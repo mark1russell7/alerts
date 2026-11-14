@@ -23,9 +23,9 @@ export type Id<Name extends string> = string & { readonly [brand]: Name };
 export type SourceId = Id<"SourceId">;
 /** The id of a delivery channel, for example `pushover`. */
 export type ChannelId = Id<"ChannelId">;
-/** The id of one raw message from a source: the SHA-256 of the source id and the body, in hex. */
+/** The id of one raw message from a source: the SHA-256 of its content, in hex. `observationId` makes it. */
 export type ObservationId = Id<"ObservationId">;
-/** The id of one report: the SHA-256 of the source id, the source key and the sent time, in hex. */
+/** The id of one report: the SHA-256 of the source id, the source key and the sent time, in hex. `reportId` makes it. */
 export type ReportId = Id<"ReportId">;
 /** The id of a person that the system watches over. The private configuration resolves it. */
 export type PersonId = Id<"PersonId">;
@@ -425,7 +425,7 @@ export interface ChannelDescriptor {
 /** One message to one person on one channel. */
 export interface Message {
   /**
-   * The delivery key: the SHA-256 of the incident anchor, the level, the person and the step.
+   * The delivery key: the SHA-256 of the incident anchor, the level, the person and the step. `messageKey` makes it.
    * A channel that can drop a repeated key does so.
    */
   readonly key: string;

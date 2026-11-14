@@ -66,7 +66,11 @@ The rules of each adapter:
 1. **An empty answer is not a failure.** `{ ok: true, observations: [], complete: true }` means "no alert". A failure is `{ ok: false }`. The health uses the difference.
 2. **The map tells of format changes.** A field that the map does not understand is a `MapProblem`. A fatal problem makes no report. Problems move the health to `changed`.
 3. **The descriptor tells the truth about dependencies.** `origins` names the authorities whose messages the source carries. `dependsOn` names the failure domains: providers, networks, radio. The coverage uses them.
-4. **The ids are hashes of content.** A report id is the SHA-256 of the source id, the source key and the sent time. Each copy of the system gives the same id.
+4. **The ids are hashes of content.** The core gives the id functions in `ids.ts`. An adapter does not make its own ids.
+   - `observationId`: the SHA-256 of the source id, the content type, the request URL and the body. The fetch time is not part of it, so a poll with no change gives the same id.
+   - `reportId`: the SHA-256 of the source id, the source key and the sent time.
+   - `messageKey`: the SHA-256 of the incident report, the level, the person and the step.
+   - The hash input is a JSON array that starts with the scheme `alerts-id/1` and the kind of id. Each copy of the system gives the same id.
 5. **The fixtures are real and contain no personal data.** Each adapter keeps recorded answers of its source in `fixtures/`, with the expected reports. The places of the tests are public places, not the places of a real person.
 6. **A canary when the source has one.** For example: the national feed of the NWS has one or more active alerts. A national feed with no alert is more likely a fault than a calm country.
 
@@ -149,6 +153,5 @@ The core matches the area of a report to a place with one rule for each source. 
 ## Open points
 
 - The procedure schemas: Standard Schema validators (zod 4) for each input and output, in the core package.
-- The id functions `reportId` and `observationId`, on WebCrypto SHA-256, so that each adapter makes the same ids.
 - The link rule of each family of kind, for rule 3 of the merge.
 - The taxonomy: the list of codes, from the CAP and NWS event names first (AL-5).
