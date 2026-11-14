@@ -254,7 +254,7 @@ function withoutAbsent<T extends object>(value: T): Present<T> {
 }
 
 /** This function maps one alert (a GeoJSON feature) to a report, or to no report and its problems. */
-async function mapFeature(feature: unknown, observation: Observation, problems: Problems): Promise<Report | undefined> {
+function mapFeature(feature: unknown, observation: Observation, problems: Problems): Report | undefined {
   if (!isObject(feature) || feature["type"] !== "Feature") {
     problems.add("", "the message is not a GeoJSON feature", true);
     return undefined;
@@ -335,7 +335,7 @@ async function mapFeature(feature: unknown, observation: Observation, problems: 
     web: textOf(properties["web"]),
   });
   const report: Report = {
-    id: await reportId({ source: SOURCE_ID, key, sent }),
+    id: reportId({ source: SOURCE_ID, key, sent }),
     source: SOURCE_ID,
     key,
     references: referencesOf(properties, key, parameters),
@@ -362,7 +362,7 @@ async function mapFeature(feature: unknown, observation: Observation, problems: 
 }
 
 /** This function maps one observation, and can throw. `mapObservation` catches each error. */
-async function mapOrThrow(observation: Observation): Promise<MapResult> {
+function mapOrThrow(observation: Observation): MapResult {
   let body: unknown;
   try {
     body = JSON.parse(observation.body);
@@ -376,7 +376,7 @@ async function mapOrThrow(observation: Observation): Promise<MapResult> {
   const problems: MapProblem[] = [];
   for (const message of messages) {
     const own = new Problems(message.path);
-    const report = await mapFeature(message.feature, observation, own);
+    const report = mapFeature(message.feature, observation, own);
     if (report !== undefined) reports.push(report);
     problems.push(...own.list.map((problem) => ({ ...problem, path: problem.path.replace(/^\./, "") })));
   }
@@ -387,9 +387,9 @@ async function mapOrThrow(observation: Observation): Promise<MapResult> {
  * This function maps one observation of the NWS API to reports. The body is one alert (a GeoJSON
  * feature) or a list of alerts (a feature collection). The function does not throw: an error is a fatal problem.
  */
-export async function mapObservation(observation: Observation): Promise<MapResult> {
+export function mapObservation(observation: Observation): MapResult {
   try {
-    return await mapOrThrow(observation);
+    return mapOrThrow(observation);
   } catch (error) {
     return { reports: [], problems: [{ path: "", message: `the map function failed: ${errorMessage(error)}`, fatal: true }] };
   }

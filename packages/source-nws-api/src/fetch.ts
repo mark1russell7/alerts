@@ -134,7 +134,7 @@ interface Read {
  * A body that is not valid JSON gives `undefined`, and the fetch fails. A cut with no framing can look
  * whole to the HTTP client. Thus a body that does not parse is not a change of the format.
  */
-export async function readAnswer(reply: Reply, url: string, fetched: Instant, latency: number): Promise<Read | undefined> {
+export function readAnswer(reply: Reply, url: string, fetched: Instant, latency: number): Read | undefined {
   const contentType = reply.headers["content-type"] ?? "application/geo+json";
   const etag = reply.headers["etag"];
   const lastModified = reply.headers["last-modified"];
@@ -145,8 +145,8 @@ export async function readAnswer(reply: Reply, url: string, fetched: Instant, la
     ...(etag === undefined ? {} : { etag }),
     ...(lastModified === undefined ? {} : { lastModified }),
   };
-  const observation = async (body: string): Promise<Observation> => ({
-    id: await observationId({ source: SOURCE_ID, contentType, url, body }),
+  const observation = (body: string): Observation => ({
+    id: observationId({ source: SOURCE_ID, contentType, url, body }),
     source: SOURCE_ID,
     fetched,
     contentType,
@@ -161,8 +161,8 @@ export async function readAnswer(reply: Reply, url: string, fetched: Instant, la
   }
   const features =
     typeof parsed === "object" && parsed !== null && "features" in parsed && Array.isArray(parsed.features) ? (parsed.features as unknown[]) : undefined;
-  if (features === undefined) return { observations: [await observation(reply.body)], complete: false };
-  return { observations: await Promise.all(features.map((feature) => observation(JSON.stringify(feature)))), complete: true };
+  if (features === undefined) return { observations: [observation(reply.body)], complete: false };
+  return { observations: features.map((feature) => observation(JSON.stringify(feature))), complete: true };
 }
 
 /** The result of one query. */
@@ -217,7 +217,7 @@ export function createNwsFetch(options: NwsFetchOptions): (input: NwsFetchInput,
       return { ok: false, failure: { kind: "network", message } };
     }
     if (answer.classified.outcome !== "ok") return { ok: false, failure: failureOf(answer) };
-    const read = await readAnswer(answer.reply, url, now(), latency);
+    const read = readAnswer(answer.reply, url, now(), latency);
     if (read === undefined) {
       return { ok: false, failure: { kind: "network", message: `truncated or malformed body: ${url}` } };
     }

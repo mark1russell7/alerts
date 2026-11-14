@@ -21,8 +21,8 @@ const observe = (body: string): Observation => ({
   transport: { latency: 0 },
 });
 
-const mapOne = async (body: unknown): Promise<{ report: Report | undefined; problems: readonly { path: string; message: string; fatal: boolean }[] }> => {
-  const result = await mapObservation(observe(typeof body === "string" ? body : JSON.stringify(body)));
+const mapOne = (body: unknown): { report: Report | undefined; problems: readonly { path: string; message: string; fatal: boolean }[] } => {
+  const result = mapObservation(observe(typeof body === "string" ? body : JSON.stringify(body)));
   return { report: result.reports[0], problems: result.problems };
 };
 
@@ -49,10 +49,10 @@ describe("the map of the recorded alerts", () => {
     expect(NAMES.sort()).toEqual(Object.keys(EXPECTED_KIND).sort());
   });
 
-  it.each(NAMES)("maps %s to one report with no problem", async (name) => {
+  it.each(NAMES)("maps %s to one report with no problem", (name) => {
     const source = feature(name);
     const properties = source.properties;
-    const { report, problems } = await mapOne(source);
+    const { report, problems } = mapOne(source);
     expect(problems).toEqual([]);
     expect(report).toBeDefined();
     if (report === undefined) return;
@@ -88,20 +88,20 @@ describe("the map of the recorded alerts", () => {
     }
   });
 
-  it.each(NAMES)("gives the same reports for %s each time", async (name) => {
-    expect(await mapObservation(observe(text(name)))).toEqual(await mapObservation(observe(text(name))));
+  it.each(NAMES)("gives the same reports for %s each time", (name) => {
+    expect(mapObservation(observe(text(name)))).toEqual(mapObservation(observe(text(name))));
   });
 
-  it("marks the keepalive as a test", async () => {
-    const { report } = await mapOne(feature("nws-keepalive.json"));
+  it("marks the keepalive as a test", () => {
+    const { report } = mapOne(feature("nws-keepalive.json"));
     expect(report?.status).toBe("test");
     expect(report?.categories).toEqual(["met"]);
   });
 
-  it("maps each alert of a feature collection, with the path of each problem", async () => {
+  it("maps each alert of a feature collection, with the path of each problem", () => {
     const good = feature("nws-flw.json");
     const bad = { ...feature("nws-glw.json"), properties: { ...feature("nws-glw.json").properties, id: undefined } };
-    const result = await mapObservation(observe(JSON.stringify({ type: "FeatureCollection", features: [good, bad] })));
+    const result = mapObservation(observe(JSON.stringify({ type: "FeatureCollection", features: [good, bad] })));
     expect(result.reports.map((report) => report.key)).toEqual([good.properties.id]);
     expect(result.problems).toEqual([{ path: "features[1].properties.id", message: "the alert has no identifier", fatal: true }]);
   });
@@ -111,53 +111,53 @@ describe("the map of broken alerts", () => {
   const base = feature("nws-flw.json");
   const withProperties = (change: Record<string, unknown>): unknown => ({ ...base, properties: { ...base.properties, ...change } });
 
-  it("gives a fatal problem for a body that is not JSON or not a feature", async () => {
-    expect(await mapOne("<html>")).toEqual({ report: undefined, problems: [{ path: "", message: "the body is not JSON", fatal: true }] });
-    expect((await mapOne({ type: "Point" })).problems[0]?.fatal).toBe(true);
-    expect((await mapOne({ type: "Feature" })).problems[0]).toMatchObject({ path: "properties", fatal: true });
+  it("gives a fatal problem for a body that is not JSON or not a feature", () => {
+    expect(mapOne("<html>")).toEqual({ report: undefined, problems: [{ path: "", message: "the body is not JSON", fatal: true }] });
+    expect((mapOne({ type: "Point" })).problems[0]?.fatal).toBe(true);
+    expect((mapOne({ type: "Feature" })).problems[0]).toMatchObject({ path: "properties", fatal: true });
   });
 
-  it("gives a fatal problem for an alert with no valid sent time", async () => {
-    const { report, problems } = await mapOne(withProperties({ sent: "yesterday" }));
+  it("gives a fatal problem for an alert with no valid sent time", () => {
+    const { report, problems } = mapOne(withProperties({ sent: "yesterday" }));
     expect(report).toBeUndefined();
     expect(problems.filter((problem) => problem.fatal)).toEqual([
       { path: "properties.sent", message: "the alert has no valid sent time", fatal: true },
     ]);
   });
 
-  it("gives no report and no problem for an acknowledgment", async () => {
-    expect(await mapOne(withProperties({ messageType: "Ack" }))).toEqual({ report: undefined, problems: [] });
+  it("gives no report and no problem for an acknowledgment", () => {
+    expect(mapOne(withProperties({ messageType: "Ack" }))).toEqual({ report: undefined, problems: [] });
   });
 
-  it("keeps a report with a problem for an unknown value or field", async () => {
-    const { report, problems } = await mapOne(withProperties({ severity: "Catastrophic", status: "Rehearsal", colour: "red" }));
+  it("keeps a report with a problem for an unknown value or field", () => {
+    const { report, problems } = mapOne(withProperties({ severity: "Catastrophic", status: "Rehearsal", colour: "red" }));
     expect(report?.severity).toBe("unknown");
     expect(report?.status).toBe("actual");
     expect(problems.map((problem) => problem.path).sort()).toEqual(["properties.colour", "properties.severity", "properties.status"]);
     expect(problems.every((problem) => !problem.fatal)).toBe(true);
   });
 
-  it("keeps the label of an unknown event and says so", async () => {
-    const { report, problems } = await mapOne(
+  it("keeps the label of an unknown event and says so", () => {
+    const { report, problems } = mapOne(
       withProperties({ event: "Volcanic Haze Notice", eventCode: { SAME: ["NWS"], NationalWeatherService: ["VHN"] }, parameters: {} }),
     );
     expect(report?.kind).toEqual({ code: "other.unknown", label: "Volcanic Haze Notice" });
     expect(problems).toContainEqual({ path: "properties.event", message: 'the kind tables do not know the event "Volcanic Haze Notice"', fatal: false });
   });
 
-  it("closes an open ring, and drops a polygon with a bad outside ring", async () => {
+  it("closes an open ring, and drops a polygon with a bad outside ring", () => {
     const open = { ...base, geometry: { type: "Polygon", coordinates: [[[-98, 28], [-97, 28], [-97, 29]]] } };
-    const closed = await mapOne(open);
+    const closed = mapOne(open);
     expect(closed.report?.areas).toContainEqual({ type: "polygon", rings: [[[-98, 28], [-97, 28], [-97, 29], [-98, 28]]] });
     expect(closed.problems.map((problem) => problem.path)).toEqual(["geometry.coordinates[0]"]);
 
-    const broken = await mapOne({ ...base, geometry: { type: "Polygon", coordinates: [[[-98, 28], [-97, 200], [-97, 29]]] } });
+    const broken = mapOne({ ...base, geometry: { type: "Polygon", coordinates: [[[-98, 28], [-97, 200], [-97, 29]]] } });
     expect(broken.report?.areas.some((area) => area.type === "polygon")).toBe(false);
     expect(broken.problems[0]?.fatal).toBe(false);
   });
 
-  it("reads the expired references of the NWS", async () => {
-    const { report } = await mapOne(
+  it("reads the expired references of the NWS", () => {
+    const { report } = mapOne(
       withProperties({ parameters: { ...base.properties.parameters, expiredReferences: ["w-nws.webmaster@noaa.gov,urn:oid:old.1,2026-11-14T01:00:00-06:00 w-nws.webmaster@noaa.gov,urn:oid:old.2,2026-11-14T02:00:00-06:00"] } }),
     );
     expect(report?.references).toEqual(expect.arrayContaining(["urn:oid:old.1", "urn:oid:old.2"]));
@@ -166,32 +166,32 @@ describe("the map of broken alerts", () => {
 });
 
 describe("the map function", () => {
-  it("does not throw for any JSON body", async () => {
-    await fc.assert(
-      fc.asyncProperty(fc.jsonValue(), async (value) => {
-        const result = await mapObservation(observe(JSON.stringify(value) ?? "null"));
+  it("does not throw for any JSON body", () => {
+    fc.assert(
+      fc.property(fc.jsonValue(), (value) => {
+        const result = mapObservation(observe(JSON.stringify(value) ?? "null"));
         return Array.isArray(result.reports) && Array.isArray(result.problems);
       }),
     );
   });
 
-  it("does not throw when a field of a real alert has any value", async () => {
+  it("does not throw when a field of a real alert has any value", () => {
     const source = feature("nws-faw.json");
     const fields = Object.keys(source.properties);
-    await fc.assert(
-      fc.asyncProperty(fc.constantFrom(...fields), fc.jsonValue(), async (field, value) => {
+    fc.assert(
+      fc.property(fc.constantFrom(...fields), fc.jsonValue(), (field, value) => {
         const changed = { ...source, properties: { ...source.properties, [field]: value } };
-        const result = await mapObservation(observe(JSON.stringify(changed)));
+        const result = mapObservation(observe(JSON.stringify(changed)));
         return result.reports.length <= 1 && result.problems.every((problem) => typeof problem.path === "string");
       }),
     );
   });
 
-  it("does not throw for any geometry", async () => {
+  it("does not throw for any geometry", () => {
     const source = feature("nws-sps.json");
-    await fc.assert(
-      fc.asyncProperty(fc.jsonValue(), async (geometry) => {
-        const result = await mapObservation(observe(JSON.stringify({ ...source, geometry })));
+    fc.assert(
+      fc.property(fc.jsonValue(), (geometry) => {
+        const result = mapObservation(observe(JSON.stringify({ ...source, geometry })));
         return result.reports.length === 1;
       }),
     );
@@ -211,9 +211,9 @@ describe("the VTEC key at the new year", () => {
     { "@id": "x", identifier: "urn:oid:test.year.1", sender: "w-nws.webmaster@noaa.gov", sent: "2026-12-31T20:00:00+00:00" },
   ]);
 
-  it("gives two keys, and the CAP reference still links the two reports", async () => {
-    const one = (await mapOne(first)).report;
-    const two = (await mapOne(second)).report;
+  it("gives two keys, and the CAP reference still links the two reports", () => {
+    const one = (mapOne(first)).report;
+    const two = (mapOne(second)).report;
     expect(one?.correlation).toEqual([{ system: "vtec", id: "PAFG.BZ.W.0099.2026" }]);
     expect(two?.correlation).toEqual([{ system: "vtec", id: "PAFG.BZ.W.0099.2027" }]);
     expect(two?.references).toContain(one?.key);
