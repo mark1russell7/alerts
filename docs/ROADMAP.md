@@ -10,12 +10,12 @@ The repo is public. It holds the general framework only. People, places, keys an
 
 | ID | Item | Status | Summary |
 | --- | --- | --- | --- |
-| AL-28 | Contracts: the event, the source and the channel | in progress | The TypeScript types and [`CONTRACTS.md`](CONTRACTS.md). The sources and delivery efforts start from them. |
+| AL-28 | Contracts: the event, the source and the channel | done | The TypeScript types and [`CONTRACTS.md`](CONTRACTS.md). The sources and delivery efforts start from them. |
 | AL-1 | Design study | in progress | The scope, the pipeline, the formulas of the priority, the fault model, a catalog of sources by kind and the test plan. |
 | AL-2 | First commit and the public repo | done | The template stamp, the public repo and the first CI runs. |
 | AL-3 | The home of each part | in progress | The sending clients go to `@procedures/notify`. Geography goes to `@mark1russell7/geo`. The fetches go through `polite-crawler`. |
-| AL-4 | The push and heartbeat accounts | waiting | The owner makes a Pushover account and a Healthchecks.io account. The keys stay outside the repo. |
-| AL-5 | Event model and taxonomy | blocked | The core package: the types, the schemas, the id functions and the first taxonomy, from the SAME event codes and the NWS event names. |
+| AL-4 | The push and heartbeat accounts | done | The owner makes a Pushover account and a Healthchecks.io account. The keys stay outside the repo. |
+| AL-5 | Event model and taxonomy | in progress | The core package: the types, the schemas, the id functions and the first taxonomy, from the SAME event codes and the NWS event names. The id functions are done. |
 | AL-6 | Merge reports into incidents | blocked | Grow-only sets with a union join. Property tests hold the three laws: idempotent, commutative and associative. |
 | AL-7 | Priority calculation | blocked | The probability that the event is real, times the exposure of the people, times the harm and the urgency, against the cost to interrupt the person. |
 | AL-8 | Weather and emergency sources | blocked | The NWS API, the NWS CAP feed and FEMA IPAWS, each a procedure package with recorded fixtures and a canary. |
@@ -24,6 +24,7 @@ The repo is public. It holds the general framework only. People, places, keys an
 | AL-11 | Operate as a service | blocked | The service runner of `@mark1russell7/service`, with an append-only event log in SQLite. |
 | AL-12 | Outside heartbeat | blocked | The running system pings Healthchecks.io. When the pings stop, Healthchecks.io alerts the owner. |
 | AL-13 | Fault tests of the pipeline | blocked | Fault plans from rigor: a source down, slow, duplicated, out of order or with a changed format, a channel down, a copy stopped. A gate holds each case. |
+| AL-29 | A standalone weather radio | waiting | The owner sets up a SAME weather radio at the bed. It needs no internet and no part of this system. |
 
 ## Phase 2: wider and harder
 
