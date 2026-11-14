@@ -11,7 +11,8 @@
  */
 
 import type { Machine, Transition } from "@mark1russell7/algebra";
-import type { Acknowledgment, ChannelId, Duration, EscalationPolicy, Incident, Instant, Level, PersonId, Receipt, ReportId } from "./contracts.ts";
+import { LEVELS } from "./contracts.ts";
+import type { Acknowledgment, ChannelId, Delivery, Duration, EscalationPolicy, Incident, Instant, Level, PersonId, ReportId } from "./contracts.ts";
 import type { MessageKeyInput } from "./ids.ts";
 
 /**
@@ -95,23 +96,6 @@ export const ESCALATION_MACHINE: Machine = {
   ],
 };
 
-/** One delivery of the ledger, as the escalation reads it. The merge state holds the deliveries as a grow-only set. */
-export interface EscalationDelivery {
-  /** The delivery key: `messageKey` of the report, the level, the person and the step. */
-  readonly key: string;
-  /** A report of the incident: its anchor at the time of the send. */
-  readonly incident: ReportId;
-  readonly level: Level;
-  readonly person: PersonId;
-  /** The index of the step in the policy. */
-  readonly step: number;
-  readonly channel: ChannelId;
-  /** The time at which the channel accepted the message. */
-  readonly at: Instant;
-  /** The receipt of the channel. A cancel of the delivery gives it to the channel. */
-  readonly receipt?: Receipt | undefined;
-}
-
 /** The input of `escalate`. */
 export interface EscalationInput {
   readonly policy: EscalationPolicy;
@@ -123,8 +107,11 @@ export interface EscalationInput {
   /** The time at which the incident is over: its expiry, or the time of its cancel. Without it, the incident is live. */
   readonly endsAt?: Instant | undefined;
   /** The deliveries of the merge state. The function keeps the deliveries of this incident, level and person. */
-  readonly deliveries: readonly EscalationDelivery[];
-  /** The acknowledgments of the merge state. The function keeps the acknowledgments of this incident, level and person. */
+  readonly deliveries: readonly Delivery[];
+  /**
+   * The acknowledgments of the merge state. The function keeps the acknowledgments of the person for
+   * this incident, at this level or above. An acknowledgment of a level also covers each lower level.
+   */
   readonly acknowledgments: readonly Acknowledgment[];
   /** The delivery keys that this copy cancelled. A cancel is idempotent, so this set only prevents a second call. */
   readonly cancelled?: ReadonlySet<string> | undefined;
@@ -151,7 +138,7 @@ export interface EscalationPlan {
   /** The steps that are due and have no delivery in the ledger. Only `sent`, `last` and `exhausted` have sends. */
   readonly sends: readonly EscalationSend[];
   /** The deliveries to cancel, after an acknowledgment or the end. Each one has a different key. */
-  readonly cancels: readonly EscalationDelivery[];
+  readonly cancels: readonly Delivery[];
   /** The time of the next decision. It is absent when only an acknowledgment or the end can change the state. */
   readonly wakeAt?: Instant;
   /** The first acknowledgment of the person. */
@@ -193,7 +180,9 @@ export function escalate(input: EscalationInput): EscalationPlan {
   const ours = (item: { readonly incident: ReportId; readonly level: Level; readonly person: PersonId }): boolean =>
     reports.has(item.incident) && item.level === level && item.person === person;
   const deliveries = input.deliveries.filter(ours);
-  const acknowledgment = input.acknowledgments.filter(ours).sort(byTimeThenVia)[0];
+  const least = LEVELS.indexOf(level);
+  const covers = (ack: Acknowledgment): boolean => reports.has(ack.incident) && ack.person === person && LEVELS.indexOf(ack.level) >= least;
+  const acknowledgment = input.acknowledgments.filter(covers).sort(byTimeThenVia)[0];
   const steps = policy.steps;
   const wait = nonNegative(input.rank) * nonNegative(input.rankDelay);
 
@@ -256,7 +245,7 @@ export function escalate(input: EscalationInput): EscalationPlan {
       })
     : [];
 
-  const cancels: EscalationDelivery[] = [];
+  const cancels: Delivery[] = [];
   if (FINAL.has(state)) {
     const seen = new Set<string>(input.cancelled ?? []);
     for (const delivery of [...deliveries].sort((a, b) => byTime(a.at, b.at) || compare(a.key, b.key))) {

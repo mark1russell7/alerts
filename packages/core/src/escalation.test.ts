@@ -1,12 +1,11 @@
 import { machineProblems, replay } from "@mark1russell7/algebra";
 import { fakeClock } from "@mark1russell7/algebra/clock";
 import { describe, expect, it } from "vitest";
-import type { Acknowledgment, ChannelId, EscalationPolicy, Level, PersonId, ReportId } from "./contracts.ts";
+import type { Acknowledgment, ChannelId, Delivery, EscalationPolicy, Level, PersonId, ReportId } from "./contracts.ts";
 import {
   ESCALATION_MACHINE,
   escalate,
   escalationProblems,
-  type EscalationDelivery,
   type EscalationInput,
   type EscalationPlan,
 } from "./escalation.ts";
@@ -42,7 +41,7 @@ const input = (extra: Partial<EscalationInput> = {}): EscalationInput => ({
   ...extra,
 });
 
-const delivery = (step: number, at: number, extra: Partial<EscalationDelivery> = {}): EscalationDelivery => ({
+const delivery = (step: number, at: number, extra: Partial<Delivery> = {}): Delivery => ({
   key: `key-${step}`,
   incident: anchor,
   level: "life-safety",
@@ -120,6 +119,13 @@ describe("escalate", () => {
     expect(plan.wakeAt).toBeUndefined();
     expect(plan.transitions.map((each) => `${each.from}>${each.to}`)).toEqual(["idle>sent", "sent>acknowledged"]);
     expect(escalate(input({ deliveries, acknowledgments: [ack(T0 + 3 * MINUTE)], cancelled: new Set(["key-0"]), now: T0 + 8 * MINUTE })).cancels).toHaveLength(1);
+  });
+
+  it("stops at an acknowledgment of a higher level, as the merge does", () => {
+    const urgent: EscalationPolicy = { ...policy, level: "urgent" };
+    const deliveries = [delivery(0, T0, { level: "urgent" })];
+    expect(escalate(input({ policy: urgent, deliveries, acknowledgments: [ack(T0 + MINUTE)], now: T0 + 2 * MINUTE })).state).toBe("acknowledged");
+    expect(escalate(input({ deliveries: [delivery(0, T0)], acknowledgments: [ack(T0 + MINUTE, { level: "urgent" })], now: T0 + 2 * MINUTE })).state).toBe("sent");
   });
 
   it("takes the first acknowledgment, and one from a copy with a clock ahead", () => {
@@ -237,7 +243,7 @@ describe("escalate over a grid of inputs", () => {
 describe("escalate on the test clock", () => {
   it("sends each step at its time, and stops at the acknowledgment", async () => {
     const clock = fakeClock(T0);
-    const ledger: EscalationDelivery[] = [];
+    const ledger: Delivery[] = [];
     const acknowledgments: Acknowledgment[] = [];
     const sent: Array<[number, number]> = [];
     // A small runtime: it sends the due steps, writes them to the ledger and waits for wakeAt.
