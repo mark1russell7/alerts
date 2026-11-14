@@ -5,7 +5,7 @@ import { ID_SCHEME, messageKey, observationId, reportId } from "./ids.ts";
 const source = "nws-api" as SourceId;
 const hex = /^[0-9a-f]{64}$/;
 
-// node:crypto calculated these values, apart from WebCrypto. A change of the id scheme changes them.
+// node:crypto calculated these values, apart from the home of the hash. A change of the id scheme changes them.
 const GOLDEN = {
   observation: "f9688516bbc34b989ebea52300ec715d48a472b6865bfd7b1ad2f838541d554b",
   report: "578e21f72458d9724b0ddc9590d8d3a9543aa83ce22fbd28abc1947c119db53c",
@@ -26,72 +26,73 @@ describe("the id scheme", () => {
     expect(ID_SCHEME).toBe("alerts-id/1");
   });
 
-  it("gives the golden values", async () => {
-    expect(await observationId(observation)).toBe(GOLDEN.observation);
-    expect(await reportId(report)).toBe(GOLDEN.report);
-    expect(await messageKey(message)).toBe(GOLDEN.message);
+  it("gives the golden values", () => {
+    expect(observationId(observation)).toBe(GOLDEN.observation);
+    expect(reportId(report)).toBe(GOLDEN.report);
+    expect(messageKey(message)).toBe(GOLDEN.message);
   });
 
-  it("gives 64 lowercase hex digits", async () => {
-    expect(await observationId(observation)).toMatch(hex);
-    expect(await reportId(report)).toMatch(hex);
-    expect(await messageKey(message)).toMatch(hex);
+  it("gives 64 lowercase hex digits", () => {
+    expect(observationId(observation)).toMatch(hex);
+    expect(reportId(report)).toMatch(hex);
+    expect(messageKey(message)).toMatch(hex);
   });
 });
 
 describe("observationId", () => {
-  it("gives the same id to the same content at a different fetch", async () => {
-    expect(await observationId({ ...observation })).toBe(await observationId(observation));
+  it("gives the same id to the same content at a different fetch", () => {
+    expect(observationId({ ...observation })).toBe(observationId(observation));
   });
 
-  it("changes with each part of the content", async () => {
-    const base = await observationId(observation);
-    const others = await Promise.all([
+  it("changes with each part of the content", () => {
+    const base = observationId(observation);
+    const others = [
       observationId({ ...observation, source: "nws-cap" as SourceId }),
       observationId({ ...observation, contentType: "application/json" }),
       observationId({ ...observation, url: "https://api.weather.gov/alerts/active?area=NE" }),
       observationId({ ...observation, body: '{"features":[{}]}' }),
       observationId({ source, contentType: observation.contentType, body: observation.body }),
-    ]);
+    ];
     expect(new Set([base, ...others]).size).toBe(others.length + 1);
   });
 });
 
 describe("reportId", () => {
-  it("changes with the source, the key and the sent time", async () => {
-    const ids = await Promise.all([
+  it("changes with the source, the key and the sent time", () => {
+    const ids = [
       reportId(report),
       reportId({ ...report, source: "nws-cap" as SourceId }),
       reportId({ ...report, key: `${report.key}.2` }),
       reportId({ ...report, sent: report.sent + 1 }),
-    ]);
+    ];
     expect(new Set(ids).size).toBe(ids.length);
   });
 
-  it("does not mix fields that a separator character can join", async () => {
-    const a = await reportId({ source: "a|b" as SourceId, key: "c", sent: 0 });
-    const b = await reportId({ source: "a" as SourceId, key: "b|c", sent: 0 });
+  it("does not mix fields that a separator character can join", () => {
+    const a = reportId({ source: "a|b" as SourceId, key: "c", sent: 0 });
+    const b = reportId({ source: "a" as SourceId, key: "b|c", sent: 0 });
     expect(a).not.toBe(b);
   });
 
-  it("does not throw for a time that is not finite, because map is total", async () => {
-    await expect(reportId({ ...report, sent: Number.NaN })).resolves.toMatch(hex);
+  it("does not throw for a time that is not finite or a lone surrogate, because map is total", () => {
+    expect(reportId({ ...report, sent: Number.NaN })).toMatch(hex);
+    expect(reportId({ ...report, key: "�" })).toMatch(hex);
   });
 });
 
 describe("messageKey", () => {
-  it("gives a new key to each step and to each level", async () => {
-    const keys = await Promise.all([
+  it("gives a new key to each step and to each level", () => {
+    const keys = [
       messageKey(message),
       messageKey({ ...message, step: 1 }),
       messageKey({ ...message, level: "urgent" }),
       messageKey({ ...message, person: "person-2" as PersonId }),
-    ]);
+    ];
     expect(new Set(keys).size).toBe(keys.length);
   });
 
-  it("keeps the kinds of id apart", async () => {
-    const asReport = await reportId({ source: message.incident as unknown as SourceId, key: message.level, sent: 0 });
-    expect(asReport).not.toBe(await messageKey({ ...message, person: "0" as PersonId }));
+  it("keeps the kinds of id apart", () => {
+    const asReport = reportId({ source: message.incident as unknown as SourceId, key: message.level, sent: 0 });
+    expect(asReport).not.toBe(messageKey({ ...message, person: "0" as PersonId }));
   });
 });

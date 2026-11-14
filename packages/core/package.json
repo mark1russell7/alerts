@@ -11,6 +11,9 @@
     "test:watch": "vitest",
     "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.test.json"
   },
+  "dependencies": {
+    "@mark1russell7/rigor-generators": "^0.1.16"
+  },
   "devDependencies": {
     "@mark1russell7/cue": "^2.0.0",
     "@types/node": "^26.6.5",

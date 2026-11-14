@@ -57,7 +57,7 @@ Each source package registers three or more procedures under `alerts.source.<id>
 | --- | --- | --- |
 | `describe` | none | It gives the `SourceDescriptor`. |
 | `fetch` | reads `network` | It goes through polite-crawler. It is idempotent. For a failure of the source, it gives `{ ok: false, failure }` and does not throw. |
-| `map` | none | A pure and total function. It does not throw. The same observation gives the same reports with the same ids. It gives a promise, because the ids are SHA-256 hashes from WebCrypto. |
+| `map` | none | A pure and total function. It does not throw. The same observation gives the same reports with the same ids. It makes the ids with the id functions of the core. |
 | `check` | none | Optional. It examines a fetch against the canary of the source. |
 | `locate` | reads `network` | Optional. It gives the region codes of a position (`ugc`, `same`) for a source with a lookup, for example the `/points` query of the NWS API. It is idempotent. |
 

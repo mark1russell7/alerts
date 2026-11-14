@@ -328,14 +328,11 @@ export interface CanaryResult {
  * - `check`: a pure function. It examines the observations of a fetch against the canary.
  * - `locate`: optional. It reads `network` and is idempotent. It gives the region codes of a
  *   position, for a source that has a lookup: the `/points` query of the NWS API.
- *
- * The `map` function gives a promise, because the ids are SHA-256 hashes from WebCrypto. It stays
- * pure and total.
  */
 export interface SourceProcedures {
   describe(): SourceDescriptor;
   fetch(input: { readonly watch: Watch; readonly cursor?: Cursor }): Promise<FetchOutcome>;
-  map(input: { readonly observation: Observation }): Promise<MapResult>;
+  map(input: { readonly observation: Observation }): MapResult;
   check?(input: { readonly observations: readonly Observation[] }): CanaryResult;
   locate?(input: { readonly at: Position }): Promise<LocateOutcome>;
 }

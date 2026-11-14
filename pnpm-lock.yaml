@@ -204,6 +204,10 @@ importers:
         version: 7.0.2
 
   packages/core:
+    dependencies:
+      '@mark1russell7/rigor-generators':
+        specifier: ^0.1.16
+        version: 0.1.16
     devDependencies:
       '@mark1russell7/cue':
         specifier: ^2.0.0
