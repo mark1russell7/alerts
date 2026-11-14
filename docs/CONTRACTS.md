@@ -65,7 +65,7 @@ The rules of each adapter:
 
 1. **An empty answer is not a failure.** `{ ok: true, observations: [], complete: true }` means "no alert". A failure is `{ ok: false }`. The health uses the difference.
 2. **The map tells of format changes.** A field that the map does not understand is a `MapProblem`. A fatal problem makes no report. Problems move the health to `changed`.
-3. **The descriptor tells the truth about dependencies.** `origins` names the authorities whose messages the source carries. `dependsOn` names the failure domains: providers, networks, radio. The coverage uses them.
+3. **The descriptor tells the truth about dependencies.** `origins` names the authorities whose messages the source carries. `dependsOn` names the failure domains outside the cell: providers, CDNs, transmitters. `uses` names the resources of the cell: `internet`, `power`, `receiver`. The coverage uses both.
 4. **The ids are hashes of content.** The core gives the id functions in `ids.ts`. An adapter does not make its own ids.
    - `observationId`: the SHA-256 of the source id, the content type, the request URL and the body. The fetch time is not part of it, so a poll with no change gives the same id.
    - `reportId`: the SHA-256 of the source id, the source key and the sent time.
@@ -93,10 +93,15 @@ Each change of state is a system report.
 
 The system uses two kinds of independence, and keeps them apart:
 
-- **Independence for coverage** asks: "can one fault stop both sources?" Two sources are independent when their `dependsOn` sets have no shared domain. The NWS API and the NOAA Weather Radio are independent: one uses the internet, and the other uses radio.
+- **Independence for coverage** asks: "can one fault stop both sources?" Two sources are independent when their `dependsOn` sets have no shared domain. The NWS API and the NOAA Weather Radio are independent: one comes from a provider on the internet, and the other comes from a transmitter.
 - **Independence for corroboration** asks: "are these two witnesses, or one witness twice?" Two sources are independent when their `origins` differ. A news story that repeats an NWS warning is not a second witness.
 
-The coverage of a kind at a place is the count of groups of healthy sources with no shared failure domain. The policy asks for two or more for each life-safety kind. A smaller count is a system report: `urgent` at one, `life-safety` at zero during a watch or a warning at the place.
+The cell is the copy of the system on one machine. Its internet link, its power and its receivers are common to each of its sources. So a source names them in `uses`, not in `dependsOn`. Else each internet source falls into one group, and the coverage cannot tell two providers apart.
+
+The coverage of a kind at a place has two parts:
+
+- `independent`: the smallest count of outside failure domains whose faults stop each healthy source of the kind. At 2 or more, no single outside fault stops the coverage. The policy asks for 2 or more for each life-safety kind. A smaller count is a system report: `urgent` at one, `life-safety` at zero during a watch or a warning at the place.
+- `commonResources`: the cell resources that each of these sources uses. One fault of one of them stops all of these sources in this cell. The radio input and a second cell remove these common faults. The blindness formula of the design study uses them as the shared fault `c`.
 
 ## The channel contract
 

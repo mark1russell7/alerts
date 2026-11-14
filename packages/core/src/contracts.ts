@@ -208,6 +208,13 @@ export interface Report {
 /** How a source gives its data. */
 export type Transport = "poll" | "stream" | "push" | "radio";
 
+/**
+ * A resource of the cell. The cell is the copy of the system on one machine. Each source of the
+ * cell uses the same internet link, the same power and the same receivers. So the fault of a
+ * resource is a common fault of the cell, not the fault of one source.
+ */
+export type CellResource = "internet" | "power" | "receiver";
+
 /** The facts of a source. The core uses them for the schedule, the health and the coverage. */
 export interface SourceDescriptor {
   readonly id: SourceId;
@@ -215,11 +222,16 @@ export interface SourceDescriptor {
   /** The authorities whose messages the source carries, for example `nws` or `usgs`. */
   readonly origins: readonly string[];
   /**
-   * The failure domains that the source needs: providers, networks, regions, power. Examples:
-   * `provider:nws-api`, `net:internet`, `rf:nwr`. Two sources with a shared domain are not
-   * independent for coverage.
+   * The failure domains outside the cell that the source needs: providers, CDNs, transmitters and
+   * regions. Examples: `provider:nws-api`, `cdn:akamai`, `rf:nwr`. Two sources with a shared
+   * domain are not independent for coverage. Do not put the resources of the cell here.
    */
   readonly dependsOn: readonly string[];
+  /**
+   * The resources of the cell that the source uses. An internet source uses `internet` and
+   * `power`. A radio source uses `receiver` and `power`.
+   */
+  readonly uses: readonly CellResource[];
   /** The prefixes of the taxonomy codes that the source covers, for example `met` and `hydro`. */
   readonly kinds: readonly string[];
   /** The areas that the source covers, or `global`. */
@@ -356,8 +368,16 @@ export interface Coverage {
   readonly kind: string;
   /** The healthy sources that cover the kind at the place. */
   readonly sources: readonly SourceId[];
-  /** The count of groups of these sources with no shared failure domain. */
+  /**
+   * The smallest count of outside failure domains whose faults stop each of these sources. At 2
+   * or more, no single outside fault stops the coverage.
+   */
   readonly independent: number;
+  /**
+   * The resources of the cell that each of these sources uses. One fault of one of them stops all
+   * of these sources in this cell.
+   */
+  readonly commonResources: readonly CellResource[];
   /** The count that the policy needs. A smaller count is a coverage alert. */
   readonly required: number;
 }
