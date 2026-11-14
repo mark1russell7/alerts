@@ -84,7 +84,7 @@ export interface LinkRule {
 
 /** The options of `incidents`. */
 export interface IncidentOptions {
-  /** The link rule of merge rule 3. Absent: rules 1 and 2 only. */
+  /** The link rule of merge rule 3. When it is absent, the merge uses rules 1 and 2 only. */
   readonly link?: LinkRule;
 }
 
