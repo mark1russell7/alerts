@@ -64,12 +64,19 @@ export async function messageKey(input: MessageKeyInput): Promise<string> {
   return digest(["message", input.incident, input.level, input.person, input.step]);
 }
 
-const encoder = new TextEncoder();
+// The core runs in Node and in browsers, so its compiler settings hold no platform types. These
+// two types declare the only platform functions that the core uses: WebCrypto and TextEncoder.
+interface Platform {
+  readonly crypto: { readonly subtle: { digest(algorithm: "SHA-256", data: Uint8Array): Promise<ArrayBuffer> } };
+  readonly TextEncoder: new () => { encode(text: string): Uint8Array };
+}
+const platform = globalThis as unknown as Platform;
+const encoder = new platform.TextEncoder();
 
 // This function is local because no home package has a content hash at this time. It moves to
 // the home of content hashes when the map of homes names one.
 async function digest(fields: readonly (string | number | null)[]): Promise<string> {
-  const bytes = await globalThis.crypto.subtle.digest("SHA-256", encoder.encode(JSON.stringify([ID_SCHEME, ...fields])));
+  const bytes = await platform.crypto.subtle.digest("SHA-256", encoder.encode(JSON.stringify([ID_SCHEME, ...fields])));
   let hex = "";
   for (const byte of new Uint8Array(bytes)) hex += byte.toString(16).padStart(2, "0");
   return hex;
