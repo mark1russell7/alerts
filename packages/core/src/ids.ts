@@ -3,10 +3,12 @@
  * So each adapter and each copy of the system gives the same id to the same content, and a
  * duplicate changes nothing.
  *
- * The hash input is a JSON array: the scheme, the kind of id, then the fields. JSON escapes each
- * string, so two different lists of fields do not give the same input. The kind keeps the ids
- * of two kinds apart.
+ * The hash input is the canonical JSON of an array: the scheme, the kind of id, then the fields.
+ * JSON escapes each string, so two different lists of fields do not give the same input. The kind
+ * keeps the ids of two kinds apart. The hash comes from `@mark1russell7/rigor-generators`, the home
+ * of content hashes. It is pure JavaScript, so the ids are synchronous in Node and in browsers.
  */
+import { canonicalHash } from "@mark1russell7/rigor-generators";
 import type { Instant, Level, ObservationId, PersonId, ReportId, SourceId } from "./contracts.ts";
 
 /** The version of the id scheme. A change of the input of an id function raises it. */
@@ -42,42 +44,28 @@ export interface MessageKeyInput {
  * request gives the same id, so the log keeps the observation one time. The fetch time and the
  * other facts of the transport are not part of the id.
  */
-export async function observationId(input: ObservationIdInput): Promise<ObservationId> {
-  const hex = await digest(["observation", input.source, input.contentType, input.url ?? null, input.body]);
-  return hex as ObservationId;
+export function observationId(input: ObservationIdInput): ObservationId {
+  return digest(["observation", input.source, input.contentType, input.url ?? null, input.body]) as ObservationId;
 }
 
 /**
  * This function gives the id of a report. An update of the source has a new key or a new sent
  * time, so it gets a new id. The merge uses the smallest report id of an incident as its anchor.
  */
-export async function reportId(input: ReportIdInput): Promise<ReportId> {
-  const hex = await digest(["report", input.source, input.key, input.sent]);
-  return hex as ReportId;
+export function reportId(input: ReportIdInput): ReportId {
+  return digest(["report", input.source, input.key, input.sent]) as ReportId;
 }
 
 /**
  * This function gives the key of a message. A channel that can drop a repeated key does so. A
  * repeat of the same step gets the same key, and the next step gets a new key.
  */
-export async function messageKey(input: MessageKeyInput): Promise<string> {
+export function messageKey(input: MessageKeyInput): string {
   return digest(["message", input.incident, input.level, input.person, input.step]);
 }
 
-// The core runs in Node and in browsers, so its compiler settings hold no platform types. These
-// two types declare the only platform functions that the core uses: WebCrypto and TextEncoder.
-interface Platform {
-  readonly crypto: { readonly subtle: { digest(algorithm: "SHA-256", data: Uint8Array): Promise<ArrayBuffer> } };
-  readonly TextEncoder: new () => { encode(text: string): Uint8Array };
-}
-const platform = globalThis as unknown as Platform;
-const encoder = new platform.TextEncoder();
-
-// This function is local because no home package has a content hash at this time. It moves to
-// the home of content hashes when the map of homes names one.
-async function digest(fields: readonly (string | number | null)[]): Promise<string> {
-  const bytes = await platform.crypto.subtle.digest("SHA-256", encoder.encode(JSON.stringify([ID_SCHEME, ...fields])));
-  let hex = "";
-  for (const byte of new Uint8Array(bytes)) hex += byte.toString(16).padStart(2, "0");
-  return hex;
+// The form "json" writes NaN and an infinite number as null, and escapes a lone surrogate. So the
+// id functions do not throw, and `map` stays total.
+function digest(fields: readonly (string | number | null)[]): string {
+  return canonicalHash([ID_SCHEME, ...fields], { form: "json" });
 }
