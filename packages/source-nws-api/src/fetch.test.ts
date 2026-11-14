@@ -114,10 +114,26 @@ describe("createNwsFetch", () => {
     expect(outcome.ok && outcome.observations).toHaveLength(1);
   });
 
-  it("marks an answer that is not a feature collection as not complete", async () => {
-    const outcome = await fetchWith({ [MAIN]: json("<html>maintenance</html>"), [CANARY_PATH]: canary }).fetch({ watch });
+  it("marks a JSON answer that is not a feature collection as not complete", async () => {
+    const body = JSON.stringify({ type: "Feature" });
+    const outcome = await fetchWith({ [MAIN]: json(body), [CANARY_PATH]: canary }).fetch({ watch });
     expect(outcome).toMatchObject({ ok: true, complete: false });
-    expect(outcome.ok && outcome.observations[0]?.body).toBe("<html>maintenance</html>");
+    expect(outcome.ok && outcome.observations[0]?.body).toBe(body);
+  });
+
+  it("fails with a network failure for a page that is not JSON", async () => {
+    const page = json("<html>maintenance</html>", 200, { "content-type": "text/html; charset=utf-8" });
+    const outcome = await fetchWith({ [MAIN]: page, [CANARY_PATH]: canary }).fetch({ watch });
+    expect(failureOf(outcome)).toEqual({ kind: "network", message: `truncated or malformed body: ${BASE}${MAIN}` });
+  });
+
+  it("fails with a network failure for a JSON body that stops early, and never says no alert", async () => {
+    const whole = JSON.stringify(collection("nws-flw.json"));
+    for (const end of [0, 1, 40, whole.length - 1]) {
+      const outcome = await fetchWith({ [MAIN]: json(whole.slice(0, end)), [CANARY_PATH]: canary }).fetch({ watch });
+      expect(outcome.ok, `a body of ${String(end)} characters`).toBe(false);
+      expect(failureOf(outcome)).toMatchObject({ kind: "network" });
+    }
   });
 
   it("does not fail when only the canary query fails", async () => {

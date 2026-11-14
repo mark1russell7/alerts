@@ -21,8 +21,9 @@ import type {
   Status,
   Urgency,
 } from "@mark1russell7/alerts";
+import { reportId } from "@mark1russell7/alerts";
 import { errorMessage } from "@mark1russell7/text";
-import { reportId } from "./ids.ts";
+
 import { categoryOf, resolveKind } from "./kinds.ts";
 import { parseVtec, vtecKey, type Vtec } from "./vtec.ts";
 

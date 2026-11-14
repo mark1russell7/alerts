@@ -3,10 +3,10 @@
  * through polite-crawler, and gives one observation for each alert.
  */
 
-import type { Cursor, FetchFailure, FetchOutcome, Instant, Observation, Watch } from "@mark1russell7/alerts";
+import { observationId, type Cursor, type FetchFailure, type FetchOutcome, type Instant, type Observation, type Watch } from "@mark1russell7/alerts";
 import { errorMessage } from "@mark1russell7/text";
 import { ApiError, send, type Answer, type Exchange, type Pace, type Reply, type Transport } from "polite-crawler/api";
-import { observationId } from "./ids.ts";
+
 import { SOURCE_ID } from "./map.ts";
 
 /** The base URL of the NWS API. */
@@ -128,10 +128,13 @@ interface Read {
 }
 
 /**
- * This function splits an answer of the NWS API into observations: one for each alert. A body that
- * is not a feature collection gives one observation of the whole body, and the answer is not complete.
+ * This function splits an answer of the NWS API into observations: one for each alert. A JSON body
+ * that is not a feature collection gives one observation of the whole body, and the answer is not complete.
+ *
+ * A body that is not valid JSON gives `undefined`, and the fetch fails. A cut with no framing can look
+ * whole to the HTTP client, so a body that does not parse is not a change of the format.
  */
-export async function readAnswer(reply: Reply, url: string, fetched: Instant, latency: number): Promise<Read> {
+export async function readAnswer(reply: Reply, url: string, fetched: Instant, latency: number): Promise<Read | undefined> {
   const contentType = reply.headers["content-type"] ?? "application/geo+json";
   const etag = reply.headers["etag"];
   const lastModified = reply.headers["last-modified"];
@@ -154,7 +157,7 @@ export async function readAnswer(reply: Reply, url: string, fetched: Instant, la
   try {
     parsed = JSON.parse(reply.body);
   } catch {
-    return { observations: [await observation(reply.body)], complete: false };
+    return undefined;
   }
   const features =
     typeof parsed === "object" && parsed !== null && "features" in parsed && Array.isArray(parsed.features) ? (parsed.features as unknown[]) : undefined;
@@ -214,7 +217,11 @@ export function createNwsFetch(options: NwsFetchOptions): (input: NwsFetchInput,
       return { ok: false, failure: { kind: "network", message } };
     }
     if (answer.classified.outcome !== "ok") return { ok: false, failure: failureOf(answer) };
-    return { ok: true, read: await readAnswer(answer.reply, url, now(), latency) };
+    const read = await readAnswer(answer.reply, url, now(), latency);
+    if (read === undefined) {
+      return { ok: false, failure: { kind: "network", message: `truncated or malformed body: ${url}` } };
+    }
+    return { ok: true, read };
   }
 
   return async ({ watch }, signal) => {

@@ -34,13 +34,17 @@ describe("the kind tables", () => {
     expect(fromEventCode("ZZZ")).toBeUndefined();
   });
 
-  it("find each calculated event name", () => {
+  it("find each calculated event name: the same code, or a broader one for a shared name", () => {
     for (const phenomenon of Object.keys(PHENOMENA)) {
       for (const letter of Object.keys(SIGNIFICANCE)) {
         const event = fromPhenomenon(phenomenon, letter);
-        if (event !== undefined) expect(fromEventName(event.label)?.code).toBe(event.code);
+        if (event === undefined) continue;
+        const found = fromEventName(event.label)?.code ?? "";
+        expect(event.code === found || event.code.startsWith(`${found}.`), `${event.label}: ${found}`).toBe(true);
       }
     }
+    expect(fromEventName("Flash Flood Watch")?.code).toBe("met.flood.flash");
+    expect(fromEventName("Flood Warning")?.code).toBe("met.flood");
     expect(fromEventName("  red   FLAG warning ")?.code).toBe("fire.weather");
   });
 });

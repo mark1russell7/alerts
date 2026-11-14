@@ -231,28 +231,38 @@ export function fromEventCode(value: string): EventCode | undefined {
   return EVENT_CODES[upper] ?? (upper.length === 3 ? fromPhenomenon(upper.slice(0, 2), upper.slice(2)) : undefined);
 }
 
-/** The other names of some events: names that do not follow the pattern of hazard and stage. */
+/**
+ * The other names of some events: names that do not follow the pattern of hazard and stage. The NWS
+ * gives one name to the river floods and the areal floods, so these names give the broad code.
+ */
 const NAME_ALIASES: Readonly<Record<string, EventCode>> = {
+  "flood warning": code("met.flood", "Flood Warning", "warning"),
+  "flood watch": code("met.flood", "Flood Watch", "watch"),
+  "flood advisory": code("met.flood", "Flood Advisory", "advisory"),
+  "flood statement": code("met.flood", "Flood Statement", "statement"),
   "red flag warning": code("fire.weather", "Red Flag Warning", "warning"),
   "small craft advisory for hazardous seas": code("met.marine.small-craft.seas", "Small Craft Advisory for Hazardous Seas", "advisory"),
   "small craft advisory for rough bar": code("met.marine.small-craft.rough-bar", "Small Craft Advisory for Rough Bar", "advisory"),
   "small craft advisory for winds": code("met.marine.small-craft.wind", "Small Craft Advisory for Winds", "advisory"),
 };
 
-/** The index of the event names, in lower case. The first row of a name wins. */
+/**
+ * The index of the event names, in lower case. A name of a phenomenon and a stage comes first, then a
+ * name of the table of event codes, then an alias. The first row of a name wins, but an alias replaces it.
+ */
 const NAMES: ReadonlyMap<string, EventCode> = (() => {
   const index = new Map<string, EventCode>();
   const add = (event: EventCode): void => {
     const name = event.label.toLowerCase();
     if (!index.has(name)) index.set(name, event);
   };
-  for (const event of Object.values(EVENT_CODES)) add(event);
   for (const phenomenon of Object.keys(PHENOMENA)) {
     for (const letter of ["W", "A", "Y", "S", "O"]) {
       const event = fromPhenomenon(phenomenon, letter);
       if (event !== undefined) add(event);
     }
   }
+  for (const event of Object.values(EVENT_CODES)) add(event);
   for (const [name, event] of Object.entries(NAME_ALIASES)) index.set(name, event);
   return index;
 })();

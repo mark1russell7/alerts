@@ -197,3 +197,25 @@ describe("the map function", () => {
     );
   });
 });
+
+describe("the VTEC key at the new year", () => {
+  // Two messages of one event, made from a recorded alert. The first message starts the event on
+  // 31 December. The second one continues it on 1 January, with the start 000000T0000Z.
+  const base = feature("nws-bzw.json");
+  const message = (id: string, sent: string, messageType: string, vtec: string, references: unknown[]): unknown => ({
+    ...base,
+    properties: { ...base.properties, id, sent, messageType, references, parameters: { ...base.properties.parameters, VTEC: [vtec] } },
+  });
+  const first = message("urn:oid:test.year.1", "2026-12-31T20:00:00+00:00", "Alert", "/O.NEW.PAFG.BZ.W.0099.261231T2100Z-270101T1600Z/", []);
+  const second = message("urn:oid:test.year.2", "2027-01-01T03:00:00+00:00", "Update", "/O.CON.PAFG.BZ.W.0099.000000T0000Z-270101T1600Z/", [
+    { "@id": "x", identifier: "urn:oid:test.year.1", sender: "w-nws.webmaster@noaa.gov", sent: "2026-12-31T20:00:00+00:00" },
+  ]);
+
+  it("gives two keys, and the CAP reference still links the two reports", async () => {
+    const one = (await mapOne(first)).report;
+    const two = (await mapOne(second)).report;
+    expect(one?.correlation).toEqual([{ system: "vtec", id: "PAFG.BZ.W.0099.2026" }]);
+    expect(two?.correlation).toEqual([{ system: "vtec", id: "PAFG.BZ.W.0099.2027" }]);
+    expect(two?.references).toContain(one?.key);
+  });
+});
