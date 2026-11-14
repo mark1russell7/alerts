@@ -40,7 +40,7 @@ export interface NwsFetchInput {
   readonly cursor?: Cursor;
 }
 
-/** One query of a fetch: its path and whether its failure fails the fetch. */
+/** One query of a fetch: its path, and the effect of its failure. */
 export interface Query {
   readonly path: string;
   /** True: the alerts of the watch. False: the canary query, whose failure only fails the canary check. */
@@ -121,7 +121,7 @@ export function failureOf(answer: Answer): FetchFailure {
   }
 }
 
-/** The observations of one answer, and whether the answer was a full list of alerts. */
+/** The observations of one answer. The value `complete` is true if the answer was a full list of alerts. */
 interface Read {
   readonly observations: Observation[];
   readonly complete: boolean;
@@ -129,10 +129,10 @@ interface Read {
 
 /**
  * This function splits an answer of the NWS API into observations: one for each alert. A JSON body
- * that is not a feature collection gives one observation of the whole body, and the answer is not complete.
+ * that is not a feature collection gives one observation of the whole body. Then the answer is not complete.
  *
  * A body that is not valid JSON gives `undefined`, and the fetch fails. A cut with no framing can look
- * whole to the HTTP client, so a body that does not parse is not a change of the format.
+ * whole to the HTTP client. Thus a body that does not parse is not a change of the format.
  */
 export async function readAnswer(reply: Reply, url: string, fetched: Instant, latency: number): Promise<Read | undefined> {
   const contentType = reply.headers["content-type"] ?? "application/geo+json";

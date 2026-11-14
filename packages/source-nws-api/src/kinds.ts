@@ -284,7 +284,7 @@ export interface KindFacts {
   readonly name?: string;
 }
 
-/** The kind of a message, and whether a table knew it. */
+/** The kind of a message. The value `known` is true if a table knew the kind. */
 export interface ResolvedKind {
   readonly kind: Kind;
   readonly known: boolean;

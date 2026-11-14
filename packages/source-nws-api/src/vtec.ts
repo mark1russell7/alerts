@@ -78,8 +78,8 @@ export function parseVtec(text: string): Vtec | undefined {
  * This function gives the correlation key of a VTEC event: the office, the phenomenon, the
  * significance, the event number and the year. The event numbers start again each year.
  *
- * The year comes from the start of the event. A message about an event that already started has no
- * start, so the year comes from the sent time. Near the new year, two messages about one event can
+ * The year comes from the start of the event. For an event that already started, the VTEC has no
+ * start, so the year comes from the sent time. Near the new year, two messages of one event can
  * thus get two keys. Then the CAP references of the messages still link them.
  */
 export function vtecKey(vtec: Vtec, sent: Instant): CorrelationKey {
