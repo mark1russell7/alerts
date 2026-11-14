@@ -1,0 +1,88 @@
+{
+  "id": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.f3de3ec9923a43c3838185ed8d654938f4829183.001.2",
+  "type": "Feature",
+  "geometry": null,
+  "properties": {
+    "@id": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.f3de3ec9923a43c3838185ed8d654938f4829183.001.2",
+    "@type": "wx:Alert",
+    "id": "urn:oid:2.49.0.1.840.0.f3de3ec9923a43c3838185ed8d654938f4829183.001.2",
+    "areaDesc": "Dougherty; Lee; Miller; Baker; Mitchell",
+    "geocode": {
+      "SAME": [
+        "013095",
+        "013177",
+        "013201",
+        "013007",
+        "013205"
+      ],
+      "UGC": [
+        "GAZ125",
+        "GAZ126",
+        "GAZ143",
+        "GAZ144",
+        "GAZ145"
+      ]
+    },
+    "affectedZones": [
+      "https://api.weather.gov/zones/forecast/GAZ125",
+      "https://api.weather.gov/zones/forecast/GAZ126",
+      "https://api.weather.gov/zones/forecast/GAZ143",
+      "https://api.weather.gov/zones/forecast/GAZ144",
+      "https://api.weather.gov/zones/forecast/GAZ145"
+    ],
+    "references": [],
+    "sent": "2026-11-14T12:49:00-05:00",
+    "effective": "2026-11-14T12:49:00-05:00",
+    "onset": "2026-11-15T01:00:00-05:00",
+    "expires": "2026-11-15T09:00:00-05:00",
+    "ends": "2026-11-15T09:00:00-05:00",
+    "status": "Actual",
+    "messageType": "Alert",
+    "category": "Met",
+    "severity": "Severe",
+    "certainty": "Likely",
+    "urgency": "Expected",
+    "event": "Freeze Warning",
+    "sender": "w-nws.webmaster@noaa.gov",
+    "senderName": "NWS Tallahassee FL",
+    "headline": "Freeze Warning issued November 14 at 12:49PM EST until November 15 at 9:00AM EST by NWS Tallahassee FL",
+    "description": "* WHAT...Sub-freezing temperatures as low as 30 expected.\n\n* WHERE...Baker, Dougherty, Lee, Miller, and Mitchell Counties.\n\n* WHEN...From 1 AM to 9 AM EST Sunday.\n\n* IMPACTS...Frost and freeze conditions could kill crops, other\nsensitive vegetation and possibly damage unprotected outdoor\nplumbing.",
+    "instruction": "Take steps now to protect tender plants from the cold.",
+    "response": "Execute",
+    "note": null,
+    "parameters": {
+      "AWIPSidentifier": [
+        "NPWTAE"
+      ],
+      "WMOidentifier": [
+        "WWUS72 KTAE 141749"
+      ],
+      "NWSheadline": [
+        "FREEZE WARNING IN EFFECT FROM 1 AM TO 9 AM EST SUNDAY"
+      ],
+      "BLOCKCHANNEL": [
+        "EAS",
+        "NWEM",
+        "CMAS"
+      ],
+      "VTEC": [
+        "/O.EXA.KTAE.FZ.W.0013.261115T0600Z-261115T1400Z/"
+      ],
+      "eventEndingTime": [
+        "2026-11-15T09:00:00-05:00"
+      ]
+    },
+    "scope": "Public",
+    "code": "IPAWSv1.0",
+    "language": "en-US",
+    "web": "http://www.weather.gov",
+    "eventCode": {
+      "SAME": [
+        "NWS"
+      ],
+      "NationalWeatherService": [
+        "FZW"
+      ]
+    }
+  }
+}

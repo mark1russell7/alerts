@@ -1,0 +1,76 @@
+{
+  "id": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.309d8c6e239c548780e12fc06bebedaa56a5686c.015.1",
+  "type": "Feature",
+  "geometry": null,
+  "properties": {
+    "@id": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.309d8c6e239c548780e12fc06bebedaa56a5686c.015.1",
+    "@type": "wx:Alert",
+    "id": "urn:oid:2.49.0.1.840.0.309d8c6e239c548780e12fc06bebedaa56a5686c.015.1",
+    "areaDesc": "West of Barren Islands Including Kamishak Bay",
+    "geocode": {
+      "SAME": [
+        "058730"
+      ],
+      "UGC": [
+        "PKZ730"
+      ]
+    },
+    "affectedZones": [
+      "https://api.weather.gov/zones/forecast/PKZ730"
+    ],
+    "references": [],
+    "sent": "2026-11-13T03:13:00-09:00",
+    "effective": "2026-11-13T03:13:00-09:00",
+    "onset": "2026-11-14T05:00:00-09:00",
+    "expires": "2026-11-13T16:15:00-09:00",
+    "ends": "2026-11-14T17:00:00-09:00",
+    "status": "Actual",
+    "messageType": "Alert",
+    "category": "Met",
+    "severity": "Moderate",
+    "certainty": "Likely",
+    "urgency": "Expected",
+    "event": "Gale Warning",
+    "sender": "w-nws.webmaster@noaa.gov",
+    "senderName": "NWS Anchorage AK",
+    "headline": "Gale Warning issued November 13 at 3:13AM AKST until November 14 at 5:00PM AKST by NWS Anchorage AK",
+    "description": "Coastal Waters Forecast for the Northern Gulf of Alaska Coast\nup to 100 nm out including Kodiak Island and Cook Inlet.\n\nWind forecasts reflect the predominant speed and direction\nexpected. Sea forecasts represent an average of the highest\none-third of the combined wind wave and swell height.\n\n.TODAY...N wind 25 kt. Seas 6 ft. Snow.\n.TONIGHT...NW wind 30 kt. Seas 8 ft.\n.SAT...NW wind 35 kt. Seas 9 ft.\n.SAT NIGHT...NW wind 35 kt. Seas 9 ft.\n.SUN THROUGH TUE...NW wind 30 kt. Seas 8 ft.",
+    "instruction": null,
+    "response": "Avoid",
+    "note": null,
+    "parameters": {
+      "AWIPSidentifier": [
+        "CWFAER"
+      ],
+      "WMOidentifier": [
+        "FZAK51 PAFC 131213"
+      ],
+      "NWSheadline": [
+        "GALE WARNING SATURDAY"
+      ],
+      "BLOCKCHANNEL": [
+        "EAS",
+        "NWEM",
+        "CMAS"
+      ],
+      "VTEC": [
+        "/O.NEW.PAFC.GL.W.1597.261114T1400Z-261115T0200Z/"
+      ],
+      "eventEndingTime": [
+        "2026-11-14T17:00:00-09:00"
+      ]
+    },
+    "scope": "Public",
+    "code": "IPAWSv1.0",
+    "language": "en-US",
+    "web": "http://www.weather.gov",
+    "eventCode": {
+      "SAME": [
+        "NWS"
+      ],
+      "NationalWeatherService": [
+        "GLW"
+      ]
+    }
+  }
+}

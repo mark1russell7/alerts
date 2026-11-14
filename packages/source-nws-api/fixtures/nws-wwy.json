@@ -1,0 +1,76 @@
+{
+  "id": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.60d5501d0964b0acc64c08a405f9900902dc988d.006.2",
+  "type": "Feature",
+  "geometry": null,
+  "properties": {
+    "@id": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.60d5501d0964b0acc64c08a405f9900902dc988d.006.2",
+    "@type": "wx:Alert",
+    "id": "urn:oid:2.49.0.1.840.0.60d5501d0964b0acc64c08a405f9900902dc988d.006.2",
+    "areaDesc": "Southern Kenai Mtns",
+    "geocode": {
+      "SAME": [
+        "002122"
+      ],
+      "UGC": [
+        "AKZ725"
+      ]
+    },
+    "affectedZones": [
+      "https://api.weather.gov/zones/forecast/AKZ725"
+    ],
+    "references": [],
+    "sent": "2026-11-14T05:50:00-09:00",
+    "effective": "2026-11-14T05:50:00-09:00",
+    "onset": "2026-11-14T22:00:00-09:00",
+    "expires": "2026-11-14T17:00:00-09:00",
+    "ends": "2026-11-15T17:00:00-09:00",
+    "status": "Actual",
+    "messageType": "Alert",
+    "category": "Met",
+    "severity": "Moderate",
+    "certainty": "Likely",
+    "urgency": "Expected",
+    "event": "Winter Weather Advisory",
+    "sender": "w-nws.webmaster@noaa.gov",
+    "senderName": "NWS Anchorage AK",
+    "headline": "Winter Weather Advisory issued November 14 at 5:50AM AKST until November 15 at 5:00PM AKST by NWS Anchorage AK",
+    "description": "* WHAT...Mixed precipitation expected. Total snow accumulations\nbetween 2 and 4 inches and ice accumulations around a light glaze.\nWinds gusting as high as 35 mph.\n\n* WHERE...Seward.\n\n* WHEN...From 10 PM this evening to 5 PM AKST Sunday.\n\n* IMPACTS...Travel could be very difficult.\n\n* ADDITIONAL DETAILS...Snow will develop tonight and continue into\nSunday before warmer air works in and changes the snow over to\nrain. A brief period of freezing rain is possible before\ntemperatures warm above freezing.",
+    "instruction": "Slow down and use caution while traveling. For the latest road\nconditions call 5 1 1 or visit 511.alaska.gov.",
+    "response": "Execute",
+    "note": null,
+    "parameters": {
+      "AWIPSidentifier": [
+        "WSWAER"
+      ],
+      "WMOidentifier": [
+        "WWAK41 PAFC 141450"
+      ],
+      "NWSheadline": [
+        "WINTER WEATHER ADVISORY IN EFFECT FROM 10 PM THIS EVENING TO 5 PM AKST SUNDAY"
+      ],
+      "BLOCKCHANNEL": [
+        "EAS",
+        "NWEM",
+        "CMAS"
+      ],
+      "VTEC": [
+        "/O.NEW.PAFC.WW.Y.0056.261115T0700Z-261116T0200Z/"
+      ],
+      "eventEndingTime": [
+        "2026-11-15T17:00:00-09:00"
+      ]
+    },
+    "scope": "Public",
+    "code": "IPAWSv1.0",
+    "language": "en-US",
+    "web": "http://www.weather.gov",
+    "eventCode": {
+      "SAME": [
+        "NWS"
+      ],
+      "NationalWeatherService": [
+        "WWY"
+      ]
+    }
+  }
+}

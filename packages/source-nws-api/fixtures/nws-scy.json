@@ -1,0 +1,86 @@
+{
+  "id": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.36aa8025494a4d1141a24d70546d91703134addf.010.1",
+  "type": "Feature",
+  "geometry": null,
+  "properties": {
+    "@id": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.36aa8025494a4d1141a24d70546d91703134addf.010.1",
+    "@type": "wx:Alert",
+    "id": "urn:oid:2.49.0.1.840.0.36aa8025494a4d1141a24d70546d91703134addf.010.1",
+    "areaDesc": "Monterey Bay",
+    "geocode": {
+      "SAME": [
+        "057535"
+      ],
+      "UGC": [
+        "PZZ535"
+      ]
+    },
+    "affectedZones": [
+      "https://api.weather.gov/zones/forecast/PZZ535"
+    ],
+    "references": [
+      {
+        "@id": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.aeb8390304a0ebfc4f38197ba239ce5058ae47a8.009.1",
+        "identifier": "urn:oid:2.49.0.1.840.0.aeb8390304a0ebfc4f38197ba239ce5058ae47a8.009.1",
+        "sender": "w-nws.webmaster@noaa.gov",
+        "sent": "2026-11-14T08:38:00-08:00"
+      }
+    ],
+    "sent": "2026-11-14T14:08:00-08:00",
+    "effective": "2026-11-14T14:08:00-08:00",
+    "onset": "2026-11-14T14:08:00-08:00",
+    "expires": "2026-11-14T22:15:00-08:00",
+    "ends": "2026-11-16T15:00:00-08:00",
+    "status": "Actual",
+    "messageType": "Update",
+    "category": "Met",
+    "severity": "Minor",
+    "certainty": "Likely",
+    "urgency": "Expected",
+    "event": "Small Craft Advisory",
+    "sender": "w-nws.webmaster@noaa.gov",
+    "senderName": "NWS San Francisco CA",
+    "headline": "Small Craft Advisory issued November 14 at 2:08PM PST until November 16 at 3:00PM PST by NWS San Francisco CA",
+    "description": "* WHAT...Southwest winds 10 to 20 kt with gusts up to 30 kt and\nseas 9 to 14 ft.\n\n* WHERE...Monterey Bay.\n\n* WHEN...Until 3 PM PST Monday.\n\n* IMPACTS...Conditions will be hazardous to small craft.",
+    "instruction": "Inexperienced mariners, especially those operating smaller\nvessels, should avoid navigating in hazardous conditions.",
+    "response": "Avoid",
+    "note": null,
+    "parameters": {
+      "AWIPSidentifier": [
+        "MWWMTR"
+      ],
+      "WMOidentifier": [
+        "WHUS76 KMTR 142208"
+      ],
+      "NWSheadline": [
+        "SMALL CRAFT ADVISORY NOW IN EFFECT UNTIL 3 PM PST MONDAY"
+      ],
+      "BLOCKCHANNEL": [
+        "EAS",
+        "NWEM",
+        "CMAS"
+      ],
+      "VTEC": [
+        "/O.EXT.KMTR.SC.Y.0138.000000T0000Z-261116T2300Z/"
+      ],
+      "eventEndingTime": [
+        "2026-11-16T15:00:00-08:00"
+      ],
+      "expiredReferences": [
+        "w-nws.webmaster@noaa.gov,urn:oid:2.49.0.1.840.0.554ef41b65cf202f912a9a87ad2629fcc3bf9ba4.009.1,2026-11-14T02:32:00-08:00 w-nws.webmaster@noaa.gov,urn:oid:2.49.0.1.840.0.09064297c76716cb295b31ea0e7b2bb75266269f.005.2,2026-11-13T20:48:00-08:00"
+      ]
+    },
+    "scope": "Public",
+    "code": "IPAWSv1.0",
+    "language": "en-US",
+    "web": "http://www.weather.gov",
+    "eventCode": {
+      "SAME": [
+        "NWS"
+      ],
+      "NationalWeatherService": [
+        "SCY"
+      ]
+    }
+  }
+}

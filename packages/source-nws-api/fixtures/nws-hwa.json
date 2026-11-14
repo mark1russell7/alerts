@@ -1,0 +1,79 @@
+{
+  "id": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.680bbf1e781a90a7c7cdbd357b23ea929fc43bd5.001.1",
+  "type": "Feature",
+  "geometry": null,
+  "properties": {
+    "@id": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.680bbf1e781a90a7c7cdbd357b23ea929fc43bd5.001.1",
+    "@type": "wx:Alert",
+    "id": "urn:oid:2.49.0.1.840.0.680bbf1e781a90a7c7cdbd357b23ea929fc43bd5.001.1",
+    "areaDesc": "Shemya and Attu Islands",
+    "geocode": {
+      "SAME": [
+        "002016"
+      ],
+      "UGC": [
+        "AKZ791"
+      ]
+    },
+    "affectedZones": [
+      "https://api.weather.gov/zones/forecast/AKZ791"
+    ],
+    "references": [],
+    "sent": "2026-11-14T12:31:00-09:00",
+    "effective": "2026-11-14T12:31:00-09:00",
+    "onset": "2026-11-16T21:00:00-09:00",
+    "expires": "2026-11-15T06:15:00-09:00",
+    "ends": "2026-11-17T06:00:00-09:00",
+    "status": "Actual",
+    "messageType": "Alert",
+    "category": "Met",
+    "severity": "Severe",
+    "certainty": "Possible",
+    "urgency": "Future",
+    "event": "High Wind Watch",
+    "sender": "w-nws.webmaster@noaa.gov",
+    "senderName": "NWS Anchorage AK",
+    "headline": "High Wind Watch issued November 14 at 12:31PM AKST until November 17 at 6:00AM AKST by NWS Anchorage AK",
+    "description": "* WHAT...West winds 50 to 65 mph with gusts up to 80 mph possible.\n\n* WHERE...Shemya and Attu Islands.\n\n* WHEN...From Monday evening through late Monday night.\n\n* IMPACTS...High winds could move loose debris, damage property, and\ncause power outages. Travel could be difficult.\n\n* ADDITIONAL DETAILS...Winds rapidly increase in strength late Monday\nevening and peak Tuesday morning as a strong low pressure system\nmoves through the Bering. Winds will gradually lighten through\nTuesday afternoon.",
+    "instruction": "A high wind watch means there is potential for a hazardous high wind\nevent. Monitor the latest forecasts and warnings for updates on this\nsituation. Fasten loose objects or shelter objects in a safe location\nprior to the onset of winds.",
+    "response": "Prepare",
+    "note": null,
+    "parameters": {
+      "AWIPSidentifier": [
+        "NPWALU"
+      ],
+      "WMOidentifier": [
+        "WWAK72 PAFC 142131"
+      ],
+      "NWSheadline": [
+        "HIGH WIND WATCH IN EFFECT FROM MONDAY EVENING THROUGH LATE MONDAY NIGHT"
+      ],
+      "BLOCKCHANNEL": [
+        "EAS",
+        "NWEM",
+        "CMAS"
+      ],
+      "EAS-ORG": [
+        "WXR"
+      ],
+      "VTEC": [
+        "/O.NEW.PAFC.HW.A.0011.261117T0600Z-261117T1500Z/"
+      ],
+      "eventEndingTime": [
+        "2026-11-17T06:00:00-09:00"
+      ]
+    },
+    "scope": "Public",
+    "code": "IPAWSv1.0",
+    "language": "en-US",
+    "web": "http://www.weather.gov",
+    "eventCode": {
+      "SAME": [
+        "HWA"
+      ],
+      "NationalWeatherService": [
+        "HWA"
+      ]
+    }
+  }
+}
