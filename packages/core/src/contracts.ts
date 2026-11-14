@@ -162,6 +162,11 @@ export interface Observation {
 export interface Report {
   readonly id: ReportId;
   readonly source: SourceId;
+  /**
+   * The authority that issued the message: one of the `origins` of the source descriptor, for
+   * example `nws` or `usgs`. The corroboration of an incident counts the different origins.
+   */
+  readonly origin: string;
   /** The id that the source gives to the message (the CAP identifier). */
   readonly key: string;
   /** The keys of the same source that this report updates or cancels (the CAP references). */
@@ -189,7 +194,7 @@ export interface Report {
   readonly areas: readonly Area[];
   readonly areaText?: string;
   readonly about: readonly Subject[];
-  /** The authority that sent the message, for example `NWS Boston/Norton MA`. */
+  /** The authority that sent the message, for example `NWS Topeka KS`. */
   readonly sender: string;
   readonly headline: string;
   readonly description?: string;
@@ -385,12 +390,15 @@ export interface Coverage {
 
 /**
  * One real event, made from one or more reports. The core calculates each incident from the
- * merge state alone, so each copy of the system gets the same incidents.
+ * merge state and a time, so each copy of the system gets the same incidents.
  */
 export interface Incident {
   /** The smallest report id of the incident. It changes when two incidents merge. */
   readonly anchor: ReportId;
+  /** The report ids of the incident, from the smallest. */
   readonly reports: readonly ReportId[];
+  /** The status of each report of the incident. Reports of two statuses are not in one incident. */
+  readonly status: Status;
   readonly kind: Kind;
   readonly severity: Severity;
   readonly urgency: Urgency;
@@ -399,9 +407,9 @@ export interface Incident {
   readonly expires?: Instant;
   readonly areas: readonly Area[];
   readonly about: readonly Subject[];
-  /** False when each line of reports is cancelled or expired. */
+  /** False when each line of reports is cancelled or expired at the time of the calculation. */
   readonly live: boolean;
-  /** The count of independent origins that report the event. */
+  /** The count of different origins that report the event. */
   readonly corroboration: number;
 }
 
@@ -516,6 +524,27 @@ export interface EscalationPolicy {
   readonly exhaustedAfter: Duration;
 }
 
+/**
+ * One accepted send of one step of an escalation. The merge state keeps each send, so each copy of
+ * the system knows the level that a person already got. A send that failed makes no record, so its
+ * step stays due.
+ */
+export interface Delivery {
+  /** The key of the message, from `messageKey`. */
+  readonly key: string;
+  /** A report of the incident: its anchor at the time of the send. */
+  readonly incident: ReportId;
+  readonly level: Level;
+  readonly person: PersonId;
+  readonly channel: ChannelId;
+  /** The index of the step in the escalation, from 0. */
+  readonly step: number;
+  /** The time at which the channel accepted the message. */
+  readonly at: Instant;
+  /** The receipt of the channel, when it gives one. The escalation uses it to cancel or to poll. */
+  readonly receipt?: Receipt;
+}
+
 /** An acknowledgment from a person, by any channel or the UI. It stops the escalation of the level. */
 export interface Acknowledgment {
   /** A report of the incident. The ack applies to the incident that holds this report, also after a merge. */
@@ -524,4 +553,20 @@ export interface Acknowledgment {
   readonly person: PersonId;
   readonly at: Instant;
   readonly via: ChannelId | "ui";
+}
+
+// =============================================================================
+// The merge state
+// =============================================================================
+
+/**
+ * The merge state: three grow-only sets. The join of two states is their union, so each copy of
+ * the system that gets the same parts gets the same state. `normalize` gives the one form of a
+ * state. It has one report for each id, in the order of the ids. It has each delivery and each
+ * acknowledgment one time, in the order of their canonical JSON.
+ */
+export interface MergeState {
+  readonly reports: readonly Report[];
+  readonly deliveries: readonly Delivery[];
+  readonly acks: readonly Acknowledgment[];
 }

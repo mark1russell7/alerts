@@ -39,15 +39,25 @@ The merge state is a set of grow-only sets: reports, acknowledgments and deliver
 - **commutative**: `join(a, b) = join(b, a)`. The order of arrival changes nothing.
 - **associative**: `join(join(a, b), c) = join(a, join(b, c))`. Two copies of the system that exchange their states get the same state.
 
-The incidents are a function of the merge state alone, with no clock. Two reports are in one incident when:
+Two copies can get one report id with two contents, for example from two versions of an adapter. The join then keeps the content with the smaller canonical JSON (RFC 8785). This choice is a total order, so the join keeps the three laws.
+
+The groups of reports are a function of the merge state alone, with no clock. Two reports of one status are in one incident when:
 
 1. one report references the other (the CAP references), or
 2. they share a correlation key (an NWS VTEC event, a USGS event id), or
 3. the link rule of their kinds matches: the same family of kind, areas that overlap and times that overlap.
 
-The incident id is its anchor: its smallest report id. The anchor can change when two incidents merge. So an acknowledgment and a delivery point to a report of the incident, not to the anchor. The level that the system already sent for an incident is the highest level of each delivery that points to one of its reports. This value only grows, so a merge does not send an alert again.
+The links are transitive: when A links to B and B links to C, the three reports are in one incident. A link rule gives the blocks of a report, for example its family of kind and its day. The merge tests only two reports that share a block. So the cost grows with the size of the blocks, not with the square of the count of reports.
 
-Property tests hold each law (rigor, fast-check).
+A line is a report and the reports of its source that update or cancel it. The head of a line is its last report: no report of the same source references it. An incident is live at a time when one or more heads are not cancelled and not expired at that time. Its severity, urgency and certainty are the highest of its live heads. Its corroboration is the count of the different origins of its reports.
+
+A cancel ends only its own line. A copy from another source can miss the cancel. Then the incident stays live until that copy expires. This error is on the safe side.
+
+The incident id is its anchor: its smallest report id. The anchor can change when two incidents merge. So an acknowledgment and a delivery point to a report of the incident, not to the anchor.
+
+A delivery is one accepted send. A failed send makes no delivery, so its step stays due and the runtime tries it again. The sent level of a person for an incident is the highest level of the deliveries to the person for its reports. This value only grows, so a merge does not send an alert again.
+
+Property tests hold each law. They use the seeded generator of `@mark1russell7/rigor-generators`, and the variable `SEED` replays a run. They also examine that each order of arrival gives the same incidents.
 
 ## The source contract
 
@@ -159,4 +169,5 @@ The core matches the area of a report to a place with one rule for each source. 
 
 - The procedure schemas: Standard Schema validators (zod 4) for each input and output, in the core package.
 - The link rule of each family of kind, for rule 3 of the merge.
+- The merge state grows with each report. A compaction of the incidents that ended before a horizon keeps it small. It must keep the three laws.
 - The taxonomy: the list of codes, from the CAP and NWS event names first (AL-5).
