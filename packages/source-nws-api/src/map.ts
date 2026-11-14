@@ -30,6 +30,9 @@ import { parseVtec, vtecKey, type Vtec } from "./vtec.ts";
 /** The id of this source. */
 export const SOURCE_ID = "nws-api" as SourceId;
 
+/** The authority that issues each message of this source: the NWS. The descriptor lists it in `origins`. */
+export const ORIGIN = "nws";
+
 /** The fields of the properties of an NWS alert that the map function knows. A different field is a problem. */
 export const KNOWN_FIELDS: ReadonlySet<string> = new Set([
   "@id",
@@ -337,6 +340,7 @@ function mapFeature(feature: unknown, observation: Observation, problems: Proble
   const report: Report = {
     id: reportId({ source: SOURCE_ID, key, sent }),
     source: SOURCE_ID,
+    origin: ORIGIN,
     key,
     references: referencesOf(properties, key, parameters),
     correlation: [...correlation.values()],

@@ -5,7 +5,7 @@
 
 import type { Area, SourceDescriptor } from "@mark1russell7/alerts";
 import { EVENT_CODES, PHENOMENA } from "./kinds.ts";
-import { SOURCE_ID } from "./map.ts";
+import { ORIGIN, SOURCE_ID } from "./map.ts";
 
 /** The countries and territories of the NWS, as ISO 3166 codes. */
 const COVERAGE: readonly Area[] = ["US", "PR", "GU", "AS", "VI", "MP"].map((code) => ({ type: "code", system: "iso3166", code }));
@@ -19,7 +19,7 @@ export const KIND_PREFIXES: readonly string[] = [
 export const NWS_DESCRIPTOR: SourceDescriptor = {
   id: SOURCE_ID,
   title: "NWS alerts API (api.weather.gov)",
-  origins: ["nws"],
+  origins: [ORIGIN],
   // The NWS API answers through the Akamai network (api.weather.gov is a name of edgekey.net)
   dependsOn: ["provider:nws-api", "cdn:akamai"],
   uses: ["internet", "power"],

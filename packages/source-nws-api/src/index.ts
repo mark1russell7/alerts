@@ -26,7 +26,7 @@ export {
   UNKNOWN_KIND,
 } from "./kinds.ts";
 export type { EventCode, Hazard, KindFacts, ResolvedKind } from "./kinds.ts";
-export { KNOWN_FIELDS, mapObservation, SOURCE_ID } from "./map.ts";
+export { KNOWN_FIELDS, mapObservation, ORIGIN, SOURCE_ID } from "./map.ts";
 export { CLOSING_ACTIONS, mainVtec, parseVtec, vtecKey, vtecTime } from "./vtec.ts";
 export type { Vtec, VtecClass } from "./vtec.ts";
 
