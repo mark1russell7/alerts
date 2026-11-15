@@ -7,6 +7,7 @@
  */
 
 import type { Expectation, SourceId } from "@mark1russell7/alerts";
+import { WEA_PARAMETER } from "@mark1russell7/alerts-format-nws";
 import { SOURCE_ID } from "./map.ts";
 
 /** The id of the NWS API source. A source package does not import another source package, so the id is here as data. */
@@ -21,5 +22,5 @@ export const WEA_EXPECTATION: Expectation = {
   id: "nws-api.ipaws",
   from: NWS_API_SOURCE,
   to: SOURCE_ID,
-  when: { statuses: ["actual"], parameters: ["WEAHandling"] },
+  when: { statuses: ["actual"], parameters: [WEA_PARAMETER] },
 };

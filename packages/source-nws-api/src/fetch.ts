@@ -4,7 +4,7 @@
  */
 
 import { observationId, type Cursor, type FetchFailure, type FetchOutcome, type Instant, type Observation, type Watch } from "@mark1russell7/alerts";
-import { isUgcCode } from "@mark1russell7/alerts-format-nws";
+import { isUgcCode, WEA_EVENT_CODES } from "@mark1russell7/alerts-format-nws";
 import { errorMessage } from "@mark1russell7/text";
 import { ApiError, poll, type Answer, type Condition, type Exchange, type Pace, type Reply, type Transport } from "polite-crawler/api";
 
@@ -33,6 +33,8 @@ export interface NwsFetchOptions {
   readonly minIntervalMs?: number;
   /** The longest time of one request, in milliseconds. The default is 15000. */
   readonly timeoutMs?: number;
+  /** True: each fetch also asks for the national WEA messages (`WEA_PATH`). The default is true. */
+  readonly weaCopies?: boolean;
 }
 
 /** The input of the fetch function, as the contract gives it. */
@@ -44,8 +46,23 @@ export interface NwsFetchInput {
 /** One query of a fetch: its path, and the effect of its failure. */
 export interface Query {
   readonly path: string;
-  /** True: the alerts of the watch. False: the canary query, whose failure only fails the canary check. */
+  /**
+   * True: the alerts of the watch. False: a query of the health of the source, the canary or the WEA
+   * copies. The failure of such a query does not fail the fetch.
+   */
   readonly main: boolean;
+}
+
+/**
+ * The national query of the actual WEA messages. The lateness of IPAWS against this source needs each
+ * WEA message of the country, because the IPAWS feed is national. The core filters the reports by `WEAHandling`.
+ */
+export const WEA_PATH: string = `/alerts/active?status=actual&code=${WEA_EVENT_CODES.join(",")}`;
+
+/** The options of the queries of a watch. */
+export interface QueryOptions {
+  /** True: the queries include the national query of the WEA messages. The default is true. */
+  readonly weaCopies?: boolean;
 }
 
 const STATE = /^[A-Z]{2}$/;
@@ -56,11 +73,14 @@ const STATE = /^[A-Z]{2}$/;
  * no such code gives the national query. A watch with no place gives no query of alerts. Each
  * watch also gives the canary query, so the health of the source is known with no place.
  *
- * The queries ask for all kinds and all statuses. The core filters the reports.
+ * The queries of the watch ask for all kinds and all statuses. The core filters the reports. The
+ * national query of the WEA messages comes after the queries of the watch. The national query of all
+ * alerts holds the WEA messages, so then the WEA query is not necessary.
  */
-export function queriesOf(watch: Watch): Query[] {
+export function queriesOf(watch: Watch, options: QueryOptions = {}): Query[] {
   const canary: Query = { path: CANARY_PATH, main: false };
-  if (watch.places.length === 0) return [canary];
+  const health: Query[] = options.weaCopies === false ? [canary] : [{ path: WEA_PATH, main: false }, canary];
+  if (watch.places.length === 0) return health;
   const states = new Set<string>();
   const zones = new Set<string>();
   let national = false;
@@ -81,13 +101,12 @@ export function queriesOf(watch: Watch): Query[] {
     else national = true;
   }
   const list = (values: Set<string>): string => [...values].sort().join(",");
-  const main: Query[] = national
-    ? [{ path: "/alerts/active", main: true }]
-    : [
-        ...(states.size > 0 ? [{ path: `/alerts/active?area=${list(states)}`, main: true }] : []),
-        ...(zones.size > 0 ? [{ path: `/alerts/active?zone=${list(zones)}`, main: true }] : []),
-      ];
-  return [...main, canary];
+  if (national) return [{ path: "/alerts/active", main: true }, canary];
+  return [
+    ...(states.size > 0 ? [{ path: `/alerts/active?area=${list(states)}`, main: true }] : []),
+    ...(zones.size > 0 ? [{ path: `/alerts/active?zone=${list(zones)}`, main: true }] : []),
+    ...health,
+  ];
 }
 
 /** The text of a problem answer of the NWS API (RFC 7807), when the body is one. */
@@ -246,17 +265,23 @@ export function createNwsFetch(options: NwsFetchOptions): (input: NwsFetchInput,
   }
 
   return async ({ watch }, signal) => {
-    const queries = queriesOf(watch);
+    const queries = queriesOf(watch, options.weaCopies === undefined ? {} : { weaCopies: options.weaCopies });
     const observations: Observation[] = [];
+    // An alert in two answers is one observation: the first answer gives it
+    const bodies = new Set<string>();
     let complete = true;
     for (const { path, main } of queries) {
       const result = await query(path, signal);
       if (!result.ok) {
-        // The failure of the canary query does not fail the fetch. The canary check then fails.
+        // The failure of a health query does not fail the fetch. The canary check, or the lateness check, then has less data.
         if (main) return { ok: false, failure: result.failure };
         continue;
       }
-      observations.push(...result.read.observations);
+      for (const observation of result.read.observations) {
+        if (bodies.has(observation.body)) continue;
+        bodies.add(observation.body);
+        observations.push(observation);
+      }
       if (main && !result.read.complete) complete = false;
     }
     return { ok: true, observations, complete };
