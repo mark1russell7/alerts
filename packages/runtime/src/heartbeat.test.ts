@@ -1,4 +1,4 @@
-import type { SourceId } from "@mark1russell7/alerts";
+import type { ChannelId, PersonId, ReportId, SourceId } from "@mark1russell7/alerts";
 import { fakeWallClock } from "@mark1russell7/algebra/clock";
 import { random, seedsFrom } from "@mark1russell7/rigor-generators";
 import { describe, expect, it } from "vitest";
@@ -22,7 +22,9 @@ import {
   type PassSummary,
   type RefusalView,
 } from "./heartbeat.ts";
+import { envelope, type RuntimeEvent } from "./events.ts";
 import { INSTANCE_TIMES } from "./instance.ts";
+import { EMPTY_RUNTIME, fold } from "./state.ts";
 
 const T0 = Date.UTC(2026, 10, 15, 12, 0);
 const SECOND = 1000;
@@ -166,48 +168,63 @@ describe("the steps of the heartbeat", () => {
 });
 
 describe("the refused channels of the log", () => {
-  const view = (refusals: RefusalView["refusals"], deliveries: RefusalView["merge"]["deliveries"] = []): RefusalView => ({ refusals, merge: { deliveries } });
+  const view = (refusals: RefusalView["refusals"], delivered: RefusalView["delivered"] = {}): RefusalView => ({ refusals, delivered });
 
-  it("holds each channel with a waiting refusal after its last delivery, with the sorted kinds and the latest retry", () => {
+  it("holds each channel with a waiting refusal and no later delivery, with the sorted kinds and the latest retry", () => {
     const state = view(
       {
-        a: { channel: "pushover", kind: "rate-limited", at: T0 + SECOND, retryAt: T0 + 120 * SECOND },
-        b: { channel: "pushover", kind: "auth", at: T0, retryAt: T0 + 60 * SECOND },
+        a: { channel: "pushover", kind: "rate-limited", retryAt: T0 + 120 * SECOND, deliveries: 3 },
+        b: { channel: "pushover", kind: "auth", retryAt: T0 + 60 * SECOND, deliveries: 3 },
         // The retry of this refusal is before the time of the first pass, thus its kind is old.
-        c: { channel: "pushover", kind: "refused", at: T0 - 60 * SECOND, retryAt: T0 + 2 * SECOND },
-        // A delivery on the channel came after this refusal, thus the channel works.
-        d: { channel: "twilio", kind: "refused", at: T0 - 10 * SECOND, retryAt: T0 + 30 * SECOND },
+        c: { channel: "pushover", kind: "refused", retryAt: T0 + 2 * SECOND, deliveries: 3 },
+        // A delivery on the channel came after this refusal in the log, thus the channel works.
+        d: { channel: "twilio", kind: "refused", retryAt: T0 + 30 * SECOND, deliveries: 0 },
       },
-      [
-        { channel: "twilio", at: T0 },
-        { channel: "pushover", at: T0 - 90 * SECOND },
-      ],
+      { pushover: 3, twilio: 1 },
     );
     expect(heldOf(state, T0 + 2 * SECOND)).toEqual({ pushover: { kinds: ["auth", "rate-limited"], until: T0 + 120 * SECOND } });
   });
 
-  it("holds nothing with no refusal, and keeps a refusal at the time of a delivery on its channel", () => {
+  it("holds nothing with no refusal, and holds a channel whose refusal has no later delivery", () => {
     expect(heldOf(view({}), T0)).toEqual({});
-    const same = view({ a: { channel: "pushover", kind: "auth", at: T0, retryAt: T0 + 60 * SECOND } }, [{ channel: "pushover", at: T0 }]);
-    expect(heldOf(same, T0 + SECOND)).toEqual({ pushover: { kinds: ["auth"], until: T0 + 60 * SECOND } });
+    const refused = view({ a: { channel: "pushover", kind: "auth", retryAt: T0 + 60 * SECOND, deliveries: 0 } });
+    expect(heldOf(refused, T0 + SECOND)).toEqual({ pushover: { kinds: ["auth"], until: T0 + 60 * SECOND } });
   });
 
-  it("keeps the hold of each channel across a restart at each pass: the same channels and the same retry", () => {
+  const delivery = (key: string, channel: string, at: number): RuntimeEvent => ({
+    ...envelope("delivery", `delivery:${key}`, at),
+    delivery: { key, incident: "report-1" as ReportId, level: "urgent", person: "person-1" as PersonId, channel: channel as ChannelId, step: 0, at },
+  });
+
+  it("keeps the hold of each channel across a restart at each pass, also when a channel accepts after the time of the refusal", () => {
     const CHANNELS = ["pushover", "twilio"];
     for (const seed of SEEDS) {
       const r = random(seed).fork("restart");
-      // Each pass can refuse and send on each channel. The log keeps each refusal and each delivery of the passes.
+      // Each pass writes its deliveries, then its refusals, as the step does. A late send of a pass lands in the next pass,
+      // and each time of acceptance can be after the time of the refusals of its pass.
       const passes: PassSummary[] = [];
+      const logs: RuntimeEvent[][] = [];
+      let landing: string[] = [];
+      let keys = 0;
       for (let index = 0; index < 40; index++) {
         const at = T0 + index * 30 * SECOND;
-        const sent = CHANNELS.filter(() => r.chance(0.25)).map((channel) => ({ channel }));
+        const sent = [...landing, ...CHANNELS.filter(() => r.chance(0.25))];
+        landing = CHANNELS.filter(() => r.chance(0.1));
         const failures = CHANNELS.filter(() => r.chance(0.3)).map((channel) => ({
           call: "send",
           channel,
           kind: UNREACHABLE[r.int(0, UNREACHABLE.length - 1)]!,
           retryAt: at + r.int(0, 200) * SECOND,
         }));
-        passes.push({ ...healthy(at), delivery: { sent, failures } });
+        const refusedAt = at + r.int(0, 10) * SECOND;
+        logs.push([
+          ...sent.map((channel) => delivery(`k${keys++}`, channel, refusedAt + r.int(-10, 20) * SECOND)),
+          ...failures.map((failure) => {
+            const key = `k${keys++}`;
+            return { ...envelope("refused", `refused:${key}@${at}`, refusedAt), key, channel: failure.channel as ChannelId, kind: failure.kind, retryAt: failure.retryAt };
+          }),
+        ]);
+        passes.push({ ...healthy(at), delivery: { sent: sent.map((channel) => ({ channel })), failures } });
       }
       const straight: HeartbeatState["held"][] = [];
       passes.reduce<HeartbeatState["held"]>((held, pass) => {
@@ -216,14 +233,11 @@ describe("the refused channels of the log", () => {
         return next;
       }, {});
       for (let stop = 0; stop < passes.length - 1; stop++) {
-        const before = passes.slice(0, stop + 1);
-        const refusals = Object.fromEntries(
-          before.flatMap((pass, index) =>
-            (pass.delivery?.failures ?? []).map((failure) => [`${index}-${failure.channel}`, { channel: failure.channel, kind: failure.kind as (typeof UNREACHABLE)[number], at: pass.at, retryAt: failure.retryAt }]),
-          ),
-        );
-        const deliveries = before.flatMap((pass) => (pass.delivery?.sent ?? []).map((delivery) => ({ channel: delivery.channel, at: pass.at })));
-        let held = heldOf(view(refusals, deliveries), passes[stop + 1]!.at);
+        // The restart writes its start, then its first pass comes.
+        const restart = passes[stop + 1]!.at;
+        const events = [...logs.slice(0, stop + 1).flat(), { ...envelope("started", `started:run-${stop}`, restart), run: `run-${stop}` }];
+        const state = events.reduce((before, event) => fold(before, event, { sources: [] }), EMPTY_RUNTIME);
+        let held = heldOf(state, restart);
         for (let index = stop + 1; index < passes.length; index++) {
           held = holdStep(held, passes[index]!);
           const expected = straight[index]!;
@@ -233,6 +247,8 @@ describe("the refused channels of the log", () => {
           );
           for (const [channel, hold] of Object.entries(held)) expect(expected[channel]!.kinds, label).toEqual(expect.arrayContaining([...hold.kinds]));
         }
+        // The state keeps only the refusals that wait after the start.
+        for (const refusal of Object.values(state.refusals)) expect(refusal.retryAt, `seed ${seed}, a restart after pass ${stop}`).toBeGreaterThan(restart);
       }
     }
   });
