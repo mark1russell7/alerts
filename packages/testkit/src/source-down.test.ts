@@ -9,6 +9,7 @@ import {
   CASE_5_SETTINGS,
   canaryAnswer,
   caseClock,
+  caseTransport,
   DOWN_ARMS,
   type DownArm,
   type DownPass,
@@ -16,11 +17,12 @@ import {
   downGatesOf,
   downLimits,
   downVerdictOf,
-  faultsOf,
+  gatesRead,
   outageOf,
-  outageTransport,
-  type RouteCounts,
+  planOf,
+  samplesOf,
   settingsProblems,
+  windowFaultOf,
 } from "./source-down.ts";
 
 const MINUTE = 60_000;
@@ -30,15 +32,17 @@ const LIMITS = downLimits();
 const passesOf = (stateAt: (minute: number) => HealthState, minutes = 80): DownPass[] =>
   Array.from({ length: minutes + 1 }, (_, minute) => ({ at: minute * MINUTE + 500, state: stateAt(minute), fetched: true }));
 
+/** The record of an arm. In an arm with an outage, 20 requests fall in the window, and each stops at the proxy. */
 const recordOf = (arm: DownArm, stateAt: (minute: number) => HealthState = () => "healthy", extra: Partial<DownRecord> = {}): DownRecord => {
   const outage = outageOf(arm);
+  const inWindow = outage === undefined ? 0 : 20;
   return {
     arm,
     ...(outage === undefined ? {} : { outage }),
     passes: passesOf((minute) => (minute === 0 ? "unknown" : stateAt(minute))),
-    requests: { direct: 240, faulty: outage === undefined ? 0 : 6, canary: 80 },
-    faults: outage === undefined ? 0 : 6,
-    leaked: 0,
+    requests: { sent: 320, inWindow, reached: 320 - inWindow },
+    faults: inWindow,
+    connections: 90,
     ...extra,
   };
 };
@@ -60,13 +64,13 @@ describe("the plan of the case", () => {
     expect(outageOf("error-long")).toEqual({ from: 4.5 * MINUTE, to: 14.5 * MINUTE });
   });
 
-  it("gives one fault at the start of each connection of the plan", () => {
-    expect(faultsOf("control")).toEqual([]);
-    const resets = faultsOf("reset-long");
-    expect(resets).toHaveLength(CASE_5_SETTINGS.connections);
-    expect(resets[3]).toEqual({ connection: 3, direction: "up", at: { byte: 0 }, kind: "reset" });
-    expect(faultsOf("error-long")[0]).toEqual({ connection: 0, direction: "up", at: { frame: 0 }, kind: "answer", status: 500 });
-    expect(faultsOf("unavailable-long")[63]).toMatchObject({ connection: 63, kind: "answer", status: 503 });
+  it("gives one fault of the outage window to each arm with an outage, and no fault to control", () => {
+    expect(windowFaultOf("control")).toBeUndefined();
+    expect(windowFaultOf("reset-long")).toEqual({ window: { from: 4.5 * MINUTE, to: 14.5 * MINUTE }, direction: "up", at: { byte: 0 }, kind: "reset" });
+    expect(windowFaultOf("error-long")).toMatchObject({ direction: "up", at: { frame: 0 }, kind: "answer", status: 500 });
+    expect(windowFaultOf("unavailable-long")).toMatchObject({ kind: "answer", status: 503 });
+    expect(planOf("control")).toEqual({ format: "rigor-faults/1", seed: null, faults: [] });
+    expect(planOf("reset-short")).toEqual({ format: "rigor-faults/2", seed: null, faults: [], windows: [windowFaultOf("reset-short")] });
   });
 
   it("takes the limits from the default policy of polite-crawler and the interval of the source", () => {
@@ -80,34 +84,35 @@ describe("the plan of the case", () => {
     expect(settingsProblems({ ...CASE_5_SETTINGS, longMs: 5 * MINUTE })).toHaveLength(1);
     expect(settingsProblems({ ...CASE_5_SETTINGS, armMs: 20 * MINUTE })).toHaveLength(1);
     expect(settingsProblems({ ...CASE_5_SETTINGS, outageAtMs: MINUTE })).toHaveLength(1);
-    expect(settingsProblems({ ...CASE_5_SETTINGS, connections: 8 })).toHaveLength(1);
   });
 });
 
-describe("outageTransport", () => {
+describe("caseTransport", () => {
   const exchange = (path: string): Exchange => ({ method: "GET", url: `${CASE_5_ORIGIN}${path}`, headers: {}, body: null });
-  const reply: Reply = { status: 200, statusText: "OK", headers: {}, body: "{}" };
+  const reply = (status: number): Reply => ({ status, statusText: status === 200 ? "OK" : "Error", headers: {}, body: "{}" });
 
-  it("sends each request to the proxy in the window, and answers the canary itself out of the window", async () => {
-    const sent: string[] = [];
+  it("sends each request to the proxy, records its time, and gives the keepalive of its time to a canary reply of 200", async () => {
+    const urls: string[] = [];
+    let status = 200;
     const inner: Transport = async (one) => {
-      sent.push(one.url);
-      return reply;
+      urls.push(one.url);
+      return reply(status);
     };
     let now = 0;
-    const counts: RouteCounts = { direct: 0, faulty: 0, canary: 0 };
-    const canary = (at: number): Reply => ({ ...reply, body: String(at) });
-    const transport = outageTransport({ inner, clock: { now: () => now }, outage: { from: 10, to: 20 }, direct: "http://127.0.0.1:1", faulty: "http://127.0.0.1:2", canary, counts });
-    await transport(exchange(MAIN_PATH), undefined);
-    expect((await transport(exchange(CANARY_PATH), undefined)).body).toBe("0");
+    const sent: number[] = [];
+    const canary = (at: number): Reply => ({ ...reply(200), body: String(at) });
+    const transport = caseTransport({ inner, clock: { now: () => now }, proxy: "http://127.0.0.1:2", canary, sent });
+    expect((await transport(exchange(MAIN_PATH), undefined)).body).toBe("{}");
     now = 10;
-    await transport(exchange(MAIN_PATH), undefined);
-    await transport(exchange(CANARY_PATH), undefined);
+    expect((await transport(exchange(CANARY_PATH), undefined)).body).toBe("10");
     now = 20;
+    status = 503;
+    expect((await transport(exchange(CANARY_PATH), undefined)).status).toBe(503);
     await transport(exchange(WEA_PATH), undefined);
-    expect(sent).toEqual([`http://127.0.0.1:1${MAIN_PATH}`, `http://127.0.0.1:2${MAIN_PATH}`, `http://127.0.0.1:2${CANARY_PATH}`, `http://127.0.0.1:1${WEA_PATH}`]);
-    expect(counts).toEqual({ direct: 2, faulty: 2, canary: 1 });
+    expect(urls).toEqual([`http://127.0.0.1:2${MAIN_PATH}`, `http://127.0.0.1:2${CANARY_PATH}`, `http://127.0.0.1:2${CANARY_PATH}`, `http://127.0.0.1:2${WEA_PATH}`]);
+    expect(sent).toEqual([0, 10, 20, 20]);
     await expect(transport({ ...exchange(MAIN_PATH), url: `https://api.weather.gov${MAIN_PATH}` }, undefined)).rejects.toThrow(TypeError);
+    expect(sent).toHaveLength(4);
   });
 });
 
@@ -173,30 +178,63 @@ describe("caseClock", () => {
   });
 });
 
+describe("samplesOf", () => {
+  it("gives one sample for each pass, up when the coverage counts its state", () => {
+    const record = recordOf("control", (minute) => (minute === 1 ? "slow" : minute === 2 ? "failing" : "healthy"));
+    expect(samplesOf(record).slice(0, 4)).toEqual([
+      { at: 500, up: false },
+      { at: MINUTE + 500, up: true },
+      { at: 2 * MINUTE + 500, up: false },
+      { at: 3 * MINUTE + 500, up: true },
+    ]);
+  });
+});
+
 describe("downGatesOf", () => {
   it("passes both gates when the health goes down in the outage and comes up soon after it", () => {
     const result = downGatesOf(recordOf("reset-short", outageHealth("reset-short", 1)), LIMITS);
-    expect(result.gates).toEqual({ detected: true, recovers: true });
+    expect(result).toMatchObject({ detected: "pass", recovered: "pass", problems: [] });
     // The outage is from 4.5 to 7.5 minutes. The passes at 7:00.5 and 9:00.5 are the first down and the first up after it.
-    expect(result.detectedAfterMs).toBe(2.5 * MINUTE + 500);
-    expect(result.recoveredAfterMs).toBe(1.5 * MINUTE + 500);
+    expect(result.detectMs).toBe(2.5 * MINUTE + 500);
+    expect(result.recoverMs).toBe(1.5 * MINUTE + 500);
   });
 
-  it("fails recovers when the health comes up after the limit, as after a stop of the host for 60 minutes", () => {
+  it("fails recovered when the health comes up after the limit, as after a stop of the host for 60 minutes", () => {
     const result = downGatesOf(recordOf("reset-long", outageHealth("reset-long", 55)), LIMITS);
-    expect(result.gates).toEqual({ detected: true, recovers: false });
-    expect(result.problems.join("\n")).toContain("not in 7 min of the end of the outage");
+    expect(result).toMatchObject({ detected: "pass", recovered: "fail" });
+    expect(result.problems.join("\n")).toContain(`reset-long: The signal came up after ${String(55.5 * MINUTE + 500)} ms, not in 420000 ms`);
   });
 
-  it("fails detected when the health stays up, and both gates for an arm with no outage", () => {
-    expect(downGatesOf(recordOf("error-long"), LIMITS).gates).toEqual({ detected: false, recovers: true });
-    expect(downGatesOf(recordOf("control"), LIMITS).gates).toEqual({ detected: false, recovers: false });
+  it("fails detected when the health stays up, and has no read of recovered after it", () => {
+    expect(downGatesOf(recordOf("error-long"), LIMITS)).toMatchObject({ detected: "fail", recovered: "no read" });
+  });
+
+  it("has no read when the samples end before the limit, and for an arm with no outage", () => {
+    const short = recordOf("reset-short", outageHealth("reset-short", 1));
+    expect(downGatesOf({ ...short, passes: short.passes.slice(0, 7) }, LIMITS)).toMatchObject({ detected: "no read", recovered: "no read" });
+    expect(downGatesOf({ ...short, passes: short.passes.slice(0, 9) }, LIMITS)).toMatchObject({ detected: "pass", recovered: "no read" });
+    expect(downGatesOf(recordOf("control"), LIMITS)).toEqual({ detected: "no read", recovered: "no read", problems: ["control: the arm has no outage."] });
+  });
+});
+
+describe("gatesRead", () => {
+  it("reads gates that pass or fail, and a fail of detected with no read of recovered", () => {
+    expect(gatesRead({ detected: "pass", recovered: "pass", problems: [] })).toBe(true);
+    expect(gatesRead({ detected: "pass", recovered: "fail", problems: [] })).toBe(true);
+    expect(gatesRead({ detected: "fail", recovered: "no read", problems: [] })).toBe(true);
+  });
+
+  it("does not read a missing result, or a gate with no read that the samples did not decide", () => {
+    expect(gatesRead(undefined)).toBe(false);
+    expect(gatesRead({ detected: "no read", recovered: "no read", problems: [] })).toBe(false);
+    expect(gatesRead({ detected: "pass", recovered: "no read", problems: [] })).toBe(false);
   });
 });
 
 describe("downVerdictOf", () => {
   const good = (arm: DownArm): DownRecord => recordOf(arm, outageHealth(arm, 1));
   const records = (change: (arm: DownArm) => DownRecord = good) => DOWN_ARMS.map(change);
+  const only = (arm: DownArm, change: (record: DownRecord) => DownRecord) => records((one) => (one === arm ? change(good(one)) : good(one)));
 
   it("reads and passes when each arm detects its outage and recovers in the limit", () => {
     expect(downVerdictOf(records())).toMatchObject({ read: true, pass: true, problems: [] });
@@ -206,20 +244,35 @@ describe("downVerdictOf", () => {
     const verdict = downVerdictOf(records((arm) => (arm === "reset-long" || arm === "error-long" ? recordOf(arm, outageHealth(arm, 55)) : good(arm))));
     expect(verdict.read).toBe(true);
     expect(verdict.pass).toBe(false);
-    expect(verdict.results["reset-long"]?.gates).toEqual({ detected: true, recovers: false });
-    expect(verdict.results["unavailable-long"]?.gates).toEqual({ detected: true, recovers: true });
+    expect(verdict.results["reset-long"]).toMatchObject({ detected: "pass", recovered: "fail" });
+    expect(verdict.results["unavailable-long"]).toMatchObject({ detected: "pass", recovered: "pass" });
+  });
+
+  it("reads and fails when the health of an arm does not go down in its outage", () => {
+    const verdict = downVerdictOf(only("unavailable-long", (record) => recordOf(record.arm)));
+    expect(verdict).toMatchObject({ read: true, pass: false });
+    expect(verdict.results["unavailable-long"]).toMatchObject({ detected: "fail", recovered: "no read" });
   });
 
   it("cannot read when the control arm goes down, or an arm is down before its outage", () => {
-    expect(downVerdictOf(records((arm) => (arm === "control" ? recordOf(arm, (minute) => (minute === 30 ? "failing" : "healthy")) : good(arm)))).read).toBe(false);
-    expect(downVerdictOf(records((arm) => (arm === "reset-short" ? recordOf(arm, (minute) => (minute === 2 ? "failing" : "healthy")) : good(arm)))).read).toBe(false);
+    expect(downVerdictOf(only("control", () => recordOf("control", (minute) => (minute === 30 ? "failing" : "healthy")))).read).toBe(false);
+    expect(downVerdictOf(only("reset-short", () => recordOf("reset-short", (minute) => (minute === 2 ? "failing" : "healthy")))).read).toBe(false);
   });
 
-  it("cannot read when a request got past the proxy, the proxy has no fault, a pass threw or the passes end early", () => {
-    expect(downVerdictOf(records((arm) => (arm === "error-long" ? { ...good(arm), leaked: 1 } : good(arm)))).read).toBe(false);
-    expect(downVerdictOf(records((arm) => (arm === "error-long" ? { ...good(arm), faults: 0 } : good(arm)))).read).toBe(false);
-    expect(downVerdictOf(records((arm) => (arm === "control" ? { ...good(arm), error: "boom" } : good(arm)))).read).toBe(false);
-    expect(downVerdictOf(records((arm) => (arm === "control" ? { ...good(arm), passes: good(arm).passes.slice(0, 40) } : good(arm)))).read).toBe(false);
+  it("cannot read when a request of the window got to the server, or a request out of it did not", () => {
+    expect(downVerdictOf(only("error-long", (record) => ({ ...record, requests: { ...record.requests, reached: record.requests.reached + 1 } }))).read).toBe(false);
+    expect(downVerdictOf(only("error-long", (record) => ({ ...record, requests: { ...record.requests, reached: record.requests.reached - 1 } }))).read).toBe(false);
+  });
+
+  it("cannot read when the proxy has no fault, control has a fault, or no request falls in the window", () => {
+    expect(downVerdictOf(only("error-long", (record) => ({ ...record, faults: 0, requests: { ...record.requests, reached: 320 } }))).read).toBe(false);
+    expect(downVerdictOf(only("control", (record) => ({ ...record, faults: 1, requests: { ...record.requests, reached: 319 } }))).read).toBe(false);
+    expect(downVerdictOf(only("reset-short", (record) => ({ ...record, faults: 0, requests: { sent: 320, inWindow: 0, reached: 320 } }))).read).toBe(false);
+  });
+
+  it("cannot read when a pass threw or the passes end early", () => {
+    expect(downVerdictOf(only("control", (record) => ({ ...record, error: "boom" }))).read).toBe(false);
+    expect(downVerdictOf(only("control", (record) => ({ ...record, passes: record.passes.slice(0, 40) }))).read).toBe(false);
   });
 
   it("cannot read with a missing arm, or with settings that do not separate the outages", () => {
