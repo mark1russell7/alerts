@@ -1,8 +1,8 @@
 import { byId, copyText, h, setupTheme } from "@mark1russell7/site-pages/chrome";
-import { PEOPLE, PLACES, STEPS } from "./demo.ts";
-import { clock } from "./explain.ts";
+import { COVERAGE_KINDS, FETCHES, FIRST_FETCH, PEOPLE, PLACES, SOURCES, STEPS } from "./demo.ts";
+import { clock, stepLabel } from "./explain.ts";
 import { replay } from "./replay.ts";
-import { counts, drawIncidents, drawLevels, drawMap, drawMessage } from "./view.ts";
+import { counts, drawIncidents, drawLevels, drawMap, drawMessage, drawSources } from "./view.ts";
 
 setupTheme(byId<HTMLButtonElement>("theme"), "theme");
 
@@ -12,7 +12,8 @@ copy.addEventListener("click", () => {
 });
 
 // The replay runs once, at the load of the page. Each step then only draws its frame.
-const frames = replay(STEPS, PEOPLE, PLACES);
+// The labels count the steps from 1 for the reader. The indexes and `data-step` count from 0.
+const frames = replay(STEPS, PEOPLE, PLACES, { sources: SOURCES, fetches: FETCHES, start: FIRST_FETCH, kinds: COVERAGE_KINDS });
 const last = frames.length - 1;
 let index = 0;
 let selected: string | undefined;
@@ -26,8 +27,8 @@ const play = byId<HTMLButtonElement>("play");
 frames.forEach((frame, at) => {
   const button = h(
     "button",
-    { type: "button", class: "step", "data-step": at, "aria-label": `Step ${String(at)}: ${frame.step.title}, ${clock(frame.step.at)}` },
-    h("span", { class: "number" }, String(at)),
+    { type: "button", class: "step", "data-step": at, "aria-label": `${stepLabel(at, frames.length)}: ${frame.step.title}, ${clock(frame.step.at)}` },
+    h("span", { class: "number" }, String(at + 1)),
     h("span", { class: "label" }, frame.step.title),
   );
   button.addEventListener("click", () => {
@@ -57,7 +58,7 @@ function go(at: number): void {
 function draw(): void {
   const frame = frames[index]!;
   byId("clock").textContent = clock(frame.step.at);
-  byId("step-title").textContent = `Step ${String(index)} of ${String(last)}: ${frame.step.title}`;
+  byId("step-title").textContent = `${stepLabel(index, frames.length)}: ${frame.step.title}`;
   byId("story").textContent = frame.step.story;
   for (const button of rail.querySelectorAll<HTMLButtonElement>("button.step")) {
     const at = Number(button.dataset["step"]);
@@ -73,6 +74,7 @@ function draw(): void {
   byId("count-levels").textContent = String(count.levels);
   byId("map").replaceChildren(drawMap(frame, selected, select));
   byId("levels").replaceChildren(drawLevels(frame));
+  byId("sources").replaceChildren(drawSources(frame));
   byId("incidents").replaceChildren(drawIncidents(frame, selected, select));
   byId("message").replaceChildren(drawMessage(frame));
 }
@@ -117,5 +119,5 @@ byId("demo").addEventListener("keydown", (event) => {
   }
 });
 
-// The first view is step 4: two people have a level, and the flood incident has three messages.
+// The first view is the step at index 4: two people have a level, and the flood incident has three messages.
 go(4);

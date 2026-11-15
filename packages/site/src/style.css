@@ -716,8 +716,192 @@ summary:focus-visible,
   padding-left: 1.25rem;
 }
 
+/* The sources: the health of each source, the coverage at each home and the system reports */
+
+.sources-panel {
+  grid-column: 1 / -1;
+}
+
+.sources {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 0.5rem 1.5rem;
+}
+
+.sources h4 {
+  margin: 0.5rem 0 0.25rem;
+  font-size: 0.95rem;
+}
+
+.sources .part > h4:first-child {
+  margin-top: 0;
+}
+
+.health,
+.coverage,
+.people {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.health {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: 0.5rem;
+}
+
+.health .source {
+  --tone: var(--ok);
+  padding: 0.375rem 0.75rem 0.5rem;
+  border-left: 4px solid var(--tone);
+  border-radius: 0.25rem;
+  background: var(--panel);
+}
+
+.health .source[data-state="failing"],
+.health .source[data-state="silent"],
+.health .source[data-state="changed"] { --tone: var(--ls); }
+.health .source[data-state="slow"] { --tone: var(--urgent); }
+.health .source[data-state="unknown"] { --tone: var(--none); }
+
+.health .row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.25rem 0.5rem;
+}
+
+.health .facts,
+.health .domains,
+.health .change {
+  margin: 0.125rem 0 0;
+  font-size: 0.8rem;
+}
+
+.health .domains {
+  color: var(--quiet);
+}
+
+.health .domains code {
+  font-size: 0.8rem;
+}
+
+.health .change {
+  color: var(--link);
+}
+
+.chip.good { border-color: var(--ok); color: var(--ok); font-weight: 650; }
+.chip.warn { border-color: var(--urgent); color: var(--urgent); font-weight: 650; }
+.chip.bad { border-color: var(--ls); color: var(--ls); font-weight: 650; }
+.chip.quiet { color: var(--quiet); }
+
+.coverage li {
+  display: grid;
+  grid-template-columns: 6.5rem 6rem 3.5rem auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0 0.5rem;
+  padding: 0.25rem 0.5rem;
+  border-bottom: 1px solid var(--line);
+  font-size: 0.875rem;
+}
+
+.coverage li.short {
+  background: color-mix(in srgb, var(--ls) 9%, transparent);
+}
+
+.coverage .home {
+  font-weight: 600;
+}
+
+.coverage .count {
+  font-variant-numeric: tabular-nums;
+}
+
+.coverage .up {
+  overflow: hidden;
+  color: var(--quiet);
+  font-size: 0.8rem;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.system {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.system-card {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--urgent);
+  border-radius: 0.5rem;
+}
+
+.system-card.ended {
+  border-left-color: var(--line);
+  opacity: 0.7;
+}
+
+.system-card header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.5rem;
+}
+
+.system-card h5 {
+  margin: 0 auto 0 0;
+  font-size: 0.95rem;
+}
+
+.reports .said {
+  flex-basis: 100%;
+}
+
+.reports .said.quiet {
+  color: var(--quiet);
+}
+
+.people {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 1rem;
+  margin-top: 0.25rem;
+  font-size: 0.875rem;
+}
+
+.people summary {
+  cursor: pointer;
+}
+
+.people details[open] {
+  flex-basis: 100%;
+}
+
+.map .gap {
+  fill: none;
+  stroke: var(--none);
+  stroke-width: 5;
+  stroke-dasharray: 9 7;
+  pointer-events: none;
+}
+
+.map .gap.level-life-safety { stroke: var(--ls); }
+.map .gap.level-urgent { stroke: var(--urgent); }
+.map .gap.level-notice { stroke: var(--notice); }
+
+.swatch.gap {
+  border-style: dashed;
+  border-color: var(--urgent);
+  border-radius: 50%;
+  background: none;
+}
+
 @media (max-width: 60rem) {
-  .board {
+  .board,
+  .sources {
     grid-template-columns: minmax(0, 1fr);
   }
 }
@@ -751,6 +935,21 @@ summary:focus-visible,
 
   .pipeline li + li::before {
     content: none;
+  }
+
+  .coverage li {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+  }
+
+  .coverage .kind {
+    grid-row: 2;
+    color: var(--quiet);
+  }
+
+  .coverage .up {
+    grid-row: 2;
+    grid-column: 2 / -1;
+    text-align: right;
   }
 }
 
