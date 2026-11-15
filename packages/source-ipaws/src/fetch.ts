@@ -6,19 +6,11 @@
  * feed answers for the last 30 minutes at most. The feed is national and has no filter by area.
  */
 
-import {
-  observationId,
-  type Cursor,
-  type FetchFailure,
-  type FetchOutcome,
-  type Instant,
-  type Observation,
-  type Watch,
-} from "@mark1russell7/alerts";
+import { observationId, type Cursor, type FetchOutcome, type Instant, type Observation, type Watch } from "@mark1russell7/alerts";
+import { createRequester } from "@mark1russell7/alerts-fetch";
 import { readCap, splitFeed } from "@mark1russell7/alerts-format-cap";
 import { stateOfSame, stateOfUgc } from "@mark1russell7/alerts-format-nws";
-import { errorMessage } from "@mark1russell7/text";
-import { ApiError, send, type Answer, type Pace, type Reply, type Transport } from "polite-crawler/api";
+import type { Pace, Reply, Transport } from "polite-crawler/api";
 
 import { NWS_SENDER, SOURCE_ID } from "./map.ts";
 
@@ -136,30 +128,6 @@ export function keeps(alert: string, states: ReadonlySet<string> | undefined): b
   return !stated;
 }
 
-/**
- * This function maps an answer that is not a success to a failure of the fetch.
- *
- * The NWS API source has the same map of the outcomes of polite-crawler. It moves to one home when
- * the lead of the core accepts it. The NWS map also reads the problem text of the NWS API.
- */
-export function failureOf(answer: Answer): FetchFailure {
-  const { reply, classified } = answer;
-  const message = `${String(reply.status)} ${reply.statusText}`.trim();
-  const retryAfter = classified.retryAfterMs === undefined ? {} : { retryAfter: classified.retryAfterMs };
-  switch (classified.outcome) {
-    case "rate-limited":
-      return { kind: "rate-limited", message, ...retryAfter };
-    case "unavailable":
-      return { kind: "server", message, ...retryAfter };
-    case "blocked":
-      return reply.status === 401 ? { kind: "auth", message } : { kind: "refused", message };
-    case "error":
-      return reply.status >= 500 ? { kind: "server", message, ...retryAfter } : { kind: "refused", message };
-    default:
-      return { kind: "refused", message: `${message} (${classified.outcome})` };
-  }
-}
-
 /** The observations of one answer. The value `complete` is false when the answer is not the feed. */
 interface Read {
   readonly observations: Observation[];
@@ -203,54 +171,24 @@ export function readAnswer(reply: Reply, url: string, feedUrl: string, fetched: 
  * less `OVERLAP_MS`. A failed fetch gives no cursor, so the next fetch asks again from the old cursor.
  */
 export function createIpawsFetch(options: IpawsFetchOptions): (input: IpawsFetchInput, signal?: AbortSignal) => Promise<FetchOutcome> {
-  // A loop, not a pattern with `\/+$`: that pattern takes quadratic time on a text with many slashes (CodeQL js/polynomial-redos)
-  const given = options.baseUrl ?? IPAWS_BASE_URL;
-  let end = given.length;
-  while (end > 0 && given[end - 1] === "/") end -= 1;
-  const baseUrl = given.slice(0, end);
-  const host = new URL(baseUrl).host;
-  const feedUrl = `${baseUrl}${FEED_PATH}`;
-  const timeoutMs = options.timeoutMs ?? 15_000;
+  const requester = createRequester({
+    source: SOURCE_ID,
+    pace: options.pace,
+    transport: options.transport,
+    baseUrl: options.baseUrl ?? IPAWS_BASE_URL,
+    headers: { accept: "application/xml", "user-agent": options.userAgent },
+    ...(options.minIntervalMs === undefined ? {} : { minIntervalMs: options.minIntervalMs }),
+    ...(options.timeoutMs === undefined ? {} : { timeoutMs: options.timeoutMs }),
+  });
+  const feedUrl = `${requester.baseUrl}${FEED_PATH}`;
   const now = options.pace.now;
 
   return async ({ watch, cursor }, signal) => {
     const started = now();
     const { since, complete } = sinceOf(cursor, started);
-    const url = `${feedUrl}/${feedTime(since)}`;
-    let timedOut = false;
-    let latency = 0;
-    // The latency is the time of the transport only. The wait of the scheduler is not part of it.
-    const timed: Transport = async (request, outer) => {
-      const own = AbortSignal.timeout(timeoutMs);
-      own.addEventListener("abort", () => (timedOut = true), { once: true });
-      const sent = now();
-      try {
-        return await options.transport(request, outer === undefined ? own : AbortSignal.any([outer, own]));
-      } finally {
-        latency = now() - sent;
-      }
-    };
-    let answer: Answer;
-    try {
-      answer = await send(
-        options.pace,
-        timed,
-        {
-          source: SOURCE_ID,
-          host,
-          minIntervalMs: options.minIntervalMs ?? 1000,
-          what: "the recent alerts",
-          exchange: { method: "GET", url, headers: { accept: "application/xml", "user-agent": options.userAgent }, body: null },
-        },
-        signal,
-      );
-    } catch (error) {
-      if (signal?.aborted === true) throw error;
-      if (timedOut) return { ok: false, failure: { kind: "timeout", message: `no answer in ${String(timeoutMs)} ms: ${url}` } };
-      const message = error instanceof ApiError ? error.message : errorMessage(error);
-      return { ok: false, failure: { kind: "network", message } };
-    }
-    if (answer.classified.outcome !== "ok") return { ok: false, failure: failureOf(answer) };
+    const requested = await requester.get({ path: `${FEED_PATH}/${feedTime(since)}`, what: "the recent alerts" }, signal);
+    if (!requested.ok) return { ok: false, failure: requested.failure };
+    const { url, answer, latency } = requested;
     const read = readAnswer(answer.reply, url, feedUrl, now(), latency, statesOf(watch));
     if (read === undefined) return { ok: false, failure: { kind: "network", message: `truncated or malformed body: ${url}` } };
     return {

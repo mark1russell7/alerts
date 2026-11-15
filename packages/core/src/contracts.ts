@@ -326,7 +326,7 @@ export interface MapProblem {
    * True: the report lacks a value of the message, or holds a fallback in its place. The field is
    * absent for a note and for a fatal problem.
    */
-  readonly lossy?: boolean;
+  readonly lossy?: true;
 }
 
 /** The result of the map function. */
