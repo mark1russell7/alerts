@@ -223,6 +223,9 @@ importers:
       '@mark1russell7/rigor-generators':
         specifier: ^0.1.16
         version: 0.1.16
+      '@mark1russell7/rigor-statistics':
+        specifier: ^0.2.0
+        version: 0.2.0
     devDependencies:
       '@mark1russell7/cue':
         specifier: ^2.0.0

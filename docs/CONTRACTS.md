@@ -152,6 +152,26 @@ A coverage report has the area of the watched place, `{ type: "place", place }`.
 
 The assessment policy holds two system classes, and each class admits only the status `system`. A class can name its statuses. Else the statuses of the policy apply. The NWS kinds `system.test` and `system.admin` are not in these classes, so the policy statuses apply to them.
 
+### Lateness across sources
+
+Some sources carry a copy of the messages of another source. FEMA IPAWS carries each NWS warning for Wireless Emergency Alerts. Over 30 days, the public IPAWS feed had 17 gaps of 4 hours or more and one gap of 12.6 hours. So a quiet feed is normal, and the quiet timer of the health cannot show that the source stopped. The check across sources shows it.
+
+- An `Expectation` is data: the source `from`, the source `to` and a `ReportFilter`. For IPAWS, the filter is the status `actual` and the parameter `WEAHandling`.
+- The two copies must be in one incident. So the source `to` must give a correlation key of the source `from`, for example the VTEC key.
+- `carriages(state, incidents, expectations)` gives one check for each expectation and each incident: the first report of `from` that passes the filter, and the first copy of `to`. The result is a function of the set of reports.
+- `delayLimit(delays, { quantile, level })` gives the limit of the delay. It is the distribution-free upper bound of the quantile of the measured delays, from `quantileInterval` of `@mark1russell7/rigor-statistics`. No person sets a time.
+- A small sample has no upper bound. Then the expectation has no limit, and the check only measures.
+- `lateness(checks, expectations, limits, at)` gives the state of each expectation: `no-limit`, `no-data`, `met` or `late`. A check is a miss when it passes its limit with no copy. The source is late when a miss comes after the last check that came.
+- A copy that comes after a miss ends the miss, because it shows that the source carries the reports again. A copy after the limit is not a miss.
+- `wakeAt` is the next time when a check passes its limit. The runtime starts `lateness` again at that time.
+
+A late source has two effects:
+
+- `coverage` does not count it, also when its health state is up. Its fetches pass, but it does not carry the reports. `lateSources` gives the list for `CoverageInput.late`.
+- Each late expectation is a line of system reports with the kind `system.health.late`. Its subject is the source `to`, so it goes to the person who watches the sources. Each new miss is a new fact, so it gives an update.
+
+A copy that did not come is not a measure, because its delay is not known. So a sample from a time when the source was down gives a lower limit. A lower limit gives more late states, which is the safe side.
+
 ## The channel contract
 
 Each channel package registers four procedures under `alerts.channel.<id>`:
