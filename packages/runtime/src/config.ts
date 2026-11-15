@@ -88,12 +88,27 @@ export async function readSecrets(home: string): Promise<Result<Readonly<Record<
 /**
  * This function checks a configuration with the keys of the private folder, as the start of the runtime
  * does. A writer of the configuration uses it before its new file replaces `config.json`, because a
- * bad `config.json` stops the next start.
+ * bad `config.json` stops the next start. The check of the instance comes after the check of the format.
  */
-export async function checkConfig(source: ConfigSource, home: string, channels: readonly ChannelDescriptor[]): Promise<Result<ParsedConfig, readonly string[]>> {
+export async function checkConfig(source: ConfigSource, home: string, check: InstanceCheck): Promise<Result<ParsedConfig, readonly string[]>> {
   const secrets = await readSecrets(home);
   if (secrets.tag === "err") return err(secrets.error);
-  return readConfig(source, channels, envSecrets(secrets.value));
+  const secret = envSecrets(secrets.value);
+  const parsed = await readConfig(source, check.channels, secret);
+  if (parsed.tag === "err") return parsed;
+  const problems = check.problems(parsed.value, secret);
+  return problems.length > 0 ? err(problems) : parsed;
+}
+
+/**
+ * The check of an instance after the check of the format. The module `instance.ts` gives the check of
+ * the live instance. Thus the check of a file finds each problem that stops the start.
+ */
+export interface InstanceCheck {
+  /** The channels of the instance. The loader checks each recipient against them. */
+  readonly channels: readonly ChannelDescriptor[];
+  /** This function gives the problems of a parsed configuration that stop the start of the instance. */
+  problems(parsed: ParsedConfig, secret: SecretLookup): readonly string[];
 }
 
 /**

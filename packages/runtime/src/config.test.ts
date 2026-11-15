@@ -16,6 +16,7 @@ import {
   requireConfig,
   SECRETS_FILE,
   type ConfigSource,
+  type InstanceCheck,
 } from "./config.ts";
 
 const PUSHOVER = "pushover" as ChannelId;
@@ -46,6 +47,8 @@ const CONFIG: AlertConfig = {
 const PRIVATE = "PRIVATE";
 const SECRETS = envSecrets({ PUSHOVER_USER: `${PRIVATE}-user` });
 const textSource = (text: string): ConfigSource => ({ name: "The test source", read: async () => text });
+// The check of an instance with the one channel and no problem of its own.
+const CHECK: InstanceCheck = { channels: [CHANNEL], problems: () => [] };
 
 describe("alertsHome and configPath", () => {
   // Absolute paths on each system: on Windows, resolve adds the drive.
@@ -157,19 +160,33 @@ describe("readSecrets and checkConfig", () => {
 
   it("checks a configuration with the keys of the private folder, as the start does", async () => {
     await writeSecrets(`PUSHOVER_USER=${PRIVATE}-user\n`);
-    const checked = await checkConfig(textSource(JSON.stringify(CONFIG)), home, [CHANNEL]);
+    const checked = await checkConfig(textSource(JSON.stringify(CONFIG)), home, CHECK);
     expect(checked.tag === "ok" ? checked.value.config : undefined).toEqual(CONFIG);
   });
 
   it("refuses a configuration that names a key that secrets.env does not have", async () => {
     await writeSecrets("OTHER=value\n");
-    expect(await checkConfig(textSource(JSON.stringify(CONFIG)), home, [CHANNEL])).toEqual({ tag: "err", error: [expect.stringContaining("names the secret PUSHOVER_USER")] });
+    expect(await checkConfig(textSource(JSON.stringify(CONFIG)), home, CHECK)).toEqual({ tag: "err", error: [expect.stringContaining("names the secret PUSHOVER_USER")] });
+  });
+
+  it("gives the problems of the instance after the check of the format, with the keys of the private folder", async () => {
+    await writeSecrets(`PUSHOVER_USER=${PRIVATE}-user\n`);
+    const seen: string[] = [];
+    const check: InstanceCheck = {
+      channels: [CHANNEL],
+      problems: (parsed, secret) => (seen.push(`${parsed.config.places.length} ${secret("PUSHOVER_USER") === `${PRIVATE}-user`}`), ["No source covers the place place:a."]),
+    };
+    expect(await checkConfig(textSource(JSON.stringify(CONFIG)), home, check)).toEqual({ tag: "err", error: ["No source covers the place place:a."] });
+    expect(seen).toEqual(["1 true"]);
+    // A file with a bad format does not get the check of the instance.
+    expect((await checkConfig(textSource("{"), home, check)).tag).toBe("err");
+    expect(seen).toHaveLength(1);
   });
 
   it("gives the problems of secrets.env before it reads the configuration", async () => {
     let reads = 0;
     const counted: ConfigSource = { name: "The test source", read: async () => ((reads += 1), JSON.stringify(CONFIG)) };
-    const checked = await checkConfig(counted, join(home, "absent"), [CHANNEL]);
+    const checked = await checkConfig(counted, join(home, "absent"), CHECK);
     expect(checked).toEqual({ tag: "err", error: ["The file secrets.env cannot be read (ENOENT)."] });
     expect(reads).toBe(0);
   });
