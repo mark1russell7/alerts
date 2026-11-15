@@ -59,6 +59,11 @@ export interface AlertConfig {
   readonly contacts: readonly ContactConfig[];
   /** The escalation policies of each person with no policies of their own. */
   readonly policies: readonly EscalationPolicy[];
+  /**
+   * The contact of the operator of the instance: an `https` URL or a `mailto` URL. Each request to the
+   * server of another party gives it in the User-Agent. Without it, the User-Agent has no contact.
+   */
+  readonly contact?: string;
 }
 
 /** The secret store of the instance. It gives the value of a key, or `undefined` when it has no such key. */

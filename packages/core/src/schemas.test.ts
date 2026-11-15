@@ -672,6 +672,17 @@ describe("the private configuration", () => {
     expect(problemsOf(JSON.stringify(CONFIG), () => undefined)).toEqual([expect.stringContaining("names the secret PUSHOVER_USER")]);
   });
 
+  it("accepts a contact of the operator as an https URL or a mailto URL, and refuses other forms with no quote of the value", () => {
+    holds(alertConfigSchema, { ...CONFIG, contact: "https://example.org/operator" });
+    holds(alertConfigSchema, { ...CONFIG, contact: "mailto:operator@example.org" });
+    for (const contact of ["http://example.org/PRIVATE", "PRIVATE@example.org", "", 7]) {
+      const problems = problemsOf(JSON.stringify({ ...CONFIG, contact }));
+      expect(problems).toHaveLength(1);
+      expect(problems[0]?.startsWith("contact: ")).toBe(true);
+      expect(problems[0]).not.toContain("PRIVATE");
+    }
+  });
+
   it("gives no value of the configuration and no value of a secret in a problem", () => {
     // Each check looks for the start of the value, because the JSON parser quotes only a part of a text.
     const prefix = "PRIVATE";

@@ -810,6 +810,13 @@ export const placeConfigSchema: z.ZodType<PlaceConfig, PlaceConfig> = schemaOf<P
     .readonly(),
 );
 
+/** This function tells if a text is an `https` URL or a `mailto` URL: the forms of the contact of an operator. */
+export function isContactUrl(text: string): boolean {
+  if (!URL.canParse(text)) return false;
+  const protocol = new URL(text).protocol;
+  return protocol === "https:" || protocol === "mailto:";
+}
+
 /** This schema checks a person of the configuration: the watch, and the policies of the person when they are not the default. */
 export const personConfigSchema: z.ZodType<PersonConfig, PersonConfig> = schemaOf<PersonConfig>()(
   z
@@ -839,6 +846,7 @@ export const alertConfigSchema: z.ZodType<AlertConfig, AlertConfig> = schemaOf<A
       people: z.array(personConfigSchema).readonly(),
       contacts: z.array(contactConfigSchema).readonly(),
       policies: z.array(escalationPolicySchema).readonly(),
+      contact: z.string().refine(isContactUrl, "The contact is not an https URL or a mailto URL.").exactOptional(),
     })
     .readonly(),
 );
