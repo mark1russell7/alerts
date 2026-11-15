@@ -826,12 +826,12 @@ describe("the delivery step of a pass", () => {
       {
         pushover: {
           describe: { maxInFlight: 2 },
-          send: async () => {
+          send: async (_, count): Promise<SendOutcome> => {
             busy += 1;
             peak = Math.max(peak, busy);
             await gate;
             busy -= 1;
-            return undefined;
+            return { ok: true, receipt: { receipt: `pushover-${count}` }, accepted: clock.now() };
           },
         },
       },
