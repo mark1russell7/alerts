@@ -3,11 +3,13 @@
  * supervisor (`main.ts supervise`). The supervisor starts the runtime (`main.ts`). It starts the runtime
  * again after an exit, or after the liveness probe fails. The entry gives the paths and the ports.
  */
+import { homedir } from "node:os";
 import { join } from "node:path";
 import { add, sum, type Quantity } from "@mark1russell7/quantity";
 import { daemon, service, type Profile, type ServiceBuilder } from "@mark1russell7/service";
 import type { GroupSpec, ServiceSpec } from "@mark1russell7/service/host";
 import { holdingPasses, READINESS, STARTUP_BUDGET, STOP_MESSAGE } from "./index.ts";
+import { alertsHome, HOME_VARIABLE } from "./config.ts";
 import { INSTANCE_TIMES } from "./instance.ts";
 
 const ms = (value: number): Quantity => ({ value, unit: "ms" });
@@ -46,6 +48,16 @@ export const shutdownCap = (profile: Profile): Quantity =>
  * grace, the supervisor stops the process tree. Thus a stop does not cut a pass.
  */
 export const RUNTIME_GRACE: Quantity = add(shutdownCap(RUNTIME_PROFILE), s(2));
+
+/**
+ * This function gives the folder of the private files from the argument of the supervisor. It resolves
+ * the argument as the runtime resolves `ALERTS_HOME`: `~` is the home folder, and a relative path is
+ * relative to `base`. Thus the supervisor and the runtime use the same folder. An empty argument is an error.
+ */
+export function supervisorHome(argument: string | undefined, base: string, home: string = homedir()): string {
+  if (argument === undefined || argument === "") throw new Error("The supervisor needs one argument: the folder of the private files.");
+  return alertsHome({ [HOME_VARIABLE]: argument }, base, home);
+}
 
 /** The folder of the files of the host: the task file, the lock, the discovery file and the logs. */
 export const hostFolder = (home: string): string => join(home, "host");

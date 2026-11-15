@@ -62,13 +62,16 @@ function fixture(source: string, name: string): string {
 /**
  * A fake network with recorded answers. The NWS API gives the Flood Warning to the request of the
  * state, the keepalive to the canary, and no alert to the WEA request. The IPAWS feed has no alert.
+ * Each exchange takes `delay` milliseconds of real time, as on a busy runner. With `Infinity`, no exchange ends.
  */
-function network() {
+function network(delay = 0) {
   const exchanges: Exchange[] = [];
   const collection = (...names: string[]): string => JSON.stringify({ type: "FeatureCollection", features: names.map((name) => JSON.parse(fixture("alerts-source-nws-api", name))) });
   const nws: Readonly<Record<string, string>> = { "/alerts/active?area=TX": collection("nws-flw.json"), [CANARY_PATH]: collection("nws-keepalive.json") };
   const transport: Transport = async (exchange) => {
     exchanges.push(exchange);
+    if (delay === Infinity) await new Promise<never>(() => undefined);
+    if (delay > 0) await pause(delay);
     const url = new URL(exchange.url);
     if (url.hostname === "apps.fema.gov") return { status: 200, statusText: "OK", headers: { "content-type": "application/xml" }, body: fixture("alerts-source-ipaws", "feed-empty.xml") };
     if (url.hostname !== "api.weather.gov") throw new Error(`The fake network has no route to ${url.hostname}.`);
@@ -89,10 +92,18 @@ function pushoverServer() {
   return { fetch, calls };
 }
 
-// The microtasks and the callbacks of the promises end before this promise resolves.
-const settle = (): Promise<void> => new Promise((resolve) => setImmediate(resolve));
+// The limit of each fetch in these tests. With the interval of 60 s, a stall of 1.2 s of real time stops a fetch.
+const TEST_FETCH_LIMIT = 60 * 60 * 1000;
 
-/** This function moves the clock in steps of one second until the work ends. The waits of the pace of the sources end in the steps. */
+// The real time between two steps of the fake clock. In this time, the microtasks, the callbacks and the real work of a step end.
+const REAL_STEP_MS = 20;
+const pause = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * This function moves the clock in steps of one second until the work ends. The waits of the pace of the sources end in the steps.
+ * Before each step, it waits `REAL_STEP_MS` of real time. Thus slow real work does not move the fake time. On a busy runner, a step
+ * after each turn of the event loop moved the clock 60 seconds in one fetch, and the limit of the fetch stopped the NWS source.
+ */
 async function finish<T>(clock: FakeClock, work: Promise<T>): Promise<T> {
   let done = false;
   work.then(
@@ -100,8 +111,8 @@ async function finish<T>(clock: FakeClock, work: Promise<T>): Promise<T> {
     () => (done = true),
   );
   for (let step = 0; !done && step < 10 * 60; step++) {
-    await clock.advance(1000);
-    await settle();
+    await pause(REAL_STEP_MS);
+    if (!done) await clock.advance(1000);
   }
   return work;
 }
@@ -126,7 +137,8 @@ afterEach(() => {
   opened = [];
 });
 
-function open(secret: SecretLookup = store(SECRETS), config: AlertConfig = CONFIG) {
+/** This function opens an instance. The limit `"interval"` keeps the default limit of each fetch: the interval of the source. */
+function open(secret: SecretLookup = store(SECRETS), config: AlertConfig = CONFIG, delay = 0, fetchLimit: number | "interval" = TEST_FETCH_LIMIT) {
   // The entry reads the configuration so: a refused parse stops the start before the instance.
   const parsed = parseConfig(JSON.stringify(config), INSTANCE_CHANNELS, secret);
   if (parsed.tag === "err") throw new Error(parsed.error.join("\n"));
@@ -136,9 +148,9 @@ function open(secret: SecretLookup = store(SECRETS), config: AlertConfig = CONFI
   const clock = fakeClock(T0);
   // The fake clock starts at T0. Thus its time is also the instant of the test.
   const wall: WallClock = { time: "wall", now: () => clock.now(), after: (ms, run) => clock.after(ms, run) };
-  const net = network();
+  const net = network(delay);
   const server = pushoverServer();
-  const instance: Instance = openInstance({ config: parsed.value, secret, log, clock, wall, transport: net.transport, pushover: server.fetch, run: "run-1" });
+  const instance: Instance = openInstance({ config: parsed.value, secret, log, clock, wall, transport: net.transport, pushover: server.fetch, run: "run-1", ...(fetchLimit === "interval" ? {} : { fetchLimit: () => fetchLimit }) });
   return { instance, clock, net, server };
 }
 
@@ -147,6 +159,11 @@ describe("openInstance", () => {
     const { instance, clock, net, server } = await open();
     const pass = await finish(clock, instance.runtime.pass());
     expect(pass.fetched).toEqual(["nws-api", "ipaws"]);
+    // A fetch that ran out of time names its cause here, before the checks of the send.
+    expect(pass.view?.health.map((health) => [health.source, health.state])).toEqual([
+      ["nws-api", "healthy"],
+      ["ipaws", "healthy"],
+    ]);
     expect(server.calls).toHaveLength(1);
     const [call] = server.calls;
     expect(call?.url).toBe("https://api.pushover.net/1/messages.json");
@@ -155,6 +172,26 @@ describe("openInstance", () => {
     expect(pass.delivery?.sent).toHaveLength(1);
     // The source asks for the alerts of the state. The match to the county is local.
     expect(net.exchanges.map((exchange) => exchange.url)).toContain("https://api.weather.gov/alerts/active?area=TX");
+  });
+
+  it("sends the warning when each exchange takes real time, as on a busy runner", async () => {
+    // This test keeps the default limit, the interval. Before the fix of `finish`, a delay of 5 ms moved the fake clock past it.
+    const { instance, clock, server } = open(store(SECRETS), CONFIG, 15, "interval");
+    const pass = await finish(clock, instance.runtime.pass());
+    expect(pass.view?.health.map((health) => [health.source, health.state])).toEqual([
+      ["nws-api", "healthy"],
+      ["ipaws", "healthy"],
+    ]);
+    expect(server.calls.map((call) => call.fields["title"])).toEqual([expect.stringContaining("Flood Warning")]);
+  });
+
+  it("stops each fetch at the limit of the options", async () => {
+    const { instance, clock } = open(store(SECRETS), CONFIG, Infinity, 5000);
+    const pass = await finish(clock, instance.runtime.pass());
+    expect(pass.view?.health.map((health) => [health.source, health.lastFailure?.failure.message])).toEqual([
+      ["nws-api", "The fetch took longer than 5000 ms."],
+      ["ipaws", "The fetch took longer than 5000 ms."],
+    ]);
   });
 
   it("names the project in the User-Agent of each request, and no request holds the position of a place", async () => {

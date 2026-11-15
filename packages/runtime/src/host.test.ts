@@ -1,9 +1,9 @@
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { valueIn } from "@mark1russell7/quantity";
 import { groupProblems, renderTaskXml, serviceProblems, superviseGroup } from "@mark1russell7/service/host";
 import { fakeHost } from "@mark1russell7/service/testing";
 import { describe, expect, it } from "vitest";
-import { declareSupervisor, HOST_PORTS, hostGroup, hostTask, RUNTIME_GRACE, RUNTIME_PROFILE, shutdownCap, supervisorDiscovery } from "./host.ts";
+import { declareSupervisor, HOST_PORTS, hostGroup, hostTask, RUNTIME_GRACE, RUNTIME_PROFILE, shutdownCap, supervisorDiscovery, supervisorHome } from "./host.ts";
 import { STOP_MESSAGE } from "./index.ts";
 import { INSTANCE_TIMES } from "./instance.ts";
 
@@ -41,6 +41,17 @@ async function pass(host: Awaited<ReturnType<typeof started>>["host"], seconds: 
 }
 
 describe("the host of the instance", () => {
+  it("resolves the folder argument of the supervisor as the runtime resolves ALERTS_HOME", () => {
+    const user = join("/home", "owner");
+    const base = join("/srv", "console");
+    // The folder is absolute. On Windows, it starts with the drive of the base.
+    expect(supervisorHome("~/private", base, user)).toBe(resolve(user, "private"));
+    expect(supervisorHome("./private", base, user)).toBe(resolve(base, "private"));
+    expect(supervisorHome(HOME, base, user)).toBe(resolve(HOME));
+    expect(() => supervisorHome("", base, user)).toThrow("The supervisor needs one argument: the folder of the private files.");
+    expect(() => supervisorHome(undefined, base, user)).toThrow("The supervisor needs one argument: the folder of the private files.");
+  });
+
   it("gives a group and a boot task with no problems", () => {
     expect(groupProblems(hostGroup(OPTIONS))).toEqual([]);
     expect(serviceProblems(hostTask(OPTIONS))).toEqual([]);
