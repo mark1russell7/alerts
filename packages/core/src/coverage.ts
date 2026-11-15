@@ -6,7 +6,7 @@
  * `independent` is the size of the smallest set of outside domains whose faults stop each of the
  * sources. That is a minimum hitting set, and `@mark1russell7/collections/graph` calculates it.
  */
-import { minimumHittingSet } from "@mark1russell7/collections/graph";
+import { minimumHittingSet, type HittingSetChoice } from "@mark1russell7/collections/graph";
 import { hasKind, LIFE_SAFETY_KINDS, regionCovers } from "./assess.ts";
 import type { Coverage, HealthState, SourceDescriptor, SourceHealth, SourceId, WatchedPlace } from "./contracts.ts";
 import { CELL_RESOURCES } from "./contracts.ts";
@@ -98,9 +98,9 @@ export function coverageShort(entry: Coverage): boolean {
 }
 
 function coverageOf(place: Coverage["place"], kind: string, sources: readonly SourceDescriptor[], required: number, policy: CoveragePolicy): Coverage {
-  const search = minimumHittingSet(sources.map(failureDomains), policy.maxSteps === undefined ? {} : { maxSteps: policy.maxSteps });
+  const search = minimumHittingSet<string>(sources.map(failureDomains), policy.maxSteps === undefined ? {} : { maxSteps: policy.maxSteps });
   // Each set of domains has one or more domains, so the result is never none.
-  const found = search.kind === "budget" ? search.best : search.kind === "exact" ? search : { elements: [], weight: 0 };
+  const found: HittingSetChoice<string> = search.kind === "budget" ? search.best : search.kind === "exact" ? search : { elements: [], weight: 0 };
   const commonResources = CELL_RESOURCES.filter((resource) => sources.length > 0 && sources.every((source) => source.uses.includes(resource)));
   return {
     place,
