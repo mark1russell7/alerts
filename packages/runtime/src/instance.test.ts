@@ -333,7 +333,8 @@ describe("openInstance", () => {
     const outcomes: ShapeOutcome[] = [];
     let told = 0;
     const { instance, clock } = open(store(SECRETS), CONFIG, 0, TEST_FETCH_LIMIT, { transport: withZones(net), shapes: cache, onShapes: (outcome) => outcomes.push(outcome), onPlaceCodes: () => (told += 1) });
-    expect(instance.zoneCodes).toBe(1);
+    // The 4 codes near the place are TXC311, its SAME code, the state and TXZ230. The file has each code but the forecast zone TXZ230.
+    expect(instance.zones).toEqual({ placed: 1, outlined: 1, near: 4, added: 1 });
     expect(instance.runtime.config.places[0]?.codes.at(-1)).toEqual({ system: "ugc", code: "TXZ230" });
     await finish(clock, instance.runtime.pass());
     await finish(clock, instance.shapes.idle());
@@ -351,7 +352,7 @@ describe("openInstance", () => {
     const outcomes: ShapeOutcome[] = [];
     let told = 0;
     const { instance, clock } = open(store(SECRETS), CONFIG, 0, TEST_FETCH_LIMIT, { transport: withZones(net), shapes: memoryCache(), onShapes: (outcome) => outcomes.push(outcome), onPlaceCodes: () => (told += 1) });
-    expect(instance.zoneCodes).toBe(0);
+    expect(instance.zones).toEqual({ placed: 1, outlined: 0, near: 0, added: 0 });
     for (let pass = 0; pass < 4 && told === 0; pass++) {
       await finish(clock, instance.runtime.pass());
       await finish(clock, instance.shapes.idle());
