@@ -1,0 +1,87 @@
+{
+  "type": "Feature",
+  "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+      [
+        [
+          0.18,
+          0.32
+        ],
+        [
+          0.4,
+          0.3
+        ],
+        [
+          0.52,
+          0.14
+        ],
+        [
+          0.5,
+          0.04
+        ],
+        [
+          0.36,
+          0.04
+        ],
+        [
+          0.2,
+          0.18
+        ],
+        [
+          0.18,
+          0.32
+        ]
+      ]
+    ]
+  },
+  "properties": {
+    "id": "urn:demo:xhil:0201",
+    "areaDesc": "West County",
+    "geocode": {
+      "SAME": [
+        "099002"
+      ],
+      "UGC": [
+        "XXC002"
+      ]
+    },
+    "references": [],
+    "sent": "2026-05-04T12:35:00Z",
+    "effective": "2026-05-04T12:35:00Z",
+    "onset": "2026-05-04T12:35:00Z",
+    "expires": "2026-05-04T15:20:00Z",
+    "ends": "2026-05-04T15:20:00Z",
+    "status": "Actual",
+    "messageType": "Update",
+    "category": "Met",
+    "severity": "Extreme",
+    "certainty": "Observed",
+    "urgency": "Immediate",
+    "event": "Flash Flood Warning",
+    "sender": "forecast@hill-office.example",
+    "senderName": "Hill Forecast Office (made up)",
+    "headline": "Flash Flood Warning stays in effect until 3:20 PM for West County",
+    "description": "The Hill office sends this message as the backup of the Lake office. Water covers the valley road. This message is made up for the demo. No real office sent it, and no real place is in it.",
+    "instruction": "Move to higher ground now.",
+    "response": "Evacuate",
+    "parameters": {
+      "NWSheadline": [
+        "FLASH FLOOD WARNING STAYS IN EFFECT UNTIL 3:20 PM FOR WEST COUNTY"
+      ],
+      "VTEC": [
+        "/O.CON.XLAK.FF.W.0007.000000T0000Z-260504T1520Z/"
+      ]
+    },
+    "scope": "Public",
+    "language": "en-US",
+    "eventCode": {
+      "SAME": [
+        "FFW"
+      ],
+      "NationalWeatherService": [
+        "FFW"
+      ]
+    }
+  }
+}
