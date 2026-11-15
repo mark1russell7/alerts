@@ -112,6 +112,12 @@ export function faultsOf(arm: DownArm, settings: DownSettings = CASE_5_SETTINGS)
 /** The clock of the case. The runtime reads `now` and `after`. The scheduler of `polite-crawler` reads `now` and `sleep`. */
 export type CaseClock = RuntimeOptions["clock"] & PoliteClock;
 
+/** A timer of the fast clock: the function that stops it, and the function that lets the process end before it. */
+interface FastTimer {
+  readonly stop: () => void;
+  readonly unref: () => void;
+}
+
 /**
  * This function gives a clock that moves `speed` times faster than real time, from the time `start` since the epoch. Each
  * timer ends after `ms / speed` real milliseconds. The clock is local until `@mark1russell7/algebra/clock` has a fast clock.
@@ -119,26 +125,52 @@ export type CaseClock = RuntimeOptions["clock"] & PoliteClock;
 export function fastClock(start: number, speed: number): CaseClock {
   if (!Number.isFinite(speed) || speed < 1) throw new RangeError(`The speed ${String(speed)} is not a finite number of 1 or more.`);
   const origin = performance.now();
-  const realMs = (ms: number): number => Math.max(0, ms) / speed;
+  const now = (): number => start + Math.floor((performance.now() - origin) * speed);
+  // A timer of Node.js keeps whole milliseconds and can fire before `performance.now()` gets to its end. Thus the timer
+  // starts again until `now()` gets to the target, and a wait never ends before its time on this clock.
+  const timerOf = (ms: number, fire: () => void): FastTimer => {
+    const target = now() + Math.max(0, ms);
+    let unrefed = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const arm = (): void => {
+      const left = target - now();
+      if (left <= 0) {
+        timer = undefined;
+        fire();
+        return;
+      }
+      timer = setTimeout(arm, Math.max(1, left / speed));
+      if (unrefed) timer.unref();
+    };
+    // The first timer also goes through `setTimeout`, thus `fire` never runs before the caller has the timer.
+    timer = setTimeout(arm, Math.max(0, ms) / speed);
+    return {
+      stop: () => clearTimeout(timer),
+      unref: () => {
+        unrefed = true;
+        timer?.unref();
+      },
+    };
+  };
   return {
     // The time starts at an instant (`Date.now()` in the case), thus this clock is a wall clock.
     time: "wall",
-    now: () => start + Math.floor((performance.now() - origin) * speed),
+    now,
     after: (ms, run) => {
-      const timer = setTimeout(run, realMs(ms));
-      return Object.assign(() => clearTimeout(timer), { unref: () => void timer.unref() });
+      const timer = timerOf(ms, run);
+      return Object.assign(timer.stop, { unref: timer.unref });
     },
     sleep: (ms, signal) =>
       new Promise<void>((resolve) => {
         if (signal?.aborted === true) return resolve();
         const stop = (): void => {
-          clearTimeout(timer);
+          timer.stop();
           resolve();
         };
-        const timer = setTimeout(() => {
+        const timer = timerOf(ms, () => {
           signal?.removeEventListener("abort", stop);
           resolve();
-        }, realMs(ms));
+        });
         signal?.addEventListener("abort", stop, { once: true });
       }),
   };

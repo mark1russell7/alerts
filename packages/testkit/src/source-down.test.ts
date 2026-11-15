@@ -136,6 +136,31 @@ describe("fastClock", () => {
     expect(() => fastClock(0, 0.5)).toThrow(RangeError);
   });
 
+  it("never ends a wait or a timer before its time on the clock, at a speed where each timer is near 1 ms", async () => {
+    const clock = fastClock(0, 1000);
+    for (let wait = 0; wait < 20; wait += 1) {
+      const from = clock.now();
+      await clock.sleep(1500);
+      expect(clock.now() - from).toBeGreaterThanOrEqual(1500);
+      const fired = await new Promise<number>((resolve) => clock.after(700, () => resolve(clock.now())));
+      expect(fired - from).toBeGreaterThanOrEqual(2200);
+    }
+  });
+
+  it("fires a timer of 0 ms after the call of after, not in it", async () => {
+    const clock = fastClock(0, 1000);
+    let fired = false;
+    const fires = new Promise<void>((resolve) =>
+      clock.after(0, () => {
+        fired = true;
+        resolve();
+      }),
+    );
+    expect(fired).toBe(false);
+    await fires;
+    expect(fired).toBe(true);
+  });
+
   it("stops a timer with the function that after gives", async () => {
     const clock = fastClock(0, 1000);
     let fired = false;
