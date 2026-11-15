@@ -11,7 +11,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ServiceBuilder } from "@mark1russell7/service";
 import { discoveryOf, nodeHostPorts, removeDiscovery, superviseGroup, writeDiscovery } from "@mark1russell7/service/host";
-import { declareSupervisor, hostGroup, supervisorDiscovery } from "./host.ts";
+import { declareSupervisor, hostGroup, supervisorDiscovery, supervisorHome } from "./host.ts";
 
 // The folder of the package. The runtime starts from the same checkout as the supervisor.
 const ROOT = join(fileURLToPath(new URL(".", import.meta.url)), "..");
@@ -20,8 +20,9 @@ const ROOT = join(fileURLToPath(new URL(".", import.meta.url)), "..");
  * This function makes the service of the supervisor for the folder of the private files. The service
  * starts the group, and its shutdown stops the group. The entry `main.ts` starts the service.
  */
-export function supervisor(home: string | undefined): ServiceBuilder {
-  if (home === undefined || home === "") throw new Error("The supervisor needs one argument: the folder of the private files.");
+export function supervisor(argument: string | undefined): ServiceBuilder {
+  // A console argument can be `~/x` or `./x`. The runtime gets the resolved folder, thus its files are the files of the supervisor.
+  const home = supervisorHome(argument, process.cwd());
   const ports = nodeHostPorts();
   const group = superviseGroup(hostGroup({ home, root: ROOT, node: process.execPath }), ports);
   // The discovery file names this process. With it, the remove of the task stops the process tree.
