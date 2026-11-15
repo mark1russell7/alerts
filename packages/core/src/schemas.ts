@@ -36,6 +36,7 @@ import {
   type DeliveryStatus,
   type EndMark,
   type Estimate,
+  type ExpectedHarm,
   type Duration,
   type EscalationPolicy,
   type EscalationStep,
@@ -745,8 +746,11 @@ function estimateIn(min: number, max: number): z.ZodType<Estimate, Estimate> {
 /** This schema checks a probability with its interval: each number is from 0 to 1. */
 export const probabilitySchema: z.ZodType<Estimate, Estimate> = estimateIn(0, 1);
 
-/** This schema checks a measured value with its interval: each number is 0 or more. */
-export const estimateSchema: z.ZodType<Estimate, Estimate> = estimateIn(0, Number.MAX_VALUE);
+/**
+ * This schema checks a measured value with its interval. Each number is from 0 to `Number.MAX_SAFE_INTEGER`. Thus the
+ * product of a probability and a count has a finite interval.
+ */
+export const estimateSchema: z.ZodType<Estimate, Estimate> = estimateIn(0, Number.MAX_SAFE_INTEGER);
 
 /** This schema checks the priors of one kind. */
 export const kindPriorSchema: z.ZodType<KindPrior, KindPrior> = schemaOf<KindPrior>()(
@@ -788,11 +792,22 @@ export const scoreFactorSchema: z.ZodType<ScoreFactor, ScoreFactor> = schemaOf<S
     .readonly(),
 );
 
+/** This schema checks the expected harm of a shadow score. */
+export const expectedHarmSchema: z.ZodType<ExpectedHarm, ExpectedHarm> = schemaOf<ExpectedHarm>()(
+  z.strictObject({ deaths: estimateSchema, injuries: estimateSchema }).readonly(),
+);
+
 /** This schema checks a shadow score. A score with no read names one or more factors that the priors do not give. */
 export const shadowScoreSchema: z.ZodType<ShadowScore, ShadowScore> = schemaOf<ShadowScore>()(
   z
     .discriminatedUnion("read", [
-      z.strictObject({ read: z.literal(true), probability: scoreFactorSchema, deaths: scoreFactorSchema, injuries: scoreFactorSchema }),
+      z.strictObject({
+        read: z.literal(true),
+        probability: scoreFactorSchema,
+        deaths: scoreFactorSchema,
+        injuries: scoreFactorSchema,
+        expected: expectedHarmSchema,
+      }),
       z.strictObject({
         read: z.literal(false),
         missing: z

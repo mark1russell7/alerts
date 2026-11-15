@@ -288,12 +288,13 @@ describe("the words of the page", () => {
           probability: factor(0.31416, 0.28, 0.33, "kinds", "met.flood.flash"),
           deaths: factor(0.02, 0.01, 0.03, "kinds", "met.flood.flash"),
           injuries: factor(0.05, 0.03, 0.08, "kinds", "met"),
+          expected: { deaths: { value: 0.0063, low: 0.0028, high: 0.0099 }, injuries: { value: 0.016, low: 0.0084, high: 0.026 } },
         },
       },
       incident!,
     );
     expect(read).toBe(
-      'The shadow score does not decide the level. The probability of the event is 0.31 (0.28 to 0.33), from the verified share of the warnings of "met.flood.flash". One event of this kind gives 0.02 (0.01 to 0.03) deaths and 0.05 (0.03 to 0.08) injuries. The deaths come from the measures of "met.flood.flash", and the injuries from "met".',
+      'The shadow score does not decide the level. The probability of the event is 0.31 (0.28 to 0.33), from the verified share of the warnings of "met.flood.flash". One event of this kind gives 0.02 (0.01 to 0.03) deaths and 0.05 (0.03 to 0.08) injuries. The deaths come from the measures of "met.flood.flash", and the injuries from "met". The expected harm is the probability times each count: 0.0063 (0.0028 to 0.0099) deaths and 0.016 (0.0084 to 0.026) injuries.',
     );
     expect(reasonText({ kind: "shadow", score: { read: false, missing: ["probability", "deaths"] } }, incident!)).toBe(
       "The shadow score does not decide the level, and it has no value. The priors do not give these factors: probability, deaths.",

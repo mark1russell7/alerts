@@ -92,13 +92,14 @@ function probabilitySource(factor: ScoreFactor): string {
 /** This function gives the text of a shadow score. The score does not decide the level, and the text tells this first. */
 export function shadowText(score: ShadowScore): string {
   if (!score.read) return `The shadow score does not decide the level, and it has no value. The priors do not give these factors: ${score.missing.join(", ")}.`;
-  const { probability, deaths, injuries } = score;
+  const { probability, deaths, injuries, expected } = score;
   const harm = `One event of this kind gives ${estimateText(deaths.estimate)} deaths and ${estimateText(injuries.estimate)} injuries.`;
   const keys =
     deaths.from.key === injuries.from.key
       ? `These counts come from the measures of "${deaths.from.key}".`
       : `The deaths come from the measures of "${deaths.from.key}", and the injuries from "${injuries.from.key}".`;
-  return `The shadow score does not decide the level. The probability of the event is ${estimateText(probability.estimate)}, from ${probabilitySource(probability)}. ${harm} ${keys}`;
+  const product = `The expected harm is the probability times each count: ${estimateText(expected.deaths)} deaths and ${estimateText(expected.injuries)} injuries.`;
+  return `The shadow score does not decide the level. The probability of the event is ${estimateText(probability.estimate)}, from ${probabilitySource(probability)}. ${harm} ${keys} ${product}`;
 }
 
 /** This function gives the text of one reason of an assessment. */
