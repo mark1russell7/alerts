@@ -61,9 +61,10 @@ export interface Refusal {
  *
  * - The address has the field `user`, and the optional field `device`.
  * - A title or a body over the limit of Pushover gets a cut. A URL over the limit is not sent, because a cut URL is broken.
- * - The delivery key is the tag of a `life-safety` message. Thus a cancel by tag stops its repeats.
+ * - The delivery key is the first tag of a `life-safety` message. Thus a cancel by tag stops its repeats.
+ * - The copy id of the send is its second tag. Thus a cancel by the copy id stops this copy only.
  */
-export function pushoverMessageOf(message: Message, address: Address, at: Instant, options: PushoverMapOptions = {}): PushoverMessage | Refusal {
+export function pushoverMessageOf(message: Message, address: Address, at: Instant, options: PushoverMapOptions = {}, copy?: string): PushoverMessage | Refusal {
   const user = address["user"];
   if (user === undefined || user === "") return { refused: "The address has no user key." };
   if (message.expires !== undefined && message.expires <= at) return { refused: "The message expired before the send." };
@@ -84,7 +85,7 @@ export function pushoverMessageOf(message: Message, address: Address, at: Instan
     ...(device === undefined || device === "" ? {} : { devices: [device] }),
     ...(sound === undefined ? {} : { sound }),
     ...(priority === 2
-      ? { emergency: { retryMs, expireMs: Math.max(retryMs, Math.min(PUSHOVER_EXPIRE_MAX_MS, options.expireMs ?? PUSHOVER_EXPIRE_MAX_MS, left)), tags: [message.key] } }
+      ? { emergency: { retryMs, expireMs: Math.max(retryMs, Math.min(PUSHOVER_EXPIRE_MAX_MS, options.expireMs ?? PUSHOVER_EXPIRE_MAX_MS, left)), tags: copy === undefined ? [message.key] : [message.key, copy] } }
       : left >= 1000 && Number.isFinite(left)
         ? { ttlMs: left }
         : {}),

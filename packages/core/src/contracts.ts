@@ -574,10 +574,27 @@ export interface DeliveryStatus {
  */
 export interface ChannelProcedures {
   describe(): ChannelDescriptor;
-  send(input: { readonly message: Message; readonly address: Address }): Promise<SendOutcome>;
+  send(input: SendInput): Promise<SendOutcome>;
   status(input: { readonly receipt: Receipt }): Promise<DeliveryStatus>;
-  cancel(input: { readonly receipt: Receipt }): Promise<void>;
+  cancel(input: CancelTarget): Promise<void>;
 }
+
+/** The input of a send. */
+export interface SendInput {
+  readonly message: Message;
+  readonly address: Address;
+  /**
+   * The id of this send of the key. Its characters match `COPY_ID`. Each send of a key has a new id.
+   * A channel that repeats a message keeps the id with the message. Then `cancel({ copy })` stops this copy only.
+   */
+  readonly copy?: string;
+}
+
+/**
+ * The target of a cancel. A receipt stops each copy of its delivery key. A copy id stops one copy
+ * whose send did not end, thus the cancel has no receipt of it. The new copy of the key continues.
+ */
+export type CancelTarget = { readonly receipt: Receipt } | { readonly copy: string };
 
 /** One step of an escalation: a channel, and the wait after the step before it. */
 export interface EscalationStep {
