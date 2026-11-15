@@ -6,6 +6,7 @@
  */
 import type { WallClock } from "@mark1russell7/algebra/clock";
 import {
+  COPY_ID,
   acknowledgmentOf,
   incidents,
   messageKey,
@@ -78,7 +79,8 @@ export interface DeliveryStep {
   readonly sent: readonly Delivery[];
   /**
    * The keys of the sends that the channel accepted when the log already had a delivery of the key.
-   * Another copy of the system can cause this. The log keeps the first delivery. The cancel by tag of the
+   * A late send on a channel that does not repeat can cause this, after a second send. Another copy
+   * of the system can also cause it. The log keeps the first delivery. The cancel by tag of the
    * channel stops the repeats of each copy.
    */
   readonly duplicates: readonly string[];
@@ -97,7 +99,7 @@ export interface DeliveryStep {
 /** What the delivery reads and writes in the runtime. */
 export interface DeliveryContext {
   readonly clock: WallClock;
-  /** The id of the run. Each copy id starts with it, thus two runs do not give the same copy id. */
+  /** The id of the run. Its characters match `COPY_ID`. Each copy id starts with it, thus two runs do not give the same copy id. */
   readonly run: string;
   readonly places: readonly WatchedPlace[];
   state(): RuntimeState;
@@ -127,6 +129,15 @@ interface Flight {
  * or the server failed. A refusal, a bad key and a full quota tell that the channel has no message.
  */
 const UNSURE: ReadonlySet<string> = new Set(["network", "timeout", "server"]);
+
+/** The kind and the text of a failed cancel or stop. */
+interface CallFailure {
+  readonly kind: "timeout" | "network";
+  readonly message: string;
+}
+
+/** A cancel or a stop that threw is a failure of the kind `network`. */
+const thrownFailure = (thrown: unknown, otherwise: string): CallFailure => ({ kind: "network", message: thrown === undefined ? otherwise : errorMessage(thrown) });
 
 /**
  * This function makes the dispatcher. Each call of a channel goes through a time limit. A failed call
@@ -158,6 +169,8 @@ export function createDispatcher(options: DeliveryOptions, context: DeliveryCont
   const repeating = new Set(descriptors.filter((descriptor) => descriptor.repeats).map((descriptor) => descriptor.id as string));
   const recipients = new Map(options.recipients.map((recipient) => [recipient.watch.person as string, recipient]));
   if (!(options.flightLimit >= options.callLimit)) throw new Error(`The flight limit (${options.flightLimit} ms) is shorter than the call limit (${options.callLimit} ms).`);
+  // Each copy id starts with the run id. A channel can put it in the path of a URL.
+  if (!COPY_ID.test(context.run)) throw new Error(`The run id "${context.run}" has a character that a copy id cannot have. Use letters, digits, _ and -.`);
   const polled = new Map<string, Instant>();
   const waits = new Map<string, Instant>();
   // The send in flight of each key. Each flight is an object, thus a late end does not remove a later flight of the same key.
@@ -294,7 +307,7 @@ export function createDispatcher(options: DeliveryOptions, context: DeliveryCont
               const deliveryOf = (accepted: Extract<SendOutcome, { ok: true }>): Delivery => ({ key: message.key, incident: send.incident, level: send.level, person: send.person, channel: send.channel, step: send.step, at: accepted.accepted, receipt: accepted.receipt });
               // The send stays in flight until it ends, also after the time limit of the step.
               copies += 1;
-              const flight: Flight = { since: at, copy: `${context.run}.${copies}`, stale: false };
+              const flight: Flight = { since: at, copy: `${context.run}-${copies}`, stale: false };
               flying.set(key, flight);
               let late = false;
               const call = Promise.resolve()
@@ -362,15 +375,15 @@ export function createDispatcher(options: DeliveryOptions, context: DeliveryCont
                   return;
                 }
                 const receipt = delivery.receipt;
-                const error = await limited<unknown>(
+                const failure = await limited<CallFailure | undefined>(
                   Promise.resolve().then(() => channel.cancel({ receipt })).then(() => undefined),
                   options.callLimit,
                   clock,
-                  () => new Error(`The cancel took longer than ${options.callLimit} ms.`),
-                  (thrown) => thrown ?? new Error("The cancel failed."),
+                  () => ({ kind: "timeout", message: `The cancel took longer than ${options.callLimit} ms.` }),
+                  (thrown) => thrownFailure(thrown, "The cancel failed."),
                 );
-                if (error !== undefined) {
-                  fail("cancel", delivery, "network", errorMessage(error));
+                if (failure !== undefined) {
+                  fail("cancel", delivery, failure.kind, failure.message);
                   return;
                 }
               }
@@ -391,17 +404,17 @@ export function createDispatcher(options: DeliveryOptions, context: DeliveryCont
         }
         work.push(
           (async () => {
-            const error = await limited<unknown>(
+            const failure = await limited<CallFailure | undefined>(
               Promise.resolve()
                 .then(() => channel.cancel({ copy }))
                 .then(() => undefined),
               options.callLimit,
               clock,
-              () => new Error(`The stop of the copy took longer than ${options.callLimit} ms.`),
-              (thrown) => thrown ?? new Error("The stop of the copy failed."),
+              () => ({ kind: "timeout", message: `The stop of the copy took longer than ${options.callLimit} ms.` }),
+              (thrown) => thrownFailure(thrown, "The stop of the copy failed."),
             );
-            if (error !== undefined) {
-              fail("copy", { ...target, copy }, "network", errorMessage(error));
+            if (failure !== undefined) {
+              fail("copy", { ...target, copy }, failure.kind, failure.message);
               return;
             }
             // A late accept during the stop puts a new entry, thus its stop goes again.

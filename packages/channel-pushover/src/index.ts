@@ -4,7 +4,7 @@
  * come from `@procedures/notify/pushover`.
  */
 
-import type { ChannelDescriptor, ChannelId, ChannelProcedures, Instant, SendOutcome } from "@mark1russell7/alerts";
+import { COPY_ID, type ChannelDescriptor, type ChannelId, type ChannelProcedures, type Instant, type SendOutcome } from "@mark1russell7/alerts";
 import {
   callPushover,
   extractPushoverCancelled,
@@ -135,6 +135,7 @@ export function createPushoverChannel(options: PushoverChannelOptions): ChannelP
     describe: () => descriptor,
 
     async send({ message, address, copy }): Promise<SendOutcome> {
+      if (copy !== undefined && !COPY_ID.test(copy)) return { ok: false, kind: "refused", message: `The copy id "${copy}" has a character that the path of a stop cannot have.` };
       const at = now();
       if (!isPushoverKey(options.token)) return { ok: false, kind: "auth", message: "The API token is not 30 letters and digits." };
       const mapped = pushoverMessageOf(message, address, at, options, copy);
@@ -177,6 +178,7 @@ export function createPushoverChannel(options: PushoverChannelOptions): ChannelP
       let request: PushoverRequest | undefined;
       if ("copy" in target) {
         // The copy id is the second tag of the message. It stops only this copy, and the new copy of the key continues.
+        if (!COPY_ID.test(target.copy)) throw new Error(`The copy id "${target.copy}" has a character that the path of a stop cannot have.`);
         request = pushoverCancelByTagRequest(options.token, target.copy);
       } else {
         const tag = target.receipt["tag"];

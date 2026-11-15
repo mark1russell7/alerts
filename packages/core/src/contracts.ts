@@ -578,7 +578,7 @@ export interface SendInput {
   readonly message: Message;
   readonly address: Address;
   /**
-   * The id of this send of the key: letters, digits, `.`, `_` and `-`. Each send of a key has a new id.
+   * The id of this send of the key. Its characters match `COPY_ID`. Each send of a key has a new id.
    * A channel that repeats a message keeps the id with the message. Then `cancel({ copy })` stops this copy only.
    */
   readonly copy?: string;

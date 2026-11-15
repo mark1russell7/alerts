@@ -259,10 +259,10 @@ A send that passes its time limit stays in flight, because the provider can acce
 
 - No second send of its key starts until the first send ends, or until the flight limit `flightLimit` ends. The flight limit is not shorter than the time limit.
 - A late send that the provider accepts gets its delivery in the log at the next step. Thus its acknowledgment and its cancel work.
-- After the flight limit, a second send goes. A late first send that lands after it gets no delivery in the log.
+- After the flight limit, a second send goes. On a channel that repeats, a late first send that lands after it gets no delivery in the log, and its stop goes again. On a channel that does not repeat, it gets its delivery when the log has no delivery of the key. Else the step lists its key in `duplicates`.
 - A send that the channel accepts in time, and whose write to the log fails, also gets its delivery at the next step. Thus no second send goes.
 
-Each send of a key has a new copy id. The channel can have a copy that the log does not keep:
+Each send of a key has a new copy id: the run id, `-` and a count. It has only letters, digits, `_` and `-` (`COPY_ID`), because a stop puts it in the path of a URL. The channel can have a copy that the log does not keep:
 
 - a copy past its flight limit;
 - a copy whose send failed with no answer: a time-out, a network failure or a server failure.
