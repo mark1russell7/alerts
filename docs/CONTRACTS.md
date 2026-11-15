@@ -192,7 +192,7 @@ Some sources carry a copy of the messages of another source. FEMA IPAWS carries 
 
 - An `Expectation` is data: the source `from`, the source `to` and a `ReportFilter`. For IPAWS, the filter is the status `actual` and the parameter `WEAHandling`.
 - The two copies must be in one incident. So the source `to` must give a correlation key of the source `from`, for example the VTEC key.
-- `carriages(state, incidents, expectations)` gives one check for each expectation and each incident: the first report of `from` that passes the filter, and the first copy of `to`. The result is a function of the set of reports.
+- `carriages(state, incidents, expectations)` gives one check for each expectation and each message of `from`. A message is the reports of `from` in one incident with one sent time that pass the filter. Its copy is the first report of `to` in the incident with the same sent time. Thus an extension has its own check. The result is a function of the set of reports.
 - `delayLimit(delays, { quantile, level })` gives the limit of the delay. It is the distribution-free upper bound of the quantile of the measured delays, from `quantileInterval` of `@mark1russell7/rigor-statistics`. No person sets a time.
 - A small sample has no upper bound. Then the expectation has no limit, and the check only measures.
 - A check is a miss when it passes its limit with no copy. In normal work, some copies come late and some copies do not come. So one miss is not a proof.
