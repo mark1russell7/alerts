@@ -2,20 +2,28 @@
  * This module keeps the outlines of the regions of the instance: the NWS zones and counties of the watched states and of
  * the live incidents. After each pass, the instance starts a refresh of the store of shapes. The refresh ends before the
  * next fetch of the alerts. Thus the alerts come first. The match by shape and the map route read the outlines here.
+ *
+ * The match by shape reads the outlines of the store. The map reads a simplified copy, because the outlines of one state are
+ * many megabytes. The keeper simplifies the regions of the watched states again only when the store changes them. An
+ * incident changes only the small copy of the regions outside those states.
  */
-import type { AlertConfig, Incident, Instant, MapRegion, PlaceConfig, RegionCode, ShapeLookup, WatchedPlace } from "@mark1russell7/alerts";
+import { basemapToleranceKm, simplifyBasemap, type AlertConfig, type Incident, type Instant, type MapRegion, type PlaceConfig, type RegionCode, type ShapeLookup, type WatchedPlace } from "@mark1russell7/alerts";
 import { stateOfCode } from "@mark1russell7/alerts-format-nws";
 import { compareCodes, zoneCodesNear, type Refreshed, type ShapeStore, type Wanted } from "@mark1russell7/alerts-shapes-nws";
 import { errorMessage } from "@mark1russell7/text";
 
-/** The outcome of one refresh of the outlines: its result, or the error that it threw. */
-export type ShapeOutcome = { readonly ok: true; readonly refreshed: Refreshed } | { readonly ok: false; readonly error: unknown };
+/**
+ * The outcome of one refresh of the outlines: its result, or the error that it threw. The step `basemap` tells that the
+ * simplification of the basemap threw. Then the map has the full outlines.
+ */
+export type ShapeOutcome = { readonly ok: true; readonly refreshed: Refreshed } | { readonly ok: false; readonly error: unknown; readonly step?: "basemap" };
 
 /**
  * This function gives a text about a refresh with a failure, a problem or an error, or `undefined` for a refresh with none. The
  * entry writes the text to the output of the process.
  */
 export function shapeReport(outcome: ShapeOutcome): string | undefined {
+  if (!outcome.ok && outcome.step === "basemap") return `The simplification of the basemap threw, thus the map has the full outlines: ${errorMessage(outcome.error)}`;
   if (!outcome.ok) return `The refresh of the shapes threw: ${errorMessage(outcome.error)}`;
   const { requests, failures, problems, stop } = outcome.refreshed;
   if (failures.length === 0 && problems.length === 0) return undefined;
@@ -28,6 +36,19 @@ const codeKey = (code: RegionCode): string => `${code.system}:${code.code.trim()
 
 /** This function compares two region codes: by the system, and then by the code. */
 const byCode = (a: RegionCode, b: RegionCode): number => compareCodes(a.system, b.system) || compareCodes(a.code, b.code);
+
+/** This function gives the regions in the order of their codes. */
+const byRegion = (regions: Iterable<MapRegion>): MapRegion[] => [...regions].sort((a, b) => byCode(a.code, b.code));
+
+/** A list of regions and its simplified copy. */
+interface BasemapCopy {
+  readonly raw: readonly MapRegion[];
+  readonly simple: readonly MapRegion[];
+}
+
+/** This function tells if two lists have the same regions, with the same arrays of shapes, in the same order. */
+const sameRegions = (a: readonly MapRegion[], b: readonly MapRegion[]): boolean =>
+  a.length === b.length && a.every((region, at) => region.shapes === b[at]!.shapes && region.name === b[at]!.name && codeKey(region.code) === codeKey(b[at]!.code));
 
 /** This function gives the codes of the areas of the live incidents in capitals, once each, in the order of the system and the code. */
 export function liveCodes(incidents: readonly Incident[]): RegionCode[] {
@@ -94,8 +115,9 @@ export interface InstanceShapes {
   /** This function gives the shapes of a region code from the records of the store. The view of the map uses it. */
   readonly lookup: ShapeLookup;
   /**
-   * This function gives the regions under the map: the regions of the watched places and of the live incidents, in the order
-   * of the code. A region is a zone or a county, and its code is the UGC code.
+   * This function gives the regions under the map, in the order of the code. These are the counties and forecast zones of the
+   * watched states, and the regions of the places and the live incidents. A region is a zone or a county with a UGC code.
+   * The outlines are simplified for the view box of the page with `simplifyBasemap`.
    */
   basemap(): readonly MapRegion[];
   /** This function waits for the end of the refresh in progress. It does not throw. */
@@ -128,6 +150,7 @@ export interface ShapeKeeperOptions {
 /** This function makes the keeper of the outlines of the instance. */
 export function keepShapes(options: ShapeKeeperOptions): ShapeKeeper {
   const { store, places } = options;
+  const states = wantedShapes(places, []).states;
   const stop = new AbortController();
   let incidents: readonly Incident[] = [];
   let running: Promise<void> | undefined;
@@ -139,19 +162,47 @@ export function keepShapes(options: ShapeKeeperOptions): ShapeKeeper {
       // The hook only reports. A fault of the hook does not stop the keeper.
     }
   };
+  // The simplified copies. A record of the store keeps its array of shapes until the record changes. Thus the same arrays tell
+  // that a copy is current. The copy of the watched states changes only at a refresh of the store. The copy of the other
+  // regions changes with the incidents, and it is small.
+  let watched: BasemapCopy | undefined;
+  let others: (BasemapCopy & { readonly with: BasemapCopy }) | undefined;
+  let last: { readonly watched: readonly MapRegion[]; readonly others: readonly MapRegion[]; readonly regions: readonly MapRegion[] } | undefined;
+  const copyOf = (raw: readonly MapRegion[], tolerance: number | undefined): BasemapCopy => {
+    if (tolerance === undefined) return { raw, simple: raw };
+    try {
+      return { raw, simple: simplifyBasemap(raw, tolerance) };
+    } catch (error) {
+      // The full outlines are correct, only larger. The keeper reports the error one time for each change of the regions.
+      report({ ok: false, error, step: "basemap" });
+      return { raw, simple: raw };
+    }
+  };
 
   return {
     lookup: (code) => store?.lookup(code),
     basemap() {
       if (store === undefined) return [];
-      // TODO(geo/R12): give the whole watched states with `store.basemap(state)`, after geo simplifies the regions with shared
-      // edges. The raw outlines of one state are many megabytes, thus the map has only the regions of the places and the incidents.
-      const regions = new Map<string, MapRegion>();
+      const own = new Map<string, MapRegion>();
+      for (const state of states) for (const region of store.basemap(state)) own.set(region.code.code, region);
+      const ownList = byRegion(own.values());
+      if (watched === undefined || !sameRegions(watched.raw, ownList)) watched = copyOf(ownList, basemapToleranceKm(ownList));
+      // A region of a place or of an incident can be outside the watched states, or not yet in the list of its state.
+      const other = new Map<string, MapRegion>();
       for (const code of [...places.flatMap((place) => place.codes), ...liveCodes(incidents)]) {
         const region = store.region(code);
-        if (region !== undefined) regions.set(region.code.code, region);
+        if (region !== undefined && !own.has(region.code.code)) other.set(region.code.code, region);
       }
-      return [...regions.values()].sort((a, b) => byCode(a.code, b.code));
+      const otherList = byRegion(other.values());
+      if (others === undefined || others.with !== watched || !sameRegions(others.raw, otherList)) {
+        // The tolerance comes from the fit of all the regions. The page fits them all, thus it is on the safe side.
+        const tolerance = otherList.length === 0 ? undefined : basemapToleranceKm([...ownList, ...otherList]);
+        others = { ...copyOf(otherList, tolerance), with: watched };
+      }
+      if (last === undefined || last.watched !== watched.simple || last.others !== others.simple) {
+        last = { watched: watched.simple, others: others.simple, regions: byRegion([...watched.simple, ...others.simple]) };
+      }
+      return last.regions;
     },
     afterPass(live, until) {
       incidents = live;

@@ -252,8 +252,8 @@ importers:
         specifier: ^0.10.2
         version: 0.10.2(zod@4.6.7)
       '@mark1russell7/geo':
-        specifier: ^0.2.1
-        version: 0.2.1
+        specifier: ^0.3.0
+        version: 0.3.0
       '@mark1russell7/interval':
         specifier: ^0.1.0
         version: 0.1.0
@@ -458,8 +458,8 @@ importers:
         specifier: workspace:*
         version: link:../source-nws-api
       '@mark1russell7/geo':
-        specifier: ^0.2.1
-        version: 0.2.1
+        specifier: ^0.3.0
+        version: 0.3.0
       '@mark1russell7/sqlite':
         specifier: ^0.3.2
         version: 0.3.2
@@ -978,8 +978,8 @@ packages:
     resolution: {integrity: sha512-FiiKK/sAbp39ypGv+2XzYRc+s911pdCtu97UQ4LiKmQKHjqPiyocGO48r2YObucxUkQhnm9mCdkiQxW6rFjiAg==}
     engines: {node: '>=22'}
 
-  '@mark1russell7/geo@0.2.1':
-    resolution: {integrity: sha512-T/DB8810mppYuWHAQ43Sy0sE/dQWse9vlr8bHGt+8QXk6ZMJS4eZ+t5qUGC4Wf0PcFKulhg43VLcQKZcRVtNvg==}
+  '@mark1russell7/geo@0.3.0':
+    resolution: {integrity: sha512-CIG42TK4o9r0FQgP5BZwFfnVba579/oaTaHbQ+UmVrzMGWEz3LLZcIQ2hNYvWOQ+PXuukTefCiKEyUl5jWovmg==}
     engines: {node: '>=22.12'}
 
   '@mark1russell7/interval@0.1.0':
@@ -2378,7 +2378,7 @@ snapshots:
 
   '@mark1russell7/files@0.0.3': {}
 
-  '@mark1russell7/geo@0.2.1':
+  '@mark1russell7/geo@0.3.0':
     dependencies:
       '@mark1russell7/optional': 1.2.0
       '@mark1russell7/predicates': 0.1.2
