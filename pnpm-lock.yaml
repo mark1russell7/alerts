@@ -209,8 +209,8 @@ importers:
         specifier: ^0.8.5
         version: 0.8.5
       '@mark1russell7/collections':
-        specifier: ^0.10.1
-        version: 0.10.1
+        specifier: ^0.10.2
+        version: 0.10.2
       '@mark1russell7/rigor-generators':
         specifier: ^0.1.16
         version: 0.1.16
@@ -518,8 +518,8 @@ packages:
       dependency-cruiser:
         optional: true
 
-  '@mark1russell7/collections@0.10.1':
-    resolution: {integrity: sha512-z0Js1n8Df/XsS8nGEpBYpZElRxquTcaPZluL5ZSHod14PnGAGLcoQoSkl7AlbSyLk9H0i6MozwX6mYlaYdXq1g==}
+  '@mark1russell7/collections@0.10.2':
+    resolution: {integrity: sha512-uOqrK6ZYqgbG8DLchTU2FO8DcNeeeLbNAqR8E3YTe/HKK3rk4ZpR0M0GlYG/7ApiWfrFkVhW1rCF6opaeiL16g==}
     engines: {node: '>=22.12'}
 
   '@mark1russell7/conventions@0.41.5':
@@ -1706,7 +1706,7 @@ snapshots:
       '@swc/core': 1.16.22
       dependency-cruiser: 18.7.2
 
-  '@mark1russell7/collections@0.10.1':
+  '@mark1russell7/collections@0.10.2':
     dependencies:
       '@mark1russell7/algebra': 0.8.5
       '@mark1russell7/optional': 1.2.0
