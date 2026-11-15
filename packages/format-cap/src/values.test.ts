@@ -14,16 +14,17 @@ describe("the readers of the CAP values", () => {
   it("gives the fallback and a problem for an unknown value", () => {
     const problems = sink();
     expect(capValue<Severity>("Awful", CAP_SEVERITY, "unknown", "severity", problems)).toBe("unknown");
-    expect(problems.list).toEqual([{ path: "severity", message: 'the value "Awful" is not known: the map uses unknown', fatal: false }]);
+    expect(problems.list).toEqual([{ path: "severity", message: 'the value "Awful" is not known: the map uses unknown', fatal: false, lossy: true }]);
   });
 
-  it("gives a problem for an absent value only when the fallback is not unknown", () => {
+  it("gives the fallback and a lossy problem for an absent value, because CAP requires each value", () => {
     const problems = sink();
     expect(capValue<Severity>(undefined, CAP_SEVERITY, "unknown", "severity", problems)).toBe("unknown");
-    expect(capValue("", CAP_SEVERITY, "unknown", "severity", problems)).toBe("unknown");
-    expect(problems.list).toEqual([]);
+    expect(capValue(null, CAP_SEVERITY, "unknown", "severity", problems)).toBe("unknown");
+    expect(capValue(" ", CAP_SEVERITY, "unknown", "severity", problems)).toBe("unknown");
     expect(capValue("", CAP_STATUS, "actual", "status", problems)).toBe("actual");
-    expect(problems.list).toEqual([{ path: "status", message: "the value is absent: the map uses actual", fatal: false }]);
+    const absent = (path: string, fallback: string) => ({ path, message: `the value is absent: the map uses ${fallback}`, fatal: false, lossy: true });
+    expect(problems.list).toEqual([absent("severity", "unknown"), absent("severity", "unknown"), absent("severity", "unknown"), absent("status", "actual")]);
   });
 
   it("reads the times of CAP, and the times with Z and parts of a second", () => {
@@ -38,7 +39,7 @@ describe("the readers of the CAP values", () => {
     for (const text of ["2026-11-08T13:23:00", "2026-11-08", "2026-13-40T99:99:00Z", "soon"]) {
       const problems = sink();
       expect(capTime(text, "sent", problems), text).toBeUndefined();
-      expect(problems.list, text).toHaveLength(1);
+      expect([problems.list.length, problems.lossy], text).toEqual([1, 1]);
     }
   });
 

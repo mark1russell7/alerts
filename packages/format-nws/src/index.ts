@@ -11,6 +11,7 @@ export {
   fromEventCode,
   fromEventName,
   fromPhenomenon,
+  hasVtec,
   PHENOMENA,
   resolveKind,
   SIGNIFICANCE,

@@ -402,6 +402,9 @@ importers:
       '@mark1russell7/alerts':
         specifier: workspace:*
         version: link:../core
+      '@mark1russell7/alerts-format-cap':
+        specifier: workspace:*
+        version: link:../format-cap
       '@mark1russell7/alerts-format-nws':
         specifier: workspace:*
         version: link:../format-nws
