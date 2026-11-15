@@ -35,6 +35,7 @@ import {
   type DeliveryState,
   type DeliveryStatus,
   type EndMark,
+  type Estimate,
   type Duration,
   type EscalationPolicy,
   type EscalationStep,
@@ -47,6 +48,7 @@ import {
   type Instant,
   type Kind,
   type KindClass,
+  type KindPrior,
   type Level,
   type LevelRule,
   type LevelTable,
@@ -67,8 +69,11 @@ import {
   type Report,
   type ReportId,
   type ResponseType,
+  type ScoreFactor,
+  type ScorePriors,
   type SendOutcome,
   type Severity,
+  type ShadowScore,
   type Significance,
   type SourceDescriptor,
   type SourceHealth,
@@ -726,6 +731,79 @@ export const personWatchSchema: z.ZodType<PersonWatch, PersonWatch> = schemaOf<P
     .readonly(),
 );
 
+// An estimate with each number from `min` to `max`, and an interval that holds the value.
+function estimateIn(min: number, max: number): z.ZodType<Estimate, Estimate> {
+  const part = z.number().min(min).max(max);
+  return schemaOf<Estimate>()(
+    z
+      .strictObject({ value: part, low: part, high: part })
+      .refine((estimate) => estimate.low <= estimate.value && estimate.value <= estimate.high, "The interval of an estimate holds its value: low <= value <= high.")
+      .readonly(),
+  );
+}
+
+/** This schema checks a probability with its interval: each number is from 0 to 1. */
+export const probabilitySchema: z.ZodType<Estimate, Estimate> = estimateIn(0, 1);
+
+/** This schema checks a measured value with its interval: each number is 0 or more. */
+export const estimateSchema: z.ZodType<Estimate, Estimate> = estimateIn(0, Number.MAX_VALUE);
+
+/** This schema checks the priors of one kind. */
+export const kindPriorSchema: z.ZodType<KindPrior, KindPrior> = schemaOf<KindPrior>()(
+  z
+    .strictObject({
+      verified: probabilitySchema.exactOptional(),
+      deaths: estimateSchema.exactOptional(),
+      injuries: estimateSchema.exactOptional(),
+    })
+    .readonly(),
+);
+
+/** This schema checks a file of priors, `alerts-priors/1`. */
+export const scorePriorsSchema: z.ZodType<ScorePriors, ScorePriors> = schemaOf<ScorePriors>()(
+  z
+    .strictObject({
+      format: z.literal("alerts-priors/1"),
+      kinds: z.record(z.string().min(1, "A prefix of a kind is a non-empty string."), kindPriorSchema).readonly(),
+      certainty: z
+        .strictObject({
+          observed: probabilitySchema.exactOptional(),
+          likely: probabilitySchema.exactOptional(),
+          possible: probabilitySchema.exactOptional(),
+          unlikely: probabilitySchema.exactOptional(),
+          unknown: probabilitySchema.exactOptional(),
+        })
+        .readonly(),
+    })
+    .readonly(),
+);
+
+/** This schema checks one factor of a shadow score. */
+export const scoreFactorSchema: z.ZodType<ScoreFactor, ScoreFactor> = schemaOf<ScoreFactor>()(
+  z
+    .strictObject({
+      estimate: estimateSchema,
+      from: z.strictObject({ table: z.enum(["kinds", "certainty"]), key: z.string().min(1, "A key of the priors is a non-empty string.") }).readonly(),
+    })
+    .readonly(),
+);
+
+/** This schema checks a shadow score. A score with no read names one or more factors that the priors do not give. */
+export const shadowScoreSchema: z.ZodType<ShadowScore, ShadowScore> = schemaOf<ShadowScore>()(
+  z
+    .discriminatedUnion("read", [
+      z.strictObject({ read: z.literal(true), probability: scoreFactorSchema, deaths: scoreFactorSchema, injuries: scoreFactorSchema }),
+      z.strictObject({
+        read: z.literal(false),
+        missing: z
+          .array(z.enum(["probability", "deaths", "injuries"]))
+          .min(1, "A score with no read names each factor that the priors do not give.")
+          .readonly(),
+      }),
+    ])
+    .readonly(),
+);
+
 /** This schema checks a reason of an assessment. The index of a rule is its position, from 0 (`contracts.ts`, line 747). */
 export const assessReasonSchema: z.ZodType<AssessReason, AssessReason> = schemaOf<AssessReason>()(
   z
@@ -752,6 +830,7 @@ export const assessReasonSchema: z.ZodType<AssessReason, AssessReason> = schemaO
         level: assessedLevelSchema,
       }),
       z.strictObject({ kind: z.literal("rule"), place: placeIdSchema.exactOptional(), index: count(), max: assessedLevelSchema }),
+      z.strictObject({ kind: z.literal("shadow"), score: shadowScoreSchema }),
     ])
     .readonly(),
 );
