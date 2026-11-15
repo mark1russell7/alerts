@@ -316,7 +316,7 @@ describe("the delivery step of a pass", () => {
     log.close();
   });
 
-  it("sends again after a write of a delivery fails, and keeps the state of the log", async () => {
+  it("writes a delivery whose write failed at the next pass, and sends no second copy", async () => {
     const clock = fakeClock(T0);
     const inner = openRuntimeLog(":memory:");
     let fail = true;
@@ -330,14 +330,17 @@ describe("the delivery step of a pass", () => {
         return inner.appendAll(events, accept);
       },
     };
-    const { runtime, pushover } = open({}, flaky, clock);
+    let woken = 0;
+    const { runtime, pushover } = open({}, flaky, clock, {}, () => (woken += 1));
     await expect(runtime.pass()).rejects.toThrow("The disk is full.");
     expect(runtime.state()).toEqual(rebuild(inner.read(), runtime.config));
     expect(runtime.state().merge.deliveries).toEqual([]);
-    // The delivery is at least once: the send goes again with the same key.
+    expect(woken).toBe(1);
+    // The channel has the message. The next pass writes its delivery, and the send does not go again.
     const pass = await runtime.pass();
-    expect(pushover.send.map((message) => message.key)).toEqual([pushover.send[0]!.key, pushover.send[0]!.key]);
-    expect(pass.delivery?.sent).toHaveLength(1);
+    expect(pushover.send).toHaveLength(1);
+    expect(pass.delivery?.sent.map((delivery) => delivery.receipt)).toEqual([{ receipt: "pushover-1" }]);
+    expect(runtime.state().merge.deliveries).toHaveLength(1);
     inner.close();
   });
 
@@ -364,6 +367,48 @@ describe("the delivery step of a pass", () => {
     expect(third.delivery?.cancelled).toHaveLength(1);
     expect(pushover.cancel).toHaveLength(2);
     expect(types(log)).toEqual(["started", "escalation", "delivery", "acknowledgment", "cancelled"]);
+    log.close();
+  });
+
+  it("tells an on-time send whose key the log already has as a duplicate, not as sent", async () => {
+    const clock = fakeClock(T0);
+    const inner = openRuntimeLog(":memory:");
+    // Another writer puts a delivery with the same id and another receipt into the log first.
+    const shared: RuntimeLog = {
+      ...inner,
+      appendAll: (events, accept) => {
+        for (const event of events) if (event.type === "delivery") inner.appendAll([{ ...event, delivery: { ...event.delivery, receipt: { receipt: "other" } } }], accept);
+        return inner.appendAll(events, accept);
+      },
+    };
+    const { runtime, pushover } = open({}, shared, clock);
+    const pass = await runtime.pass();
+    expect(pushover.send).toHaveLength(1);
+    expect(pass.delivery?.sent).toEqual([]);
+    expect(pass.delivery?.duplicates).toEqual([pushover.send[0]!.key]);
+    expect(pass.conflicts).toEqual([`delivery:${pushover.send[0]!.key}`]);
+    inner.close();
+  });
+
+  it("writes one delivery when two late sends of one key land before the same pass", async () => {
+    const clock = fakeClock(T0);
+    const late = (after: number, receipt: string): Promise<SendOutcome> => new Promise((resolve) => clock.after(after, () => resolve({ ok: true, receipt: { receipt }, accepted: clock.now() })));
+    // The first send lands at 50 s. The second send starts at 40 s, after the flight limit, and lands at 52 s.
+    const { runtime, log, pushover } = open({ pushover: { send: (_, count) => (count === 1 ? late(50 * SECOND, "late-1") : late(12 * SECOND, "late-2")) } }, openRuntimeLog(":memory:"), clock);
+    const first = runtime.pass();
+    await clock.advance(10 * SECOND);
+    await first;
+    await clock.advance(30 * SECOND);
+    const second = runtime.pass();
+    await clock.advance(10 * SECOND);
+    await second;
+    await clock.advance(5 * SECOND);
+    await settle();
+    const last = await runtime.pass();
+    expect(pushover.send).toHaveLength(2);
+    expect(last.delivery?.sent.map((delivery) => delivery.receipt)).toEqual([{ receipt: "late-1" }]);
+    expect(last.delivery?.duplicates).toEqual([pushover.send[0]!.key]);
+    expect(last.conflicts).toEqual([]);
     log.close();
   });
 

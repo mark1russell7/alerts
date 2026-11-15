@@ -74,8 +74,9 @@ export interface DeliveryStep {
   /** The deliveries that the step wrote: the sends of the step, and the late sends of earlier steps. */
   readonly sent: readonly Delivery[];
   /**
-   * The keys of the late sends that the channel accepted after a second send of the same key. The log
-   * keeps the first delivery. The cancel by tag of the channel stops the repeats of each copy.
+   * The keys of the sends that the channel accepted when the log already had a delivery of the key: a
+   * late send after a second send of the same key. The log keeps the first delivery. The cancel by tag
+   * of the channel stops the repeats of each copy.
    */
   readonly duplicates: readonly string[];
   readonly acknowledged: readonly Acknowledgment[];
@@ -182,8 +183,17 @@ export function createDispatcher(options: DeliveryOptions, context: DeliveryCont
       const sent: Delivery[] = [];
       const duplicates: string[] = [];
       const arrived = landed.splice(0);
+      // A key of the log, or a key of an earlier delivery of this batch, makes a duplicate.
       const logged = new Set(context.state().merge.deliveries.map((delivery) => delivery.key));
-      const fresh = arrived.filter((delivery) => !logged.has(delivery.key));
+      const fresh: Delivery[] = [];
+      for (const delivery of arrived) {
+        if (logged.has(delivery.key)) {
+          duplicates.push(delivery.key);
+          continue;
+        }
+        logged.add(delivery.key);
+        fresh.push(delivery);
+      }
       try {
         write(fresh.map((delivery) => ({ ...envelope("delivery", `delivery:${delivery.key}`, at), delivery })));
       } catch (error) {
@@ -193,7 +203,6 @@ export function createDispatcher(options: DeliveryOptions, context: DeliveryCont
       }
       for (const delivery of fresh) polled.set(delivery.key, at);
       sent.push(...fresh);
-      duplicates.push(...arrived.filter((delivery) => logged.has(delivery.key)).map((delivery) => delivery.key));
 
       // 1. The polls. An acknowledgment changes the escalations, thus the routes come again after it.
       const first = routesNow();
@@ -275,7 +284,20 @@ export function createDispatcher(options: DeliveryOptions, context: DeliveryCont
                 return;
               }
               const delivery = deliveryOf(outcome);
-              write([{ ...envelope("delivery", `delivery:${delivery.key}`, clock.now()), delivery }]);
+              let different: readonly string[];
+              try {
+                different = context.append([{ ...envelope("delivery", `delivery:${delivery.key}`, clock.now()), delivery }]);
+              } catch (error) {
+                // The channel has the message, and the log does not. The next step writes the delivery first, thus no second send goes.
+                landed.push(delivery);
+                context.wake?.();
+                throw error;
+              }
+              conflicts.push(...different);
+              if (different.length > 0) {
+                duplicates.push(delivery.key);
+                return;
+              }
               // A new delivery gets its first poll after one interval.
               polled.set(delivery.key, at);
               sent.push(delivery);
