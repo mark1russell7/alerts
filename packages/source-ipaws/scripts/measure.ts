@@ -1,7 +1,8 @@
 /**
  * This script measures the sent times of the IPAWS copies of the WEA messages of the NWS (AL-8). The core
- * finds the copy of a message only at the same sent time, to the millisecond. A copy in the incident of the
- * message with no copy at its sent time gives a false miss. The count of such messages must be 0.
+ * finds the copy of a message only at the same sent time, to the millisecond. A message with copies in its
+ * incident, but no copy at its sent time, gives a false miss. The class `shifted` counts the messages with
+ * the copy with their id in the incident. The class `lost` counts the other messages. The sum of the two counts must be 0.
  *
  * The two sources keep their history, so the measure reads a range of the past:
  *
@@ -11,7 +12,8 @@
  *
  * The requests name no state and no place. The script maps each body with the map of its source, and
  * gives the reports to `sentMeasure`. It writes the bodies, one line for each request, the checks and the
- * summary to the folder `--out`. It ends with the code 1 when a request fails, or when the count is above 0.
+ * summary to the folder `--out`. It ends with the code 1 when a request fails, or when the sum of `shifted`
+ * and `lost` is above 0 (`sentFails`).
  *
  * Start it in the folder of the package: `node scripts/measure.ts --out=measure`, with the options
  * `--start=<ISO time>` and `--end=<ISO time>`. The option `--from=<folder>` reads the bodies of an earlier measure.
@@ -25,7 +27,7 @@ import { WEA_EVENT_CODES } from "@mark1russell7/alerts-format-nws";
 import { mapObservation as mapApi, NWS_BASE_URL, SOURCE_ID as API } from "@mark1russell7/alerts-source-nws-api";
 import { fetchTransport } from "polite-crawler/api";
 import { HostScheduler, realClock } from "polite-crawler/politeness";
-import { mapObservation as mapIpaws, NWS_SENDER, SOURCE_ID as IPAWS, sentMeasure, type SentGap } from "../src/index.ts";
+import { mapObservation as mapIpaws, NWS_SENDER, SOURCE_ID as IPAWS, sentFails, sentMeasure, type SentGap } from "../src/index.ts";
 
 /** A generic name: the requests carry no name of a person or a project. */
 const USER_AGENT = "alerts-measure";
@@ -286,8 +288,7 @@ const result = sentMeasure(reports, { censorAfter: meta.censorAfter });
 await writeFile(join(out, "checks.jsonl"), lines(result.checks));
 
 const { counts } = result;
-const shiftedGaps = result.gaps.filter((gap) => gap.class === "shifted");
-const apartGaps = result.gaps.filter((gap) => gap.class === "apart");
+const gapsOf = (kind: SentGap["class"]): SentGap[] => result.gaps.filter((gap) => gap.class === kind);
 const nwsSents = nwsLines.flatMap((line) => {
   const sent = (line.feature as { properties?: { sent?: unknown } }).properties?.sent;
   return typeof sent === "string" && Number.isFinite(Date.parse(sent)) ? [Date.parse(sent)] : [];
@@ -308,15 +309,19 @@ const summary = {
 };
 await writeFile(join(out, "summary.json"), `${JSON.stringify(summary, null, 2)}\n`);
 
-/** The table of the pairs: only the NWS message id, the event code, the two sent times and their difference. */
+/** The table of the pairs: only the NWS message id, the event code, the two sent times, their difference and the rule of the match. */
 const table = (gaps: readonly SentGap[]): string =>
   gaps.length === 0
     ? "None."
     : [
-        "| NWS message | Event | NWS sent time | IPAWS sent time | Difference (seconds) |",
-        "| --- | --- | --- | --- | ---: |",
-        ...gaps.map((gap) => `| \`${gap.key}\` | ${gap.event} | ${iso(gap.sent)} | ${iso(gap.copy.sent)} | ${String(gap.difference / 1000)} |`),
+        "| NWS message | Event | NWS sent time | IPAWS sent time | Difference (seconds) | Match |",
+        "| --- | --- | --- | --- | ---: | --- |",
+        ...gaps.map((gap) => `| \`${gap.key}\` | ${gap.event} | ${iso(gap.sent)} | ${iso(gap.copy.sent)} | ${String(gap.difference / 1000)} | ${gap.match} |`),
       ].join("\n");
+/** The titles of the classes with a pair, in the table of the counts and above the tables of the pairs. */
+const SHIFTED = "Shifted: the copy with the id of the message in the incident, at a different sent time";
+const LOST = "Lost: copies in the incident, but none with the id of the message and none at the sent time";
+const APART = "Apart: a copy with the id of the message in a different incident";
 const short = meta.start < meta.fetchedAt - NWS_HISTORY_MS ? ` The range starts more than 7 days before the fetch, so the NWS API has no messages in its first part.` : "";
 const markdown = [
   "# The measure of the sent times of the WEA copies",
@@ -326,21 +331,27 @@ const markdown = [
   "| Messages with `WEAHandling` | Count |",
   "| --- | ---: |",
   `| All | ${String(counts.messages)} |`,
-  `| A copy at the same sent time | ${String(counts.same)} |`,
-  `| **A copy in the incident, none at the sent time (must be 0)** | **${String(counts.shifted)}** |`,
-  `| A copy with the id of the message in a different incident | ${String(counts.apart)} |`,
-  `| No copy | ${String(counts.none)} |`,
+  `| Same: a copy at the same sent time | ${String(counts.same)} |`,
+  `| ${SHIFTED} | ${String(counts.shifted)} |`,
+  `| ${LOST} | ${String(counts.lost)} |`,
+  `| **Shifted and lost (must be 0)** | **${String(counts.shifted + counts.lost)}** |`,
+  `| ${APART} | ${String(counts.apart)} |`,
+  `| None: no copy | ${String(counts.none)} |`,
   `| Censored | ${String(counts.censored)} |`,
   "",
   `Bodies with no report: ${String(unmapped.api)} of the NWS API, ${String(unmapped.ipaws)} of the archive.`,
   "",
-  "## A copy in the incident, none at the sent time",
+  `## ${SHIFTED}`,
   "",
-  table(shiftedGaps),
+  table(gapsOf("shifted")),
   "",
-  "## A copy with the id of the message in a different incident",
+  `## ${LOST}`,
   "",
-  table(apartGaps),
+  table(gapsOf("lost")),
+  "",
+  `## ${APART}`,
+  "",
+  table(gapsOf("apart")),
   "",
   ...(meta.failures.length === 0 ? [] : ["## Failures of the requests", "", ...meta.failures.map((failure) => `- ${failure}`), ""]),
   ...(meta.notes.length === 0 ? [] : ["## Notes", "", ...meta.notes.map((note) => `- ${note}`), ""]),
@@ -353,7 +364,7 @@ if (meta.failures.length > 0) {
   console.error("A request failed, so the measure is not complete.");
   process.exitCode = 1;
 }
-if (counts.shifted > 0) {
-  console.error(`${String(counts.shifted)} message(s) have a copy in the incident and no copy at the sent time. The count must be 0.`);
+if (sentFails(counts)) {
+  console.error(`${String(counts.shifted)} message(s) are shifted and ${String(counts.lost)} message(s) are lost. The sum of the two counts must be 0.`);
   process.exitCode = 1;
 }

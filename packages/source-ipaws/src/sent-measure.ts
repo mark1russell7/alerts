@@ -18,12 +18,15 @@ export const COPY_SUFFIX = ".IPAWS";
  * The class of one message of the source `from` in the measure.
  *
  * - `same`: the incident of the message has a copy with the same sent time. The check of the core finds it.
- * - `shifted`: the incident has a copy, but no copy with the same sent time. The check of the core is a miss.
+ * - `shifted`: the incident has the copy with the id of the message, but at a different sent time. The check of the core is a miss.
+ * - `lost`: the incident has copies, but no copy with the id of the message and no copy at its sent time. The check of the core is a miss.
  * - `apart`: the incident has no copy, but a copy with the id of the message is in a different incident.
  * - `none`: the reports have no copy of the message.
  * - `censored`: the message comes after the censor time, and no copy has its sent time. Its copy can come later.
+ *
+ * The class `lost` is a different fault from `shifted`, for example the lost copy of an extension.
  */
-export type SentClass = "same" | "shifted" | "apart" | "none" | "censored";
+export type SentClass = "same" | "shifted" | "lost" | "apart" | "none" | "censored";
 
 /** One report of the source `to`: its key and its sent time. */
 export interface CopyTime {
@@ -52,21 +55,23 @@ export interface SentGap {
   readonly key: string;
   readonly event: string;
   readonly sent: Instant;
-  readonly class: "shifted" | "apart";
-  /** The copy: the copy with the id of the message, or else the copy of the incident with the nearest sent time. */
+  readonly class: "shifted" | "lost" | "apart";
+  /** The copy: the copy with the id of the message, or for the class `lost` the copy of the incident with the nearest sent time. */
   readonly copy: CopyTime;
-  /** The rule that found the copy: the id of the message, or the nearest sent time. */
+  /** The rule that found the copy: the id of the message (`shifted` and `apart`), or the nearest sent time (`lost`). */
   readonly match: "id" | "nearest";
   /** The sent time of the copy minus the sent time of the message, in milliseconds. */
   readonly difference: Duration;
 }
 
-/** The count of the messages of each class. */
+/** The count of the messages of each class. The sum of `shifted` and `lost` must be 0 (`sentFails`). */
 export interface SentCounts {
   readonly messages: number;
   readonly same: number;
-  /** The messages with a copy in the incident and no copy at the sent time. This count must be 0. */
+  /** The messages with the copy with their id in the incident, at a different sent time. The sum of `shifted` and `lost` must be 0. */
   readonly shifted: number;
+  /** The messages with copies in the incident, but no copy with their id and no copy at their sent time. The sum of `shifted` and `lost` must be 0. */
+  readonly lost: number;
   readonly apart: number;
   readonly none: number;
   readonly censored: number;
@@ -77,7 +82,7 @@ export interface SentMeasure {
   readonly counts: SentCounts;
   /** The checks, in the order of their sent times. */
   readonly checks: readonly SentCheck[];
-  /** The messages of the classes `shifted` and `apart`, each with its copy, in the order of their sent times. */
+  /** The messages of the classes `shifted`, `lost` and `apart`, each with its copy, in the order of their sent times. */
   readonly gaps: readonly SentGap[];
 }
 
@@ -139,10 +144,15 @@ export function sentMeasure(reports: readonly Report[], options: SentMeasureOpti
     if (check.arrived !== undefined) kind = "same";
     else if (options.censorAfter !== undefined && report.sent > options.censorAfter) kind = "censored";
     else if (copies.length > 0) {
-      kind = "shifted";
       const byIdInIncident = copies.find((copy) => copy.key === own?.key);
-      const copy = byIdInIncident ?? nearest(copies, report.sent);
-      gaps.push({ ...base, class: kind, copy, match: byIdInIncident === undefined ? "nearest" : "id", difference: copy.sent - report.sent });
+      if (byIdInIncident !== undefined) {
+        kind = "shifted";
+        gaps.push({ ...base, class: kind, copy: byIdInIncident, match: "id", difference: byIdInIncident.sent - report.sent });
+      } else {
+        kind = "lost";
+        const copy = nearest(copies, report.sent);
+        gaps.push({ ...base, class: kind, copy, match: "nearest", difference: copy.sent - report.sent });
+      }
     } else if (own !== undefined) {
       kind = "apart";
       gaps.push({ ...base, class: kind, copy: own, match: "id", difference: own.sent - report.sent });
@@ -154,10 +164,26 @@ export function sentMeasure(reports: readonly Report[], options: SentMeasureOpti
   gaps.sort(order);
   const count = (kind: SentClass): number => checks.filter((check) => check.class === kind).length;
   return {
-    counts: { messages: checks.length, same: count("same"), shifted: count("shifted"), apart: count("apart"), none: count("none"), censored: count("censored") },
+    counts: {
+      messages: checks.length,
+      same: count("same"),
+      shifted: count("shifted"),
+      lost: count("lost"),
+      apart: count("apart"),
+      none: count("none"),
+      censored: count("censored"),
+    },
     checks,
     gaps,
   };
+}
+
+/**
+ * This function tells if the counts of a measure show a fault: the sum of `shifted` and `lost` is above 0.
+ * The classes `same`, `apart`, `none` and `censored` do not change the result.
+ */
+export function sentFails(counts: SentCounts): boolean {
+  return counts.shifted + counts.lost > 0;
 }
 
 // The copy with the nearest sent time. A tie goes to the earlier copy. The list is not empty.

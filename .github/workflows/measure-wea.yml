@@ -1,6 +1,8 @@
 # The measure of the sent times of the WEA copies (AL-8). The core finds the IPAWS copy of an NWS message only at the same
 # sent time, to the millisecond. Each run reads the history of the NWS API and the IPAWS archive of OpenFEMA. It counts
-# the messages with a copy in the incident and no copy at the sent time. The count must be 0, so the job fails above 0.
+# the messages with copies in the incident and no copy at the sent time, in two classes. The class `shifted` has the copy
+# with the id of the message at a different sent time. The class `lost` has no copy with the id of the message. The sum
+# of the two counts must be 0, so the job fails above 0.
 # The requests name no state and no place. The job sends requests to outside servers, so it operates in CI only.
 name: Measure WEA
 
@@ -49,7 +51,8 @@ jobs:
           node-version: 26
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      # The script writes the summary of the job. It ends with the code 1 when a request fails, or when the count is above 0.
+      # The script writes the summary of the job. It ends with the code 1 when a request fails, or when the sum of the counts
+      # `shifted` and `lost` is above 0.
       - name: Measure the range
         working-directory: packages/source-ipaws
         env:
