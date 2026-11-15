@@ -17,6 +17,8 @@ describe("statesOf", () => {
   it("gives all states when a place has no code of a state", () => {
     expect(statesOf({ places: [KANSAS, NO_STATE] })).toBeUndefined();
     expect(statesOf({ places: [place("e", [{ system: "ugc", code: "GMZ250" }])] })).toBeUndefined();
+    // A state code that is not a state does not narrow the watch to no row.
+    expect(statesOf({ places: [place("f", [{ system: "state", code: "XX" }])] })).toBeUndefined();
   });
 
   it("gives no state for a watch with no place", () => {

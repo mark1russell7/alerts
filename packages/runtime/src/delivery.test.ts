@@ -240,7 +240,7 @@ describe("the delivery step of a pass", () => {
     const { clock, runtime, log, pushover } = open({ pushover: { send: (_, count) => (count === 1 ? { ok: false, kind: "rate-limited", message: "The quota is used.", retryAfter: 90 * SECOND } : undefined) } });
     const first = await runtime.pass();
     expect(first.delivery?.failures).toEqual([{ call: "send", key: pushover.send[0]!.key, channel: PUSHOVER, kind: "rate-limited", message: "The quota is used.", retryAt: T0 + 90 * SECOND }]);
-    expect(types(log)).toEqual(["started", "escalation", "attempt", "settled"]);
+    expect(types(log)).toEqual(["started", "escalation", "attempt", "refused"]);
     // The fetch of the source brings a pass before the end of the wait. The send waits, and the next pass comes at its end.
     await clock.advance(MINUTE);
     const second = await runtime.pass();
@@ -251,6 +251,37 @@ describe("the delivery step of a pass", () => {
     expect(pushover.send).toHaveLength(2);
     expect(third.delivery?.sent).toHaveLength(1);
     expect(pushover.stops).toEqual([]);
+    // The delivery of the key ends its refusal.
+    expect(runtime.state().refusals).toEqual({});
+    log.close();
+  });
+
+  it("keeps the wait of a refused send after a restart, thus the quota of the channel holds", async () => {
+    const clock = fakeWallClock(T0);
+    const log = openRuntimeLog(":memory:");
+    const before = open({ pushover: { send: () => ({ ok: false, kind: "rate-limited", message: "The quota is used.", retryAfter: 90 * SECOND }) } }, log, clock);
+    await before.runtime.pass();
+    const key = before.pushover.send[0]!.key;
+    expect(before.runtime.state().refusals).toEqual({ [key]: { channel: PUSHOVER, kind: "rate-limited", at: T0, retryAt: T0 + 90 * SECOND } });
+    // The refusal ends the copy, thus the restart does not stop it.
+    expect(before.runtime.state().copies).toEqual({});
+
+    // A new process on the same log, before the end of the wait.
+    await clock.advance(30 * SECOND);
+    const after = open({}, log, clock);
+    expect(after.runtime.state()).toEqual(rebuild(log.read(), after.runtime.config));
+    await after.runtime.pass();
+    expect(after.pushover.send).toEqual([]);
+    expect(after.pushover.stops).toEqual([]);
+    await clock.advance(30 * SECOND);
+    const early = await after.runtime.pass();
+    expect(after.pushover.send).toEqual([]);
+    expect(early.wakeAt).toBe(T0 + 90 * SECOND);
+    await clock.advance(30 * SECOND);
+    const late = await after.runtime.pass();
+    expect(after.pushover.send.map((message) => message.key)).toEqual([key]);
+    expect(late.delivery?.sent).toHaveLength(1);
+    expect(after.runtime.state().refusals).toEqual({});
     log.close();
   });
 
@@ -413,11 +444,17 @@ describe("the delivery step of a pass", () => {
     const second = await runtime.pass();
     expect(pushover.send).toHaveLength(2);
     expect(second.delivery?.stopped).toEqual([`${RUN}-1`]);
+    // The send of the copy did not end, thus its stop does not end it. A restart now stops it again.
+    expect(types(log).filter((type) => type === "settled")).toEqual([]);
+    expect(Object.keys(runtime.state().copies)).toContain(`${RUN}-1`);
     await clock.advance(10 * SECOND);
     await settle();
     expect(woken).toBe(1);
     const last = await runtime.pass();
     expect(last.delivery?.stopped).toEqual([`${RUN}-1`]);
+    // The second stop comes after the end of the send. It ends the copy.
+    expect(types(log).filter((type) => type === "settled")).toEqual(["settled"]);
+    expect(Object.keys(runtime.state().copies)).not.toContain(`${RUN}-1`);
     expect(last.delivery?.sent).toEqual([]);
     expect(last.delivery?.duplicates).toEqual([]);
     expect(pushover.stops).toEqual([`${RUN}-1`, `${RUN}-1`]);

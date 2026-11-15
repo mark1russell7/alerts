@@ -68,6 +68,8 @@ For each code, the latest reports that name it stay. So the rule loses no later 
 
 An end mark tells that a report of a snapshot source left the list of the source (`ended: true`), or is in the list again (`ended: false`). A report is ended at a time when its latest mark at or before that time is an end. When two marks of one report have the same time, the report stays live. This choice is on the safe side, and it is a function of the set, so the three laws hold. A mark changes no group. It changes only the field `live` and the levels of the live heads. An ended report still gives its known values to the fill of `unknown` values, as an expired report does.
 
+An end mark can also hold the time of the data of the list that ended the report (`asOf`). The runtime reads it to refuse an old list. The merge does not read it.
+
 The incident id is its anchor: its smallest report id. The anchor can change when two incidents merge. So an acknowledgment and a delivery point to a report of the incident, not to the anchor.
 
 A delivery is one accepted send. A failed send makes no delivery, so its step stays due and the runtime tries it again. The sent level of a person for an incident is the highest level of the deliveries to the person for its reports. This value only grows, so a merge does not send an alert again.
@@ -109,6 +111,10 @@ The rules of each adapter:
    - A failed fetch or an incomplete fetch counts nothing.
    - A report that ended and is in a complete list again gets a `back` event.
    - The counts are in memory only. A restart makes an end later, not sooner.
+   - A cache can give an old list that is complete. A complete fetch of a snapshot source gives the time of its data (`asOf`): the time of its newest product.
+   - An absent report counts a miss only when its `sent` time is not after `asOf`. A newer report keeps its count.
+   - The end mark keeps the `asOf` of the list that ended the report. A report comes back only in a list with a later `asOf`.
+   - A list with no `asOf` counts as current.
 8. **The kinds are codes of the taxonomy.** Each kind that `map` gives is a code of `TAXONOMY`. A kind that the tables do not know is `other.unknown`, with a problem. A gate test of the adapter holds this rule with `unknownKinds`.
 
 The testkit gives one conformance suite, and each adapter passes it. The suite examines the laws of `map` on the fixtures and on mutated fixtures. It examines the outcomes of `fetch` behind a fault proxy: cut, delay, reset, 429, 500 and a changed body. It also examines the descriptor.
@@ -186,7 +192,7 @@ Some sources carry a copy of the messages of another source. FEMA IPAWS carries 
 
 - An `Expectation` is data: the source `from`, the source `to` and a `ReportFilter`. For IPAWS, the filter is the status `actual` and the parameter `WEAHandling`.
 - The two copies must be in one incident. So the source `to` must give a correlation key of the source `from`, for example the VTEC key.
-- `carriages(state, incidents, expectations)` gives one check for each expectation and each incident: the first report of `from` that passes the filter, and the first copy of `to`. The result is a function of the set of reports.
+- `carriages(state, incidents, expectations)` gives one check for each expectation and each message of `from`. A message is the reports of `from` in one incident with one sent time that pass the filter. Its copy is the first report of `to` in the incident with the same sent time. Thus an extension has its own check. The result is a function of the set of reports.
 - `delayLimit(delays, { quantile, level })` gives the limit of the delay. It is the distribution-free upper bound of the quantile of the measured delays, from `quantileInterval` of `@mark1russell7/rigor-statistics`. No person sets a time.
 - A small sample has no upper bound. Then the expectation has no limit, and the check only measures.
 - A check is a miss when it passes its limit with no copy. In normal work, some copies come late and some copies do not come. So one miss is not a proof.
@@ -284,11 +290,19 @@ The log keeps each copy on a channel that repeats, and its end. Thus a restart d
 
 - Before each send on a channel that repeats, the step writes an `attempt` event with the delivery key, the channel and the copy id.
 - The `delivery` event of an accepted send has the copy id. It ends the copy.
-- A `settled` event ends a copy that needs no stop: the channel refused its send, or a stop of the copy went after the end of its send.
+- A `refused` event ends the copy of a send that the channel refused in its time limit.
+- A `settled` event ends a copy that needs no stop: the channel refused its send after its time limit, or a stop of the copy went after the end of its send.
 - The state has the open copies: each attempt with no end. The first step after a restart stops each of them by its copy id.
 - A stop of a copy whose send did not end does not end the copy. The channel can accept that copy later, and then its stop goes again.
 
 A write of the `attempt` event that fails throws, and the send does not go.
+
+The log also keeps each refused send. A refused send is a refusal, a bad key or a full quota, in the time limit of the send:
+
+- The `refused` event has the delivery key, the channel, the kind and the retry time.
+- The state keeps the last refusal of each key. A delivery of the key removes it.
+- After a restart, the first step keeps the wait of each refusal. Thus the quota of a channel holds across a restart.
+- The heartbeat reads the refusals of the state at the start. Thus a restart does not end the fail of a refused channel.
 
 A recipient has no problem from `recipientProblems` before it gets alerts:
 
@@ -399,7 +413,9 @@ The instance does not start when it finds one of these problems:
 - each problem of `parseConfig`: the JSON, the schema and the references
 - a place that no source covers. Usually the place does not have a code of each level: the zone, the county, SAME, the state and the country.
 
-The environment gives `PORT` (8080), `PROBE_PORT` (9090) and `SERVICE_PROFILE` (`local`, `daemon` or `pod`). The folder `ALERTS_HOME` (`.alerts` in the home folder) holds the private files: `config.json`, `secrets.env` and the log `runtime.sqlite`. No repository holds them. A problem of `secrets.env` names its line and its key, and no value. The output of a failed pass shows no value of `secrets.env`.
+The environment gives `PORT` (8080), `PROBE_PORT` (9090) and `SERVICE_PROFILE` (`local`, `daemon` or `pod`). The folder `ALERTS_HOME` (`.alerts` in the home folder) holds the private files: `config.json`, `secrets.env`, the log `runtime.sqlite` and the outlines of the zones `shapes.sqlite`. No repository holds them. A problem of `secrets.env` names its line and its key, and no value. The output of a failed pass shows no value of `secrets.env`.
+
+After each pass, the runtime gets the outlines of the zones of the watched states. It stops before the next fetch of the alerts. A broken file of outlines goes into quarantine, and the runtime gets the outlines again.
 
 ### The host on one computer
 
@@ -423,6 +439,7 @@ The runtime cannot tell the person that it stopped. A check of Healthchecks.io t
 - After each pass with no error, the hook pings the check. A ping of the same kind goes once in each 60 seconds. When the pings stop, Healthchecks.io alerts the owner: the process stopped, the computer stopped, or its network is down.
 - A pass in which a channel gave `auth`, `refused` or `rate-limited` to a send pings `/fail`, because then the system cannot tell the person.
 - The fail of a channel holds until a send on the channel goes, or until the pass of the retry has no refusal on it. The delivery step sends a failed call again at the first pass at or after its `retryAt`. Thus the check does not go down and up at each retry.
+- The fail of a channel holds across a restart. At its first pass, the hook starts from `heldOf` of the log: each refusal after the last delivery on its channel, with a retry after that pass. Thus a restart does not ping `success` while the channel refuses.
 - The body of a success ping gives the state of each source. The body of a fail ping gives the channel and the kind. No body holds a place, a person or the text of a failure.
 - The hook starts the ping and ends at once. One ping is in flight at a time, for 10 seconds or less. A failed ping goes to the log, and its text holds no ping URL. The next pass pings again.
 - The key `HEALTHCHECKS_PING_URL` of `secrets.env` gives the ping URL, with `https`. The profile `daemon` does not start without it.

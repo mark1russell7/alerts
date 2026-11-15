@@ -75,11 +75,22 @@ describe("the WEA copies of a real event, through the maps of the two sources an
     expect(found.map((incident) => [...incident.reports].sort())).toEqual([[...api, ...ipaws].map((report) => report.id).sort()]);
   });
 
-  it("measures the delay of the first copy of the incident, because the core gives one check for each incident", () => {
+  it("gives each message its own check, with the IPAWS copy of the same sent time", () => {
     const { api, ipaws } = reportsOf([NEW, EXT]);
-    // The extension is a WEA message with its own IPAWS copy, but it gives no check of its own.
+    expect(ipaws.map((report) => report.sent)).toEqual(api.map((report) => report.sent));
     expect(checksOf([...api, ...ipaws], [NEW, EXT])).toEqual([
       { expectation: WEA_EXPECTATION.id, report: api[0]?.id, started: NEW.sent + 20_000, arrived: NEW.sent + 40_000 },
+      { expectation: WEA_EXPECTATION.id, report: api[1]?.id, started: EXT.sent + 20_000, arrived: EXT.sent + 40_000 },
+    ]);
+  });
+
+  it("gives a check with no arrival for the extension when its IPAWS copy is lost", () => {
+    const { api, ipaws } = reportsOf([NEW, EXT]);
+    const kept = ipaws.filter((report) => report.sent === NEW.sent);
+    expect(kept).toHaveLength(1);
+    expect(checksOf([...api, ...kept], [NEW, EXT])).toEqual([
+      { expectation: WEA_EXPECTATION.id, report: api[0]?.id, started: NEW.sent + 20_000, arrived: NEW.sent + 40_000 },
+      { expectation: WEA_EXPECTATION.id, report: api[1]?.id, started: EXT.sent + 20_000 },
     ]);
   });
 

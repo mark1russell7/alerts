@@ -5,11 +5,14 @@ import { dirname, join } from "node:path";
 import { fakeClock, type FakeClock, type WallClock } from "@mark1russell7/algebra/clock";
 import { CONFIG_FORMAT, matchPlaces, parseConfig, type AlertConfig, type Watch, type ChannelId, type EscalationPolicy, type PersonId, type PlaceId, type SecretLookup, type SourceId } from "@mark1russell7/alerts";
 import { PUSHOVER_TIMEOUT_MS, type PushoverChannelOptions } from "@mark1russell7/alerts-channel-pushover";
+import { memoryCache, type ShapeCache } from "@mark1russell7/alerts-shapes-nws";
 import { CANARY_PATH, createNwsSource } from "@mark1russell7/alerts-source-nws-api";
 import type { Exchange, Transport } from "polite-crawler/api";
 import { DEFAULT_POLICY } from "polite-crawler/politeness";
 import { afterEach, describe, expect, it } from "vitest";
-import { INSTANCE_CHANNELS, INSTANCE_CHECK, INSTANCE_SOURCES, INSTANCE_TIMES, instanceProblems, openInstance, SOURCE_POLICY, sourcePace, USER_AGENT_NAME, type Instance } from "./instance.ts";
+import { INSTANCE_CHANNELS, INSTANCE_CHECK, INSTANCE_SOURCES, INSTANCE_TIMES, instanceProblems, openInstance, SOURCE_POLICY, sourcePace, USER_AGENT_NAME, type Instance, type InstanceOptions } from "./instance.ts";
+import type { ShapeOutcome } from "./shapes.ts";
+import { nextFetch } from "./view.ts";
 import { openRuntimeLog, type RuntimeLog } from "./log.ts";
 
 // The Flood Warning was sent at 14:54 UTC on 2026-11-14, and it expires at 06:00 UTC on 2026-11-15.
@@ -106,7 +109,8 @@ const pause = (ms: number): Promise<void> => new Promise((resolve) => setTimeout
 /**
  * This function moves the clock in steps of one second until the work ends. The waits of the pace of the sources end in the steps.
  * Before each step, it waits `REAL_STEP_MS` of real time. Thus slow real work does not move the fake time. On a busy runner, a step
- * after each turn of the event loop moved the clock 60 seconds in one fetch, and the limit of the fetch stopped the NWS source.
+ * after each turn of the event loop moved the clock 60 seconds in one fetch.
+ * Then the limit of the fetch stopped the NWS source.
  */
 async function finish<T>(clock: FakeClock, work: Promise<T>): Promise<T> {
   let done = false;
@@ -141,8 +145,11 @@ afterEach(() => {
   opened = [];
 });
 
+/** The contact of an operator in the tests. The domain is the example domain of RFC 2606. */
+const CONTACT = "mailto:operator@example.org";
+
 /** This function opens an instance. The limit `"interval"` keeps the default limit of each fetch: the interval of the source. */
-function open(secret: SecretLookup = store(SECRETS), config: AlertConfig = CONFIG, delay = 0, fetchLimit: number | "interval" = TEST_FETCH_LIMIT) {
+function open(secret: SecretLookup = store(SECRETS), config: AlertConfig = CONFIG, delay = 0, fetchLimit: number | "interval" = TEST_FETCH_LIMIT, more: Partial<InstanceOptions> = {}) {
   // The entry reads the configuration so: a refused parse stops the start before the instance.
   const parsed = parseConfig(JSON.stringify(config), INSTANCE_CHANNELS, secret);
   if (parsed.tag === "err") throw new Error(parsed.error.join("\n"));
@@ -154,7 +161,7 @@ function open(secret: SecretLookup = store(SECRETS), config: AlertConfig = CONFI
   const wall: WallClock = { time: "wall", now: () => clock.now(), after: (ms, run) => clock.after(ms, run) };
   const net = network(delay);
   const server = pushoverServer();
-  const instance: Instance = openInstance({ config: parsed.value, secret, log, clock, wall, transport: net.transport, pushover: server.fetch, run: "run-1", ...(fetchLimit === "interval" ? {} : { fetchLimit: () => fetchLimit }) });
+  const instance: Instance = openInstance({ config: parsed.value, secret, log, clock, wall, transport: net.transport, pushover: server.fetch, run: "run-1", ...(fetchLimit === "interval" ? {} : { fetchLimit: () => fetchLimit }), ...more });
   return { instance, clock, net, server };
 }
 
@@ -227,8 +234,38 @@ describe("openInstance", () => {
     }
   });
 
+  it("gets the outlines of the state of the place after a pass, at the pace and with the User-Agent of the instance", async () => {
+    const outcomes: ShapeOutcome[] = [];
+    let closed = 0;
+    const cache = memoryCache();
+    const counted: ShapeCache = { ...cache, close: () => (closed += 1) };
+    const { instance, clock, net } = open(store(SECRETS), { ...CONFIG, contact: CONTACT }, 0, TEST_FETCH_LIMIT, { shapes: counted, onShapes: (outcome) => outcomes.push(outcome) });
+    const pass = await finish(clock, instance.runtime.pass());
+    await finish(clock, instance.shapes.idle());
+    const zones = net.exchanges.filter((exchange) => new URL(exchange.url).pathname.startsWith("/zones"));
+    expect(zones.map((exchange) => exchange.url)).toContain("https://api.weather.gov/zones?area=TX&type=county");
+    expect(new Set(net.exchanges.map((exchange) => exchange.headers["user-agent"]))).toEqual(new Set([`${USER_AGENT_NAME} (+${CONTACT})`]));
+    // The refresh starts after the pass, and it starts no request that can end after the next fetch of a source.
+    const next = Math.min(...instance.runtime.config.sources.map((source) => nextFetch(instance.runtime.state(), source)));
+    expect(clock.now()).toBeLessThanOrEqual(next);
+    expect(pass.fetched).toEqual(["nws-api", "ipaws"]);
+    expect(outcomes).toHaveLength(1);
+    expect(outcomes[0]?.ok).toBe(true);
+    await instance.shapes.close();
+    expect(closed).toBe(1);
+  });
+
+  it("gets no outline without a cache of shapes", async () => {
+    const { instance, clock, net } = open();
+    await finish(clock, instance.runtime.pass());
+    await instance.shapes.idle();
+    expect(net.exchanges.filter((exchange) => new URL(exchange.url).pathname.startsWith("/zones"))).toEqual([]);
+    expect(instance.shapes.basemap()).toEqual([]);
+    expect(instance.shapes.lookup({ system: "ugc", code: "TXC311" })).toBeUndefined();
+  });
+
   it("gives the contact of the configuration in the User-Agent of each request", async () => {
-    const { instance, clock, net } = await open(store(SECRETS), { ...CONFIG, contact: "mailto:operator@example.org" });
+    const { instance, clock, net } = await open(store(SECRETS), { ...CONFIG, contact: CONTACT });
     await finish(clock, instance.runtime.pass());
     expect(net.exchanges.length).toBeGreaterThan(0);
     expect(new Set(net.exchanges.map((exchange) => exchange.headers["user-agent"]))).toEqual(new Set(["alerts-runtime (+mailto:operator@example.org)"]));

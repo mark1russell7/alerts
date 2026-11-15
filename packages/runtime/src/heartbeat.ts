@@ -7,18 +7,22 @@
  * The ping URL and the key of the management API are secrets. No ping body and no error text holds
  * them. A ping body holds no place and no person.
  */
-import type { Duration, HealthState, Instant, SendOutcome, SourceId } from "@mark1russell7/alerts";
+import type { Duration, HealthState, Instant, SourceId } from "@mark1russell7/alerts";
 import type { WallClock } from "@mark1russell7/algebra/clock";
 import { errorMessage } from "@mark1russell7/text";
 import { redactSecrets } from "@mark1russell7/text/redact";
 import type { Exchange } from "polite-crawler/api";
+import type { RefusalKind } from "./events.ts";
 import type { LoopTimes } from "./loop.ts";
 
-/** The kind of a failed call of a channel. */
-export type ChannelFailureKind = Extract<SendOutcome, { readonly ok: false }>["kind"];
+/** The record has each kind of `RefusalKind`, thus the list below cannot lose a kind. */
+const REFUSALS: Readonly<Record<RefusalKind, true>> = { auth: true, refused: true, "rate-limited": true };
 
-/** The kinds of a failed send that stop each delivery to the person until the owner acts. */
-export const UNREACHABLE: readonly ChannelFailureKind[] = ["auth", "refused", "rate-limited"];
+/**
+ * The kinds of a failed send that stop each delivery to the person until the owner acts. They are the
+ * kinds of `RefusalKind`, thus the log keeps a `refused` event for each of them.
+ */
+export const UNREACHABLE = Object.keys(REFUSALS) as readonly RefusalKind[];
 const unreachable: ReadonlySet<string> = new Set(UNREACHABLE);
 
 /** The time between two pings of the same kind. */
@@ -81,14 +85,41 @@ export function holdStep(held: HeartbeatState["held"], pass: PassSummary): Heart
   const next: Record<string, HeldFail> = {};
   for (const [channel, hold] of Object.entries(held)) if (!sent.has(channel) && pass.at < hold.until) next[channel] = hold;
   for (const failure of pass.delivery?.failures ?? []) {
-    if (failure.call !== "send" || !unreachable.has(failure.kind)) continue;
-    const before = next[failure.channel];
-    next[failure.channel] = {
-      kinds: [...new Set([...(before?.kinds ?? []), failure.kind])].sort(),
-      until: Math.max(before?.until ?? failure.retryAt, failure.retryAt),
-    };
+    if (failure.call === "send" && unreachable.has(failure.kind)) hold(next, failure.channel, failure.kind, failure.retryAt);
   }
   return next;
+}
+
+/** The parts of the state of the runtime that `heldOf` reads. */
+export interface RefusalView {
+  readonly refusals: Readonly<Record<string, { readonly channel: string; readonly kind: RefusalKind; readonly at: Instant; readonly retryAt: Instant }>>;
+  readonly merge: { readonly deliveries: readonly { readonly channel: string; readonly at: Instant }[] };
+}
+
+/**
+ * This function gives the refused channels at the time `at` from the state of the log. The hook of the
+ * heartbeat starts from them at its first pass, thus a restart does not end the fail of a refused channel.
+ *
+ * - A refusal counts when its retry is after `at`, and no delivery on its channel came after it.
+ * - A delivery at the time of the refusal does not end it, as a send and a refusal in one pass keep the fail.
+ * - The channels and their `until` are the same as with no restart. The kinds are only those of the
+ *   refusals that wait for their retry.
+ */
+export function heldOf(state: RefusalView, at: Instant): HeartbeatState["held"] {
+  const delivered = new Map<string, Instant>();
+  for (const delivery of state.merge.deliveries) delivered.set(delivery.channel, Math.max(delivered.get(delivery.channel) ?? delivery.at, delivery.at));
+  const held: Record<string, HeldFail> = {};
+  for (const refused of Object.values(state.refusals)) {
+    const after = (delivered.get(refused.channel) ?? Number.NEGATIVE_INFINITY) <= refused.at;
+    if (after && refused.retryAt > at) hold(held, refused.channel, refused.kind, refused.retryAt);
+  }
+  return held;
+}
+
+/** This function adds a refused send to the fail of its channel: the kind goes into the sorted kinds, and the latest retry stays. */
+function hold(held: Record<string, HeldFail>, channel: string, kind: string, retryAt: Instant): void {
+  const before = held[channel];
+  held[channel] = { kinds: [...new Set([...(before?.kinds ?? []), kind])].sort(), until: Math.max(before?.until ?? retryAt, retryAt) };
 }
 
 /**
@@ -158,6 +189,11 @@ export interface HeartbeatOptions {
   /** The longest time of one ping. The default is `HEARTBEAT_LIMIT`. */
   readonly limit?: Duration;
   readonly userAgent: string;
+  /**
+   * This function gives the refused channels at the time of the first pass, for example `heldOf` of the
+   * state of the runtime. The hook starts it one time. The default is no refused channel.
+   */
+  readonly held?: (at: Instant) => HeartbeatState["held"];
   /** The heartbeat gives each failed ping to this function. Its text holds no URL. */
   readonly onError: (message: string) => void;
 }
@@ -186,6 +222,7 @@ export function heartbeat(options: HeartbeatOptions): (pass: PassSummary) => voi
   const every = options.every ?? HEARTBEAT_EVERY;
   const limit = options.limit ?? HEARTBEAT_LIMIT;
   let state = HEARTBEAT_START;
+  let started = false;
   let flight = false;
   // A lost ping does not count. Thus one lost ping does not make the gap of two pings longer.
   const lost = (message: string): void => {
@@ -193,6 +230,10 @@ export function heartbeat(options: HeartbeatOptions): (pass: PassSummary) => voi
     options.onError(message);
   };
   return (pass) => {
+    if (!started) {
+      started = true;
+      state = { held: options.held?.(pass.at) ?? {} };
+    }
     const step = heartbeatStep(state, pass, every, flight);
     state = step.state;
     if (step.ping === undefined) return;

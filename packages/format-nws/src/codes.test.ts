@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import fc from "fast-check";
-import { countyUgcOfSame, isSameCode, isUgcCode, parseSameLocation, sameOfCountyUgc, STATE_FIPS, STATE_POSTAL, stateOfSame, stateOfUgc } from "./codes.ts";
+import { countyUgcOfSame, isSameCode, isUgcCode, parseSameLocation, sameOfCountyUgc, STATE_FIPS, STATE_POSTAL, stateCode, stateOfCode, stateOfSame, stateOfUgc } from "./codes.ts";
 
 describe("isUgcCode", () => {
   it.each(["KSZ001", "TXC123", "GMZ250", "PKZ414"])("accepts %s", (code) => {
@@ -91,5 +91,22 @@ describe("sameOfCountyUgc", () => {
 
   it.each(["KSZ083", "GMZ250", "TXC01", "", "XXC001"])("gives no code for %j", (code) => {
     expect(sameOfCountyUgc(code)).toBeUndefined();
+  });
+});
+
+describe("stateCode and stateOfCode", () => {
+  it("gives the postal code of a state", () => {
+    expect(stateCode(" ks ")).toBe("KS");
+    expect(stateCode("XX")).toBeUndefined();
+    expect(stateCode("toString")).toBeUndefined();
+  });
+
+  it("gives the state of a region code at each level, and none for a marine zone or a country", () => {
+    expect(stateOfCode({ system: "state", code: "ks" })).toBe("KS");
+    expect(stateOfCode({ system: "ugc", code: "KSZ083" })).toBe("KS");
+    expect(stateOfCode({ system: "same", code: "048029" })).toBe("TX");
+    expect(stateOfCode({ system: "ugc", code: "GMZ250" })).toBeUndefined();
+    expect(stateOfCode({ system: "iso3166", code: "US" })).toBeUndefined();
+    expect(stateOfCode({ system: "state", code: "XX" })).toBeUndefined();
   });
 });

@@ -86,13 +86,13 @@ describe("the filter of an expectation", () => {
 
 describe("the checks", () => {
   it("gives the delay of the copy in the same incident", () => {
-    const checks = checksOf([report(API, "w1", 1_000), report(WEA, "w1", 61_000)]);
+    const checks = checksOf([report(API, "w1", 1_000), report(WEA, "w1", 61_000, { sent: 1_000 })]);
     expect(checks).toEqual([{ expectation: EXPECT.id, report: reportId({ source: API, key: "w1", sent: 1_000 }), started: 1_000, arrived: 61_000 }]);
     expect(delaysOf(checks, EXPECT.id)).toEqual([60_000]);
   });
 
   it("gives a negative delay when the copy came first", () => {
-    expect(delaysOf(checksOf([report(API, "w1", 50_000), report(WEA, "w1", 20_000)]), EXPECT.id)).toEqual([-30_000]);
+    expect(delaysOf(checksOf([report(API, "w1", 50_000), report(WEA, "w1", 20_000, { sent: 50_000 })]), EXPECT.id)).toEqual([-30_000]);
   });
 
   it("gives a check with no arrival when no copy came", () => {
@@ -106,19 +106,37 @@ describe("the checks", () => {
     expect(checksOf([report(WEA, "w1", 1_000)])).toEqual([]);
   });
 
-  it("starts the check at the first report of the source, and takes the first copy", () => {
+  it("gives each message of an event its own check: the extension too", () => {
     const checks = checksOf([
       report(API, "w1", 5_000, { op: "update", key: "w1b", references: ["w1"] }),
       report(API, "w1", 1_000),
-      report(WEA, "w1", 9_000),
-      report(WEA, "w1", 7_000, { key: "w1c" }),
+      report(WEA, "w1", 9_000, { key: "w1c", sent: 5_000 }),
+      report(WEA, "w1", 3_000, { sent: 1_000 }),
     ]);
-    expect(checks).toHaveLength(1);
-    expect(checks[0]).toMatchObject({ started: 1_000, arrived: 7_000 });
+    expect(checks).toEqual([
+      { expectation: EXPECT.id, report: reportId({ source: API, key: "w1", sent: 1_000 }), started: 1_000, arrived: 3_000 },
+      { expectation: EXPECT.id, report: reportId({ source: API, key: "w1", sent: 5_000 }), started: 5_000, arrived: 9_000 },
+    ]);
+    // A lost copy of the extension is a check with no copy.
+    expect(checksOf([report(API, "w1", 5_000, { op: "update", key: "w1b" }), report(API, "w1", 1_000), report(WEA, "w1", 3_000, { sent: 1_000 })]).map((check) => check.arrived)).toEqual([3_000, undefined]);
+  });
+
+  it("counts a copy with a different sent time as no copy", () => {
+    expect(checksOf([report(API, "w1", 1_000), report(WEA, "w1", 3_000)])).toEqual([{ expectation: EXPECT.id, report: reportId({ source: API, key: "w1", sent: 1_000 }), started: 1_000 }]);
+  });
+
+  it("counts two copies at one sent time one time, and takes the first", () => {
+    const checks = checksOf([report(API, "w1", 1_000), report(WEA, "w1", 9_000, { sent: 1_000 }), report(WEA, "w1", 7_000, { key: "w1c", sent: 1_000 })]);
+    expect(checks).toEqual([{ expectation: EXPECT.id, report: reportId({ source: API, key: "w1", sent: 1_000 }), started: 1_000, arrived: 7_000 }]);
+  });
+
+  it("counts two reports of the source at one sent time one time, from the first report", () => {
+    const checks = checksOf([report(API, "w1", 4_000, { sent: 1_000 }), report(API, "w1", 1_000, { key: "w1b" }), report(WEA, "w1", 6_000, { sent: 1_000 })]);
+    expect(checks).toEqual([{ expectation: EXPECT.id, report: reportId({ source: API, key: "w1", sent: 1_000 }), started: 1_000, arrived: 6_000 }]);
   });
 
   it("gives one check for each incident", () => {
-    expect(checksOf([report(API, "w1", 1_000), report(API, "w2", 2_000), report(WEA, "w2", 3_000)]).map((check) => check.arrived)).toEqual([undefined, 3_000]);
+    expect(checksOf([report(API, "w1", 1_000), report(API, "w2", 2_000), report(WEA, "w2", 3_000, { sent: 2_000 })]).map((check) => check.arrived)).toEqual([undefined, 3_000]);
   });
 
   for (const seed of SEEDS) {
@@ -128,8 +146,11 @@ describe("the checks", () => {
       for (let warning = 0; warning < 12; warning += 1) {
         const start = Math.floor(rng.next() * 1_000_000);
         reports.push(report(API, `w${warning}`, start));
-        if (rng.next() < 0.7) reports.push(report(WEA, `w${warning}`, start + Math.floor(rng.next() * 300_000) - 60_000));
-        if (rng.next() < 0.3) reports.push(report(API, `w${warning}`, start + 1_000, { key: `w${warning}u`, op: "update" }));
+        if (rng.next() < 0.7) reports.push(report(WEA, `w${warning}`, start + Math.floor(rng.next() * 300_000) - 60_000, { sent: start }));
+        if (rng.next() < 0.3) {
+          reports.push(report(API, `w${warning}`, start + 1_000, { key: `w${warning}u`, op: "update" }));
+          if (rng.next() < 0.7) reports.push(report(WEA, `w${warning}`, start + 1_000 + Math.floor(rng.next() * 300_000), { key: `w${warning}uc`, sent: start + 1_000 }));
+        }
       }
       const shuffled = [...reports];
       for (let index = shuffled.length - 1; index > 0; index -= 1) {
@@ -137,6 +158,7 @@ describe("the checks", () => {
         [shuffled[index], shuffled[other]] = [shuffled[other]!, shuffled[index]!];
       }
       expect(checksOf(shuffled)).toEqual(checksOf(reports));
+      expect(checksOf(reports).some((check) => check.arrived !== undefined)).toBe(true);
     });
   }
 });

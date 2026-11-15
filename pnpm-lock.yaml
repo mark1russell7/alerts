@@ -217,9 +217,15 @@ importers:
       '@mark1russell7/alerts':
         specifier: workspace:*
         version: link:../core
+      '@mark1russell7/text':
+        specifier: ^0.0.6
+        version: 0.0.6
       '@procedures/notify':
         specifier: ^0.56.0
         version: 0.56.0
+      polite-crawler:
+        specifier: ^0.7.3
+        version: 0.7.4(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
     devDependencies:
       '@mark1russell7/cue':
         specifier: ^2.0.0
@@ -283,11 +289,11 @@ importers:
         specifier: workspace:*
         version: link:../core
       '@mark1russell7/text':
-        specifier: ^0.0.5
-        version: 0.0.5
+        specifier: ^0.0.6
+        version: 0.0.6
       polite-crawler:
-        specifier: ^0.6.2
-        version: 0.6.2
+        specifier: ^0.7.3
+        version: 0.7.4(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
     devDependencies:
       '@mark1russell7/cue':
         specifier: ^2.0.0
@@ -375,6 +381,12 @@ importers:
       '@mark1russell7/alerts-channel-pushover':
         specifier: workspace:*
         version: link:../channel-pushover
+      '@mark1russell7/alerts-format-nws':
+        specifier: workspace:*
+        version: link:../format-nws
+      '@mark1russell7/alerts-shapes-nws':
+        specifier: workspace:*
+        version: link:../shapes-nws
       '@mark1russell7/alerts-source-ipaws':
         specifier: workspace:*
         version: link:../source-ipaws
@@ -397,14 +409,14 @@ importers:
         specifier: ^0.8.16
         version: 0.8.16(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
       '@mark1russell7/sqlite':
-        specifier: ^0.2.6
-        version: 0.2.6
+        specifier: ^0.3.2
+        version: 0.3.2
       '@mark1russell7/text':
-        specifier: ^0.0.5
-        version: 0.0.5
+        specifier: ^0.0.6
+        version: 0.0.6
       polite-crawler:
-        specifier: ^0.6.2
-        version: 0.6.2
+        specifier: ^0.7.3
+        version: 0.7.4(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
     devDependencies:
       '@mark1russell7/cue':
         specifier: ^2.0.0
@@ -443,11 +455,11 @@ importers:
         specifier: ^0.2.1
         version: 0.2.1
       '@mark1russell7/sqlite':
-        specifier: ^0.2.6
-        version: 0.2.6
+        specifier: ^0.3.2
+        version: 0.3.2
       polite-crawler:
-        specifier: ^0.6.2
-        version: 0.6.2
+        specifier: ^0.7.3
+        version: 0.7.4(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
     devDependencies:
       '@mark1russell7/cue':
         specifier: ^2.0.0
@@ -519,11 +531,11 @@ importers:
         specifier: workspace:*
         version: link:../format-nws
       '@mark1russell7/text':
-        specifier: ^0.0.5
-        version: 0.0.5
+        specifier: ^0.0.6
+        version: 0.0.6
       polite-crawler:
-        specifier: ^0.6.2
-        version: 0.6.2
+        specifier: ^0.7.3
+        version: 0.7.4(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
     devDependencies:
       '@mark1russell7/alerts-runtime':
         specifier: workspace:*
@@ -571,11 +583,11 @@ importers:
         specifier: workspace:*
         version: link:../format-nws
       '@mark1russell7/text':
-        specifier: ^0.0.5
-        version: 0.0.5
+        specifier: ^0.0.6
+        version: 0.0.6
       polite-crawler:
-        specifier: ^0.6.2
-        version: 0.6.2
+        specifier: ^0.7.3
+        version: 0.7.4(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
     devDependencies:
       '@mark1russell7/cue':
         specifier: ^2.0.0
@@ -611,11 +623,11 @@ importers:
         specifier: workspace:*
         version: link:../format-nws
       '@mark1russell7/text':
-        specifier: ^0.0.5
-        version: 0.0.5
+        specifier: ^0.0.6
+        version: 0.0.6
       polite-crawler:
-        specifier: ^0.6.2
-        version: 0.6.2
+        specifier: ^0.7.3
+        version: 0.7.4(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
     devDependencies:
       '@mark1russell7/cue':
         specifier: ^2.0.0
@@ -669,8 +681,8 @@ importers:
         specifier: ^0.57.0
         version: 0.57.0(@mark1russell7/rigor-testkit@0.1.7(@opentelemetry/api@1.10.0)(fast-check@4.10.2))
       polite-crawler:
-        specifier: ^0.6.2
-        version: 0.6.2
+        specifier: ^0.7.3
+        version: 0.7.4(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
     devDependencies:
       '@mark1russell7/cue':
         specifier: ^2.0.0
@@ -999,8 +1011,8 @@ packages:
     resolution: {integrity: sha512-4m8yw4giLH/y1HcsroBQSHAWByC5fK/iJb4dNGCPT6Eelr26bxvBz7kMC7UMFSzGcR+W8GTrAwlAQmmFnQDMuA==}
     engines: {node: '>=22'}
 
-  '@mark1russell7/rigor-statistics@0.2.3':
-    resolution: {integrity: sha512-jnUcZqLCY8sXuM0Kr3iuMgFe3OT7+Z4q4iqMrG68u2HBZBxcZeqS5dk/4LWw99w8e25yMEYN1F3fr5cTz6pf5A==}
+  '@mark1russell7/rigor-statistics@0.2.4':
+    resolution: {integrity: sha512-0L075rT+toD6edxEwDdZHiFzHP4+dJrI64Pw5gh9V33VwCfNRUMQY90AooDpMgVcC9cuxHNXegDLSOYU9ZMIlA==}
     engines: {node: '>=22'}
 
   '@mark1russell7/rigor-testkit@0.1.7':
@@ -1062,8 +1074,8 @@ packages:
     engines: {node: '>=22'}
     hasBin: true
 
-  '@mark1russell7/sqlite@0.2.6':
-    resolution: {integrity: sha512-uc1KAI7kDz77g6+ssLta9uytc2UNns2ue+my4/jKYdPjDQj1Ijyi76Pco9jRp+Nwil5hYOzGyw0Q/WN7h7di3A==}
+  '@mark1russell7/sqlite@0.3.2':
+    resolution: {integrity: sha512-3eX6QuGbiLjpSxdYHaJUQ8Ow6mYPIA/N5qZuxKgon4iq2v3wr0Hp888ZbkSWhxQdpo4rD7MVZoQXWL4g5VjxEA==}
     engines: {node: '>=22.16'}
 
   '@mark1russell7/ste-lint@0.3.1':
@@ -1078,6 +1090,10 @@ packages:
 
   '@mark1russell7/text@0.0.5':
     resolution: {integrity: sha512-Ql1eBET3PgEBL5DWZHZ20GRZmorkq6mWdnfj21cqXfLvZdikO+GlvSAfbv1ld7YCnEqxOa7eg6ESfl+jzPGe9w==}
+    engines: {node: '>=22.12'}
+
+  '@mark1russell7/text@0.0.6':
+    resolution: {integrity: sha512-IwKQHx9U+k5AbEzZ8q4CxImQCuYXSFhvzMOSgy5UGYrZRIBO9RES7SYrXDrKqQFtMl5qD2QbibffevUPsrUW+A==}
     engines: {node: '>=22.12'}
 
   '@mozilla/readability@0.6.0':
@@ -1886,8 +1902,8 @@ packages:
     resolution: {integrity: sha512-qcJu88Q2IWqJsDD529JKMdwGm/dvInW4HvQnRwiH9JtihJvzGOscDtHE3x1pBKeUOTysQ8kVmLnJ2kJu7yhcGA==}
     engines: {node: '>=12'}
 
-  polite-crawler@0.6.2:
-    resolution: {integrity: sha512-rSi0ys/yNGX63ow6YkEEzBbvhRu0pu9rsi8L7Eo1E+7ep3Z5BOnq3U/LukVr88BHOb+tPXN89qQgRUUin+QC+w==}
+  polite-crawler@0.7.4:
+    resolution: {integrity: sha512-zQCUAM3mm0+3A10RSD5chCVvRCFEDGEYChHtOgza6jIaSMWd4KpB8rruSMgNwbY97rpVEkyaqykNJS8kC2LxgQ==}
     engines: {node: '>=22.19'}
     hasBin: true
     peerDependencies:
@@ -2362,7 +2378,7 @@ snapshots:
   '@mark1russell7/rigor-chaos@0.3.0':
     dependencies:
       '@mark1russell7/rigor-generators': 0.1.16
-      '@mark1russell7/rigor-statistics': 0.2.3
+      '@mark1russell7/rigor-statistics': 0.2.4
 
   '@mark1russell7/rigor-generators@0.1.16': {}
 
@@ -2381,7 +2397,7 @@ snapshots:
     dependencies:
       '@mark1russell7/rigor-generators': 0.1.16
 
-  '@mark1russell7/rigor-statistics@0.2.3':
+  '@mark1russell7/rigor-statistics@0.2.4':
     dependencies:
       '@mark1russell7/rigor-generators': 0.1.16
 
@@ -2406,7 +2422,7 @@ snapshots:
     dependencies:
       '@mark1russell7/rigor-statistics': 0.1.29
 
-  '@mark1russell7/sqlite@0.2.6': {}
+  '@mark1russell7/sqlite@0.3.2': {}
 
   '@mark1russell7/ste-lint@0.3.1':
     dependencies:
@@ -2417,6 +2433,8 @@ snapshots:
       '@clack/prompts': 1.9.0
 
   '@mark1russell7/text@0.0.5': {}
+
+  '@mark1russell7/text@0.0.6': {}
 
   '@mozilla/readability@0.6.0': {}
 
@@ -3088,15 +3106,26 @@ snapshots:
 
   picomatch@4.0.7: {}
 
-  polite-crawler@0.6.2:
+  polite-crawler@0.7.4(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7):
     dependencies:
+      '@mark1russell7/algebra': 0.8.9(zod@4.6.7)
+      '@mark1russell7/service': 0.8.16(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
+      '@mark1russell7/sqlite': 0.3.2
       '@mozilla/readability': 0.6.0
       linkedom: 0.18.15
       undici: 8.12.4
       unpdf: 1.9.1
     transitivePeerDependencies:
+      - '@grpc/grpc-js'
       - '@napi-rs/canvas'
+      - '@opentelemetry/api'
+      - amqplib
       - canvas
+      - ioredis
+      - mongodb
+      - pg
+      - ws
+      - zod
 
   postcss@8.5.32:
     dependencies:

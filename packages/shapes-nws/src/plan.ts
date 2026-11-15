@@ -3,8 +3,9 @@
  * new list removes. The functions are pure. They read the records and the clock that they get.
  */
 import type { Duration, Instant, MapShape, RegionCode } from "@mark1russell7/alerts";
+import { stateCode } from "@mark1russell7/alerts-format-nws";
 import type { Condition } from "polite-crawler/api";
-import { compareCodes, stateCode, ZONE_KINDS, zoneOfCode, type ZoneKey, type ZoneKind } from "./zones.ts";
+import { compareCodes, ZONE_KINDS, zoneOfCode, type ZoneKey, type ZoneKind } from "./zones.ts";
 
 /** The record of one list: the codes of the zones of one kind of a state, at the time of the fetch. */
 export interface CachedList {

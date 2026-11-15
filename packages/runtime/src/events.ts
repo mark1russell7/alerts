@@ -3,7 +3,13 @@
  * events and the configuration, and of nothing else. Thus a restart reads the log and gets the same
  * state as a run with no restart.
  */
-import type { Acknowledgment, ChannelId, Cursor, Delivery, EscalationStart, FetchRecord, Instant, MapProblem, Observation, Report, ReportId, SourceId } from "@mark1russell7/alerts";
+import type { Acknowledgment, ChannelId, Cursor, Delivery, EscalationStart, FetchRecord, Instant, MapProblem, Observation, Report, ReportId, SendOutcome, SourceId } from "@mark1russell7/alerts";
+
+/** The kind of a failed call of a channel. */
+export type ChannelFailureKind = Extract<SendOutcome, { readonly ok: false }>["kind"];
+
+/** The kinds of a send that the channel refused. After such a send, the channel has no message. */
+export type RefusalKind = Exclude<ChannelFailureKind, "network" | "timeout" | "server">;
 
 /** The fields of each event. The log of `@mark1russell7/sqlite` reads `id`, `at` and `type`. */
 interface Envelope<T extends string> {
@@ -39,6 +45,8 @@ export interface FetchEvent extends Envelope<"fetch"> {
 export interface EndedEvent extends Envelope<"ended"> {
   readonly source: SourceId;
   readonly reports: readonly ReportId[];
+  /** The time of the data of the list that ended the reports (`asOf` of the fetch), if the list has a time. */
+  readonly asOf?: Instant;
 }
 
 /** Reports of a snapshot source that ended are in a complete list of the source again. The merge reads them as live. */
@@ -71,9 +79,24 @@ export interface AttemptEvent extends Envelope<"attempt"> {
   readonly copy: string;
 }
 
-/** A copy needs no stop: the channel refused its send, or a stop of the copy ended after the end of its send. */
+/** A copy needs no stop. The channel refused its send after its time limit, or a stop of the copy ended after the end of its send. */
 export interface SettledEvent extends Envelope<"settled"> {
   readonly copy: string;
+}
+
+/**
+ * The channel refused a send in its time limit. The log keeps the refusal, thus a restart keeps the wait
+ * of the retry and the fail of the heartbeat.
+ */
+export interface RefusedEvent extends Envelope<"refused"> {
+  /** The delivery key of the send. */
+  readonly key: string;
+  readonly channel: ChannelId;
+  readonly kind: RefusalKind;
+  /** The step sends the key again at this time or later. */
+  readonly retryAt: Instant;
+  /** The copy id of the send, on a channel that repeats. The refusal ends the copy. */
+  readonly copy?: string;
 }
 
 /** One acknowledgment of a person. */
@@ -105,10 +128,11 @@ export type RuntimeEvent =
   | AcknowledgmentEvent
   | CancelledEvent
   | AttemptEvent
-  | SettledEvent;
+  | SettledEvent
+  | RefusedEvent;
 
 /** The types of the events. */
-export const EVENT_TYPES: readonly RuntimeEvent["type"][] = ["started", "observation", "fetch", "ended", "back", "system", "escalation", "delivery", "acknowledgment", "cancelled", "attempt", "settled"];
+export const EVENT_TYPES: readonly RuntimeEvent["type"][] = ["started", "observation", "fetch", "ended", "back", "system", "escalation", "delivery", "acknowledgment", "cancelled", "attempt", "settled", "refused"];
 
 /** This function gives the fields of the envelope of an event at a time. */
 export function envelope<T extends RuntimeEvent["type"]>(type: T, id: string, time: Instant): Envelope<T> {
