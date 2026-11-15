@@ -290,11 +290,19 @@ The log keeps each copy on a channel that repeats, and its end. Thus a restart d
 
 - Before each send on a channel that repeats, the step writes an `attempt` event with the delivery key, the channel and the copy id.
 - The `delivery` event of an accepted send has the copy id. It ends the copy.
-- A `settled` event ends a copy that needs no stop: the channel refused its send, or a stop of the copy went after the end of its send.
+- A `refused` event ends the copy of a send that the channel refused in its time limit.
+- A `settled` event ends a copy that needs no stop: the channel refused its send after its time limit, or a stop of the copy went after the end of its send.
 - The state has the open copies: each attempt with no end. The first step after a restart stops each of them by its copy id.
 - A stop of a copy whose send did not end does not end the copy. The channel can accept that copy later, and then its stop goes again.
 
 A write of the `attempt` event that fails throws, and the send does not go.
+
+The log also keeps each refused send. A refused send is a refusal, a bad key or a full quota, in the time limit of the send:
+
+- The `refused` event has the delivery key, the channel, the kind and the retry time.
+- The state keeps the last refusal of each key. A delivery of the key removes it.
+- After a restart, the first step keeps the wait of each refusal. Thus the quota of a channel holds across a restart.
+- The heartbeat reads the refusals of the state at the start. Thus a restart does not end the fail of a refused channel.
 
 A recipient has no problem from `recipientProblems` before it gets alerts:
 
@@ -431,6 +439,7 @@ The runtime cannot tell the person that it stopped. A check of Healthchecks.io t
 - After each pass with no error, the hook pings the check. A ping of the same kind goes once in each 60 seconds. When the pings stop, Healthchecks.io alerts the owner: the process stopped, the computer stopped, or its network is down.
 - A pass in which a channel gave `auth`, `refused` or `rate-limited` to a send pings `/fail`, because then the system cannot tell the person.
 - The fail of a channel holds until a send on the channel goes, or until the pass of the retry has no refusal on it. The delivery step sends a failed call again at the first pass at or after its `retryAt`. Thus the check does not go down and up at each retry.
+- The fail of a channel holds across a restart. At its first pass, the hook starts from `heldOf` of the log: each refusal after the last delivery on its channel, with a retry after that pass. Thus a restart does not ping `success` while the channel refuses.
 - The body of a success ping gives the state of each source. The body of a fail ping gives the channel and the kind. No body holds a place, a person or the text of a failure.
 - The hook starts the ping and ends at once. One ping is in flight at a time, for 10 seconds or less. A failed ping goes to the log, and its text holds no ping URL. The next pass pings again.
 - The key `HEALTHCHECKS_PING_URL` of `secrets.env` gives the ping URL, with `https`. The profile `daemon` does not start without it.

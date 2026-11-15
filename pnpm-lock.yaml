@@ -660,8 +660,8 @@ importers:
         specifier: workspace:*
         version: link:../source-nws-api
       '@mark1russell7/algebra':
-        specifier: ^0.8.9
-        version: 0.8.9(zod@4.6.7)
+        specifier: ^0.8.10
+        version: 0.8.10(zod@4.6.7)
       '@mark1russell7/rigor-chaos':
         specifier: ^0.2.2
         version: 0.2.2
@@ -902,6 +902,15 @@ packages:
 
   '@jridgewell/trace-mapping@0.3.31':
     resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==}
+
+  '@mark1russell7/algebra@0.8.10':
+    resolution: {integrity: sha512-+BrWHJHSMF/BTOegejCY14W2/3B4gmNhrSwLxitgQF0OYb7NcaovLILnDrDjNtTFgxuuA5Gd2jtlLJprTUO5Yw==}
+    engines: {node: '>=22.19'}
+    peerDependencies:
+      zod: ^4.1.0
+    peerDependenciesMeta:
+      zod:
+        optional: true
 
   '@mark1russell7/algebra@0.8.9':
     resolution: {integrity: sha512-Ol2CeOEjTlf6hzDItciPk2dLziK7mjrH1s/f2OraTMR7YypX597D3R9wCZgBpXZPt779lBpUon7f61EclYXZwg==}
@@ -2290,6 +2299,12 @@ snapshots:
       '@jridgewell/resolve-uri': 3.1.3
       '@jridgewell/sourcemap-codec': 1.6.0
 
+  '@mark1russell7/algebra@0.8.10(zod@4.6.7)':
+    dependencies:
+      '@mark1russell7/quantity': 0.4.0(zod@4.6.7)
+    optionalDependencies:
+      zod: 4.6.7
+
   '@mark1russell7/algebra@0.8.9(zod@4.6.7)':
     dependencies:
       '@mark1russell7/quantity': 0.4.0(zod@4.6.7)
@@ -2314,7 +2329,7 @@ snapshots:
 
   '@mark1russell7/collections@0.10.2(zod@4.6.7)':
     dependencies:
-      '@mark1russell7/algebra': 0.8.9(zod@4.6.7)
+      '@mark1russell7/algebra': 0.8.10(zod@4.6.7)
       '@mark1russell7/optional': 1.2.0
       '@mark1russell7/rigor-statistics': 0.1.29
     transitivePeerDependencies:
@@ -2322,7 +2337,7 @@ snapshots:
 
   '@mark1russell7/collections@0.11.0(zod@4.6.7)':
     dependencies:
-      '@mark1russell7/algebra': 0.8.9(zod@4.6.7)
+      '@mark1russell7/algebra': 0.8.10(zod@4.6.7)
       '@mark1russell7/optional': 1.2.0
       '@mark1russell7/rigor-statistics': 0.2.1
     transitivePeerDependencies:
@@ -2362,7 +2377,7 @@ snapshots:
 
   '@mark1russell7/rigor-proxy@0.2.1(zod@4.6.7)':
     dependencies:
-      '@mark1russell7/algebra': 0.8.9(zod@4.6.7)
+      '@mark1russell7/algebra': 0.8.10(zod@4.6.7)
       '@mark1russell7/rigor-chaos': 0.2.2
     transitivePeerDependencies:
       - zod
@@ -2382,7 +2397,7 @@ snapshots:
 
   '@mark1russell7/service@0.8.16(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)':
     dependencies:
-      '@mark1russell7/algebra': 0.8.9(zod@4.6.7)
+      '@mark1russell7/algebra': 0.8.10(zod@4.6.7)
       '@mark1russell7/collections': 0.11.0(zod@4.6.7)
       '@mark1russell7/quantity': 0.4.0(zod@4.6.7)
       '@mark1russell7/rigor-generators': 0.1.16
@@ -2425,7 +2440,7 @@ snapshots:
 
   '@procedures/client@0.56.0':
     dependencies:
-      '@mark1russell7/algebra': 0.8.9(zod@4.6.7)
+      '@mark1russell7/algebra': 0.8.10(zod@4.6.7)
       '@mark1russell7/coeval': 0.34.0(zod@4.6.7)
       '@mark1russell7/collections': 0.10.2(zod@4.6.7)
       '@mark1russell7/quantity': 0.4.0(zod@4.6.7)

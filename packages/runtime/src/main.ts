@@ -29,7 +29,7 @@ import { redactSecrets } from "@mark1russell7/text/redact";
 import { fetchTransport } from "polite-crawler/api";
 import { writeFileAtomic } from "@procedures/fs/files";
 import { alertsHome, configPath, envSecrets } from "./config.ts";
-import { heartbeat, type PassSummary } from "./heartbeat.ts";
+import { heartbeat, heldOf, type PassSummary } from "./heartbeat.ts";
 import { PROFILES, declare } from "./index.ts";
 import { DAEMON_CHECK, INSTANCE_CHECK, openInstance, PING_URL_KEY, userAgent } from "./instance.ts";
 import { openRuntimeLog } from "./log.ts";
@@ -72,7 +72,7 @@ async function runtime(): Promise<ServiceBuilder> {
   // The outside heartbeat. Without it, a stop of this process is silent. The check of the profile daemon needs it.
   const pingUrl = secret(PING_URL_KEY) ?? "";
   if (pingUrl === "") console.warn(`The file secrets.env has no ${PING_URL_KEY}. This runtime has no outside heartbeat.`);
-  const beat = pingUrl === "" ? undefined : heartbeat({ url: pingUrl, fetch, clock: wall, userAgent: agent, onError: (message) => console.error(redactSecrets(message, values)) });
+  const beat = pingUrl === "" ? undefined : heartbeat({ url: pingUrl, fetch, clock: wall, userAgent: agent, held: (at) => heldOf(instance.runtime.state(), at), onError: (message) => console.error(redactSecrets(message, values)) });
 
   // A change of the private files restarts the runtime. Only the profile daemon has a supervisor that starts it again.
   const reload =
