@@ -13,19 +13,19 @@
  * The environment gives `ALERTS_HOME`, the folder of the private files, as for `main.ts`. Without
  * it, the folder is `.alerts` in the home folder.
  */
-import { readFileSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { valueIn } from "@mark1russell7/quantity";
-import { installService, nodeHostPorts, parseEnvFile, probeOnce, serviceStatus, uninstallService, type ServiceOutcome } from "@mark1russell7/service/host";
+import { installService, nodeHostPorts, probeOnce, serviceStatus, uninstallService, type ServiceOutcome } from "@mark1russell7/service/host";
 import { errorMessage } from "@mark1russell7/text";
 import { redactSecrets } from "@mark1russell7/text/redact";
 import { fetchTransport, send, statusLine } from "polite-crawler/api";
 import { HostScheduler, realClock } from "polite-crawler/politeness";
-import { alertsHome } from "./config.ts";
+import { alertsHome, readText, SECRETS_FILE } from "./config.ts";
 import { checkOfPingUrl, checksRequest, checkTimesProblem, heartbeatGap } from "./heartbeat.ts";
 import { hostTask, READY_WITHIN, readinessProbe, supervisorDiscovery } from "./host.ts";
-import { INSTANCE_TIMES, USER_AGENT_NAME } from "./instance.ts";
+import { checksKeys, INSTANCE_TIMES, USER_AGENT_NAME } from "./instance.ts";
 
 const ACTIONS = ["install", "remove", "status"] as const;
 const action = process.argv[2];
@@ -76,15 +76,10 @@ interface OutsideCheck {
 async function outsideCheck(): Promise<OutsideCheck> {
   const gap = heartbeatGap(INSTANCE_TIMES);
   const neededSeconds = Math.ceil(gap / 1000);
-  let env: Readonly<Record<string, string>>;
-  try {
-    env = parseEnvFile(readFileSync(join(home, "secrets.env"), "utf8")).env;
-  } catch {
-    return { ok: false, neededSeconds, problem: "The status cannot read the file secrets.env." };
-  }
-  const key = env["HEALTHCHECKS_API_KEY"] ?? "";
-  const url = env["HEALTHCHECKS_PING_URL"] ?? "";
-  if (key === "" || url === "") return { ok: false, neededSeconds, problem: "The file secrets.env needs HEALTHCHECKS_API_KEY and HEALTHCHECKS_PING_URL for this check." };
+  // The status reads secrets.env as the start does: a bad line is a problem, and no problem holds a value.
+  const keys = checksKeys(await readText(() => readFile(join(home, SECRETS_FILE), "utf8")));
+  if (keys.tag === "err") return { ok: false, neededSeconds, problem: keys.error.join(" ") };
+  const { key, url } = keys.value;
   const secrets = [key, url];
   // The request has the User-Agent with no contact: the status reads no configuration.
   const exchange = checksRequest(key, USER_AGENT_NAME);

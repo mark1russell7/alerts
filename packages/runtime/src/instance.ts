@@ -9,9 +9,10 @@ import { CHANNEL_ID, createPushoverChannel, isPushoverKey, pushoverDescriptor, P
 import { createIpawsSource, IPAWS_DESCRIPTOR, WEA_EXPECTATION } from "@mark1russell7/alerts-source-ipaws";
 import { createShapeStore, type ShapeCache, type ShapeStore } from "@mark1russell7/alerts-shapes-nws";
 import { createNwsSource, NWS_DESCRIPTOR } from "@mark1russell7/alerts-source-nws-api";
+import { err, ok, type Result } from "@mark1russell7/optional";
 import type { Pace, Transport } from "polite-crawler/api";
 import { DEFAULT_POLICY, HostScheduler, type PolitenessPolicy } from "polite-crawler/politeness";
-import { requireKey, type InstanceCheck } from "./config.ts";
+import { parseSecrets, requireKey, SECRETS_FILE, type FileText, type InstanceCheck } from "./config.ts";
 import { overdueLimit, type DeliveryOptions } from "./delivery.ts";
 import type { RuntimeLog } from "./log.ts";
 import { createLoop, loopTimes, type LoopTimes, type RuntimeLoop } from "./loop.ts";
@@ -25,6 +26,32 @@ export const PUSHOVER_TOKEN = "PUSHOVER_APP_TOKEN";
 
 /** The name of the key of `secrets.env` that holds the address of the outside heartbeat. */
 export const PING_URL_KEY = "HEALTHCHECKS_PING_URL";
+
+/**
+ * The name of the key of `secrets.env` that holds the key of the management API of Healthchecks.io. Only
+ * the status of `install.ts` reads it. The runtime does not use it.
+ */
+export const CHECKS_KEY = "HEALTHCHECKS_API_KEY";
+
+/** The two keys of the status check of the heartbeat. */
+export interface ChecksKeys {
+  /** The key of the management API. */
+  readonly key: string;
+  /** The address of the outside heartbeat. */
+  readonly url: string;
+}
+
+/**
+ * This function gives the keys of the status check of the heartbeat from the text of `secrets.env`. It
+ * parses the text as the start does. A problem holds no value and no path.
+ */
+export function checksKeys(file: FileText): Result<ChecksKeys, readonly string[]> {
+  const keys = parseSecrets(file);
+  if (keys.tag === "err") return keys;
+  const key = keys.value[CHECKS_KEY] ?? "";
+  const url = keys.value[PING_URL_KEY] ?? "";
+  return key === "" || url === "" ? err([`The file ${SECRETS_FILE} needs ${CHECKS_KEY} and ${PING_URL_KEY} for this check.`]) : ok({ key, url });
+}
 
 /** The name of the application in the User-Agent of each request. The NWS asks for a name and a contact. */
 export const USER_AGENT_NAME = "alerts-runtime";
