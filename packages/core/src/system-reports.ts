@@ -166,6 +166,33 @@ export function systemReports(lines: SystemLines, snapshot: SystemSnapshot, at: 
   return { lines: { count, open: Object.fromEntries(sorted) }, reports, observations };
 }
 
+/**
+ * This function adds the reports of the fold to the lines, in their order. It gives the lines that
+ * `systemReports` gave with these reports. Thus the runtime rebuilds the lines from its log, and the
+ * log holds no copy of the state. A report of another source changes nothing.
+ *
+ * The observation of each report gives the facts of its line. The function throws when an observation
+ * is not in `observations`, because then the log is not complete.
+ */
+export function addSystemReports(lines: SystemLines, reports: readonly Report[], observations: readonly Observation[]): SystemLines {
+  const bodies = new Map(observations.map((observation) => [observation.id, observation.body]));
+  let count = lines.count;
+  const open = new Map(Object.entries(lines.open));
+  for (const report of reports) {
+    if (report.source !== SYSTEM_SOURCE) continue;
+    const mark = report.key.lastIndexOf("#");
+    const name = report.key.slice(0, mark);
+    const body = bodies.get(report.observation);
+    if (mark < 0 || body === undefined) throw new Error(`The system report ${report.key} has no observation ${report.observation}.`);
+    const { facts } = JSON.parse(body) as { readonly facts: Condition["facts"] };
+    count = Math.max(count, Number(report.key.slice(mark + 1)));
+    if (report.op === "cancel") open.delete(name);
+    else open.set(name, { key: report.key, facts: canonicalJson(facts, { form: "json" }), kind: report.kind, areas: report.areas, about: report.about });
+  }
+  const sorted = [...open.entries()].sort(([a], [b]) => compare(a, b));
+  return { count, open: Object.fromEntries(sorted) };
+}
+
 // The parts of a report that a condition gives. The fold adds the key, the references, the times and the observation.
 interface Condition {
   readonly facts: Readonly<Record<string, unknown>>;
