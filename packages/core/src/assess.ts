@@ -88,8 +88,8 @@ const SYSTEM_TABLE: LevelTable = {
 
 /**
  * The first policy. An incident is `life-safety` when its status is `actual` and its kind is in
- * `LIFE_SAFETY_KINDS`. Its severity must be `severe` or `extreme`, and its urgency must be
- * `immediate` or `expected`. A place of the person must be in its areas.
+ * `LIFE_SAFETY_KINDS`. Its severity must be `severe`, `extreme` or `unknown`, and its urgency must
+ * be `immediate`, `expected` or `unknown`. A place of the person must be in its areas.
  *
  * The two system classes hold the reports of the core, and they admit only the status `system`. The
  * coverage of a life-safety kind can reach `life-safety`. Each other report of the core reaches
