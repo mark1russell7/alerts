@@ -10,6 +10,7 @@ import { join } from "node:path";
 import { FRAMINGS } from "@mark1russell7/rigor-testkit/http";
 import { runCutInBody } from "../src/cut-in-body.ts";
 import { changesOf, runChangedFormat } from "../src/changed-format.ts";
+import { ACCEPT_ARMS, ACCEPT_GATES, runLateAccept } from "../src/late-accept.ts";
 import { runSlowSource, SLOW_ARMS, trickleMs } from "../src/slow-source.ts";
 import { DOWN_ARMS, runSourceDown } from "../src/source-down.ts";
 
@@ -95,6 +96,26 @@ report(format.id, format.verdict, [
   ),
   "",
   `Read: ${yes(format.verdict.read)}. Pass: **${yes(format.verdict.pass)}**.`,
+]);
+
+const accept = await runLateAccept();
+write("case-4.json", accept);
+const limits = accept.settings;
+report(accept.id, accept.verdict, [
+  `## ${accept.id}: a late accept of the Pushover channel`,
+  "",
+  `The call limit of the delivery step is ${String(limits.callLimitMs)} ms, and its flight limit ${String(limits.flightLimitMs)} ms. The late answer comes at ${String(limits.lateMs)} ms. A hang lasts ${String(limits.hangMs)} ms, and each arm ${String(limits.armMs)} ms.`,
+  "",
+  "| Arm | Fault at its point | Sends | Reads | Cancels | Cancels by tag | Open messages | Failed calls | Duplicates | Delivered | Single | Stopped |",
+  "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+  ...accept.records.map((r) => {
+    const open = r.ledger.messages.filter((m) => m.readAt === undefined && m.cancelledAt === undefined).length;
+    const gates = accept.verdict.gates[r.arm];
+    const c = r.ledger.counts;
+    return `| ${r.arm} | ${yes(r.faulted)} | ${String(c.sends)} | ${String(c.reads)} | ${String(c.cancels)} | ${String(c.tagCancels)} | ${String(open)} | ${String(r.failures.length)} | ${String(r.duplicates)} | ${ACCEPT_GATES.map((g) => yes(gates[g])).join(" | ")} |`;
+  }),
+  "",
+  `Read: ${yes(accept.verdict.read)}. Arms: ${ACCEPT_ARMS.join(", ")}. Pass: **${yes(accept.verdict.pass)}**.`,
 ]);
 
 const down = await runSourceDown();

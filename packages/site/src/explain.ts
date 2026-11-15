@@ -60,15 +60,6 @@ export function incidentLabel(incident: Pick<Incident, "kind" | "areas">): strin
   return place === undefined ? label : `${label}, ${shortName(place.place)}`;
 }
 
-/** The words of each level. */
-export const LEVEL_WORDS: Readonly<Record<AssessedLevel, string>> = {
-  "life-safety": "Life-safety",
-  urgent: "Urgent",
-  notice: "Notice",
-  digest: "Digest",
-  none: "No message",
-};
-
 /** The meaning of each level, from the table of the levels in `docs/CONTRACTS.md`. */
 export const LEVEL_MEANINGS: Readonly<Record<AssessedLevel, string>> = {
   "life-safety": "It wakes the person, sounds through silent mode and escalates until acknowledged.",

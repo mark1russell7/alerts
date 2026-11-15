@@ -13,7 +13,7 @@ import { DEFAULT_POLICY, HostScheduler, type PolitenessPolicy } from "polite-cra
 import type { DeliveryOptions } from "./delivery.ts";
 import type { RuntimeLog } from "./log.ts";
 import { createLoop, loopTimes, type LoopTimes, type RuntimeLoop } from "./loop.ts";
-import { openRuntime, type Pass, type Runtime } from "./runtime.ts";
+import { openRuntime, type Pass, type Runtime, type RuntimeOptions } from "./runtime.ts";
 
 /** The name of the secret that holds the API token of the Pushover application. */
 export const PUSHOVER_TOKEN = "PUSHOVER_APP_TOKEN";
@@ -86,6 +86,11 @@ export interface InstanceOptions {
   readonly onPass?: (pass: Pass) => void | Promise<void>;
   /** The loop gives each failed pass to this function. */
   readonly onError?: (error: unknown, failures: number) => void;
+  /**
+   * This function gives the longest time of one fetch of a source. The default is the interval of the
+   * source. A test with a fake clock gives a long limit, because a slow runner moves the fake clock during a fetch.
+   */
+  readonly fetchLimit?: RuntimeOptions["fetchLimit"];
 }
 
 /** The instance: the runtime and its loop. */
@@ -166,6 +171,7 @@ export function openInstance(options: InstanceOptions): Instance {
     // The loop exists before the first pass, and only a pass starts a wake.
     wake: () => loop.wake(),
     ...(options.onPass === undefined ? {} : { onPass: options.onPass }),
+    ...(options.fetchLimit === undefined ? {} : { fetchLimit: options.fetchLimit }),
   });
   const loop = createLoop({
     pass: () => runtime.pass(),

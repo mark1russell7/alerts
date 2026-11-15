@@ -65,7 +65,7 @@ function fixture(source: string, name: string): string {
 /**
  * A fake network with recorded answers. The NWS API gives the Flood Warning to the request of the
  * state, the keepalive to the canary, and no alert to the WEA request. The IPAWS feed has no alert.
- * Each exchange takes `delay` milliseconds of real time, as on a busy runner.
+ * Each exchange takes `delay` milliseconds of real time, as on a busy runner. With `Infinity`, no exchange ends.
  */
 function network(delay = 0) {
   const exchanges: Exchange[] = [];
@@ -73,6 +73,7 @@ function network(delay = 0) {
   const nws: Readonly<Record<string, string>> = { "/alerts/active?area=TX": collection("nws-flw.json"), [CANARY_PATH]: collection("nws-keepalive.json") };
   const transport: Transport = async (exchange) => {
     exchanges.push(exchange);
+    if (delay === Infinity) await new Promise<never>(() => undefined);
     if (delay > 0) await pause(delay);
     const url = new URL(exchange.url);
     if (url.hostname === "apps.fema.gov") return { status: 200, statusText: "OK", headers: { "content-type": "application/xml" }, body: fixture("alerts-source-ipaws", "feed-empty.xml") };
@@ -93,6 +94,9 @@ function pushoverServer() {
   };
   return { fetch, calls };
 }
+
+// The limit of each fetch in these tests. With the interval of 60 s, a stall of 1.2 s of real time stops a fetch.
+const TEST_FETCH_LIMIT = 60 * 60 * 1000;
 
 // The real time between two steps of the fake clock. In this time, the microtasks, the callbacks and the real work of a step end.
 const REAL_STEP_MS = 20;
@@ -136,7 +140,8 @@ afterEach(() => {
   opened = [];
 });
 
-function open(secret: SecretLookup = store(SECRETS), config: AlertConfig = CONFIG, delay = 0) {
+/** This function opens an instance. The limit `"interval"` keeps the default limit of each fetch: the interval of the source. */
+function open(secret: SecretLookup = store(SECRETS), config: AlertConfig = CONFIG, delay = 0, fetchLimit: number | "interval" = TEST_FETCH_LIMIT) {
   // The entry reads the configuration so: a refused parse stops the start before the instance.
   const parsed = parseConfig(JSON.stringify(config), INSTANCE_CHANNELS, secret);
   if (parsed.tag === "err") throw new Error(parsed.error.join("\n"));
@@ -148,7 +153,7 @@ function open(secret: SecretLookup = store(SECRETS), config: AlertConfig = CONFI
   const wall: WallClock = { time: "wall", now: () => clock.now(), after: (ms, run) => clock.after(ms, run) };
   const net = network(delay);
   const server = pushoverServer();
-  const instance: Instance = openInstance({ config: parsed.value, secret, log, clock, wall, transport: net.transport, pushover: server.fetch, run: "run-1" });
+  const instance: Instance = openInstance({ config: parsed.value, secret, log, clock, wall, transport: net.transport, pushover: server.fetch, run: "run-1", ...(fetchLimit === "interval" ? {} : { fetchLimit: () => fetchLimit }) });
   return { instance, clock, net, server };
 }
 
@@ -173,14 +178,23 @@ describe("openInstance", () => {
   });
 
   it("sends the warning when each exchange takes real time, as on a busy runner", async () => {
-    // Before the fix of `finish`, a delay of 5 ms moved the fake clock past the limit of the NWS fetch.
-    const { instance, clock, server } = open(store(SECRETS), CONFIG, 15);
+    // This test keeps the default limit, the interval. Before the fix of `finish`, a delay of 5 ms moved the fake clock past it.
+    const { instance, clock, server } = open(store(SECRETS), CONFIG, 15, "interval");
     const pass = await finish(clock, instance.runtime.pass());
     expect(pass.view?.health.map((health) => [health.source, health.state])).toEqual([
       ["nws-api", "healthy"],
       ["ipaws", "healthy"],
     ]);
     expect(server.calls.map((call) => call.fields["title"])).toEqual([expect.stringContaining("Flood Warning")]);
+  });
+
+  it("stops each fetch at the limit of the options", async () => {
+    const { instance, clock } = open(store(SECRETS), CONFIG, Infinity, 5000);
+    const pass = await finish(clock, instance.runtime.pass());
+    expect(pass.view?.health.map((health) => [health.source, health.lastFailure?.failure.message])).toEqual([
+      ["nws-api", "The fetch took longer than 5000 ms."],
+      ["ipaws", "The fetch took longer than 5000 ms."],
+    ]);
   });
 
   it("names the project in the User-Agent of each request, and no request holds the position of a place", async () => {

@@ -85,6 +85,23 @@ export interface MapView {
   readonly unshaped: readonly RegionCode[];
 }
 
+/** One region of the basemap: its code, its name and its shapes, from the store of shapes. */
+export interface MapRegion {
+  readonly code: RegionCode;
+  readonly name: string;
+  readonly shapes: readonly MapShape[];
+}
+
+/**
+ * The answer of the map route of the runtime: the view, and the regions of the basemap. The route is on the loopback
+ * address only, because the view holds the labels and the positions of the places. The local page draws this answer.
+ */
+export interface MapPayload {
+  readonly view: MapView;
+  /** The regions under the view: the zones and the counties of each watched state, from the store of shapes. */
+  readonly basemap: readonly MapRegion[];
+}
+
 /** The severities, from the highest. */
 const SEVERITY_ORDER: readonly Severity[] = ["extreme", "severe", "moderate", "minor", "unknown"];
 
