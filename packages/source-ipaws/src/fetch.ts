@@ -87,12 +87,15 @@ export function sinceOf(cursor: Cursor | undefined, now: Instant): Since {
   return { since: Math.min(asked, now), complete: true };
 }
 
+// The SAME code of the full country (47 CFR 11.31).
+const COUNTRY_SAME = "000000";
+
 /**
  * This function examines one alert of the feed against the states of a watch. The fetch keeps each
  * alert of the NWS, for the whole country. The lateness of the NWS API source needs each copy of the
  * WEA messages. An alert of a different authority stays when one of its geocodes is in a watched
- * state. It also stays when it has no geocode of a state. An alert that the reader refuses stays, so
- * the map tells of it.
+ * state. It also stays when it has no geocode of a state, or when it has the SAME code `000000` of the
+ * full country. An alert that the reader refuses stays, so the map tells of it.
  */
 export function keeps(alert: string, states: ReadonlySet<string> | undefined): boolean {
   if (states === undefined) return true;
@@ -103,6 +106,7 @@ export function keeps(alert: string, states: ReadonlySet<string> | undefined): b
   for (const info of read.alert.infos) {
     for (const area of info.areas) {
       for (const geocode of area.geocodes) {
+        if (geocode.valueName === "SAME" && geocode.value.trim() === COUNTRY_SAME) return true;
         const state = geocode.valueName === "UGC" ? stateOfUgc(geocode.value) : geocode.valueName === "SAME" ? stateOfSame(geocode.value) : undefined;
         if (state === undefined) continue;
         if (states.has(state)) return true;

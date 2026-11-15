@@ -11,7 +11,7 @@ import type { Duration, HealthState, Instant, SourceId } from "@mark1russell7/al
 import type { WallClock } from "@mark1russell7/algebra/clock";
 import { errorMessage } from "@mark1russell7/text";
 import { redactSecrets } from "@mark1russell7/text/redact";
-import type { Exchange, QuotaGate } from "polite-crawler/api";
+import type { Exchange } from "polite-crawler/api";
 import type { RefusalKind } from "./events.ts";
 import type { LoopTimes } from "./loop.ts";
 
@@ -207,25 +207,6 @@ export interface HeartbeatOptions {
   readonly notes?: (at: Instant) => readonly string[];
   /** The heartbeat gives each failed ping to this function. Its text holds no URL. */
   readonly onError: (message: string) => void;
-}
-
-/** The parts of a quota gate of `polite-crawler/api` that `quotaNote` reads. */
-export type QuotaView = Pick<QuotaGate, "quota" | "state">;
-
-/**
- * This function gives the line of the state of a quota for the body of a ping. In the reserve, the
- * channel sends only the highest level until the reset. Thus the check shows the reserve, and the
- * ping stays `success`.
- */
-export function quotaNote(channel: string, gate: QuotaView): string {
-  const state = gate.state();
-  const { limit } = gate.quota;
-  const reserve = gate.quota.reserve ?? 0;
-  const until = (time: Instant | undefined): string => (time === undefined ? "" : ` until ${new Date(time).toISOString()}`);
-  if (state.blockedUntil !== undefined) return `${channel}: the provider refuses each message${until(state.blockedUntil)}.`;
-  if (state.used >= limit) return `${channel}: all ${limit} units of the window are used${until(state.resetAt)}.`;
-  if (state.left === 0) return `${channel}: ${state.used} of ${limit} units are used. The channel keeps the last ${reserve} units for life-safety${until(state.resetAt)}.`;
-  return `${channel}: ${state.used} of ${limit} units are used, and ${state.left} are left before the reserve of ${reserve}.`;
 }
 
 /** This function gives the URL of a ping: the ping URL, or the ping URL and `/fail`. A query of the ping URL stays. */

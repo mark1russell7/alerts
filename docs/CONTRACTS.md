@@ -97,7 +97,7 @@ The rules of each adapter:
    - A **note** keeps the whole report. The message has more than the report holds, for example an unknown field.
 
    Fatal and lossy problems move the health to `changed`. Notes do not. So a renamed value that the map replaces with a fallback shows in the health.
-   When the map cannot read an area or a subject that a watch can match, it gives a fatal problem. Until the core matches shapes, an area needs a region code or a place.
+   When the map cannot read an area or a subject that a watch can match, it gives a fatal problem. A place with no position matches only by codes, so an area needs a region code or a place.
 3. **The descriptor tells the truth about dependencies.** `origins` names the authorities whose messages the source carries. `dependsOn` names the failure domains outside the cell: providers, CDNs, transmitters. `uses` names the resources of the cell: `internet`, `power`, `receiver`. The coverage uses both.
 4. **The ids are hashes of content.** The core gives the id functions in `ids.ts`. An adapter does not make its own ids.
    - `observationId`: the SHA-256 of the source id, the content type, the request URL and the body. The fetch time is not part of it, so a poll with no change gives the same id. The URL is the part that the `map` function reads. A URL with the time of the poll gives the URL with no time, and a test holds that `map` does not read the time.
@@ -149,7 +149,8 @@ The cell is the copy of the system on one machine. Its internet link, its power 
 
 - A source counts when its health is in `policy.up`. The first policy counts `healthy` and `slow`. A source with no health is `unknown`.
 - A source covers a kind when one of its prefixes has the kind. A source of a part of the kind does not count.
-- A source covers a place when its coverage is `global`, or when a code of its coverage covers a code of the place. So a place lists its codes at each level: the NWS zone and county, SAME, the state (`state`) and the country (`iso3166`).
+- A source covers a place when its coverage is `global`, or when a code of its coverage holds a code of the place (`regionContains`). So a place lists its codes at each level: the NWS zone and county, SAME, the state (`state`) and the country (`iso3166`).
+- A SAME code of a part of a county does not hold the full county. This rule errs on the safe side for the coverage: a source of a part does not hide a gap.
 - A shape of the coverage covers a place when the shape contains the position of the place. The buffer does not count, as for the codes.
 - A shape covers no place with no position. A shape that `@mark1russell7/geo` refuses covers no place, so the coverage shows a gap.
 
@@ -162,7 +163,7 @@ The coverage has these parts:
 
 ### System reports
 
-`systemReports(lines, snapshot, at)` makes the reports of the core. Each source in `DOWN_STATES` (`failing`, `silent` and `changed`) is a condition. Each coverage that `coverageShort` finds is a condition. Each condition is a line of CAP reports with the status `system` and the source `system`:
+`systemReports(lines, snapshot, at)` makes the reports of the core. Each source in `DOWN_STATES` (`failing`, `silent` and `changed`) is a condition. Each coverage that `coverageShort` finds is a condition. Each stage of the quota of a channel is a condition. Each condition is a line of CAP reports with the status `system` and the source `system`:
 
 - The start of a condition gives an `alert`.
 - A change of its facts gives an `update`. The update references the last key of the line. A new count in the reason of the health is not a fact, so it gives no update.
@@ -181,6 +182,18 @@ A coverage report has the area of the watched place, `{ type: "place", place }`.
 | No independent source during a watch or a warning of the kind at the place | `extreme`, `immediate` | `life-safety` | `notice` |
 | Fewer independent sources than the policy needs | `severe`, `expected` | `urgent` | `notice` |
 | A count that the search did not prove | `moderate`, `expected` | `notice` | `notice` |
+
+A quota report has no area. Its subject is `{ system: "alerts.channel", id: <channel id> }`. Its kind is `system.quota.<stage>`, and it gets `notice` at most. `quotaStages` gives the stages that a quota reached, and each stage is one line:
+
+| Stage | Condition | Severity, urgency |
+| --- | --- | --- |
+| `low` | 2 reserves of units or fewer left in the window | `moderate`, `expected` |
+| `reserve` | The reserve or fewer left. The channel sends only `life-safety`. | `severe`, `expected` |
+| `spent` | The provider refuses each message | `severe`, `immediate` |
+
+- The facts of a line are the channel, the stage and the end of the window. A new count gives no update. Thus each stage gives one alert in a window.
+- The message of the line `reserve` has `useReserve`. The channel sends it from the reserve, one time in each window (`PUSHOVER_RESERVE_NOTICES`). Else the reserve stops the message that tells of it.
+- A snapshot with no quotas keeps each open line of a quota. Thus a failed read of a count ends no line.
 
 `threats(incidents, places)` gives the watches and the warnings. A threat is a live incident with the status `actual` at a watched place. Its stage is `watch`, `warning` or absent. A report of the core has the status `system`, so it is not a threat.
 
@@ -499,23 +512,47 @@ A writer of the configuration does these steps, thus the live instance does not 
 
 The output of the check gives the count of the places, the people, the contacts and the policies, or the problems. It holds no value and no path.
 
+The runtime adds the codes of the zones near each place with a position (`withZoneCodes`). Thus a writer gives a position and one code of the state of the place. A `same` code of the county is better, because the IPAWS and radio alerts use it.
+
+- At the start, the store of shapes gives the outlines of the zones of each state of the codes of the place. No request names the position.
+- The function `zoneCodesNear` gives the codes of each county and forecast zone in the buffer of the place. The codes are the UGC codes, the `same` code of each county and the `state` code.
+- The codes of the file stay first. The runtime only adds codes. It does not write `config.json`.
+- The added codes hold the `state` code. Thus the NWS API source asks by state, not by zone.
+- After a refresh with requests, when no task is due, the instance compares the codes again. A change starts `onPlaceCodes` one time. The profile `daemon` then stops, and the supervisor starts it again with the new codes.
+- A place near the line of a state gets the zones of the states of its codes only. To watch a zone of the next state, give a code of that state too.
+- The first start with a new state has no outlines of that state. The place uses the codes of the file until the store has the outlines and the runtime starts again.
+
 The function `sourcePlaces` gives the places for one source, with no label, and with a position only when the place shares it with that source. The function `localPlaces` gives each position for the matching on the machine of the instance.
 
-A person also watches subjects, other than places, in `PersonWatch.subjects`: a source of the system, a service or a cloud region. A watch with no id matches each subject of its system. A rule with places does not apply to a subject. The person who operates the system watches `{ system: "alerts.source" }`, and gets the health reports.
+A person also watches subjects, other than places, in `PersonWatch.subjects`: a source of the system, a service or a cloud region. A watch with no id matches each subject of its system. A rule with places does not apply to a subject. The person who operates the system watches `{ system: "alerts.source" }` and `{ system: "alerts.channel" }`, and gets the health reports and the quota reports.
 
 The positions of the places do not go to a source. A source fetches by area, for example all the alerts of a state, and the core matches the places on the machine of the instance. So a `WatchedPlace` gives an adapter region codes and a buffer, and no name, no address and no position. A source that needs a position gets it only when the owner lets that source get it.
 
-The core matches the area of a report to a place with one rule for each source. The region codes are the floor of each match. A polygon or a circle can add a place, with the buffer of the place.
+The core matches the area of a report to a place with one rule for each source. An area block is a group of areas that tell one area together. The adapter writes the key of the block in the field `block` of each area. The key is unique in the report. The merge puts the report id before the key, so the blocks of two reports stay apart.
 
-- A place matches when the areas cover one of its codes. A shape does not remove this match.
-- A place with a position also matches when the great-circle distance from its position to the nearest shape is not more than its buffer.
+- A block with a shape decides by its shapes for a place with a position. The place matches when the great-circle distance from its position to the nearest polygon or circle of the block is not more than its buffer. The codes of that block do not decide for that place.
+- A block with no shape decides by its codes. A place matches when the codes of the block cover one of its codes.
+- A place with no position matches by the codes of each block.
+- `@mark1russell7/geo` can refuse a shape, for example a ring with fewer than 4 positions. When it refuses each shape of a block, the codes of that block decide. This error is on the safe side. The match has `shapeRefused: true`, and the view tells it.
+- One block that matches is enough.
+- The areas with no block key keep the union rule. Their codes are the floor of the match, and a shape adds a place in its buffer. A shape that geo refuses adds no place.
 - A position in a shape has the distance 0. The reason `place` of the assessment has `distanceKm` when the distance is in the buffer. A match by a shape only has no codes.
-- A place with no position matches by its codes only.
 - `@mark1russell7/geo` gives the distances. An edge of a polygon is a straight line in longitude and latitude, as in GeoJSON (RFC 7946).
-- A shape that `@mark1russell7/geo` refuses, for example a ring with fewer than 4 positions, adds no place.
-- The list of areas does not keep the area blocks of a CAP message. The IPAWS adapter and the merge put the areas of all blocks in one list. Thus a shape cannot remove a place: the place can be in a block with only codes. The next part of the plan gives each area the key of its block. Then the shape of a block decides for that block.
 
-Two codes match when their systems and their values are equal. The first digit of a SAME code is a part of the county, and `0` is the full county. So a part also matches the full county, and the match errs on the safe side.
+The keys of the sources:
+
+- An alert of the NWS API is one block with the key `feature`. Its geometry is the warned area, and its codes name each county or zone that the geometry touches.
+- For a message of the NWS, the IPAWS adapter gives each CAP `area` element its path as the key, for example `info[0].area[1]`.
+- In CAP, the area of an `area` element is the union of its polygons, circles and geocodes. Only the NWS is known to write the warned area as the polygon. Another sender on IPAWS can mean the union, so its areas have no key. They keep the union rule, on the safe side.
+- The IEM rows have only codes, so they have no key.
+
+A known effect of the blocks: the NWS API and IPAWS copies of one warning are two reports, so each copy has its own blocks. When one copy has only codes, those codes match a place out of the polygon of the other copy. The error is on the safe side.
+
+Two codes match when their systems and their values are equal, or when two SAME codes name regions that meet (`regionCovers`). A SAME code `PSSCCC` has the part `P`, the state `SS` and the county `CCC`. The part `0` is the full county, the county `000` is the full state, and `000000` is the full country (47 CFR 11.31).
+
+- A part matches the full county, and the full county matches each part. Two different parts do not match.
+- A code of a state matches each county of that state. `000000` matches each SAME code.
+- The rule errs on the safe side: an alert for a full state goes to each place of that state.
 
 The area `{ type: "place" }` covers that watched place only. Only the reports of the core use it. When the areas have no code and no place, and no place of the person has a position, the assessment gives the reason `no-codes`. The first sources, the NWS and IPAWS, give codes with each area.
 

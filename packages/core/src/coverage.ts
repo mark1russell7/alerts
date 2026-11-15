@@ -7,7 +7,7 @@
  * sources. That is a minimum hitting set, and `@mark1russell7/collections/graph` calculates it.
  */
 import { minimumHittingSet, type HittingSetChoice } from "@mark1russell7/collections/graph";
-import { hasKind, LIFE_SAFETY_KINDS, regionCovers } from "./assess.ts";
+import { hasKind, LIFE_SAFETY_KINDS, regionContains } from "./assess.ts";
 import type { Coverage, HealthState, SourceDescriptor, SourceHealth, SourceId, WatchedPlace } from "./contracts.ts";
 import { CELL_RESOURCES } from "./contracts.ts";
 import { isShape, shapeDistanceKm } from "./shapes.ts";
@@ -61,8 +61,9 @@ export interface CoverageInput {
  *
  * - One prefix of the source must have the kind. A source of a part of the kind does not count: the
  *   prefix `met.tornado.warning` does not cover the kind `met.tornado`.
- * - The coverage of the source must be `global`, or an area of the coverage must cover the place. A
- *   code of the coverage must cover a code of the place, or a shape must contain the position of the place.
+ * - The coverage of the source must be `global`, or an area of the coverage must hold the place. A
+ *   code of the coverage must hold a code of the place (`regionContains`), or a shape must contain the
+ *   position of the place.
  * - A shape covers no place with no position. A shape that `@mark1russell7/geo` refuses covers no
  *   place, so the coverage shows a gap.
  */
@@ -72,7 +73,7 @@ export function sourceCovers(source: SourceDescriptor, place: WatchedPlace, kind
   const at = place.at;
   return source.coverage.some((area) =>
     area.type === "code"
-      ? place.codes.some((code) => regionCovers(area, code))
+      ? place.codes.some((code) => regionContains(area, code))
       : isShape(area) && at !== undefined && shapeDistanceKm(area, at) === 0,
   );
 }

@@ -21,8 +21,8 @@
   "conventions": {
     "rules": {
       "gate-trigger": {
-        "allow": ["measure.yml"],
-        "reason": "measure.yml is a measure of outside servers, not a gate. A pull request that changes the measure gets a short smoke run, and no other pull request starts it."
+        "allow": ["measure.yml", "measure-wea.yml"],
+        "reason": "measure.yml and measure-wea.yml are measures of outside servers, not gates. A pull request that changes a measure gets a smoke run, and no other pull request starts it."
       }
     }
   },

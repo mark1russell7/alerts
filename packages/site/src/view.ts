@@ -3,7 +3,7 @@
  * the incidents and the message of the step. The view only draws: the frames hold each decision.
  */
 
-import type { Assessment, HealthState, Incident, Report, Position } from "@mark1russell7/alerts";
+import { areasWithoutBlocks, type Assessment, type HealthState, type Incident, type Report, type Position } from "@mark1russell7/alerts";
 import { h } from "@mark1russell7/site-pages/chrome";
 import { LEVEL_WORDS, levelChip, s } from "./draw.ts";
 import { COUNTIES, PEOPLE, PLACES, RIVER, SOURCES, ZONES, type Zone } from "./demo.ts";
@@ -73,7 +73,7 @@ export function drawMap(frame: Frame, selected: string | undefined, select: (anc
       "data-anchor": incident.anchor,
     });
     for (const zone of zonesOf(incident)) group.append(s("path", { class: "area", d: path(zone.ring) }));
-    for (const area of incident.areas) {
+    for (const area of areasWithoutBlocks(incident.areas)) {
       if (area.type === "polygon") for (const ring of area.rings) group.append(s("path", { class: "shape", d: path(ring) }));
     }
     group.addEventListener("click", () => select(incident.anchor));

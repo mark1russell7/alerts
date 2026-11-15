@@ -108,14 +108,24 @@ export interface RegionCode {
   readonly code: string;
 }
 
+/**
+ * The key of the area block of a message, for example the path `info[0].area[1]` of a CAP `area` element. The
+ * areas of one block tell one area together: the shapes of a block decide for that block. In a report,
+ * the adapter writes a key that is unique in the report. In an incident, the merge puts the report id
+ * before the key, so the blocks of two reports stay apart. An area with no key is in no block.
+ */
+export interface AreaBlock {
+  readonly block?: string;
+}
+
 /** One area of an event. */
 export type Area =
   /** A polygon. The first ring is the outside. Each ring closes on its first position. */
-  | { readonly type: "polygon"; readonly rings: readonly (readonly Position[])[] }
+  | ({ readonly type: "polygon"; readonly rings: readonly (readonly Position[])[] } & AreaBlock)
   /** A circle on the ground. */
-  | { readonly type: "circle"; readonly center: Position; readonly radiusKm: number }
+  | ({ readonly type: "circle"; readonly center: Position; readonly radiusKm: number } & AreaBlock)
   /** A region by its code. */
-  | ({ readonly type: "code" } & RegionCode)
+  | ({ readonly type: "code" } & RegionCode & AreaBlock)
   /**
    * A watched place of the configuration. Only the reports of the core use it, for example a gap of
    * the coverage at that place. An adapter does not know the places.
@@ -538,6 +548,11 @@ export interface Message {
    * message is not quiet at any time. The channel keeps no rule of its own about the time of day.
    */
   readonly quiet: boolean;
+  /**
+   * True: the message tells of the entry of a channel into the reserve of its quota. The channel can send
+   * it from the reserve, one time in each window. `messageOf` sets it.
+   */
+  readonly useReserve?: boolean;
 }
 
 /** The address of a person on a channel, from the private configuration. The repo does not hold an address. */
@@ -545,6 +560,30 @@ export type Address = Readonly<Record<string, string>>;
 
 /** The receipt of a sent message, as the channel gives it. */
 export type Receipt = Readonly<Record<string, string>>;
+
+/**
+ * The stages of the quota of a channel. Each stage is a line of system reports:
+ *
+ * - `low`: the window has 2 reserves of units or fewer left.
+ * - `reserve`: the window has the reserve or fewer left. The channel sends only `life-safety`.
+ * - `spent`: the provider refuses each message, also a `life-safety` message.
+ */
+export type QuotaStage = "low" | "reserve" | "spent";
+
+/** The state of the quota of a channel in its window, as the gate of the channel counts it. */
+export interface ChannelQuota {
+  readonly channel: ChannelId;
+  /** The units of one window. */
+  readonly limit: number;
+  /** The last units of the window. The channel uses them only for `life-safety`. */
+  readonly reserve: number;
+  /** The units used in the window. */
+  readonly used: number;
+  /** The end of the window. */
+  readonly resetAt?: Instant;
+  /** The provider refuses each message until this time. */
+  readonly blockedUntil?: Instant;
+}
 
 /**
  * The result of a send. A failed send has one of these kinds:
@@ -766,7 +805,8 @@ export interface PersonWatch {
   readonly places: readonly PlaceId[];
   /**
    * The subjects that the person watches. The health reports of the sources have the subjects of
-   * the system `alerts.source`. So the person who operates the system watches `{ system: "alerts.source" }`.
+   * the system `alerts.source`, and the quota reports have the subjects of the system `alerts.channel`. So the
+   * person who operates the system watches `{ system: "alerts.source" }` and `{ system: "alerts.channel" }`.
    */
   readonly subjects?: readonly SubjectWatch[];
   /** The rules of the person, in order. */
@@ -793,11 +833,19 @@ export type AssessReason =
   /** The configuration has no watched place for this id of the person. */
   | { readonly kind: "unknown-place"; readonly place: PlaceId }
   /**
-   * An area of the incident covers this place. The codes are the codes of the place that the areas have.
-   * `distanceKm` is the distance from the place to the nearest shape, and it is 0 in a shape. It is
-   * present when that distance is in the buffer of the place. For a match by a shape only, the codes are empty.
+   * An area of the incident covers this place. The codes are the codes of the place that decided the match.
+   * `distanceKm` is the distance from the place to the nearest shape that decided, and it is 0 in a shape.
+   * It is present when that distance is in the buffer of the place. For a match by a shape only, the codes
+   * are empty. `shapeRefused` is true when the codes of a block decided because `@mark1russell7/geo`
+   * refuses each shape of that block.
    */
-  | { readonly kind: "place"; readonly place: PlaceId; readonly codes: readonly RegionCode[]; readonly distanceKm?: number }
+  | {
+      readonly kind: "place";
+      readonly place: PlaceId;
+      readonly codes: readonly RegionCode[];
+      readonly distanceKm?: number;
+      readonly shapeRefused?: true;
+    }
   /** The person watches a subject of the incident. */
   | { readonly kind: "subject"; readonly subject: SubjectWatch }
   /** The table gave this level. The class is absent for the table `otherwise`. */

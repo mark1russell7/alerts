@@ -22,7 +22,7 @@
  */
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
-import { PUSHOVER_QUOTA } from "@mark1russell7/alerts-channel-pushover";
+import { CHANNEL_ID as PUSHOVER_CHANNEL, PUSHOVER_QUOTA, PUSHOVER_RESERVE_NOTICES } from "@mark1russell7/alerts-channel-pushover";
 import { openShapeCache, SHAPES_FILE } from "@mark1russell7/alerts-shapes-nws";
 import { realClock, wallClock } from "@mark1russell7/algebra/clock";
 import type { ServiceBuilder } from "@mark1russell7/service";
@@ -32,7 +32,8 @@ import { SqliteHostStateStore } from "polite-crawler";
 import { fetchTransport, quotaGate } from "polite-crawler/api";
 import { writeFileAtomic } from "@procedures/fs/files";
 import { alertsHome, configPath, envSecrets } from "./config.ts";
-import { heartbeat, heldOf, quotaNote, type PassSummary } from "./heartbeat.ts";
+import { heartbeat, heldOf, type PassSummary } from "./heartbeat.ts";
+import { channelQuota, quotaNote } from "./quota.ts";
 import { PROFILES, declare } from "./index.ts";
 import { DAEMON_CHECK, INSTANCE_CHECK, openInstance, PING_URL_KEY, userAgent } from "./instance.ts";
 import { openRuntimeLog } from "./log.ts";
@@ -75,6 +76,7 @@ async function runtime(): Promise<ServiceBuilder> {
   // The count of the Pushover messages of the month. The file keeps it across a restart. The key names the application, not its token.
   const quotas = new SqliteHostStateStore(join(home, "quotas.sqlite"));
   const pushoverQuota = quotaGate(PUSHOVER_QUOTA, { key: "pushover:app", store: quotas, now: () => wall.now() });
+  const pushoverReserveNotices = quotaGate(PUSHOVER_RESERVE_NOTICES, { key: "pushover:reserve-notices", store: quotas, now: () => wall.now() });
 
   // The outside heartbeat. Without it, a stop of this process is silent. The check of the profile daemon needs it.
   const pingUrl = secret(PING_URL_KEY) ?? "";
@@ -89,7 +91,7 @@ async function runtime(): Promise<ServiceBuilder> {
           userAgent: agent,
           held: (at) => heldOf(instance.runtime.state(), at),
           // The body of each ping tells the state of the quota. Thus the check shows the reserve.
-          notes: () => [quotaNote("pushover", pushoverQuota)],
+          notes: () => [quotaNote(channelQuota(PUSHOVER_CHANNEL, pushoverQuota))],
           onError: (message) => console.error(redactSecrets(message, values)),
         });
 
@@ -128,6 +130,7 @@ async function runtime(): Promise<ServiceBuilder> {
     transport: fetchTransport({ userAgent: agent }),
     pushover: fetch,
     pushoverQuota,
+    pushoverReserveNotices,
     run: randomUUID(),
     ...(onPass === undefined ? {} : { onPass }),
     // The output gets no secret, also when an error quotes a request.
@@ -137,7 +140,17 @@ async function runtime(): Promise<ServiceBuilder> {
       const report = shapeReport(outcome);
       if (report !== undefined) console.error(redactSecrets(report, values));
     },
+    // New outlines change the codes of a place. Only the profile daemon has a supervisor that starts the runtime again.
+    onPlaceCodes: () => {
+      if (name !== "daemon") {
+        console.error("New outlines change the codes of a place. Start the runtime again to use them.");
+        return;
+      }
+      console.error("New outlines change the codes of a place. The runtime stops, and the supervisor starts it again.");
+      void service.lifecycle?.shutdown("The codes of a place changed.");
+    },
   });
+  console.log(`The outlines of the zones added ${instance.zoneCodes} codes to the places.`);
 
   // The service closes the log and the store of shapes in its shutdown.
   const service = declare({ port: port("PORT", 8080), probePort: port("PROBE_PORT", 9090), profile, loop: instance.loop, log, shapes: instance.shapes, quotas });

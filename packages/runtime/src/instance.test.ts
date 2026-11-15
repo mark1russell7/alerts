@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fakeClock, type FakeClock, type WallClock } from "@mark1russell7/algebra/clock";
 import { CONFIG_FORMAT, matchPlaces, parseConfig, type AlertConfig, type Watch, type ChannelId, type EscalationPolicy, type PersonId, type PlaceId, type SecretLookup, type SourceId } from "@mark1russell7/alerts";
-import { PUSHOVER_QUOTA, PUSHOVER_TIMEOUT_MS, type PushoverChannelOptions } from "@mark1russell7/alerts-channel-pushover";
+import { PUSHOVER_QUOTA, PUSHOVER_RESERVE_NOTICES, PUSHOVER_TIMEOUT_MS, type PushoverChannelOptions } from "@mark1russell7/alerts-channel-pushover";
 import { memoryCache, type ShapeCache } from "@mark1russell7/alerts-shapes-nws";
 import { CANARY_PATH, createNwsSource } from "@mark1russell7/alerts-source-nws-api";
 import { quotaGate, type Exchange, type Transport } from "polite-crawler/api";
@@ -86,6 +86,32 @@ function network(delay = 0) {
     return { status: 200, statusText: "OK", headers: { "content-type": "application/geo+json" }, body };
   };
   return { transport, exchanges };
+}
+
+// The outlines of a county and a forecast zone that contain the place. TXZ230 is a code of these tests only.
+const zoneSquare = (west: number, south: number, size: number): number[][] => [
+  [west, south],
+  [west + size, south],
+  [west + size, south + size],
+  [west, south + size],
+  [west, south],
+];
+const ZONE_ANSWERS: Readonly<Record<string, string>> = {
+  "/zones?area=TX&type=county": JSON.stringify({ type: "FeatureCollection", features: [{ type: "Feature", geometry: null, properties: { id: "TXC311", type: "county", name: "County" } }] }),
+  "/zones?area=TX&type=forecast": JSON.stringify({ type: "FeatureCollection", features: [{ type: "Feature", geometry: null, properties: { id: "TXZ230", type: "public", name: "Zone" } }] }),
+  "/zones/county/TXC311": JSON.stringify({ type: "Feature", geometry: { type: "Polygon", coordinates: [zoneSquare(-99, 28, 1)] }, properties: { id: "TXC311", name: "County" } }),
+  "/zones/forecast/TXZ230": JSON.stringify({ type: "Feature", geometry: { type: "Polygon", coordinates: [zoneSquare(-98.6, 28.2, 0.2)] }, properties: { id: "TXZ230", name: "Zone" } }),
+};
+
+/** This function adds the answers of the zone service to a fake network. */
+function withZones(net: ReturnType<typeof network>): Transport {
+  return async (exchange, signal) => {
+    const url = new URL(exchange.url);
+    const body = url.hostname === "api.weather.gov" ? ZONE_ANSWERS[url.pathname + url.search] : undefined;
+    if (body === undefined) return net.transport(exchange, signal);
+    net.exchanges.push(exchange);
+    return { status: 200, statusText: "OK", headers: { "content-type": "application/geo+json" }, body };
+  };
 }
 
 /** A fake Pushover server. It accepts each message. */
@@ -202,19 +228,35 @@ describe("openInstance", () => {
     expect(pass.delivery?.failures.map((failure) => failure.kind)).toEqual(["reserved"]);
   });
 
-  it("sends the warning by the county code to a place in the county but out of the polygon", async () => {
-    // A public point in McMullen County TX, 8.9 km north of the polygon. The buffer of the place is 5 km. A shape adds
-    // a place and does not remove a match by codes, so the county code matches the place.
+  it("sends the line of the entry into the reserve from the reserve, one time, and holds the other messages", async () => {
+    const gate = quotaGate(PUSHOVER_QUOTA, { key: "pushover:app", now: () => T0 });
+    gate.note({ remaining: 1_000 });
+    const notices = quotaGate(PUSHOVER_RESERVE_NOTICES, { key: "pushover:reserve-notices", now: () => T0 });
+    const watching: AlertConfig = { ...CONFIG, people: CONFIG.people.map((entry) => ({ ...entry, watch: { ...entry.watch, subjects: [{ system: "alerts.channel" }] } })) };
+    const { clock, instance, server } = await open(undefined, watching, undefined, undefined, { pushoverQuota: gate, pushoverReserveNotices: notices });
+    const pass = await finish(clock, instance.runtime.pass());
+    expect(pass.view.step.reports.map((report) => report.kind.code)).toEqual(["system.quota.low", "system.quota.reserve"]);
+    expect(server.calls.map((call) => call.fields["title"])).toEqual([expect.stringContaining("sends only life-safety messages")]);
+    expect(pass.delivery?.failures.map((failure) => failure.kind)).toEqual(["reserved", "reserved"]);
+    expect(notices.state().used).toBe(1);
+  });
+
+  it("lets the polygon of the warning decide for a place in the county but out of the polygon", async () => {
+    // A public point in McMullen County TX, 8.9 km north of the polygon. The buffer of the place is 5 km. The NWS API copy
+    // and the IPAWS copy each give the polygon and the county code in one area block, so the polygon decides.
     const outside = { ...CONFIG.places[0]!, at: [LONGITUDE, 28.46] as const };
     const { instance, clock, server } = open(store(SECRETS), { ...CONFIG, places: [outside] });
     const pass = await finish(clock, instance.runtime.pass());
     expect(pass.fetched).toEqual(["nws-api", "ipaws"]);
-    expect(server.calls).toHaveLength(1);
-    expect(pass.delivery?.sent).toHaveLength(1);
+    expect(server.calls).toHaveLength(0);
     const [incident] = pass.view.incidents;
-    const [match] = matchPlaces(incident!, [outside]);
-    expect(match?.codes.map((code) => code.code)).toEqual(["TXC311", "048311"]);
-    expect(match?.distanceKm).toBeUndefined();
+    expect(incident?.areas.some((area) => area.type === "polygon")).toBe(true);
+    expect(matchPlaces(incident!, [outside])).toEqual([]);
+    // With a buffer of 10 km, the polygon is in the buffer of the place, and the distance decides the match.
+    const [near] = matchPlaces(incident!, [{ ...outside, bufferKm: 10 }]);
+    expect(near?.codes).toEqual([]);
+    expect(near?.distanceKm).toBeGreaterThan(8);
+    expect(near?.distanceKm).toBeLessThan(10);
   });
 
   it("sends the warning when each exchange takes real time, as on a busy runner", async () => {
@@ -270,6 +312,56 @@ describe("openInstance", () => {
     expect(outcomes[0]?.ok).toBe(true);
     await instance.shapes.close();
     expect(closed).toBe(1);
+  });
+
+  it("adds the codes of the zones near a place from the outlines of the cache, and asks the NWS API by state only", async () => {
+    // The records are older than the period of the refresh. Thus the refresh asks again, and gets the same outlines.
+    const old = T0 - 8 * 24 * 60 * 60 * 1000;
+    const shapeOf = (path: string) => (JSON.parse(ZONE_ANSWERS[path]!) as { geometry: { coordinates: [number, number][][] } }).geometry.coordinates;
+    const cache = memoryCache({
+      lists: [
+        { state: "TX", kind: "county", fetched: old, ids: ["TXC311"] },
+        { state: "TX", kind: "forecast", fetched: old, ids: ["TXZ230"] },
+      ],
+      zones: [
+        { kind: "county", id: "TXC311", state: "TX", name: "County", fetched: old, shapes: [{ type: "polygon", rings: shapeOf("/zones/county/TXC311") }] },
+        { kind: "forecast", id: "TXZ230", state: "TX", name: "Zone", fetched: old, shapes: [{ type: "polygon", rings: shapeOf("/zones/forecast/TXZ230") }] },
+      ],
+    });
+    const net = network();
+    const outcomes: ShapeOutcome[] = [];
+    let told = 0;
+    const { instance, clock } = open(store(SECRETS), CONFIG, 0, TEST_FETCH_LIMIT, { transport: withZones(net), shapes: cache, onShapes: (outcome) => outcomes.push(outcome), onPlaceCodes: () => (told += 1) });
+    expect(instance.zoneCodes).toBe(1);
+    expect(instance.runtime.config.places[0]?.codes.at(-1)).toEqual({ system: "ugc", code: "TXZ230" });
+    await finish(clock, instance.runtime.pass());
+    await finish(clock, instance.shapes.idle());
+    // The refresh asked again, and the outlines did not change. Thus the codes of the place did not change.
+    expect(outcomes).toEqual([{ ok: true, refreshed: expect.objectContaining({ stop: "done", failures: [] }) }]);
+    expect(outcomes[0]?.ok === true && outcomes[0].refreshed.requests).toBeGreaterThan(0);
+    expect(told).toBe(0);
+    const alerts = net.exchanges.map((exchange) => new URL(exchange.url)).filter((url) => url.pathname === "/alerts/active");
+    expect(alerts.map((url) => url.search)).toContain("?area=TX");
+    expect(alerts.filter((url) => url.searchParams.has("zone"))).toEqual([]);
+  });
+
+  it("tells one time when new outlines change the codes of a place", async () => {
+    const net = network();
+    const outcomes: ShapeOutcome[] = [];
+    let told = 0;
+    const { instance, clock } = open(store(SECRETS), CONFIG, 0, TEST_FETCH_LIMIT, { transport: withZones(net), shapes: memoryCache(), onShapes: (outcome) => outcomes.push(outcome), onPlaceCodes: () => (told += 1) });
+    expect(instance.zoneCodes).toBe(0);
+    for (let pass = 0; pass < 4 && told === 0; pass++) {
+      await finish(clock, instance.runtime.pass());
+      await finish(clock, instance.shapes.idle());
+    }
+    expect(told).toBe(1);
+    expect(outcomes.at(-1)).toEqual({ ok: true, refreshed: expect.objectContaining({ stop: "done", failures: [] }) });
+    // The instance keeps the codes of its start. The supervisor starts a new instance with the new codes.
+    expect(instance.runtime.config.places[0]?.codes).toEqual(CONFIG.places[0]?.codes);
+    await finish(clock, instance.runtime.pass());
+    await finish(clock, instance.shapes.idle());
+    expect(told).toBe(1);
   });
 
   it("gets no outline without a cache of shapes", async () => {

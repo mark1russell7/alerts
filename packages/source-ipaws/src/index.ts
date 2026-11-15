@@ -27,6 +27,8 @@ export {
 } from "./fetch.ts";
 export type { IpawsFetchInput, IpawsFetchOptions, Since } from "./fetch.ts";
 export { mapObservation, NWS_SENDER, ORIGINS, originOf, SOURCE_ID } from "./map.ts";
+export { COPY_SUFFIX, eventOf, sentMeasure } from "./sent-measure.ts";
+export type { CopyTime, SentCheck, SentClass, SentCounts, SentGap, SentMeasure, SentMeasureOptions } from "./sent-measure.ts";
 
 /** The options of the IPAWS source. */
 export interface IpawsSourceOptions extends IpawsFetchOptions {

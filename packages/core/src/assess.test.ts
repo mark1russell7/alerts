@@ -2,6 +2,7 @@ import { distanceKm, locatePoint } from "@mark1russell7/geo";
 import { random, seedsFrom, type Random } from "@mark1russell7/rigor-generators";
 import { describe, expect, it } from "vitest";
 import type {
+  Area,
   AssessedLevel,
   Incident,
   LevelRule,
@@ -27,10 +28,12 @@ import {
   higherLevel,
   matchPlaces,
   matchSubjects,
+  regionContains,
   regionCovers,
   tableLevel,
 } from "./assess.ts";
 import { assessmentSchema } from "./schemas.ts";
+import { areasWithoutBlocks } from "./shapes.ts";
 
 const SEEDS = seedsFrom(process.env["SEED"], [1, 2, 3, 4, 5, 6, 7, 8]);
 
@@ -196,6 +199,47 @@ describe("the places", () => {
     expect(regionCovers(same("020173"), same("020175"))).toBe(false);
   });
 
+  it("matches a SAME code of a state to each county of the state, and 000000 to each SAME code", () => {
+    const same = (code: string) => ({ system: "same", code });
+    expect(regionCovers(same("020000"), same("020173"))).toBe(true);
+    expect(regionCovers(same("020000"), same("320173"))).toBe(true);
+    expect(regionCovers(same("020173"), same("020000"))).toBe(true);
+    expect(regionCovers(same("020000"), same("048029"))).toBe(false);
+    expect(regionCovers(same("000000"), same("048029"))).toBe(true);
+    expect(regionCovers(same("048029"), same("000000"))).toBe(true);
+    // A code that is not 6 digits matches only an equal code.
+    expect(regionCovers(same("20000"), same("020173"))).toBe(false);
+    expect(regionContains(same("20000"), same("20000"))).toBe(true);
+  });
+
+  // Each code of a small alphabet against each code. The oracle names the smallest regions in each code: a part of a county.
+  it("agrees with the smallest regions of each SAME code for the two relations", () => {
+    const codes: string[] = [];
+    for (const part of ["0", "1", "2"]) {
+      codes.push(`${part}00000`);
+      for (const state of ["20", "48"]) for (const county of ["000", "173", "029"]) codes.push(`${part}${state}${county}`);
+    }
+    const atoms = ["20", "48"].flatMap((state) => ["173", "029"].flatMap((county) => ["1", "2", "3"].map((part) => [state, county, part] as const)));
+    const holds = (code: string, [state, county, part]: readonly [string, string, string]): boolean => {
+      const [p, s, c] = [code.slice(0, 1), code.slice(1, 3), code.slice(3)];
+      if (s === "00" && c === "000") return true;
+      return s === state && (c === "000" || (c === county && (p === "0" || p === part)));
+    };
+    const same = (code: string) => ({ system: "same", code });
+    for (const a of codes) {
+      for (const b of codes) {
+        const inB = atoms.filter((atom) => holds(b, atom));
+        expect(regionCovers(same(a), same(b)), `${a} meets ${b}`).toBe(inB.some((atom) => holds(a, atom)));
+        expect(regionContains(same(a), same(b)), `${a} contains ${b}`).toBe(inB.every((atom) => holds(a, atom)));
+      }
+    }
+  });
+
+  it("gives a place of a county for a SAME alert of its state", () => {
+    expect(matchPlaces({ areas: [{ type: "code", system: "same", code: "020000" }] }, places).map((match) => match.place)).toEqual([home]);
+    expect(matchPlaces({ areas: [{ type: "code", system: "same", code: "000000" }] }, places).map((match) => match.place)).toEqual([home, other]);
+  });
+
   it("gives the places in their order, with the codes that matched", () => {
     const areas = [...atOther, ...atHome, { type: "code", system: "same", code: "320173" }] as const;
     expect(matchPlaces({ areas }, places)).toEqual([
@@ -260,9 +304,8 @@ describe("the shapes", () => {
     expect(matchPlaces({ areas: [polygon, ...atHome] }, [placed([0.5, 0.5], 0)])).toEqual([{ ...byCode, distanceKm: 0 }]);
   });
 
-  it("matches a place by the code of one block when the polygon of another block is far", () => {
-    // The first CAP block has a polygon, and the second block has only the code of a second county. The list of
-    // areas does not keep the blocks, so the polygon must not remove the place of the second block.
+  it("keeps the union rule for the areas with no block key: a far polygon does not remove a match by codes", () => {
+    // The areas have no block key, so the core does not know which code goes with the polygon.
     const second = { system: "ugc", code: "KSC015" } as const;
     const place: WatchedPlace = { ...placed([5, 5], 5), codes: [second] };
     expect(matchPlaces({ areas: [polygon, { type: "code", ...second }] }, [place])).toEqual([{ place: home, codes: [second] }]);
@@ -317,6 +360,61 @@ describe("the shapes", () => {
       const buffer = r.range(0, 200);
       if (matched(buffer)) expect(matched(buffer * 2)).toBe(true);
     }
+  });
+
+  describe("the area blocks", () => {
+    const keyed = (block: string, ...areas: readonly Area[]): Area[] => areas.map((area) => ({ ...area, block }) as Area);
+    const homeCode = { type: "code", system: "ugc", code: "KSC173" } as const;
+    const far = { type: "polygon", rings: [[[3, 0], [4, 0], [4, 1], [3, 1], [3, 0]]] } as const;
+    const broken = { type: "polygon", rings: [[[0, 0], [1, 0], [0, 0]]] } as const;
+
+    it("lets the shape of a block decide for a place with a position", () => {
+      const areas = keyed("r/feature", polygon, homeCode);
+      expect(matchPlaces({ areas }, [placed([0.5, 0.5], 0)])).toEqual([{ place: home, codes: [], distanceKm: 0 }]);
+      // The code of the block covers the place, but the place is far from the shape of the block.
+      expect(matchPlaces({ areas }, [placed([5, 5], 5)])).toEqual([]);
+      // A place with no position matches by the codes of the block.
+      expect(matchPlaces({ areas }, places)).toEqual([byCode]);
+    });
+
+    it("lets the codes of a block with no shape decide, and one block that matches is enough", () => {
+      const areas = [...keyed("r/info[0].area[0]", far, homeCode), ...keyed("r/info[0].area[1]", homeCode)];
+      expect(matchPlaces({ areas }, [placed([5, 5], 5)])).toEqual([byCode]);
+      const two = [...keyed("r/a", far), ...keyed("r/b", polygon)];
+      expect(matchPlaces({ areas: two }, [placed([0.5, 0.5], 0)])).toEqual([{ place: home, codes: [], distanceKm: 0 }]);
+    });
+
+    it("lets the codes decide when geo refuses each shape of a block, and tells it", () => {
+      expect(matchPlaces({ areas: keyed("r/0", broken, homeCode) }, [placed([5, 5], 0)])).toEqual([{ ...byCode, shapeRefused: true }]);
+      // A shape that geo reads still decides for its block.
+      expect(matchPlaces({ areas: keyed("r/0", broken, polygon, homeCode) }, [placed([5, 5], 0)])).toEqual([]);
+      // For a place with no position, the codes decide in each block, so no refusal shows.
+      expect(matchPlaces({ areas: keyed("r/0", broken, homeCode) }, places)).toEqual([byCode]);
+      const result = assess(incident({ areas: keyed("r/0", broken, homeCode) }), person([], [home]), [placed([5, 5], 0)]);
+      expect(result.reasons.find((one) => one.kind === "place")).toEqual({ kind: "place", ...byCode, shapeRefused: true });
+      expect(assessmentSchema.safeParse(result).success).toBe(true);
+    });
+
+    it("matches a place out of the polygon of one copy by the codes of a copy with no shape", () => {
+      // The known effect in CONTRACTS.md: each copy is a block of its own, and a block with only codes decides by its codes.
+      const areas = [...keyed("api/feature", polygon, homeCode), ...keyed("ipaws/info[0].area[0]", homeCode)];
+      expect(matchPlaces({ areas }, [placed([5, 5], 5)])).toEqual([byCode]);
+    });
+
+    it.each(SEEDS)("keys only remove matches of the union rule, and the order of the areas does not change a match (seed %i)", (seed) => {
+      const r = random(seed);
+      const circle = { type: "circle", center: [2, 2], radiusKm: 80 } as const;
+      const pool: readonly Area[] = [polygon, far, broken, circle, homeCode, { type: "code", system: "same", code: "020173" }];
+      for (let round = 0; round < 200; round += 1) {
+        const areas = r.sample(pool, r.int(1, pool.length)).map((area) => (r.chance(0.7) ? ({ ...area, block: r.pick(["a", "b"]) } as Area) : area));
+        const place = r.chance(0.8) ? placed([r.range(-1, 6), r.range(-1, 6)], r.range(0, 300)) : (places[0] as WatchedPlace);
+        const keyedMatch = matchPlaces({ areas }, [place]);
+        const unionMatch = matchPlaces({ areas: areasWithoutBlocks(areas) }, [place]);
+        if (keyedMatch.length > 0) expect(unionMatch).toHaveLength(1);
+        if (place.at === undefined) expect(keyedMatch).toEqual(unionMatch);
+        expect(matchPlaces({ areas: r.shuffle(areas) }, [place])).toEqual(keyedMatch);
+      }
+    });
   });
 });
 

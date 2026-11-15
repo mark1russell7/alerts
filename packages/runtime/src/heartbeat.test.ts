@@ -1,8 +1,6 @@
 import type { ChannelId, PersonId, ReportId, SourceId } from "@mark1russell7/alerts";
-import { PUSHOVER_QUOTA } from "@mark1russell7/alerts-channel-pushover";
 import { fakeWallClock } from "@mark1russell7/algebra/clock";
 import { random, seedsFrom } from "@mark1russell7/rigor-generators";
-import { quotaGate } from "polite-crawler/api";
 import { describe, expect, it } from "vitest";
 import {
   checkOfPingUrl,
@@ -18,7 +16,6 @@ import {
   holdStep,
   pingOf,
   pingUrl,
-  quotaNote,
   REFUSAL_KINDS,
   UNREACHABLE,
   type HeartbeatFetch,
@@ -264,27 +261,6 @@ describe("the refused channels of the log", () => {
         for (const refusal of Object.values(state.refusals)) expect(refusal.retryAt, `seed ${seed}, a restart after pass ${stop}`).toBeGreaterThan(restart);
       }
     }
-  });
-});
-
-describe("the note of a quota", () => {
-  // Midnight in America/Chicago on 1 December.
-  const RESET = Date.UTC(2026, 11, 1, 6);
-  const gateAt = () => quotaGate(PUSHOVER_QUOTA, { key: "pushover:app", now: () => T0 });
-
-  it("gives the units used and left before the reserve, the reserve with its end, and the block of the provider", () => {
-    const gate = gateAt();
-    expect(quotaNote("pushover", gate)).toBe("pushover: 0 of 10000 units are used, and 9000 are left before the reserve of 1000.");
-    gate.note({ remaining: 1_000 });
-    expect(quotaNote("pushover", gate)).toBe(`pushover: 9000 of 10000 units are used. The channel keeps the last 1000 units for life-safety until ${new Date(RESET).toISOString()}.`);
-    gate.note({ remaining: 0, resetAt: RESET });
-    expect(quotaNote("pushover", gate)).toBe(`pushover: the provider refuses each message until ${new Date(RESET).toISOString()}.`);
-  });
-
-  it("gives the end of a window with each unit used", () => {
-    const gate = gateAt();
-    gate.note({ remaining: 0 });
-    expect(quotaNote("pushover", gate)).toMatch(/^pushover: (all 10000 units of the window are used|the provider refuses each message) until 2026-12-01T06:00:00\.000Z\.$/);
   });
 });
 

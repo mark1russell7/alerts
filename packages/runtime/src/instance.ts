@@ -7,7 +7,7 @@ import { delay, type Clock, type WallClock } from "@mark1russell7/algebra/clock"
 import { localPlaces, sourceCovers, sourcePlaces, type ChannelDescriptor, type ParsedConfig, type SecretLookup, type SourceDescriptor } from "@mark1russell7/alerts";
 import { CHANNEL_ID, createPushoverChannel, isPushoverKey, pushoverDescriptor, PUSHOVER_REPEAT_MS, PUSHOVER_TIMEOUT_MS, type PushoverChannelOptions } from "@mark1russell7/alerts-channel-pushover";
 import { createIpawsSource, IPAWS_DESCRIPTOR, WEA_EXPECTATION } from "@mark1russell7/alerts-source-ipaws";
-import { createShapeStore, type ShapeCache } from "@mark1russell7/alerts-shapes-nws";
+import { createShapeStore, type ShapeCache, type ShapeStore } from "@mark1russell7/alerts-shapes-nws";
 import { createNwsSource, NWS_DESCRIPTOR } from "@mark1russell7/alerts-source-nws-api";
 import type { Pace, Transport } from "polite-crawler/api";
 import { DEFAULT_POLICY, HostScheduler, type PolitenessPolicy } from "polite-crawler/politeness";
@@ -15,8 +15,9 @@ import { requireKey, type InstanceCheck } from "./config.ts";
 import type { DeliveryOptions } from "./delivery.ts";
 import type { RuntimeLog } from "./log.ts";
 import { createLoop, loopTimes, type LoopTimes, type RuntimeLoop } from "./loop.ts";
+import { channelQuota } from "./quota.ts";
 import { openRuntime, type Pass, type Runtime, type RuntimeOptions } from "./runtime.ts";
-import { keepShapes, type InstanceShapes, type ShapeOutcome } from "./shapes.ts";
+import { keepShapes, placeCodesKey, withZoneCodes, type InstanceShapes, type ShapeOutcome } from "./shapes.ts";
 import { DELAY_LIMITS, earliest, nextFetch } from "./view.ts";
 
 /** The name of the secret that holds the API token of the Pushover application. */
@@ -145,6 +146,8 @@ export interface InstanceOptions {
    * thus the count holds across a restart. With no gate, the channel counts nothing.
    */
   readonly pushoverQuota?: PushoverChannelOptions["quota"];
+  /** The gate of the Pushover messages that tell of the entry into the reserve: one in each window. */
+  readonly pushoverReserveNotices?: PushoverChannelOptions["reserveNotices"];
   /** The id of this run. Each start of the process has a new id. */
   readonly run: string;
   /** The runtime starts this hook at the end of each pass with no error. */
@@ -163,6 +166,11 @@ export interface InstanceOptions {
   readonly shapes?: ShapeCache;
   /** The instance gives each refresh of the outlines to this function. */
   readonly onShapes?: (outcome: ShapeOutcome) => void;
+  /**
+   * The instance starts this function one time, when new outlines change the codes of a place. The check is after a refresh
+   * with requests, when no task is due. The entry of the profile `daemon` stops the runtime, and the supervisor starts it again.
+   */
+  readonly onPlaceCodes?: () => void;
 }
 
 /** The instance: the runtime, its loop and the outlines of the regions. */
@@ -171,6 +179,8 @@ export interface Instance {
   readonly loop: RuntimeLoop;
   /** The outlines of the regions. The match by shape and the map route read them here. */
   readonly shapes: InstanceShapes;
+  /** The count of the codes that the outlines of the store added to the places at the start. */
+  readonly zoneCodes: number;
 }
 
 /**
@@ -195,7 +205,6 @@ export function openInstance(options: InstanceOptions): Instance {
   const kinds = [...new Set(descriptors.flatMap((descriptor) => descriptor.kinds))];
 
   const { config, recipients } = options.config;
-  const places = localPlaces(config);
   const problems = instanceProblems(options.config, options.secret, descriptors);
   if (problems.length > 0) throw new Error(`The instance does not start. The configuration has these problems:\n- ${problems.join("\n- ")}`);
   const token = options.secret(PUSHOVER_TOKEN) ?? "";
@@ -203,16 +212,47 @@ export function openInstance(options: InstanceOptions): Instance {
   // The store of shapes shares the pace of the sources. Thus its requests to the NWS API keep the rests of that host.
   const store = options.shapes === undefined ? undefined : createShapeStore({ pace, transport: options.transport, userAgent: agent, cache: options.shapes });
   const cache = options.shapes;
-  const shapes = keepShapes({ store, places, onShapes: options.onShapes, close: () => cache?.close() });
+  // The places get the codes of the zones near their positions, from the outlines of the store at the start.
+  const zoned = (from: ShapeStore) => withZoneCodes(config, (state) => from.basemap(state));
+  const placed = store === undefined ? config : zoned(store);
+  const places = localPlaces(placed);
+  const zoneCodes = places.reduce((count, place, at) => count + place.codes.length - (config.places[at]?.codes.length ?? 0), 0);
+  // New outlines can change the codes of a place. The check is after a refresh with requests, when no task is due.
+  const opened = placeCodesKey(placed);
+  let fresh = false;
+  let told = false;
+  const checkCodes = (outcome: ShapeOutcome): void => {
+    if (store === undefined || told || !outcome.ok) return;
+    if (outcome.refreshed.requests > 0) fresh = true;
+    if (!fresh || outcome.refreshed.stop !== "done") return;
+    fresh = false;
+    if (placeCodesKey(zoned(store)) === opened) return;
+    told = true;
+    options.onPlaceCodes?.();
+  };
+  const onShapes = (outcome: ShapeOutcome): void => {
+    try {
+      checkCodes(outcome);
+    } finally {
+      options.onShapes?.(outcome);
+    }
+  };
+  const shapes = keepShapes({ store, places, onShapes, close: () => cache?.close() });
 
-  const pushover = createPushoverChannel({ token, fetch: options.pushover, now: () => wall.now(), ...(options.pushoverQuota === undefined ? {} : { quota: options.pushoverQuota }) });
+  const pushover = createPushoverChannel({
+    token,
+    fetch: options.pushover,
+    now: () => wall.now(),
+    ...(options.pushoverQuota === undefined ? {} : { quota: options.pushoverQuota }),
+    ...(options.pushoverReserveNotices === undefined ? {} : { reserveNotices: options.pushoverReserveNotices }),
+  });
   const delivery: DeliveryOptions = { recipients, channels: [pushover], ...DELIVERY_TIMES };
 
   const runtime: Runtime = openRuntime({
     log: options.log,
     clock: wall,
     sources,
-    watch: (source) => ({ places: sourcePlaces(config, source.id) }),
+    watch: (source) => ({ places: sourcePlaces(placed, source.id) }),
     view: {
       places,
       kinds,
@@ -223,6 +263,8 @@ export function openInstance(options: InstanceOptions): Instance {
     delivery,
     // The loop exists before the first pass, and only a pass starts a wake.
     wake: () => loop.wake(),
+    // Each stage of the Pushover quota is a line of system reports.
+    quotas: () => (options.pushoverQuota === undefined ? [] : [channelQuota(CHANNEL_ID, options.pushoverQuota)]),
     // After each pass, the store of shapes gets the outlines that are due, and it ends before the next fetch of a source.
     onPass: async (pass) => {
       shapes.afterPass(pass.view.incidents, earliest(runtime.config.sources.map((descriptor) => nextFetch(runtime.state(), descriptor))));
@@ -237,5 +279,5 @@ export function openInstance(options: InstanceOptions): Instance {
     times: loopTimes(runtime.config.sources, { delivery }),
     ...(options.onError === undefined ? {} : { onError: options.onError }),
   });
-  return { runtime, loop, shapes };
+  return { runtime, loop, shapes, zoneCodes };
 }
