@@ -39,8 +39,17 @@ export interface CaseBodies {
   readonly observations: number;
 }
 
-/** This function gives the bodies of the replies, from the fixtures of the NWS source. */
-export function caseBodies(): CaseBodies {
+/** The options of the bodies. */
+export interface BodyOptions {
+  /** The sent time of the keepalive of the canary body. When it is absent, the keepalive keeps its recorded time. */
+  readonly keepaliveSent?: number;
+}
+
+/**
+ * This function gives the bodies of the replies, from the fixtures of the NWS source. The recorded keepalive is old, so the
+ * canary check fails for it. A case that reads the canary gives a recent `keepaliveSent`.
+ */
+export function caseBodies(options: BodyOptions = {}): CaseBodies {
   const root = dirname(createRequire(import.meta.url).resolve("@mark1russell7/alerts-source-nws-api/package.json"));
   const folder = join(root, "fixtures");
   const names = readdirSync(folder)
@@ -48,7 +57,10 @@ export function caseBodies(): CaseBodies {
     .sort();
   const read = (name: string): unknown => JSON.parse(readFileSync(join(folder, name), "utf8"));
   const features = names.map(read);
-  const canary = names.filter((name) => name.includes("keepalive")).map(read);
+  const sent = options.keepaliveSent === undefined ? undefined : new Date(options.keepaliveSent).toISOString();
+  const fresh = (feature: unknown): unknown =>
+    sent === undefined ? feature : { ...(feature as object), properties: { ...(feature as { properties: object }).properties, sent } };
+  const canary = names.filter((name) => name.includes("keepalive")).map((name) => fresh(read(name)));
   const encode = (value: unknown): Uint8Array => new TextEncoder().encode(JSON.stringify(value));
   return {
     main: encode({ type: "FeatureCollection", features }),
@@ -66,16 +78,20 @@ export interface FetchLimits {
   readonly transportTimeoutMs?: number;
 }
 
-const summaryOf = (outcome: FetchOutcome): OutcomeSummary =>
+/** This function gives the outcome of a fetch with no body. */
+export const summaryOf = (outcome: FetchOutcome): OutcomeSummary =>
   outcome.ok
     ? { ok: true, complete: outcome.complete, observations: outcome.observations.length }
     : { ok: false, kind: outcome.failure.kind, message: outcome.failure.message };
 
+/** The outcome of one fetch, or the message of a throw. */
+export type FetchResult = { readonly outcome: FetchOutcome } | { readonly thrown: string };
+
 /**
- * This function fetches the watch of the cases one time at `baseUrl`. Each fetch has a new scheduler, so the pace of
- * one fetch does not change the next fetch. A throw becomes a failure of the kind `thrown`.
+ * This function fetches the watch of the cases one time at `baseUrl`, and gives the outcome with its observations. Each
+ * fetch has a new scheduler, so the pace of one fetch does not change the next fetch.
  */
-export async function fetchOnce(baseUrl: string, limits: FetchLimits): Promise<OutcomeSummary> {
+export async function fetchResult(baseUrl: string, limits: FetchLimits): Promise<FetchResult> {
   const transport = fetchTransport({ userAgent: USER_AGENT, ...(limits.transportTimeoutMs === undefined ? {} : { timeoutMs: limits.transportTimeoutMs }) });
   const fetch = createNwsFetch({
     pace: { scheduler: new HostScheduler(realClock, 1), now: () => realClock.now() },
@@ -86,10 +102,16 @@ export async function fetchOnce(baseUrl: string, limits: FetchLimits): Promise<O
     timeoutMs: limits.timeoutMs,
   });
   try {
-    return summaryOf(await fetch({ watch: NWS_WATCH }));
+    return { outcome: await fetch({ watch: NWS_WATCH }) };
   } catch (error) {
-    return { ok: false, kind: "thrown", message: error instanceof Error ? error.message : String(error) };
+    return { thrown: error instanceof Error ? error.message : String(error) };
   }
+}
+
+/** This function fetches the watch one time, as `fetchResult` does, and gives the outcome with no body. A throw becomes the kind `thrown`. */
+export async function fetchOnce(baseUrl: string, limits: FetchLimits): Promise<OutcomeSummary> {
+  const result = await fetchResult(baseUrl, limits);
+  return "thrown" in result ? { ok: false, kind: "thrown", message: result.thrown } : summaryOf(result.outcome);
 }
 
 /** This function starts the scripted server of a framing. The main reply has `BODY_PARTS` parts. The canary reply has one part. */
