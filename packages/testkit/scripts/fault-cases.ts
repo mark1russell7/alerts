@@ -8,6 +8,7 @@
 import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { FRAMINGS } from "@mark1russell7/rigor-testkit/http";
+import { CHANNEL_ARMS, CHANNEL_GATES, recoverLimit, runChannelDown } from "../src/channel-down.ts";
 import { runCutInBody } from "../src/cut-in-body.ts";
 import { changesOf, runChangedFormat } from "../src/changed-format.ts";
 import { ACCEPT_ARMS, ACCEPT_GATES, runLateAccept } from "../src/late-accept.ts";
@@ -165,4 +166,29 @@ report(stale.id, stale.verdict, [
   }),
   "",
   `Read: ${yes(stale.verdict.read)}. Pass: **${yes(stale.verdict.pass)}**.`,
+]);
+
+const channel = await runChannelDown();
+write("case-7.json", channel);
+const s = (ms: number | undefined): string => (ms === undefined || !Number.isFinite(ms) ? "never" : (ms / 1000).toFixed(1));
+report(channel.id, channel.verdict, [
+  `## ${channel.id}: a channel down`,
+  "",
+  `The case clock moves ${String(channel.settings.speed)} times faster than real time. Each arm has ${min(channel.settings.armMs)} min, and each outage lasts ${min(channel.settings.outageMs)} min from the start of the arm.`,
+  `Each Pushover request goes through the fault proxy. The retry of a failed call is ${s(channel.times.retry)} s, and the first delivery comes in ${s(recoverLimit(channel.settings))} s after the outage.`,
+  "",
+  `| Arm | Requests (in the window) | To the server | Faults | Failed sends (kinds) | First delivery (s) | Pings (fail) | First fail ping (s) | ${CHANNEL_GATES.join(" | ")} |`,
+  `| --- | --- | --- | --- | --- | --- | --- | --- | ${CHANNEL_GATES.map(() => "---").join(" | ")} |`,
+  ...CHANNEL_ARMS.map((arm) => {
+    const record = channel.records.find((one) => one.arm === arm);
+    if (record === undefined) return `| ${arm} | - | - | - | - | - | - | - | ${CHANNEL_GATES.map(() => "-").join(" | ")} |`;
+    const sends = record.failures.filter((failure) => failure.call === "send");
+    const kinds = [...new Set(sends.map((failure) => failure.kind))].sort().join(", ") || "none";
+    const fails = record.pings.filter((ping) => ping.kind === "fail");
+    const first = Math.min(...record.log.deliveries.map((delivery) => delivery.at));
+    const gates = channel.verdict.gates[arm];
+    return `| ${arm} | ${String(record.requests.sent)} (${String(record.requests.inWindow)}) | ${String(record.requests.reached)} | ${String(record.faults)} | ${String(sends.length)} (${kinds}) | ${s(first)} | ${String(record.pings.length)} (${String(fails.length)}) | ${s(fails[0]?.at)} | ${CHANNEL_GATES.map((gate) => (gates === undefined ? "-" : yes(gates[gate]))).join(" | ")} |`;
+  }),
+  "",
+  `Read: ${yes(channel.verdict.read)}. Pass: **${yes(channel.verdict.pass)}**.`,
 ]);
