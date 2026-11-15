@@ -98,6 +98,12 @@ describe("the first table", () => {
     ["a winter storm warning", { kind: "met.winter.storm", severity: "moderate", urgency: "expected" }, "notice"],
     ["a wind advisory", { kind: "met.wind.high", severity: "minor", urgency: "expected" }, "digest"],
     ["a tornado warning that passed", { kind: "met.tornado", severity: "extreme", urgency: "past" }, "digest"],
+    ["an Emergency Action Notification", { kind: "safety.national-emergency", severity: "extreme", urgency: "immediate" }, "life-safety"],
+    ["a typhoon warning", { kind: "met.tropical.typhoon", severity: "extreme", urgency: "expected" }, "life-safety"],
+    ["a debris flow warning", { kind: "geo.debris-flow", severity: "severe", urgency: "immediate" }, "life-safety"],
+    ["a volcano warning", { kind: "geo.volcano.eruption", severity: "extreme", urgency: "immediate" }, "life-safety"],
+    // The eruption is a child of `geo.volcano`, so the ashfall codes stay out of the class.
+    ["an ashfall warning", { kind: "geo.volcano.ashfall", severity: "severe", urgency: "expected" }, "urgent"],
   ];
   it.each(products)("gives %s the level %s", (_, fields, level) => {
     expect(assess(incident(fields), person(), places).level).toBe(level);
