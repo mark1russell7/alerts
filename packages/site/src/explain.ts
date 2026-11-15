@@ -98,7 +98,9 @@ export function reasonText(reason: AssessReason, incident: Pick<Incident, "sever
             : `A shape of the incident is ${kilometers(reason.distanceKm)} from ${nameOf(reason.place)}, in the buffer of the place.`;
       if (reason.codes.length > 0) {
         const codes = `The incident covers ${nameOf(reason.place)}: ${reason.codes.map((code) => code.code).join(", ")}.`;
-        return shape === undefined ? codes : `${codes} ${shape}`;
+        // The codes of a block decide when geo refuses each shape of that block. The match is then on the safe side.
+        const refused = reason.shapeRefused === true ? " The shape of an area of the incident is not valid, so its region codes decided." : "";
+        return `${codes}${refused}${shape === undefined ? "" : ` ${shape}`}`;
       }
       // A system report names the place itself, so its match has no codes and no distance.
       return shape ?? `The area of the report is ${nameOf(reason.place)}.`;

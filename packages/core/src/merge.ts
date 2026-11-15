@@ -9,6 +9,7 @@ import { stronglyConnectedComponents } from "@mark1russell7/collections/graph";
 import { canonicalJson } from "@mark1russell7/rigor-generators";
 import type {
   Acknowledgment,
+  Area,
   Certainty,
   Delivery,
   EndMark,
@@ -223,7 +224,7 @@ function incidentOf(group: readonly Report[], at: Instant, ended: ReadonlySet<Re
     severity: worst.severity,
     urgency: top(stated, (values) => URGENCY.indexOf(values.urgency)).urgency,
     certainty: top(stated, (values) => CERTAINTY.indexOf(values.certainty)).certainty,
-    areas: uniqueByText(basis.flatMap((report) => report.areas)),
+    areas: uniqueByText(basis.flatMap(blockAreas)),
     about: uniqueByText(basis.flatMap((report) => report.about)),
     live: liveHeads.length > 0,
     corroboration: new Set(group.map((report) => report.origin)).size,
@@ -351,6 +352,14 @@ function uniqueByText<T extends object>(items: readonly T[]): T[] {
     if (!byText.has(text)) byText.set(text, item);
   }
   return [...byText.entries()].sort(([a], [b]) => compare(a, b)).map(([, item]) => item);
+}
+
+/**
+ * The areas of a report, with the report id before each block key. Thus the blocks of two reports stay
+ * apart, also when the NWS and IPAWS copies of one warning give the same keys.
+ */
+function blockAreas(report: Report): Area[] {
+  return report.areas.map((area) => (area.type === "place" || area.block === undefined ? area : { ...area, block: `${report.id}/${area.block}` }));
 }
 
 // The order of the code units, the same in each copy and each locale.

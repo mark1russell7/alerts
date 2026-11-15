@@ -193,47 +193,70 @@ export function regionContains(area: RegionCode, place: RegionCode): boolean {
 /** A place in the areas of an incident, with the codes or the distance that decided the match. */
 export interface PlaceMatch {
   readonly place: PlaceId;
-  /** The codes of the place that the areas cover. The list is empty for a match by a shape only. */
+  /** The codes of the place that decided the match. The list is empty for a match by a shape only. */
   readonly codes: readonly RegionCode[];
   /**
-   * The great-circle distance in kilometers from the place to the nearest shape of the areas. It is 0
-   * in a shape. It is present only when that distance is in the buffer of the place.
+   * The great-circle distance in kilometers from the place to the nearest shape that decided. It is 0 in
+   * a shape. It is present only when that distance is in the buffer of the place.
    */
   readonly distanceKm?: number;
+  /**
+   * True when the codes of a block decided the match because `@mark1russell7/geo` refuses each shape of
+   * that block. The view shows it, because the shape of that block did not decide.
+   */
+  readonly shapeRefused?: true;
 }
 
 /**
- * This function gives the places that the areas of an incident cover, in the order of the places.
+ * This function gives the places that the areas of an incident cover, in the order of the places. One
+ * block that matches is enough.
  *
  * - An area of a watched place covers that place.
- * - The region codes are the floor of each match. A place matches when the areas cover one of its codes.
- * - A shape adds a place. It does not remove a match by codes. A place with a position also matches when
- *   the distance to the nearest polygon or circle is not more than its buffer.
- * - A shape that `@mark1russell7/geo` refuses adds no place.
- * - The rule stays until the areas keep their CAP block. Today one list holds the areas of all blocks,
- *   so the shape of one block cannot remove a place from a block with only codes.
+ * - A block with a shape decides by its shapes for a place with a position. The place matches when the
+ *   great-circle distance to the nearest polygon or circle of the block is not more than its buffer. The
+ *   codes of that block do not decide for that place.
+ * - A block with no shape decides by its codes. So does each block for a place with no position.
+ * - When `@mark1russell7/geo` refuses each shape of a block, the codes of the block decide. This is on the
+ *   safe side, and the match tells it with `shapeRefused`.
+ * - The areas with no block key keep the union rule. Their codes are the floor of the match, and a shape
+ *   adds a place in its buffer. A shape that geo refuses adds no place.
  */
 export function matchPlaces(incident: Pick<Incident, "areas">, places: readonly WatchedPlace[]): PlaceMatch[] {
-  const shapes = incident.areas.filter(isShape);
-  const codes = incident.areas.flatMap((area) => (area.type === "code" ? [area] : []));
   const ids = new Set(incident.areas.flatMap((area) => (area.type === "place" ? [area.place] : [])));
+  const groups = new Map<string | undefined, (MapShape | (RegionCode & { readonly type: "code" }))[]>();
+  for (const area of incident.areas) {
+    if (area.type === "place") continue;
+    const group = groups.get(area.block) ?? [];
+    group.push(area);
+    groups.set(area.block, group);
+  }
   return places.flatMap((place): PlaceMatch[] => {
-    const covered = place.codes.filter((code) => codes.some((area) => regionCovers(area, code)));
-    const byCodes = covered.length > 0 || ids.has(place.id) ? [{ place: place.id, codes: covered }] : [];
-    if (ids.has(place.id) || shapes.length === 0 || place.at === undefined) return byCodes;
-    const nearest = nearestShape(shapes, place.at);
+    const covered = new Set<RegionCode>();
+    let nearest = Number.POSITIVE_INFINITY;
+    let shapeRefused = false;
+    for (const [block, areas] of groups) {
+      const shapes = areas.filter(isShape);
+      const distance = place.at === undefined || shapes.length === 0 ? undefined : nearestShape(shapes, place.at);
+      if (distance !== undefined) nearest = Math.min(nearest, distance);
+      // A block decides by its shapes when geo reads one of them. The areas with no block always give their codes.
+      if (block !== undefined && distance !== undefined) continue;
+      const byBlock = place.codes.filter((code) => areas.some((area) => area.type === "code" && regionCovers(area, code)));
+      for (const code of byBlock) covered.add(code);
+      if (byBlock.length > 0 && block !== undefined && place.at !== undefined && shapes.length > 0) shapeRefused = true;
+    }
+    const codes = place.codes.filter((code) => covered.has(code));
     const near = nearest <= place.bufferKm;
-    if (covered.length > 0) return [{ place: place.id, codes: covered, ...(near ? { distanceKm: nearest } : {}) }];
-    return near ? [{ place: place.id, codes: [], distanceKm: nearest }] : [];
+    if (codes.length === 0 && !near && !ids.has(place.id)) return [];
+    return [{ place: place.id, codes, ...(near ? { distanceKm: nearest } : {}), ...(shapeRefused ? { shapeRefused: true as const } : {}) }];
   });
 }
 
-// The distance to the nearest shape that geo reads. A shape that geo refuses adds no distance.
-function nearestShape(shapes: readonly MapShape[], at: Position): number {
-  let nearest = Number.POSITIVE_INFINITY;
+// The distance to the nearest shape that geo reads, or `undefined` when geo refuses each shape.
+function nearestShape(shapes: readonly MapShape[], at: Position): number | undefined {
+  let nearest: number | undefined;
   for (const shape of shapes) {
     const distance = shapeDistanceKm(shape, at);
-    if (distance !== undefined) nearest = Math.min(nearest, distance);
+    if (distance !== undefined) nearest = Math.min(nearest ?? distance, distance);
   }
   return nearest;
 }
@@ -308,11 +331,7 @@ export function assess(
     return rule.max;
   };
   for (const match of matches) {
-    reasons.push(
-      match.distanceKm === undefined
-        ? { kind: "place", place: match.place, codes: match.codes }
-        : { kind: "place", place: match.place, codes: match.codes, distanceKm: match.distanceKm },
-    );
+    reasons.push({ kind: "place", ...match });
     level = higherLevel(level, atMatch(match.place));
   }
   for (const subject of subjects) {

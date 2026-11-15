@@ -77,9 +77,10 @@ describe("the map of the recorded alerts", () => {
     for (const reference of references) expect(report.references).toContain(reference);
     expect(report.references).not.toContain(report.key);
 
-    for (const ugc of properties.geocode.UGC) expect(report.areas).toContainEqual({ type: "code", system: "ugc", code: ugc });
-    for (const same of properties.geocode.SAME) expect(report.areas).toContainEqual({ type: "code", system: "same", code: same });
+    for (const ugc of properties.geocode.UGC) expect(report.areas).toContainEqual({ type: "code", system: "ugc", code: ugc, block: "feature" });
+    for (const same of properties.geocode.SAME) expect(report.areas).toContainEqual({ type: "code", system: "same", code: same, block: "feature" });
     expect(report.areas.some((area) => area.type === "polygon")).toBe(source.geometry !== null);
+    expect(report.areas.every((area) => area.type !== "place" && area.block === "feature")).toBe(true);
 
     const vtec = ((properties.parameters.VTEC ?? []) as string[]).map((one) => parseVtec(one)).filter((one): one is Vtec => one !== undefined);
     const main = mainVtec(vtec);
@@ -189,7 +190,7 @@ describe("the map of broken alerts", () => {
   it("closes an open ring, and drops a polygon with a bad outside ring", () => {
     const open = { ...base, geometry: { type: "Polygon", coordinates: [[[-98, 28], [-97, 28], [-97, 29]]] } };
     const closed = mapOne(open);
-    expect(closed.report?.areas).toContainEqual({ type: "polygon", rings: [[[-98, 28], [-97, 28], [-97, 29], [-98, 28]]] });
+    expect(closed.report?.areas).toContainEqual({ type: "polygon", rings: [[[-98, 28], [-97, 28], [-97, 29], [-98, 28]]], block: "feature" });
     expect(closed.problems.map((problem) => problem.path)).toEqual(["geometry.coordinates[0]"]);
 
     const broken = mapOne({ ...base, geometry: { type: "Polygon", coordinates: [[[-98, 28], [-97, 200], [-97, 29]]] } });
@@ -238,8 +239,8 @@ describe("the region codes of an alert", () => {
   it("keeps the valid codes of a report, and gives a problem for each code of an unknown form", () => {
     const { report, problems } = mapOne(withGeocode({ UGC: ["txz123", "TX-Z-124", 7], SAME: [" 048019 "] }));
     expect(codesOf(report)).toEqual([
-      { type: "code", system: "ugc", code: "TXZ123" },
-      { type: "code", system: "same", code: "048019" },
+      { type: "code", system: "ugc", code: "TXZ123", block: "feature" },
+      { type: "code", system: "same", code: "048019", block: "feature" },
     ]);
     expect(problems).toEqual([
       { path: "properties.geocode.UGC[1]", message: 'the value "TX-Z-124" is not a UGC code', fatal: false, lossy: true },

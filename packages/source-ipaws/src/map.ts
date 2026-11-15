@@ -77,20 +77,28 @@ function grouped(pairs: readonly CapPair[], prefix = ""): Record<string, string[
   return result;
 }
 
-/** This function reads the areas of the chosen info blocks: the polygons, the circles and the geocodes. */
-function areasOf(blocks: readonly { readonly info: CapInfo; readonly index: number }[], problems: Problems): Area[] {
+/**
+ * This function reads the areas of the chosen info blocks: the polygons, the circles and the geocodes.
+ *
+ * For a message of the NWS, the key of each area is the path of its CAP `area` element, for example
+ * `info[0].area[1]`. Then the shapes of an element decide for it. The NWS writes the warned area as the
+ * polygon, and the codes name each region that the polygon touches. In CAP, the area of an element is the
+ * union of its parts. Another sender can mean that union, so its areas get no key and keep the union rule.
+ */
+function areasOf(blocks: readonly { readonly info: CapInfo; readonly index: number }[], keyed: boolean, problems: Problems): Area[] {
   const areas: Area[] = [];
   const codes = new Set<string>();
   for (const { info, index } of blocks) {
     info.areas.forEach((area, at) => {
       const path = `info[${String(index)}].area[${String(at)}]`;
+      const block = keyed ? { block: path } : {};
       area.polygons.forEach((text, one) => {
         const polygon = capPolygon(text, `${path}.polygon[${String(one)}]`, problems);
-        if (polygon !== undefined) areas.push(polygon);
+        if (polygon !== undefined) areas.push({ ...polygon, ...block });
       });
       area.circles.forEach((text, one) => {
         const circle = capCircle(text, `${path}.circle[${String(one)}]`, problems);
-        if (circle !== undefined) areas.push(circle);
+        if (circle !== undefined) areas.push({ ...circle, ...block });
       });
       for (const geocode of area.geocodes) {
         const system = GEOCODES[geocode.valueName];
@@ -99,10 +107,11 @@ function areasOf(blocks: readonly { readonly info: CapInfo; readonly index: numb
           continue;
         }
         const code = system === "ugc" ? geocode.value.trim().toUpperCase() : geocode.value.trim();
-        // Two blocks of one language can name one region: the report has it one time
-        if (code === "" || codes.has(`${system}:${code}`)) continue;
-        codes.add(`${system}:${code}`);
-        areas.push({ type: "code", system, code });
+        // Two area elements can name one region. The report has it one time in each block, or one time with no key.
+        const once = keyed ? `${path} ${system}:${code}` : `${system}:${code}`;
+        if (code === "" || codes.has(once)) continue;
+        codes.add(once);
+        areas.push({ type: "code", system, code, ...block });
       }
     });
   }
@@ -232,7 +241,7 @@ function mapAlert(alert: CapAlert, observation: Observation, languages: readonly
     response,
     sent,
     received: observation.fetched,
-    areas: areasOf(blocks, problems),
+    areas: areasOf(blocks, originOf(alert.sender) === ORIGINS.nws, problems),
     about: [],
     sender: info?.senderName?.trim() || alert.sender,
     headline: info?.headline?.trim() || valuesOf(parameters, "NWSheadline")[0] || name || key,

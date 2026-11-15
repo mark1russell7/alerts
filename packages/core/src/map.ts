@@ -6,6 +6,7 @@
 import { higherLevel, matchPlaces } from "./assess.ts";
 import { ASSESSED_LEVELS, type Area, type AssessedLevel, type Assessment, type Coverage, type Incident, type Kind, type PlaceId, type Position, type RegionCode, type ReportId, type Severity, type Instant } from "./contracts.ts";
 import { coverageShort } from "./coverage.ts";
+import { areasWithoutBlocks } from "./shapes.ts";
 
 /** A shape of the map in WGS 84: a polygon or a circle. A region code gets its shapes from the store. */
 export type MapShape = Extract<Area, { readonly type: "polygon" } | { readonly type: "circle" }>;
@@ -140,7 +141,7 @@ export function mapView(input: MapInput): MapView {
     .map((incident): MapIncident => {
       const shapes: MapShape[] = [];
       const missing: RegionCode[] = [];
-      for (const area of incident.areas) {
+      for (const area of areasWithoutBlocks(incident.areas)) {
         if (area.type === "polygon" || area.type === "circle") shapes.push(area);
         else if (area.type === "code") {
           const code = { system: area.system, code: area.code };

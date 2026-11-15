@@ -130,7 +130,7 @@ const isPosition = (value: unknown): value is [number, number] =>
  * function closes it. A bad hole is a lossy problem, and the area does not have it. A bad outside ring
  * is a lossy problem, and the function gives no area.
  */
-function polygonOf(rings: unknown, path: string, problems: Problems): Area | undefined {
+function polygonOf(rings: unknown, path: string, problems: Problems): Extract<Area, { readonly type: "polygon" }> | undefined {
   if (!Array.isArray(rings) || rings.length === 0) {
     problems.add(path, "the polygon has no rings");
     return undefined;
@@ -154,9 +154,13 @@ function polygonOf(rings: unknown, path: string, problems: Problems): Area | und
   return { type: "polygon", rings: good };
 }
 
+// The key of the one area block of an alert.
+const BLOCK = "feature";
+
 /**
  * This function reads the areas of an alert: its geometry and its region codes. A code of an unknown form
- * is a problem, and the function drops it, because it matches no watch.
+ * is a problem, and the function drops it, because it matches no watch. The alert is one area block with
+ * the key `feature`: the geometry is the warned area, and the codes name the regions that it touches.
  */
 function areasOf(feature: JsonObject, properties: JsonObject, problems: Problems): Area[] {
   const areas: Area[] = [];
@@ -165,11 +169,11 @@ function areasOf(feature: JsonObject, properties: JsonObject, problems: Problems
     const type = geometry["type"];
     if (type === "Polygon") {
       const polygon = polygonOf(geometry["coordinates"], "geometry.coordinates", problems);
-      if (polygon !== undefined) areas.push(polygon);
+      if (polygon !== undefined) areas.push({ ...polygon, block: BLOCK });
     } else if (type === "MultiPolygon" && Array.isArray(geometry["coordinates"])) {
       geometry["coordinates"].forEach((rings, index) => {
         const polygon = polygonOf(rings, `geometry.coordinates[${index}]`, problems);
-        if (polygon !== undefined) areas.push(polygon);
+        if (polygon !== undefined) areas.push({ ...polygon, block: BLOCK });
       });
     } else {
       problems.add("geometry.type", `the geometry ${JSON.stringify(type)} is not a Polygon or a MultiPolygon`);
@@ -194,7 +198,7 @@ function areasOf(feature: JsonObject, properties: JsonObject, problems: Problems
     }
     items.forEach((item, index) => {
       const code = typeof item === "string" ? normal(item) : undefined;
-      if (code !== undefined && valid(code)) areas.push({ type: "code", system, code });
+      if (code !== undefined && valid(code)) areas.push({ type: "code", system, code, block: BLOCK });
       else problems.add(`properties.geocode.${field}[${index}]`, `the value ${JSON.stringify(item)} is not a ${field} code`);
     });
   }

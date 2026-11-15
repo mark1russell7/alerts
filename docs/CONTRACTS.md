@@ -97,7 +97,7 @@ The rules of each adapter:
    - A **note** keeps the whole report. The message has more than the report holds, for example an unknown field.
 
    Fatal and lossy problems move the health to `changed`. Notes do not. So a renamed value that the map replaces with a fallback shows in the health.
-   When the map cannot read an area or a subject that a watch can match, it gives a fatal problem. Until the core matches shapes, an area needs a region code or a place.
+   When the map cannot read an area or a subject that a watch can match, it gives a fatal problem. A place with no position matches only by codes, so an area needs a region code or a place.
 3. **The descriptor tells the truth about dependencies.** `origins` names the authorities whose messages the source carries. `dependsOn` names the failure domains outside the cell: providers, CDNs, transmitters. `uses` names the resources of the cell: `internet`, `power`, `receiver`. The coverage uses both.
 4. **The ids are hashes of content.** The core gives the id functions in `ids.ts`. An adapter does not make its own ids.
    - `observationId`: the SHA-256 of the source id, the content type, the request URL and the body. The fetch time is not part of it, so a poll with no change gives the same id. The URL is the part that the `map` function reads. A URL with the time of the poll gives the URL with no time, and a test holds that `map` does not read the time.
@@ -528,15 +528,25 @@ A person also watches subjects, other than places, in `PersonWatch.subjects`: a 
 
 The positions of the places do not go to a source. A source fetches by area, for example all the alerts of a state, and the core matches the places on the machine of the instance. So a `WatchedPlace` gives an adapter region codes and a buffer, and no name, no address and no position. A source that needs a position gets it only when the owner lets that source get it.
 
-The core matches the area of a report to a place with one rule for each source. The region codes are the floor of each match. A polygon or a circle can add a place, with the buffer of the place.
+The core matches the area of a report to a place with one rule for each source. An area block is a group of areas that tell one area together. The adapter writes the key of the block in the field `block` of each area. The key is unique in the report. The merge puts the report id before the key, so the blocks of two reports stay apart.
 
-- A place matches when the areas cover one of its codes. A shape does not remove this match.
-- A place with a position also matches when the great-circle distance from its position to the nearest shape is not more than its buffer.
+- A block with a shape decides by its shapes for a place with a position. The place matches when the great-circle distance from its position to the nearest polygon or circle of the block is not more than its buffer. The codes of that block do not decide for that place.
+- A block with no shape decides by its codes. A place matches when the codes of the block cover one of its codes.
+- A place with no position matches by the codes of each block.
+- `@mark1russell7/geo` can refuse a shape, for example a ring with fewer than 4 positions. When it refuses each shape of a block, the codes of that block decide. This error is on the safe side. The match has `shapeRefused: true`, and the view tells it.
+- One block that matches is enough.
+- The areas with no block key keep the union rule. Their codes are the floor of the match, and a shape adds a place in its buffer. A shape that geo refuses adds no place.
 - A position in a shape has the distance 0. The reason `place` of the assessment has `distanceKm` when the distance is in the buffer. A match by a shape only has no codes.
-- A place with no position matches by its codes only.
 - `@mark1russell7/geo` gives the distances. An edge of a polygon is a straight line in longitude and latitude, as in GeoJSON (RFC 7946).
-- A shape that `@mark1russell7/geo` refuses, for example a ring with fewer than 4 positions, adds no place.
-- The list of areas does not keep the area blocks of a CAP message. The IPAWS adapter and the merge put the areas of all blocks in one list. Thus a shape cannot remove a place: the place can be in a block with only codes. The next part of the plan gives each area the key of its block. Then the shape of a block decides for that block.
+
+The keys of the sources:
+
+- An alert of the NWS API is one block with the key `feature`. Its geometry is the warned area, and its codes name each county or zone that the geometry touches.
+- For a message of the NWS, the IPAWS adapter gives each CAP `area` element its path as the key, for example `info[0].area[1]`.
+- In CAP, the area of an `area` element is the union of its polygons, circles and geocodes. Only the NWS is known to write the warned area as the polygon. Another sender on IPAWS can mean the union, so its areas have no key. They keep the union rule, on the safe side.
+- The IEM rows have only codes, so they have no key.
+
+A known effect of the blocks: the NWS API and IPAWS copies of one warning are two reports, so each copy has its own blocks. When one copy has only codes, those codes match a place out of the polygon of the other copy. The error is on the safe side.
 
 Two codes match when their systems and their values are equal, or when two SAME codes name regions that meet (`regionCovers`). A SAME code `PSSCCC` has the part `P`, the state `SS` and the county `CCC`. The part `0` is the full county, the county `000` is the full state, and `000000` is the full country (47 CFR 11.31).
 

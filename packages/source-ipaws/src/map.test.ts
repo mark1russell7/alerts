@@ -88,6 +88,8 @@ describe("the map of the IPAWS copies of the KEWX flash flood warning", () => {
     const { report } = mapOne(NEW_IPAWS);
     const geocode = NEW_API.properties["geocode"] as { UGC: string[]; SAME: string[] };
     expect(codesOf(report)).toEqual([...geocode.UGC.map((code) => `ugc:${code}`), ...geocode.SAME.map((code) => `same:${code}`)].sort());
+    // The message of the NWS has one area element in the chosen language: each area has its key.
+    expect(new Set(report.areas.map((area) => (area.type === "place" ? "" : area.block)))).toEqual(new Set(["info[0].area[0]"]));
     const polygons = report.areas.filter((area) => area.type === "polygon");
     expect(polygons).toHaveLength(1);
     const ring = polygons[0]?.type === "polygon" ? polygons[0].rings[0] : undefined;
@@ -196,6 +198,20 @@ describe("the map of other messages", () => {
     expect(report.areaText).toBe("A test area; A second area");
     expect(problems).toHaveLength(1);
     expect(problems[0]).toMatchObject({ path: "info", fatal: false });
+  });
+
+  it("gives each area of an NWS message the key of its CAP area element, and no key for another sender", () => {
+    const same = "<geocode><valueName>SAME</valueName><value>020173</value></geocode>";
+    const body = authority(`<polygon>37.6,-97.5 37.6,-97.2 37.8,-97.2 37.6,-97.5</polygon>${same}${same}</area><area><areaDesc>A second area</areaDesc>${same}`);
+    const blocksOf = (report: Report): string[] => report.areas.map((area) => (area.type === "place" ? "" : `${area.block ?? "none"} ${area.type}`));
+    // The NWS: the shapes of an area element decide for it, and each code is in the report one time for each element.
+    const nws = mapOne(body.replace("<sender>alerts@example.org</sender>", `<sender>${NWS_SENDER}</sender>`));
+    expect(nws.report.origin).toBe(ORIGINS.nws);
+    expect(blocksOf(nws.report)).toEqual(["info[0].area[0] polygon", "info[0].area[0] code", "info[0].area[1] code"]);
+    // Another sender can mean the union of the parts of an element, as CAP tells. Its areas keep the union rule.
+    const other = mapOne(body);
+    expect(other.problems).toEqual([]);
+    expect(blocksOf(other.report)).toEqual(["none polygon", "none code"]);
   });
 
   it("gives no report and no problem for an acknowledgment", () => {

@@ -33,7 +33,7 @@ const samePosition = (a: Position, b: Position): boolean => a[0] === b[0] && a[1
  * and the last point is the first point. A ring that does not close is a note, and the function closes
  * it. A bad point, or fewer than 4 points, is a lossy problem, and the function gives no area.
  */
-export function capPolygon(text: string, path: string, problems: ProblemSink): Area | undefined {
+export function capPolygon(text: string, path: string, problems: ProblemSink): Extract<Area, { readonly type: "polygon" }> | undefined {
   const ring: Position[] = [];
   for (const point of text.trim().split(/\s+/)) {
     if (point === "") continue;
@@ -61,7 +61,7 @@ export function capPolygon(text: string, path: string, problems: ProblemSink): A
  * This function reads a CAP circle: a point, a space and a radius in kilometers. A bad circle is a
  * problem, and the function gives no area.
  */
-export function capCircle(text: string, path: string, problems: ProblemSink): Area | undefined {
+export function capCircle(text: string, path: string, problems: ProblemSink): Extract<Area, { readonly type: "circle" }> | undefined {
   const parts = text.trim().split(/\s+/);
   const center = parts.length === 2 ? capPosition(parts[0] as string) : undefined;
   const radiusKm = parts.length === 2 ? decimalOf(parts[1] as string) : undefined;
