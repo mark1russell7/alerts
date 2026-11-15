@@ -62,12 +62,15 @@ jobs:
           if-no-files-found: error
           retention-days: 90
       # The summary of this window and of the windows of the earlier runs on main, which are each a separate window.
+      # Each run uploads the records of its window before this step. Thus the loop reads each completed run, also a run whose
+      # summary failed. The folder past exists before the loop, so find does not fail when no earlier run has records.
       - name: All the measures
         if: github.event_name != 'pull_request'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          for id in $(gh run list --repo "$GITHUB_REPOSITORY" --workflow measure.yml --branch main --status success --limit 90 --json databaseId --jq '.[].databaseId'); do
+          mkdir -p past
+          for id in $(gh run list --repo "$GITHUB_REPOSITORY" --workflow measure.yml --branch main --status completed --limit 90 --json databaseId --jq '.[].databaseId'); do
             gh run download "$id" --repo "$GITHUB_REPOSITORY" --pattern 'measure-iem-[0-9]*' --dir "past/$id" || echo "No records in run $id."
           done
           files=$(find measure past -name records.jsonl 2>/dev/null | sort | paste -sd, -)
