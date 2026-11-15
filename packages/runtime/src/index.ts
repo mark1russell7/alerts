@@ -7,6 +7,7 @@ import { LOOPBACK, attachApi } from "./api.ts";
 import type { RuntimeLoop } from "./loop.ts";
 
 export { LOOPBACK, attachApi, statusOf, type ApiOptions, type Status } from "./api.ts";
+export * from "./config.ts";
 export * from "./delivery.ts";
 export * from "./events.ts";
 export * from "./fetch.ts";

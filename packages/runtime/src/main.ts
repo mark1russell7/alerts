@@ -5,19 +5,19 @@
  *
  * The environment gives `PORT` (8080), `PROBE_PORT` (9090), `SERVICE_PROFILE` (`local`) and
  * `ALERTS_HOME` (the folder `.alerts` in the home folder). The value in parentheses is the value
- * without the variable. The folder holds the private files of the instance: `config.json`,
+ * without the variable. An empty value counts as no value, and a relative path starts at the working
+ * folder. The folder holds the private files of the instance: `config.json`,
  * `secrets.env` and the log `runtime.sqlite`. No repository holds them.
  */
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
-import { homedir } from "node:os";
 import { join } from "node:path";
 import { realClock, wallClock } from "@mark1russell7/algebra/clock";
-import { parseConfig } from "@mark1russell7/alerts";
 import { parseEnvFile } from "@mark1russell7/service/host";
 import { errorMessage } from "@mark1russell7/text";
 import { redactSecrets } from "@mark1russell7/text/redact";
 import { fetchTransport } from "polite-crawler/api";
+import { alertsHome, configPath, envSecrets, fileSource, requireConfig } from "./config.ts";
 import { PROFILES, declare } from "./index.ts";
 import { INSTANCE_CHANNELS, openInstance, USER_AGENT } from "./instance.ts";
 import { openRuntimeLog } from "./log.ts";
@@ -34,22 +34,21 @@ const name = process.env["SERVICE_PROFILE"] ?? "local";
 const profile = PROFILES[name];
 if (profile === undefined) throw new Error(`SERVICE_PROFILE is "${name}". The profiles are: ${Object.keys(PROFILES).join(", ")}.`);
 
-const home = process.env["ALERTS_HOME"] ?? join(homedir(), ".alerts");
+const home = alertsHome(process.env, process.cwd());
 
 // A problem of the file names its line and its key, and no value.
 const secrets = parseEnvFile(readFileSync(join(home, "secrets.env"), "utf8"));
 if (secrets.problems.length > 0) throw new Error(`The file secrets.env has these problems:\n- ${secrets.problems.join("\n- ")}`);
 const values = Object.values(secrets.env);
 
-const secret = (key: string): string | undefined => secrets.env[key];
+const secret = envSecrets(secrets.env);
 
-// A problem of the parse holds no value of the file and no value of a secret.
-const parsed = parseConfig(readFileSync(join(home, "config.json"), "utf8"), INSTANCE_CHANNELS, secret);
-if (parsed.tag === "err") throw new Error(`The file config.json has these problems:\n- ${parsed.error.join("\n- ")}`);
+// A problem of the configuration holds no value of the file, no value of a secret and no path.
+const config = await requireConfig(fileSource(configPath(process.env, process.cwd())), INSTANCE_CHANNELS, secret);
 
 const log = openRuntimeLog(join(home, "runtime.sqlite"));
 const instance = openInstance({
-  config: parsed.value,
+  config,
   secret,
   log,
   clock: realClock,

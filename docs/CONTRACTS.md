@@ -401,6 +401,10 @@ A problem names ids, fields and the names of secrets. It does not hold the value
 
 The function `parseConfig` reads the JSON text of the configuration. It checks the JSON, then the schema, then the references. Its result is a `Result` of `@mark1russell7/optional`: the configuration and the recipients, or the problems. The runtime starts only with an `ok` result. A problem of the JSON does not quote the text, because the text can hold a private value.
 
+The runtime reads the text with `requireConfig`. A `ConfigSource` gives the text. Today it is the private file `config.json` in the folder `ALERTS_HOME`, or in `~/.alerts` with no variable. A procedure that gives the configuration replaces the file later, with the same interface.
+
+The entry reads the keys of `secrets.env` in the same folder with `parseEnvFile` of `@mark1russell7/service/host`. `envSecrets` gives them as the secret store. The keys do not go into `process.env`, because each child process gets that environment. On a problem, `requireConfig` throws `ConfigRefused`, and the process does not start. A read error gives only its code, because the path can hold a user name.
+
 The function `sourcePlaces` gives the places for one source, with no label, and with a position only when the place shares it with that source. The function `localPlaces` gives each position for the matching on the machine of the instance.
 
 A person also watches subjects, other than places, in `PersonWatch.subjects`: a source of the system, a service or a cloud region. A watch with no id matches each subject of its system. A rule with places does not apply to a subject. The person who operates the system watches `{ system: "alerts.source" }`, and gets the health reports.
