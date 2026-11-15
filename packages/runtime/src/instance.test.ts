@@ -10,7 +10,7 @@ import { CANARY_PATH, createNwsSource } from "@mark1russell7/alerts-source-nws-a
 import { quotaGate, type Exchange, type Transport } from "polite-crawler/api";
 import { DEFAULT_POLICY } from "polite-crawler/politeness";
 import { afterEach, describe, expect, it } from "vitest";
-import { DAEMON_CHECK, DELIVERY_TIMES, INSTANCE_CHANNELS, INSTANCE_CHECK, INSTANCE_SOURCES, INSTANCE_TIMES, instanceProblems, openInstance, PING_URL_KEY, SOURCE_POLICY, sourcePace, USER_AGENT_NAME, type Instance, type InstanceOptions } from "./instance.ts";
+import { CHECKS_KEY, checksKeys, DAEMON_CHECK, DELIVERY_TIMES, INSTANCE_CHANNELS, INSTANCE_CHECK, INSTANCE_SOURCES, INSTANCE_TIMES, instanceProblems, openInstance, PING_URL_KEY, SOURCE_POLICY, sourcePace, USER_AGENT_NAME, type Instance, type InstanceOptions } from "./instance.ts";
 import { overdueLimit } from "./delivery.ts";
 import type { ShapeOutcome } from "./shapes.ts";
 import { nextFetch } from "./view.ts";
@@ -416,6 +416,33 @@ describe("openInstance", () => {
     expect(message).toContain("The value of PUSHOVER_APP_TOKEN is not a key of Pushover");
     expect(message).toContain("The Pushover user key of person-1 is not 30 letters and digits.");
     expect(message).not.toMatch(/bad-token-value|bad-user-value/);
+  });
+});
+
+describe("the keys of the status check", () => {
+  // Fake values only. The test looks for them in each problem.
+  const KEY = "k".repeat(32);
+  const URL_OF_CHECK = "https://hc-ping.com/00000000-0000-4000-8000-000000000000";
+
+  it("gives the key of the management API and the ping URL of secrets.env", () => {
+    expect(checksKeys({ text: `${CHECKS_KEY}=${KEY}\n${PING_URL_KEY}=${URL_OF_CHECK}\n` })).toEqual({ tag: "ok", value: { key: KEY, url: URL_OF_CHECK } });
+  });
+
+  it("gives a problem with no value and no path for a missing key, a bad line and a failed read", () => {
+    const problems = [
+      checksKeys({ text: `${CHECKS_KEY}=${KEY}\n` }),
+      checksKeys({ text: `${CHECKS_KEY}=${KEY}\n${PING_URL_KEY}=\n` }),
+      checksKeys({ text: `${CHECKS_KEY}=${KEY}\n${PING_URL_KEY}=${URL_OF_CHECK}\nnot a line\n` }),
+      checksKeys({ code: "ENOENT" }),
+    ].map((result) => (result.tag === "err" ? result.error.join(" ") : "ok"));
+    expect(problems[0]).toBe(`The file secrets.env needs ${CHECKS_KEY} and ${PING_URL_KEY} for this check.`);
+    expect(problems[1]).toBe(problems[0]);
+    expect(problems[2]).toMatch(/^The file secrets\.env: /);
+    expect(problems[3]).toBe("The file secrets.env cannot be read (ENOENT).");
+    for (const problem of problems) {
+      expect(problem).not.toContain(KEY);
+      expect(problem).not.toContain(URL_OF_CHECK);
+    }
   });
 });
 
