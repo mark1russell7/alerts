@@ -9,7 +9,6 @@
  */
 
 export {
-  categoryOf,
   EVENT_CODES,
   fromEventCode,
   fromEventName,

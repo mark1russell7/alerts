@@ -1,8 +1,8 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fakeClock, type Clock } from "@mark1russell7/algebra/clock";
-import { reportId, type Expectation, type FetchOutcome, type Observation, type ObservationId, type PlaceId, type Report, type SourceDescriptor, type SourceId, type SourceProcedures, type WatchedPlace } from "@mark1russell7/alerts";
+import { fakeWallClock, type WallClock } from "@mark1russell7/algebra/clock";
+import { reportId, type Expectation, type FetchOutcome, type Observation, type ObservationId, type PlaceId, type Report, type SourceDescriptor, type SourceId, type SourceProcedures, type Watch, type WatchedPlace } from "@mark1russell7/alerts";
 import { random, seedsFrom } from "@mark1russell7/rigor-generators";
 import { afterEach, describe, expect, it } from "vitest";
 import type { RuntimeEvent } from "./events.ts";
@@ -117,7 +117,7 @@ function warningsOf(seed: number): Warning[] {
  * This function makes a fake source of a world. Its outcome is a function of the seed and the time of the
  * fetch only. Thus a run after a restart gets the same outcome at the same time.
  */
-function worldSource(id: SourceId, interval: number, seed: number, warnings: readonly Warning[], clock: Clock, maxQuiet?: number): SourceProcedures {
+function worldSource(id: SourceId, interval: number, seed: number, warnings: readonly Warning[], clock: WallClock, maxQuiet?: number): SourceProcedures {
   const timeOf = (warning: Warning) => (id === API ? warning.issued : warning.carried);
   return {
     describe: () => descriptor(id, interval, maxQuiet),
@@ -177,9 +177,9 @@ interface WorldRun {
 /** This function runs a world for two hours. With `cutAt`, the process stops at that event, and a new runtime opens the file again. */
 async function runWorld(seed: number, path: string, cutAt?: number): Promise<WorldRun> {
   const warnings = warningsOf(seed);
-  const clock = fakeClock(T0);
+  const clock = fakeWallClock(T0);
   const sources = [worldSource(API, MINUTE, seed, warnings, clock), worldSource(WEA, 2 * MINUTE, seed, warnings, clock, 20 * MINUTE)];
-  const options = (log: RuntimeLog, run: string): RuntimeOptions => ({ log, clock, sources, watch: { places: [KANSAS], kinds: ["met"] }, view: VIEW, run });
+  const options = (log: RuntimeLog, run: string): RuntimeOptions => ({ log, clock, sources, watch: () => ({ places: [KANSAS], kinds: ["met"] }), view: VIEW, run });
   const end = T0 + 120 * MINUTE;
   let log = openRuntimeLog(path);
   let runtime = openRuntime(options(cutAt === undefined ? log : crashing(log, cutAt), "run-0"));
@@ -247,10 +247,10 @@ describe("one pass of the runtime", () => {
   }
 
   function open(sources: readonly SourceProcedures[], extra: Partial<RuntimeOptions> = {}) {
-    const clock = fakeClock(T0);
+    const clock = fakeWallClock(T0);
     const log = openRuntimeLog(":memory:");
     try {
-      const runtime = openRuntime({ log, clock, sources, watch: { places: [KANSAS], kinds: ["met"] }, view: VIEW, run: "run-0", ...extra });
+      const runtime = openRuntime({ log, clock, sources, watch: () => ({ places: [KANSAS], kinds: ["met"] }), view: VIEW, run: "run-0", ...extra });
       return { clock, log, runtime };
     } catch (error) {
       log.close();
@@ -327,7 +327,7 @@ describe("one pass of the runtime", () => {
   });
 
   it("keeps the state of the log when a write fails, and does the work again in the next pass", async () => {
-    const clock = fakeClock(T0);
+    const clock = fakeWallClock(T0);
     const inner = openRuntimeLog(":memory:");
     let fail = true;
     const flaky: RuntimeLog = {
@@ -342,13 +342,27 @@ describe("one pass of the runtime", () => {
     };
     const seen = observation(API, "w1", T0, { key: "w1", issued: T0 });
     const source = scripted(API, async () => ({ ok: true, observations: [seen], complete: true }));
-    const runtime = openRuntime({ log: flaky, clock, sources: [source], watch: { places: [KANSAS], kinds: ["met"] }, view: VIEW, run: "run-0" });
+    const runtime = openRuntime({ log: flaky, clock, sources: [source], watch: () => ({ places: [KANSAS], kinds: ["met"] }), view: VIEW, run: "run-0" });
     await expect(runtime.pass()).rejects.toThrow("The disk is full.");
     expect(runtime.state()).toEqual(rebuild(inner.read(), runtime.config));
     const pass = await runtime.pass();
     expect(pass.fetched).toEqual([API]);
     expect(runtime.state().merge.reports.map((entry) => entry.key)).toEqual(["w1"]);
     inner.close();
+  });
+
+  it("gives each source the watch of that source", async () => {
+    const got: [SourceId, Watch][] = [];
+    const record = (id: SourceId) => scripted(id, async (input) => (got.push([id, input.watch]), { ok: true, observations: [], complete: true }));
+    // Only the second source gets the position: a public point in Wichita KS.
+    const watches: Record<string, Watch> = { [API]: { places: [KANSAS] }, [WEA]: { places: [{ ...KANSAS, at: [-97.34, 37.69] }], kinds: ["met"] } };
+    const { runtime, log } = open([record(API), record(WEA)], { watch: (source) => watches[source.id] ?? { places: [] } });
+    await runtime.pass();
+    expect(got).toEqual([
+      [API, watches[API]],
+      [WEA, watches[WEA]],
+    ]);
+    log.close();
   });
 
   it("gives each pass to the hook, with the time of the next pass", async () => {

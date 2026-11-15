@@ -339,6 +339,42 @@ Each assessment has its reasons: the gate that stopped it, the class, the two lo
 
 The table becomes the calculation of AL-31. The calculation multiplies the probability that the event is real, the impact on the person and the urgency. It compares the result with the cost to interrupt the person at that time. The probabilities come from base rates that the event log measures, not from values that a person sets.
 
+## The service
+
+The runtime operates as one service of `@mark1russell7/service`. Its entry is `packages/runtime/src/main.ts`. Only that file uses `run()`, and only that file reads a real clock.
+
+The loop of the runtime is the worker `passes`:
+
+- The worker does one pass at a time. After a pass, it sleeps until the wake time of the pass, or until `wake()`.
+- The function `loopTimes` gives the times of the loop from the limits of the runtime. No time of the loop is set by hand.
+- The bound of a pass is the longest fetch limit, plus two calls of the delivery. A failed pass waits its retry, and the wait doubles up to the shortest interval of a source.
+- The loop reads two clocks. The monotonic clock of the lifecycle gives its waits and its bounds. The wall clock gives the instants of the runtime.
+- A test gives `fakeClock` and `fakeWallClock` of `@mark1russell7/algebra/clock`.
+
+The service keeps the loop alive and safe:
+
+- The check `passes.progress` gates the liveness. It fails when a pass takes longer than its bound, or when the next pass is later than its bound. Then the supervisor stops the process and starts it again.
+- The drain holds the pass in flight. Its cap is the cap of the profile, plus the bound of a pass. Thus a shutdown does not cut a pass.
+- The service closes the log in the phase `tear down dependencies`, after the close of the worker. Thus no pass writes to a closed log.
+- The API on the loopback address gives `GET /status`: the time, the wake time, the sources, the sends and the conflicts of the last pass. It also gives the reason when the loop is stuck. The probes have a port of their own.
+
+The function `openInstance` makes the instance of the owner from the private configuration:
+
+- The sources are the NWS API and IPAWS. The channel is Pushover.
+- Each source gets the watch of `sourcePlaces`. Thus a source gets the region codes, and a position only when the place shares it with that source.
+- The User-Agent of each request names the project and its page. It names no person.
+- The times of the delivery come from facts of the channel. A call has a limit of 10 seconds. The poll goes at the pace of the emergency repeats, 30 seconds.
+- A failed call goes again after one time limit of a call. The flight limit is two time limits.
+- The limits of the lateness use the quantile 0.99, at the level 0.95.
+
+The instance does not start when it finds one of these problems:
+
+- a missing secret, or a key that does not have the form of a Pushover key (30 letters and digits)
+- each problem of `parseConfig`: the JSON, the schema and the references
+- a place that no source covers. Usually the place does not have a code of each level: the zone, the county, SAME, the state and the country.
+
+The environment gives `PORT` (8080), `PROBE_PORT` (9090) and `SERVICE_PROFILE` (`local`, `daemon` or `pod`). The folder `ALERTS_HOME` (`.alerts` in the home folder) holds the private files: `config.json`, `secrets.env` and the log `runtime.sqlite`. No repository holds them. A problem of `secrets.env` names its line and its key, and no value. The output of a failed pass shows no value of `secrets.env`.
+
 ## People and places
 
 The contracts carry only ids: `PersonId` and `PlaceId`. The runtime gets people, places, addresses and the night rule of each person from the private configuration.

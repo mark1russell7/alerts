@@ -4,7 +4,7 @@
  * time of the next pass. The loop of the service starts the passes. The runtime reads only the clock
  * that it gets.
  */
-import type { Clock } from "@mark1russell7/algebra/clock";
+import type { WallClock } from "@mark1russell7/algebra/clock";
 import type { Duration, FetchOutcome, Instant, SourceDescriptor, SourceId, SourceProcedures, Watch } from "@mark1russell7/alerts";
 import { errorMessage } from "@mark1russell7/text";
 import { createDispatcher, type DeliveryOptions, type DeliveryStep } from "./delivery.ts";
@@ -19,14 +19,17 @@ import { earliest, nextFetch, systemEvent, systemView, type SystemView, type Vie
 export interface RuntimeOptions {
   readonly log: RuntimeLog;
   /**
-   * The clock of the runtime, and the only clock that it reads. Its `now()` is the time in milliseconds
-   * since the epoch. A test gives `fakeClock(start)` of `@mark1russell7/algebra/clock`.
+   * The clock of the runtime, and the only clock that it reads. Its `now()` is the instant: the time in
+   * milliseconds since the epoch. A test gives `fakeWallClock(start)` of `@mark1russell7/algebra/clock`.
    */
-  readonly clock: Clock;
+  readonly clock: WallClock;
   /** The adapters of the sources. Each adapter holds its transport, thus a test gives a transport with faults. */
   readonly sources: readonly SourceProcedures[];
-  /** The places and the kinds that each fetch asks for. */
-  readonly watch: Watch;
+  /**
+   * This function gives the places and the kinds that each fetch of a source asks for. Give each source
+   * only what it needs. The function `sourcePlaces` of the core gives a position only to a source that can have it.
+   */
+  readonly watch: (source: SourceDescriptor) => Watch;
   /** The configuration of the views, other than the descriptors of the sources. */
   readonly view: Omit<ViewConfig, "sources">;
   /** The id of this run. Each start of the process has a new id. */
@@ -103,7 +106,7 @@ export function openRuntime(options: RuntimeOptions): Runtime {
     const started = clock.now();
     const cursor = state.cursors[descriptor.id];
     // A fetch that throws at once is a failure of its source too, not a failure of the pass.
-    const work = Promise.resolve().then(() => source.fetch({ watch: options.watch, ...(cursor === undefined ? {} : { cursor }) }));
+    const work = Promise.resolve().then(() => source.fetch({ watch: options.watch(descriptor), ...(cursor === undefined ? {} : { cursor }) }));
     const outcome = await bounded(work, options.fetchLimit?.(descriptor) ?? descriptor.interval, clock);
     return append(fetchEvents({ source: descriptor.id, procedures: source, started, ended: clock.now(), outcome, known: (id) => log.has(id) }));
   };
@@ -152,7 +155,7 @@ export function openRuntime(options: RuntimeOptions): Runtime {
  * A fetch that throws is a fault of the adapter. Its outcome is a failure, and the health records it.
  * The fetch continues after a timeout, and the runtime ignores its outcome. The adapter owns its transport.
  */
-export function bounded(work: Promise<FetchOutcome>, limit: Duration, clock: Clock): Promise<FetchOutcome> {
+export function bounded(work: Promise<FetchOutcome>, limit: Duration, clock: WallClock): Promise<FetchOutcome> {
   return limited<FetchOutcome>(
     work,
     limit,
