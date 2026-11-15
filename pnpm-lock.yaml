@@ -372,6 +372,9 @@ importers:
       '@mark1russell7/alerts-channel-pushover':
         specifier: workspace:*
         version: link:../channel-pushover
+      '@mark1russell7/alerts-shapes-nws':
+        specifier: workspace:*
+        version: link:../shapes-nws
       '@mark1russell7/alerts-source-ipaws':
         specifier: workspace:*
         version: link:../source-ipaws

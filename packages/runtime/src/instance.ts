@@ -7,6 +7,7 @@ import { delay, type Clock, type WallClock } from "@mark1russell7/algebra/clock"
 import { localPlaces, sourceCovers, sourcePlaces, type ChannelDescriptor, type DelayLimitOptions, type ParsedConfig, type SecretLookup } from "@mark1russell7/alerts";
 import { CHANNEL_ID, createPushoverChannel, isPushoverKey, pushoverDescriptor, PUSHOVER_REPEAT_MS, PUSHOVER_TIMEOUT_MS, type PushoverChannelOptions } from "@mark1russell7/alerts-channel-pushover";
 import { createIpawsSource, IPAWS_DESCRIPTOR, WEA_EXPECTATION } from "@mark1russell7/alerts-source-ipaws";
+import { createShapeStore, type ShapeCache } from "@mark1russell7/alerts-shapes-nws";
 import { createNwsSource, NWS_DESCRIPTOR } from "@mark1russell7/alerts-source-nws-api";
 import type { Pace, Transport } from "polite-crawler/api";
 import { HostScheduler } from "polite-crawler/politeness";
@@ -14,6 +15,8 @@ import type { DeliveryOptions } from "./delivery.ts";
 import type { RuntimeLog } from "./log.ts";
 import { createLoop, loopTimes, type LoopTimes, type RuntimeLoop } from "./loop.ts";
 import { openRuntime, type Pass, type Runtime, type RuntimeOptions } from "./runtime.ts";
+import { keepShapes, type InstanceShapes, type ShapeOutcome } from "./shapes.ts";
+import { earliest, nextFetch } from "./view.ts";
 
 /** The name of the secret that holds the API token of the Pushover application. */
 export const PUSHOVER_TOKEN = "PUSHOVER_APP_TOKEN";
@@ -72,12 +75,21 @@ export interface InstanceOptions {
    * source. A test with a fake clock gives a long limit, because a slow runner moves the fake clock during a fetch.
    */
   readonly fetchLimit?: RuntimeOptions["fetchLimit"];
+  /**
+   * The cache of the store of shapes: the outlines of the NWS zones for the map. Without it, the instance gets no outline, and the
+   * map has no region. The entry gives the file `shapes.sqlite` of the private folder. The instance closes it at `shapes.close()`.
+   */
+  readonly shapes?: ShapeCache;
+  /** The instance gives each refresh of the outlines to this function. */
+  readonly onShapes?: (outcome: ShapeOutcome) => void;
 }
 
-/** The instance: the runtime and its loop. */
+/** The instance: the runtime, its loop and the outlines of the regions. */
 export interface Instance {
   readonly runtime: Runtime;
   readonly loop: RuntimeLoop;
+  /** The outlines of the regions. The match by shape and the map route read them here. */
+  readonly shapes: InstanceShapes;
 }
 
 /**
@@ -124,6 +136,11 @@ export function openInstance(options: InstanceOptions): Instance {
   const problems = [...tokenProblems, ...userProblems, ...placeProblems];
   if (problems.length > 0) throw new Error(`The instance does not start. The configuration has these problems:\n- ${problems.join("\n- ")}`);
 
+  // The store of shapes shares the pace of the sources. Thus its requests to the NWS API keep the rests of that host.
+  const store = options.shapes === undefined ? undefined : createShapeStore({ pace, transport: options.transport, userAgent: USER_AGENT, cache: options.shapes });
+  const cache = options.shapes;
+  const shapes = keepShapes({ store, places, onShapes: options.onShapes, close: () => cache?.close() });
+
   const pushover = createPushoverChannel({ token, fetch: options.pushover, now: () => wall.now() });
   const callLimit = CALL_LIMIT;
   const delivery: DeliveryOptions = {
@@ -153,7 +170,11 @@ export function openInstance(options: InstanceOptions): Instance {
     delivery,
     // The loop exists before the first pass, and only a pass starts a wake.
     wake: () => loop.wake(),
-    ...(options.onPass === undefined ? {} : { onPass: options.onPass }),
+    // After each pass, the store of shapes gets the outlines that are due, and it ends before the next fetch of a source.
+    onPass: async (pass) => {
+      shapes.afterPass(pass.view.incidents, earliest(runtime.config.sources.map((descriptor) => nextFetch(runtime.state(), descriptor))));
+      await options.onPass?.(pass);
+    },
     ...(options.fetchLimit === undefined ? {} : { fetchLimit: options.fetchLimit }),
   });
   const loop = createLoop({
@@ -163,5 +184,5 @@ export function openInstance(options: InstanceOptions): Instance {
     times: loopTimes(runtime.config.sources, { delivery }),
     ...(options.onError === undefined ? {} : { onError: options.onError }),
   });
-  return { runtime, loop };
+  return { runtime, loop, shapes };
 }

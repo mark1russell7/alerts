@@ -11,7 +11,7 @@
  * `ALERTS_HOME` (the folder `.alerts` in the home folder). The value in parentheses is the value
  * without the variable. An empty value counts as no value, and a relative path starts at the working
  * folder. The folder holds the private files of the instance: `config.json`,
- * `secrets.env` and the log `runtime.sqlite`. No repository holds them.
+ * `secrets.env`, the log `runtime.sqlite` and the outlines `shapes.sqlite`. No repository holds them.
  */
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -21,11 +21,13 @@ import type { ServiceBuilder } from "@mark1russell7/service";
 import { parseEnvFile } from "@mark1russell7/service/host";
 import { errorMessage } from "@mark1russell7/text";
 import { redactSecrets } from "@mark1russell7/text/redact";
+import { openShapeCache, SHAPES_FILE } from "@mark1russell7/alerts-shapes-nws";
 import { fetchTransport } from "polite-crawler/api";
 import { alertsHome, configPath, envSecrets, fileSource, requireConfig } from "./config.ts";
 import { PROFILES, declare } from "./index.ts";
 import { INSTANCE_CHANNELS, openInstance, USER_AGENT } from "./instance.ts";
 import { openRuntimeLog } from "./log.ts";
+import { shapeReport } from "./shapes.ts";
 import { supervisor } from "./supervise.ts";
 
 /** This function gives a port from the environment, or the fallback when the variable is not set. */
@@ -55,6 +57,9 @@ async function runtime(): Promise<ServiceBuilder> {
   const config = await requireConfig(fileSource(configPath(process.env, process.cwd())), INSTANCE_CHANNELS, secret);
 
   const log = openRuntimeLog(join(home, "runtime.sqlite"));
+  // A broken file of shapes goes into quarantine, and the store starts empty. Then the outlines come again from the NWS API.
+  const shapes = openShapeCache(join(home, SHAPES_FILE));
+  if (shapes.quarantined !== undefined) console.error(`The file ${SHAPES_FILE} was broken. It is in quarantine, and the store of shapes starts empty.`);
   const instance = openInstance({
     config,
     secret,
@@ -66,10 +71,15 @@ async function runtime(): Promise<ServiceBuilder> {
     run: randomUUID(),
     // The output gets no secret, also when an error quotes a request.
     onError: (error, failures) => console.error(`A pass failed (${failures} in sequence): ${redactSecrets(errorMessage(error), values)}`),
+    shapes,
+    onShapes: (outcome) => {
+      const report = shapeReport(outcome);
+      if (report !== undefined) console.error(redactSecrets(report, values));
+    },
   });
 
-  // The service closes the log in its shutdown.
-  return declare({ port: port("PORT", 8080), probePort: port("PROBE_PORT", 9090), profile, loop: instance.loop, log });
+  // The service closes the log and the store of shapes in its shutdown.
+  return declare({ port: port("PORT", 8080), probePort: port("PROBE_PORT", 9090), profile, loop: instance.loop, log, shapes: instance.shapes });
 }
 
 const MODES = ["supervise"];

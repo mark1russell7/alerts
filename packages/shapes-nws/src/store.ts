@@ -3,7 +3,7 @@
  * the basemap of a state from its records. Its refresh gets the records from the zone service of the
  * NWS API, one request at a time, between the fetches of the alerts.
  */
-import type { Duration, FetchFailure, Instant, MapRegion, ShapeLookup, SourceId } from "@mark1russell7/alerts";
+import type { Duration, FetchFailure, Instant, MapRegion, RegionCode, ShapeLookup, SourceId } from "@mark1russell7/alerts";
 import { createRequester, problemDetail } from "@mark1russell7/alerts-fetch";
 import { stateOfUgc } from "@mark1russell7/alerts-format-nws";
 import { NWS_BASE_URL } from "@mark1russell7/alerts-source-nws-api";
@@ -89,6 +89,11 @@ export interface Refreshed {
 export interface ShapeStore {
   /** This function gives the shapes of a region code. It reads only the records. */
   readonly lookup: ShapeLookup;
+  /**
+   * This function gives the region of a code, with the name and the shapes of its zone, or `undefined` when the store has no record.
+   * The code of the region is the UGC code of the zone. Thus a SAME code gives the UGC code of its county.
+   */
+  region(code: RegionCode): MapRegion | undefined;
   /** This function gives the regions of the basemap of a state: each county, then each forecast zone, in the order of the code. */
   basemap(state: string): readonly MapRegion[];
   /** This function gives the time when the next task of these regions is due, or `undefined` when no task waits. */
@@ -222,13 +227,18 @@ export function createShapeStore(options: ShapeStoreOptions): ShapeStore {
       const key = zoneOfCode(code);
       return key === undefined ? undefined : zones.get(zoneKey(key))?.shapes;
     },
+    region(code) {
+      const key = zoneOfCode(code);
+      const zone = key === undefined ? undefined : zones.get(zoneKey(key));
+      return zone === undefined ? undefined : { code: { system: "ugc", code: zone.id }, name: zone.name, shapes: zone.shapes };
+    },
     basemap(name) {
       const code = stateCode(name);
       if (code === undefined) return [];
       return ZONE_KINDS.flatMap((kind) =>
         (lists.get(listKey(code, kind))?.ids ?? []).flatMap((id): MapRegion[] => {
           const zone = zones.get(zoneKey({ kind, id }));
-          return zone === undefined ? [] : [{ code: { system: "ugc", code: id }, name: zone.name, shapes: zone.shapes }];
+          return zone === undefined ? [] : [{ code: { system: "ugc", code: zone.id }, name: zone.name, shapes: zone.shapes }];
         }),
       );
     },
