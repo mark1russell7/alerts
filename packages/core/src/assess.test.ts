@@ -18,10 +18,13 @@ import { ASSESSED_LEVELS } from "./contracts.ts";
 import {
   DEFAULT_ASSESS_POLICY,
   LIFE_SAFETY_KINDS,
+  admits,
   assess,
+  classOf,
   hasKind,
   higherLevel,
   matchPlaces,
+  matchSubjects,
   regionCovers,
   tableLevel,
 } from "./assess.ts";
@@ -220,6 +223,57 @@ describe("the gates", () => {
   it("gives none to a status that the policy does not send", () => {
     expect(assess(incident({ status: "exercise" }), person(), places).reasons).toEqual([{ kind: "status", status: "exercise" }]);
   });
+
+  it("sends the status system only for the kinds of the core", () => {
+    expect(admits(DEFAULT_ASSESS_POLICY, { status: "system", kind: { code: "system.health.failing", label: "" } })).toBe(true);
+    expect(admits(DEFAULT_ASSESS_POLICY, { status: "system", kind: { code: "system.coverage.met.tornado", label: "" } })).toBe(true);
+    expect(admits(DEFAULT_ASSESS_POLICY, { status: "actual", kind: { code: "system.health.failing", label: "" } })).toBe(false);
+    expect(admits(DEFAULT_ASSESS_POLICY, { status: "system", kind: { code: "met.tornado", label: "" } })).toBe(false);
+    // The NWS maps an administrative message to `system.admin`. It stays in the table `otherwise`.
+    expect(admits(DEFAULT_ASSESS_POLICY, { status: "actual", kind: { code: "system.admin", label: "" } })).toBe(true);
+    expect(admits(DEFAULT_ASSESS_POLICY, { status: "system", kind: { code: "system.admin", label: "" } })).toBe(false);
+    expect(classOf(DEFAULT_ASSESS_POLICY, "system.admin")).toBeUndefined();
+  });
+
+  it("gives the coverage of a life-safety kind its own class, and each other report of the core at most notice", () => {
+    const worst = { severity: "extreme", urgency: "immediate" } as const;
+    expect(tableLevel(DEFAULT_ASSESS_POLICY, { kind: { code: "system.coverage.met.tornado", label: "" }, ...worst })).toMatchObject({ class: "system-coverage", level: "life-safety" });
+    expect(tableLevel(DEFAULT_ASSESS_POLICY, { kind: { code: "system.coverage.met.winter", label: "" }, ...worst })).toMatchObject({ class: "system", level: "notice" });
+    expect(tableLevel(DEFAULT_ASSESS_POLICY, { kind: { code: "system.health.failing", label: "" }, ...worst })).toMatchObject({ class: "system", level: "notice" });
+  });
+});
+
+describe("the subjects and the areas of a place", () => {
+  const source = { system: "alerts.source", id: "api" };
+  const down = (fields: Draft = {}): Incident =>
+    incident({ status: "system", kind: "system.health.failing", severity: "moderate", urgency: "expected", areas: [], about: [source], ...fields });
+  const watcher = (rules: readonly LevelRule[] = [], subjects: PersonWatch["subjects"] = [{ system: "alerts.source" }]): PersonWatch => ({ ...person(rules), subjects });
+
+  it("matches a watched subject by its system, and by its id when the watch has one", () => {
+    expect(matchSubjects(down(), [{ system: "alerts.source" }, { system: "alerts.source", id: "api" }, { system: "alerts.source", id: "radio" }, { system: "cloud" }])).toEqual([
+      { system: "alerts.source" },
+      { system: "alerts.source", id: "api" },
+    ]);
+    expect(assess(down(), watcher(), places)).toMatchObject({ level: "notice", places: [], reasons: [{ kind: "table" }, { kind: "subject", subject: { system: "alerts.source" } }] });
+  });
+
+  it("gives none with the reason no-subject to a person who watches no subject of the incident", () => {
+    expect(assess(down(), person(), places).reasons).toEqual([{ kind: "no-subject" }]);
+    expect(assess(down(), watcher([], [{ system: "cloud" }]), places).level).toBe("none");
+  });
+
+  it("applies a rule with no places to a subject, and not a rule with places", () => {
+    expect(assess(down(), watcher([{ places: [home], max: "none" }, { kinds: ["system"], max: "digest" }]), places)).toMatchObject({
+      level: "digest",
+      reasons: [{ kind: "table" }, { kind: "subject" }, { kind: "rule", index: 1, max: "digest" }],
+    });
+  });
+
+  it("matches an area of a watched place to that place only", () => {
+    const gap = incident({ areas: [{ type: "place", place: other }] });
+    expect(matchPlaces(gap, places)).toEqual([{ place: other, codes: [] }]);
+    expect(assess(gap, person([], [home]), places).reasons).toEqual([{ kind: "no-place" }]);
+  });
 });
 
 describe("the rules of a person", () => {
@@ -252,7 +306,7 @@ describe("the rules of a person", () => {
 });
 
 describe("the properties of the assessment", () => {
-  const kinds = ["met.tornado", "met.flood.flash", "met.thunderstorm.severe", "met.wind.high", "cbrne.radiological"];
+  const kinds = ["met.tornado", "met.flood.flash", "met.thunderstorm.severe", "met.wind.high", "cbrne.radiological", "system.coverage.met.tornado", "system.health.failing"];
   const levels = ASSESSED_LEVELS;
 
   function randomIncident(r: Random): Incident {
