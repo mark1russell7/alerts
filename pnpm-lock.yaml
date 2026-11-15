@@ -245,6 +245,9 @@ importers:
       '@mark1russell7/collections':
         specifier: ^0.10.2
         version: 0.10.2(zod@4.6.7)
+      '@mark1russell7/optional':
+        specifier: ^1.2.0
+        version: 1.2.0
       '@mark1russell7/rigor-generators':
         specifier: ^0.1.16
         version: 0.1.16

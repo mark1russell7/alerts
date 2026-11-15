@@ -80,7 +80,19 @@ import {
   type Watch,
   type WatchedPlace,
 } from "./contracts.ts";
-import { CONFIG_FORMAT, type AddressValue, type AlertConfig, type ContactConfig, type PersonConfig, type PlaceConfig, type SecretRef } from "./config.ts";
+import { err, ok, tryCatch, type Result } from "@mark1russell7/optional";
+import {
+  CONFIG_FORMAT,
+  loadConfig,
+  type AddressValue,
+  type AlertConfig,
+  type ContactConfig,
+  type PersonConfig,
+  type PlaceConfig,
+  type SecretLookup,
+  type SecretRef,
+} from "./config.ts";
+import type { Recipient } from "./delivery.ts";
 import type { Lateness, LatenessLimit, LatenessState } from "./lateness.ts";
 import { CATEGORIES, knownKind } from "./taxonomy.ts";
 
@@ -817,3 +829,41 @@ export const alertConfigSchema: z.ZodType<AlertConfig, AlertConfig> = schemaOf<A
     })
     .readonly(),
 );
+
+/**
+ * This function checks a value at a trust boundary. The result is the value, or one problem for each
+ * issue of the schema. A problem names the path and the rule. It does not hold the value, because the
+ * value can be private.
+ */
+export function checkWith<T>(schema: z.ZodType<T, T>, value: unknown): Result<T, readonly string[]> {
+  const parsed = schema.safeParse(value);
+  if (parsed.success) return ok(parsed.data);
+  return err(parsed.error.issues.map((issue) => `${pathText(issue.path)}: ${issue.message}`));
+}
+
+/** The text of the path of an issue, for example `places[0].codes[1]`. The root is `(root)`. */
+function pathText(path: readonly PropertyKey[]): string {
+  const text = path.map((part, index) => (typeof part === "number" ? `[${part}]` : `${index === 0 ? "" : "."}${String(part)}`)).join("");
+  return text === "" ? "(root)" : text;
+}
+
+/** A configuration that passed the schema and the load, with the recipient of each person. */
+export interface ParsedConfig {
+  readonly config: AlertConfig;
+  readonly recipients: readonly Recipient[];
+}
+
+/**
+ * This function reads the JSON text of the private configuration. It checks the JSON, then the schema,
+ * then the references with `loadConfig`. The runtime starts only with an `ok` result. The problems hold
+ * no value of the configuration and no value of a secret.
+ */
+export function parseConfig(text: string, channels: readonly ChannelDescriptor[], secret: SecretLookup): Result<ParsedConfig, readonly string[]> {
+  // The message of the JSON parser can quote the text, so the problem does not use it.
+  const json = tryCatch((): unknown => JSON.parse(text), () => ["The configuration is not valid JSON."]);
+  if (json.tag === "err") return json;
+  const checked = checkWith(alertConfigSchema, json.value);
+  if (checked.tag === "err") return checked;
+  const loaded = loadConfig(checked.value, channels, secret);
+  return loaded.problems.length > 0 ? err(loaded.problems) : ok({ config: checked.value, recipients: loaded.recipients });
+}

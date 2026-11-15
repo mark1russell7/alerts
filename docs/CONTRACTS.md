@@ -361,6 +361,8 @@ The schema `alertConfigSchema` checks the JSON of the configuration first. Then 
 
 A problem names ids, fields and the names of secrets. It does not hold the value of a secret, a label or a position.
 
+The function `parseConfig` reads the JSON text of the configuration. It checks the JSON, then the schema, then the references. Its result is a `Result` of `@mark1russell7/optional`: the configuration and the recipients, or the problems. The runtime starts only with an `ok` result. A problem of the JSON does not quote the text, because the text can hold a private value.
+
 The function `sourcePlaces` gives the places for one source, with no label, and with a position only when the place shares it with that source. The function `localPlaces` gives each position for the matching on the machine of the instance.
 
 A person also watches subjects, other than places, in `PersonWatch.subjects`: a source of the system, a service or a cloud region. A watch with no id matches each subject of its system. A rule with places does not apply to a subject. The person who operates the system watches `{ system: "alerts.source" }`, and gets the health reports.
@@ -381,6 +383,7 @@ The file `schemas.ts` of the core has one zod 4 schema for each data type of the
 - Each object is strict, so an unknown key fails. An optional key with the value `undefined` also fails.
 - No schema has a transform, so `z.toJSONSchema` converts each one for the procedure tools.
 - A refinement holds each rule of a value that a type cannot hold, for example the anchor of an incident or a known kind code.
+- The function `checkWith` checks a value with a schema at a boundary. Each problem names the path and the rule, for example `places[0].bufferKm`. It does not hold the value.
 
 ## Open points
 

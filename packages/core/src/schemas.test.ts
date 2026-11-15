@@ -91,6 +91,7 @@ import {
   certaintySchema,
   channelDescriptorSchema,
   channelIdSchema,
+  checkWith,
   contactConfigSchema,
   correlationKeySchema,
   coverageSchema,
@@ -122,6 +123,7 @@ import {
   observationIdSchema,
   observationSchema,
   operationSchema,
+  parseConfig,
   personConfigSchema,
   personIdSchema,
   personWatchSchema,
@@ -635,6 +637,59 @@ describe("the private configuration", () => {
     fails(personConfigSchema, { watch: { person: PERSON, places: [], rules: [] }, policies: [{ ...ESCALATION, level: "loud" }] });
     // A person who watches a place that the configuration does not have is a problem of the load, not of the form.
     holds(alertConfigSchema, { ...CONFIG, people: [{ watch: { person: PERSON, places: ["place:z"], rules: [] } }] });
+  });
+
+  const store = (name: string): string | undefined => (name === "PUSHOVER_USER" ? "user-test" : undefined);
+  const problemsOf = (text: string, secret = store): readonly string[] => {
+    const parsed = parseConfig(text, [CHANNEL], secret);
+    return parsed.tag === "err" ? parsed.error : [];
+  };
+
+  it("parses the JSON text of a configuration, and gives the recipients", () => {
+    const parsed = parseConfig(JSON.stringify(CONFIG), [CHANNEL], store);
+    expect(parsed.tag).toBe("ok");
+    if (parsed.tag === "ok") {
+      expect(parsed.value.config).toEqual(CONFIG);
+      expect(parsed.value.recipients.map((recipient) => recipient.addresses)).toEqual([{ [PUSHOVER]: { user: "user-test", device: "phone" } }]);
+    }
+  });
+
+  it("gives the problems of the JSON, of the form and of the references, each with its path", () => {
+    expect(problemsOf("{")).toEqual(["The configuration is not valid JSON."]);
+    // The path of a problem is its text before the first colon.
+    const pathsOf = (text: string): string[] => problemsOf(text).map((problem) => problem.slice(0, problem.indexOf(": ")));
+    expect(pathsOf("7")).toEqual(["(root)"]);
+    const wrong = { ...CONFIG, places: [{ ...CONFIG.places[0], bufferKm: "5" }, { ...CONFIG.places[1], codes: [{ system: "ugc", code: 7 }] }] };
+    expect(pathsOf(JSON.stringify(wrong))).toEqual(["places[0].bufferKm", "places[1].codes[0].code"]);
+    // The form holds, and the load finds the secret that the store does not have.
+    expect(problemsOf(JSON.stringify(CONFIG), () => undefined)).toEqual([expect.stringContaining("names the secret PUSHOVER_USER")]);
+  });
+
+  it("gives no value of the configuration and no value of a secret in a problem", () => {
+    // Each check looks for the start of the value, because the JSON parser quotes only a part of a text.
+    const prefix = "PRIVATE";
+    const value = `${prefix}-VALUE`;
+    // The message of the JSON parser quotes this text.
+    expect(problemsOf(`{"label": ${value}}`).join(" ")).not.toContain(prefix);
+    const wrong = {
+      ...CONFIG,
+      format: `alerts-config/${value}`,
+      places: [{ ...CONFIG.places[0], label: [value], bufferKm: value, at: [500, 37.68] }],
+      contacts: [{ ...CONFIG.contacts[0], address: { user: { secret: "PUSHOVER_USER", value } } }],
+    };
+    const problems = problemsOf(JSON.stringify(wrong));
+    expect(problems.length).toBeGreaterThanOrEqual(4);
+    expect(problems.join(" ")).not.toContain(prefix);
+    // The load: the store holds the value of one secret, and the problem names only the other secret.
+    const twoSecrets = { ...CONFIG, contacts: [{ ...CONFIG.contacts[0], address: { user: { secret: "PUSHOVER_USER" }, device: { secret: "MISSING" } } }] };
+    const loadProblems = problemsOf(JSON.stringify(twoSecrets), (name) => (name === "PUSHOVER_USER" ? value : undefined));
+    expect(loadProblems).toEqual([expect.stringContaining("names the secret MISSING")]);
+    expect(loadProblems.join(" ")).not.toContain(prefix);
+  });
+
+  it("gives each issue of a schema with its path, and a value that holds", () => {
+    expect(checkWith(secretRefSchema, { secret: "NAME" })).toEqual({ tag: "ok", value: { secret: "NAME" } });
+    expect(checkWith(secretRefSchema, { secret: "" })).toEqual({ tag: "err", error: ["secret: The name of a secret is a non-empty string."] });
   });
 
   it("gives a JSON Schema with the format as a constant", () => {
