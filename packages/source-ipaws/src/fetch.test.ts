@@ -113,6 +113,13 @@ describe("keeps", () => {
     expect(keeps(authority(same("000000")), states)).toBe(true);
     expect(keeps("<alert>", states)).toBe(true);
   });
+
+  it("keeps an alert for the full country, also with a code of a state that no watch has", () => {
+    const states = new Set(["KS"]);
+    expect(keeps(authority(same("048019") + same("000000")), states)).toBe(true);
+    expect(keeps(authority(same("048000")), states)).toBe(false);
+    expect(keeps(authority(same("020000")), states)).toBe(true);
+  });
 });
 
 describe("createIpawsFetch", () => {

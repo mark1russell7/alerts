@@ -27,6 +27,7 @@ import {
   higherLevel,
   matchPlaces,
   matchSubjects,
+  regionContains,
   regionCovers,
   tableLevel,
 } from "./assess.ts";
@@ -194,6 +195,47 @@ describe("the places", () => {
     expect(regionCovers(same("120173"), same("120173"))).toBe(true);
     expect(regionCovers(same("120173"), same("220173"))).toBe(false);
     expect(regionCovers(same("020173"), same("020175"))).toBe(false);
+  });
+
+  it("matches a SAME code of a state to each county of the state, and 000000 to each SAME code", () => {
+    const same = (code: string) => ({ system: "same", code });
+    expect(regionCovers(same("020000"), same("020173"))).toBe(true);
+    expect(regionCovers(same("020000"), same("320173"))).toBe(true);
+    expect(regionCovers(same("020173"), same("020000"))).toBe(true);
+    expect(regionCovers(same("020000"), same("048029"))).toBe(false);
+    expect(regionCovers(same("000000"), same("048029"))).toBe(true);
+    expect(regionCovers(same("048029"), same("000000"))).toBe(true);
+    // A code that is not 6 digits matches only an equal code.
+    expect(regionCovers(same("20000"), same("020173"))).toBe(false);
+    expect(regionContains(same("20000"), same("20000"))).toBe(true);
+  });
+
+  // Each code of a small alphabet against each code. The oracle names the smallest regions in each code: a part of a county.
+  it("agrees with the smallest regions of each SAME code for the two relations", () => {
+    const codes: string[] = [];
+    for (const part of ["0", "1", "2"]) {
+      codes.push(`${part}00000`);
+      for (const state of ["20", "48"]) for (const county of ["000", "173", "029"]) codes.push(`${part}${state}${county}`);
+    }
+    const atoms = ["20", "48"].flatMap((state) => ["173", "029"].flatMap((county) => ["1", "2", "3"].map((part) => [state, county, part] as const)));
+    const holds = (code: string, [state, county, part]: readonly [string, string, string]): boolean => {
+      const [p, s, c] = [code.slice(0, 1), code.slice(1, 3), code.slice(3)];
+      if (s === "00" && c === "000") return true;
+      return s === state && (c === "000" || (c === county && (p === "0" || p === part)));
+    };
+    const same = (code: string) => ({ system: "same", code });
+    for (const a of codes) {
+      for (const b of codes) {
+        const inB = atoms.filter((atom) => holds(b, atom));
+        expect(regionCovers(same(a), same(b)), `${a} meets ${b}`).toBe(inB.some((atom) => holds(a, atom)));
+        expect(regionContains(same(a), same(b)), `${a} contains ${b}`).toBe(inB.every((atom) => holds(a, atom)));
+      }
+    }
+  });
+
+  it("gives a place of a county for a SAME alert of its state", () => {
+    expect(matchPlaces({ areas: [{ type: "code", system: "same", code: "020000" }] }, places).map((match) => match.place)).toEqual([home]);
+    expect(matchPlaces({ areas: [{ type: "code", system: "same", code: "000000" }] }, places).map((match) => match.place)).toEqual([home, other]);
   });
 
   it("gives the places in their order, with the codes that matched", () => {
