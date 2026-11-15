@@ -200,7 +200,7 @@ describe("the properties of the fold", () => {
         [TORNADO, "met.winter"].filter(() => r.chance(0.5)).map((kind) => gap({ place: place.id, kind, independent: r.int(0, 2), proven: r.chance(0.9) })),
       );
       const late: Lateness[] = r.chance(0.3)
-        ? [{ expectation: "a-to-b", from: "a" as SourceId, to: "b" as SourceId, state: "late", limit: 60_000, missed: [`report:${r.int(0, 3)}` as ReportId], since: step }]
+        ? [{ expectation: "a-to-b", from: "a" as SourceId, to: "b" as SourceId, state: "late", limit: { delay: 60_000, misses: 1 }, missed: [`report:${r.int(0, 3)}` as ReportId], since: step }]
         : [];
       const input = snapshot({ sources, health, coverage, lateness: late, threats: r.chance(0.3) ? [{ place: KANSAS.id, kind: TORNADO }] : [] });
       const before = lines;
