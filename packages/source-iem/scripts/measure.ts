@@ -4,9 +4,13 @@
  * list of each source at the interval of its descriptor. The requests name no state and no place.
  *
  * It writes one line for each fetch to `records.jsonl`, with the keys of the list. It writes the
- * results to `summary.json` and `summary.md`. It also counts the IEM product times that are not the sent time of an
- * NWS API message of the same event. A later IEM time lets the IEM rows replace the NWS API copy. In a GitHub Actions job, it also writes the summary of
- * the job. The option `--from` reads the records of earlier measures and fetches nothing.
+ * results to `summary.json` and `summary.md`, and in a GitHub Actions job to the summary of the job.
+ * The option `--from` reads the records of earlier measures and fetches nothing.
+ *
+ * The false ends count only with a horizon of complete lists after their start (`--horizon`). Each
+ * false end has a bound by key and a bound by list, because one bad list can end many keys at once.
+ * The script also counts the IEM product times that are not the sent time of an NWS API message of the
+ * same event. A later IEM time lets the IEM rows replace the NWS API copy.
  *
  * Start it in the folder of the package:
  * `node scripts/measure.ts --minutes=55 --out=measure`, or `node scripts/measure.ts --from=a.jsonl,b.jsonl --out=sum`.
@@ -15,7 +19,7 @@
 import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { Cursor, FetchOutcome, Instant, PlaceId, Report, SourceProcedures, Watch } from "@mark1russell7/alerts";
-import { flapCounts, listRuns, type ListFetch, type ListRuns } from "@mark1russell7/alerts-runtime";
+import { flapCounts, listRuns, type FlapCount, type ListFetch, type ListRuns } from "@mark1russell7/alerts-runtime";
 import { createNwsSource, NWS_DESCRIPTOR } from "@mark1russell7/alerts-source-nws-api";
 import { clopperPearson, quantile } from "@mark1russell7/rigor-statistics";
 import { fetchTransport } from "polite-crawler/api";
@@ -51,6 +55,8 @@ const out = option("out") ?? "measure";
 const from = option("from");
 const minutes = Number(option("minutes") ?? "55");
 if (!(minutes > 0)) throw new Error(`The length of the measure is ${String(minutes)} minutes, not a number above 0.`);
+/** The count of complete lists after the start of an absence before it counts: 10 lists of IEM are 20 minutes. */
+const horizon = Number(option("horizon") ?? "10");
 
 /** This function tells if a report is live at a time, with the rules of `snapshotStep`. */
 const live = (report: Report, at: Instant): boolean => report.status === "actual" && report.op !== "cancel" && !(report.expires !== undefined && report.expires <= at);
@@ -119,21 +125,42 @@ interface FlapResult {
   readonly misses: number;
   readonly flaps: number;
   readonly trials: number;
-  /** The upper bound of the rate of the false ends for each trial, at `LEVEL`. */
+  /** The upper bound of the rate of the false ends for each trial (a key at a list), at `LEVEL`. */
   readonly high: number;
-  /** The upper bound of the false ends in one day of the measured traffic. */
-  readonly perDay: number;
+  /** The count of observed lists where one or more false ends start. */
+  readonly starts: number;
+  /** The count of observed lists. */
+  readonly lists: number;
+  /** The upper bound of the rate of the lists where false ends start, at `LEVEL`. The decision reads this bound. */
+  readonly highByList: number;
+  /** The largest count of false ends that start at one list. */
+  readonly largest: number;
+  /** The upper bound of the lists in one day where false ends start. */
+  readonly startsPerDay: number;
 }
 
 /** This function sums the flaps of the windows. Each window is one measure, so no absence goes over a gap. */
 function flapResults(windows: readonly ListRuns[], hours: number): FlapResult[] {
   const results: FlapResult[] = [];
+  const bound = (count: number, total: number): number => (total === 0 ? 1 : clopperPearson(count, total, LEVEL).high);
+  const listsPerHour = hours > 0 ? windows.reduce((sum, runs) => sum + runs.lists, 0) / hours : Number.POSITIVE_INFINITY;
   for (let misses = 1; misses <= MOST_MISSES; misses += 1) {
     const counts = windows.map((runs) => flapCounts(runs, MOST_MISSES)[misses - 1]!);
-    const flaps = counts.reduce((sum, count) => sum + count.flaps, 0);
-    const trials = counts.reduce((sum, count) => sum + count.trials, 0);
-    const high = trials === 0 ? 1 : clopperPearson(flaps, trials, LEVEL).high;
-    results.push({ misses, flaps, trials, high, perDay: hours > 0 ? (high * trials * 24) / hours : Number.POSITIVE_INFINITY });
+    const total = (pick: (count: FlapCount) => number): number => counts.reduce((sum, count) => sum + pick(count), 0);
+    const starts = total((count) => count.starts);
+    const lists = total((count) => count.lists);
+    const highByList = bound(starts, lists);
+    results.push({
+      misses,
+      flaps: total((count) => count.flaps),
+      trials: total((count) => count.trials),
+      high: bound(total((count) => count.flaps), total((count) => count.trials)),
+      starts,
+      lists,
+      highByList,
+      largest: Math.max(0, ...counts.map((count) => count.largest)),
+      startsPerDay: highByList * listsPerHour * 24,
+    });
   }
   return results;
 }
@@ -243,8 +270,8 @@ const windows = await windowsOf();
 await mkdir(out, { recursive: true });
 const listsOf = (records: readonly MeasureRecord[], keys: (record: MeasureRecord) => readonly string[] | undefined): ListFetch[] =>
   records.flatMap((record) => (record.source === "iem" ? [{ at: record.at, ...(record.ok && record.complete === true ? { keys: keys(record) ?? [] } : {}) }] : []));
-const rowRuns = windows.map((records) => listRuns(listsOf(records, (record) => record.rows)));
-const pairRuns = windows.map((records) => listRuns(listsOf(records, (record) => record.pairs)));
+const rowRuns = windows.map((records) => listRuns(listsOf(records, (record) => record.rows), horizon));
+const pairRuns = windows.map((records) => listRuns(listsOf(records, (record) => record.pairs), horizon));
 const hours = windows.reduce((sum, records) => {
   const times = records.map((record) => record.at);
   return sum + (times.length < 2 ? 0 : (Math.max(...times) - Math.min(...times)) / HOUR);
@@ -256,15 +283,18 @@ const fetches = (source: "iem" | "nws") => {
   for (const record of records) if (!record.ok) failures[record.failure ?? "unknown"] = (failures[record.failure ?? "unknown"] ?? 0) + 1;
   return { fetches: records.length, complete: records.filter((record) => record.ok && record.complete === true).length, failures };
 };
+const endsOf = (runs: readonly ListRuns[]): number => runs.reduce((total, one) => total + one.absences.filter((absence) => absence.back === undefined).length, 0);
+const censoredOf = (runs: readonly ListRuns[]): number => runs.reduce((total, one) => total + one.censored, 0);
 const sum = (pick: (comparison: Comparison) => number): number => comparisons.reduce((total, comparison) => total + pick(comparison), 0);
 const summary = {
   windows: windows.length,
   hours: Math.round(hours * 100) / 100,
   level: LEVEL,
+  horizon,
   iem: fetches("iem"),
   nws: fetches("nws"),
-  rows: { flaps: flapResults(rowRuns, hours), ends: rowRuns.reduce((total, runs) => total + runs.absences.filter((absence) => absence.back === undefined).length, 0) },
-  pairs: { flaps: flapResults(pairRuns, hours), ends: pairRuns.reduce((total, runs) => total + runs.absences.filter((absence) => absence.back === undefined).length, 0) },
+  rows: { flaps: flapResults(rowRuns, hours), ends: endsOf(rowRuns), censored: censoredOf(rowRuns) },
+  pairs: { flaps: flapResults(pairRuns, hours), ends: endsOf(pairRuns), censored: censoredOf(pairRuns) },
   start: { delay: minutesOf(comparisons.flatMap((comparison) => comparison.delays)), onlyIem: sum((c) => c.onlyIem), onlyNws: sum((c) => c.onlyNws) },
   end: { lag: minutesOf(comparisons.flatMap((comparison) => comparison.endLags)), notInNws: sum((c) => c.endsNotInNws), stillInNws: sum((c) => c.endsStillInNws) },
   tie: {
@@ -277,22 +307,22 @@ const summary = {
 
 const table = (results: readonly FlapResult[]): string =>
   [
-    "| Count of misses | False ends | Trials | Upper bound of the rate | Upper bound of the false ends in a day of the national list |",
-    "| ---: | ---: | ---: | ---: | ---: |",
-    ...results.map((result) => `| ${String(result.misses)} | ${String(result.flaps)} | ${String(result.trials)} | ${result.high.toExponential(2)} | ${result.perDay.toFixed(2)} |`),
+    "| Count of misses | False ends | Trials | Bound by key | Lists with a start | Observed lists | Bound by list | Most keys of one start | Bound of the lists with a start in a day |",
+    "| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+    ...results.map((result) => `| ${String(result.misses)} | ${String(result.flaps)} | ${String(result.trials)} | ${result.high.toExponential(2)} | ${String(result.starts)} | ${String(result.lists)} | ${result.highByList.toExponential(2)} | ${String(result.largest)} | ${result.startsPerDay.toFixed(2)} |`),
   ].join("\n");
 const markdown = [
   from === undefined ? `# The measure of the IEM list` : `# All the measures of the IEM list`,
   "",
   `${String(summary.windows)} window(s), ${String(summary.hours)} hours. IEM: ${String(summary.iem.complete)} complete lists of ${String(summary.iem.fetches)} fetches. NWS API: ${String(summary.nws.complete)} complete lists of ${String(summary.nws.fetches)} fetches.`,
   "",
-  `A false end is a key that leaves the complete lists for the count of misses or more, and comes back. The bounds are Clopper-Pearson bounds at ${String(LEVEL)}.`,
+  `A false end is a key that leaves the complete lists for the count of misses or more, and comes back. An absence counts only when ${String(summary.horizon)} complete lists follow its start. The bounds are Clopper-Pearson bounds at ${String(LEVEL)}. One bad list can end many keys at once, so the decision reads the bound by list.`,
   "",
   `## The rows (the keys of \`snapshotStep\`)`,
   "",
   table(summary.rows.flaps),
   "",
-  `Rows that left and did not come back: ${String(summary.rows.ends)}.`,
+  `Rows that left and did not come back: ${String(summary.rows.ends)}. Absences in the horizon at the end of a window, not counted: ${String(summary.rows.censored)}.`,
   "",
   `## The events by UGC code (the liveness of an incident)`,
   "",
