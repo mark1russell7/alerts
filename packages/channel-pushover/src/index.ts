@@ -4,7 +4,7 @@
  * come from `@procedures/notify/pushover`.
  */
 
-import { COPY_ID, type ChannelDescriptor, type ChannelId, type ChannelProcedures, type Instant, type SendOutcome } from "@mark1russell7/alerts";
+import { COPY_ID, WHY_LIMITS, type ChannelDescriptor, type ChannelId, type ChannelProcedures, type Instant, type SendOutcome } from "@mark1russell7/alerts";
 import { isQuotaError, type Quota, type QuotaError, type QuotaGate, type QuotaReading, type QuotaState } from "polite-crawler/api";
 import {
   callPushover,
@@ -137,6 +137,7 @@ export function pushoverDescriptor(platform?: "ios" | "android"): ChannelDescrip
     maxTitle: PUSHOVER_LIMITS.title,
     maxBody: PUSHOVER_LIMITS.message,
     maxInFlight: PUSHOVER_MAX_IN_FLIGHT,
+    why: WHY_LIMITS.push,
   };
 }
 

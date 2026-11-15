@@ -1,6 +1,6 @@
 import { random, seedsFrom } from "@mark1russell7/rigor-generators";
 import { describe, expect, it } from "vitest";
-import { CONFIG_FORMAT, loadConfig, localPlaces, sourcePlaces, type AlertConfig, type ContactConfig, type PersonConfig, type PlaceConfig, type SecretLookup } from "./config.ts";
+import { CONFIG_FORMAT, loadConfig, localPlaces, placeLabels, sourcePlaces, type AlertConfig, type ContactConfig, type PersonConfig, type PlaceConfig, type SecretLookup } from "./config.ts";
 import type { ChannelDescriptor, ChannelId, EscalationPolicy, PersonId, PlaceId, Position, SourceId } from "./contracts.ts";
 
 const SEEDS = seedsFrom(process.env["SEED"], [1, 2, 3, 4, 5, 6, 7, 8]);
@@ -156,6 +156,14 @@ describe("the places of a configuration", () => {
   it("give each position for the matching on the machine of the instance", () => {
     expect(localPlaces(config()).map((place) => place.at)).toEqual([HOME_AT, PLACES[1]!.at]);
     expect(localPlaces(config()).some((place) => "label" in place || "sharePosition" in place)).toBe(false);
+  });
+
+  it("give each label by the node key of its place, for the why line on the machine of the instance", () => {
+    const labels = placeLabels(config());
+    expect(labels(`place:${home}`)).toBe("Home");
+    expect(labels(`place:${work}`)).toBe("Work");
+    expect(labels(home)).toBeUndefined();
+    expect(labels("ugc:KSC173")).toBeUndefined();
   });
 
   it("give a position to a source only when the place shares it with that source, over seeded configurations", () => {

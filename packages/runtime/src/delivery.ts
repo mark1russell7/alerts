@@ -8,11 +8,13 @@ import type { WallClock } from "@mark1russell7/algebra/clock";
 import { backoffDelay, type Backoff } from "@mark1russell7/service/backoff";
 import {
   COPY_ID,
+  NO_LABELS,
   acknowledgmentOf,
   incidents,
   messageKey,
   messageOf,
   route,
+  whyLine,
   type Acknowledgment,
   type AssessPolicy,
   type ChannelDescriptor,
@@ -26,6 +28,8 @@ import {
   type Route,
   type SendOutcome,
   type WatchedPlace,
+  type WhyLabels,
+  type WhyLimit,
 } from "@mark1russell7/alerts";
 import { errorMessage } from "@mark1russell7/text";
 import { envelope, type ChannelFailureKind, type RefusalKind, type RefusedEvent, type RuntimeEvent } from "./events.ts";
@@ -67,6 +71,11 @@ export interface DeliveryOptions {
    * failed probe, up to this time. The default is `PROBE_LIMIT` or `retry`, the longer one.
    */
   readonly probeLimit?: Duration;
+  /**
+   * The private labels of the nodes of the why records, for the why line of each message. The labels stay in the
+   * runtime: no record and no log event holds them. Without them, each why line uses plain nouns.
+   */
+  readonly labels?: WhyLabels;
 }
 
 /** The default longest wait between two stop probes of a down channel: 60 seconds. */
@@ -241,6 +250,9 @@ export function createDispatcher(options: DeliveryOptions, context: DeliveryCont
     descriptors.push(descriptor);
   }
   const polling = new Set(descriptors.filter((descriptor) => descriptor.ack === "poll").map((descriptor) => descriptor.id as string));
+  // The limit of the why line of each channel that has one.
+  const whyLimits = new Map<string, WhyLimit>(descriptors.flatMap((descriptor) => (descriptor.why === undefined ? [] : [[descriptor.id as string, descriptor.why] as const])));
+  const labels = options.labels ?? NO_LABELS;
   // Only a copy that the channel repeats needs a stop.
   const repeating = new Set(descriptors.filter((descriptor) => descriptor.repeats).map((descriptor) => descriptor.id as string));
   const recipients = new Map(options.recipients.map((recipient) => [recipient.watch.person as string, recipient]));
@@ -448,7 +460,9 @@ export function createDispatcher(options: DeliveryOptions, context: DeliveryCont
                 refuse(target, "refused", retryAt);
                 return;
               }
-              const message = messageOf(entry.incident, context.state().merge.reports, send);
+              const limit = whyLimits.get(send.channel);
+              const why = limit === undefined || entry.why === undefined ? undefined : whyLine(entry.why, labels, limit);
+              const message = messageOf(entry.incident, context.state().merge.reports, send, why);
               const deliveryOf = (accepted: Extract<SendOutcome, { ok: true }>): Delivery => ({ key: message.key, incident: send.incident, level: send.level, person: send.person, channel: send.channel, step: send.step, at: accepted.accepted, receipt: accepted.receipt });
               // A send with no free place on its channel goes at a later step. It has no copy yet.
               const release = place(send.channel);

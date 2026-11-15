@@ -1,6 +1,7 @@
 import { fakeWallClock } from "@mark1russell7/algebra/clock";
 import {
   COPY_ID,
+  WHY_LIMITS,
   reportId,
   type ChannelDescriptor,
   type ChannelId,
@@ -183,6 +184,25 @@ function open(scripts: { readonly pushover?: Script; readonly sms?: Script } = {
 const types = (log: RuntimeLog) => [...log.read()].map((event) => event.type).filter((type) => type !== "observation" && type !== "fetch" && type !== "system");
 
 describe("the delivery step of a pass", () => {
+  it("puts the why line into each message of a channel with a why limit, with the label of the runtime and no label in the log", async () => {
+    const labels = (node: string): string | undefined => (node === `place:${KANSAS.id}` ? "Lake cabin" : undefined);
+    const named = open({ pushover: { describe: { why: WHY_LIMITS.push } } }, undefined, undefined, { labels });
+    await named.runtime.pass();
+    expect(named.pushover.send[0]?.why).toBe("Why: Lake cabin is in the area");
+    expect(named.pushover.send[0]?.body).toBe("TAKE COVER NOW!");
+    expect(JSON.stringify([...named.log.read()])).not.toContain("Lake cabin");
+    named.log.close();
+    // With no labels, the line uses a plain noun. A channel with no why limit gets no why line.
+    const plain = open({ pushover: { describe: { why: WHY_LIMITS.text } } });
+    await plain.runtime.pass();
+    expect(plain.pushover.send[0]?.why).toBe("Why: your place is in the area");
+    plain.log.close();
+    const none = open(undefined, undefined, undefined, { labels });
+    await none.runtime.pass();
+    expect(none.pushover.send[0]).not.toHaveProperty("why");
+    none.log.close();
+  });
+
   it("starts the escalation of a warning at a watched place, and sends its first step", async () => {
     const { runtime, log, pushover, sms } = open();
     const pass = await runtime.pass();

@@ -242,6 +242,7 @@ The channel does not escalate. The core does:
 - Only an acknowledgment proves that the person got a message. The Pushover receipt field `last_delivered_at` is the time of a retry of the server, not a proof.
 - The core decides the silent mode. `escalate` sets `quiet` on each send, and `Message.quiet` takes it. Each channel maps it to its silent mode: Pushover priority `-1`, or a text and no call on Twilio. No channel keeps its own rule about the time of day.
 - On an iPhone, an Emergency message of Pushover sounds through silent mode only when the Pushover app has Critical Alerts on for Emergency. A reset of the iOS permission of Pushover turns that setting off.
+- A channel with `why` in its descriptor gets a why line in `Message.why`: why the message reaches the person, in the limit of the channel. `WHY_LIMITS` in `why.ts` holds the limit of each kind of channel. Pushover takes the push limit, and puts the line first in the body.
 
 ## The delivery promise
 
@@ -604,6 +605,13 @@ The view holds labels and positions. Only a route on the loopback address gives 
 The relevance of an incident for one person is a calculation over the interest graph of the person (AL-35). The types are in the section "Relevance" of `contracts.ts`.
 
 `RELEVANCE.md` describes the model, the defaults, the three kinds of opt-out, the why record and the gates.
+
+The why line is live for the match by places:
+
+- `route` gives each route of a live incident the `WhyRecord` of the matched place with the first id (`placeWhy`). Thus the order of the configuration does not change it. A match by subjects alone gives no why at this time.
+- The runtime makes the line of each channel with `whyLine`, from the record and the labels of `placeLabels`. The labels stay in the runtime. No record and no event of the log holds them.
+- A label goes into a line only when it is plain words. A line holds no digit, no code in capitals and no colon after its prefix. Thus it holds no address, point or region code.
+- The gate test "The why fits each channel" holds each limit of `WHY_LIMITS` over seeded records and labels.
 
 ## The schemas
 

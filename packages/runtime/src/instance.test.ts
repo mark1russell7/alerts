@@ -207,6 +207,8 @@ describe("openInstance", () => {
     expect(call?.url).toBe("https://api.pushover.net/1/messages.json");
     expect(call?.fields).toMatchObject({ token: SECRETS["PUSHOVER_APP_TOKEN"], user: SECRETS["PUSHOVER_USER_KEY"] });
     expect(call?.fields["title"]).toContain("Flood Warning");
+    // The body starts with the why line, with the label of the place from the configuration.
+    expect(call?.fields["message"]).toMatch(/^Why: Place is in the area\n\n\S/);
     expect(pass.delivery?.sent).toHaveLength(1);
     // The source asks for the alerts of the state. The match to the county is local.
     expect(net.exchanges.map((exchange) => exchange.url)).toContain("https://api.weather.gov/alerts/active?area=TX");

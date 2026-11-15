@@ -4,7 +4,7 @@
  * clocks and the transports. This module reads no file, no environment variable and no clock.
  */
 import { delay, type Clock, type WallClock } from "@mark1russell7/algebra/clock";
-import { localPlaces, sourceCovers, sourcePlaces, type ChannelDescriptor, type Duration, type ParsedConfig, type SecretLookup, type SourceDescriptor } from "@mark1russell7/alerts";
+import { localPlaces, placeLabels, sourceCovers, sourcePlaces, type ChannelDescriptor, type Duration, type ParsedConfig, type SecretLookup, type SourceDescriptor } from "@mark1russell7/alerts";
 import { CHANNEL_ID, createPushoverChannel, isPushoverKey, pushoverDescriptor, PUSHOVER_REPEAT_MS, PUSHOVER_TIMEOUT_MS, type PushoverChannelOptions } from "@mark1russell7/alerts-channel-pushover";
 import { createIpawsSource, IPAWS_DESCRIPTOR, WEA_EXPECTATION } from "@mark1russell7/alerts-source-ipaws";
 import { createShapeStore, type ShapeCache, type ShapeStore } from "@mark1russell7/alerts-shapes-nws";
@@ -303,7 +303,8 @@ export function openInstance(options: InstanceOptions): Instance {
     ...(options.pushoverQuota === undefined ? {} : { quota: options.pushoverQuota }),
     ...(options.pushoverReserveNotices === undefined ? {} : { reserveNotices: options.pushoverReserveNotices }),
   });
-  const delivery: DeliveryOptions = { recipients, channels: [pushover], ...DELIVERY_TIMES };
+  // The labels of the places go only into the why line of each message.
+  const delivery: DeliveryOptions = { recipients, channels: [pushover], labels: placeLabels(placed), ...DELIVERY_TIMES };
 
   const runtime: Runtime = openRuntime({
     log: options.log,

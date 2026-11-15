@@ -3,8 +3,9 @@
  * the owner, and the load that checks it and makes the recipients. The repository holds no
  * configuration. The functions are pure, and the caller gives the secrets.
  */
-import type { Address, ChannelDescriptor, ChannelId, EscalationPolicy, PersonId, PersonWatch, PlaceId, Position, RegionCode, SourceId, WatchedPlace } from "./contracts.ts";
+import type { Address, ChannelDescriptor, ChannelId, EscalationPolicy, NodeKey, PersonId, PersonWatch, PlaceId, Position, RegionCode, SourceId, WatchedPlace } from "./contracts.ts";
 import { recipientProblems, type Recipient } from "./delivery.ts";
+import type { WhyLabels } from "./why.ts";
 
 /** The name of the format of a configuration. A change that breaks a configuration gets a new name. */
 export const CONFIG_FORMAT = "alerts-config/1";
@@ -162,6 +163,15 @@ export function localPlaces(config: AlertConfig): WatchedPlace[] {
 /** This function gives the places of the configuration for one source. A place has a position only when it shares it with that source. */
 export function sourcePlaces(config: AlertConfig, source: SourceId): WatchedPlace[] {
   return config.places.map((place) => watchedPlace(place, place.sharePosition?.includes(source) === true));
+}
+
+/**
+ * This function gives the labels of the places of the configuration, by their node keys `place:<id>`. The labels
+ * stay on the machine of the instance: the runtime puts them only in the why line of a message.
+ */
+export function placeLabels(config: AlertConfig): WhyLabels {
+  const labels = new Map<NodeKey, string>(config.places.map((place) => [`place:${place.id}`, place.label]));
+  return (node) => labels.get(node);
 }
 
 // A watched place has no label. It has the position only when `withPosition` is true.

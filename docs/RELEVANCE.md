@@ -145,6 +145,8 @@ The delivery puts the why in the text of each channel, with these limits:
 
 No text holds an address, a point or a region code.
 
+`WHY_LIMITS` in `why.ts` holds these values. A channel descriptor names the limit of its kind in its field `why`. The gate test "The why fits each channel" holds each limit.
+
 ## The ids
 
 `SUBJECT_SYSTEMS` in `contracts.ts` is the one closed list of the systems of subject ids. The source records of AL-36 use the same list, and their gate imports it. A new system comes with the first source or default that gives its ids.

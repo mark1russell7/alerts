@@ -18,6 +18,7 @@ import type {
 import { LEVELS } from "./contracts.ts";
 import { acknowledgmentOf, messageOf, recipientProblems, route, type EscalationStart, type Recipient, type Route, type RouteInput } from "./delivery.ts";
 import { messageKey } from "./ids.ts";
+import { placeWhy } from "./why.ts";
 
 const SEEDS = seedsFrom(process.env["SEED"], [1, 2, 3, 4, 5, 6, 7, 8]);
 const MINUTE = 60_000;
@@ -105,6 +106,29 @@ describe("route", () => {
     expect(summary(routes)).toEqual([{ level: "life-safety", state: "sent", fresh: true, sends: [0], cancels: [] }]);
     expect(routes[0]!.start).toEqual(start("life-safety", T0));
     expect(routes[0]!.plan.wakeAt).toBe(T0 + 5 * MINUTE);
+  });
+
+  it("gives the why of the matched place with the first id, whatever the order of the places of the person", () => {
+    const lake = "place-0" as PlaceId;
+    const both: readonly WatchedPlace[] = [...places, { id: lake, codes: [{ system: "ugc", code: "KSC173" }], bufferKm: 5 }];
+    const routes = route(input({ places: both, recipients: [recipient("person-1", [LIFE_SAFETY, URGENT], [home, lake])] }));
+    expect(routes[0]!.why).toEqual(placeWhy([lake]));
+    expect(routes[0]!.why).toEqual({ rule: "reach.place.places", subject: "place:place-0", kind: "place", anchor: "place:place-0", origin: "places", coverage: 1 });
+    expect(route(input())[0]!.why?.anchor).toBe("place:place-1");
+  });
+
+  it("gives no why to a match by subjects alone, and none to an incident that is over", () => {
+    const operator = recipient("person-1", [LIFE_SAFETY, URGENT], []);
+    const watching: Recipient = { ...operator, watch: { ...operator.watch, subjects: [{ system: "alerts.source" }] } };
+    const about = incident({ areas: [], about: [{ system: "alerts.source", id: "source-1" }] });
+    const routes = route(input({ incidents: [about], recipients: [watching] }));
+    expect(routes).toHaveLength(1);
+    expect(routes[0]!.why).toBeUndefined();
+    const sent = [delivery("life-safety", 0, T0)];
+    const over = incident({ live: false, expires: T0 + MINUTE });
+    const ended = route(input({ incidents: [over], starts: [start("life-safety", T0)], merge: { deliveries: sent }, now: T0 + 3 * MINUTE }));
+    expect(ended).toHaveLength(1);
+    expect(ended[0]!.why).toBeUndefined();
   });
 
   it("keeps the start of the log, thus a step comes at its time after a restart", () => {
@@ -344,6 +368,9 @@ describe("messageOf", () => {
       expires: T0 + 30 * MINUTE,
       quiet: false,
     });
+    // The why line of the channel goes into its own field. An empty line gives no field.
+    expect(messageOf(members, reports, send, "Why: your place is in the area").why).toBe("Why: your place is in the area");
+    expect("why" in messageOf(members, reports, send, "")).toBe(false);
   });
 
   it("uses the label of the kind when no report of the incident is in the state", () => {
