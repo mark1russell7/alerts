@@ -34,8 +34,9 @@ The repo is public. It holds the general framework only. People, places, keys an
 | AL-14 | More hazards | blocked | Earthquakes, floods, hurricanes, air quality, wildfire smoke, space weather and power outages, each with two or more sources. |
 | AL-15 | Text and voice | blocked | Text messages and voice calls as the next step of the escalation, on a second provider. |
 | AL-16 | A cloud copy | blocked | A second copy of the system on a cloud server. The merge makes the copies agree. |
-| AL-17 | People and places from the private store | in progress | The system reads people and places from the private configuration at run time. The format `AlertConfig`, its schema and its load are done in the core. The loader of the runtime and the store of the owner are next. |
+| AL-17 | People and places from the private store | in progress | The system reads people and places from the private configuration at run time. The format `AlertConfig`, its schema and its load are done in the core. The loader of the runtime is done: the entry reads the private folder through it, and a problem stops the start. Next: a procedure of the private store of the owner replaces the file. |
 | AL-18 | A UI with a map and overlays | in progress | Live incidents, warning areas, places and coverage on a map, with a view by criticality. The view of the map (`mapView` of the core) is done. Next: the store of zone shapes by state, the renderer with no outside tiles, and the local route of the runtime. |
+| AL-33 | Fire weather zones as a region system | later | An NWS fire zone and a forecast zone can have the same code and different outlines. Today each zone code is a forecast zone. A region system for fire zones goes into the match, the store of shapes and the map. |
 | AL-19 | Technical outages and news | blocked | Status pages, cloud regions, internet outages and breaking news, with the same merge and priority. |
 | AL-25 | Radio input through an SDR | blocked | A software-defined radio receives NOAA Weather Radio, and the system decodes its SAME headers. This input needs no internet. |
 
