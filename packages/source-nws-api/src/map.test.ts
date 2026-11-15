@@ -2,10 +2,9 @@ import { readdirSync, readFileSync } from "node:fs";
 import type { Observation, ObservationId, Report } from "@mark1russell7/alerts";
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
-import { PHENOMENA } from "./kinds.ts";
 import { NWS_DESCRIPTOR } from "./descriptor.ts";
 import { mapObservation, ORIGIN, SOURCE_ID } from "./map.ts";
-import { mainVtec, parseVtec, vtecKey, type Vtec } from "./vtec.ts";
+import { mainVtec, parseVtec, PHENOMENA, vtecKey, type Vtec } from "@mark1russell7/alerts-format-nws";
 
 const FIXTURES = new URL("../fixtures/", import.meta.url);
 const NAMES = readdirSync(FIXTURES).filter((name) => name.endsWith(".json"));
