@@ -1,7 +1,7 @@
 import type { Level, Message, PersonId, ReportId } from "@mark1russell7/alerts";
 import type { PushoverFetch } from "@procedures/notify/pushover";
 import { describe, expect, it } from "vitest";
-import { createPushoverChannel, cut, isQuotaRefusal, priorityOf, pushoverDescriptor, pushoverMessageOf } from "./index.ts";
+import { createPushoverChannel, cut, isPushoverKey, isQuotaRefusal, priorityOf, pushoverDescriptor, pushoverMessageOf } from "./index.ts";
 
 // Fake keys: 30 letters and digits, as Pushover keys are. No real key is in this repository.
 const TOKEN = "t".repeat(30);
@@ -116,6 +116,13 @@ describe("pushoverMessageOf", () => {
   });
 });
 
+describe("isPushoverKey", () => {
+  it("accepts 30 letters and digits, and nothing else", () => {
+    expect([TOKEN, USER, "aZ09".repeat(7) + "aZ"].map(isPushoverKey)).toEqual([true, true, true]);
+    expect([TOKEN.slice(1), TOKEN + "t", "t".repeat(29) + "-", " " + TOKEN.slice(1), "", undefined, 30].map(isPushoverKey)).toEqual(Array(7).fill(false));
+  });
+});
+
 describe("the descriptor", () => {
   it("names the push service of the platform, and the resources of the cell", () => {
     expect(pushoverDescriptor("ios").dependsOn).toEqual(["provider:pushover", "provider:apns"]);
@@ -133,6 +140,14 @@ describe("send", () => {
     expect(await channel.send({ message: message("life-safety"), address: ADDRESS })).toEqual({ ok: true, receipt: { request: "req-1", receipt: RECEIPT, tag: "k".repeat(64) }, accepted: AT });
     expect(fake.calls[0]?.url).toBe("https://api.pushover.net/1/messages.json");
     expect(fields(fake.calls[0]?.body)).toMatchObject({ token: TOKEN, user: USER, priority: "2", retry: "30", expire: "10800", tags: "k".repeat(64) });
+  });
+
+  it("tags a life-safety message with the delivery key and the copy id, and keeps the delivery key in the receipt", async () => {
+    const fake = server({ status: 200, body: { status: 1, request: "req-1", receipt: RECEIPT } });
+    const channel = createPushoverChannel({ token: TOKEN, fetch: fake.fetch, now: () => AT });
+    const sent = await channel.send({ message: message("life-safety"), address: ADDRESS, copy: "run-1-2" });
+    expect(sent).toEqual({ ok: true, receipt: { request: "req-1", receipt: RECEIPT, tag: "k".repeat(64) }, accepted: AT });
+    expect(fields(fake.calls[0]?.body)).toMatchObject({ tags: `${"k".repeat(64)},run-1-2` });
   });
 
   it("sends a quiet notice at -1, and a message below priority 2 has no receipt", async () => {
@@ -210,6 +225,23 @@ describe("cancel", () => {
     await channel.cancel({ receipt: { request: "req", receipt: RECEIPT, tag: "k".repeat(64) } });
     expect(fake.calls.map((call) => call.url)).toEqual([`https://api.pushover.net/1/receipts/cancel_by_tag/${"k".repeat(64)}.json`]);
     expect(fields(fake.calls[0]?.body)).toEqual({ token: TOKEN });
+  });
+
+  it("stops one copy by its copy id, thus the other copies of the key continue", async () => {
+    const fake = server({ status: 200, body: { status: 1, request: "req", canceled: 1 } });
+    const channel = createPushoverChannel({ token: TOKEN, fetch: fake.fetch });
+    // A copy id of the runtime: a UUID, "-" and a count. The path keeps it whole.
+    await channel.cancel({ copy: "0b6f3c1e-8f0a-4d1e-9a51-6c2f1d7e9b10-3" });
+    expect(fake.calls.map((call) => call.url)).toEqual(["https://api.pushover.net/1/receipts/cancel_by_tag/0b6f3c1e-8f0a-4d1e-9a51-6c2f1d7e9b10-3.json"]);
+    expect(fields(fake.calls[0]?.body)).toEqual({ token: TOKEN });
+  });
+
+  it("refuses a copy id with a character that the path of a stop cannot have, before a call", async () => {
+    const fake = server();
+    const channel = createPushoverChannel({ token: TOKEN, fetch: fake.fetch, now: () => AT });
+    expect(await channel.send({ message: message("life-safety"), address: ADDRESS, copy: "run.1" })).toEqual({ ok: false, kind: "refused", message: 'The copy id "run.1" has a character that the path of a stop cannot have.' });
+    await expect(channel.cancel({ copy: "run/1" })).rejects.toThrow('The copy id "run/1" has a character that the path of a stop cannot have.');
+    expect(fake.calls).toEqual([]);
   });
 
   it("is idempotent: a cancel of a receipt that Pushover does not know returns after one call", async () => {

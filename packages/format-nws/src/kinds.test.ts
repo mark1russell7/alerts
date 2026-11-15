@@ -2,7 +2,6 @@ import { categoryOf, knownKind, LIFE_SAFETY_KINDS, hasKind, UNKNOWN_KIND, unknow
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import {
-  categoryOf as movedCategoryOf,
   EVENT_CODES,
   fromEventCode,
   fromEventName,
@@ -39,10 +38,6 @@ describe("the kind tables", () => {
     const text = (known: readonly string[]): fc.Arbitrary<string> => fc.oneof(fc.constantFrom(...known), fc.string());
     const facts = fc.record({ nwsCode: text(codes), sameCode: text([...codes, "NWS"]), name: text(names) }, { requiredKeys: [] });
     fc.assert(fc.property(facts, (input) => knownKind(resolveKind(input).kind.code)));
-  });
-
-  it("keep the moved categoryOf as the function of the core", () => {
-    expect(movedCategoryOf).toBe(categoryOf);
   });
 
   it("reach each kind of the life-safety class", () => {

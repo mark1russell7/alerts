@@ -9,7 +9,6 @@
  */
 
 export {
-  categoryOf,
   EVENT_CODES,
   fromEventCode,
   fromEventName,
@@ -51,6 +50,7 @@ export {
   vtecEventKey,
   vtecKey,
   vtecTime,
+  vtecYear,
   type Vtec,
   type VtecClass,
   type VtecEvent,

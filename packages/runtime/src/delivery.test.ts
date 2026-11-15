@@ -1,5 +1,6 @@
-import { fakeClock } from "@mark1russell7/algebra/clock";
+import { fakeWallClock } from "@mark1russell7/algebra/clock";
 import {
+  COPY_ID,
   reportId,
   type ChannelDescriptor,
   type ChannelId,
@@ -105,8 +106,13 @@ const SOURCE: SourceProcedures = {
 
 interface Calls {
   readonly send: Message[];
+  /** The copy id of each send. */
+  readonly copies: (string | undefined)[];
   readonly status: Receipt[];
+  /** The cancels by a receipt. */
   readonly cancel: Receipt[];
+  /** The stops of one copy by its copy id. */
+  readonly stops: string[];
 }
 
 interface Script {
@@ -114,24 +120,31 @@ interface Script {
   send?: (message: Message, count: number) => SendOutcome | undefined | Promise<SendOutcome>;
   status?: (receipt: Receipt) => DeliveryStatus;
   cancel?: (receipt: Receipt) => void | Promise<void>;
+  stop?: (copy: string) => void | Promise<void>;
 }
 
 // A channel of the test. Its default send accepts each message with a new receipt.
 function channel(id: ChannelId, ack: ChannelDescriptor["ack"], now: () => number, script: Script = {}): { readonly procedures: ChannelProcedures; readonly calls: Calls } {
-  const calls: Calls = { send: [], status: [], cancel: [] };
+  const calls: Calls = { send: [], copies: [], status: [], cancel: [], stops: [] };
   const procedures: ChannelProcedures = {
     describe: () => ({ id, title: id, dependsOn: [], uses: ["internet"], breaksThrough: true, repeats: ack === "poll", ack, maxTitle: 250, maxBody: 1024 }),
-    send: async ({ message }) => {
+    send: async ({ message, copy }) => {
       calls.send.push(message);
+      calls.copies.push(copy);
       return (await script.send?.(message, calls.send.length)) ?? { ok: true, receipt: { receipt: `${id}-${calls.send.length}` }, accepted: now() };
     },
     status: async ({ receipt }) => {
       calls.status.push(receipt);
       return script.status?.(receipt) ?? { state: "delivered", at: now() };
     },
-    cancel: async ({ receipt }) => {
-      calls.cancel.push(receipt);
-      await script.cancel?.(receipt);
+    cancel: async (target) => {
+      if ("copy" in target) {
+        calls.stops.push(target.copy);
+        await script.stop?.(target.copy);
+        return;
+      }
+      calls.cancel.push(target.receipt);
+      await script.cancel?.(target.receipt);
     },
   };
   return { procedures, calls };
@@ -139,17 +152,20 @@ function channel(id: ChannelId, ack: ChannelDescriptor["ack"], now: () => number
 
 const DELIVERY = { recipients: [RECIPIENT], pollEvery: 30 * SECOND, retry: 15 * SECOND, callLimit: 10 * SECOND, flightLimit: 40 * SECOND } as const;
 
+// The run id of a runtime that `open` starts at T0. Each copy id starts with it.
+const RUN = `run-${T0}`;
+
 // The microtasks and the callbacks of the promises end before this promise resolves.
 const settle = (): Promise<void> => new Promise((resolve) => setImmediate(resolve));
 
-function open(scripts: { readonly pushover?: Script; readonly sms?: Script } = {}, log: RuntimeLog = openRuntimeLog(":memory:"), clock = fakeClock(T0), extra: Partial<DeliveryOptions> = {}, wake?: () => void) {
+function open(scripts: { readonly pushover?: Script; readonly sms?: Script } = {}, log: RuntimeLog = openRuntimeLog(":memory:"), clock = fakeWallClock(T0), extra: Partial<DeliveryOptions> = {}, wake?: () => void) {
   const pushover = channel(PUSHOVER, "poll", () => clock.now(), scripts.pushover);
   const sms = channel(SMS, "none", () => clock.now(), scripts.sms);
   const runtime = openRuntime({
     log,
     clock,
     sources: [SOURCE],
-    watch: { places: [KANSAS], kinds: ["met"] },
+    watch: () => ({ places: [KANSAS], kinds: ["met"] }),
     view: VIEW,
     run: `run-${clock.now()}`,
     delivery: { ...DELIVERY, channels: [pushover.procedures, sms.procedures], ...extra },
@@ -234,10 +250,112 @@ describe("the delivery step of a pass", () => {
     const third = await runtime.pass();
     expect(pushover.send).toHaveLength(2);
     expect(third.delivery?.sent).toHaveLength(1);
+    expect(pushover.stops).toEqual([]);
     log.close();
   });
 
-  it("keeps a send that hangs in flight until its flight limit, and then sends again", async () => {
+  it("stops a copy whose send failed with no answer by its copy id, in parallel with the new copy", async () => {
+    const { clock, runtime, log, pushover } = open({ pushover: { send: (_, count) => (count === 1 ? { ok: false, kind: "timeout", message: "Pushover did not answer." } : undefined) } });
+    const first = await runtime.pass();
+    expect(first.delivery?.failures.map((failure) => failure.kind)).toEqual(["timeout"]);
+    expect(first.delivery?.stopped).toEqual([]);
+    await clock.advance(15 * SECOND);
+    const second = await runtime.pass();
+    expect(pushover.copies).toEqual([`${RUN}-1`, `${RUN}-2`]);
+    expect(pushover.copies.every((copy) => copy !== undefined && COPY_ID.test(copy))).toBe(true);
+    expect(pushover.stops).toEqual([`${RUN}-1`]);
+    expect(second.delivery?.stopped).toEqual([`${RUN}-1`]);
+    expect(second.delivery?.sent.map((delivery) => delivery.receipt)).toEqual([{ receipt: "pushover-2" }]);
+    // No cancel by the delivery key goes, thus the new copy repeats until the acknowledgment.
+    expect(pushover.cancel).toEqual([]);
+    log.close();
+  });
+
+  it("stops a copy again at a later pass when its stop fails", async () => {
+    let refuse = true;
+    const { clock, runtime, log, pushover } = open({
+      pushover: {
+        send: (_, count) => (count === 1 ? { ok: false, kind: "network", message: "The connection reset." } : undefined),
+        stop: () => {
+          if (refuse) {
+            refuse = false;
+            throw new Error("Pushover is down.");
+          }
+        },
+      },
+    });
+    await runtime.pass();
+    await clock.advance(15 * SECOND);
+    const second = await runtime.pass();
+    expect(second.delivery?.failures.map((failure) => [failure.call, failure.copy, failure.message])).toEqual([["copy", `${RUN}-1`, "Pushover is down."]]);
+    expect(second.delivery?.sent).toHaveLength(1);
+    expect(second.wakeAt).toBe(T0 + 30 * SECOND);
+    await clock.advance(15 * SECOND);
+    const third = await runtime.pass();
+    expect(third.delivery?.stopped).toEqual([`${RUN}-1`]);
+    expect(pushover.stops).toEqual([`${RUN}-1`, `${RUN}-1`]);
+    log.close();
+  });
+
+  it("gives the kind timeout to a stop and to a cancel that pass their time limit", async () => {
+    const hang = (): Promise<void> => new Promise<void>(() => undefined);
+    let stops = 0;
+    const { clock, runtime, log, pushover } = open({
+      pushover: {
+        send: (_, count) => (count === 1 ? { ok: false, kind: "timeout", message: "Pushover did not answer." } : undefined),
+        status: () => ({ state: "acknowledged", at: T0 + 20 * SECOND }),
+        // The first stop hangs, and the second stop ends.
+        stop: () => {
+          stops += 1;
+          return stops === 1 ? hang() : undefined;
+        },
+        cancel: hang,
+      },
+    });
+    await runtime.pass();
+    await clock.advance(15 * SECOND);
+    const second = runtime.pass();
+    await clock.advance(10 * SECOND);
+    expect((await second).delivery?.failures.map((failure) => [failure.call, failure.kind, failure.message])).toEqual([["copy", "timeout", "The stop of the copy took longer than 10000 ms."]]);
+    // The poll of the new copy comes 30 s after its send, at T0 + 45 s. It reads the acknowledgment, and the cancel by receipt hangs.
+    await clock.advance(20 * SECOND);
+    const third = runtime.pass();
+    await clock.advance(10 * SECOND);
+    const last = await third;
+    expect(last.delivery?.failures.map((failure) => [failure.call, failure.kind, failure.message])).toEqual([["cancel", "timeout", "The cancel took longer than 10000 ms."]]);
+    expect(last.delivery?.stopped).toEqual([`${RUN}-1`]);
+    expect(pushover.stops).toEqual([`${RUN}-1`, `${RUN}-1`]);
+    log.close();
+  });
+
+  it("refuses a run id with a character that a copy id cannot have", () => {
+    const clock = fakeWallClock(T0);
+    const start = (run: string): void => {
+      const log = openRuntimeLog(":memory:");
+      try {
+        const channels = [channel(PUSHOVER, "poll", () => clock.now()).procedures, channel(SMS, "none", () => clock.now()).procedures];
+        openRuntime({ log, clock, sources: [SOURCE], watch: () => ({ places: [KANSAS], kinds: ["met"] }), view: VIEW, run, delivery: { ...DELIVERY, channels } });
+      } finally {
+        log.close();
+      }
+    };
+    expect(() => start("run.1")).toThrow('The run id "run.1" has a character that a copy id cannot have. Use letters, digits, _ and -.');
+    expect(() => start("0b6f3c1e-8f0a-4d1e-9a51-6c2f1d7e9b10")).not.toThrow();
+  });
+
+  it("stops no copy on a channel that does not repeat", async () => {
+    const { clock, runtime, log, sms } = open({ sms: { send: () => ({ ok: false, kind: "timeout", message: "The gateway did not answer." }) } });
+    let pass = await runtime.pass();
+    while ((pass.wakeAt ?? Infinity) <= T0 + 6 * MINUTE) {
+      await clock.advance(Math.max(1, pass.wakeAt! - clock.now()));
+      pass = await runtime.pass();
+    }
+    expect(sms.send.length).toBeGreaterThanOrEqual(2);
+    expect(sms.stops).toEqual([]);
+    log.close();
+  });
+
+  it("keeps a send that hangs in flight until its flight limit, then stops its copy and sends a new copy in parallel", async () => {
     const { clock, runtime, log, pushover } = open({ pushover: { send: (_, count) => (count === 1 ? new Promise<SendOutcome>(() => undefined) : undefined) } });
     const running = runtime.pass();
     await clock.advance(10 * SECOND);
@@ -253,11 +371,16 @@ describe("the delivery step of a pass", () => {
     const third = await runtime.pass();
     expect(pushover.send).toHaveLength(2);
     expect(third.delivery?.sent.map((delivery) => delivery.receipt)).toEqual([{ receipt: "pushover-2" }]);
+    // The stop names the copy of the hung send. A cancel by the delivery key would also stop the new copy.
+    expect(pushover.copies).toEqual([`${RUN}-1`, `${RUN}-2`]);
+    expect(third.delivery?.stopped).toEqual([`${RUN}-1`]);
+    expect(pushover.stops).toEqual([`${RUN}-1`]);
+    expect(pushover.cancel).toEqual([]);
     log.close();
   });
 
   it("writes a send that the channel accepts after the time limit, and sends no second copy", async () => {
-    const clock = fakeClock(T0);
+    const clock = fakeWallClock(T0);
     let woken = 0;
     const late = (): Promise<SendOutcome> => new Promise((resolve) => clock.after(15 * SECOND, () => resolve({ ok: true, receipt: { receipt: "late-1" }, accepted: clock.now() })));
     const { runtime, log, pushover } = open({ pushover: { send: (_, count) => (count === 1 ? late() : undefined) } }, openRuntimeLog(":memory:"), clock, {}, () => (woken += 1));
@@ -278,27 +401,33 @@ describe("the delivery step of a pass", () => {
     log.close();
   });
 
-  it("tells a late send that lands after a second send of its key as a duplicate, and keeps the first delivery of the log", async () => {
-    const clock = fakeClock(T0);
+  it("stops a stale copy again when the channel accepts it after its stop, and writes no delivery of it", async () => {
+    const clock = fakeWallClock(T0);
+    let woken = 0;
     const late = (): Promise<SendOutcome> => new Promise((resolve) => clock.after(50 * SECOND, () => resolve({ ok: true, receipt: { receipt: "late-1" }, accepted: clock.now() })));
-    const { runtime, log, pushover } = open({ pushover: { send: (_, count) => (count === 1 ? late() : undefined) } }, openRuntimeLog(":memory:"), clock);
+    const { runtime, log, pushover } = open({ pushover: { send: (_, count) => (count === 1 ? late() : undefined) } }, openRuntimeLog(":memory:"), clock, {}, () => (woken += 1));
     const running = runtime.pass();
     await clock.advance(10 * SECOND);
     await running;
     await clock.advance(30 * SECOND);
-    await runtime.pass();
+    const second = await runtime.pass();
     expect(pushover.send).toHaveLength(2);
+    expect(second.delivery?.stopped).toEqual([`${RUN}-1`]);
     await clock.advance(10 * SECOND);
     await settle();
+    expect(woken).toBe(1);
     const last = await runtime.pass();
-    expect(last.delivery?.duplicates).toEqual([pushover.send[0]!.key]);
+    expect(last.delivery?.stopped).toEqual([`${RUN}-1`]);
     expect(last.delivery?.sent).toEqual([]);
+    expect(last.delivery?.duplicates).toEqual([]);
+    expect(pushover.stops).toEqual([`${RUN}-1`, `${RUN}-1`]);
+    expect(pushover.cancel).toEqual([]);
     expect(runtime.state().merge.deliveries.map((delivery) => delivery.receipt)).toEqual([{ receipt: "pushover-2" }]);
     log.close();
   });
 
   it("keeps the start after a restart, thus the next step comes at its time and no step goes twice", async () => {
-    const clock = fakeClock(T0);
+    const clock = fakeWallClock(T0);
     const log = openRuntimeLog(":memory:");
     const before = open({}, log, clock);
     await before.runtime.pass();
@@ -317,7 +446,7 @@ describe("the delivery step of a pass", () => {
   });
 
   it("writes a delivery whose write failed at the next pass, and sends no second copy", async () => {
-    const clock = fakeClock(T0);
+    const clock = fakeWallClock(T0);
     const inner = openRuntimeLog(":memory:");
     let fail = true;
     const flaky: RuntimeLog = {
@@ -371,7 +500,7 @@ describe("the delivery step of a pass", () => {
   });
 
   it("tells an on-time send whose key the log already has as a duplicate, not as sent", async () => {
-    const clock = fakeClock(T0);
+    const clock = fakeWallClock(T0);
     const inner = openRuntimeLog(":memory:");
     // Another writer puts a delivery with the same id and another receipt into the log first.
     const shared: RuntimeLog = {
@@ -390,8 +519,8 @@ describe("the delivery step of a pass", () => {
     inner.close();
   });
 
-  it("writes one delivery when two late sends of one key land before the same pass", async () => {
-    const clock = fakeClock(T0);
+  it("writes the delivery of the new copy, and not of the stale copy, when both land before the same pass", async () => {
+    const clock = fakeWallClock(T0);
     const late = (after: number, receipt: string): Promise<SendOutcome> => new Promise((resolve) => clock.after(after, () => resolve({ ok: true, receipt: { receipt }, accepted: clock.now() })));
     // The first send lands at 50 s. The second send starts at 40 s, after the flight limit, and lands at 52 s.
     const { runtime, log, pushover } = open({ pushover: { send: (_, count) => (count === 1 ? late(50 * SECOND, "late-1") : late(12 * SECOND, "late-2")) } }, openRuntimeLog(":memory:"), clock);
@@ -406,14 +535,15 @@ describe("the delivery step of a pass", () => {
     await settle();
     const last = await runtime.pass();
     expect(pushover.send).toHaveLength(2);
-    expect(last.delivery?.sent.map((delivery) => delivery.receipt)).toEqual([{ receipt: "late-1" }]);
-    expect(last.delivery?.duplicates).toEqual([pushover.send[0]!.key]);
+    expect(last.delivery?.sent.map((delivery) => delivery.receipt)).toEqual([{ receipt: "late-2" }]);
+    expect(last.delivery?.duplicates).toEqual([]);
+    expect(last.delivery?.stopped).toEqual([`${RUN}-1`]);
     expect(last.conflicts).toEqual([]);
     log.close();
   });
 
   it("keeps the later flight of a key when an earlier flight fails after it started", async () => {
-    const clock = fakeClock(T0);
+    const clock = fakeWallClock(T0);
     // The first send fails at 50 s. The second send starts at 40 s and hangs.
     const refused = (): Promise<SendOutcome> => new Promise((resolve) => clock.after(50 * SECOND, () => resolve({ ok: false, kind: "network", message: "The connection reset." })));
     const { runtime, log, pushover } = open({ pushover: { send: (_, count) => (count === 1 ? refused() : new Promise<SendOutcome>(() => undefined)) } }, openRuntimeLog(":memory:"), clock);
@@ -432,7 +562,7 @@ describe("the delivery step of a pass", () => {
   });
 
   it("keeps a late delivery for the next pass when its write fails", async () => {
-    const clock = fakeClock(T0);
+    const clock = fakeWallClock(T0);
     const inner = openRuntimeLog(":memory:");
     let fail = true;
     const flaky: RuntimeLog = {
@@ -460,11 +590,11 @@ describe("the delivery step of a pass", () => {
   });
 
   it("refuses a flight limit that is shorter than the call limit", () => {
-    expect(() => open({}, openRuntimeLog(":memory:"), fakeClock(T0), { flightLimit: 5 * SECOND })).toThrow("The flight limit (5000 ms) is shorter than the call limit (10000 ms).");
+    expect(() => open({}, openRuntimeLog(":memory:"), fakeWallClock(T0), { flightLimit: 5 * SECOND })).toThrow("The flight limit (5000 ms) is shorter than the call limit (10000 ms).");
   });
 
   it("refuses two channels with the same id", () => {
-    const clock = fakeClock(T0);
+    const clock = fakeWallClock(T0);
     const twice = channel(PUSHOVER, "poll", () => clock.now()).procedures;
     expect(() => open({}, openRuntimeLog(":memory:"), clock, { channels: [twice, twice] })).toThrow("Two channels have the id pushover.");
   });

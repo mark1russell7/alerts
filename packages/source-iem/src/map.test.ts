@@ -94,6 +94,17 @@ describe("mapObservation", () => {
     expect(report.correlation).toEqual([{ system: "vtec", id: "PAFC.WS.A.0007.2026" }]);
   });
 
+  it("gives the year of the earlier time of the row: the start or the product", () => {
+    const kansas = { ...ROW, wfo: "TOP", phenomena: "WS", significance: "W", eventid: 3, ugc: "KSZ083", utc_expire: "2026-01-02T18:00:00Z" };
+    // A start in the old year and a product in the new year
+    const started = mapOne(observationOfRow({ ...kansas, utc_issue: "2025-12-31T22:00:00Z", utc_product_issue: "2026-01-01T03:00:00Z" }));
+    expect(started.correlation).toEqual([{ system: "vtec", id: "KTOP.WS.W.0003.2025" }]);
+    expect(started.web).toBe(`${EVENT_PAGE}2025-O-NEW-KTOP-WS-W-0003`);
+    // A product in the old year with a start in the new year, as in section 2.1.6 of NWS Directive 10-1703
+    const early = mapOne(observationOfRow({ ...kansas, utc_issue: "2026-01-02T00:00:00Z", utc_product_issue: "2025-12-31T21:00:00Z" }));
+    expect(early.correlation).toEqual([{ system: "vtec", id: "KTOP.WS.W.0003.2025" }]);
+  });
+
   it("gives no end for a row with no end", () => {
     const report = mapOne(observationOfRow({ ...ROW, utc_expire: null }));
     expect(report.expires).toBeUndefined();
@@ -170,15 +181,16 @@ describe("the gate of the taxonomy", () => {
 });
 
 describe("the IEM copy and the NWS API copy of one event, in the core", () => {
+  const nwsObservation: Observation = {
+    id: "observation-nws-api" as ObservationId,
+    source: NWS_API_SOURCE,
+    fetched: FETCHED - 60_000,
+    contentType: "application/geo+json",
+    body: NWS_NEW,
+    transport: { latency: 0 },
+  };
+
   it("are one incident with one origin, and the level of the NWS API copy", () => {
-    const nwsObservation: Observation = {
-      id: "observation-nws-api" as ObservationId,
-      source: NWS_API_SOURCE,
-      fetched: FETCHED - 60_000,
-      contentType: "application/geo+json",
-      body: NWS_NEW,
-      transport: { latency: 0 },
-    };
     const nws = mapNwsApi(nwsObservation).reports;
     expect(nws).toHaveLength(1);
     const iem = observationsOf(LIST_0108)
@@ -195,5 +207,26 @@ describe("the IEM copy and the NWS API copy of one event, in the core", () => {
     expect(incident?.reports).toHaveLength(8);
     // The IEM copies alone give an incident of the same event with an unknown level
     expect(incidents(normalize({ reports: iem }), FETCHED)[0]).toMatchObject({ live: true, corroboration: 1, severity: "unknown" });
+  });
+
+  // A false end of the IEM rows is safe only while the NWS API copy stays a head. The rows replace that
+  // copy when they are later and together name each of its codes. This gate holds the tie of the two times.
+  it("stay live when each IEM row of the event ends, because the rows and the NWS API copy of one product have the same sent time", () => {
+    const [api] = mapNwsApi(nwsObservation).reports;
+    expect(api).toBeDefined();
+    const rows = observationsOf(LIST_0108)
+      .map(mapOne)
+      .filter((report) => report.correlation.some((key) => key.id === api?.correlation[0]?.id));
+    expect(rows.map((row) => row.areas.find((area) => area.type === "code" && area.system === "ugc"))).toContainEqual({ type: "code", system: "ugc", code: "TXC137" });
+    for (const row of rows) expect([row.origin, row.sent, row.correlation]).toEqual([api?.origin, api?.sent, api?.correlation]);
+    // The rows together name each code of the message, so only the tie keeps the message a head.
+    const codes = (reports: readonly Report[]): string[] => [...new Set(reports.flatMap((report) => report.areas.flatMap((area) => (area.type === "code" ? [`${area.system}:${area.code}`] : []))))].sort();
+    expect(codes(rows)).toEqual(codes(api === undefined ? [] : [api]));
+
+    const ended = FETCHED + 4 * 60_000;
+    const ends = rows.map((row) => ({ report: row.id, at: ended, ended: true }));
+    expect(incidents(normalize({ reports: [...(api === undefined ? [] : [api]), ...rows], ends }), ended + 60_000)).toMatchObject([{ live: true, severity: "severe" }]);
+    // The rows alone end with the list.
+    expect(incidents(normalize({ reports: rows, ends }), ended + 60_000)).toMatchObject([{ live: false }]);
   });
 });

@@ -4,7 +4,7 @@
  * come from `@procedures/notify/pushover`.
  */
 
-import type { ChannelDescriptor, ChannelId, ChannelProcedures, Instant, SendOutcome } from "@mark1russell7/alerts";
+import { COPY_ID, type ChannelDescriptor, type ChannelId, type ChannelProcedures, type Instant, type SendOutcome } from "@mark1russell7/alerts";
 import {
   callPushover,
   extractPushoverCancelled,
@@ -12,6 +12,7 @@ import {
   extractPushoverSent,
   PUSHOVER_KEY,
   PUSHOVER_LIMITS,
+  PUSHOVER_RETRY_MIN_MS,
   pushoverCancelByTagRequest,
   pushoverCancelRequest,
   pushoverReceiptRequest,
@@ -26,8 +27,23 @@ import { type PushoverMapOptions, pushoverMessageOf, sendFailureOf, statusOf } f
 export { cut, priorityOf, pushoverMessageOf, sendFailureOf, statusOf } from "./map.ts";
 export type { PushoverMapOptions, Refusal } from "./map.ts";
 
+/** The time limit of one call when the options give none, in milliseconds. */
+export const PUSHOVER_TIMEOUT_MS = 10_000;
+
+/** The time between two repeats of a `life-safety` message when the options give none, in milliseconds. It is also the minimum. */
+export const PUSHOVER_REPEAT_MS: number = PUSHOVER_RETRY_MIN_MS;
+
 /** The id of the channel. */
 export const CHANNEL_ID = "pushover" as ChannelId;
+
+/**
+ * This function tells if a value has the form of a key of Pushover: 30 letters and digits. The API token of an
+ * application, a user key and a group key have this form. A start of the system examines each key with it, thus a
+ * bad key stops the start, before the first alert.
+ */
+export function isPushoverKey(value: unknown): value is string {
+  return typeof value === "string" && PUSHOVER_KEY.test(value);
+}
 
 /** The options of the Pushover channel. */
 export interface PushoverChannelOptions extends PushoverMapOptions {
@@ -91,12 +107,13 @@ export function pushoverDescriptor(platform?: "ios" | "android"): ChannelDescrip
  * - `send` does not throw. A refusal of the quota is a failure of the kind `rate-limited`, thus the escalation goes to its next step.
  * - `status` does not throw. A receipt that the channel cannot read keeps the state `accepted`.
  * - `cancel` stops the repeats by the tag of the receipt: the delivery key. Thus it also stops a copy of a send whose receipt the log does not have. A receipt with no tag stops by its id.
+ * - `cancel({ copy })` stops one copy by its copy id, the second tag of the message. The other copies of the key continue.
  * - `cancel` is idempotent. A cancel that Pushover refuses ends without an error, because Pushover does not know the receipt (it keeps a receipt for one week). Thus no repeats continue.
  * - `cancel` throws for each other failure, thus the caller can try again. A request that Pushover refused does not go again, because many refusals can block the address of the caller.
  */
 export function createPushoverChannel(options: PushoverChannelOptions): ChannelProcedures {
   const now = options.now ?? Date.now;
-  const timeoutMs = options.timeoutMs ?? 10_000;
+  const timeoutMs = options.timeoutMs ?? PUSHOVER_TIMEOUT_MS;
   const descriptor = pushoverDescriptor(options.platform);
 
   /** One call. A refusal of the quota stops the call before Pushover counts it. */
@@ -117,10 +134,11 @@ export function createPushoverChannel(options: PushoverChannelOptions): ChannelP
   return {
     describe: () => descriptor,
 
-    async send({ message, address }): Promise<SendOutcome> {
+    async send({ message, address, copy }): Promise<SendOutcome> {
+      if (copy !== undefined && !COPY_ID.test(copy)) return { ok: false, kind: "refused", message: `The copy id "${copy}" has a character that the path of a stop cannot have.` };
       const at = now();
-      if (!PUSHOVER_KEY.test(options.token)) return { ok: false, kind: "auth", message: "The API token is not 30 letters and digits." };
-      const mapped = pushoverMessageOf(message, address, at, options);
+      if (!isPushoverKey(options.token)) return { ok: false, kind: "auth", message: "The API token is not 30 letters and digits." };
+      const mapped = pushoverMessageOf(message, address, at, options, copy);
       if ("refused" in mapped) return { ok: false, kind: "refused", message: mapped.refused };
       let request: PushoverRequest;
       try {
@@ -156,11 +174,18 @@ export function createPushoverChannel(options: PushoverChannelOptions): ChannelP
       return statusOf(result, at);
     },
 
-    async cancel({ receipt }) {
-      const tag = receipt["tag"];
-      const id = receipt["receipt"];
-      // The tag stops each message of the delivery key, also a copy whose receipt the log does not have.
-      const request = tag !== undefined ? pushoverCancelByTagRequest(options.token, tag) : id !== undefined ? pushoverCancelRequest(options.token, id) : undefined;
+    async cancel(target) {
+      let request: PushoverRequest | undefined;
+      if ("copy" in target) {
+        // The copy id is the second tag of the message. It stops only this copy, and the new copy of the key continues.
+        if (!COPY_ID.test(target.copy)) throw new Error(`The copy id "${target.copy}" has a character that the path of a stop cannot have.`);
+        request = pushoverCancelByTagRequest(options.token, target.copy);
+      } else {
+        const tag = target.receipt["tag"];
+        const id = target.receipt["receipt"];
+        // The tag stops each message of the delivery key, also a copy whose receipt the log does not have.
+        request = tag !== undefined ? pushoverCancelByTagRequest(options.token, tag) : id !== undefined ? pushoverCancelRequest(options.token, id) : undefined;
+      }
       // A message below priority 2 does not repeat, thus nothing stops.
       if (request === undefined) return;
       const { result } = await call(request, extractPushoverCancelled);

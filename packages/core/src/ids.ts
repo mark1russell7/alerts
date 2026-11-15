@@ -61,6 +61,12 @@ export function reportId(input: ReportIdInput): ReportId {
 }
 
 /**
+ * The characters of a copy id: letters, digits, `_` and `-`. A channel can put a copy id in the path
+ * of a URL, thus a `.` or a `/` is not in it.
+ */
+export const COPY_ID: RegExp = /^[A-Za-z0-9_-]+$/;
+
+/**
  * This function gives the key of a message. A channel that can drop a repeated key does so. A
  * repeat of the same step gets the same key, and the next step gets a new key.
  */

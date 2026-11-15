@@ -27,6 +27,7 @@ describe("createIemSource", () => {
       interval: 120_000,
       auth: "none",
       uses: ["internet", "power"],
+      listing: "snapshot",
     });
     expect(IEM_DESCRIPTOR.kinds).toEqual(VTEC_KIND_PREFIXES);
     expect(IEM_DESCRIPTOR.maxQuiet).toBeUndefined();

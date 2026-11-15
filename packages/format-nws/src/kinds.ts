@@ -9,7 +9,7 @@
  * This package is the home of the tables. Each source of NWS or SAME messages imports them from here.
  */
 
-import { categoryOf as coreCategoryOf, UNKNOWN_KIND, type Kind, type Significance } from "@mark1russell7/alerts";
+import { UNKNOWN_KIND, type Kind, type Significance } from "@mark1russell7/alerts";
 import { mainVtec, type Vtec } from "./vtec.ts";
 
 /** One hazard of the taxonomy: its dotted code and its plain name. */
@@ -306,11 +306,3 @@ export function resolveKind(facts: KindFacts): ResolvedKind {
     found.significance === undefined ? { code: found.code, label } : { code: found.code, significance: found.significance, label };
   return { kind, known: true };
 }
-
-/**
- * This value is the function `categoryOf` of the core. Its home is the taxonomy of the core. Two sources
- * of open pull requests import it from this package, so it stays here for one more pull request.
- *
- * @deprecated Import `categoryOf` from `@mark1russell7/alerts`. The next pull request removes it from this package.
- */
-export const categoryOf: typeof coreCategoryOf = coreCategoryOf;

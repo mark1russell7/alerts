@@ -1,8 +1,8 @@
 import { canonicalJson, random, seedsFrom, type Random } from "@mark1russell7/rigor-generators";
 import { describe, expect, it } from "vitest";
-import type { Acknowledgment, ChannelId, Delivery, Incident, MergeState, ObservationId, PersonId, Report, SourceId, Status } from "./contracts.ts";
+import type { Acknowledgment, ChannelId, Delivery, EndMark, Incident, MergeState, ObservationId, PersonId, Report, SourceId, Status } from "./contracts.ts";
 import { reportId } from "./ids.ts";
-import { EMPTY_STATE, acknowledgedLevel, add, incidents, join, normalize, sentLevel, type LinkRule } from "./merge.ts";
+import { EMPTY_STATE, acknowledgedLevel, add, endedReports, incidents, join, normalize, sentLevel, type LinkRule } from "./merge.ts";
 
 const SEEDS = seedsFrom(process.env["SEED"], [1, 2, 3, 4, 5, 6, 7, 8]);
 const HOUR = 3_600_000;
@@ -53,6 +53,7 @@ function randomState(r: Random): MergeState {
   const reports: Report[] = [];
   const deliveries: Delivery[] = [];
   const acks: Acknowledgment[] = [];
+  const ends: EndMark[] = [];
   for (let i = r.int(0, 8); i > 0; i -= 1) {
     const event = r.below(4);
     const key = `k${event}.${r.below(3)}`;
@@ -66,7 +67,9 @@ function randomState(r: Random): MergeState {
         correlation: r.chance(0.5) ? [{ system: "vtec", id: `KTOP.TO.W.${event}` }] : [],
         // Two sizes of area, so that the rule of the copies replaces some reports and keeps others.
         areas: r.chance(0.5) ? [{ type: "code", system: "ugc", code: "KSZ083" }] : [{ type: "code", system: "ugc", code: "KSZ083" }, { type: "code", system: "ugc", code: "KSZ084" }],
-        severity: r.pick(["moderate", "severe", "extreme"] as const),
+        // An unknown value takes a value of its event, so the laws also hold for the fill.
+        severity: r.pick(["unknown", "moderate", "severe", "extreme"] as const),
+        urgency: r.pick(["unknown", "expected", "immediate"] as const),
         op: r.pick(["alert", "update", "cancel"] as const),
         status: r.chance(0.9) ? "actual" : "test",
         // Two contents for one id: the merge keeps the smaller canonical JSON.
@@ -82,7 +85,12 @@ function randomState(r: Random): MergeState {
     const incident = reports.length > 0 ? r.pick(reports).id : report({ key: "k0.0" }).id;
     acks.push({ incident, level: r.pick(["urgent", "life-safety"] as const), person, at: T0 + r.below(3), via: "ui" });
   }
-  return normalize({ reports, deliveries, acks });
+  // Marks at a small set of times, so that two marks of one report often have the same time.
+  for (let i = r.int(0, 3); i > 0; i -= 1) {
+    const ended = reports.length > 0 ? r.pick(reports).id : report({ key: "k0.0" }).id;
+    ends.push({ report: ended, at: T0 + r.below(3) * HOUR, ended: r.chance(0.7) });
+  }
+  return normalize({ reports, deliveries, acks, ends });
 }
 
 describe("the join", () => {
@@ -101,7 +109,12 @@ describe("the join", () => {
     const r = random(seed);
     for (let round = 0; round < 30; round += 1) {
       const all = join(join(randomState(r), randomState(r)), randomState(r));
-      const parts = [...all.reports.map((x) => ({ reports: [x] })), ...all.deliveries.map((x) => ({ deliveries: [x] })), ...all.acks.map((x) => ({ acks: [x] }))];
+      const parts = [
+        ...all.reports.map((x) => ({ reports: [x] })),
+        ...all.deliveries.map((x) => ({ deliveries: [x] })),
+        ...all.acks.map((x) => ({ acks: [x] })),
+        ...all.ends.map((x) => ({ ends: [x] })),
+      ];
       // Each part arrives one or more times, in a random order.
       const arrivals = r.shuffle([...parts, ...r.sample(parts, r.int(0, parts.length))]);
       const built = arrivals.reduce(add, EMPTY_STATE);
@@ -122,6 +135,50 @@ describe("the join", () => {
     const delivery: Delivery = { key: "m", incident: report({ key: "k" }).id, level: "urgent", person, channel: pushover, step: 0, at: T0 };
     const state = add(add(EMPTY_STATE, { deliveries: [delivery] }), { deliveries: [{ ...delivery }] });
     expect(state.deliveries).toHaveLength(1);
+  });
+
+  it("keeps each end mark one time", () => {
+    const mark: EndMark = { report: report({ key: "k" }).id, at: T0, ended: true };
+    expect(add(add(EMPTY_STATE, { ends: [mark] }), { ends: [{ ...mark }] }).ends).toEqual([mark]);
+  });
+});
+
+describe("the end marks of a snapshot source", () => {
+  const row = report({ key: "row", source: "iem", correlation: [{ system: "vtec", id: "KTOP.TO.W.1" }] });
+  const mark = (at: number, ended: boolean): EndMark => ({ report: row.id, at, ended });
+  const liveAt = (ends: readonly EndMark[], at: number): boolean | undefined => incidents(normalize({ reports: [row], ends }), at)[0]?.live;
+
+  it("ends a report from the time of its mark, and not before", () => {
+    const ends = [mark(T0 + 600_000, true)];
+    expect(liveAt(ends, T0 + 599_999)).toBe(true);
+    expect(liveAt(ends, T0 + 600_000)).toBe(false);
+    expect([...endedReports(normalize({ ends }), T0 + 600_000)]).toEqual([row.id]);
+  });
+
+  it("makes a report live again with a later mark that is not an end", () => {
+    const ends = [mark(T0 + 600_000, true), mark(T0 + 1_200_000, false)];
+    expect(liveAt(ends, T0 + 900_000)).toBe(false);
+    expect(liveAt(ends, T0 + 1_200_000)).toBe(true);
+    expect(liveAt([...ends, mark(T0 + 1_800_000, true)], T0 + 1_800_000)).toBe(false);
+  });
+
+  it("keeps a report live when an end and a return have one time, in each order", () => {
+    expect(liveAt([mark(T0, true), mark(T0, false)], T0 + 1)).toBe(true);
+    expect(liveAt([mark(T0, false), mark(T0, true)], T0 + 1)).toBe(true);
+  });
+
+  it("keeps the incident live while a different head is live, with the level of the live heads", () => {
+    const api = report({ key: "api", correlation: row.correlation, severity: "severe" });
+    const [one] = incidents(normalize({ reports: [row, api], ends: [mark(T0, true)] }), T0 + 1);
+    expect(one).toMatchObject({ live: true, severity: "severe", corroboration: 1 });
+    const [ended] = incidents(normalize({ reports: [row, api], ends: [mark(T0, true), { report: api.id, at: T0, ended: true }] }), T0 + 1);
+    expect(ended?.live).toBe(false);
+  });
+
+  it("changes no group: a mark reads only the field live", () => {
+    const api = report({ key: "api", correlation: row.correlation });
+    const groups = (ends: readonly EndMark[]) => incidents(normalize({ reports: [row, api], ends }), T0 + 1).map((incident) => incident.reports);
+    expect(groups([mark(T0, true)])).toEqual(groups([]));
   });
 });
 
@@ -242,7 +299,7 @@ describe("the copies of one event", () => {
     expect(incidents(normalize({ reports: [alert, copy, update] }), at)[0]?.severity).toBe("severe");
   });
 
-  it("keeps the copy live when the later report names only a part of its codes", () => {
+  it("keeps the copy live when the later reports name only a part of its codes", () => {
     // The NWS cancels the warning for one county. The update for the other county is missing.
     const partial = report({ key: "api-2", op: "cancel", sent: later, references: ["api-1"], correlation: vtec, areas: codes("KSC045") });
     const [incident] = incidents(normalize({ reports: [alert, copy, partial] }), at);
@@ -261,7 +318,41 @@ describe("the copies of one event", () => {
     expect(liveOf(alert, shapeOnly, cancel({}))).toBe(true);
   });
 
-  it.each(SEEDS)("ends no code that no later report of the origin and event names (seed %i)", (seed) => {
+  it("ends a report when the later reports together name each of its codes", () => {
+    // IEM gives one row for each county. Each row is a report of its own.
+    const row = (code: string, op: Report["op"], sent = later): Report => report({ key: `iem-${code}-${sent}`, source: "iem", op, sent, correlation: vtec, areas: codes(code) });
+    expect(liveOf(alert, row("KSC177", "cancel"), row("KSC045", "cancel"))).toBe(false);
+    // The authority ends one county and keeps the other: the incident keeps only the other county.
+    const [incident] = incidents(normalize({ reports: [alert, row("KSC177", "cancel"), row("KSC045", "update")] }), at);
+    expect(incident?.live).toBe(true);
+    expect(incident?.areas).toEqual(codes("KSC045"));
+    // The rows of the first message end when the NWS API cancels the two counties.
+    const cancel = report({ key: "api-2", op: "cancel", sent: later, references: ["api-1"], correlation: vtec, areas: codes("KSC177", "KSC045") });
+    expect(liveOf(alert, row("KSC177", "alert", T0), row("KSC045", "alert", T0), cancel)).toBe(false);
+  });
+
+  it("fills an unknown value from the latest earlier report of the event that is not a cancel", () => {
+    // IEM gives no severity, urgency or certainty.
+    const blank = { severity: "unknown", urgency: "unknown", certainty: "unknown" } as const;
+    const row = (code: string, sent: number): Report => report({ key: `iem-${code}-${sent}`, source: "iem", sent, correlation: vtec, areas: codes(code), ...blank });
+    const api = report({ key: "api-1", correlation: vtec, areas: codes("KSC177", "KSC045"), severity: "moderate", urgency: "expected", certainty: "likely" });
+    const values = (...reports: Report[]): unknown => {
+      const [incident] = incidents(normalize({ reports }), at);
+      return { live: incident?.live, severity: incident?.severity, urgency: incident?.urgency, certainty: incident?.certainty };
+    };
+    // The rows of a later product replace the message of the NWS API, and keep its values.
+    expect(values(api, row("KSC177", later), row("KSC045", later))).toEqual({ live: true, severity: "moderate", urgency: "expected", certainty: "likely" });
+    // With no known value, the value stays unknown.
+    expect(values(row("KSC177", later))).toEqual({ live: true, ...blank });
+    // A cancel gives the values of an end, so a row after the cancel takes the values of the alert.
+    const cancel = report({ key: "api-2", op: "cancel", sent: later, references: ["api-1"], correlation: vtec, areas: codes("KSC177", "KSC045"), severity: "minor", urgency: "past", certainty: "observed" });
+    expect(values(api, cancel, row("KSC177", later + 60_000))).toEqual({ live: true, severity: "moderate", urgency: "expected", certainty: "likely" });
+    // A known value of a later report does not fill an earlier report. This later report has expired, so it is not live.
+    const late = report({ key: "api-9", sent: at, expires: at, correlation: vtec, areas: codes("KSC139"), severity: "extreme", urgency: "immediate", certainty: "observed" });
+    expect(values(row("KSC177", later), late)).toEqual({ live: true, ...blank });
+  });
+
+  it.each(SEEDS)("is live exactly when the latest report of some code is not a cancel (seed %i)", (seed) => {
     const r = random(seed);
     const pool = ["KSC177", "KSC045", "KSC139", "KSC197"];
     for (let round = 0; round < 50; round += 1) {
@@ -272,18 +363,42 @@ describe("the copies of one event", () => {
           sent: T0 + r.below(4) * 60_000,
           op: r.pick(["alert", "update", "cancel"] as const),
           correlation: vtec,
-          areas: codes(...r.sample(pool, r.int(1, pool.length))),
+          // Half of the reports name one code, as the rows of IEM do.
+          areas: codes(...r.sample(pool, r.chance(0.5) ? 1 : r.int(1, pool.length))),
+          severity: r.pick(["unknown", "minor", "moderate", "severe", "extreme"] as const),
+          urgency: r.pick(["unknown", "future", "expected", "immediate"] as const),
         }),
       );
       const [incident] = incidents(normalize({ reports }), at);
-      // Each live report that no later report covers keeps its codes in the incident.
-      for (const held of reports) {
-        if (held.op === "cancel") continue;
-        const covered = reports.some((other) => other.sent > held.sent && held.areas.every((area) => other.areas.some((x) => JSON.stringify(x) === JSON.stringify(area))));
-        if (covered) continue;
-        expect(incident?.live, `seed ${seed} round ${round}`).toBe(true);
-        for (const area of held.areas) expect(incident?.areas).toContainEqual(area);
+      // The latest statements of each code: the reports with the latest sent time that name the code.
+      let live = false;
+      for (const code of pool) {
+        const naming = reports.filter((held) => held.areas.some((area) => area.type === "code" && area.code === code));
+        const last = Math.max(...naming.map((held) => held.sent));
+        if (!naming.some((held) => held.sent === last && held.op !== "cancel")) continue;
+        // No later report names this code, so the incident keeps it.
+        live = true;
+        expect(incident?.areas, `seed ${seed} round ${round}`).toContainEqual({ type: "code", system: "ugc", code });
       }
+      expect(incident?.live, `seed ${seed} round ${round}`).toBe(live);
+      // The oracle: the rule in its direct form. A report stays a head when a code of it has no later report.
+      const named = (held: Report, code: string): boolean => held.areas.some((area) => area.type === "code" && area.code === code);
+      const heads = reports.filter((held) => pool.some((code) => named(held, code) && !reports.some((other) => other.sent > held.sent && named(other, code))));
+      const liveHeads = heads.filter((held) => held.op !== "cancel");
+      const basis = liveHeads.length > 0 ? liveHeads : heads;
+      const expected = [...new Set(basis.flatMap((held) => held.areas.map((area) => (area.type === "code" ? area.code : ""))))].sort();
+      expect(incident?.areas.map((area) => (area.type === "code" ? area.code : "")).sort(), `seed ${seed} round ${round}`).toEqual(expected);
+      // The oracle of the values: an unknown value takes the highest value of the latest earlier known reports that are not cancels.
+      const fill = <F extends "severity" | "urgency">(held: Report, field: F, order: readonly Report[F][]): number => {
+        if (held[field] !== "unknown") return order.indexOf(held[field]);
+        const known = reports.filter((other) => other.op !== "cancel" && other[field] !== "unknown" && other.sent <= held.sent);
+        const last = Math.max(...known.map((other) => other.sent));
+        return Math.max(0, ...known.filter((other) => other.sent === last).map((other) => order.indexOf(other[field])));
+      };
+      const severities = ["unknown", "minor", "moderate", "severe", "extreme"] as const;
+      const urgencies = ["unknown", "past", "future", "expected", "immediate"] as const;
+      expect(incident?.severity, `seed ${seed} round ${round}`).toBe(severities[Math.max(...basis.map((held) => fill(held, "severity", severities)))]);
+      expect(incident?.urgency, `seed ${seed} round ${round}`).toBe(urgencies[Math.max(...basis.map((held) => fill(held, "urgency", urgencies)))]);
     }
   });
 });

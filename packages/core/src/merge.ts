@@ -11,6 +11,7 @@ import type {
   Acknowledgment,
   Certainty,
   Delivery,
+  EndMark,
   Incident,
   Instant,
   Level,
@@ -24,19 +25,20 @@ import type {
 import { LEVELS } from "./contracts.ts";
 
 /** The merge state with no part. */
-export const EMPTY_STATE: MergeState = { reports: [], deliveries: [], acks: [] };
+export const EMPTY_STATE: MergeState = { reports: [], deliveries: [], acks: [], ends: [] };
 
 /** The parts of a merge state, in any order and with duplicates. */
 export interface MergeParts {
   readonly reports?: readonly Report[];
   readonly deliveries?: readonly Delivery[];
   readonly acks?: readonly Acknowledgment[];
+  readonly ends?: readonly EndMark[];
 }
 
 /**
  * This function gives the one form of a merge state. It keeps one report for each id: for two
- * contents of one id, the content with the smaller canonical JSON. It keeps each delivery and each
- * acknowledgment one time.
+ * contents of one id, the content with the smaller canonical JSON. It keeps each delivery, each
+ * acknowledgment and each end mark one time.
  */
 export function normalize(parts: MergeParts): MergeState {
   const reports = new Map<ReportId, { readonly report: Report; readonly text: string }>();
@@ -49,6 +51,7 @@ export function normalize(parts: MergeParts): MergeState {
     reports: [...reports.entries()].sort(([a], [b]) => compare(a, b)).map(([, held]) => held.report),
     deliveries: uniqueByText(parts.deliveries ?? []),
     acks: uniqueByText(parts.acks ?? []),
+    ends: uniqueByText(parts.ends ?? []),
   };
 }
 
@@ -58,6 +61,7 @@ export function join(a: MergeState, b: MergeState): MergeState {
     reports: [...a.reports, ...b.reports],
     deliveries: [...a.deliveries, ...b.deliveries],
     acks: [...a.acks, ...b.acks],
+    ends: [...a.ends, ...b.ends],
   });
 }
 
@@ -67,6 +71,7 @@ export function add(state: MergeState, parts: MergeParts): MergeState {
     reports: [...state.reports, ...(parts.reports ?? [])],
     deliveries: [...state.deliveries, ...(parts.deliveries ?? [])],
     acks: [...state.acks, ...(parts.acks ?? [])],
+    ends: [...state.ends, ...(parts.ends ?? [])],
   });
 }
 
@@ -142,9 +147,26 @@ export function incidents(state: MergeState, at: Instant, options: IncidentOptio
   // The edges go in the two directions, so the strong components are the connected components.
   // The nodes of a component keep the order of the reports: the order of their ids.
   const components = stronglyConnectedComponents(reports.keys(), (index) => edges[index]!);
+  const ended = endedReports(state, at);
   return components
-    .map((component) => incidentOf(component.map((index) => reports[index]!), at))
+    .map((component) => incidentOf(component.map((index) => reports[index]!), at, ended))
     .sort((a, b) => compare(a.anchor, b.anchor));
+}
+
+/**
+ * This function gives the reports that ended at a time: each report whose latest end mark at or before
+ * the time has `ended` true. A mark after the time changes nothing, so a replay of a past time gives
+ * the past value.
+ */
+export function endedReports(state: MergeState, at: Instant): ReadonlySet<ReportId> {
+  const latest = new Map<ReportId, EndMark>();
+  for (const mark of state.ends) {
+    if (mark.at > at) continue;
+    const held = latest.get(mark.report);
+    // At one time, the mark with `ended` false wins. Thus the order of the marks changes nothing.
+    if (held === undefined || mark.at > held.at || (mark.at === held.at && !mark.ended)) latest.set(mark.report, mark);
+  }
+  return new Set([...latest.values()].filter((mark) => mark.ended).map((mark) => mark.report));
 }
 
 /**
@@ -171,34 +193,36 @@ const SEVERITY: readonly Severity[] = ["unknown", "minor", "moderate", "severe",
 const URGENCY: readonly Urgency[] = ["unknown", "past", "future", "expected", "immediate"];
 const CERTAINTY: readonly Certainty[] = ["unknown", "unlikely", "possible", "likely", "observed"];
 
-// The first report with the highest value. The reports come in the order of their ids, so a tie goes to the smallest id.
-function top(reports: readonly Report[], rank: (report: Report) => number): Report {
-  return reports.reduce((best, report) => (rank(report) > rank(best) ? report : best));
+// The first item with the highest value. The reports come in the order of their ids, so a tie goes to the smallest id.
+function top<T>(items: readonly T[], rank: (item: T) => number): T {
+  return items.reduce((best, item) => (rank(item) > rank(best) ? item : best));
 }
 
-function incidentOf(group: readonly Report[], at: Instant): Incident {
+function incidentOf(group: readonly Report[], at: Instant, ended: ReadonlySet<ReportId>): Incident {
   const superseded = new Set<string>();
   for (const report of group) {
     for (const reference of report.references) superseded.add(JSON.stringify([report.source, reference]));
   }
-  const replaced = replacedCopies(group);
+  const events = eventsOf(group);
+  const replaced = replacedCopies(events);
   let heads = group.filter((report) => !superseded.has(JSON.stringify([report.source, report.key])) && !replaced.has(report.id));
   // A cycle of references leaves no head. Then each report counts as a head.
   if (heads.length === 0) heads = [...group];
-  const liveHeads = heads.filter((report) => report.op !== "cancel" && !(report.expires !== undefined && report.expires <= at));
+  const liveHeads = heads.filter((report) => report.op !== "cancel" && !(report.expires !== undefined && report.expires <= at) && !ended.has(report.id));
   const basis = liveHeads.length > 0 ? liveHeads : heads;
+  const stated = basis.map((report) => ({ report, ...knownValues(report, events) }));
   const first = group[0]!;
-  const worst = top(basis, (report) => SEVERITY.indexOf(report.severity));
+  const worst = top(stated, (values) => SEVERITY.indexOf(values.severity));
   const onsets = basis.flatMap((report) => (report.onset === undefined ? [] : [report.onset]));
   const expiries = basis.flatMap((report) => (report.expires === undefined ? [] : [report.expires]));
   const incident: Incident = {
     anchor: first.id,
     reports: group.map((report) => report.id),
     status: first.status,
-    kind: worst.kind,
+    kind: worst.report.kind,
     severity: worst.severity,
-    urgency: top(basis, (report) => URGENCY.indexOf(report.urgency)).urgency,
-    certainty: top(basis, (report) => CERTAINTY.indexOf(report.certainty)).certainty,
+    urgency: top(stated, (values) => URGENCY.indexOf(values.urgency)).urgency,
+    certainty: top(stated, (values) => CERTAINTY.indexOf(values.certainty)).certainty,
     areas: uniqueByText(basis.flatMap((report) => report.areas)),
     about: uniqueByText(basis.flatMap((report) => report.about)),
     live: liveHeads.length > 0,
@@ -214,23 +238,15 @@ function incidentOf(group: readonly Report[], at: Instant): Incident {
 
 /**
  * The rule of the copies. Two reports of one origin with a shared correlation key tell of one event.
- * The later report replaces the earlier report, from any source, when it names each region code of
- * the earlier report. Thus a cancel of the NWS also ends the copy of that alert from IPAWS.
+ * The later reports of the event replace an earlier report, from any source, when together they name
+ * each region code of the earlier report. Thus a cancel of the NWS also ends the copy of that alert
+ * from IPAWS. The rows of IEM, one for each county, end the NWS message of two counties.
  *
- * A later report that names only a part of the codes replaces nothing, and a report with no code is
- * not replaced. Then the copy stays live: the error is on the safe side. The rule reads only the
- * group, so it keeps the laws of the merge.
+ * For each code, the latest reports that name it stay, so no later statement of a code is lost. A
+ * code that no later report names keeps its report live, and a report with no code is not replaced.
+ * Then the error is on the safe side. The rule reads only the group, so it keeps the laws of the merge.
  */
-function replacedCopies(group: readonly Report[]): Set<ReportId> {
-  const byEvent = new Map<string, Report[]>();
-  for (const report of group) {
-    for (const key of report.correlation) {
-      const event = JSON.stringify([report.origin, key.system, key.id]);
-      const reports = byEvent.get(event);
-      if (reports === undefined) byEvent.set(event, [report]);
-      else reports.push(report);
-    }
-  }
+function replacedCopies(byEvent: Events): Set<ReportId> {
   const codes = new Map<ReportId, ReadonlySet<string>>();
   const codesOf = (report: Report): ReadonlySet<string> => {
     let set = codes.get(report.id);
@@ -242,14 +258,74 @@ function replacedCopies(group: readonly Report[]): Set<ReportId> {
   };
   const replaced = new Set<ReportId>();
   for (const reports of byEvent.values()) {
-    for (const earlier of reports) {
-      const named = codesOf(earlier);
-      if (replaced.has(earlier.id) || named.size === 0) continue;
-      const covers = (later: Report): boolean => later.sent > earlier.sent && [...named].every((code) => codesOf(later).has(code));
-      if (reports.some(covers)) replaced.add(earlier.id);
+    // From the latest sent time to the earliest. `later` holds the codes of the reports after the current time.
+    const ordered = [...reports].sort((a, b) => b.sent - a.sent);
+    const later = new Set<string>();
+    for (let start = 0, end = 0; start < ordered.length; start = end) {
+      while (end < ordered.length && ordered[end]!.sent === ordered[start]!.sent) end += 1;
+      const tied = ordered.slice(start, end);
+      for (const report of tied) {
+        const named = codesOf(report);
+        if (named.size > 0 && [...named].every((code) => later.has(code))) replaced.add(report.id);
+      }
+      for (const report of tied) for (const code of codesOf(report)) later.add(code);
     }
   }
   return replaced;
+}
+
+// The reports of each event of a group: one origin and one correlation key.
+type Events = ReadonlyMap<string, readonly Report[]>;
+
+const eventKey = (report: Report, key: Report["correlation"][number]): string => JSON.stringify([report.origin, key.system, key.id]);
+
+function eventsOf(group: readonly Report[]): Events {
+  const byEvent = new Map<string, Report[]>();
+  for (const report of group) {
+    for (const key of report.correlation) {
+      const event = eventKey(report, key);
+      const reports = byEvent.get(event);
+      if (reports === undefined) byEvent.set(event, [report]);
+      else reports.push(report);
+    }
+  }
+  return byEvent;
+}
+
+type Stated = Pick<Report, "severity" | "urgency" | "certainty">;
+
+/**
+ * The severity, the urgency and the certainty of a report, with each `unknown` value filled from its
+ * events. A copy with no value, as a row of IEM, then keeps the values of the message of the authority.
+ */
+function knownValues(report: Report, events: Events): Stated {
+  return {
+    severity: knownValue(report, "severity", SEVERITY, events),
+    urgency: knownValue(report, "urgency", URGENCY, events),
+    certainty: knownValue(report, "certainty", CERTAINTY, events),
+  };
+}
+
+/**
+ * The value of one field. An `unknown` value takes the value of the latest report of an event of the
+ * report with a known value. That report is not later than the report and is not a cancel, because
+ * a cancel of the NWS gives the values of an end. A tie of time takes the highest value.
+ */
+function knownValue<F extends keyof Stated>(report: Report, field: F, order: readonly Report[F][], events: Events): Report[F] {
+  let value = report[field];
+  if (value !== "unknown") return value;
+  let sent = -Infinity;
+  for (const key of report.correlation) {
+    for (const other of events.get(eventKey(report, key)) ?? []) {
+      const found = other[field];
+      if (other.op === "cancel" || found === "unknown" || other.sent > report.sent) continue;
+      if (other.sent > sent || (other.sent === sent && order.indexOf(found) > order.indexOf(value))) {
+        value = found;
+        sent = other.sent;
+      }
+    }
+  }
+  return value;
 }
 
 function highest(parts: readonly { readonly level: Level }[]): Level | undefined {
