@@ -3,7 +3,8 @@ import type { FetchOutcome, PlaceId, WatchedPlace } from "@mark1russell7/alerts"
 import type { Exchange, Reply, Transport } from "polite-crawler/api";
 import { HostScheduler } from "polite-crawler/politeness";
 import { describe, expect, it } from "vitest";
-import { CANARY_PATH, createNwsFetch, queriesOf } from "./fetch.ts";
+import { WEA_EVENT_CODES } from "@mark1russell7/alerts-format-nws";
+import { CANARY_PATH, createNwsFetch, queriesOf, WEA_PATH } from "./fetch.ts";
 
 const read = (name: string): unknown => JSON.parse(readFileSync(new URL(`../fixtures/${name}`, import.meta.url), "utf8"));
 const BASE = "https://nws.test";
@@ -22,19 +23,40 @@ describe("queriesOf", () => {
   const paths = (places: WatchedPlace[]): string[] => queriesOf({ places }).map((query) => query.path);
 
   it("asks by state, in order and with no duplicate", () => {
-    expect(paths([TEXAS, ARIZONA, TEXAS])).toEqual(["/alerts/active?area=AZ,TX", CANARY_PATH]);
+    expect(paths([TEXAS, ARIZONA, TEXAS])).toEqual(["/alerts/active?area=AZ,TX", WEA_PATH, CANARY_PATH]);
   });
 
   it("asks by zone for a place with no state", () => {
-    expect(paths([TEXAS, ZONE_ONLY])).toEqual(["/alerts/active?area=TX", "/alerts/active?zone=WAC045", CANARY_PATH]);
+    expect(paths([TEXAS, ZONE_ONLY])).toEqual(["/alerts/active?area=TX", "/alerts/active?zone=WAC045", WEA_PATH, CANARY_PATH]);
   });
 
-  it("asks for the whole country for a place with no state and no zone", () => {
+  it("asks for the whole country for a place with no state and no zone, and then not for the WEA messages", () => {
     expect(paths([TEXAS, NO_CODE])).toEqual(["/alerts/active", CANARY_PATH]);
   });
 
-  it("asks only for the canary with no place", () => {
-    expect(queriesOf({ places: [] })).toEqual([{ path: CANARY_PATH, main: false }]);
+  it("asks only for the health queries with no place", () => {
+    expect(queriesOf({ places: [] })).toEqual([
+      { path: WEA_PATH, main: false },
+      { path: CANARY_PATH, main: false },
+    ]);
+  });
+
+  it("asks for the WEA messages only when the option is not false", () => {
+    expect(queriesOf({ places: [TEXAS] }, { weaCopies: false }).map((query) => query.path)).toEqual(["/alerts/active?area=TX", CANARY_PATH]);
+    expect(queriesOf({ places: [] }, { weaCopies: false })).toEqual([{ path: CANARY_PATH, main: false }]);
+    expect(queriesOf({ places: [TEXAS] }, { weaCopies: true })).toEqual(queriesOf({ places: [TEXAS] }));
+  });
+
+  it("asks for the actual alerts of each WEA event code, with the parameters that the NWS API takes", () => {
+    const url = new URL(`https://nws.test${WEA_PATH}`);
+    expect(url.pathname).toBe("/alerts/active");
+    expect(url.searchParams.get("status")).toBe("actual");
+    const codes = url.searchParams.get("code")?.split(",") ?? [];
+    expect(codes).toEqual([...WEA_EVENT_CODES]);
+    // The NWS API refuses a code that is not three letters or digits (`^\w{3}$`)
+    expect(codes.every((code) => /^\w{3}$/.test(code))).toBe(true);
+    expect(codes).toContain("TOR");
+    expect(codes).toContain("FFW");
   });
 });
 
@@ -182,6 +204,29 @@ describe("createNwsFetch", () => {
       const outcome = await fetchWith({ [MAIN]: json(whole.slice(0, end)), [CANARY_PATH]: canary }).fetch({ watch });
       expect(outcome.ok, `a body of ${String(end)} characters`).toBe(false);
       expect(failureOf(outcome)).toMatchObject({ kind: "network" });
+    }
+  });
+
+  it("adds the WEA messages of the country, and gives one observation for an alert in two answers", async () => {
+    const { fetch, sent } = fetchWith({
+      [MAIN]: json(collection("nws-flw.json")),
+      [WEA_PATH]: json(collection("nws-faw.json", "nws-flw.json")),
+      [CANARY_PATH]: canary,
+    });
+    const outcome = await fetch({ watch });
+    expect(sent.map((exchange) => exchange.url)).toEqual([`${BASE}${MAIN}`, `${BASE}${WEA_PATH}`, `${BASE}${CANARY_PATH}`]);
+    expect(outcome).toMatchObject({ ok: true, complete: true });
+    if (!outcome.ok) return;
+    expect(outcome.observations.map((observation) => observation.body)).toEqual(
+      ["nws-flw.json", "nws-faw.json", "nws-keepalive.json"].map((name) => JSON.stringify(read(name))),
+    );
+    expect(outcome.observations[0]?.transport.url).toBe(`${BASE}${MAIN}`);
+  });
+
+  it("does not fail, and stays complete, when the WEA query fails or gives a different document", async () => {
+    for (const reply of [json("", 503), json({ title: "not a list" }), json("{")]) {
+      const outcome = await fetchWith({ [MAIN]: json(collection("nws-flw.json")), [WEA_PATH]: reply, [CANARY_PATH]: canary }).fetch({ watch });
+      expect(outcome).toMatchObject({ ok: true, complete: true });
     }
   });
 
