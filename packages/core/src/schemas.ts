@@ -819,8 +819,8 @@ const CONTACT_FORMS = [
 ];
 
 /**
- * This function tells if a text is an `https` URL with a host, or a `mailto` URL with an address: the forms
- * of the contact of an operator. The contact goes into the comment of the User-Agent. Thus it has only
+ * This function tells if a text is a contact of an operator: an `https` URL with a host, or a `mailto` URL
+ * with an address. The contact goes into the comment of the User-Agent. Thus it has only
  * printable ASCII characters, with no space, no parenthesis and no backslash. A header with other
  * characters stops the fetch. A parenthesis ends the comment, and a backslash escapes the next character.
  */
