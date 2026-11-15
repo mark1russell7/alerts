@@ -18,6 +18,14 @@
     "check:api": "api-report check",
     "check:conventions": "conventions check"
   },
+  "conventions": {
+    "rules": {
+      "gate-trigger": {
+        "allow": ["measure.yml"],
+        "reason": "measure.yml is a measure of outside servers, not a gate. A pull request that changes the measure gets a short smoke run, and no other pull request starts it."
+      }
+    }
+  },
   "devDependencies": {
     "@mark1russell7/api-report": "^0.5.6",
     "@mark1russell7/boundaries": "^0.2.1",
