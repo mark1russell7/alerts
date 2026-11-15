@@ -59,10 +59,10 @@ A line is a report and the reports of its source that update or cancel it. The h
 A copy of a message from another source does not get the references of the line. The rule of the copies closes this gap:
 
 - Two reports of one origin with a shared correlation key tell of one event.
-- The later report replaces the earlier report, from any source, when it names each region code of the earlier report.
-- A replaced report is not a head. Thus a cancel of the NWS also ends the copy of that alert from IPAWS.
+- The later reports of the event replace an earlier report, from any source, when together they name each region code of it.
+- A replaced report is not a head. Thus a cancel of the NWS also ends the copy of that alert from IPAWS. The rows of IEM, one for each county, end the NWS message of two counties.
 
-A later report that names only a part of the codes replaces nothing. A report with no region code is not replaced. Then the copy stays live until it expires or its source ends it. This error is on the safe side. The rule reads only the reports of the group, so it keeps the three laws.
+For each code, the latest reports that name it stay. So the rule loses no later statement of a code. A code that no later report names keeps its report live, and a report with no region code is not replaced. Then the report stays live until it expires or its source ends it. This error is on the safe side. The rule reads only the reports of the group, so it keeps the three laws.
 
 The incident id is its anchor: its smallest report id. The anchor can change when two incidents merge. So an acknowledgment and a delivery point to a report of the incident, not to the anchor.
 

@@ -214,12 +214,13 @@ function incidentOf(group: readonly Report[], at: Instant): Incident {
 
 /**
  * The rule of the copies. Two reports of one origin with a shared correlation key tell of one event.
- * The later report replaces the earlier report, from any source, when it names each region code of
- * the earlier report. Thus a cancel of the NWS also ends the copy of that alert from IPAWS.
+ * The later reports of the event replace an earlier report, from any source, when together they name
+ * each region code of the earlier report. Thus a cancel of the NWS also ends the copy of that alert
+ * from IPAWS. The rows of IEM, one for each county, end the NWS message of two counties.
  *
- * A later report that names only a part of the codes replaces nothing, and a report with no code is
- * not replaced. Then the copy stays live: the error is on the safe side. The rule reads only the
- * group, so it keeps the laws of the merge.
+ * For each code, the latest reports that name it stay, so no later statement of a code is lost. A
+ * code that no later report names keeps its report live, and a report with no code is not replaced.
+ * Then the error is on the safe side. The rule reads only the group, so it keeps the laws of the merge.
  */
 function replacedCopies(group: readonly Report[]): Set<ReportId> {
   const byEvent = new Map<string, Report[]>();
@@ -242,11 +243,17 @@ function replacedCopies(group: readonly Report[]): Set<ReportId> {
   };
   const replaced = new Set<ReportId>();
   for (const reports of byEvent.values()) {
-    for (const earlier of reports) {
-      const named = codesOf(earlier);
-      if (replaced.has(earlier.id) || named.size === 0) continue;
-      const covers = (later: Report): boolean => later.sent > earlier.sent && [...named].every((code) => codesOf(later).has(code));
-      if (reports.some(covers)) replaced.add(earlier.id);
+    // From the latest sent time to the earliest. `later` holds the codes of the reports after the current time.
+    const ordered = [...reports].sort((a, b) => b.sent - a.sent);
+    const later = new Set<string>();
+    for (let start = 0, end = 0; start < ordered.length; start = end) {
+      while (end < ordered.length && ordered[end]!.sent === ordered[start]!.sent) end += 1;
+      const tied = ordered.slice(start, end);
+      for (const report of tied) {
+        const named = codesOf(report);
+        if (named.size > 0 && [...named].every((code) => later.has(code))) replaced.add(report.id);
+      }
+      for (const report of tied) for (const code of codesOf(report)) later.add(code);
     }
   }
   return replaced;

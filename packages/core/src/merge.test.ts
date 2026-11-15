@@ -242,7 +242,7 @@ describe("the copies of one event", () => {
     expect(incidents(normalize({ reports: [alert, copy, update] }), at)[0]?.severity).toBe("severe");
   });
 
-  it("keeps the copy live when the later report names only a part of its codes", () => {
+  it("keeps the copy live when the later reports name only a part of its codes", () => {
     // The NWS cancels the warning for one county. The update for the other county is missing.
     const partial = report({ key: "api-2", op: "cancel", sent: later, references: ["api-1"], correlation: vtec, areas: codes("KSC045") });
     const [incident] = incidents(normalize({ reports: [alert, copy, partial] }), at);
@@ -261,7 +261,20 @@ describe("the copies of one event", () => {
     expect(liveOf(alert, shapeOnly, cancel({}))).toBe(true);
   });
 
-  it.each(SEEDS)("ends no code that no later report of the origin and event names (seed %i)", (seed) => {
+  it("ends a report when the later reports together name each of its codes", () => {
+    // IEM gives one row for each county. Each row is a report of its own.
+    const row = (code: string, op: Report["op"], sent = later): Report => report({ key: `iem-${code}-${sent}`, source: "iem", op, sent, correlation: vtec, areas: codes(code) });
+    expect(liveOf(alert, row("KSC177", "cancel"), row("KSC045", "cancel"))).toBe(false);
+    // The authority ends one county and keeps the other: the incident keeps only the other county.
+    const [incident] = incidents(normalize({ reports: [alert, row("KSC177", "cancel"), row("KSC045", "update")] }), at);
+    expect(incident?.live).toBe(true);
+    expect(incident?.areas).toEqual(codes("KSC045"));
+    // The rows of the first message end when the NWS API cancels the two counties.
+    const cancel = report({ key: "api-2", op: "cancel", sent: later, references: ["api-1"], correlation: vtec, areas: codes("KSC177", "KSC045") });
+    expect(liveOf(alert, row("KSC177", "alert", T0), row("KSC045", "alert", T0), cancel)).toBe(false);
+  });
+
+  it.each(SEEDS)("is live exactly when the latest report of some code is not a cancel (seed %i)", (seed) => {
     const r = random(seed);
     const pool = ["KSC177", "KSC045", "KSC139", "KSC197"];
     for (let round = 0; round < 50; round += 1) {
@@ -272,18 +285,29 @@ describe("the copies of one event", () => {
           sent: T0 + r.below(4) * 60_000,
           op: r.pick(["alert", "update", "cancel"] as const),
           correlation: vtec,
-          areas: codes(...r.sample(pool, r.int(1, pool.length))),
+          // Half of the reports name one code, as the rows of IEM do.
+          areas: codes(...r.sample(pool, r.chance(0.5) ? 1 : r.int(1, pool.length))),
         }),
       );
       const [incident] = incidents(normalize({ reports }), at);
-      // Each live report that no later report covers keeps its codes in the incident.
-      for (const held of reports) {
-        if (held.op === "cancel") continue;
-        const covered = reports.some((other) => other.sent > held.sent && held.areas.every((area) => other.areas.some((x) => JSON.stringify(x) === JSON.stringify(area))));
-        if (covered) continue;
-        expect(incident?.live, `seed ${seed} round ${round}`).toBe(true);
-        for (const area of held.areas) expect(incident?.areas).toContainEqual(area);
+      // The latest statements of each code: the reports with the latest sent time that name the code.
+      let live = false;
+      for (const code of pool) {
+        const naming = reports.filter((held) => held.areas.some((area) => area.type === "code" && area.code === code));
+        const last = Math.max(...naming.map((held) => held.sent));
+        if (!naming.some((held) => held.sent === last && held.op !== "cancel")) continue;
+        // No later report names this code, so the incident keeps it.
+        live = true;
+        expect(incident?.areas, `seed ${seed} round ${round}`).toContainEqual({ type: "code", system: "ugc", code });
       }
+      expect(incident?.live, `seed ${seed} round ${round}`).toBe(live);
+      // The oracle: the rule in its direct form. A report stays a head when a code of it has no later report.
+      const named = (held: Report, code: string): boolean => held.areas.some((area) => area.type === "code" && area.code === code);
+      const heads = reports.filter((held) => pool.some((code) => named(held, code) && !reports.some((other) => other.sent > held.sent && named(other, code))));
+      const liveHeads = heads.filter((held) => held.op !== "cancel");
+      const basis = liveHeads.length > 0 ? liveHeads : heads;
+      const expected = [...new Set(basis.flatMap((held) => held.areas.map((area) => (area.type === "code" ? area.code : ""))))].sort();
+      expect(incident?.areas.map((area) => (area.type === "code" ? area.code : "")).sort(), `seed ${seed} round ${round}`).toEqual(expected);
     }
   });
 });
