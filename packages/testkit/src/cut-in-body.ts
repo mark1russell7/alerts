@@ -10,48 +10,17 @@
  * - All framings: a cut does not give `{ ok: true, complete: true }` at any time. For `close`, the client cannot see the
  *   cut in the framing, so only the parse of the body can see it.
  */
-import { readdirSync, readFileSync } from "node:fs";
-import { createRequire } from "node:module";
-import { dirname, join } from "node:path";
-import type { FetchOutcome, PlaceId, Watch } from "@mark1russell7/alerts";
-import { CANARY_PATH, createNwsFetch } from "@mark1russell7/alerts-source-nws-api";
 import { faultPlanOf, sweepPoints } from "@mark1russell7/rigor-chaos";
-import { splitBytes, startFaultProxy } from "@mark1russell7/rigor-proxy";
-import { FRAMINGS, type Framing, startScriptedServer } from "@mark1russell7/rigor-testkit/http";
-import { fetchTransport } from "polite-crawler/api";
-import { HostScheduler, realClock } from "polite-crawler/politeness";
+import { startFaultProxy } from "@mark1russell7/rigor-proxy";
+import { FRAMINGS, type Framing } from "@mark1russell7/rigor-testkit/http";
+import { type Baseline, baselineOf, caseBodies, type FetchLimits, fetchOnce, mainAfter, type OutcomeSummary, sameHead, startNwsServer } from "./nws.ts";
 
 /** The id and the seed of the case. The cut points of each framing come from this seed, as the prediction states. */
 export const CASE_1_ID = "al-13-case-1";
 /** The number of seeded cut points of each framing, in addition to the edges 0, 1 and the last byte. */
 export const CASE_1_DRAWS = 16;
-/** The server writes the body in this number of parts, so a cut can fall in a part or between two parts. */
-export const CASE_1_PARTS = 4;
-/** The main query of the watch of the case. */
-export const MAIN_PATH = "/alerts/active?area=KS";
-/** The watch of the case: one state, a public region and not the place of an owner. */
-export const CASE_1_WATCH: Watch = { places: [{ id: "ks" as PlaceId, codes: [{ system: "state", code: "KS" }], bufferKm: 0 }] };
-
-const USER_AGENT = "alerts-testkit/0 (fault suite)";
-const TIMEOUT_MS = 10_000;
-const CONTENT_TYPE = { "content-type": "application/geo+json" };
-
-/** The result of one fetch, with no body. */
-export type OutcomeSummary =
-  | { readonly ok: true; readonly complete: boolean; readonly observations: number }
-  | { readonly ok: false; readonly kind: string; readonly message: string };
-
-/** The fetch of a framing with no fault. It gives the place of the body on the wire. */
-export interface Baseline {
-  readonly framing: Framing;
-  /** The bytes of the head of the main reply on the wire. */
-  readonly head: number;
-  /** The bytes of the body of the main reply on the wire. A `chunked` body includes its size lines. */
-  readonly body: number;
-  /** True when the main reply started its connection and the server wrote it whole. */
-  readonly whole: boolean;
-  readonly outcome: OutcomeSummary;
-}
+/** The time limits of the fetches of the case: 10 s for each query and for the transport. */
+export const CASE_1_LIMITS: FetchLimits = { timeoutMs: 10_000, transportTimeoutMs: 10_000 };
 
 /** The fetch of one cut. */
 export interface CutRecord {
@@ -90,53 +59,6 @@ export interface CaseRun {
   readonly verdict: Verdict;
 }
 
-/**
- * This function gives the bodies of the replies. The main body is one feature collection of each fixture of the NWS
- * source. The canary body has the keepalive fixture. A fetch gives the observations of each query, so a whole fetch
- * gives `observations`: the features of the main body and of the canary body.
- */
-export function caseBodies(): { readonly main: Uint8Array; readonly canary: Uint8Array; readonly features: number; readonly observations: number } {
-  const root = dirname(createRequire(import.meta.url).resolve("@mark1russell7/alerts-source-nws-api/package.json"));
-  const folder = join(root, "fixtures");
-  const names = readdirSync(folder)
-    .filter((name) => name.endsWith(".json"))
-    .sort();
-  const read = (name: string): unknown => JSON.parse(readFileSync(join(folder, name), "utf8"));
-  const features = names.map(read);
-  const canary = names.filter((name) => name.includes("keepalive")).map(read);
-  const encode = (value: unknown): Uint8Array => new TextEncoder().encode(JSON.stringify(value));
-  return {
-    main: encode({ type: "FeatureCollection", features }),
-    canary: encode({ type: "FeatureCollection", features: canary }),
-    features: features.length,
-    observations: features.length + canary.length,
-  };
-}
-
-const summaryOf = (outcome: FetchOutcome): OutcomeSummary =>
-  outcome.ok
-    ? { ok: true, complete: outcome.complete, observations: outcome.observations.length }
-    : { ok: false, kind: outcome.failure.kind, message: outcome.failure.message };
-
-const nwsFetchAt = (baseUrl: string): ReturnType<typeof createNwsFetch> =>
-  createNwsFetch({
-    pace: { scheduler: new HostScheduler(realClock, 1), now: () => realClock.now() },
-    transport: fetchTransport({ userAgent: USER_AGENT, timeoutMs: TIMEOUT_MS }),
-    userAgent: USER_AGENT,
-    baseUrl,
-    minIntervalMs: 0,
-    timeoutMs: TIMEOUT_MS,
-  });
-
-/** This function fetches the watch of the case one time. A throw becomes a failure of the kind `thrown`. */
-async function fetchOnce(baseUrl: string): Promise<OutcomeSummary> {
-  try {
-    return summaryOf(await nwsFetchAt(baseUrl)({ watch: CASE_1_WATCH }));
-  } catch (error) {
-    return { ok: false, kind: "thrown", message: error instanceof Error ? error.message : String(error) };
-  }
-}
-
 /** The options of a run. The defaults are the options of the case in CI. */
 export interface CaseOptions {
   readonly draws?: number;
@@ -146,27 +68,14 @@ export interface CaseOptions {
 /** This function starts the case: a baseline and each cut, for each framing. It gives the records and the verdict. */
 export async function runCutInBody(options: CaseOptions = {}): Promise<CaseRun> {
   const draws = options.draws ?? CASE_1_DRAWS;
+  const framings = options.framings ?? FRAMINGS;
   const bodies = caseBodies();
   const baselines: Baseline[] = [];
   const records: CutRecord[] = [];
-  for (const framing of options.framings ?? FRAMINGS) {
-    const server = await startScriptedServer({
-      routes: [
-        { path: MAIN_PATH, replies: [{ fields: CONTENT_TYPE, body: splitBytes(bodies.main, CASE_1_PARTS), framing }] },
-        { path: CANARY_PATH, replies: [{ fields: CONTENT_TYPE, body: bodies.canary }] },
-      ],
-    });
+  for (const framing of framings) {
+    const server = await startNwsServer(bodies, framing);
     try {
-      const mainAfter = (from: number) => server.requests.slice(from).find((request) => request.target === MAIN_PATH);
-      const outcome = await fetchOnce(server.url);
-      const wire = mainAfter(0)?.wire;
-      const baseline: Baseline = {
-        framing,
-        head: wire?.head ?? 0,
-        body: wire?.body ?? 0,
-        whole: wire !== undefined && wire.offset === 0 && wire.whole,
-        outcome,
-      };
+      const baseline = await baselineOf(server, framing, CASE_1_LIMITS);
       baselines.push(baseline);
       if (!baseline.whole || baseline.body < draws + 3) continue;
       for (const offset of sweepPoints(baseline.body, draws, CASE_1_ID)) {
@@ -180,18 +89,17 @@ export async function runCutInBody(options: CaseOptions = {}): Promise<CaseRun> 
         const started = performance.now();
         let result: OutcomeSummary;
         try {
-          result = await fetchOnce(`http://${proxy.host}:${String(proxy.port)}`);
+          result = await fetchOnce(`http://${proxy.host}:${String(proxy.port)}`, CASE_1_LIMITS);
         } finally {
           await proxy.close();
         }
         const ms = Math.round(performance.now() - started);
-        const seen = mainAfter(from)?.wire;
         records.push({
           framing,
           offset,
           cutByte,
           cut: proxy.records.some((r) => r.kind === "cut" && r.connection === 0 && r.direction === "down" && r.byte === cutByte),
-          sameHead: seen !== undefined && seen.offset === 0 && seen.head === baseline.head,
+          sameHead: sameHead(mainAfter(server, from), baseline),
           outcome: result,
           ms,
         });
@@ -200,7 +108,7 @@ export async function runCutInBody(options: CaseOptions = {}): Promise<CaseRun> 
       await server.close();
     }
   }
-  return { id: CASE_1_ID, seed: CASE_1_ID, bodyBytes: bodies.main.length, baselines, records, verdict: verdictOf(baselines, records, bodies.observations, draws, options.framings ?? FRAMINGS) };
+  return { id: CASE_1_ID, seed: CASE_1_ID, bodyBytes: bodies.main.length, baselines, records, verdict: verdictOf(baselines, records, bodies.observations, draws, framings) };
 }
 
 /** This function gives the verdict of the records of a run. `observations` is the count of a whole fetch. */

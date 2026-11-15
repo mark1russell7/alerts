@@ -11,6 +11,7 @@ on:
     paths:
       - packages/testkit/**
       - packages/source-nws-api/**
+      - packages/format-nws/**
       - packages/core/**
       - pnpm-lock.yaml
       - .github/workflows/faults.yml
@@ -44,6 +45,7 @@ jobs:
           paths: |
             packages/testkit/**
             packages/source-nws-api/**
+            packages/format-nws/**
             packages/core/**
             pnpm-lock.yaml
             .github/workflows/faults.yml
