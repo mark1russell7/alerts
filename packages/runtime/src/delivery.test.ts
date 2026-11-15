@@ -183,7 +183,7 @@ describe("the delivery step of a pass", () => {
     expect(pushover.send).toHaveLength(1);
     expect(pushover.send[0]).toMatchObject({ person: PERSON, level: "life-safety", title: "Tornado Warning issued April 1 at 1:00PM CDT by NWS Wichita KS", body: "TAKE COVER NOW!", quiet: false, expires: T0 + 45 * MINUTE });
     expect(sms.send).toEqual([]);
-    expect(types(log)).toEqual(["started", "escalation", "delivery"]);
+    expect(types(log)).toEqual(["started", "escalation", "attempt", "delivery"]);
     expect(pass.delivery?.sent.map((delivery) => [delivery.channel, delivery.step, delivery.receipt])).toEqual([[PUSHOVER, 0, { receipt: "pushover-1" }]]);
     // The next pass is the first poll of the receipt.
     expect(pass.wakeAt).toBe(T0 + 30 * SECOND);
@@ -199,7 +199,7 @@ describe("the delivery step of a pass", () => {
     expect(pass.delivery?.acknowledged).toEqual([{ incident: runtime.state().merge.deliveries[0]!.incident, level: "life-safety", person: PERSON, at: T0 + 20 * SECOND, via: PUSHOVER }]);
     expect(pushover.cancel).toEqual([{ receipt: "pushover-1" }]);
     expect(pass.delivery?.duplicates).toEqual([]);
-    expect(types(log)).toEqual(["started", "escalation", "delivery", "acknowledgment", "cancelled"]);
+    expect(types(log)).toEqual(["started", "escalation", "attempt", "delivery", "acknowledgment", "cancelled"]);
     await clock.advance(10 * MINUTE);
     await runtime.pass();
     expect(sms.send).toEqual([]);
@@ -240,7 +240,7 @@ describe("the delivery step of a pass", () => {
     const { clock, runtime, log, pushover } = open({ pushover: { send: (_, count) => (count === 1 ? { ok: false, kind: "rate-limited", message: "The quota is used.", retryAfter: 90 * SECOND } : undefined) } });
     const first = await runtime.pass();
     expect(first.delivery?.failures).toEqual([{ call: "send", key: pushover.send[0]!.key, channel: PUSHOVER, kind: "rate-limited", message: "The quota is used.", retryAt: T0 + 90 * SECOND }]);
-    expect(types(log)).toEqual(["started", "escalation"]);
+    expect(types(log)).toEqual(["started", "escalation", "attempt", "settled"]);
     // The fetch of the source brings a pass before the end of the wait. The send waits, and the next pass comes at its end.
     await clock.advance(MINUTE);
     const second = await runtime.pass();
@@ -361,7 +361,7 @@ describe("the delivery step of a pass", () => {
     await clock.advance(10 * SECOND);
     const first = await running;
     expect(first.delivery?.failures.map((failure) => [failure.kind, failure.message])).toEqual([["timeout", "The send took longer than 10000 ms. It stays in flight for up to 40000 ms."]]);
-    expect(types(log)).toEqual(["started", "escalation"]);
+    expect(types(log)).toEqual(["started", "escalation", "attempt"]);
     // The wait of the retry is over, but the first send is in flight. The next pass comes at the end of the flight.
     await clock.advance(5 * SECOND);
     const second = await runtime.pass();
@@ -393,7 +393,7 @@ describe("the delivery step of a pass", () => {
     const second = await runtime.pass();
     expect(second.delivery?.sent.map((delivery) => [delivery.receipt, delivery.at])).toEqual([[{ receipt: "late-1" }, T0 + 15 * SECOND]]);
     expect(pushover.send).toHaveLength(1);
-    expect(types(log)).toEqual(["started", "escalation", "delivery"]);
+    expect(types(log)).toEqual(["started", "escalation", "attempt", "delivery"]);
     // The late delivery gets its polls, thus an acknowledgment and a cancel can reach it.
     await clock.advance(30 * SECOND);
     await runtime.pass();
@@ -441,7 +441,89 @@ describe("the delivery step of a pass", () => {
     await after.runtime.pass();
     expect(after.pushover.send).toEqual([]);
     expect(after.sms.send.map((message) => message.level)).toEqual(["life-safety"]);
-    expect(types(log)).toEqual(["started", "escalation", "delivery", "started", "delivery"]);
+    // The delivery of the copy ends it, thus the restart does not stop it.
+    expect(after.pushover.stops).toEqual([]);
+    expect(types(log)).toEqual(["started", "escalation", "attempt", "delivery", "started", "delivery"]);
+    log.close();
+  });
+
+  it("stops a copy of an earlier run with no delivery after a restart, and a new copy goes in parallel", async () => {
+    const clock = fakeWallClock(T0);
+    const inner = openRuntimeLog(":memory:");
+    // The process stops after the channel accepts the send and before the log writes its delivery.
+    let crash = true;
+    const crashing: RuntimeLog = {
+      ...inner,
+      appendAll: (events, accept) => {
+        if (crash && events.some((event) => event.type === "delivery")) throw new Error("The process stops.");
+        return inner.appendAll(events, accept);
+      },
+    };
+    const before = open({}, crashing, clock);
+    await expect(before.runtime.pass()).rejects.toThrow("The process stops.");
+    expect(before.pushover.copies).toEqual([`${RUN}-1`]);
+    expect(before.runtime.state().copies).toEqual({ [`${RUN}-1`]: { key: before.pushover.send[0]!.key, channel: PUSHOVER } });
+
+    // A new process on the same log, one minute later. The log has the attempt of the copy and no delivery.
+    crash = false;
+    await clock.advance(MINUTE);
+    const after = open({}, inner, clock);
+    const pass = await after.runtime.pass();
+    const run = `run-${T0 + MINUTE}`;
+    expect(after.pushover.copies).toEqual([`${run}-1`]);
+    expect(pass.delivery?.stopped).toEqual([`${RUN}-1`]);
+    expect(after.pushover.stops).toEqual([`${RUN}-1`]);
+    expect(after.pushover.cancel).toEqual([]);
+    expect(after.runtime.state().copies).toEqual({});
+    expect(after.runtime.state()).toEqual(rebuild(inner.read(), after.runtime.config));
+    expect(types(inner)).toEqual(["started", "escalation", "attempt", "started", "attempt", "delivery", "settled"]);
+    // The copy is over, thus the next pass stops nothing.
+    await clock.advance(30 * SECOND);
+    expect((await after.runtime.pass()).delivery?.stopped).toEqual([]);
+    expect(after.pushover.stops).toHaveLength(1);
+    inner.close();
+  });
+
+  it("keeps a copy of an earlier run open in the log until its stop goes, also after a failed stop", async () => {
+    const clock = fakeWallClock(T0);
+    const log = openRuntimeLog(":memory:");
+    const before = open({ pushover: { send: () => new Promise<SendOutcome>(() => undefined) } }, log, clock);
+    const running = before.runtime.pass();
+    await clock.advance(10 * SECOND);
+    await running;
+    expect(types(log)).toEqual(["started", "escalation", "attempt"]);
+
+    await clock.advance(MINUTE);
+    let refuse = true;
+    const stop = (): void => {
+      if (refuse) {
+        refuse = false;
+        throw new Error("Pushover is down.");
+      }
+    };
+    const after = open({ pushover: { stop } }, log, clock);
+    const first = await after.runtime.pass();
+    expect(first.delivery?.failures.map((failure) => [failure.call, failure.copy, failure.message])).toEqual([["copy", `${RUN}-1`, "Pushover is down."]]);
+    expect(Object.keys(after.runtime.state().copies)).toEqual([`${RUN}-1`]);
+    await clock.advance(15 * SECOND);
+    const second = await after.runtime.pass();
+    expect(second.delivery?.stopped).toEqual([`${RUN}-1`]);
+    expect(after.pushover.stops).toEqual([`${RUN}-1`, `${RUN}-1`]);
+    expect(after.runtime.state().copies).toEqual({});
+    log.close();
+  });
+
+  it("does not stop a copy of an earlier run that the channel refused", async () => {
+    const clock = fakeWallClock(T0);
+    const log = openRuntimeLog(":memory:");
+    const before = open({ pushover: { send: () => ({ ok: false, kind: "refused", message: "The user key is not valid." }) } }, log, clock);
+    await before.runtime.pass();
+    expect(before.runtime.state().copies).toEqual({});
+    await clock.advance(MINUTE);
+    const after = open({}, log, clock);
+    await after.runtime.pass();
+    expect(after.pushover.send).toHaveLength(1);
+    expect(after.pushover.stops).toEqual([]);
     log.close();
   });
 
@@ -495,7 +577,7 @@ describe("the delivery step of a pass", () => {
     const third = await runtime.pass();
     expect(third.delivery?.cancelled).toHaveLength(1);
     expect(pushover.cancel).toHaveLength(2);
-    expect(types(log)).toEqual(["started", "escalation", "delivery", "acknowledgment", "cancelled"]);
+    expect(types(log)).toEqual(["started", "escalation", "attempt", "delivery", "acknowledgment", "cancelled"]);
     log.close();
   });
 
@@ -516,6 +598,11 @@ describe("the delivery step of a pass", () => {
     expect(pass.delivery?.sent).toEqual([]);
     expect(pass.delivery?.duplicates).toEqual([pushover.send[0]!.key]);
     expect(pass.conflicts).toEqual([`delivery:${pushover.send[0]!.key}`]);
+    // No poll reads the duplicate copy, thus the next pass stops it by its copy id.
+    const next = await runtime.pass();
+    expect(next.delivery?.stopped).toEqual([`${RUN}-1`]);
+    expect(pushover.stops).toEqual([`${RUN}-1`]);
+    expect(pushover.cancel).toEqual([]);
     inner.close();
   });
 

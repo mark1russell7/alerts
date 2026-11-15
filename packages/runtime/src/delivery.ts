@@ -84,7 +84,13 @@ export interface DeliveryStep {
    * channel stops the repeats of each copy.
    */
   readonly duplicates: readonly string[];
-  /** The copy ids that the step stopped: a copy past its flight limit, or a copy whose send failed with no answer. */
+  /**
+   * The copy ids that the step stopped. Each is a copy that the channel can repeat and that no poll reads:
+   *
+   * - a copy past its flight limit, or a copy whose send failed with no answer
+   * - a copy of a key that the log already has
+   * - a copy of an earlier run with no end in the log
+   */
   readonly stopped: readonly string[];
   readonly acknowledged: readonly Acknowledgment[];
   /** The delivery keys that the step cancelled. */
@@ -124,6 +130,12 @@ interface Flight {
   stale: boolean;
 }
 
+/** A delivery that the next step writes, and the copy id of its send. */
+interface Landed {
+  readonly delivery: Delivery;
+  readonly copy: string;
+}
+
 /**
  * The kinds of a failed send after which the channel can have the message: the answer did not come,
  * or the server failed. A refusal, a bad key and a full quota tell that the channel has no message.
@@ -144,15 +156,16 @@ const thrownFailure = (thrown: unknown, otherwise: string): CallFailure => ({ ki
  * changes nothing in the log, thus the next step decides it again.
  *
  * - A send that passes its time limit stays in flight, thus it does not get a second send.
- * - The channel can have a copy that the log does not keep. This is a copy past its flight limit, or a
- *   copy whose send failed with no answer. On a channel that repeats, the step stops that copy by its copy id, and
- *   the new copy goes in parallel. A stop by the delivery key here can also stop the new copy.
+ * - The channel can have a copy that the log does not keep. Such a copy passed its flight limit, or its
+ *   send failed with no answer. A copy of a key that the log already has is such a copy too. On a channel that repeats,
+ *   the step stops that copy by its copy id. The new copy goes in parallel. A stop by the delivery key here can also stop the new copy.
  * - A failed stop goes again at a later step. A stale copy that the channel accepts writes no delivery,
  *   and its stop goes again.
  *
- * The times of the polls, the waits, the flights and the copies to stop are in memory only. After a
- * restart, each receipt gets a poll at once. A known limit (AL-32): a hung copy of the last run gets no
- * stop by its copy id. The cancel by the delivery key at the end of its escalation stops it.
+ * The times of the polls, the waits and the flights are in memory only. After a restart, each receipt
+ * gets a poll at once. Before each send on a channel that repeats, the log keeps its copy. The log also
+ * keeps the end of the copy: its delivery, a refusal or a stop. Thus the first step after a restart stops each copy of an
+ * earlier run with no end.
  */
 export function createDispatcher(options: DeliveryOptions, context: DeliveryContext): Dispatcher {
   const { clock } = context;
@@ -178,12 +191,26 @@ export function createDispatcher(options: DeliveryOptions, context: DeliveryCont
   // The stale copies that the channel can repeat, by copy id. Each step stops them.
   const stopping = new Map<string, { readonly key: string; readonly channel: ChannelId }>();
   let copies = 0;
+  // The copies whose send did not end. A stop of such a copy does not end it, because the channel can accept it later.
+  const pending = new Set<string>();
+  // The copies that need no stop and that the log does not tell yet: a refused send, or a stop after the end of the send.
+  const closed = new Set<string>();
+  // The first step stops the open copies of the log. Each of them is a copy of an earlier run.
+  let restarted = true;
   // The deliveries of the sends that ended after their step. The next step writes them.
-  const landed: Delivery[] = [];
+  const landed: Landed[] = [];
   const later = (call: string, key: string): string => `${call} ${key}`;
+  // The channel accepted a copy, and the log keeps another delivery of its key. No poll reads the copy, thus it gets a stop.
+  const duplicate = (delivery: Delivery, copy: string): void => {
+    if (repeating.has(delivery.channel)) stopping.set(copy, { key: delivery.key, channel: delivery.channel });
+  };
 
   return {
     async step(at) {
+      if (restarted) {
+        restarted = false;
+        for (const [copy, target] of Object.entries(context.state().copies)) stopping.set(copy, target);
+      }
       // A wait that is over keeps nothing. Thus the map holds only the waits of the last retry time.
       for (const [call, until] of waits) if (until <= at) waits.delete(call);
       const found = incidents(context.state().merge, at);
@@ -232,24 +259,25 @@ export function createDispatcher(options: DeliveryOptions, context: DeliveryCont
       const arrived = landed.splice(0);
       // A key of the log, or a key of an earlier delivery of this batch, makes a duplicate.
       const logged = new Set(context.state().merge.deliveries.map((delivery) => delivery.key));
-      const fresh: Delivery[] = [];
-      for (const delivery of arrived) {
-        if (logged.has(delivery.key)) {
-          duplicates.push(delivery.key);
+      const fresh: Landed[] = [];
+      for (const item of arrived) {
+        if (logged.has(item.delivery.key)) {
+          duplicates.push(item.delivery.key);
+          duplicate(item.delivery, item.copy);
           continue;
         }
-        logged.add(delivery.key);
-        fresh.push(delivery);
+        logged.add(item.delivery.key);
+        fresh.push(item);
       }
       try {
-        write(fresh.map((delivery) => ({ ...envelope("delivery", `delivery:${delivery.key}`, at), delivery })));
+        write(fresh.map(({ delivery, copy }) => deliveryEvent(delivery, copy, at)));
       } catch (error) {
         // The deliveries stay for the next step. The log has none of them.
         landed.unshift(...arrived);
         throw error;
       }
-      for (const delivery of fresh) polled.set(delivery.key, at);
-      sent.push(...fresh);
+      for (const { delivery } of fresh) polled.set(delivery.key, at);
+      sent.push(...fresh.map(({ delivery }) => delivery));
 
       // 1. The polls. An acknowledgment changes the escalations, thus the routes come again after it.
       const first = routesNow();
@@ -305,28 +333,38 @@ export function createDispatcher(options: DeliveryOptions, context: DeliveryCont
               }
               const message = messageOf(entry.incident, context.state().merge.reports, send);
               const deliveryOf = (accepted: Extract<SendOutcome, { ok: true }>): Delivery => ({ key: message.key, incident: send.incident, level: send.level, person: send.person, channel: send.channel, step: send.step, at: accepted.accepted, receipt: accepted.receipt });
-              // The send stays in flight until it ends, also after the time limit of the step.
               copies += 1;
-              const flight: Flight = { since: at, copy: `${context.run}-${copies}`, stale: false };
+              const copy = `${context.run}-${copies}`;
+              // The log keeps the copy before the send. A write that fails throws, and no send goes.
+              if (repeating.has(send.channel)) write([{ ...envelope("attempt", `attempt:${copy}`, clock.now()), key, channel: send.channel, copy }]);
+              // The send stays in flight until it ends, also after the time limit of the step.
+              const flight: Flight = { since: at, copy, stale: false };
               flying.set(key, flight);
+              pending.add(copy);
               let late = false;
               const call = Promise.resolve()
-                .then(() => channel.send({ message, address, copy: flight.copy }))
+                .then(() => channel.send({ message, address, copy }))
                 .then(
                   (result) => result,
                   (error): SendOutcome => ({ ok: false, kind: "network", message: `The send threw: ${errorMessage(error)}` }),
                 );
               void call.then((result) => {
                 if (flying.get(key) === flight) flying.delete(key);
+                pending.delete(copy);
                 // The channel can have this copy, and the log does not keep it: a stale copy, or a send with no answer. A stop
                 // before the accept does not reach the copy, thus the stop of a stale copy goes again.
                 const unkept = result.ok ? flight.stale : UNSURE.has(result.kind);
-                if (unkept && repeating.has(send.channel)) {
-                  stopping.set(flight.copy, { key, channel: send.channel });
-                  if (late) context.wake?.();
+                if (repeating.has(send.channel)) {
+                  if (unkept) {
+                    stopping.set(copy, { key, channel: send.channel });
+                    if (late) context.wake?.();
+                  } else if (!result.ok) {
+                    // The channel refused the send, thus it has no copy to stop.
+                    closed.add(copy);
+                  }
                 }
                 if (flight.stale || !late || !result.ok) return;
-                landed.push(deliveryOf(result));
+                landed.push({ delivery: deliveryOf(result), copy });
                 context.wake?.();
               });
               const outcome = await limited<SendOutcome>(
@@ -346,16 +384,17 @@ export function createDispatcher(options: DeliveryOptions, context: DeliveryCont
               const delivery = deliveryOf(outcome);
               let different: readonly string[];
               try {
-                different = context.append([{ ...envelope("delivery", `delivery:${delivery.key}`, clock.now()), delivery }]);
+                different = context.append([deliveryEvent(delivery, copy, clock.now())]);
               } catch (error) {
                 // The channel has the message, and the log does not. The next step writes the delivery first, thus no second send goes.
-                landed.push(delivery);
+                landed.push({ delivery, copy });
                 context.wake?.();
                 throw error;
               }
               conflicts.push(...different);
               if (different.length > 0) {
                 duplicates.push(delivery.key);
+                duplicate(delivery, copy);
                 return;
               }
               // A new delivery gets its first poll after one interval.
@@ -420,6 +459,8 @@ export function createDispatcher(options: DeliveryOptions, context: DeliveryCont
             // A late accept during the stop puts a new entry, thus its stop goes again.
             if (stopping.get(copy) === target) stopping.delete(copy);
             stopped.push(copy);
+            // A copy whose send did not end can still get an accept, thus the log does not end it yet.
+            if (!pending.has(copy)) closed.add(copy);
           })(),
         );
       }
@@ -428,6 +469,11 @@ export function createDispatcher(options: DeliveryOptions, context: DeliveryCont
       const settled = await Promise.allSettled(work);
       const broken = settled.find((result) => result.status === "rejected");
       if (broken !== undefined) throw broken.reason;
+
+      // 5. The ends of the open copies of the log. A copy with no entry in the state needs no event.
+      const unended = context.state().copies;
+      write([...closed].filter((copy) => Object.hasOwn(unended, copy)).map((copy) => ({ ...envelope("settled", `settled:${copy}`, clock.now()), copy })));
+      closed.clear();
 
       const after = routesNow();
       const open = after.flatMap((entry) => entry.polls);
@@ -454,6 +500,11 @@ export function createDispatcher(options: DeliveryOptions, context: DeliveryCont
       (error) => ({ ok: false as const, kind: "network", message: `The status threw: ${errorMessage(error)}` }),
     );
   }
+}
+
+// The event of a delivery, with the copy id of its send.
+function deliveryEvent(delivery: Delivery, copy: string, time: Instant): RuntimeEvent {
+  return { ...envelope("delivery", `delivery:${delivery.key}`, time), delivery, copy };
 }
 
 // The id of the event of a start: one start for each anchor, level and person.

@@ -3,7 +3,7 @@
  * events and the configuration, and of nothing else. Thus a restart reads the log and gets the same
  * state as a run with no restart.
  */
-import type { Acknowledgment, Cursor, Delivery, EscalationStart, FetchRecord, Instant, MapProblem, Observation, Report, ReportId, SourceId } from "@mark1russell7/alerts";
+import type { Acknowledgment, ChannelId, Cursor, Delivery, EscalationStart, FetchRecord, Instant, MapProblem, Observation, Report, ReportId, SourceId } from "@mark1russell7/alerts";
 
 /** The fields of each event. The log of `@mark1russell7/sqlite` reads `id`, `at` and `type`. */
 interface Envelope<T extends string> {
@@ -56,6 +56,24 @@ export interface SystemEvent extends Envelope<"system"> {
 /** One accepted send. */
 export interface DeliveryEvent extends Envelope<"delivery"> {
   readonly delivery: Delivery;
+  /** The copy id of the accepted send, on a channel that repeats. The copy then needs no stop by its copy id. */
+  readonly copy?: string;
+}
+
+/**
+ * A send on a channel that repeats starts. The log keeps its copy id before the send. Thus after a
+ * restart, the step stops each copy that has no delivery and no `settled` event.
+ */
+export interface AttemptEvent extends Envelope<"attempt"> {
+  /** The delivery key of the send. */
+  readonly key: string;
+  readonly channel: ChannelId;
+  readonly copy: string;
+}
+
+/** A copy needs no stop: the channel refused its send, or a stop of the copy ended after the end of its send. */
+export interface SettledEvent extends Envelope<"settled"> {
+  readonly copy: string;
 }
 
 /** One acknowledgment of a person. */
@@ -85,10 +103,12 @@ export type RuntimeEvent =
   | EscalationEvent
   | DeliveryEvent
   | AcknowledgmentEvent
-  | CancelledEvent;
+  | CancelledEvent
+  | AttemptEvent
+  | SettledEvent;
 
 /** The types of the events. */
-export const EVENT_TYPES: readonly RuntimeEvent["type"][] = ["started", "observation", "fetch", "ended", "back", "system", "escalation", "delivery", "acknowledgment", "cancelled"];
+export const EVENT_TYPES: readonly RuntimeEvent["type"][] = ["started", "observation", "fetch", "ended", "back", "system", "escalation", "delivery", "acknowledgment", "cancelled", "attempt", "settled"];
 
 /** This function gives the fields of the envelope of an event at a time. */
 export function envelope<T extends RuntimeEvent["type"]>(type: T, id: string, time: Instant): Envelope<T> {
