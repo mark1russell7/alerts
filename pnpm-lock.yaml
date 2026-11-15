@@ -485,6 +485,9 @@ importers:
       '@mark1russell7/cue':
         specifier: ^2.0.0
         version: 2.1.4
+      '@mark1russell7/rigor-statistics':
+        specifier: ^0.2.1
+        version: 0.2.1
       '@types/node':
         specifier: ^26.6.5
         version: 26.6.6
