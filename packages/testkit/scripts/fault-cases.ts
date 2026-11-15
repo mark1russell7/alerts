@@ -86,11 +86,11 @@ report(format.id, format.verdict, [
   "",
   `The main body has ${String(format.bodyBytes)} bytes and ${String(format.baseline.reports)} reports. ${String(levelled)} alerts have a level for the person of the case.`,
   "",
-  "| Arm | Answered | Reports | Fatal problems | Other problems | Health | Changed levels | Gate |",
-  "| --- | --- | --- | --- | --- | --- | --- | --- |",
+  "| Arm | Answered | Reports | Fatal problems | Lossy problems | Notes | Health | Changed levels | Gate |",
+  "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
   ...format.records.map(
     (r) =>
-      `| ${r.arm} | ${yes(r.answered)} | ${String(r.reports)} | ${String(r.fatal.length)} | ${String(r.other.length)} | ${r.health} | ${String(changesOf(r).length)} | ${yes(format.verdict.gates[r.arm])} |`,
+      `| ${r.arm} | ${yes(r.answered)} | ${String(r.reports)} | ${String(r.fatal.length)} | ${String(r.lossy.length)} | ${String(r.notes.length)} | ${r.health} | ${String(changesOf(r).length)} | ${yes(format.verdict.gates[r.arm])} |`,
   ),
   "",
   `Read: ${yes(format.verdict.read)}. Pass: **${yes(format.verdict.pass)}**.`,

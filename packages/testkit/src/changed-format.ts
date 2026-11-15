@@ -12,7 +12,7 @@
  * - `urgency-renamed`: the urgencies `Immediate`, `Expected`, `Future` and `Past` become `Now`, `Soon`, `Later` and `Over`.
  * - `field-added`: each alert gets the new field `colour`. This change keeps the meaning of each alert.
  *
- * For each arm, the case maps the observations of the fetch and adds the record of the fetch to the health of the
+ * For each arm, `fetchEvents` of the runtime makes the record of the fetch, and the case adds it to the health of the
  * source. Then it assesses each alert for one person who watches the regions of each alert of the baseline.
  *
  * The gate of an arm that changes a meaning: each alert keeps its level, or the health is `changed` or `failing`. The
@@ -23,6 +23,7 @@ import {
   assess,
   type AssessedLevel,
   EMPTY_STATE,
+  type FetchOutcome,
   type FetchRecord,
   type HealthState,
   type HealthTrack,
@@ -35,9 +36,11 @@ import {
   type PersonWatch,
   type PlaceId,
   type Report,
+  type SourceProcedures,
   startHealth,
   type WatchedPlace,
 } from "@mark1russell7/alerts";
+import { fetchEvents } from "@mark1russell7/alerts-runtime";
 import { checkCanary, mapObservation, NWS_DESCRIPTOR, SOURCE_ID } from "@mark1russell7/alerts-source-nws-api";
 import { type Fault, faultPlanOf } from "@mark1russell7/rigor-chaos";
 import { startFaultProxy } from "@mark1russell7/rigor-proxy";
@@ -145,8 +148,10 @@ export interface FormatRecord {
   /** The count of the reports of the map. */
   readonly reports: number;
   readonly fatal: readonly MapProblem[];
-  /** The problems that are not fatal. */
-  readonly other: readonly MapProblem[];
+  /** The problems that keep the report, but the report lacks a value of the message or holds a fallback. */
+  readonly lossy: readonly MapProblem[];
+  /** The problems that keep the whole report. */
+  readonly notes: readonly MapProblem[];
   /** The health after the record of the fetch of the arm. */
   readonly health: HealthState;
   /** The level of each alert of the baseline before and after the change. */
@@ -198,17 +203,19 @@ function mapResult(result: FetchResult): Mapped {
   return { observations, reports: mapped.flatMap((one) => one.reports), problems: mapped.flatMap((one) => one.problems) };
 }
 
-// The record of one fetch, as the runtime makes it: the failure, the fresh observations, the fatal problems and the canary.
-function recordOf(result: FetchResult, mapped: Mapped, at: Instant, took: number, known: ReadonlySet<string>): FetchRecord {
-  const base = { source: SOURCE_ID, at, took };
-  if ("thrown" in result) return { ...base, failure: { kind: "network", message: `the fetch threw: ${result.thrown}` }, fresh: 0, fatal: 0 };
-  if (!result.outcome.ok) return { ...base, failure: result.outcome.failure, fresh: 0, fatal: 0 };
-  return {
-    ...base,
-    fresh: mapped.observations.filter((observation) => !known.has(observation.id)).length,
-    fatal: mapped.problems.filter((problem) => problem.fatal).length,
-    canary: checkCanary(mapped.observations),
-  };
+/** The map and the canary check of the NWS source, as `createNwsSource` gives them. */
+const PROCEDURES: Pick<SourceProcedures, "map" | "check"> = {
+  map: ({ observation }) => mapObservation(observation),
+  check: ({ observations }) => checkCanary(observations),
+};
+
+// The record of one fetch comes from `fetchEvents` of the runtime, so the case measures the fold of production.
+function recordOf(result: FetchResult, at: Instant, took: number, known: ReadonlySet<string>): FetchRecord {
+  const outcome: FetchOutcome = "thrown" in result ? { ok: false, failure: { kind: "network", message: `the fetch threw: ${result.thrown}` } } : result.outcome;
+  const events = fetchEvents({ source: SOURCE_ID, procedures: PROCEDURES, started: at, ended: at + took, outcome, known: (id) => known.has(id) });
+  const last = events.at(-1);
+  if (last?.type !== "fetch") throw new Error("fetchEvents gave no fetch event");
+  return last.record;
 }
 
 const outcomeOf = (result: FetchResult): OutcomeSummary => ("thrown" in result ? { ok: false, kind: "thrown", message: result.thrown } : summaryOf(result.outcome));
@@ -250,7 +257,7 @@ export async function runChangedFormat(options: FormatOptions = {}): Promise<For
     const wire = mainAfter(server, from)?.wire;
     const mapped = mapResult(result);
     const known = new Set(mapped.observations.map((observation) => observation.id));
-    const first = observeFetch(startHealth(SOURCE_ID, started), recordOf(result, mapped, started, took, known), NWS_DESCRIPTOR);
+    const first = observeFetch(startHealth(SOURCE_ID, started), recordOf(result, started, took, new Set()), NWS_DESCRIPTOR);
     const at = mapped.reports.reduce((newest, report) => Math.max(newest, report.sent), 0);
     const { person, places } = watchOf(mapped.reports);
     const before = levelsOf(mapped.reports, at, person, places);
@@ -303,7 +310,7 @@ async function runArm(
   }
   const took = Date.now() - started;
   const mapped = mapResult(result);
-  const record = recordOf(result, mapped, started, took, known);
+  const record = recordOf(result, started, took, known);
   const step = observeFetch(track, record, NWS_DESCRIPTOR);
   const after = levelsOf(mapped.reports, baseline.at, person, places);
   return {
@@ -313,7 +320,8 @@ async function runArm(
     canary: record.canary?.pass === true,
     reports: mapped.reports.length,
     fatal: mapped.problems.filter((problem) => problem.fatal),
-    other: mapped.problems.filter((problem) => !problem.fatal),
+    lossy: mapped.problems.filter((problem) => problem.lossy === true),
+    notes: mapped.problems.filter((problem) => !problem.fatal && problem.lossy !== true),
     health: step.health.state,
     levels: baseline.levels.map(({ report, level }) => ({ report, before: level, after: after.get(report) ?? "none" })),
   };

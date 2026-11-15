@@ -86,7 +86,8 @@ describe("formatVerdictOf", () => {
     canary: true,
     reports: 2,
     fatal: [],
-    other: [],
+    lossy: [],
+    notes: [],
     health,
     levels,
   });
