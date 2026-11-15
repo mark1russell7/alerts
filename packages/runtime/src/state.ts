@@ -59,8 +59,13 @@ export interface RuntimeState {
    * `settled` event. The channel can repeat them. After a restart, the delivery step stops them.
    */
   readonly copies: Readonly<Record<string, OpenCopy>>;
-  /** The last refusal of each delivery key with no later delivery of the key, by the key. */
+  /**
+   * The last refusal of each delivery key with no later delivery of the key, by the key. A start of a run and
+   * a refusal drop each refusal whose retry is at or before their time. Thus the record keeps only the waits.
+   */
   readonly refusals: Readonly<Record<string, Refusal>>;
+  /** The count of the deliveries of each channel in the log, by the channel id. */
+  readonly delivered: Readonly<Record<string, number>>;
 }
 
 /** The last refusal of a delivery key. */
@@ -70,6 +75,11 @@ export interface Refusal {
   /** The time of the refusal. */
   readonly at: Instant;
   readonly retryAt: Instant;
+  /**
+   * The count of the deliveries of the channel in the log before the refusal. When `delivered` of the
+   * channel is larger, a delivery on the channel came after the refusal in the log.
+   */
+  readonly deliveries: number;
 }
 
 /** The send of an open copy. */
@@ -91,6 +101,7 @@ export const EMPTY_RUNTIME: RuntimeState = {
   starts: [],
   copies: {},
   refusals: {},
+  delivered: {},
 };
 
 /** This function adds one event to the state. */
@@ -154,7 +165,7 @@ function foldRest(state: RuntimeState, event: RuntimeEvent, context: FoldContext
     case "started": {
       const health = { ...state.health };
       for (const source of context.sources) health[source.id] ??= startHealth(source.id, start);
-      return { ...base, start, health };
+      return { ...base, start, health, refusals: waiting(state.refusals, event.time) };
     }
     case "fetch": {
       const { record } = event;
@@ -176,17 +187,26 @@ function foldRest(state: RuntimeState, event: RuntimeEvent, context: FoldContext
       return { ...base, copies: { ...state.copies, [event.copy]: { key: event.key, channel: event.channel } } };
     case "delivery": {
       const refusals = without(state.refusals, event.delivery.key);
-      return { ...base, refusals, copies: event.copy === undefined ? state.copies : without(state.copies, event.copy) };
+      const { channel } = event.delivery;
+      const delivered = { ...state.delivered, [channel]: (state.delivered[channel] ?? 0) + 1 };
+      return { ...base, refusals, delivered, copies: event.copy === undefined ? state.copies : without(state.copies, event.copy) };
     }
     case "settled":
       return { ...base, copies: without(state.copies, event.copy) };
     case "refused": {
-      const refusals = { ...state.refusals, [event.key]: { channel: event.channel, kind: event.kind, at: event.time, retryAt: event.retryAt } };
+      const refusal: Refusal = { channel: event.channel, kind: event.kind, at: event.time, retryAt: event.retryAt, deliveries: state.delivered[event.channel] ?? 0 };
+      const refusals = { ...waiting(state.refusals, event.time), [event.key]: refusal };
       return { ...base, refusals, copies: event.copy === undefined ? state.copies : without(state.copies, event.copy) };
     }
     default:
       return base;
   }
+}
+
+// The refusals with a retry after the time `at`. A refusal with an earlier retry holds no send and no channel after a restart.
+function waiting(refusals: Readonly<Record<string, Refusal>>, at: Instant): Readonly<Record<string, Refusal>> {
+  const kept = Object.entries(refusals).filter(([, refusal]) => refusal.retryAt > at);
+  return kept.length === Object.keys(refusals).length ? refusals : Object.fromEntries(kept);
 }
 
 // The record with no entry for one id.

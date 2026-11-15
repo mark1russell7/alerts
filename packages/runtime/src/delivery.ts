@@ -27,7 +27,7 @@ import {
   type WatchedPlace,
 } from "@mark1russell7/alerts";
 import { errorMessage } from "@mark1russell7/text";
-import { envelope, type ChannelFailureKind, type RefusalKind, type RuntimeEvent } from "./events.ts";
+import { envelope, type ChannelFailureKind, type RefusalKind, type RefusedEvent, type RuntimeEvent } from "./events.ts";
 import { limited } from "./limit.ts";
 import type { RuntimeState } from "./state.ts";
 import { earliest } from "./view.ts";
@@ -246,9 +246,11 @@ export function createDispatcher(options: DeliveryOptions, context: DeliveryCont
         failures.push({ call, key: target.key, ...(target.copy === undefined ? {} : { copy: target.copy }), channel: target.channel, kind, message, retryAt });
         return retryAt;
       };
-      // The log keeps each refused send and its retry time. A refusal on a channel that repeats ends its copy.
+      // The log keeps each refused send and its retry time. A refusal on a channel that repeats ends its copy. The step
+      // writes its refusals after all of its deliveries, as `holdStep` of the heartbeat reads a pass.
+      const refusing: Pick<RefusedEvent, "key" | "channel" | "kind" | "retryAt" | "copy">[] = [];
       const refuse = (target: { readonly key: string; readonly channel: ChannelId }, kind: RefusalKind, retryAt: Instant, copy?: string): void => {
-        write([{ ...envelope("refused", `refused:${target.key}@${at}`, clock.now()), key: target.key, channel: target.channel, kind, retryAt, ...(copy === undefined ? {} : { copy }) }]);
+        refusing.push({ key: target.key, channel: target.channel, kind, retryAt, ...(copy === undefined ? {} : { copy }) });
       };
       // The end of each wait that keeps a call from this step. The next pass comes at the earliest one.
       const waiting: Instant[] = [];
@@ -480,6 +482,10 @@ export function createDispatcher(options: DeliveryOptions, context: DeliveryCont
 
       // Each call ends before the step ends. A write that failed throws after all of them.
       const settled = await Promise.allSettled(work);
+      // The refusals of the step come after each delivery of the step in the log. Thus only a delivery of a later step
+      // ends the hold of a refused channel after a restart, as in the pass. The order decides, not the times: a channel
+      // can give a time of acceptance after the time of the refusal.
+      write(refusing.map((refused) => ({ ...envelope("refused", `refused:${refused.key}@${at}`, clock.now()), ...refused })));
       const broken = settled.find((result) => result.status === "rejected");
       if (broken !== undefined) throw broken.reason;
 

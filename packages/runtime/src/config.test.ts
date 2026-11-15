@@ -6,17 +6,19 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   alertsHome,
   checkConfig,
+  checkTexts,
   ConfigRefused,
   configPath,
   DEFAULT_ALERTS_HOME,
   envSecrets,
   fileSource,
-  readConfig,
-  readSecrets,
-  requireConfig,
+  parseSecrets,
+  readText,
+  requireKey,
   SECRETS_FILE,
   type ConfigSource,
   type InstanceCheck,
+  type PrivateTexts,
 } from "./config.ts";
 
 const PUSHOVER = "pushover" as ChannelId;
@@ -82,7 +84,7 @@ describe("envSecrets", () => {
   });
 });
 
-describe("readConfig", () => {
+describe("readText", () => {
   let folder = "";
   beforeAll(async () => {
     folder = await mkdtemp(join(tmpdir(), `alerts-config-${PRIVATE}-`));
@@ -91,46 +93,98 @@ describe("readConfig", () => {
     await rm(folder, { recursive: true, force: true });
   });
 
-  it("reads and parses a file, and gives the recipients with the values of the secrets", async () => {
+  it("gives the text of a source", async () => {
     const path = join(folder, "config.json");
     await writeFile(path, JSON.stringify(CONFIG), "utf8");
-    const parsed = await readConfig(fileSource(path), [CHANNEL], SECRETS);
-    expect(parsed.tag).toBe("ok");
-    if (parsed.tag === "ok") {
-      expect(parsed.value.config).toEqual(CONFIG);
-      expect(parsed.value.recipients.map((recipient) => recipient.addresses)).toEqual([{ [PUSHOVER]: { user: `${PRIVATE}-user` } }]);
-    }
+    expect(await readText(fileSource(path).read)).toEqual({ text: JSON.stringify(CONFIG) });
   });
 
   it("gives the code of a file that cannot be read, and not its path", async () => {
-    const parsed = await readConfig(fileSource(join(folder, "absent.json")), [CHANNEL], SECRETS);
-    expect(parsed).toEqual({ tag: "err", error: ["The configuration file cannot be read (ENOENT)."] });
+    const read = await readText(fileSource(join(folder, "absent.json")).read);
+    expect(read).toEqual({ code: "ENOENT" });
   });
 
   it("gives no code when the thrown value has no text code, and keeps no text of the thrown value", async () => {
-    const failing: ConfigSource = { name: "The test source", read: () => Promise.reject(Object.assign(new Error(`${PRIVATE} text`), { code: `${PRIVATE} code` })) };
-    expect(await readConfig(failing, [CHANNEL], SECRETS)).toEqual({ tag: "err", error: ["The test source cannot be read (no code)."] });
-    const throwing: ConfigSource = {
-      name: "The test source",
-      read: () => {
-        throw new Error(PRIVATE);
-      },
+    expect(await readText(() => Promise.reject(Object.assign(new Error(`${PRIVATE} text`), { code: `${PRIVATE} code` })))).toEqual({ code: "no code" });
+    const throwing = (): Promise<string> => {
+      throw new Error(PRIVATE);
     };
-    expect(await readConfig(throwing, [CHANNEL], SECRETS)).toEqual({ tag: "err", error: ["The test source cannot be read (no code)."] });
-  });
-
-  it("gives the problems of the parse: the JSON, the form and the references", async () => {
-    const problemsOf = async (text: string, secret = SECRETS): Promise<readonly string[]> => {
-      const parsed = await readConfig(textSource(text), [CHANNEL], secret);
-      return parsed.tag === "err" ? parsed.error : [];
-    };
-    expect(await problemsOf("{")).toEqual(["The configuration is not valid JSON."]);
-    expect(await problemsOf(JSON.stringify({ ...CONFIG, extra: 1 }))).toHaveLength(1);
-    expect(await problemsOf(JSON.stringify(CONFIG), envSecrets({}))).toEqual([expect.stringContaining("names the secret PUSHOVER_USER")]);
+    expect(await readText(throwing)).toEqual({ code: "no code" });
   });
 });
 
-describe("readSecrets and checkConfig", () => {
+describe("parseSecrets", () => {
+  it("gives the keys of the text of secrets.env", () => {
+    expect(parseSecrets({ text: `# a comment\nPUSHOVER_USER=${PRIVATE}-user\nEMPTY=\n` })).toEqual({ tag: "ok", value: { PUSHOVER_USER: `${PRIVATE}-user`, EMPTY: "" } });
+  });
+
+  it("gives the code of a read error", () => {
+    expect(parseSecrets({ code: "ENOENT" })).toEqual({ tag: "err", error: ["The file secrets.env cannot be read (ENOENT)."] });
+  });
+
+  it("gives the problem of a bad line with its line and no value", () => {
+    const parsed = parseSecrets({ text: `PUSHOVER_USER=${PRIVATE}-user\n${PRIVATE} no equals sign\n` });
+    const problems = parsed.tag === "err" ? parsed.error : [];
+    expect(problems).toEqual([expect.stringMatching(/^The file secrets\.env: .*2/)]);
+    expect(problems.join("\n")).not.toContain(PRIVATE);
+  });
+});
+
+describe("checkTexts", () => {
+  const texts = (config: string, secrets = `PUSHOVER_USER=${PRIVATE}-user\n`): PrivateTexts => ({ config: { text: config }, secrets: { text: secrets } });
+
+  it("gives the configuration, the recipients with the values of the secrets, and the keys", () => {
+    const checked = checkTexts(texts(JSON.stringify(CONFIG)), CHECK);
+    expect(checked.tag).toBe("ok");
+    if (checked.tag !== "ok") return;
+    expect(checked.value.parsed.config).toEqual(CONFIG);
+    expect(checked.value.parsed.recipients.map((recipient) => recipient.addresses)).toEqual([{ [PUSHOVER]: { user: `${PRIVATE}-user` } }]);
+    expect(checked.value.keys).toEqual({ PUSHOVER_USER: `${PRIVATE}-user` });
+  });
+
+  it("gives the problems of the parse: the JSON, the form and the references", () => {
+    const problemsOf = (text: string, secrets?: string): readonly string[] => {
+      const checked = checkTexts(texts(text, secrets), CHECK);
+      return checked.tag === "err" ? checked.error : [];
+    };
+    expect(problemsOf("{")).toEqual(["The configuration is not valid JSON."]);
+    expect(problemsOf(JSON.stringify({ ...CONFIG, extra: 1 }))).toHaveLength(1);
+    expect(problemsOf(JSON.stringify(CONFIG), "OTHER=value\n")).toEqual([expect.stringContaining("names the secret PUSHOVER_USER")]);
+  });
+
+  it("gives the problems of secrets.env first, and then the read error of the configuration with its name", () => {
+    expect(checkTexts({ config: { code: "ENOENT" }, secrets: { code: "EACCES" } }, CHECK)).toEqual({ tag: "err", error: ["The file secrets.env cannot be read (EACCES)."] });
+    expect(checkTexts({ config: { code: "ENOENT" }, secrets: { text: "" } }, CHECK, "The test copy")).toEqual({ tag: "err", error: ["The test copy cannot be read (ENOENT)."] });
+  });
+
+  it("gives the problems of the instance after the check of the format, with the keys of secrets.env", () => {
+    const seen: string[] = [];
+    const check: InstanceCheck = {
+      channels: [CHANNEL],
+      problems: (parsed, secret) => (seen.push(`${parsed.config.places.length} ${secret("PUSHOVER_USER") === `${PRIVATE}-user`}`), ["No source covers the place place:a."]),
+    };
+    expect(checkTexts(texts(JSON.stringify(CONFIG)), check)).toEqual({ tag: "err", error: ["No source covers the place place:a."] });
+    expect(seen).toEqual(["1 true"]);
+    // A file with a bad format does not get the check of the instance.
+    expect(checkTexts(texts("{"), check).tag).toBe("err");
+    expect(seen).toHaveLength(1);
+  });
+});
+
+describe("requireKey", () => {
+  const check = requireKey(CHECK, "PING_URL", "The test needs it.");
+
+  it("adds a problem when the file of keys has no value for the key", () => {
+    const parsed = checkTexts({ config: { text: JSON.stringify(CONFIG) }, secrets: { text: `PUSHOVER_USER=${PRIVATE}-user\nPING_URL=\n` } }, CHECK);
+    expect(parsed.tag).toBe("ok");
+    if (parsed.tag !== "ok") return;
+    expect(check.channels).toBe(CHECK.channels);
+    expect(check.problems(parsed.value.parsed, SECRETS)).toEqual(["The file secrets.env has no PING_URL. The test needs it."]);
+    expect(check.problems(parsed.value.parsed, envSecrets({ PING_URL: `${PRIVATE}-url` }))).toEqual([]);
+  });
+});
+
+describe("checkConfig", () => {
   let home = "";
   beforeAll(async () => {
     home = await mkdtemp(join(tmpdir(), `alerts-secrets-${PRIVATE}-`));
@@ -139,24 +193,6 @@ describe("readSecrets and checkConfig", () => {
     await rm(home, { recursive: true, force: true });
   });
   const writeSecrets = (text: string): Promise<void> => writeFile(join(home, SECRETS_FILE), text, "utf8");
-
-  it("reads the keys of secrets.env in the private folder", async () => {
-    await writeSecrets(`# a comment\nPUSHOVER_USER=${PRIVATE}-user\nEMPTY=\n`);
-    expect(await readSecrets(home)).toEqual({ tag: "ok", value: { PUSHOVER_USER: `${PRIVATE}-user`, EMPTY: "" } });
-  });
-
-  it("gives the code of a file that cannot be read, and not its path", async () => {
-    expect(await readSecrets(join(home, "absent"))).toEqual({ tag: "err", error: ["The file secrets.env cannot be read (ENOENT)."] });
-  });
-
-  it("gives the problem of a bad line with its line and no value", async () => {
-    await writeSecrets(`PUSHOVER_USER=${PRIVATE}-user\n${PRIVATE} no equals sign\n`);
-    const read = await readSecrets(home);
-    expect(read.tag).toBe("err");
-    const problems = read.tag === "err" ? read.error : [];
-    expect(problems).toEqual([expect.stringMatching(/^The file secrets\.env: .*2/)]);
-    expect(problems.join("\n")).not.toContain(PRIVATE);
-  });
 
   it("checks a configuration with the keys of the private folder, as the start does", async () => {
     await writeSecrets(`PUSHOVER_USER=${PRIVATE}-user\n`);
@@ -169,18 +205,9 @@ describe("readSecrets and checkConfig", () => {
     expect(await checkConfig(textSource(JSON.stringify(CONFIG)), home, CHECK)).toEqual({ tag: "err", error: [expect.stringContaining("names the secret PUSHOVER_USER")] });
   });
 
-  it("gives the problems of the instance after the check of the format, with the keys of the private folder", async () => {
+  it("gives the name of the source and the code of its read error", async () => {
     await writeSecrets(`PUSHOVER_USER=${PRIVATE}-user\n`);
-    const seen: string[] = [];
-    const check: InstanceCheck = {
-      channels: [CHANNEL],
-      problems: (parsed, secret) => (seen.push(`${parsed.config.places.length} ${secret("PUSHOVER_USER") === `${PRIVATE}-user`}`), ["No source covers the place place:a."]),
-    };
-    expect(await checkConfig(textSource(JSON.stringify(CONFIG)), home, check)).toEqual({ tag: "err", error: ["No source covers the place place:a."] });
-    expect(seen).toEqual(["1 true"]);
-    // A file with a bad format does not get the check of the instance.
-    expect((await checkConfig(textSource("{"), home, check)).tag).toBe("err");
-    expect(seen).toHaveLength(1);
+    expect(await checkConfig(fileSource(join(home, "absent.json")), home, CHECK)).toEqual({ tag: "err", error: ["The configuration file cannot be read (ENOENT)."] });
   });
 
   it("gives the problems of secrets.env before it reads the configuration", async () => {
@@ -192,29 +219,15 @@ describe("readSecrets and checkConfig", () => {
   });
 });
 
-describe("requireConfig", () => {
-  it("gives the parsed configuration", async () => {
-    const parsed = await requireConfig(textSource(JSON.stringify(CONFIG)), [CHANNEL], SECRETS);
-    expect(parsed.config).toEqual(CONFIG);
+describe("ConfigRefused", () => {
+  it("lists each problem in the message", () => {
+    const refused = new ConfigRefused(["The first problem.", "The second problem."]);
+    expect(refused.name).toBe("ConfigRefused");
+    expect(refused.problems).toEqual(["The first problem.", "The second problem."]);
+    expect(refused.message).toBe("The runtime does not start. The configuration has 2 problems:\n- The first problem.\n- The second problem.");
   });
 
-  it("throws ConfigRefused with each problem in the message, and no private value", async () => {
-    const wrong = { ...CONFIG, format: `${PRIVATE}-format`, places: [{ ...CONFIG.places[0], label: [`${PRIVATE}-label`] }] };
-    const thrown = await requireConfig(textSource(JSON.stringify(wrong)), [CHANNEL], SECRETS).then(
-      () => undefined,
-      (error: unknown) => error,
-    );
-    expect(thrown).toBeInstanceOf(ConfigRefused);
-    if (!(thrown instanceof ConfigRefused)) return;
-    expect(thrown.problems).toHaveLength(2);
-    expect(thrown.message).toMatch(/^The runtime does not start\. The configuration has 2 problems:\n- /);
-    for (const problem of thrown.problems) expect(thrown.message).toContain(`- ${problem}`);
-    expect(thrown.message).not.toContain(PRIVATE);
-  });
-
-  it("says one problem in the singular", async () => {
-    const thrown = await requireConfig(textSource("{"), [CHANNEL], SECRETS).catch((error: unknown) => error);
-    expect(thrown).toBeInstanceOf(ConfigRefused);
-    expect(thrown instanceof Error ? thrown.message : "").toBe("The runtime does not start. The configuration has 1 problem:\n- The configuration is not valid JSON.");
+  it("says one problem in the singular", () => {
+    expect(new ConfigRefused(["The configuration is not valid JSON."]).message).toBe("The runtime does not start. The configuration has 1 problem:\n- The configuration is not valid JSON.");
   });
 });

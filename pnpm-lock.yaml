@@ -414,6 +414,9 @@ importers:
       '@mark1russell7/text':
         specifier: ^0.0.6
         version: 0.0.6
+      '@procedures/fs':
+        specifier: ^0.57.0
+        version: 0.57.0
       polite-crawler:
         specifier: ^0.7.3
         version: 0.7.4(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
@@ -659,6 +662,9 @@ importers:
       '@mark1russell7/alerts-runtime':
         specifier: workspace:*
         version: link:../runtime
+      '@mark1russell7/alerts-source-iem':
+        specifier: workspace:*
+        version: link:../source-iem
       '@mark1russell7/alerts-source-nws-api':
         specifier: workspace:*
         version: link:../source-nws-api
@@ -1134,6 +1140,10 @@ packages:
     peerDependenciesMeta:
       express:
         optional: true
+
+  '@procedures/fs@0.57.0':
+    resolution: {integrity: sha512-zNuq6My3GdB72JNTCMu/oBQuuS2FrLDRZgfkrtzlLXDPkbSxItN6F+jJ0T2FvZZl6bKQUN3dHOl3uYKUEF1Wfg==}
+    engines: {node: '>=22'}
 
   '@procedures/notify@0.56.0':
     resolution: {integrity: sha512-UR3Z0R8SpBzkO4LJiN7KfmNki+LcAKjrUwKuiJ/zKczgtzt4qWV6TZGTJv69qYwdcn6frAfZaGf1eXO5Kk669g==}
@@ -2486,6 +2496,20 @@ snapshots:
       - '@grpc/grpc-js'
       - amqplib
       - bufferutil
+      - ioredis
+      - mongodb
+      - pg
+      - utf-8-validate
+
+  '@procedures/fs@0.57.0':
+    dependencies:
+      '@procedures/client': 0.57.0
+      zod: 4.6.7
+    transitivePeerDependencies:
+      - '@grpc/grpc-js'
+      - amqplib
+      - bufferutil
+      - express
       - ioredis
       - mongodb
       - pg

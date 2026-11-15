@@ -13,6 +13,7 @@ import { changesOf, runChangedFormat } from "../src/changed-format.ts";
 import { ACCEPT_ARMS, ACCEPT_GATES, runLateAccept } from "../src/late-accept.ts";
 import { runSlowSource, SLOW_ARMS, trickleMs } from "../src/slow-source.ts";
 import { DOWN_ARMS, runSourceDown } from "../src/source-down.ts";
+import { OLD_LISTS, R2_FROM, R3_UNTIL, runStaleList, STALE_ARMS, STALE_GATES } from "../src/stale-list.ts";
 
 const at = process.argv.indexOf("--out");
 const out = at === -1 ? "fault-records" : (process.argv[at + 1] ?? "fault-records");
@@ -141,4 +142,27 @@ report(down.id, down.verdict, [
   }),
   "",
   `Read: ${yes(down.verdict.read)}. Pass: **${yes(down.verdict.pass)}**.`,
+]);
+
+const stale = await runStaleList();
+write("case-6.json", stale);
+const rowsAt = (events: readonly { readonly fetch: number; readonly row: string }[]): string => events.map((event) => `${event.row} at ${String(event.fetch)}`).join(", ") || "none";
+report(stale.id, stale.verdict, [
+  `## ${stale.id}: a stale or repeated list of a snapshot source`,
+  "",
+  `Each arm has ${String(stale.settings.fetches)} fetches of the IEM source. The case clock moves ${String(stale.settings.speed)} times faster than real time.`,
+  `The row r2 is in the true list from fetch ${String(R2_FROM)}, and the row r3 leaves it at fetch ${String(R3_UNTIL)}.`,
+  "",
+  "| Arm | Old lists (fetch: list) | Faults | Not complete | False ends | False returns | Ended at the end | No false end | No false return | Settles |",
+  "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+  ...STALE_ARMS.map((arm) => {
+    const record = stale.records.find((one) => one.arm === arm);
+    const result = stale.verdict.results[arm];
+    const olds = [...OLD_LISTS[arm]].map(([fetch, list]) => `${String(fetch)}: ${String(list)}`).join(", ") || "none";
+    const incomplete = record?.fetches.filter((fetch) => !fetch.complete).map((fetch) => fetch.fetch).join(", ") || "none";
+    const gates = STALE_GATES.map((gate) => (result === undefined ? "-" : yes(result.gates[gate]))).join(" | ");
+    return `| ${arm} | ${olds} | ${String(record?.faults ?? 0)} | ${incomplete} | ${rowsAt(result?.falseEnds ?? [])} | ${rowsAt(result?.falseBacks ?? [])} | ${result?.endedAtEnd.join(", ") || "none"} | ${gates} |`;
+  }),
+  "",
+  `Read: ${yes(stale.verdict.read)}. Pass: **${yes(stale.verdict.pass)}**.`,
 ]);

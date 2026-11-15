@@ -1,8 +1,8 @@
 /**
- * This module holds the loader of the private configuration. The runtime reads the JSON text from a
- * source and parses it with `parseConfig` of the core. A problem stops the start, because a runtime
- * with a wrong place watches the wrong place in silence. No problem holds a value of the configuration,
- * a value of a secret or a path.
+ * This module holds the check of the private files: the configuration and the keys. The check parses
+ * the configuration with `parseConfig` of the core. A runtime does not start with a bad configuration,
+ * because a runtime with a wrong place watches the wrong place in silence. The module `reload.ts` gives
+ * the start its last good copy. No problem holds a value of the configuration, a value of a secret or a path.
  */
 import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
@@ -71,33 +71,64 @@ export function envSecrets(env: Readonly<Record<string, string | undefined>>): S
   };
 }
 
+/** The text of a file, or the code of the error of its read. The code holds no path. */
+export type FileText = { readonly text: string } | { readonly code: string };
+
+/** The texts of the two private files that the start reads: `config.json` and `secrets.env`. */
+export interface PrivateTexts {
+  readonly config: FileText;
+  readonly secrets: FileText;
+}
+
+/** This function gives the text of a read, or the code of its error. */
+export async function readText(read: () => Promise<string>): Promise<FileText> {
+  const text = await tryCatchAsync(read, codeOf);
+  return text.tag === "ok" ? { text: text.value } : { code: text.error };
+}
+
 /**
- * This function reads the file of keys `secrets.env` in the private folder. A problem gives the line
- * and the key of a bad line, or the code of a read error. It holds no value and no path.
+ * This function parses the text of the file of keys `secrets.env`. A problem gives the line and the key
+ * of a bad line, or the code of a read error. It holds no value and no path.
  */
-export async function readSecrets(home: string): Promise<Result<Readonly<Record<string, string>>, readonly string[]>> {
-  const text = await tryCatchAsync(
-    () => readFile(join(home, SECRETS_FILE), "utf8"),
-    (thrown): readonly string[] => [`The file ${SECRETS_FILE} cannot be read (${codeOf(thrown)}).`],
-  );
-  if (text.tag === "err") return err(text.error);
-  const parsed = parseEnvFile(text.value);
+export function parseSecrets(file: FileText): Result<Readonly<Record<string, string>>, readonly string[]> {
+  if ("code" in file) return err([`The file ${SECRETS_FILE} cannot be read (${file.code}).`]);
+  const parsed = parseEnvFile(file.text);
   return parsed.problems.length > 0 ? err(parsed.problems.map((problem) => `The file ${SECRETS_FILE}: ${problem}`)) : ok(parsed.env);
+}
+
+/** The configuration that passed the check, with the keys of `secrets.env` that it was checked with. */
+export interface CheckedConfig {
+  readonly parsed: ParsedConfig;
+  readonly keys: Readonly<Record<string, string>>;
+}
+
+/**
+ * This function checks the texts of the two private files, as the start of the runtime does. It reads no
+ * file. The problems of `secrets.env` come first, and the check of the instance comes after the check of
+ * the format. The text `name` names the configuration at the start of a problem.
+ */
+export function checkTexts(texts: PrivateTexts, check: InstanceCheck, name = "The configuration file"): Result<CheckedConfig, readonly string[]> {
+  const keys = parseSecrets(texts.secrets);
+  if (keys.tag === "err") return keys;
+  if ("code" in texts.config) return err([`${name} cannot be read (${texts.config.code}).`]);
+  const secret = envSecrets(keys.value);
+  const parsed = parseConfig(texts.config.text, check.channels, secret);
+  if (parsed.tag === "err") return parsed;
+  const problems = check.problems(parsed.value, secret);
+  return problems.length > 0 ? err(problems) : ok({ parsed: parsed.value, keys: keys.value });
 }
 
 /**
  * This function checks a configuration with the keys of the private folder, as the start of the runtime
  * does. A writer of the configuration uses it before its new file replaces `config.json`, because a
- * bad `config.json` stops the next start. The check of the instance comes after the check of the format.
+ * bad `config.json` stops the next start. It reads the source only when `secrets.env` has no problem.
  */
 export async function checkConfig(source: ConfigSource, home: string, check: InstanceCheck): Promise<Result<ParsedConfig, readonly string[]>> {
-  const secrets = await readSecrets(home);
-  if (secrets.tag === "err") return err(secrets.error);
-  const secret = envSecrets(secrets.value);
-  const parsed = await readConfig(source, check.channels, secret);
-  if (parsed.tag === "err") return parsed;
-  const problems = check.problems(parsed.value, secret);
-  return problems.length > 0 ? err(problems) : parsed;
+  const secrets = await readText(() => readFile(join(home, SECRETS_FILE), "utf8"));
+  const keys = parseSecrets(secrets);
+  if (keys.tag === "err") return keys;
+  const checked = checkTexts({ config: await readText(() => source.read()), secrets }, check, source.name);
+  return checked.tag === "ok" ? ok(checked.value.parsed) : checked;
 }
 
 /**
@@ -111,17 +142,12 @@ export interface InstanceCheck {
   problems(parsed: ParsedConfig, secret: SecretLookup): readonly string[];
 }
 
-/**
- * This function reads and parses the configuration. When the source fails, the problem gives only the
- * code of the error. The message of a file error holds the path, and the path can hold a user name.
- */
-export async function readConfig(source: ConfigSource, channels: readonly ChannelDescriptor[], secret: SecretLookup): Promise<Result<ParsedConfig, readonly string[]>> {
-  const text = await tryCatchAsync(
-    () => source.read(),
-    (thrown): readonly string[] => [`${source.name} cannot be read (${codeOf(thrown)}).`],
-  );
-  if (text.tag === "err") return err(text.error);
-  return parseConfig(text.value, channels, secret);
+/** This function gives the check with one more problem when the file of keys has no value for `key`. The text `reason` ends the problem. */
+export function requireKey(check: InstanceCheck, key: string, reason: string): InstanceCheck {
+  return {
+    channels: check.channels,
+    problems: (parsed, secret) => [...check.problems(parsed, secret), ...(secret(key) === undefined ? [`The file ${SECRETS_FILE} has no ${key}. ${reason}`] : [])],
+  };
 }
 
 /** This error stops the start of the runtime. Its message lists each problem of the configuration. */
@@ -134,16 +160,6 @@ export class ConfigRefused extends Error {
     this.name = "ConfigRefused";
     this.problems = problems;
   }
-}
-
-/**
- * This function gives the parsed configuration, or it throws `ConfigRefused`. The entry of the process
- * uses it before the start of the service.
- */
-export async function requireConfig(source: ConfigSource, channels: readonly ChannelDescriptor[], secret: SecretLookup): Promise<ParsedConfig> {
-  const parsed = await readConfig(source, channels, secret);
-  if (parsed.tag === "err") throw new ConfigRefused(parsed.error);
-  return parsed.value;
 }
 
 /** The code of a thrown value, for example `ENOENT`, or `no code` when the value has no text code. */

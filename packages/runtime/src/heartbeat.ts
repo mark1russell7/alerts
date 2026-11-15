@@ -92,26 +92,26 @@ export function holdStep(held: HeartbeatState["held"], pass: PassSummary): Heart
 
 /** The parts of the state of the runtime that `heldOf` reads. */
 export interface RefusalView {
-  readonly refusals: Readonly<Record<string, { readonly channel: string; readonly kind: RefusalKind; readonly at: Instant; readonly retryAt: Instant }>>;
-  readonly merge: { readonly deliveries: readonly { readonly channel: string; readonly at: Instant }[] };
+  readonly refusals: Readonly<Record<string, { readonly channel: string; readonly kind: RefusalKind; readonly retryAt: Instant; readonly deliveries: number }>>;
+  readonly delivered: Readonly<Record<string, number>>;
 }
 
 /**
  * This function gives the refused channels at the time `at` from the state of the log. The hook of the
  * heartbeat starts from them at its first pass, thus a restart does not end the fail of a refused channel.
  *
- * - A refusal counts when its retry is after `at`, and no delivery on its channel came after it.
- * - A delivery at the time of the refusal does not end it, as a send and a refusal in one pass keep the fail.
+ * - A refusal counts when its retry is after `at`, and no delivery on its channel came after it in the log.
+ * - The step writes the refusals of a pass after the deliveries of the pass. Thus a send and a refusal in one
+ *   pass keep the fail, as in `holdStep`. The order of the log decides, not the times, because a channel can
+ *   give a time of acceptance after the time of the refusal.
  * - The channels and their `until` are the same as with no restart. The kinds are only those of the
  *   refusals that wait for their retry.
  */
 export function heldOf(state: RefusalView, at: Instant): HeartbeatState["held"] {
-  const delivered = new Map<string, Instant>();
-  for (const delivery of state.merge.deliveries) delivered.set(delivery.channel, Math.max(delivered.get(delivery.channel) ?? delivery.at, delivery.at));
   const held: Record<string, HeldFail> = {};
   for (const refused of Object.values(state.refusals)) {
-    const after = (delivered.get(refused.channel) ?? Number.NEGATIVE_INFINITY) <= refused.at;
-    if (after && refused.retryAt > at) hold(held, refused.channel, refused.kind, refused.retryAt);
+    const last = (state.delivered[refused.channel] ?? 0) === refused.deliveries;
+    if (last && refused.retryAt > at) hold(held, refused.channel, refused.kind, refused.retryAt);
   }
   return held;
 }
