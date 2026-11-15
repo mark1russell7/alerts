@@ -240,7 +240,7 @@ The runtime does one delivery step in each pass, after the system reports:
 
 Each call of a channel has a time limit. A failed call writes nothing, so the next step decides it again. Before it goes again, a call waits for the time that the channel tells, or for the retry time of the configuration.
 
-The message of a send takes its text from one report of the incident: the latest report with the severity and the urgency of the incident. The body has the instruction first, then the area and the description. The channel cuts the text to its limits.
+The message of a send takes its text from one report of the incident. That report is the latest one with the severity and the urgency of the incident. The body has the instruction first, then the area and the description. The channel cuts the text to its limits.
 
 Two parts wait:
 
@@ -313,6 +313,28 @@ The table becomes the calculation of AL-31. The calculation multiplies the proba
 ## People and places
 
 The contracts carry only ids: `PersonId` and `PlaceId`. The runtime gets people, places, addresses and the night rule of each person from the private configuration.
+
+### The private configuration
+
+The core gives the format of the private configuration, `AlertConfig` (`alerts-config/1`). The repository holds no configuration. Each copy of the system loads the same configuration.
+
+- `places`: the id, a label, a position, the region codes and the buffer of each place. The field `sharePosition` names the sources that get the position.
+- `people`: the `PersonWatch` of each person, a label, and the escalation policies of the person.
+- `contacts`: the address of a person on a channel. A value of an address is a text, or a reference `{ secret: "NAME" }` to a key of the secret store.
+- `policies`: the escalation policies of each person with no policies of their own.
+
+The times of the delivery and the rank of a copy are not in `AlertConfig`. They are settings of each copy.
+
+The function `loadConfig` checks a configuration and makes the recipient of each person. The caller gives the secret store, so the core reads no file. The runtime does not start when the load gives a problem. The load finds:
+
+- two places or two people with one id, and a place with no region code
+- a place of a person or of a rule that the configuration or the person does not have
+- a contact of an unknown person, two contacts of a person on one channel, and a secret with no value
+- each problem of `recipientProblems`
+
+A problem names ids, fields and the names of secrets. It does not hold the value of a secret, a label or a position.
+
+The function `sourcePlaces` gives the places for one source, with no label, and with a position only when the place shares it with that source. The function `localPlaces` gives each position for the matching on the machine of the instance.
 
 A person also watches subjects, other than places, in `PersonWatch.subjects`: a source of the system, a service or a cloud region. A watch with no id matches each subject of its system. A rule with places does not apply to a subject. The person who operates the system watches `{ system: "alerts.source" }`, and gets the health reports.
 
