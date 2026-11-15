@@ -50,6 +50,8 @@ export interface PassSummary {
   readonly delivery?: {
     readonly sent: readonly { readonly channel: string }[];
     readonly failures: readonly { readonly call: string; readonly channel: string; readonly kind: string; readonly retryAt: Instant }[];
+    /** The channels with overdue sends (`DeliveryStep.overdue`). A channel here gives `fail`, whatever the kind of its failures. */
+    readonly overdue?: readonly { readonly channel: string; readonly sends: number; readonly since: Instant }[];
   };
 }
 
@@ -130,13 +132,19 @@ function hold(held: Record<string, HeldFail>, channel: string, kind: string, ret
 
 /**
  * This function gives the ping of a pass. A refused channel gives `fail`, with the channel and the
- * kind. Else the ping is `success`, with the state of each source. No text of a failure goes into the
- * body, because it can quote a request.
+ * kind. A channel with overdue sends gives `fail` too, with the count and the age of the oldest. An overdue
+ * send needs no refusal: a reset or a server error that lasts also stops the delivery. Else the ping
+ * is `success`, with the state of each source. No text of a failure goes into the body, because it can
+ * quote a request.
  */
 export function pingOf(pass: PassSummary, held: HeartbeatState["held"] = holdStep({}, pass)): Ping {
   const refused = Object.entries(held).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
-  if (refused.length > 0) {
-    const lines = refused.flatMap(([channel, hold]) => hold.kinds.map((kind) => `The channel ${channel} gave the kind ${kind} to a send.`));
+  const overdue = [...(pass.delivery?.overdue ?? [])].sort((a, b) => (a.channel < b.channel ? -1 : a.channel > b.channel ? 1 : 0));
+  if (refused.length > 0 || overdue.length > 0) {
+    const lines = [
+      ...refused.flatMap(([channel, hold]) => hold.kinds.map((kind) => `The channel ${channel} gave the kind ${kind} to a send.`)),
+      ...overdue.map((entry) => `The channel ${entry.channel} has overdue sends: ${entry.sends}. The oldest is ${Math.round((pass.at - entry.since) / 1000)} s after its due time.`),
+    ];
     return { kind: "fail", body: lines.join("\n") };
   }
   return { kind: "success", body: pass.view.health.map((health) => `${health.source}: ${health.state}`).join("\n") };
