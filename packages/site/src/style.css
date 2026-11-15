@@ -1011,6 +1011,10 @@ main.local {
     r: 20px;
   }
 
+  .map .map-empty {
+    font-size: 52px;
+  }
+
   .map .gap.short {
     r: 44px;
   }
