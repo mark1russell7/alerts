@@ -4,7 +4,8 @@
  * next fetch of the alerts. Thus the alerts come first. The match by shape and the map route read the outlines here.
  *
  * The match by shape reads the outlines of the store. The map reads a simplified copy, because the outlines of one state are
- * many megabytes. The keeper simplifies the basemap again only when its regions change.
+ * many megabytes. The keeper simplifies the regions of the watched states again only when the store changes them. An
+ * incident changes only the small copy of the regions outside those states.
  */
 import { basemapToleranceKm, simplifyBasemap, type AlertConfig, type Incident, type Instant, type MapRegion, type PlaceConfig, type RegionCode, type ShapeLookup, type WatchedPlace } from "@mark1russell7/alerts";
 import { stateOfCode } from "@mark1russell7/alerts-format-nws";
@@ -35,6 +36,15 @@ const codeKey = (code: RegionCode): string => `${code.system}:${code.code.trim()
 
 /** This function compares two region codes: by the system, and then by the code. */
 const byCode = (a: RegionCode, b: RegionCode): number => compareCodes(a.system, b.system) || compareCodes(a.code, b.code);
+
+/** This function gives the regions in the order of their codes. */
+const byRegion = (regions: Iterable<MapRegion>): MapRegion[] => [...regions].sort((a, b) => byCode(a.code, b.code));
+
+/** A list of regions and its simplified copy. */
+interface BasemapCopy {
+  readonly raw: readonly MapRegion[];
+  readonly simple: readonly MapRegion[];
+}
 
 /** This function tells if two lists have the same regions, with the same arrays of shapes, in the same order. */
 const sameRegions = (a: readonly MapRegion[], b: readonly MapRegion[]): boolean =>
@@ -152,35 +162,47 @@ export function keepShapes(options: ShapeKeeperOptions): ShapeKeeper {
       // The hook only reports. A fault of the hook does not stop the keeper.
     }
   };
-  // The last basemap of the store and its simplified copy. A record of the store keeps its array of shapes until the record
-  // changes. Thus the same arrays tell that the copy is current.
-  let last: { readonly raw: readonly MapRegion[]; readonly simple: readonly MapRegion[] } | undefined;
-  const simplified = (raw: readonly MapRegion[]): readonly MapRegion[] => {
-    if (last !== undefined && sameRegions(last.raw, raw)) return last.simple;
-    let simple = raw;
-    const tolerance = basemapToleranceKm(raw);
+  // The simplified copies. A record of the store keeps its array of shapes until the record changes. Thus the same arrays tell
+  // that a copy is current. The copy of the watched states changes only at a refresh of the store. The copy of the other
+  // regions changes with the incidents, and it is small.
+  let watched: BasemapCopy | undefined;
+  let others: (BasemapCopy & { readonly with: BasemapCopy }) | undefined;
+  let last: { readonly watched: readonly MapRegion[]; readonly others: readonly MapRegion[]; readonly regions: readonly MapRegion[] } | undefined;
+  const copyOf = (raw: readonly MapRegion[], tolerance: number | undefined): BasemapCopy => {
+    if (tolerance === undefined) return { raw, simple: raw };
     try {
-      if (tolerance !== undefined) simple = simplifyBasemap(raw, tolerance);
+      return { raw, simple: simplifyBasemap(raw, tolerance) };
     } catch (error) {
       // The full outlines are correct, only larger. The keeper reports the error one time for each change of the regions.
       report({ ok: false, error, step: "basemap" });
+      return { raw, simple: raw };
     }
-    last = { raw, simple };
-    return simple;
   };
 
   return {
     lookup: (code) => store?.lookup(code),
     basemap() {
       if (store === undefined) return [];
-      const regions = new Map<string, MapRegion>();
-      for (const state of states) for (const region of store.basemap(state)) regions.set(region.code.code, region);
+      const own = new Map<string, MapRegion>();
+      for (const state of states) for (const region of store.basemap(state)) own.set(region.code.code, region);
+      const ownList = byRegion(own.values());
+      if (watched === undefined || !sameRegions(watched.raw, ownList)) watched = copyOf(ownList, basemapToleranceKm(ownList));
       // A region of a place or of an incident can be outside the watched states, or not yet in the list of its state.
+      const other = new Map<string, MapRegion>();
       for (const code of [...places.flatMap((place) => place.codes), ...liveCodes(incidents)]) {
         const region = store.region(code);
-        if (region !== undefined) regions.set(region.code.code, region);
+        if (region !== undefined && !own.has(region.code.code)) other.set(region.code.code, region);
       }
-      return simplified([...regions.values()].sort((a, b) => byCode(a.code, b.code)));
+      const otherList = byRegion(other.values());
+      if (others === undefined || others.with !== watched || !sameRegions(others.raw, otherList)) {
+        // The tolerance comes from the fit of all the regions. The page fits them all, thus it is on the safe side.
+        const tolerance = otherList.length === 0 ? undefined : basemapToleranceKm([...ownList, ...otherList]);
+        others = { ...copyOf(otherList, tolerance), with: watched };
+      }
+      if (last === undefined || last.watched !== watched.simple || last.others !== others.simple) {
+        last = { watched: watched.simple, others: others.simple, regions: byRegion([...watched.simple, ...others.simple]) };
+      }
+      return last.regions;
     },
     afterPass(live, until) {
       incidents = live;

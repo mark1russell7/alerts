@@ -1,4 +1,4 @@
-import { GeoError } from "@mark1russell7/geo";
+import { EARTH_MEAN_RADIUS_KM, GeoError } from "@mark1russell7/geo";
 import { describe, expect, it } from "vitest";
 import { basemapToleranceKm, MAP_VIEW, simplifyBasemap } from "./basemap.ts";
 import type { Position } from "./contracts.ts";
@@ -31,18 +31,25 @@ const EAST = region("KSC015", [[-97, 37], [-96, 37], [-96, 38], [-97, 38], ...[.
 const ZONE = region("KSZ083", [[-98, 37], [-97.5, 37], [-97, 37], [-96.5, 37], [-96, 37], [-96, 38], [-98, 38], [-98, 37]]);
 
 describe("basemapToleranceKm", () => {
-  it("gives half of one unit of the view box at the equator", () => {
+  it("gives half of one unit of the view box near the equator", () => {
     // 10 degrees of longitude at the equator are 1112 km, in 952 units of the view box: 1.168 km for each unit.
     expect(MAP_VIEW.width - 2 * MAP_VIEW.pad).toBe(952);
-    expect(basemapToleranceKm([region("A", box(0, 0, 10, 1))])).toBeCloseTo(0.584, 3);
+    // The box goes to 1 degree north, and the cosine of 1 degree is 0.99985.
+    expect(basemapToleranceKm([region("A", box(0, 0, 10, 1))])).toBeCloseTo(0.5839, 4);
   });
 
-  it("measures the unit at the latitude nearest to the equator", () => {
-    // At 60 degrees, 10 degrees of longitude are 556 km, thus the unit is half of the unit at the equator.
-    expect(basemapToleranceKm([region("A", box(0, 60, 10, 61))])).toBeCloseTo(0.292, 3);
-    expect(basemapToleranceKm([region("A", box(0, -61, 10, -60))])).toBeCloseTo(0.292, 3);
-    // A box across the equator has its largest unit at the equator.
-    expect(basemapToleranceKm([region("A", box(0, -1, 10, 1))])).toBeCloseTo(0.584, 3);
+  it("measures the unit at the latitude farthest from the equator, where one unit covers the least ground", () => {
+    // At 61 degrees, 10 degrees of longitude are 539 km. The cosine of 61 degrees is 0.4848.
+    expect(basemapToleranceKm([region("A", box(0, 60, 10, 61))])).toBeCloseTo(0.2831, 4);
+    expect(basemapToleranceKm([region("A", box(0, -61, 10, -60))])).toBeCloseTo(0.2831, 4);
+    // A box across the equator has its smallest unit at its north or south edge.
+    expect(basemapToleranceKm([region("A", box(0, -1, 10, 1))])).toBeCloseTo(0.5839, 4);
+    // Half of one unit at the farthest latitude is half of one unit or less at each latitude of the box.
+    // The width decides the fit of this box: 40 degrees of longitude in 952 units.
+    const tolerance = basemapToleranceKm([region("A", box(0, 20, 40, 30))])!;
+    const unitAt = (lat: number): number => (EARTH_MEAN_RADIUS_KM * Math.cos((lat * Math.PI) / 180) * ((40 * Math.PI) / 180)) / 952;
+    for (const lat of [20, 25, 30]) expect(tolerance / unitAt(lat)).toBeLessThanOrEqual(0.5 + 1e-12);
+    expect(tolerance / unitAt(30)).toBeCloseTo(0.5, 12);
   });
 
   it("uses the height of the box when the height decides the fit", () => {
@@ -53,7 +60,7 @@ describe("basemapToleranceKm", () => {
   it("reads the extent of all the regions, and only their polygons", () => {
     const circle: MapShape = { type: "circle", center: [40, 0], radiusKm: 500 };
     const regions = [region("A", box(0, 0, 5, 1)), region("B", box(5, 0, 10, 1)), { code: { system: "ugc", code: "C" }, name: "C", shapes: [circle] }];
-    expect(basemapToleranceKm(regions)).toBeCloseTo(0.584, 3);
+    expect(basemapToleranceKm(regions)).toBeCloseTo(0.5839, 4);
   });
 
   it("gives no tolerance with no polygon, with no extent, or across the antimeridian", () => {

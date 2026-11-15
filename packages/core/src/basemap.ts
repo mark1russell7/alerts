@@ -26,8 +26,8 @@ const mercatorY = (lat: number): number => Math.log(Math.tan(Math.PI / 4 + (lat 
  *
  * - The fit of the page also holds the incidents and the places. A larger fit has larger units, thus this tolerance is on the
  *   safe side.
- * - In the Mercator projection, one unit covers the most ground at the latitude nearest to the equator. The function
- *   measures the unit at that latitude.
+ * - In the Mercator projection, one unit covers the least ground at the latitude farthest from the equator. The function
+ *   measures the unit at that latitude. Thus a removed position moves the line by half a unit or less at each latitude.
  * - The function gives `undefined` for regions with no polygon, and for longitudes with a span of more than 180 degrees. Such
  *   regions cross the antimeridian, and their longitudes are not in one range.
  */
@@ -54,8 +54,8 @@ export function basemapToleranceKm(regions: readonly MapRegion[]): number | unde
   // The units for each radian of longitude at the fit. A region with no width and no height has no fit.
   const scale = Math.min(...scales);
   if (!Number.isFinite(scale)) return undefined;
-  const nearest = south <= 0 && north >= 0 ? 0 : Math.min(Math.abs(south), Math.abs(north));
-  return (EARTH_MEAN_RADIUS_KM * Math.cos((nearest * Math.PI) / 180)) / scale / 2;
+  const farthest = Math.max(Math.abs(south), Math.abs(north));
+  return (EARTH_MEAN_RADIUS_KM * Math.cos((farthest * Math.PI) / 180)) / scale / 2;
 }
 
 /** This function gives the GeoJSON region of the polygons of a region of the map, or `undefined` for a region with no polygon. */

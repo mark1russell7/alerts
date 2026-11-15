@@ -242,10 +242,11 @@ describe("keepShapes", () => {
     await keeper.close();
   });
 
-  it("gives each region of each watched state, simplified, and simplifies again only after a change", async () => {
+  it("gives each region of each watched state, simplified, and simplifies the states again only after a change of the store", async () => {
     // A public county of Kansas. Its south edge has 3 positions that are 1 m from the line, thus the simplification removes them.
     const harvey: MapRegion = { code: { system: "ugc", code: "KSC079" }, name: "Harvey", shapes: [{ type: "polygon", rings: [[[-98, 37], [-97.75, 37.00001], [-97.5, 37], [-97.25, 37.00001], [-97, 37], [-97, 38], [-98, 38], [-98, 37]]] }] };
-    const fake = fakeStore(["KSZ083", "KSC173", "TXC167"], { KS: [harvey] });
+    const lists: Record<string, readonly MapRegion[]> = { KS: [harvey] };
+    const fake = fakeStore(["KSZ083", "KSC173", "TXC167"], lists);
     const outcomes: ShapeOutcome[] = [];
     const keeper = keepShapes({ store: fake.store, places: [KANSAS], onShapes: (outcome) => outcomes.push(outcome) });
     const first = keeper.basemap();
@@ -259,6 +260,13 @@ describe("keepShapes", () => {
     const second = keeper.basemap();
     expect(second).not.toBe(first);
     expect(second.map((region) => region.code.code)).toEqual(["KSC079", "KSC173", "KSZ083", "TXC167"]);
+    // An incident outside the watched states does not simplify the states again.
+    expect(second[0]).toBe(first[0]);
+    // A new record of the store gives a new copy of the states.
+    lists.KS = [{ ...harvey, shapes: [...harvey.shapes] }];
+    const third = keeper.basemap();
+    expect(third[0]).not.toBe(first[0]);
+    expect(third[0]).toEqual(first[0]);
     expect(outcomes).toEqual([]);
     await keeper.close();
   });
