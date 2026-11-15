@@ -18,7 +18,7 @@ The repo is public. It holds the general framework only. People, places, keys an
 | AL-5 | Event model and taxonomy | in progress | The core package: the types, the schemas, the id functions and the first taxonomy, from the SAME event codes and the NWS event names. The id functions are done. |
 | AL-6 | Merge reports into incidents | in progress | Grow-only sets with a union join. Property tests hold the three laws: idempotent, commutative and associative. The join, the incidents, the sent level and the acknowledged level are in review. |
 | AL-7 | Priority calculation | blocked | The probability that the event is real, times the exposure of the people, times the harm and the urgency, against the cost to interrupt the person. |
-| AL-8 | Weather and emergency sources | blocked | The NWS API, the NWS CAP feed and FEMA IPAWS, each a procedure package with recorded fixtures and a canary. |
+| AL-8 | Weather and emergency sources | in progress | The NWS API, the NWS CAP feed and FEMA IPAWS, each a procedure package with recorded fixtures and a canary. The NWS API source is in review. |
 | AL-9 | Pushover delivery with acknowledge and escalate | blocked | Emergency priority with iOS Critical Alerts. The core reads the receipt and escalates to the next step. |
 | AL-10 | Source health and coverage | blocked | A health state machine for each source, and the coverage of each kind at each place. A gap is a system alert. |
 | AL-11 | Operate as a service | blocked | The service runner of `@mark1russell7/service`, with an append-only event log in SQLite. |

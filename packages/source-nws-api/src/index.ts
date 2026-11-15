@@ -1,0 +1,45 @@
+/**
+ * The source adapter of the alert system for the alerts API of the US National Weather Service
+ * (api.weather.gov). It gives the procedures of the source contract of `@mark1russell7/alerts`.
+ */
+
+import type { SourceProcedures } from "@mark1russell7/alerts";
+import { checkCanary } from "./check.ts";
+import { NWS_DESCRIPTOR } from "./descriptor.ts";
+import { createNwsFetch, type NwsFetchOptions } from "./fetch.ts";
+import { mapObservation } from "./map.ts";
+
+export { checkCanary, keepaliveSent, KEEPALIVE_MAX_AGE_MS } from "./check.ts";
+export { KIND_PREFIXES, NWS_DESCRIPTOR } from "./descriptor.ts";
+export { CANARY_PATH, createNwsFetch, failureOf, NWS_BASE_URL, queriesOf, readAnswer } from "./fetch.ts";
+export type { NwsFetchInput, NwsFetchOptions, Query } from "./fetch.ts";
+export {
+  categoryOf,
+  EVENT_CODES,
+  fromEventCode,
+  fromEventName,
+  fromPhenomenon,
+  PHENOMENA,
+  resolveKind,
+  SIGNIFICANCE,
+  STAGE_WORDS,
+  UNKNOWN_KIND,
+} from "./kinds.ts";
+export type { EventCode, Hazard, KindFacts, ResolvedKind } from "./kinds.ts";
+export { KNOWN_FIELDS, mapObservation, ORIGIN, SOURCE_ID } from "./map.ts";
+export { CLOSING_ACTIONS, mainVtec, parseVtec, vtecKey, vtecTime } from "./vtec.ts";
+export type { Vtec, VtecClass } from "./vtec.ts";
+
+/**
+ * This function makes the procedures of the NWS API source: `describe`, `fetch`, `map` and `check`.
+ * The source has no `locate`: the instance does not send the positions of its places to the NWS.
+ */
+export function createNwsSource(options: NwsFetchOptions): SourceProcedures {
+  const fetch = createNwsFetch(options);
+  return {
+    describe: () => NWS_DESCRIPTOR,
+    fetch: (input) => fetch(input),
+    map: ({ observation }) => mapObservation(observation),
+    check: ({ observations }) => checkCanary(observations),
+  };
+}

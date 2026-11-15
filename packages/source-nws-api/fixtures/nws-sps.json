@@ -1,0 +1,125 @@
+{
+  "id": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.dfd1a5940b2842dbc05206a59e33f4c30577aed4.001.1",
+  "type": "Feature",
+  "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+      [
+        [
+          -104.29,
+          34.5
+        ],
+        [
+          -104.15,
+          34.67
+        ],
+        [
+          -104.08,
+          34.84
+        ],
+        [
+          -103.51,
+          34.84
+        ],
+        [
+          -103.63,
+          34.49
+        ],
+        [
+          -103.79,
+          34.18
+        ],
+        [
+          -104.29,
+          34.5
+        ]
+      ]
+    ]
+  },
+  "properties": {
+    "@id": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.dfd1a5940b2842dbc05206a59e33f4c30577aed4.001.1",
+    "@type": "wx:Alert",
+    "id": "urn:oid:2.49.0.1.840.0.dfd1a5940b2842dbc05206a59e33f4c30577aed4.001.1",
+    "areaDesc": "Quay County; Curry County; Roosevelt County; De Baca County",
+    "geocode": {
+      "SAME": [
+        "035037",
+        "035009",
+        "035041",
+        "035011"
+      ],
+      "UGC": [
+        "NMZ234",
+        "NMZ235",
+        "NMZ236",
+        "NMZ237"
+      ]
+    },
+    "affectedZones": [
+      "https://api.weather.gov/zones/forecast/NMZ234",
+      "https://api.weather.gov/zones/forecast/NMZ235",
+      "https://api.weather.gov/zones/forecast/NMZ236",
+      "https://api.weather.gov/zones/forecast/NMZ237"
+    ],
+    "references": [],
+    "sent": "2026-11-14T15:13:00-07:00",
+    "effective": "2026-11-14T15:13:00-07:00",
+    "onset": "2026-11-14T15:13:00-07:00",
+    "expires": "2026-11-14T15:45:00-07:00",
+    "ends": null,
+    "status": "Actual",
+    "messageType": "Alert",
+    "category": "Met",
+    "severity": "Moderate",
+    "certainty": "Observed",
+    "urgency": "Expected",
+    "event": "Special Weather Statement",
+    "sender": "w-nws.webmaster@noaa.gov",
+    "senderName": "NWS Albuquerque NM",
+    "headline": "Special Weather Statement issued November 14 at 3:13PM MST by NWS Albuquerque NM",
+    "description": "At 313 PM MST, Doppler radar was tracking a line of strong\nthunderstorms extending from 6 miles southwest of Quay to 12 miles\nsouthwest of Taiban, moving east at 25 mph.\n\nHAZARD...Wind gusts up to 50 mph and pea size hail.\n\nSOURCE...Radar indicated.\n\nIMPACT...Gusty winds could knock down tree limbs and blow around\nunsecured objects. Minor damage to outdoor objects is\npossible.\n\nLocations impacted include...\nFort Sumner, House, Tolar, Taiban, Ragland, Mcalister and Forrest.\n\nThis includes Highway 60 between Mile Markers 329 and 361.",
+    "instruction": "Monitor the weather situation closely and be alert for threatening\nweather conditions.",
+    "response": "Execute",
+    "note": null,
+    "parameters": {
+      "AWIPSidentifier": [
+        "SPSABQ"
+      ],
+      "WMOidentifier": [
+        "WWUS85 KABQ 142213"
+      ],
+      "NWSheadline": [
+        "A LINE OF STRONG THUNDERSTORMS WILL IMPACT SOUTHWESTERN CURRY... NORTHEASTERN DE BACA...SOUTHWESTERN QUAY AND NORTHWESTERN ROOSEVELT COUNTIES UNTIL 345 PM MST"
+      ],
+      "eventMotionDescription": [
+        "2026-11-14T22:13:00-00:00...storm...289DEG...22KT...34.89,-103.86 34.6,-103.99 34.3,-104.11"
+      ],
+      "maxWindGust": [
+        "50 MPH"
+      ],
+      "maxHailSize": [
+        "0.25"
+      ],
+      "BLOCKCHANNEL": [
+        "EAS",
+        "NWEM",
+        "CMAS"
+      ],
+      "EAS-ORG": [
+        "WXR"
+      ]
+    },
+    "scope": "Public",
+    "code": "IPAWSv1.0",
+    "language": "en-US",
+    "web": "http://www.weather.gov",
+    "eventCode": {
+      "SAME": [
+        "SPS"
+      ],
+      "NationalWeatherService": [
+        "SPS"
+      ]
+    }
+  }
+}

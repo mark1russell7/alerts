@@ -1,0 +1,89 @@
+{
+  "id": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.715e947fc548c5927c9079ce99d69581bba3e1f1.002.1",
+  "type": "Feature",
+  "geometry": null,
+  "properties": {
+    "@id": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.715e947fc548c5927c9079ce99d69581bba3e1f1.002.1",
+    "@type": "wx:Alert",
+    "id": "urn:oid:2.49.0.1.840.0.715e947fc548c5927c9079ce99d69581bba3e1f1.002.1",
+    "areaDesc": "Northern Arctic Coast",
+    "geocode": {
+      "SAME": [
+        "002185"
+      ],
+      "UGC": [
+        "AKZ803"
+      ]
+    },
+    "affectedZones": [
+      "https://api.weather.gov/zones/forecast/AKZ803"
+    ],
+    "references": [
+      {
+        "@id": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.b31da96fac2527549b9784aecc8d61d8c1f85192.001.1",
+        "identifier": "urn:oid:2.49.0.1.840.0.b31da96fac2527549b9784aecc8d61d8c1f85192.001.1",
+        "sender": "w-nws.webmaster@noaa.gov",
+        "sent": "2026-11-14T04:05:00-09:00"
+      }
+    ],
+    "sent": "2026-11-14T09:54:00-09:00",
+    "effective": "2026-11-14T09:54:00-09:00",
+    "onset": "2026-11-14T09:54:00-09:00",
+    "expires": "2026-11-15T06:00:00-09:00",
+    "ends": "2026-11-15T07:00:00-09:00",
+    "status": "Actual",
+    "messageType": "Update",
+    "category": "Met",
+    "severity": "Extreme",
+    "certainty": "Likely",
+    "urgency": "Expected",
+    "event": "Blizzard Warning",
+    "sender": "w-nws.webmaster@noaa.gov",
+    "senderName": "NWS Fairbanks AK",
+    "headline": "Blizzard Warning issued November 14 at 9:54AM AKST until November 15 at 7:00AM AKST by NWS Fairbanks AK",
+    "description": "* WHAT...Blizzard conditions. Additional snow accumulations up to two\ninches. Winds gusting as high as 60 mph.\n\n* WHERE...Northern Arctic Coast.\n\n* WHEN...Until 7 AM AKST Sunday.\n\n* IMPACTS...Travel could be difficult. Snow and blowing snow could\nreduce visibility below one half mile at times. Periods of blizzard\nconditions will be intermittently possible.\n\n* ADDITIONAL DETAILS...The lull in snow and wind will continue\nthrough Saturday morning before snowfall chances increase Saturday\nafternoon through Sunday morning. Winds will increase thereafter\nand be strongest Saturday afternoon into Sunday with gusts as high\nas 60 mph possible and blizzard conditions returning.",
+    "instruction": "Travel should be restricted to emergencies only. If you must travel,\nhave a winter survival kit with you. If you get stranded, stay with\nyour vehicle.",
+    "response": "Prepare",
+    "note": null,
+    "parameters": {
+      "AWIPSidentifier": [
+        "WSWNSB"
+      ],
+      "WMOidentifier": [
+        "WWAK41 PAFG 141854"
+      ],
+      "NWSheadline": [
+        "BLIZZARD WARNING REMAINS IN EFFECT UNTIL 7 AM AKST SUNDAY"
+      ],
+      "BLOCKCHANNEL": [
+        "EAS",
+        "NWEM",
+        "CMAS"
+      ],
+      "EAS-ORG": [
+        "WXR"
+      ],
+      "VTEC": [
+        "/O.CON.PAFG.BZ.W.0037.000000T0000Z-261115T1600Z/"
+      ],
+      "eventEndingTime": [
+        "2026-11-15T07:00:00-09:00"
+      ],
+      "expiredReferences": [
+        "w-nws.webmaster@noaa.gov,urn:oid:2.49.0.1.840.0.43ba9fb6ec16311c1dda4789d2088e4e264e5310.001.1,2026-11-13T14:59:00-09:00 w-nws.webmaster@noaa.gov,urn:oid:2.49.0.1.840.0.4ab6b807f0f01c0c001454d2b5311debefdcd67c.001.1,2026-11-13T14:45:00-09:00 w-nws.webmaster@noaa.gov,urn:oid:2.49.0.1.840.0.001fce0540d8c6d16d8dc2781608c99549bca8e6.001.1,2026-11-13T14:33:00-09:00 w-nws.webmaster@noaa.gov,urn:oid:2.49.0.1.840.0.6eec9f42cdb5caef3f6aec7a167c3c3541551993.001.1,2026-11-13T06:07:00-09:00 w-nws.webmaster@noaa.gov,urn:oid:2.49.0.1.840.0.aaea4f45d822f39dbea817b7f4aac1b21ef430fd.002.1,2026-11-12T15:33:00-09:00 w-nws.webmaster@noaa.gov,urn:oid:2.49.0.1.840.0.8a1e7ca4512f74b79b447c665438d96feae02c96.001.1,2026-11-12T12:54:00-09:00 w-nws.webmaster@noaa.gov,urn:oid:2.49.0.1.840.0.0fb8b2b3dab9aa31e52c720d12759c567728b886.001.1,2026-11-12T03:25:00-09:00 w-nws.webmaster@noaa.gov,urn:oid:2.49.0.1.840.0.f9439f4146f95e6108504c25474f0684867493bb.001.2,2026-11-11T14:00:00-09:00"
+      ]
+    },
+    "scope": "Public",
+    "code": "IPAWSv1.0",
+    "language": "en-US",
+    "web": "http://www.weather.gov",
+    "eventCode": {
+      "SAME": [
+        "BZW"
+      ],
+      "NationalWeatherService": [
+        "BZW"
+      ]
+    }
+  }
+}
