@@ -8,7 +8,7 @@ import { PUSHOVER_TIMEOUT_MS, type PushoverChannelOptions } from "@mark1russell7
 import { CANARY_PATH } from "@mark1russell7/alerts-source-nws-api";
 import type { Exchange, Transport } from "polite-crawler/api";
 import { afterEach, describe, expect, it } from "vitest";
-import { INSTANCE_CHANNELS, openInstance, USER_AGENT, type Instance } from "./instance.ts";
+import { INSTANCE_CHANNELS, INSTANCE_TIMES, openInstance, USER_AGENT, type Instance } from "./instance.ts";
 import { openRuntimeLog, type RuntimeLog } from "./log.ts";
 
 // The Flood Warning was sent at 14:54 UTC on 2026-11-14, and it expires at 06:00 UTC on 2026-11-15.
@@ -179,6 +179,8 @@ describe("openInstance", () => {
       retryBase: Math.min(PUSHOVER_TIMEOUT_MS, ...intervals),
       retryCap: Math.min(...intervals),
     });
+    // The host reads the times before a start. They agree with the times of the loop.
+    expect(instance.loop.times).toEqual(INSTANCE_TIMES);
   });
 
   it("does not start without the token of the application or the key of the person, and no message holds a value of a secret", () => {
