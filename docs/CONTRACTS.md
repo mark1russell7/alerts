@@ -392,7 +392,16 @@ The assessment reads no clock, because the level is about the incident. The esca
 
 Each assessment has its reasons: the gate that stopped it, the class, the two lookups, the places and the rules. The UI shows them.
 
-The table becomes the calculation of AL-31. The calculation multiplies the probability that the event is real, the impact on the person and the urgency. It compares the result with the cost to interrupt the person at that time. The probabilities come from base rates that the event log measures, not from values that a person sets.
+The table becomes the calculation of AL-31. The calculation multiplies the probability that the event is real and the harm of the event. It compares the result with the cost to interrupt the person at that time. Each factor comes from a public measure, not from a value that a person sets.
+
+The shadow score (`shadowScore`) is the first step. It operates next to the table, and it does not decide a level:
+
+- The priors (`ScorePriors`, format `alerts-priors/1`) are data. For each prefix of a kind, they give the verified share of its warnings and the deaths and injuries of one event. For each CAP certainty value, they give a probability.
+- The probability of an observed event is that of the certainty `observed`. The probability of a warning is the verified share of its kind. The measure of the warnings decides over the certainty word of the sender. Each other incident gets the probability of its certainty.
+- For each field, the longest prefix of the kind with that field decides. A prefix ends at a dot, as in `hasKind`.
+- Each value has its interval. The score keeps the key of the priors that gave each factor, so the UI tells the source.
+- A factor that the priors do not give makes a score with no read. The score names each missing factor. It does not take 0 or a default value.
+- `assessWithShadow` adds the score as the last reason of an assessment with a reason of the table. The level and the other reasons stay those of `assess`. A seeded gate test holds this.
 
 ## The service
 

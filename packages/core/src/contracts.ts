@@ -815,6 +815,65 @@ export interface PersonWatch {
   readonly quiet?: QuietWindow;
 }
 
+/** A measured value with its interval. The interval holds the value: `low <= value <= high`. */
+export interface Estimate {
+  readonly value: number;
+  readonly low: number;
+  readonly high: number;
+}
+
+/**
+ * The priors of one kind of event, from public measures. A field that the measures do not give is
+ * absent. Then the shadow score of the kind has no read.
+ */
+export interface KindPrior {
+  /** The share of the warnings of the kind that an event verified, from 0 to 1. It applies to the significance `warning` only. */
+  readonly verified?: Estimate;
+  /** The deaths in one event of the kind. */
+  readonly deaths?: Estimate;
+  /** The injuries in one event of the kind. */
+  readonly injuries?: Estimate;
+}
+
+/**
+ * The priors of the shadow score. Each factor comes from a public measure, not from a guess. The
+ * format of the file is `alerts-priors/1`.
+ */
+export interface ScorePriors {
+  readonly format: "alerts-priors/1";
+  /** The priors of the kinds, by prefixes of the taxonomy codes. For each field, the longest prefix of a kind with that field decides. */
+  readonly kinds: Readonly<Record<string, KindPrior>>;
+  /** The probability of each CAP certainty value, from 0 to 1. */
+  readonly certainty: Readonly<Partial<Record<Certainty, Estimate>>>;
+}
+
+/** One factor of a shadow score, with the key of the priors that gave it. */
+export interface ScoreFactor {
+  readonly estimate: Estimate;
+  /** The table of the priors and its key: a prefix of `kinds`, or a value of `certainty`. */
+  readonly from: { readonly table: "kinds" | "certainty"; readonly key: string };
+}
+
+/** A factor of the shadow score that the priors do not give. */
+export type ScoreGap = "probability" | "deaths" | "injuries";
+
+/**
+ * The shadow score of an incident: the probability of the event and the harm of one event. The score
+ * does not decide a level at this time. The table decides, and the assessment shows the score next to it.
+ * A score with a gap has no read, and it shows each factor that the priors do not give.
+ */
+export type ShadowScore =
+  | {
+      readonly read: true;
+      /** The probability that the event occurs. */
+      readonly probability: ScoreFactor;
+      /** The deaths in one event of the kind. */
+      readonly deaths: ScoreFactor;
+      /** The injuries in one event of the kind. */
+      readonly injuries: ScoreFactor;
+    }
+  | { readonly read: false; readonly missing: readonly ScoreGap[] };
+
 /** A reason of an assessment. The UI shows the reasons, so each level tells why. */
 export type AssessReason =
   /** Each line of the incident is cancelled or expired. */
@@ -860,7 +919,9 @@ export type AssessReason =
    * A rule of the person lowered the level at this place. The index is the position of the rule.
    * The place is absent for a subject.
    */
-  | { readonly kind: "rule"; readonly place?: PlaceId; readonly index: number; readonly max: AssessedLevel };
+  | { readonly kind: "rule"; readonly place?: PlaceId; readonly index: number; readonly max: AssessedLevel }
+  /** The shadow score of the incident. It does not change the level. */
+  | { readonly kind: "shadow"; readonly score: ShadowScore };
 
 /** The level of one incident for one person, with its reasons. */
 export interface Assessment {

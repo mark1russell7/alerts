@@ -277,6 +277,29 @@ describe("the words of the page", () => {
     );
   });
 
+  it("tells first that the shadow score does not decide, and gives each factor with its source", () => {
+    const [incident] = frames[1]!.incidents;
+    const factor = (value: number, low: number, high: number, table: "kinds" | "certainty", key: string) => ({ estimate: { value, low, high }, from: { table, key } });
+    const read = reasonText(
+      {
+        kind: "shadow",
+        score: {
+          read: true,
+          probability: factor(0.31416, 0.28, 0.33, "kinds", "met.flood.flash"),
+          deaths: factor(0.02, 0.01, 0.03, "kinds", "met.flood.flash"),
+          injuries: factor(0.05, 0.03, 0.08, "kinds", "met"),
+        },
+      },
+      incident!,
+    );
+    expect(read).toBe(
+      'The shadow score does not decide the level. The probability of the event is 0.31 (0.28 to 0.33), from the verified share of the warnings of "met.flood.flash". One event of this kind gives 0.02 (0.01 to 0.03) deaths and 0.05 (0.03 to 0.08) injuries. The deaths come from the measures of "met.flood.flash", and the injuries from "met".',
+    );
+    expect(reasonText({ kind: "shadow", score: { read: false, missing: ["probability", "deaths"] } }, incident!)).toBe(
+      "The shadow score does not decide the level, and it has no value. The priors do not give these factors: probability, deaths.",
+    );
+  });
+
   it("tells when the codes of an area decided because its shape is not valid", () => {
     const [incident] = frames[1]!.incidents;
     const place = "home-a" as PlaceId;
