@@ -8,6 +8,8 @@
  * starts with the postal code of its state. Thus a source finds the state of an area from its codes.
  */
 
+import type { RegionCode } from "@mark1russell7/alerts";
+
 const UGC = /^[A-Z]{2}[CZ]\d{3}$/;
 const SAME = /^\d{6}$/;
 
@@ -136,4 +138,27 @@ export function countyUgcOfSame(code: string): string | undefined {
 export function stateOfSame(code: string): string | undefined {
   const location = parseSameLocation(code);
   return location === undefined ? undefined : STATE_POSTAL[location.state];
+}
+
+/** This function gives the postal code of a state in capital letters, or `undefined` for a text that is not a state. */
+export function stateCode(state: string): string | undefined {
+  const code = state.trim().toUpperCase();
+  return Object.hasOwn(STATE_FIPS, code) ? code : undefined;
+}
+
+/**
+ * This function gives the postal code of the state of a region code, or `undefined`. A `state` code gives
+ * its state. A UGC code and a SAME code give the state of their zone or county. A marine zone and a country give `undefined`.
+ */
+export function stateOfCode(code: RegionCode): string | undefined {
+  switch (code.system) {
+    case "state":
+      return stateCode(code.code);
+    case "ugc":
+      return stateOfUgc(code.code);
+    case "same":
+      return stateOfSame(code.code);
+    default:
+      return undefined;
+  }
 }
