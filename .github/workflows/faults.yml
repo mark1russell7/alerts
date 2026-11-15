@@ -1,0 +1,88 @@
+# The fault suite of the alert system (AL-13). Each case puts a fault proxy between a source and a scripted
+# server, and the gate of the case examines the outcome of each fault. The records of the run are an artifact.
+# The cases run in CI only: a cut and a time limit are timing-sensitive, and the runners are not shared.
+# This file is a gate with paths (CI.md): the job changes gives the match, and the job Faults OK gives the result.
+name: Faults
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+    paths:
+      - packages/testkit/**
+      - packages/source-nws-api/**
+      - packages/core/**
+      - pnpm-lock.yaml
+      - .github/workflows/faults.yml
+  # A person starts a run on a branch with no pull request: gh workflow run faults.yml --ref <branch>
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A newer push cancels the run of a pull request. Each commit of main has its own group, so its run ends with a result (main-runs-finish).
+concurrency:
+  group: faults-${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pull-requests: read
+    outputs:
+      match: ${{ steps.changes.outputs.match }}
+    steps:
+      - id: changes
+        uses: mark1russell7/template/.github/actions/changes@5d606c4ea46623e8ccb3990981b2f478c086d347 # main
+        with:
+          paths: |
+            packages/testkit/**
+            packages/source-nws-api/**
+            packages/core/**
+            pnpm-lock.yaml
+            .github/workflows/faults.yml
+
+  cases:
+    needs: changes
+    if: needs.changes.outputs.match == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 26
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # Each case writes its records to fault-records/, and its summary to the summary of the job.
+      # A case whose gate fails, or that cannot read, fails the step.
+      - run: node packages/testkit/scripts/fault-cases.ts --out fault-records
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: fault-records
+          path: fault-records/
+          if-no-files-found: error
+
+  faults-ok:
+    name: Faults OK
+    if: ${{ !cancelled() }}
+    needs: [changes, cases]
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions: {}
+    steps:
+      - uses: mark1russell7/template/.github/actions/gate-summary@5d606c4ea46623e8ccb3990981b2f478c086d347 # main
+        with:
+          needs: ${{ toJSON(needs) }}
