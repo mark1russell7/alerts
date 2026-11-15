@@ -1,7 +1,7 @@
 import { CONFIG_FORMAT, type AlertConfig, type Incident, type MapRegion, type PlaceConfig, type PlaceId, type Position, type RegionCode, type ReportId, type WatchedPlace } from "@mark1russell7/alerts";
 import type { Refreshed, RefreshInput, ShapeStore } from "@mark1russell7/alerts-shapes-nws";
 import { describe, expect, it } from "vitest";
-import { keepShapes, liveCodes, placeCodesKey, shapeReport, wantedShapes, withZoneCodes, type ShapeOutcome } from "./shapes.ts";
+import { addZoneCodes, keepShapes, liveCodes, placeCodesKey, shapeReport, wantedShapes, withZoneCodes, zoneCodesText, type ShapeOutcome } from "./shapes.ts";
 
 const T0 = Date.UTC(2026, 10, 15, 18, 0, 0);
 const RING = [
@@ -162,6 +162,56 @@ describe("withZoneCodes", () => {
     expect(placeCodesKey(config)).toBe(placeCodesKey(configOf({ ...kansasPlace, label: "Other", codes: [{ system: "same", code: "020173" }] })));
     expect(placeCodesKey(zoned)).not.toBe(placeCodesKey(config));
     expect(placeCodesKey(withZoneCodes(zoned, outlines))).toBe(placeCodesKey(zoned));
+  });
+});
+
+describe("addZoneCodes", () => {
+  const noPosition: PlaceConfig = { id: "place-a" as PlaceId, label: "A", codes: [{ system: "state", code: "KS" }], bufferKm: 0 };
+  const noOutline: PlaceConfig = { id: "place-b" as PlaceId, label: "B", at: [-100.5, 44.5], codes: [{ system: "state", code: "SD" }], bufferKm: 0 };
+  const known: PlaceConfig = {
+    ...kansasPlace,
+    id: "place-c" as PlaceId,
+    codes: [
+      { system: "ugc", code: "ksc173" },
+      { system: "ugc", code: "KSZ083" },
+      { system: "same", code: "020173" },
+      { system: "state", code: "KS" },
+    ],
+  };
+
+  it("gives the configuration of withZoneCodes", () => {
+    const config = configOf(kansasPlace, noPosition, noOutline, known);
+    expect(addZoneCodes(config, outlines).config).toEqual(withZoneCodes(config, outlines));
+  });
+
+  it("counts the placed and outlined places, and the near and added codes", () => {
+    // Each Kansas place has 4 codes near it: KSC173, its SAME code, the state and KSZ083. The first place adds 3, and the other adds 0.
+    const { counts } = addZoneCodes(configOf(kansasPlace, noPosition, noOutline, known), outlines);
+    expect(counts).toEqual({ placed: 3, outlined: 2, near: 8, added: 3 });
+  });
+
+  it("tells a file that has each code from a store with no outlines", () => {
+    expect(addZoneCodes(configOf(known), outlines).counts).toEqual({ placed: 1, outlined: 1, near: 4, added: 0 });
+    expect(addZoneCodes(configOf(known), () => []).counts).toEqual({ placed: 1, outlined: 0, near: 0, added: 0 });
+  });
+});
+
+describe("zoneCodesText", () => {
+  it("tells the near codes, the codes of the file and the added codes", () => {
+    expect(zoneCodesText({ placed: 4, outlined: 4, near: 23, added: 0 })).toBe(
+      "The outlines of the zones give 23 codes near 4 places. The file already has 23 of them, and the runtime adds 0.",
+    );
+    expect(zoneCodesText({ placed: 1, outlined: 1, near: 1, added: 1 })).toBe("The outlines of the zones give 1 code near 1 place. The file already has 0 of them, and the runtime adds 1.");
+  });
+
+  it("tells the places that wait for outlines, and a configuration with no position", () => {
+    expect(zoneCodesText({ placed: 2, outlined: 0, near: 0, added: 0 })).toBe(
+      "The store has no outlines of the states of 2 places yet. These places keep the codes of the file until a refresh gets the outlines.",
+    );
+    expect(zoneCodesText({ placed: 3, outlined: 2, near: 5, added: 1 })).toBe(
+      "The outlines of the zones give 5 codes near 2 places. The file already has 4 of them, and the runtime adds 1. The store has no outlines of the states of 1 place yet. These places keep the codes of the file until a refresh gets the outlines.",
+    );
+    expect(zoneCodesText({ placed: 0, outlined: 0, near: 0, added: 0 })).toBe("No place has a position. Thus the outlines of the zones add no code.");
   });
 });
 

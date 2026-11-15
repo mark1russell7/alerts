@@ -17,7 +17,7 @@ import type { RuntimeLog } from "./log.ts";
 import { createLoop, loopTimes, type LoopTimes, type RuntimeLoop } from "./loop.ts";
 import { channelQuota } from "./quota.ts";
 import { openRuntime, type Pass, type Runtime, type RuntimeOptions } from "./runtime.ts";
-import { keepShapes, placeCodesKey, withZoneCodes, type InstanceShapes, type ShapeOutcome } from "./shapes.ts";
+import { addZoneCodes, keepShapes, placeCodesKey, type InstanceShapes, type ShapeOutcome, type ZoneCodeCounts } from "./shapes.ts";
 import { DELAY_LIMITS, earliest, nextFetch } from "./view.ts";
 
 /** The name of the secret that holds the API token of the Pushover application. */
@@ -181,8 +181,8 @@ export interface Instance {
   readonly loop: RuntimeLoop;
   /** The outlines of the regions. The match by shape and the map route read them here. */
   readonly shapes: InstanceShapes;
-  /** The count of the codes that the outlines of the store added to the places at the start. */
-  readonly zoneCodes: number;
+  /** The counts of the zone codes of the places at the start, from the outlines of the store. An instance with no store has none. */
+  readonly zones?: ZoneCodeCounts;
 }
 
 /**
@@ -215,10 +215,10 @@ export function openInstance(options: InstanceOptions): Instance {
   const store = options.shapes === undefined ? undefined : createShapeStore({ pace, transport: options.transport, userAgent: agent, cache: options.shapes });
   const cache = options.shapes;
   // The places get the codes of the zones near their positions, from the outlines of the store at the start.
-  const zoned = (from: ShapeStore) => withZoneCodes(config, (state) => from.basemap(state));
-  const placed = store === undefined ? config : zoned(store);
+  const zoned = (from: ShapeStore) => addZoneCodes(config, (state) => from.basemap(state));
+  const start = store === undefined ? undefined : zoned(store);
+  const placed = start?.config ?? config;
   const places = localPlaces(placed);
-  const zoneCodes = places.reduce((count, place, at) => count + place.codes.length - (config.places[at]?.codes.length ?? 0), 0);
   // New outlines can change the codes of a place. The check is after a refresh with requests, when no task is due.
   const opened = placeCodesKey(placed);
   let fresh = false;
@@ -228,7 +228,7 @@ export function openInstance(options: InstanceOptions): Instance {
     if (outcome.refreshed.requests > 0) fresh = true;
     if (!fresh || outcome.refreshed.stop !== "done") return;
     fresh = false;
-    if (placeCodesKey(zoned(store)) === opened) return;
+    if (placeCodesKey(zoned(store).config) === opened) return;
     told = true;
     options.onPlaceCodes?.();
   };
@@ -281,5 +281,5 @@ export function openInstance(options: InstanceOptions): Instance {
     times: loopTimes(runtime.config.sources, { delivery }),
     ...(options.onError === undefined ? {} : { onError: options.onError }),
   });
-  return { runtime, loop, shapes, zoneCodes };
+  return { runtime, loop, shapes, ...(start === undefined ? {} : { zones: start.counts }) };
 }

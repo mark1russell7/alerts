@@ -10,7 +10,7 @@
 import { basemapToleranceKm, simplifyBasemap, type AlertConfig, type Incident, type Instant, type MapRegion, type PlaceConfig, type RegionCode, type ShapeLookup, type WatchedPlace } from "@mark1russell7/alerts";
 import { stateOfCode } from "@mark1russell7/alerts-format-nws";
 import { compareCodes, zoneCodesNear, type Refreshed, type ShapeStore, type Wanted } from "@mark1russell7/alerts-shapes-nws";
-import { errorMessage } from "@mark1russell7/text";
+import { countOf, errorMessage } from "@mark1russell7/text";
 
 /**
  * The outcome of one refresh of the outlines: its result, or the error that it threw. The step `basemap` tells that the
@@ -87,22 +87,88 @@ export function wantedShapes(places: readonly WatchedPlace[], incidents: readonl
  * - A place near the line of a state gets only the zones of the states of its codes. A code of the next state adds its zones.
  */
 export function withZoneCodes(config: AlertConfig, regionsOf: (state: string) => readonly MapRegion[]): AlertConfig {
-  return { ...config, places: config.places.map((place) => placeWithZoneCodes(place, regionsOf)) };
+  return addZoneCodes(config, regionsOf).config;
 }
 
-// The place with the codes of the zones near its position.
-function placeWithZoneCodes(place: PlaceConfig, regionsOf: (state: string) => readonly MapRegion[]): PlaceConfig {
-  if (place.at === undefined) return place;
+// The zones near a place with a position. A place with no outline of its states has no zone near it.
+interface PlaceZones {
+  readonly outlined: boolean;
+  readonly near: readonly RegionCode[];
+  readonly added: readonly RegionCode[];
+}
+
+// The zones near a place, or `undefined` for a place with no position.
+function zonesOf(place: PlaceConfig, regionsOf: (state: string) => readonly MapRegion[]): PlaceZones | undefined {
+  if (place.at === undefined) return undefined;
   const states = new Set<string>();
   for (const code of place.codes) {
     const state = stateOfCode(code);
     if (state !== undefined) states.add(state);
   }
   const regions = [...states].sort(compareCodes).flatMap((state) => regionsOf(state));
-  if (regions.length === 0) return place;
+  if (regions.length === 0) return { outlined: false, near: [], added: [] };
   const known = new Set(place.codes.map(codeKey));
-  const added = zoneCodesNear(regions, place.at, place.bufferKm).filter((code) => !known.has(codeKey(code)));
-  return added.length === 0 ? place : { ...place, codes: [...place.codes, ...added] };
+  const near = zoneCodesNear(regions, place.at, place.bufferKm);
+  return { outlined: true, near, added: near.filter((code) => !known.has(codeKey(code))) };
+}
+
+/**
+ * The counts of the zone codes of the places. They tell a store with no outlines from a file that already has
+ * each code, because both add no code.
+ */
+export interface ZoneCodeCounts {
+  /** The places with a position. */
+  readonly placed: number;
+  /** The places with a position and with outlines of their states. */
+  readonly outlined: number;
+  /** The codes of the zones near the outlined places. */
+  readonly near: number;
+  /** The codes near the outlined places that the file does not have. `withZoneCodes` adds them. */
+  readonly added: number;
+}
+
+/** The configuration with the zone codes of its places, and the counts of these codes. */
+export interface ZonedConfig {
+  readonly config: AlertConfig;
+  readonly counts: ZoneCodeCounts;
+}
+
+/**
+ * This function gives the result of `withZoneCodes` and the counts of the zone codes in one pass. Each search of the zones
+ * near a place reads the outlines of whole states, thus the start does it one time.
+ */
+export function addZoneCodes(config: AlertConfig, regionsOf: (state: string) => readonly MapRegion[]): ZonedConfig {
+  let placed = 0;
+  let outlined = 0;
+  let near = 0;
+  let added = 0;
+  const places = config.places.map((place) => {
+    const zones = zonesOf(place, regionsOf);
+    if (zones === undefined) return place;
+    placed += 1;
+    if (!zones.outlined) return place;
+    outlined += 1;
+    near += zones.near.length;
+    added += zones.added.length;
+    return zones.added.length === 0 ? place : { ...place, codes: [...place.codes, ...zones.added] };
+  });
+  return { config: { ...config, places }, counts: { placed, outlined, near, added } };
+}
+
+/** This function gives the line of the log about the zone codes at the start. */
+export function zoneCodesText(counts: ZoneCodeCounts): string {
+  if (counts.placed === 0) return "No place has a position. Thus the outlines of the zones add no code.";
+  const lines: string[] = [];
+  if (counts.outlined > 0) {
+    lines.push(
+      `The outlines of the zones give ${countOf(counts.near, "code")} near ${countOf(counts.outlined, "place")}. The file already has ${String(counts.near - counts.added)} of them, and the runtime adds ${String(counts.added)}.`,
+    );
+  }
+  const waiting = counts.placed - counts.outlined;
+  if (waiting > 0) {
+    lines.push(`The store has no outlines of the states of ${countOf(waiting, "place")} yet. These places keep the codes of the file until a refresh gets the outlines.`);
+  }
+  return lines.join(" ");
 }
 
 /** This function gives a key of the codes of each place. Two configurations with one key have the same codes. */

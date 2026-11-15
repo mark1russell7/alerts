@@ -38,7 +38,7 @@ import { PROFILES, declare } from "./index.ts";
 import { DAEMON_CHECK, INSTANCE_CHECK, openInstance, PING_URL_KEY, userAgent } from "./instance.ts";
 import { openRuntimeLog } from "./log.ts";
 import { GOOD_CONFIG_FILE, privateFiles, reloadHook, startConfig } from "./reload.ts";
-import { shapeReport } from "./shapes.ts";
+import { shapeReport, zoneCodesText } from "./shapes.ts";
 import { supervisor } from "./supervise.ts";
 
 /** This function gives a port from the environment, or the fallback when the variable is not set. */
@@ -150,7 +150,7 @@ async function runtime(): Promise<ServiceBuilder> {
       void service.lifecycle?.shutdown("The codes of a place changed.");
     },
   });
-  console.log(`The outlines of the zones added ${instance.zoneCodes} codes to the places.`);
+  if (instance.zones !== undefined) console.log(zoneCodesText(instance.zones));
 
   // The service closes the log and the store of shapes in its shutdown.
   const service = declare({ port: port("PORT", 8080), probePort: port("PROBE_PORT", 9090), profile, loop: instance.loop, log, shapes: instance.shapes, quotas });
