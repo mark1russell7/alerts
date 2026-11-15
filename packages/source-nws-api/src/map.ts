@@ -20,7 +20,7 @@ import type {
   Status,
   Urgency,
 } from "@mark1russell7/alerts";
-import { Problems, reportId } from "@mark1russell7/alerts";
+import { categoryOf, Problems, reportId } from "@mark1russell7/alerts";
 import { errorMessage } from "@mark1russell7/text";
 
 import {
@@ -35,7 +35,7 @@ import {
   capTime,
   capValue,
 } from "@mark1russell7/alerts-format-cap";
-import { categoryOf, hasVtec, isSameCode, isUgcCode, parseVtec, resolveKind, vtecKey, type Vtec } from "@mark1russell7/alerts-format-nws";
+import { hasVtec, isSameCode, isUgcCode, parseVtec, resolveKind, vtecKey, type Vtec } from "@mark1russell7/alerts-format-nws";
 
 /** The id of this source. */
 export const SOURCE_ID = "nws-api" as SourceId;

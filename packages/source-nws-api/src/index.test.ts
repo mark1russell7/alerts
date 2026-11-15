@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { createNwsSource, KIND_PREFIXES, NWS_DESCRIPTOR, SOURCE_ID } from "./index.ts";
+import { KIND_PREFIXES } from "@mark1russell7/alerts-format-nws";
+import { createNwsSource, NWS_DESCRIPTOR, SOURCE_ID } from "./index.ts";
 
 describe("the NWS API source", () => {
   const source = createNwsSource({

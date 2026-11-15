@@ -1,7 +1,8 @@
 import { readFileSync } from "node:fs";
+import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import { readCap } from "./read.ts";
-import { splitAlerts } from "./split.ts";
+import { splitAlerts, splitFeed } from "./split.ts";
 
 const fixture = (name: string): string => readFileSync(new URL(`../fixtures/${name}`, import.meta.url), "utf8");
 const FIRST = fixture("pairs/kewx-ff-w-0108-new.ipaws.xml");
@@ -48,5 +49,44 @@ describe("splitAlerts", () => {
     expect(alerts[0]).toBe(FIRST);
     expect(alerts).toHaveLength(2);
     expect(readCap(alerts[1] as string).ok).toBe(false);
+  });
+});
+
+describe("splitFeed", () => {
+  const NAMESPACE = "http://gov.fema.ipaws.services/feed";
+
+  it("reads the root, its namespace and the alerts of a whole feed", () => {
+    expect(splitFeed(feed(FIRST, UPDATE))).toEqual({ root: "ns1:alerts", namespace: NAMESPACE, alerts: [FIRST, UPDATE], whole: true });
+    expect(splitFeed(feed())).toEqual({ root: "ns1:alerts", namespace: NAMESPACE, alerts: [], whole: true });
+  });
+
+  it("takes blanks, comments and processing instructions after the root", () => {
+    expect(splitFeed(`${feed()}\r\n <!-- end --> <?done?>\n`).whole).toBe(true);
+    expect(splitFeed('<alerts xmlns="urn:x"/>  ')).toEqual({ root: "alerts", namespace: "urn:x", alerts: [], whole: true });
+  });
+
+  it("finds no whole feed in a text with no element, or with text after the root", () => {
+    expect(splitFeed("")).toEqual({ alerts: [], whole: false });
+    expect(splitFeed("no xml")).toEqual({ alerts: [], whole: false });
+    expect(splitFeed(`${feed()}<more/>`).whole).toBe(false);
+    expect(splitFeed(`${feed()} text`).whole).toBe(false);
+    expect(splitFeed(`${feed()}<!-- no end`).whole).toBe(false);
+  });
+
+  it("finds each cut of a feed: a cut feed is not whole at any cut point", () => {
+    const whole = feed(FIRST, UPDATE);
+    fc.assert(
+      fc.property(fc.integer({ min: 0, max: whole.length - 1 }), (cut) => !splitFeed(whole.slice(0, cut)).whole),
+      { numRuns: 300 },
+    );
+    // The edges: a cut of the last character, and a cut of the last close tag
+    expect(splitFeed(whole.slice(0, -1)).whole).toBe(false);
+    expect(splitFeed(whole.slice(0, -"</ns1:alerts>".length)).whole).toBe(false);
+  });
+
+  it("does not end the root at a close tag in a comment or a CDATA section", () => {
+    const text = `<ns1:alerts xmlns:ns1="${NAMESPACE}"><!-- </ns1:alerts> --><x><![CDATA[</ns1:alerts>]]></x>`;
+    expect(splitFeed(text).whole).toBe(false);
+    expect(splitFeed(`${text}</ns1:alerts>`).whole).toBe(true);
   });
 });

@@ -10,9 +10,9 @@ import { createNwsFetch, type NwsFetchOptions } from "./fetch.ts";
 import { mapObservation } from "./map.ts";
 
 export { checkCanary, keepaliveSent, KEEPALIVE_MAX_AGE_MS } from "./check.ts";
-export { KIND_PREFIXES, NWS_DESCRIPTOR } from "./descriptor.ts";
-export { CANARY_PATH, createNwsFetch, failureOf, NWS_BASE_URL, queriesOf, readAnswer } from "./fetch.ts";
-export type { NwsFetchInput, NwsFetchOptions, Query } from "./fetch.ts";
+export { NWS_DESCRIPTOR } from "./descriptor.ts";
+export { CANARY_PATH, createNwsFetch, failureOf, NWS_BASE_URL, queriesOf, readAnswer, WEA_PATH } from "./fetch.ts";
+export type { NwsFetchInput, NwsFetchOptions, Query, QueryOptions } from "./fetch.ts";
 export { KNOWN_FIELDS, mapObservation, ORIGIN, SOURCE_ID } from "./map.ts";
 
 /**

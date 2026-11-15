@@ -87,12 +87,13 @@ The rules of each adapter:
    When the map cannot read an area or a subject that a watch can match, it gives a fatal problem. Until the core matches shapes, an area needs a region code or a place.
 3. **The descriptor tells the truth about dependencies.** `origins` names the authorities whose messages the source carries. `dependsOn` names the failure domains outside the cell: providers, CDNs, transmitters. `uses` names the resources of the cell: `internet`, `power`, `receiver`. The coverage uses both.
 4. **The ids are hashes of content.** The core gives the id functions in `ids.ts`. An adapter does not make its own ids.
-   - `observationId`: the SHA-256 of the source id, the content type, the request URL and the body. The fetch time is not part of it, so a poll with no change gives the same id.
+   - `observationId`: the SHA-256 of the source id, the content type, the request URL and the body. The fetch time is not part of it, so a poll with no change gives the same id. The URL is the part that the `map` function reads. A URL with the time of the poll gives the URL with no time, and a test holds that `map` does not read the time.
    - `reportId`: the SHA-256 of the source id, the source key and the sent time.
    - `messageKey`: the SHA-256 of the incident report, the level, the person and the step.
    - The hash input is a JSON array that starts with the scheme `alerts-id/1` and the kind of id. Each copy of the system gives the same id.
 5. **The fixtures are real and contain no personal data.** Each adapter keeps recorded answers of its source in `fixtures/`, with the expected reports. The places of the tests are public places, not the places of a real person.
 6. **A canary when the source has one.** For example: the national feed of the NWS has one or more active alerts. A national feed with no alert is more likely a fault than a calm country.
+7. **The kinds are codes of the taxonomy.** Each kind that `map` gives is a code of `TAXONOMY`. A kind that the tables do not know is `other.unknown`, with a problem. A gate test of the adapter holds this rule with `unknownKinds`.
 
 The testkit gives one conformance suite, and each adapter passes it. The suite examines the laws of `map` on the fixtures and on mutated fixtures. It examines the outcomes of `fetch` behind a fault proxy: cut, delay, reset, 429, 500 and a changed body. It also examines the descriptor.
 
@@ -171,16 +172,20 @@ Some sources carry a copy of the messages of another source. FEMA IPAWS carries 
 - `carriages(state, incidents, expectations)` gives one check for each expectation and each incident: the first report of `from` that passes the filter, and the first copy of `to`. The result is a function of the set of reports.
 - `delayLimit(delays, { quantile, level })` gives the limit of the delay. It is the distribution-free upper bound of the quantile of the measured delays, from `quantileInterval` of `@mark1russell7/rigor-statistics`. No person sets a time.
 - A small sample has no upper bound. Then the expectation has no limit, and the check only measures.
-- `lateness(checks, expectations, limits, at)` gives the state of each expectation: `no-limit`, `no-data`, `met` or `late`. A check is a miss when it passes its limit with no copy. The source is late when a miss comes after the last check that came.
-- A copy that comes after a miss ends the miss, because it shows that the source carries the reports again. A copy after the limit is not a miss.
-- `wakeAt` is the next time when a check passes its limit. The runtime starts `lateness` again at that time.
+- A check is a miss when it passes its limit with no copy. In normal work, some copies come late and some copies do not come. So one miss is not a proof.
+- `missRecord(checks, expectation, delay, at)` counts the misses of the past. Only a check after a met check is a trial, so a long stop of the source counts as one miss.
+- `missLimit(record, level)` gives the count of misses in a row that makes the source late. It is the smallest k with `high ** k <= 1 - level`. `high` is the upper bound of the rate of the misses, from `clopperPearson` of `@mark1russell7/rigor-statistics`. No person sets a count.
+- `lateLimits(checks, expectations, at, { quantile, level })` gives the two limits of each expectation: the delay and the count of misses.
+- `lateness(checks, expectations, limits, at)` gives the state of each expectation: `no-limit`, `no-data`, `met` or `late`. The source is late when the misses after the last check that came reach the count.
+- A copy that comes after a miss ends the misses, because it shows that the source carries the reports again.
+- `wakeAt` is the next time when a check passes its limit. The runtime starts `lateLimits` and `lateness` again at that time.
 
 A late source has two effects:
 
 - `coverage` does not count it, also when its health state is up. Its fetches pass, but it does not carry the reports. `lateSources` gives the list for `CoverageInput.late`.
 - Each late expectation is a line of system reports with the kind `system.health.late`. Its subject is the source `to`, so it goes to the person who watches the sources. Each new miss is a new fact, so it gives an update.
 
-A copy that did not come is not a measure, because its delay is not known. So a sample from a time when the source was down gives a lower limit. A lower limit gives more late states, which is the safe side.
+A copy that did not come is not a measure of the delay, because its delay is not known. So a sample from a time when the source was down gives a lower limit of the delay. A lower limit gives more late states, which is the safe side. In normal work, a run of misses that makes the source late comes with a chance of `1 - level` or less.
 
 ## The channel contract
 
@@ -209,6 +214,44 @@ For `life-safety`, the system prefers a duplicate to a miss.
 - Each copy of the system keeps the delivery ledger in its merge state. A copy waits for its rank times a short delay before a send, and does not send when the joined ledger already has the delivery.
 - When two copies cannot reach each other, both can send. Then the person can get the alert two times. The person does not get it zero times.
 - The message key is the SHA-256 of the incident report, the level, the person and the step. A channel that can drop a repeated key does so.
+
+## The taxonomy
+
+`TAXONOMY` of the core holds each kind code and its plain name. A code is dotted, for example `met.flood.flash`.
+
+- The first part is a category: the 12 categories of CAP 1.2, then `cyber`, `market`, `civic` and `system`. `categoryOf` gives it.
+- The taxonomy is a tree. The parent of each code is also a code, and each category is a root.
+- The taxonomy is closed. `knownKind` tells if a code is in it. The coverage codes `system.coverage.<code>` are a family of the core.
+- A code with a typo does not match the life-safety class, so it can stop a wake. Thus each adapter has a gate test, and each policy names only known codes.
+- The kinds go from physical events to technical outages. A new adapter adds its new codes to `TAXONOMY` in its pull request.
+
+## The route and the delivery step
+
+The core function `route` gives the escalations at a time. Each escalation is one incident, one level and one person.
+
+- The levels of an incident and a person are the levels of its starts and its deliveries, and the assessed level.
+- The assessed level counts only when it is higher than those levels and the person has a policy for it. So the level does not go down.
+- Only the highest level continues. A lower level ends at the start of a higher level, so its repeats stop.
+- An escalation continues until an acknowledgment or the end of the incident. An acknowledgment of a level also covers each lower level.
+- The end of an incident is its expiry, or the time when it stops being live.
+
+The start of an escalation is the time at which its level first applied. The runtime writes each start to its log. After a restart, each step comes at its time from the same start.
+
+The runtime does one delivery step in each pass, after the system reports:
+
+1. It polls each open receipt of a channel with the acknowledgment `poll`, one time in each interval. A receipt that the person acknowledged gives an acknowledgment.
+2. It writes the start of each new escalation.
+3. It sends each step that is due, and it cancels the repeats of each escalation that is over.
+4. It writes the result of each call to the log at once, after the call.
+
+Each call of a channel has a time limit. A failed call writes nothing, so the next step decides it again. Before it goes again, a call waits for the time that the channel tells, or for the retry time of the configuration.
+
+The message of a send takes its text from one report of the incident. That report is the latest one with the severity and the urgency of the incident. The body has the instruction first, then the area and the description. The channel cuts the text to its limits.
+
+Two parts wait:
+
+- A crash after a send and before its write loses the receipt. Then a cancel cannot stop the repeats of that message, and the person acknowledges it in the app. Next, the Pushover channel tags each message with its key and cancels by the tag.
+- The exhaustion alert to the next person waits for a second person (AL-21). Until then, the repeats continue after the exhaustion, and the routes of each pass show it.
 
 ## Levels and the first night rule
 
@@ -245,7 +288,15 @@ So an incident is `life-safety` when each of these conditions is true:
 - The severity is `severe`, `extreme` or `unknown`.
 - The urgency is `immediate`, `expected` or `unknown`.
 
-The life-safety class holds tornado, flash flood, extreme wind, hurricane, storm surge, fire, tsunami and earthquake shaking. It also holds evacuation, shelter in place, civil danger, civil emergency, and chemical, biological, radiological and nuclear hazards. For these kinds, an unknown value counts as high, because a miss costs more than a false alarm. A tornado watch has the urgency `future`, so it is `urgent`: a push at once that does not wake the person.
+A kind is in the life-safety class when its warning tells the people at a place to act at once to save their lives. They take shelter, leave, or go to high ground. The class holds tornado, flash flood, extreme wind, hurricane, typhoon, storm surge, fire, tsunami, earthquake shaking, debris flow and volcanic eruption. It also holds the national emergency (EAN), evacuation, shelter in place, civil danger, civil emergency, and chemical, biological, radiological and nuclear hazards. For these kinds, an unknown value counts as high, because a miss costs more than a false alarm. A tornado watch has the urgency `future`, so it is `urgent`: a push at once that does not wake the person.
+
+Some dangerous kinds are not in the class. Their danger comes over hours, or it is on the road or at sea. These kinds reach `urgent` at most:
+
+- extreme heat, extreme cold, a coastal flood, a river flood, a winter storm and a blizzard.
+- a dust storm and a snow squall, which are dangers to drivers.
+- the marine kinds, and ashfall. The ashfall codes are children of `geo.volcano`, not of the eruption.
+
+A severe thunderstorm with the destructive damage threat is also not in the class. The damage threat tags of the NWS and the Wireless Emergency Alert handling of the issuer are inputs of AL-31.
 
 Each lookup only grows with the severity and with the urgency. So a more severe or more urgent incident does not get a lower level. Tests hold this order and the rule above for each value.
 
@@ -269,6 +320,28 @@ The table becomes the calculation of AL-31. The calculation multiplies the proba
 
 The contracts carry only ids: `PersonId` and `PlaceId`. The runtime gets people, places, addresses and the night rule of each person from the private configuration.
 
+### The private configuration
+
+The core gives the format of the private configuration, `AlertConfig` (`alerts-config/1`). The repository holds no configuration. Each copy of the system loads the same configuration.
+
+- `places`: the id, a label, a position, the region codes and the buffer of each place. The field `sharePosition` names the sources that get the position.
+- `people`: the `PersonWatch` of each person, a label, and the escalation policies of the person.
+- `contacts`: the address of a person on a channel. A value of an address is a text, or a reference `{ secret: "NAME" }` to a key of the secret store.
+- `policies`: the escalation policies of each person with no policies of their own.
+
+The times of the delivery and the rank of a copy are not in `AlertConfig`. They are settings of each copy.
+
+The function `loadConfig` checks a configuration and makes the recipient of each person. The caller gives the secret store, so the core reads no file. The runtime does not start when the load gives a problem. The load finds:
+
+- two places or two people with one id, and a place with no region code
+- a place of a person or of a rule that the configuration or the person does not have
+- a contact of an unknown person, two contacts of a person on one channel, and a secret with no value
+- each problem of `recipientProblems`
+
+A problem names ids, fields and the names of secrets. It does not hold the value of a secret, a label or a position.
+
+The function `sourcePlaces` gives the places for one source, with no label, and with a position only when the place shares it with that source. The function `localPlaces` gives each position for the matching on the machine of the instance.
+
 A person also watches subjects, other than places, in `PersonWatch.subjects`: a source of the system, a service or a cloud region. A watch with no id matches each subject of its system. A rule with places does not apply to a subject. The person who operates the system watches `{ system: "alerts.source" }`, and gets the health reports.
 
 The positions of the places do not go to a source. A source fetches by area, for example all the alerts of a state, and the core matches the places on the machine of the instance. So a `WatchedPlace` gives an adapter region codes and a buffer, and no name, no address and no position. A source that needs a position gets it only when the owner lets that source get it.
@@ -285,4 +358,3 @@ The area `{ type: "place" }` covers that watched place only. Only the reports of
 - The link rule of each family of kind, for rule 3 of the merge.
 - The calculation of the level from probabilities and costs (AL-31), with the base rates from the event log.
 - The merge state grows with each report. A compaction of the incidents that ended before a horizon keeps it small. It must keep the three laws.
-- The taxonomy: the list of codes, from the CAP and NWS event names first (AL-5).

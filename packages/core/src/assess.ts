@@ -24,17 +24,22 @@ import { ASSESSED_LEVELS } from "./contracts.ts";
 
 /**
  * The kinds that can reach `life-safety` in the first policy: the list of `docs/CONTRACTS.md`, as
- * prefixes of the taxonomy codes.
+ * prefixes of the taxonomy codes. A kind is in the list when its warning tells the people at a place
+ * to act at once to save their lives. They take shelter, leave, or go to high ground.
  */
 export const LIFE_SAFETY_KINDS: readonly string[] = [
   "met.tornado",
   "met.flood.flash",
   "met.wind.extreme",
   "met.tropical.hurricane",
+  "met.tropical.typhoon",
   "met.surge",
   "fire.wildfire",
   "geo.tsunami",
   "geo.earthquake",
+  "geo.debris-flow",
+  "geo.volcano.eruption",
+  "safety.national-emergency",
   "safety.evacuation",
   "safety.shelter-in-place",
   "safety.civil-danger",

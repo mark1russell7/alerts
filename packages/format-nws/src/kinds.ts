@@ -9,7 +9,7 @@
  * This package is the home of the tables. Each source of NWS or SAME messages imports them from here.
  */
 
-import type { Category, Kind, Significance } from "@mark1russell7/alerts";
+import { categoryOf as coreCategoryOf, UNKNOWN_KIND, type Kind, type Significance } from "@mark1russell7/alerts";
 import { mainVtec, type Vtec } from "./vtec.ts";
 
 /** One hazard of the taxonomy: its dotted code and its plain name. */
@@ -158,7 +158,7 @@ export const EVENT_CODES: Readonly<Record<string, EventCode>> = {
   AVW: code("geo.avalanche", "Avalanche Warning", "warning"),
   AVA: code("geo.avalanche", "Avalanche Watch", "watch"),
   EQW: code("geo.earthquake", "Earthquake Warning", "warning"),
-  VOW: code("geo.volcano", "Volcano Warning", "warning"),
+  VOW: code("geo.volcano.eruption", "Volcano Warning", "warning"),
   FRW: code("fire.wildfire", "Fire Warning", "warning"),
   // Civil and non-weather
   EAN: code("safety.national-emergency", "Emergency Action Notification", "warning"),
@@ -187,34 +187,13 @@ export const EVENT_CODES: Readonly<Record<string, EventCode>> = {
   NMN: code("system.admin", "Network Message Notification"),
 };
 
-/** The CAP categories of the system, so that the first part of a code gives a category. */
-const CATEGORIES: ReadonlySet<string> = new Set<Category>([
-  "geo",
-  "met",
-  "safety",
-  "security",
-  "rescue",
-  "fire",
-  "health",
-  "env",
-  "transport",
-  "infra",
-  "cbrne",
-  "other",
-  "cyber",
-  "market",
-  "civic",
-  "system",
-]);
-
-/** The code of a kind that the tables do not know. */
-export const UNKNOWN_KIND = "other.unknown";
-
-/** This function gives the CAP category of a taxonomy code: its first part. */
-export function categoryOf(kindCode: string): Category {
-  const first = kindCode.split(".", 1)[0] ?? "";
-  return CATEGORIES.has(first) ? (first as Category) : "other";
-}
+/**
+ * The first parts of the taxonomy codes in the kind tables: the kinds that a source of NWS or SAME
+ * messages covers. A descriptor gives them as its `kinds`.
+ */
+export const KIND_PREFIXES: readonly string[] = [
+  ...new Set([...Object.values(PHENOMENA), ...Object.values(EVENT_CODES)].map((hazard) => hazard.code.split(".", 1)[0] ?? "other")),
+].sort();
 
 /** This function calculates the event code of a phenomenon and a significance, for example `TO` and `W`. */
 export function fromPhenomenon(phenomenon: string, significance: string): EventCode | undefined {
@@ -249,7 +228,7 @@ export function fromEventCode(value: string): EventCode | undefined {
  * The other names of some events: names that do not follow the pattern of hazard and stage. The NWS
  * gives one name to the river floods and the areal floods, so these names give the broad code.
  */
-const NAME_ALIASES: Readonly<Record<string, EventCode>> = {
+export const NAME_ALIASES: Readonly<Record<string, EventCode>> = {
   "flood warning": code("met.flood", "Flood Warning", "warning"),
   "flood watch": code("met.flood", "Flood Watch", "watch"),
   "flood advisory": code("met.flood", "Flood Advisory", "advisory"),
@@ -321,3 +300,11 @@ export function resolveKind(facts: KindFacts): ResolvedKind {
     found.significance === undefined ? { code: found.code, label } : { code: found.code, significance: found.significance, label };
   return { kind, known: true };
 }
+
+/**
+ * This value is the function `categoryOf` of the core. Its home is the taxonomy of the core. Two sources
+ * of open pull requests import it from this package, so it stays here for one more pull request.
+ *
+ * @deprecated Import `categoryOf` from `@mark1russell7/alerts`. The next pull request removes it from this package.
+ */
+export const categoryOf: typeof coreCategoryOf = coreCategoryOf;
