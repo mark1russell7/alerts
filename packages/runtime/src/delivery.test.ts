@@ -702,6 +702,120 @@ describe("the delivery step of a pass", () => {
     log.close();
   });
 
+  it("sends one stop of a channel at each step while its stops fail, and the held stops after a good probe", async () => {
+    let down = true;
+    const clock = fakeWallClock(T0);
+    const woken: number[] = [];
+    const { runtime, log, pushover } = open(
+      {
+        pushover: {
+          // Four sends fail with no answer, thus the channel can have four copies.
+          send: (_, count) => (count <= 4 ? { ok: false, kind: "network", message: "The connection reset." } : undefined),
+          stop: () => {
+            if (down) throw new Error("Pushover is down.");
+          },
+        },
+      },
+      openRuntimeLog(":memory:"),
+      clock,
+      {},
+      () => woken.push(clock.now()),
+    );
+    const counts: number[] = [];
+    for (let pass = 0; pass < 6; pass += 1) {
+      const before = pushover.stops.length;
+      await runtime.pass();
+      counts.push(pushover.stops.length - before);
+      await clock.advance(15 * SECOND);
+    }
+    // With no probe, the stops grow with the copies: 0, 1, 2, 3, 4, 4.
+    expect(counts).toEqual([0, 1, 1, 1, 1, 1]);
+    expect(woken).toEqual([]);
+    down = false;
+    const probe = await runtime.pass();
+    expect(probe.delivery?.stopped).toHaveLength(1);
+    expect(woken).toEqual([T0 + 90 * SECOND]);
+    expect(probe.wakeAt).toBeLessThanOrEqual(T0 + 105 * SECOND);
+    await clock.advance(SECOND);
+    const drain = await runtime.pass();
+    expect(drain.delivery?.stopped).toHaveLength(3);
+    expect(new Set([...probe.delivery!.stopped, ...drain.delivery!.stopped])).toEqual(new Set([1, 2, 3, 4].map((count) => `${RUN}-${count}`)));
+    await clock.advance(SECOND);
+    expect((await runtime.pass()).delivery?.stopped).toEqual([]);
+    log.close();
+  });
+
+  it("probes another copy after a failed probe, thus one copy whose stop always fails does not hold the others", async () => {
+    const clock = fakeWallClock(T0);
+    const { runtime, log } = open(
+      {
+        pushover: {
+          send: (_, count) => (count <= 3 ? { ok: false, kind: "network", message: "The connection reset." } : undefined),
+          stop: (copy) => {
+            if (copy === `${RUN}-1`) throw new Error("Pushover does not know the tag.");
+          },
+        },
+      },
+      openRuntimeLog(":memory:"),
+      clock,
+    );
+    const stopped: string[] = [];
+    for (let pass = 0; pass < 10; pass += 1) {
+      stopped.push(...((await runtime.pass()).delivery?.stopped ?? []));
+      await clock.advance(20 * SECOND);
+    }
+    expect(stopped.sort()).toEqual([`${RUN}-2`, `${RUN}-3`]);
+    log.close();
+  });
+
+  it("gives the count of the overdue sends of a channel and the earliest due time", async () => {
+    const twice: EscalationPolicy = { level: "life-safety", steps: [{ channel: PUSHOVER, at: 0 }, { channel: PUSHOVER, at: MINUTE }], exhaustedAfter: 20 * MINUTE };
+    const { clock, runtime, log } = open(
+      { pushover: { send: () => ({ ok: false, kind: "server", message: "Pushover gave the status 503." }) } },
+      openRuntimeLog(":memory:"),
+      fakeWallClock(T0),
+      { recipients: [{ ...RECIPIENT, policies: [twice] }], overdueAfter: MINUTE },
+    );
+    await runtime.pass();
+    let last = await runtime.pass();
+    while (clock.now() < T0 + 2 * MINUTE) {
+      await clock.advance(15 * SECOND);
+      last = await runtime.pass();
+    }
+    expect(last.delivery?.overdue).toEqual([{ channel: PUSHOVER, sends: 2, since: T0 }]);
+    log.close();
+  });
+
+  it("gives a due send with no delivery as overdue after overdueAfter, whatever the kind of its failures", async () => {
+    let up = false;
+    const { clock, runtime, log } = open(
+      { pushover: { send: () => (up ? undefined : { ok: false, kind: "server", message: "Pushover gave the status 503." }) } },
+      openRuntimeLog(":memory:"),
+      fakeWallClock(T0),
+      { overdueAfter: 60 * SECOND },
+    );
+    expect((await runtime.pass()).delivery?.overdue).toEqual([]);
+    await clock.advance(45 * SECOND);
+    expect((await runtime.pass()).delivery?.overdue).toEqual([]);
+    await clock.advance(15 * SECOND);
+    expect((await runtime.pass()).delivery?.overdue).toEqual([{ channel: PUSHOVER, sends: 1, since: T0 }]);
+    up = true;
+    await clock.advance(15 * SECOND);
+    const back = await runtime.pass();
+    expect(back.delivery?.sent).toHaveLength(1);
+    expect(back.delivery?.overdue).toEqual([]);
+    log.close();
+  });
+
+  it("does not give a send that the reserve of a quota holds as overdue", async () => {
+    const reserved: Script = { send: () => ({ ok: false, kind: "reserved", message: "The quota keeps its last units for life-safety.", retryAfter: 600 * SECOND }) };
+    const { clock, runtime, log } = open({ pushover: reserved }, openRuntimeLog(":memory:"), fakeWallClock(T0), { overdueAfter: 60 * SECOND });
+    await runtime.pass();
+    await clock.advance(120 * SECOND);
+    expect((await runtime.pass()).delivery?.overdue).toEqual([]);
+    log.close();
+  });
+
   it("keeps the later flight of a key when an earlier flight fails after it started", async () => {
     const clock = fakeWallClock(T0);
     // The first send fails at 50 s. The second send starts at 40 s and hangs.

@@ -11,6 +11,7 @@ export * from "./contracts.ts";
 export * from "./ids.ts";
 export * from "./merge.ts";
 export * from "./assess.ts";
+export * from "./score.ts";
 export * from "./escalation.ts";
 export * from "./delivery.ts";
 export * from "./config.ts";

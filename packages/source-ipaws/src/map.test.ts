@@ -176,6 +176,12 @@ describe("the map of other messages", () => {
     expect(IPAWS_DESCRIPTOR.origins).toEqual([ORIGINS.nws, ORIGINS.authority]);
   });
 
+  it("reads the deprecated certainty Very Likely of CAP 1.0 as likely, with no problem", () => {
+    const { report, problems } = mapOne(authority("<geocode><valueName>SAME</valueName><value>020173</value></geocode>").replace("<certainty>Unknown</certainty>", "<certainty>Very Likely</certainty>"));
+    expect(report.certainty).toBe("likely");
+    expect(problems).toEqual([]);
+  });
+
   it("knows the NWS by its sender, with no change of case", () => {
     expect(originOf(NWS_SENDER)).toBe("nws");
     expect(originOf(" W-NWS.Webmaster@NOAA.gov ")).toBe("nws");

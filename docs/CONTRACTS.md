@@ -297,6 +297,13 @@ Each send of a key has a new copy id: the run id, `-` and a count. It has only l
 
 On a channel that repeats, the step stops such a copy by its copy id. The next copy goes in parallel. The step does not cancel by the delivery key here, because that cancel also stops the next copy. A failed stop goes again at a later step. A stale copy that the channel accepts later gets its stop again.
 
+Each failed send with no answer adds a copy. Thus an outage of the channel adds a copy at each retry. The stops of a channel that is down do not grow with the copies:
+
+- A step with a failed stop on a channel marks the channel as down. A step whose stops on the channel all end well marks it as up.
+- On a channel that is down, each step sends only the first ready stop: the probe. The other stops wait. Thus an outage costs one stop at each retry.
+- A failed stop goes to the end of the order. Thus the next probe is another copy, and one bad copy does not hold the others.
+- After a good probe, the other stops go at the next step. The step wakes the loop, and the next step comes within one retry.
+
 The Pushover channel tags each emergency message with its delivery key and its copy id. A cancel of a receipt goes by the delivery key. Thus it also stops the repeats of a copy whose receipt the log does not have. A crash after a send and before its write is such a case. A stop of one copy goes by its copy id.
 
 The log keeps each copy on a channel that repeats, and its end. Thus a restart does not lose the stop of a hung copy (AL-32):
@@ -392,7 +399,18 @@ The assessment reads no clock, because the level is about the incident. The esca
 
 Each assessment has its reasons: the gate that stopped it, the class, the two lookups, the places and the rules. The UI shows them.
 
-The table becomes the calculation of AL-31. The calculation multiplies the probability that the event is real, the impact on the person and the urgency. It compares the result with the cost to interrupt the person at that time. The probabilities come from base rates that the event log measures, not from values that a person sets.
+The table becomes the calculation of AL-31. The calculation multiplies the probability that the event is real and the harm of the event. It compares the result with the cost to interrupt the person at that time. Each factor comes from a public measure, not from a value that a person sets.
+
+The shadow score (`shadowScore`) is the first step. It operates next to the table, and it does not decide a level:
+
+- The priors (`ScorePriors`, format `alerts-priors/1`) are data. For each prefix of a kind, they give the verified share of its warnings and the deaths and injuries of one event. For each CAP certainty value, they give a probability.
+- The probability of an observed event is that of the certainty `observed`. The probability of a warning is the verified share of its kind. The measure of the warnings decides over the certainty word of the sender. Each other incident gets the probability of its certainty.
+- For each field, the longest prefix of the kind with that field decides. A prefix ends at a dot, as in `hasKind`.
+- Each value has its interval. The score keeps the key of the priors that gave each factor, so the UI tells the source.
+- The expected harm (`expectedOf`) is the probability times the deaths, and the probability times the injuries. `mul` of `@mark1russell7/interval` rounds each interval outward. Thus the interval holds each exact product.
+- Each count of the priors is from 0 to `Number.MAX_SAFE_INTEGER`. Thus each product has a finite interval.
+- A factor that the priors do not give makes a score with no read. The score names each missing factor. It does not take 0 or a default value.
+- `assessWithShadow` adds the score as the last reason of an assessment with a reason of the table. The level and the other reasons stay those of `assess`. A seeded gate test holds this.
 
 ## The service
 
@@ -453,11 +471,13 @@ The runtime cannot tell the person that it stopped. A check of Healthchecks.io t
 
 - After each pass with no error, the hook pings the check. A ping of the same kind goes once in each 60 seconds. When the pings stop, Healthchecks.io alerts the owner: the process stopped, the computer stopped, or its network is down.
 - A pass in which a channel gave `auth`, `refused` or `rate-limited` to a send pings `/fail`, because then the system cannot tell the person.
-- A send that a channel gave `reserved` does not ping `/fail`. The channel keeps the last units of its quota for `life-safety`, thus it still tells the person of the highest level.
+- A pass with an overdue send pings `/fail`, whatever the kind of its failures. An overdue send is due, and it has no delivery `overdueAfter` after its due time. A reset or a server error that lasts thus also pings `/fail`.
+- `overdueLimit` gives `overdueAfter`: one pass limit and two full tries, each to its flight limit and its retry. It is 140 seconds for the instance. The due time comes from the log, thus a restart keeps it.
+- A send that a channel gave `reserved` does not ping `/fail`, and it is not overdue. The channel keeps the last units of its quota for `life-safety`, thus it still tells the person of the highest level.
 - The body of each ping also gives the state of the quota of each channel with a quota.
 - The fail of a channel holds until a send on the channel goes, or until the pass of the retry has no refusal on it. The delivery step sends a failed call again at the first pass at or after its `retryAt`. Thus the check does not go down and up at each retry.
 - The fail of a channel holds across a restart. At its first pass, the hook starts from `heldOf` of the log: each refusal with no later delivery on its channel in the log, with a retry after that pass. The order of the log decides, not the times. Thus a restart does not ping `success` while the channel refuses.
-- The body of a success ping gives the state of each source. The body of a fail ping gives the channel and the kind. No body holds a place, a person or the text of a failure.
+- The body of a success ping gives the state of each source. The body of a fail ping gives the channel and the kind, or the count of the overdue sends and the age of the oldest. No body holds a place, a person or the text of a failure.
 - The hook starts the ping and ends at once. One ping is in flight at a time, for 10 seconds or less. A failed ping goes to the log, and its text holds no ping URL. The next pass pings again.
 - The key `HEALTHCHECKS_PING_URL` of `secrets.env` gives the ping URL, with `https`. The profile `daemon` does not start without it.
 - `heartbeatGap` gives the longest time between two success pings: the period of the pings, two pass limits, the longest wait of the loop and the ping limit. Each failed pass adds a pass limit and a wait. The check lets one failed pass go.

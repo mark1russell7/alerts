@@ -6,7 +6,6 @@
 import type {
   Area,
   Category,
-  Certainty,
   CorrelationKey,
   MapProblem,
   MapResult,
@@ -22,13 +21,13 @@ import type {
 import { categoryOf, Problems, reportId } from "@mark1russell7/alerts";
 import {
   CAP_CATEGORIES,
-  CAP_CERTAINTY,
   CAP_NOT_ALERTS,
   CAP_OPERATIONS,
   CAP_RESPONSES,
   CAP_SEVERITY,
   CAP_STATUS,
   CAP_URGENCY,
+  capCertainty,
   capCircle,
   capPolygon,
   capTime,
@@ -237,7 +236,7 @@ function mapAlert(alert: CapAlert, observation: Observation, languages: readonly
     categories,
     severity: capValue<Severity>(info?.severity, CAP_SEVERITY, "unknown", `${at}.severity`, problems),
     urgency: capValue<Urgency>(info?.urgency, CAP_URGENCY, "unknown", `${at}.urgency`, problems),
-    certainty: capValue<Certainty>(info?.certainty, CAP_CERTAINTY, "unknown", `${at}.certainty`, problems),
+    certainty: capCertainty(info?.certainty, `${at}.certainty`, problems),
     response,
     sent,
     received: observation.fetched,

@@ -254,6 +254,9 @@ importers:
       '@mark1russell7/geo':
         specifier: ^0.2.1
         version: 0.2.1
+      '@mark1russell7/interval':
+        specifier: ^0.1.0
+        version: 0.1.0
       '@mark1russell7/optional':
         specifier: ^1.2.0
         version: 1.2.0
@@ -978,6 +981,10 @@ packages:
   '@mark1russell7/geo@0.2.1':
     resolution: {integrity: sha512-T/DB8810mppYuWHAQ43Sy0sE/dQWse9vlr8bHGt+8QXk6ZMJS4eZ+t5qUGC4Wf0PcFKulhg43VLcQKZcRVtNvg==}
     engines: {node: '>=22.12'}
+
+  '@mark1russell7/interval@0.1.0':
+    resolution: {integrity: sha512-gxOyU9JQ4ikiomiisbOmNPwwKuOtWqQ6hPWcJANOWvIipjwQu2aYOvCeLokYpMEoCEhJHoY5FxzBGpn/mbgx+A==}
+    engines: {node: '>=22'}
 
   '@mark1russell7/optional@1.2.0':
     resolution: {integrity: sha512-vS5jF21WC/VApRv4p8afRZahcMl9cuNp03LxbVngY9nYkzq+S7Oit6ksySt2baML+tp46UF60sxnHxn1jlwtTg==}
@@ -2375,6 +2382,8 @@ snapshots:
     dependencies:
       '@mark1russell7/optional': 1.2.0
       '@mark1russell7/predicates': 0.1.2
+
+  '@mark1russell7/interval@0.1.0': {}
 
   '@mark1russell7/optional@1.2.0': {}
 

@@ -10,7 +10,8 @@ import { CANARY_PATH, createNwsSource } from "@mark1russell7/alerts-source-nws-a
 import { quotaGate, type Exchange, type Transport } from "polite-crawler/api";
 import { DEFAULT_POLICY } from "polite-crawler/politeness";
 import { afterEach, describe, expect, it } from "vitest";
-import { DAEMON_CHECK, INSTANCE_CHANNELS, INSTANCE_CHECK, INSTANCE_SOURCES, INSTANCE_TIMES, instanceProblems, openInstance, PING_URL_KEY, SOURCE_POLICY, sourcePace, USER_AGENT_NAME, type Instance, type InstanceOptions } from "./instance.ts";
+import { DAEMON_CHECK, DELIVERY_TIMES, INSTANCE_CHANNELS, INSTANCE_CHECK, INSTANCE_SOURCES, INSTANCE_TIMES, instanceProblems, openInstance, PING_URL_KEY, SOURCE_POLICY, sourcePace, USER_AGENT_NAME, type Instance, type InstanceOptions } from "./instance.ts";
+import { overdueLimit } from "./delivery.ts";
 import type { ShapeOutcome } from "./shapes.ts";
 import { nextFetch } from "./view.ts";
 import { openRuntimeLog, type RuntimeLog } from "./log.ts";
@@ -453,6 +454,15 @@ describe("the check of the instance", () => {
     expect(DAEMON_CHECK.channels).toBe(INSTANCE_CHECK.channels);
     expect(DAEMON_CHECK.problems(parsed, store(SECRETS))).toEqual([`The file secrets.env has no ${PING_URL_KEY}. The live instance needs its outside heartbeat.`]);
     expect(DAEMON_CHECK.problems(parsed, store({ ...SECRETS, [PING_URL_KEY]: "https://hc-ping.example/test" }))).toEqual([]);
+  });
+});
+
+describe("the delivery times of the instance", () => {
+  it("gives a send as overdue after one pass limit and two full tries: 140 s, well inside an outage of 10 minutes", () => {
+    expect(DELIVERY_TIMES.overdueAfter).toBe(overdueLimit({ passLimit: INSTANCE_TIMES.passLimit, flightLimit: DELIVERY_TIMES.flightLimit, retry: DELIVERY_TIMES.retry }));
+    expect(DELIVERY_TIMES.overdueAfter).toBe(140_000);
+    // A send of a healthy channel ends within one pass limit and one flight. It is not overdue.
+    expect(DELIVERY_TIMES.overdueAfter).toBeGreaterThan(INSTANCE_TIMES.passLimit + DELIVERY_TIMES.flightLimit + DELIVERY_TIMES.retry);
   });
 });
 
