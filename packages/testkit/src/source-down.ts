@@ -19,6 +19,7 @@
  *   of `polite-crawler` and two intervals of the source.
  */
 import { DEFAULT_COVERAGE_POLICY, type HealthState } from "@mark1russell7/alerts";
+import { delay, wallClock } from "@mark1russell7/algebra/clock";
 import { openRuntime, openRuntimeLog, SOURCE_POLICY, sourcePace, type RuntimeOptions } from "@mark1russell7/alerts-runtime";
 import { CANARY_PATH, createNwsSource, NWS_DESCRIPTOR, SOURCE_ID } from "@mark1russell7/alerts-source-nws-api";
 import { type Fault, faultPlanOf } from "@mark1russell7/rigor-chaos";
@@ -112,67 +113,18 @@ export function faultsOf(arm: DownArm, settings: DownSettings = CASE_5_SETTINGS)
 /** The clock of the case. The runtime reads `now` and `after`. The scheduler of `polite-crawler` reads `now` and `sleep`. */
 export type CaseClock = RuntimeOptions["clock"] & PoliteClock;
 
-/** A timer of the fast clock: the function that stops it, and the function that lets the process end before it. */
-interface FastTimer {
-  readonly stop: () => void;
-  readonly unref: () => void;
-}
-
 /**
- * This function gives a clock that moves `speed` times faster than real time, from the time `start` since the epoch. Each
- * timer ends after `ms / speed` real milliseconds. The clock is local until `@mark1russell7/algebra/clock` has a fast clock.
+ * This function gives the clock of a case: the scaled wall clock of `@mark1russell7/algebra/clock`, from the instant `start`.
+ * The clock moves `speed` times faster than real time. A timer that the platform fires early waits again.
  */
-export function fastClock(start: number, speed: number): CaseClock {
-  if (!Number.isFinite(speed) || speed < 1) throw new RangeError(`The speed ${String(speed)} is not a finite number of 1 or more.`);
-  const origin = performance.now();
-  const now = (): number => start + Math.floor((performance.now() - origin) * speed);
-  // A timer of Node.js keeps whole milliseconds and can fire before `performance.now()` gets to its end. Thus the timer
-  // starts again until `now()` gets to the target, and a wait never ends before its time on this clock.
-  const timerOf = (ms: number, fire: () => void): FastTimer => {
-    const target = now() + Math.max(0, ms);
-    let unrefed = false;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const arm = (): void => {
-      const left = target - now();
-      if (left <= 0) {
-        timer = undefined;
-        fire();
-        return;
-      }
-      timer = setTimeout(arm, Math.max(1, left / speed));
-      if (unrefed) timer.unref();
-    };
-    // The first timer also goes through `setTimeout`, thus `fire` never runs before the caller has the timer.
-    timer = setTimeout(arm, Math.max(0, ms) / speed);
-    return {
-      stop: () => clearTimeout(timer),
-      unref: () => {
-        unrefed = true;
-        timer?.unref();
-      },
-    };
-  };
+export function caseClock(start: number, speed: number): CaseClock {
+  const wall = wallClock({ start, speed });
   return {
-    // The time starts at an instant (`Date.now()` in the case), thus this clock is a wall clock.
     time: "wall",
-    now,
-    after: (ms, run) => {
-      const timer = timerOf(ms, run);
-      return Object.assign(timer.stop, { unref: timer.unref });
-    },
-    sleep: (ms, signal) =>
-      new Promise<void>((resolve) => {
-        if (signal?.aborted === true) return resolve();
-        const stop = (): void => {
-          timer.stop();
-          resolve();
-        };
-        const timer = timerOf(ms, () => {
-          signal?.removeEventListener("abort", stop);
-          resolve();
-        });
-        signal?.addEventListener("abort", stop, { once: true });
-      }),
+    now: () => wall.now(),
+    after: (ms, run) => wall.after(ms, run),
+    // The function `delay` rejects when the signal aborts. A sleep of `polite-crawler` ends early with no error.
+    sleep: (ms, signal) => delay(wall, ms, signal).catch(() => undefined),
   };
 }
 
@@ -277,7 +229,7 @@ export async function runDownArm(arm: DownArm, settings: DownSettings = CASE_5_S
   const proxy =
     behind === undefined ? undefined : await startFaultProxy({ target: { host: behind.host, port: behind.port }, plan: faultPlanOf(faultsOf(arm, settings)), protocol: "http" });
   const start = Date.now();
-  const clock = fastClock(start, settings.speed);
+  const clock = caseClock(start, settings.speed);
   const counts: RouteCounts = { direct: 0, faulty: 0, canary: 0 };
   const transport = outageTransport({
     inner: fetchTransport({ userAgent: USER_AGENT }),
