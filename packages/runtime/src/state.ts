@@ -14,6 +14,7 @@ import {
   type Acknowledgment,
   type Cursor,
   type Delivery,
+  type EscalationStart,
   type HealthOptions,
   type HealthTrack,
   type Instant,
@@ -49,6 +50,8 @@ export interface RuntimeState {
   readonly lines: SystemLines;
   /** The keys of the deliveries with no more repeats, sorted. */
   readonly cancelled: readonly string[];
+  /** The start of each escalation, in the order of the log. */
+  readonly starts: readonly EscalationStart[];
 }
 
 /** The state before the first event. */
@@ -60,6 +63,7 @@ export const EMPTY_RUNTIME: RuntimeState = {
   cursors: {},
   lines: NO_SYSTEM_LINES,
   cancelled: [],
+  starts: [],
 };
 
 /** This function adds one event to the state. */
@@ -125,6 +129,8 @@ function foldRest(state: RuntimeState, event: RuntimeEvent, context: FoldContext
     }
     case "system":
       return { ...base, lines: addSystemReports(state.lines, event.reports, event.observations) };
+    case "escalation":
+      return { ...base, starts: [...state.starts, event.start] };
     case "cancelled":
       return state.cancelled.includes(event.delivery) ? base : { ...base, cancelled: [...state.cancelled, event.delivery].sort(compare) };
     default:
