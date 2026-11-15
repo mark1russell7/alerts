@@ -264,8 +264,8 @@ importers:
         specifier: ^0.0.5
         version: 0.0.5
       polite-crawler:
-        specifier: ^0.6.1
-        version: 0.6.1
+        specifier: ^0.6.2
+        version: 0.6.2
     devDependencies:
       '@mark1russell7/cue':
         specifier: ^2.0.0
@@ -1311,8 +1311,8 @@ packages:
     resolution: {integrity: sha512-qcJu88Q2IWqJsDD529JKMdwGm/dvInW4HvQnRwiH9JtihJvzGOscDtHE3x1pBKeUOTysQ8kVmLnJ2kJu7yhcGA==}
     engines: {node: '>=12'}
 
-  polite-crawler@0.6.1:
-    resolution: {integrity: sha512-zxMCuyNTzkWFfVOtpXXgncBOQNQfksnCoHQwI3VSQ3YeOVHTNoE/39wRpSTbPc8cpQT6bdGkdHhLZBHaslhHiQ==}
+  polite-crawler@0.6.2:
+    resolution: {integrity: sha512-rSi0ys/yNGX63ow6YkEEzBbvhRu0pu9rsi8L7Eo1E+7ep3Z5BOnq3U/LukVr88BHOb+tPXN89qQgRUUin+QC+w==}
     engines: {node: '>=22.19'}
     hasBin: true
     peerDependencies:
@@ -1711,6 +1711,8 @@ snapshots:
       '@mark1russell7/algebra': 0.8.5
       '@mark1russell7/optional': 1.2.0
       '@mark1russell7/rigor-statistics': 0.1.29
+    transitivePeerDependencies:
+      - zod
 
   '@mark1russell7/conventions@0.41.5':
     dependencies:
@@ -2304,7 +2306,7 @@ snapshots:
 
   picomatch@4.0.7: {}
 
-  polite-crawler@0.6.1:
+  polite-crawler@0.6.2:
     dependencies:
       '@mozilla/readability': 0.6.0
       linkedom: 0.18.15

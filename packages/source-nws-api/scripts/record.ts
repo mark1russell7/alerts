@@ -6,13 +6,11 @@
  * Start it in the folder of the package: `pnpm record`. The option `--avoid=<prefixes>` keeps the
  * alerts with a UGC code that starts with one of the prefixes out of the fixtures. The owner of an
  * instance uses it to keep the regions of the instance out of the public repository.
- *
- * TODO(AL-8): polite-crawler 0.6.2 gives `fetchTransport`. Then the script uses it in place of `transport`.
  */
 
 import { mkdir, writeFile } from "node:fs/promises";
-import { send, type Reply, type Transport } from "polite-crawler/api";
-import { HostScheduler } from "polite-crawler/politeness";
+import { fetchTransport, send, type Reply } from "polite-crawler/api";
+import { HostScheduler, realClock } from "polite-crawler/politeness";
 
 const BASE_URL = "https://api.weather.gov";
 const USER_AGENT = "alerts-dev-fixtures";
@@ -52,27 +50,8 @@ type Feature = {
   };
 };
 
-const transport: Transport = async (exchange, signal) => {
-  const response = await fetch(exchange.url, {
-    method: exchange.method,
-    headers: exchange.headers,
-    redirect: "manual",
-    ...(signal === undefined ? {} : { signal }),
-  });
-  const headers: Record<string, string> = {};
-  response.headers.forEach((value, name) => (headers[name.toLowerCase()] = value));
-  return { status: response.status, statusText: response.statusText, headers, body: await response.text() };
-};
-
-const clock = {
-  now: (): number => Date.now(),
-  sleep: (ms: number, signal?: AbortSignal): Promise<void> =>
-    new Promise((resolve) => {
-      const timer = setTimeout(resolve, ms);
-      signal?.addEventListener("abort", () => (clearTimeout(timer), resolve()), { once: true });
-    }),
-};
-const pace = { scheduler: new HostScheduler(clock, 1), now: clock.now };
+const transport = fetchTransport({ userAgent: USER_AGENT });
+const pace = { scheduler: new HostScheduler(realClock, 1), now: realClock.now };
 
 async function get(path: string): Promise<Feature[]> {
   const answer = await send(pace, transport, {
@@ -80,7 +59,7 @@ async function get(path: string): Promise<Feature[]> {
     host: new URL(BASE_URL).host,
     minIntervalMs: 2000,
     what: path,
-    exchange: { method: "GET", url: `${BASE_URL}${path}`, headers: { accept: "application/geo+json", "user-agent": USER_AGENT }, body: null },
+    exchange: { method: "GET", url: `${BASE_URL}${path}`, headers: { accept: "application/geo+json" }, body: null },
   });
   const reply: Reply = answer.reply;
   if (answer.classified.outcome !== "ok") throw new Error(`${path}: ${String(reply.status)} ${reply.statusText}`);

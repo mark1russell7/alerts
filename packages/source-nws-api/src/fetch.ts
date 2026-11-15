@@ -5,7 +5,7 @@
 
 import { observationId, type Cursor, type FetchFailure, type FetchOutcome, type Instant, type Observation, type Watch } from "@mark1russell7/alerts";
 import { errorMessage } from "@mark1russell7/text";
-import { ApiError, send, type Answer, type Exchange, type Pace, type Reply, type Transport } from "polite-crawler/api";
+import { ApiError, poll, type Answer, type Condition, type Exchange, type Pace, type Reply, type Transport } from "polite-crawler/api";
 
 import { SOURCE_ID } from "./map.ts";
 
@@ -172,8 +172,9 @@ type QueryResult = { readonly ok: true; readonly read: Read } | { readonly ok: f
  * This function makes the fetch function of the NWS API source. The fetch does not throw for a
  * failure of the source: it gives `{ ok: false }`. It throws only when the signal of the caller aborts.
  *
- * TODO(AL-8): polite-crawler 0.6.2 gives `poll` with ETag requests. Then the fetch keeps the last
- * answer of each query, and a 304 answer costs no body. Until then, each fetch reads the full list.
+ * Each query is a conditional GET (`poll` of polite-crawler), with the ETag and the date of the last
+ * full answer of its URL. A 304 answer has no body. Then the query gives the observations of the
+ * last full answer again, unchanged. No message is new, so the log gets no new fact.
  */
 export function createNwsFetch(options: NwsFetchOptions): (input: NwsFetchInput, signal?: AbortSignal) => Promise<FetchOutcome> {
   // A loop, not a pattern with `\/+$`: that pattern takes quadratic time on a text with many slashes (CodeQL js/polynomial-redos)
@@ -184,6 +185,10 @@ export function createNwsFetch(options: NwsFetchOptions): (input: NwsFetchInput,
   const host = new URL(baseUrl).host;
   const timeoutMs = options.timeoutMs ?? 15_000;
   const now = options.pace.now;
+  // One store of conditions, because each query sends the same accept header
+  const conditions = new Map<string, Condition>();
+  // The read of the last full answer of each URL. A 304 answer gives it again.
+  const lastRead = new Map<string, Read>();
 
   async function query(path: string, signal: AbortSignal | undefined): Promise<QueryResult> {
     const url = `${baseUrl}${path}`;
@@ -208,9 +213,10 @@ export function createNwsFetch(options: NwsFetchOptions): (input: NwsFetchInput,
     };
     let answer: Answer;
     try {
-      answer = await send(
+      answer = await poll(
         options.pace,
         timed,
+        conditions,
         { source: SOURCE_ID, host, minIntervalMs: options.minIntervalMs ?? 1000, what: `the alerts ${path}`, exchange },
         signal,
       );
@@ -220,11 +226,22 @@ export function createNwsFetch(options: NwsFetchOptions): (input: NwsFetchInput,
       const message = error instanceof ApiError ? error.message : errorMessage(error);
       return { ok: false, failure: { kind: "network", message } };
     }
+    if (answer.classified.outcome === "not-modified") {
+      const previous = lastRead.get(url);
+      if (previous !== undefined) return { ok: true, read: previous };
+      // A 304 with no earlier full answer: the next request of the URL sends no condition
+      conditions.delete(url);
+      return { ok: false, failure: { kind: "network", message: `a 304 answer with no earlier full answer: ${url}` } };
+    }
     if (answer.classified.outcome !== "ok") return { ok: false, failure: failureOf(answer) };
     const read = readAnswer(answer.reply, url, now(), latency);
     if (read === undefined) {
+      // poll keeps the condition of each 2xx answer. A body that does not parse must not be the base of a later 304.
+      conditions.delete(url);
+      lastRead.delete(url);
       return { ok: false, failure: { kind: "network", message: `truncated or malformed body: ${url}` } };
     }
+    lastRead.set(url, read);
     return { ok: true, read };
   }
 
