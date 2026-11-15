@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json.schemastore.org/package",
+  "name": "@mark1russell7/alerts-runtime",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.test.json",
+    "start": "node src/main.ts"
+  },
+  "dependencies": {
+    "@mark1russell7/alerts": "workspace:*",
+    "@mark1russell7/algebra": "^0.8.7",
+    "@mark1russell7/service": "^0.8.12",
+    "@mark1russell7/sqlite": "^0.2.6",
+    "@mark1russell7/text": "^0.0.5"
+  },
+  "devDependencies": {
+    "@mark1russell7/cue": "^2.0.0",
+    "@mark1russell7/rigor-generators": "^0.1.16",
+    "@types/node": "^26.6.5",
+    "@vitest/coverage-v8": "^5.0.3",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.3"
+  }
+}

@@ -1,9 +1,10 @@
 import { random, seedsFrom } from "@mark1russell7/rigor-generators";
 import { describe, expect, it } from "vitest";
 import { assess } from "./assess.ts";
-import type { Coverage, HealthState, Incident, PersonId, PersonWatch, PlaceId, Report, ReportId, SourceDescriptor, SourceHealth, SourceId, WatchedPlace } from "./contracts.ts";
+import type { Coverage, HealthState, Incident, Observation, PersonId, PersonWatch, PlaceId, Report, ReportId, SourceDescriptor, SourceHealth, SourceId, WatchedPlace } from "./contracts.ts";
+import type { Lateness } from "./lateness.ts";
 import { incidents, normalize } from "./merge.ts";
-import { gapGrade, NO_SYSTEM_LINES, SOURCE_SUBJECT, SYSTEM_SOURCE, systemReports, threats, type SystemLines, type SystemSnapshot } from "./system-reports.ts";
+import { addSystemReports, gapGrade, NO_SYSTEM_LINES, SOURCE_SUBJECT, SYSTEM_SOURCE, systemReports, threats, type SystemLines, type SystemSnapshot } from "./system-reports.ts";
 
 const SEEDS = seedsFrom(process.env["SEED"], [1, 2, 3, 4, 5, 6, 7, 8]);
 const TORNADO = "met.tornado";
@@ -192,22 +193,29 @@ describe("the properties of the fold", () => {
     const r = random(seed);
     let lines: SystemLines = NO_SYSTEM_LINES;
     const all: Report[] = [];
+    const observations: Observation[] = [];
     for (let step = 0; step < 120; step += 1) {
       const health = sources.filter(() => r.chance(0.8)).map((source) => ({ source: source.id, state: r.pick(states), since: step, reason: "" }));
       const coverage = [KANSAS, TEXAS].flatMap((place) =>
         [TORNADO, "met.winter"].filter(() => r.chance(0.5)).map((kind) => gap({ place: place.id, kind, independent: r.int(0, 2), proven: r.chance(0.9) })),
       );
-      const input = snapshot({ sources, health, coverage, threats: r.chance(0.3) ? [{ place: KANSAS.id, kind: TORNADO }] : [] });
+      const late: Lateness[] = r.chance(0.3)
+        ? [{ expectation: "a-to-b", from: "a" as SourceId, to: "b" as SourceId, state: "late", limit: 60_000, missed: [`report:${r.int(0, 3)}` as ReportId], since: step }]
+        : [];
+      const input = snapshot({ sources, health, coverage, lateness: late, threats: r.chance(0.3) ? [{ place: KANSAS.id, kind: TORNADO }] : [] });
       const before = lines;
       const result = systemReports(lines, input, step * 1_000);
       const label = `seed ${seed} step ${step}`;
+      // The reports and their observations give the lines again, so the runtime rebuilds them from its log.
+      expect(addSystemReports(before, result.reports, result.observations), label).toEqual(result.lines);
+      observations.push(...result.observations);
       // Each update and cancel references the last key of its line, and an alert starts a line.
       for (const report of result.reports) {
         const name = report.key.slice(0, report.key.lastIndexOf("#"));
         expect(report.references, label).toEqual(report.op === "alert" ? [] : [before.open[name]!.key]);
       }
       // The open lines are the conditions of the snapshot.
-      const down = health.filter((entry) => ["failing", "silent", "changed"].includes(entry.state)).length;
+      const down = health.filter((entry) => ["failing", "silent", "changed"].includes(entry.state)).length + late.length;
       const short = coverage.filter((entry) => !entry.proven || entry.independent < entry.required).length;
       expect(Object.keys(result.lines.open), label).toHaveLength(down + short);
       // The same snapshot again gives no report.
@@ -219,5 +227,13 @@ describe("the properties of the fold", () => {
       expect(live, label).toHaveLength(down + short);
     }
     expect(new Set(all.map((report) => report.key)).size).toBe(all.length);
+    // All the reports in one call give the last lines. A report of another source changes nothing.
+    const other = { ...all[0]!, source: "a" as SourceId, key: "other#999" };
+    expect(addSystemReports(NO_SYSTEM_LINES, [...all, other], observations)).toEqual(lines);
+  });
+
+  it("throws for a system report with no observation, because then the log is not complete", () => {
+    const step = systemReports(NO_SYSTEM_LINES, snapshot({ health: [healthOf("failing")] }), 1_000);
+    expect(() => addSystemReports(NO_SYSTEM_LINES, step.reports, [])).toThrow(/has no observation/);
   });
 });
