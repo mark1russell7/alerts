@@ -28,12 +28,12 @@ const codeKey = (code: RegionCode): string => `${code.system}:${code.code.trim()
 /** This function compares two region codes: by the system, and then by the code. */
 const byCode = (a: RegionCode, b: RegionCode): number => compareCodes(a.system, b.system) || compareCodes(a.code, b.code);
 
-/** This function gives the codes of the areas of the live incidents, once each, in the order of the system and the code. */
+/** This function gives the codes of the areas of the live incidents in capitals, once each, in the order of the system and the code. */
 export function liveCodes(incidents: readonly Incident[]): RegionCode[] {
   const codes = new Map<string, RegionCode>();
   for (const incident of incidents) {
     if (!incident.live) continue;
-    for (const area of incident.areas) if (area.type === "code") codes.set(codeKey(area), { system: area.system, code: area.code });
+    for (const area of incident.areas) if (area.type === "code") codes.set(codeKey(area), { system: area.system, code: area.code.trim().toUpperCase() });
   }
   return [...codes.values()].sort(byCode);
 }
@@ -65,7 +65,7 @@ export interface InstanceShapes {
    * of the code. A region is a zone or a county, and its code is the UGC code.
    */
   basemap(): readonly MapRegion[];
-  /** This function waits for the end of the refresh in progress. It never throws. */
+  /** This function waits for the end of the refresh in progress. It does not throw. */
   idle(): Promise<void>;
   /** This function stops the refresh in progress, waits for its end, and closes the cache of the store. */
   close(): Promise<void>;

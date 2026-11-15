@@ -85,6 +85,13 @@ describe("the store of the shapes", () => {
     expect(store.lookup({ system: "same", code: "020173" })).toBe(store.lookup({ system: "ugc", code: "ksc173" }));
     expect(store.lookup({ system: "ugc", code: "KSC173" })).toHaveLength(1);
     expect(store.basemap("XX")).toEqual([]);
+    // A SAME code gives the region of its county, with the UGC code of the county.
+    const sedgwick = store.region({ system: "same", code: "020173" });
+    expect(sedgwick).toMatchObject({ code: { system: "ugc", code: "KSC173" }, name: "Sedgwick" });
+    expect(sedgwick?.shapes).toBe(store.lookup({ system: "ugc", code: "KSC173" }));
+    expect(store.region({ system: "ugc", code: "ksz083" })?.code).toEqual({ system: "ugc", code: "KSZ083" });
+    expect(store.region({ system: "ugc", code: "TXC167" })).toBeUndefined();
+    expect(store.region({ system: "state", code: "KS" })).toBeUndefined();
     // The next task is the refresh of the first list, after 7 days.
     expect(result.next).toBe(store.nextDue(KANSAS));
     expect(result.next).toBeGreaterThan(T0 + 7 * DAY - 1);

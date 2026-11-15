@@ -5,10 +5,13 @@ import { dirname, join } from "node:path";
 import { fakeClock, type FakeClock, type WallClock } from "@mark1russell7/algebra/clock";
 import { CONFIG_FORMAT, parseConfig, type AlertConfig, type ChannelId, type EscalationPolicy, type PersonId, type PlaceId, type SecretLookup, type SourceId } from "@mark1russell7/alerts";
 import { PUSHOVER_TIMEOUT_MS, type PushoverChannelOptions } from "@mark1russell7/alerts-channel-pushover";
+import { memoryCache, type ShapeCache } from "@mark1russell7/alerts-shapes-nws";
 import { CANARY_PATH } from "@mark1russell7/alerts-source-nws-api";
 import type { Exchange, Transport } from "polite-crawler/api";
 import { afterEach, describe, expect, it } from "vitest";
-import { INSTANCE_CHANNELS, INSTANCE_TIMES, openInstance, USER_AGENT, type Instance } from "./instance.ts";
+import { INSTANCE_CHANNELS, INSTANCE_TIMES, openInstance, USER_AGENT, type Instance, type InstanceOptions } from "./instance.ts";
+import type { ShapeOutcome } from "./shapes.ts";
+import { nextFetch } from "./view.ts";
 import { openRuntimeLog, type RuntimeLog } from "./log.ts";
 
 // The Flood Warning was sent at 14:54 UTC on 2026-11-14, and it expires at 06:00 UTC on 2026-11-15.
@@ -138,7 +141,7 @@ afterEach(() => {
 });
 
 /** This function opens an instance. The limit `"interval"` keeps the default limit of each fetch: the interval of the source. */
-function open(secret: SecretLookup = store(SECRETS), config: AlertConfig = CONFIG, delay = 0, fetchLimit: number | "interval" = TEST_FETCH_LIMIT) {
+function open(secret: SecretLookup = store(SECRETS), config: AlertConfig = CONFIG, delay = 0, fetchLimit: number | "interval" = TEST_FETCH_LIMIT, more: Partial<InstanceOptions> = {}) {
   // The entry reads the configuration so: a refused parse stops the start before the instance.
   const parsed = parseConfig(JSON.stringify(config), INSTANCE_CHANNELS, secret);
   if (parsed.tag === "err") throw new Error(parsed.error.join("\n"));
@@ -150,7 +153,7 @@ function open(secret: SecretLookup = store(SECRETS), config: AlertConfig = CONFI
   const wall: WallClock = { time: "wall", now: () => clock.now(), after: (ms, run) => clock.after(ms, run) };
   const net = network(delay);
   const server = pushoverServer();
-  const instance: Instance = openInstance({ config: parsed.value, secret, log, clock, wall, transport: net.transport, pushover: server.fetch, run: "run-1", ...(fetchLimit === "interval" ? {} : { fetchLimit: () => fetchLimit }) });
+  const instance: Instance = openInstance({ config: parsed.value, secret, log, clock, wall, transport: net.transport, pushover: server.fetch, run: "run-1", ...(fetchLimit === "interval" ? {} : { fetchLimit: () => fetchLimit }), ...more });
   return { instance, clock, net, server };
 }
 
@@ -205,6 +208,36 @@ describe("openInstance", () => {
       expect(text).not.toContain(String(LONGITUDE));
       expect(text).not.toContain(String(LATITUDE));
     }
+  });
+
+  it("gets the outlines of the state of the place after a pass, at the pace and with the User-Agent of the instance", async () => {
+    const outcomes: ShapeOutcome[] = [];
+    let closed = 0;
+    const cache = memoryCache();
+    const counted: ShapeCache = { ...cache, close: () => (closed += 1) };
+    const { instance, clock, net } = open(store(SECRETS), CONFIG, 0, TEST_FETCH_LIMIT, { shapes: counted, onShapes: (outcome) => outcomes.push(outcome) });
+    const pass = await finish(clock, instance.runtime.pass());
+    await finish(clock, instance.shapes.idle());
+    const zones = net.exchanges.filter((exchange) => new URL(exchange.url).pathname.startsWith("/zones"));
+    expect(zones.map((exchange) => exchange.url)).toContain("https://api.weather.gov/zones?area=TX&type=county");
+    for (const exchange of zones) expect(exchange.headers["user-agent"]).toBe(USER_AGENT);
+    // The refresh starts after the pass, and it starts no request that can end after the next fetch of a source.
+    const next = Math.min(...instance.runtime.config.sources.map((source) => nextFetch(instance.runtime.state(), source)));
+    expect(clock.now()).toBeLessThanOrEqual(next);
+    expect(pass.fetched).toEqual(["nws-api", "ipaws"]);
+    expect(outcomes).toHaveLength(1);
+    expect(outcomes[0]?.ok).toBe(true);
+    await instance.shapes.close();
+    expect(closed).toBe(1);
+  });
+
+  it("gets no outline without a cache of shapes", async () => {
+    const { instance, clock, net } = open();
+    await finish(clock, instance.runtime.pass());
+    await instance.shapes.idle();
+    expect(net.exchanges.filter((exchange) => new URL(exchange.url).pathname.startsWith("/zones"))).toEqual([]);
+    expect(instance.shapes.basemap()).toEqual([]);
+    expect(instance.shapes.lookup({ system: "ugc", code: "TXC311" })).toBeUndefined();
   });
 
   it("gives the loop the times of the sources and of the channel", async () => {
