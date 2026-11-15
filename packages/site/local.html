@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="robots" content="noindex">
+<title>alerts: the live map</title>
+<meta name="description" content="The live map of the alert runtime on this computer: the incidents, their levels and the watched places.">
+<script>
+  // The theme before the first paint: the choice of the visitor, else the theme of the system.
+  try { const t = localStorage.getItem("theme"); if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; } catch {}
+</script>
+<link rel="stylesheet" href="./src/style.css">
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="./local.html">alerts</a>
+  <nav aria-label="Page">
+    <button id="theme" class="theme" type="button" aria-label="Change the theme"><span aria-hidden="true">◐</span></button>
+  </nav>
+</header>
+
+<main class="local">
+  <div class="local-head">
+    <h1>The live map</h1>
+    <p id="read" class="read" aria-live="polite">Reading the runtime.</p>
+  </div>
+  <p id="problem" class="problem" role="alert" hidden></p>
+
+  <div class="board">
+    <section class="panel map-panel" aria-labelledby="map-h">
+      <h2 id="map-h">Map</h2>
+      <div id="map" class="map-box"></div>
+      <ul class="legend" aria-label="The parts of the map">
+        <li><span class="swatch level-life-safety"></span>Life-safety</li>
+        <li><span class="swatch level-urgent"></span>Urgent</li>
+        <li><span class="swatch level-notice"></span>Notice</li>
+        <li><span class="swatch level-digest"></span>Digest</li>
+        <li><span class="swatch level-none"></span>No person</li>
+        <li><span class="swatch gap"></span>Coverage gap</li>
+      </ul>
+      <p class="hint">The map uses no tiles from another server. The shapes come from the runtime on this computer.</p>
+    </section>
+
+    <section class="panel" aria-labelledby="incidents-h">
+      <h2 id="incidents-h">Live incidents</h2>
+      <p class="hint">The highest level is first. Select an incident to show it on the map.</p>
+      <div id="incidents"></div>
+      <div id="unshaped"></div>
+    </section>
+  </div>
+</main>
+
+<script type="module" src="./src/local.ts"></script>
+</body>
+</html>

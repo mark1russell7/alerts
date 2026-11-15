@@ -410,10 +410,10 @@ summary:focus-visible,
   cursor: pointer;
 }
 
-.map .incident.level-life-safety { --tone: var(--ls); }
-.map .incident.level-urgent { --tone: var(--urgent); }
-.map .incident.level-notice { --tone: var(--notice); }
-.map .incident.level-digest { --tone: var(--digest); }
+.map .incident.level-life-safety, .map .place.level-life-safety { --tone: var(--ls); }
+.map .incident.level-urgent, .map .place.level-urgent { --tone: var(--urgent); }
+.map .incident.level-notice, .map .place.level-notice { --tone: var(--notice); }
+.map .incident.level-digest, .map .place.level-digest { --tone: var(--digest); }
 
 .map .incident .area {
   fill: var(--tone);
@@ -500,6 +500,7 @@ summary:focus-visible,
 .swatch.level-life-safety { border-color: var(--ls); background: color-mix(in srgb, var(--ls) 35%, transparent); }
 .swatch.level-urgent { border-color: var(--urgent); background: color-mix(in srgb, var(--urgent) 35%, transparent); }
 .swatch.level-notice { border-color: var(--notice); background: color-mix(in srgb, var(--notice) 35%, transparent); }
+.swatch.level-digest { border-color: var(--digest); background: color-mix(in srgb, var(--digest) 35%, transparent); }
 
 /* The chips, the lanes and the cards */
 
@@ -899,6 +900,99 @@ summary:focus-visible,
   background: none;
 }
 
+/* The live map of the local page */
+
+main.local {
+  max-width: 76rem;
+}
+
+.local-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0 1rem;
+}
+
+.local-head h1 {
+  margin: 0.5rem 0;
+  font-size: 1.75rem;
+}
+
+.read {
+  margin: 0 0 0.5rem;
+  color: var(--quiet);
+  font-size: 0.875rem;
+}
+
+.problem {
+  margin: 0 0 1rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--urgent);
+  border-left-width: 0.3rem;
+  border-radius: 0.5rem;
+  background: color-mix(in srgb, var(--urgent) 10%, transparent);
+}
+
+.panel h2 {
+  margin: 0 0 0.25rem;
+  font-size: 1.05rem;
+}
+
+.map .incident:focus-visible {
+  outline: 3px solid var(--link);
+}
+
+.map .place {
+  --tone: var(--none);
+}
+
+.map .place .outline {
+  fill: none;
+  stroke: var(--tone);
+  stroke-width: 5;
+  stroke-dasharray: 2 9;
+  stroke-linecap: round;
+}
+
+.map .place-label {
+  fill: var(--ink);
+  font: 650 26px system-ui, sans-serif;
+  paint-order: stroke;
+  stroke: var(--page);
+  stroke-width: 7px;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+.map .place-label.outlined { text-anchor: middle; }
+.map .place-label.left { text-anchor: end; }
+.map .gap.short { stroke: var(--urgent); }
+
+.map .map-empty {
+  fill: var(--quiet);
+  font: 28px system-ui, sans-serif;
+  text-anchor: middle;
+}
+
+.unshaped .codes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.75rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.unshaped .code-system {
+  color: var(--quiet);
+  font-size: 0.8rem;
+}
+
+#incidents + #unshaped:not(:empty) {
+  margin-top: 1rem;
+}
+
 @media (max-width: 60rem) {
   .board,
   .sources {
@@ -907,6 +1001,20 @@ summary:focus-visible,
 }
 
 @media (max-width: 36rem) {
+  /* The map is approximately 0.3 of its view box here. Larger labels and pins stay readable. */
+  .map .place-label {
+    font-size: 44px;
+    stroke-width: 10px;
+  }
+
+  .live-map .pin circle {
+    r: 20px;
+  }
+
+  .map .gap.short {
+    r: 44px;
+  }
+
   .player {
     flex-direction: column;
     align-items: stretch;
