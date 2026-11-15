@@ -406,6 +406,9 @@ describe("the round trip of real values", () => {
     holds(sourceDescriptorSchema, { ...DESCRIPTOR, listing: "snapshot" });
     fails(sourceDescriptorSchema, { ...DESCRIPTOR, listing: "stream" });
     holds(channelDescriptorSchema, CHANNEL);
+    holds(channelDescriptorSchema, { ...CHANNEL, maxInFlight: 2 });
+    fails(channelDescriptorSchema, { ...CHANNEL, maxInFlight: 0 });
+    fails(channelDescriptorSchema, { ...CHANNEL, maxInFlight: 1.5 });
     holds(observationSchema, OBSERVATION);
     holds(reportSchema, WARNING);
     holds(mapResultSchema, { reports: [WARNING], problems: [{ path: "features[3].properties.onset", message: "The onset is not a date.", fatal: false }] });

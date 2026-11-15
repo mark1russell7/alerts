@@ -303,6 +303,11 @@ Each failed send with no answer adds a copy. Thus an outage of the channel adds 
 - On a channel that is down, each step sends only the first ready stop: the probe. The other stops wait. Thus an outage costs one stop at each retry.
 - A failed stop goes to the end of the order. Thus the next probe is another copy, and one bad copy does not hold the others.
 - After a good probe, the other stops go at the next step. The step wakes the loop, and the next step comes within one retry.
+- The wait before the next probe starts at the retry. It doubles after each failed probe, up to `probeLimit` (60 seconds by default).
+- A good answer of a down channel to a send, a poll or a cancel moves its next probe to the next step. Thus the stops go soon after an outage.
+- A channel with `maxInFlight` in its descriptor gets no more calls in progress at the same time. Pushover sets 2, from the rules of its API.
+- A call that has no free place waits for a later step. The end of a call wakes the loop.
+- A call keeps its place until it ends or its flight limit passes. Thus a hung call does not hold its place for all time.
 
 The Pushover channel tags each emergency message with its delivery key and its copy id. A cancel of a receipt goes by the delivery key. Thus it also stops the repeats of a copy whose receipt the log does not have. A crash after a send and before its write is such a case. A stop of one copy goes by its copy id.
 
