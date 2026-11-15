@@ -103,7 +103,7 @@ The default of `failAfter` is 2 fetches, and the default of `staleAfter` is 3 in
 
 The health is a pure fold. `observeFetch` adds one record, and `advanceHealth` moves the time. Each step gives the changes of state as transitions, and the time of its next timer in `wakeAt`. A replay of the transitions against the document finds each change that the document does not permit. Tests replay random records, and compare each state with a direct calculation from the records.
 
-Each change of state is a system report.
+A source that is down is a system report. The section [System reports](#system-reports) tells the rules.
 
 The system uses two kinds of independence, and keeps them apart:
 
@@ -121,10 +121,36 @@ The cell is the copy of the system on one machine. Its internet link, its power 
 
 The coverage has these parts:
 
-- `independent`: the smallest count of outside failure domains whose faults stop each source of the kind that is up. At 2 or more, no single outside fault stops the coverage. The policy asks for 2 or more for each life-safety kind, and 1 for each other kind. A smaller count is a system report: `urgent` at one, `life-safety` at zero during a watch or a warning at the place.
+- `independent`: the smallest count of outside failure domains whose faults stop each source of the kind that is up. At 2 or more, no single outside fault stops the coverage. The policy asks for 2 or more for each life-safety kind, and 1 for each other kind. A smaller count is a system report: `urgent` for a life-safety kind, and `life-safety` at zero during a watch or a warning at the place.
 - `faults`: the domains of that smallest set. The report names them. A source with no domain in `dependsOn` gets its own domain `source:<id>`.
 - `proven`: the search of the smallest set ended. The count is a minimum hitting set, and `minimumHittingSet` of `@mark1russell7/collections/graph` calculates it exactly. When the search passes its budget, `proven` is false, and `coverageShort` gives true. A count that the search did not prove is not a pass.
 - `commonResources`: the cell resources that each of these sources uses. One fault of one of them stops all of these sources in this cell. The radio input and a second cell remove these common faults. The blindness formula of the design study uses them as the shared fault `c`.
+
+### System reports
+
+`systemReports(lines, snapshot, at)` makes the reports of the core. Each source in `DOWN_STATES` (`failing`, `silent` and `changed`) is a condition. Each coverage that `coverageShort` finds is a condition. Each condition is a line of CAP reports with the status `system` and the source `system`:
+
+- The start of a condition gives an `alert`.
+- A change of its facts gives an `update`. The update references the last key of the line. A new count in the reason of the health is not a fact, so it gives no update.
+- The end of the condition gives a `cancel`, an all clear. A later start gives a new line, because the level already sent of a line only grows.
+- The state of the fold is data: the open lines and the count of the reports. An equal snapshot gives no report.
+- Tests hold the open lines against the conditions over random snapshots, and through the merge.
+
+Each report has an observation: the canonical JSON of its facts. The log keeps it, as it keeps the observations of the sources.
+
+A health report has no area. Its subject is `{ system: "alerts.source", id: <source id> }`. So it goes only to a person who watches that subject in `PersonWatch.subjects`. Its kind is `system.health.<state>`, and it gets `notice` at most.
+
+A coverage report has the area of the watched place, `{ type: "place", place }`. So it goes to each person who watches that place. Its kind is `system.coverage.<kind>`. Its severity and urgency come from the gap:
+
+| Gap | Severity, urgency | Life-safety kind | Other kind |
+| --- | --- | --- | --- |
+| No independent source during a watch or a warning of the kind at the place | `extreme`, `immediate` | `life-safety` | `notice` |
+| Fewer independent sources than the policy needs | `severe`, `expected` | `urgent` | `notice` |
+| A count that the search did not prove | `moderate`, `expected` | `notice` | `notice` |
+
+`threats(incidents, places)` gives the watches and the warnings. A threat is a live incident with the status `actual` at a watched place. Its stage is `watch`, `warning` or absent. A report of the core has the status `system`, so it is not a threat.
+
+The assessment policy holds two system classes, and each class admits only the status `system`. A class can name its statuses. Else the statuses of the policy apply. The NWS kinds `system.test` and `system.admin` are not in these classes, so the policy statuses apply to them.
 
 ## The channel contract
 
@@ -214,11 +240,15 @@ The table becomes the calculation of AL-31. The calculation multiplies the proba
 
 The contracts carry only ids: `PersonId` and `PlaceId`. The runtime gets people, places, addresses and the night rule of each person from the private configuration.
 
+A person also watches subjects, other than places, in `PersonWatch.subjects`: a source of the system, a service or a cloud region. A watch with no id matches each subject of its system. A rule with places does not apply to a subject. The person who operates the system watches `{ system: "alerts.source" }`, and gets the health reports.
+
 The positions of the places do not go to a source. A source fetches by area, for example all the alerts of a state, and the core matches the places on the machine of the instance. So a `WatchedPlace` gives an adapter region codes and a buffer, and no name, no address and no position. A source that needs a position gets it only when the owner lets that source get it.
 
 The core matches the area of a report to a place with one rule for each source. A polygon or a circle comes first, with the buffer of the place. Else the region codes decide. Polygon math waits for its home, `@mark1russell7/geo`. Until then, the core matches by codes only.
 
-Two codes match when their systems and their values are equal. The first digit of a SAME code is a part of the county, and `0` is the full county. So a part also matches the full county, and the match errs on the safe side. An area with only shapes matches no place until `@mark1russell7/geo` has the tests. The assessment then gives the reason `no-codes`. The first sources, the NWS and IPAWS, give codes with each area.
+Two codes match when their systems and their values are equal. The first digit of a SAME code is a part of the county, and `0` is the full county. So a part also matches the full county, and the match errs on the safe side.
+
+The area `{ type: "place" }` covers that watched place only. Only the reports of the core use it. An area with only shapes matches no place until `@mark1russell7/geo` has the tests. The assessment then gives the reason `no-codes`. The first sources, the NWS and IPAWS, give codes with each area.
 
 ## Open points
 

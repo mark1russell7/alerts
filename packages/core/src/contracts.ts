@@ -115,7 +115,12 @@ export type Area =
   /** A circle on the ground. */
   | { readonly type: "circle"; readonly center: Position; readonly radiusKm: number }
   /** A region by its code. */
-  | ({ readonly type: "code" } & RegionCode);
+  | ({ readonly type: "code" } & RegionCode)
+  /**
+   * A watched place of the configuration. Only the reports of the core use it, for example a gap of
+   * the coverage at that place. An adapter does not know the places.
+   */
+  | { readonly type: "place"; readonly place: PlaceId };
 
 /** A thing that an event is about, other than a place: a service, a cloud region, a market. */
 export interface Subject {
@@ -634,11 +639,13 @@ export interface KindClass extends LevelTable {
   readonly id: string;
   /** The prefixes of the taxonomy codes of the class, for example `met.tornado`. */
   readonly kinds: readonly string[];
+  /** The statuses that can make a message of this class. Absent: the statuses of the policy. */
+  readonly statuses?: readonly Status[];
 }
 
 /** The data of the first assessment. A change of the policy is a change of data, not of code. */
 export interface AssessPolicy {
-  /** The statuses that can make a message. An incident with another status gets `none`. */
+  /** The statuses that can make a message, for each class with no statuses of its own. Another status gets `none`. */
   readonly statuses: readonly Status[];
   /** The classes, in order. The first class with a prefix of the kind applies. */
   readonly classes: readonly KindClass[];
@@ -673,11 +680,25 @@ export interface QuietWindow {
   readonly end: string;
 }
 
+/**
+ * A subject that a person watches, other than a place: a source of the system, a service, a cloud
+ * region. A watch with no id matches each subject of its system.
+ */
+export interface SubjectWatch {
+  readonly system: string;
+  readonly id?: string;
+}
+
 /** The places and the rules of one person. The private configuration gives them. */
 export interface PersonWatch {
   readonly person: PersonId;
   /** The places that the person watches. */
   readonly places: readonly PlaceId[];
+  /**
+   * The subjects that the person watches. The health reports of the sources have the subjects of
+   * the system `alerts.source`. So the person who operates the system watches `{ system: "alerts.source" }`.
+   */
+  readonly subjects?: readonly SubjectWatch[];
   /** The rules of the person, in order. */
   readonly rules: readonly LevelRule[];
   /** The quiet window of the person. When it is absent, no message is quiet. */
@@ -692,6 +713,8 @@ export type AssessReason =
   | { readonly kind: "status"; readonly status: Status }
   /** No place of the person is in the areas of the incident. */
   | { readonly kind: "no-place" }
+  /** The incident has no area, and the person watches no subject of the incident. */
+  | { readonly kind: "no-subject" }
   /**
    * The areas of the incident are shapes with no code. The core matches only codes until the home of
    * geography has the tests of shapes.
@@ -699,8 +722,10 @@ export type AssessReason =
   | { readonly kind: "no-codes" }
   /** The configuration has no watched place for this id of the person. */
   | { readonly kind: "unknown-place"; readonly place: PlaceId }
-  /** An area of the incident has a code of this place. */
+  /** An area of the incident covers this place. The codes are the codes of the place that the areas have. */
   | { readonly kind: "place"; readonly place: PlaceId; readonly codes: readonly RegionCode[] }
+  /** The person watches a subject of the incident. */
+  | { readonly kind: "subject"; readonly subject: SubjectWatch }
   /** The table gave this level. The class is absent for the table `otherwise`. */
   | {
       readonly kind: "table";
@@ -709,8 +734,11 @@ export type AssessReason =
       readonly byUrgency: AssessedLevel;
       readonly level: AssessedLevel;
     }
-  /** A rule of the person lowered the level at this place. The index is the position of the rule. */
-  | { readonly kind: "rule"; readonly place: PlaceId; readonly index: number; readonly max: AssessedLevel };
+  /**
+   * A rule of the person lowered the level at this place. The index is the position of the rule.
+   * The place is absent for a subject.
+   */
+  | { readonly kind: "rule"; readonly place?: PlaceId; readonly index: number; readonly max: AssessedLevel };
 
 /** The level of one incident for one person, with its reasons. */
 export interface Assessment {

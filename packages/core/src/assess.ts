@@ -12,10 +12,12 @@ import type {
   AssessReason,
   Assessment,
   Incident,
+  KindClass,
   LevelTable,
   PersonWatch,
   PlaceId,
   RegionCode,
+  SubjectWatch,
   WatchedPlace,
 } from "./contracts.ts";
 import { ASSESSED_LEVELS } from "./contracts.ts";
@@ -56,13 +58,45 @@ const OTHER_TABLE: LevelTable = {
 };
 
 /**
+ * The prefix of the kinds of the health reports of the core. The state follows it:
+ * `system.health.failing`. An adapter does not map a message to this prefix.
+ */
+export const HEALTH_KIND = "system.health";
+
+/**
+ * The prefix of the kinds of the coverage reports of the core. The covered kind follows it:
+ * `system.coverage.met.tornado`. An adapter does not map a message to this prefix.
+ */
+export const COVERAGE_KIND = "system.coverage";
+
+/** The table of the coverage of the kinds that can reach `life-safety`. */
+const COVERAGE_TABLE: LevelTable = {
+  severity: { extreme: "life-safety", severe: "urgent", moderate: "notice", minor: "digest", unknown: "urgent" },
+  urgency: { immediate: "life-safety", expected: "urgent", future: "notice", past: "digest", unknown: "urgent" },
+};
+
+/** The table of the other reports of the system. These reports reach `notice` at most. */
+const SYSTEM_TABLE: LevelTable = {
+  severity: { extreme: "notice", severe: "notice", moderate: "notice", minor: "digest", unknown: "notice" },
+  urgency: { immediate: "notice", expected: "notice", future: "digest", past: "digest", unknown: "notice" },
+};
+
+/**
  * The first policy. An incident is `life-safety` when its status is `actual` and its kind is in
  * `LIFE_SAFETY_KINDS`. Its severity must be `severe` or `extreme`, and its urgency must be
  * `immediate` or `expected`. A place of the person must be in its areas.
+ *
+ * The two system classes hold the reports of the core, and they admit only the status `system`. The
+ * coverage of a life-safety kind can reach `life-safety`. Each other report of the core reaches
+ * `notice` at most. The NWS kinds `system.test` and `system.admin` are not in these classes.
  */
 export const DEFAULT_ASSESS_POLICY: AssessPolicy = {
   statuses: ["actual"],
-  classes: [{ id: "life-safety", kinds: LIFE_SAFETY_KINDS, ...LIFE_SAFETY_TABLE }],
+  classes: [
+    { id: "life-safety", kinds: LIFE_SAFETY_KINDS, ...LIFE_SAFETY_TABLE },
+    { id: "system-coverage", kinds: LIFE_SAFETY_KINDS.map((kind) => `${COVERAGE_KIND}.${kind}`), statuses: ["system"], ...COVERAGE_TABLE },
+    { id: "system", kinds: [HEALTH_KIND, COVERAGE_KIND], statuses: ["system"], ...SYSTEM_TABLE },
+  ],
   otherwise: OTHER_TABLE,
 };
 
@@ -94,9 +128,22 @@ export interface TableResult {
   readonly level: AssessedLevel;
 }
 
+/** This function gives the first class of the policy with a prefix of a kind, or `undefined`. */
+export function classOf(policy: AssessPolicy, kind: string): KindClass | undefined {
+  return policy.classes.find((candidate) => hasKind(candidate.kinds, kind));
+}
+
+/**
+ * This function tells if the policy sends an incident of this status and kind. The class of the kind
+ * gives the statuses, else the policy gives them.
+ */
+export function admits(policy: AssessPolicy, incident: Pick<Incident, "status" | "kind">): boolean {
+  return (classOf(policy, incident.kind.code)?.statuses ?? policy.statuses).includes(incident.status);
+}
+
 /** This function gives the level of the table for an incident: the lower of its two lookups. */
 export function tableLevel(policy: AssessPolicy, incident: Pick<Incident, "kind" | "severity" | "urgency">): TableResult {
-  const found = policy.classes.find((candidate) => hasKind(candidate.kinds, incident.kind.code));
+  const found = classOf(policy, incident.kind.code);
   const table = found ?? policy.otherwise;
   const bySeverity = table.severity[incident.severity];
   const byUrgency = table.urgency[incident.urgency];
@@ -126,22 +173,37 @@ export interface PlaceMatch {
 
 /**
  * This function gives the places that the areas of an incident cover, in the order of the places.
- * It matches by codes only. The tests of polygons and circles with the buffer of a place wait for
- * the home of geography, `@mark1russell7/geo`. Until then, an area with no code covers no place.
+ * It matches by codes, and an area of a watched place covers that place. The tests of polygons and
+ * circles with the buffer of a place wait for the home of geography, `@mark1russell7/geo`. Until
+ * then, an area with only a shape covers no place.
  */
 export function matchPlaces(incident: Pick<Incident, "areas">, places: readonly WatchedPlace[]): PlaceMatch[] {
   const codes = incident.areas.flatMap((area) => (area.type === "code" ? [area] : []));
+  const ids = new Set(incident.areas.flatMap((area) => (area.type === "place" ? [area.place] : [])));
   return places.flatMap((place) => {
     const covered = place.codes.filter((code) => codes.some((area) => regionCovers(area, code)));
-    return covered.length > 0 ? [{ place: place.id, codes: covered }] : [];
+    return covered.length > 0 || ids.has(place.id) ? [{ place: place.id, codes: covered }] : [];
   });
 }
 
 /**
+ * This function gives the watches of a person that a subject of an incident matches, in the order
+ * of the watches. A watch with no id matches each subject of its system.
+ */
+export function matchSubjects(incident: Pick<Incident, "about">, watches: readonly SubjectWatch[]): SubjectWatch[] {
+  return watches.filter((watch) =>
+    incident.about.some((subject) => subject.system === watch.system && (watch.id === undefined || watch.id === subject.id)),
+  );
+}
+
+/**
  * This function gives the level of an incident for a person, with its reasons. The level is `none`
- * when the incident ended or when the policy does not send its status. It is also `none` when the
- * areas of the incident contain no place of the person. Else it is the highest level at the places of the person. At each place, the
- * first rule of the person that matches the place and the kind can lower the level of the table.
+ * when the incident ended, or when the policy does not send its status for its kind. It is also
+ * `none` when the incident has no place and no subject that the person watches.
+ *
+ * Else the level is the highest level at the matches of the person: each place in the areas, and
+ * each watched subject. At each match, the first rule of the person that matches can lower the
+ * level of the table. A rule with places does not match a subject.
  */
 export function assess(
   incident: Incident,
@@ -158,6 +220,7 @@ export function assess(
     else watched.push(place);
   }
   const matches = matchPlaces(incident, watched);
+  const subjects = matchSubjects(incident, person.subjects ?? []);
   const result = (level: AssessedLevel): Assessment => ({
     incident: incident.anchor,
     person: person.person,
@@ -169,33 +232,45 @@ export function assess(
     reasons.push({ kind: "ended" });
     return result("none");
   }
-  if (!policy.statuses.includes(incident.status)) {
+  if (!admits(policy, incident)) {
     reasons.push({ kind: "status", status: incident.status });
     return result("none");
   }
-  if (matches.length === 0) {
-    reasons.push({ kind: incident.areas.some((area) => area.type === "code") ? "no-place" : "no-codes" });
+  if (matches.length === 0 && subjects.length === 0) {
+    reasons.push({ kind: noMatch(incident) });
     return result("none");
   }
   const table = tableLevel(policy, incident);
   reasons.push({ kind: "table", ...table });
   let level: AssessedLevel = "none";
-  for (const match of matches) {
-    reasons.push({ kind: "place", place: match.place, codes: match.codes });
+  // The level at one match: the first rule that matches can lower the level of the table.
+  const atMatch = (place: PlaceId | undefined): AssessedLevel => {
     const index = person.rules.findIndex(
       (rule) =>
-        (rule.places === undefined || rule.places.includes(match.place)) &&
+        (rule.places === undefined || (place !== undefined && rule.places.includes(place))) &&
         (rule.kinds === undefined || hasKind(rule.kinds, incident.kind.code)),
     );
     const rule = person.rules[index];
-    let atPlace = table.level;
-    if (rule !== undefined && rank(rule.max) < rank(atPlace)) {
-      atPlace = rule.max;
-      reasons.push({ kind: "rule", place: match.place, index, max: rule.max });
-    }
-    level = higherLevel(level, atPlace);
+    if (rule === undefined || rank(rule.max) >= rank(table.level)) return table.level;
+    reasons.push(place === undefined ? { kind: "rule", index, max: rule.max } : { kind: "rule", place, index, max: rule.max });
+    return rule.max;
+  };
+  for (const match of matches) {
+    reasons.push({ kind: "place", place: match.place, codes: match.codes });
+    level = higherLevel(level, atMatch(match.place));
+  }
+  for (const subject of subjects) {
+    reasons.push({ kind: "subject", subject });
+    level = higherLevel(level, atMatch(undefined));
   }
   return result(level);
+}
+
+// The reason when the incident has no place and no subject of the person.
+function noMatch(incident: Pick<Incident, "areas" | "about">): "no-place" | "no-subject" | "no-codes" {
+  if (incident.areas.some((area) => area.type === "code" || area.type === "place")) return "no-place";
+  if (incident.areas.length === 0 && incident.about.length > 0) return "no-subject";
+  return "no-codes";
 }
 
 // A SAME code: a part digit, two digits of the state and three digits of the county.
