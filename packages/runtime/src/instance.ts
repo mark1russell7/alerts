@@ -28,6 +28,30 @@ export const PUSHOVER_TOKEN = "PUSHOVER_APP_TOKEN";
 export const PING_URL_KEY = "HEALTHCHECKS_PING_URL";
 
 /**
+ * The name of the optional key of `secrets.env` that holds the address of a second check: the loud
+ * check. Its integration makes a phone call to the person, and it shares no channel with the instance. The
+ * heartbeat sends each ping to the two checks. Without the key, nothing changes.
+ */
+export const LOUD_PING_URL_KEY = "HEALTHCHECKS_LOUD_PING_URL";
+
+/** One check of the outside heartbeat: the key of `secrets.env` and its address. */
+export interface PingTarget {
+  readonly key: typeof PING_URL_KEY | typeof LOUD_PING_URL_KEY;
+  readonly url: string;
+}
+
+/**
+ * This function gives the checks of the outside heartbeat from the secrets: the check of
+ * `HEALTHCHECKS_PING_URL`, then the loud check. A key with an empty value gives no check.
+ */
+export function pingTargets(secret: (key: string) => string | undefined): readonly PingTarget[] {
+  return ([PING_URL_KEY, LOUD_PING_URL_KEY] as const).flatMap((key): PingTarget[] => {
+    const url = secret(key) ?? "";
+    return url === "" ? [] : [{ key, url }];
+  });
+}
+
+/**
  * The name of the key of `secrets.env` that holds the key of the management API of Healthchecks.io. Only
  * the status of `install.ts` reads it. The runtime does not use it.
  */
@@ -39,6 +63,8 @@ export interface ChecksKeys {
   readonly key: string;
   /** The address of the outside heartbeat. */
   readonly url: string;
+  /** The address of the loud check, when `secrets.env` has one. */
+  readonly loudUrl?: string;
 }
 
 /**
@@ -50,7 +76,9 @@ export function checksKeys(file: FileText): Result<ChecksKeys, readonly string[]
   if (keys.tag === "err") return keys;
   const key = keys.value[CHECKS_KEY] ?? "";
   const url = keys.value[PING_URL_KEY] ?? "";
-  return key === "" || url === "" ? err([`The file ${SECRETS_FILE} needs ${CHECKS_KEY} and ${PING_URL_KEY} for this check.`]) : ok({ key, url });
+  const loudUrl = keys.value[LOUD_PING_URL_KEY] ?? "";
+  if (key === "" || url === "") return err([`The file ${SECRETS_FILE} needs ${CHECKS_KEY} and ${PING_URL_KEY} for this check.`]);
+  return ok(loudUrl === "" ? { key, url } : { key, url, loudUrl });
 }
 
 /** The name of the application in the User-Agent of each request. The NWS asks for a name and a contact. */

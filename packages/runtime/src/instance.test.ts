@@ -10,7 +10,7 @@ import { CANARY_PATH, createNwsSource } from "@mark1russell7/alerts-source-nws-a
 import { quotaGate, type Exchange, type Transport } from "polite-crawler/api";
 import { DEFAULT_POLICY } from "polite-crawler/politeness";
 import { afterEach, describe, expect, it } from "vitest";
-import { CHECKS_KEY, checksKeys, DAEMON_CHECK, DELIVERY_TIMES, INSTANCE_CHANNELS, INSTANCE_CHECK, INSTANCE_SOURCES, INSTANCE_TIMES, instanceProblems, openInstance, PING_URL_KEY, SOURCE_POLICY, sourcePace, USER_AGENT_NAME, type Instance, type InstanceOptions } from "./instance.ts";
+import { CHECKS_KEY, checksKeys, DAEMON_CHECK, DELIVERY_TIMES, INSTANCE_CHANNELS, INSTANCE_CHECK, INSTANCE_SOURCES, INSTANCE_TIMES, instanceProblems, LOUD_PING_URL_KEY, openInstance, PING_URL_KEY, pingTargets, SOURCE_POLICY, sourcePace, USER_AGENT_NAME, type Instance, type InstanceOptions } from "./instance.ts";
 import { overdueLimit } from "./delivery.ts";
 import type { ShapeOutcome } from "./shapes.ts";
 import { nextFetch } from "./view.ts";
@@ -427,6 +427,28 @@ describe("the keys of the status check", () => {
 
   it("gives the key of the management API and the ping URL of secrets.env", () => {
     expect(checksKeys({ text: `${CHECKS_KEY}=${KEY}\n${PING_URL_KEY}=${URL_OF_CHECK}\n` })).toEqual({ tag: "ok", value: { key: KEY, url: URL_OF_CHECK } });
+  });
+
+  it("gives the URL of the loud check when secrets.env has one, and no field for an empty value", () => {
+    const loud = `${URL_OF_CHECK}-loud`;
+    expect(checksKeys({ text: `${CHECKS_KEY}=${KEY}\n${PING_URL_KEY}=${URL_OF_CHECK}\n${LOUD_PING_URL_KEY}=${loud}\n` })).toEqual({
+      tag: "ok",
+      value: { key: KEY, url: URL_OF_CHECK, loudUrl: loud },
+    });
+    expect(checksKeys({ text: `${CHECKS_KEY}=${KEY}\n${PING_URL_KEY}=${URL_OF_CHECK}\n${LOUD_PING_URL_KEY}=\n` })).toEqual({ tag: "ok", value: { key: KEY, url: URL_OF_CHECK } });
+  });
+
+  it("gives the checks of the heartbeat: the check, then the loud check, and none for a missing or empty key", () => {
+    const loud = `${URL_OF_CHECK}-loud`;
+    const lookup = (values: Record<string, string>) => (key: string) => values[key];
+    expect(pingTargets(lookup({ [LOUD_PING_URL_KEY]: loud, [PING_URL_KEY]: URL_OF_CHECK }))).toEqual([
+      { key: PING_URL_KEY, url: URL_OF_CHECK },
+      { key: LOUD_PING_URL_KEY, url: loud },
+    ]);
+    expect(pingTargets(lookup({ [PING_URL_KEY]: URL_OF_CHECK }))).toEqual([{ key: PING_URL_KEY, url: URL_OF_CHECK }]);
+    expect(pingTargets(lookup({ [PING_URL_KEY]: URL_OF_CHECK, [LOUD_PING_URL_KEY]: "" }))).toEqual([{ key: PING_URL_KEY, url: URL_OF_CHECK }]);
+    expect(pingTargets(lookup({ [LOUD_PING_URL_KEY]: loud }))).toEqual([{ key: LOUD_PING_URL_KEY, url: loud }]);
+    expect(pingTargets(lookup({}))).toEqual([]);
   });
 
   it("gives a problem with no value and no path for a missing key, a bad line and a failed read", () => {

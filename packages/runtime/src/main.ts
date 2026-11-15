@@ -16,6 +16,7 @@
  *
  * The key `HEALTHCHECKS_PING_URL` of `secrets.env` gives the outside heartbeat (`heartbeat.ts`). The
  * profile `daemon` of the live instance does not start without it. Another profile starts with a warning.
+ * The optional key `HEALTHCHECKS_LOUD_PING_URL` gives a second check. The heartbeat sends each ping to it too.
  *
  * A bad `config.json` gives way to the last good copy `config.good.json` (`reload.ts`). In the profile
  * `daemon`, a change of the private files that passes the check stops the runtime. The supervisor starts it again.
@@ -35,7 +36,7 @@ import { alertsHome, configPath, envSecrets } from "./config.ts";
 import { heartbeat, heldOf, type PassSummary } from "./heartbeat.ts";
 import { channelQuota, quotaNote } from "./quota.ts";
 import { PROFILES, declare } from "./index.ts";
-import { DAEMON_CHECK, INSTANCE_CHECK, openInstance, PING_URL_KEY, userAgent } from "./instance.ts";
+import { DAEMON_CHECK, INSTANCE_CHECK, LOUD_PING_URL_KEY, openInstance, PING_URL_KEY, pingTargets, userAgent } from "./instance.ts";
 import { openRuntimeLog } from "./log.ts";
 import { GOOD_CONFIG_FILE, privateFiles, reloadHook, startConfig } from "./reload.ts";
 import { shapeReport, zoneCodesText } from "./shapes.ts";
@@ -79,21 +80,21 @@ async function runtime(): Promise<ServiceBuilder> {
   const pushoverReserveNotices = quotaGate(PUSHOVER_RESERVE_NOTICES, { key: "pushover:reserve-notices", store: quotas, now: () => wall.now() });
 
   // The outside heartbeat. Without it, a stop of this process is silent. The check of the profile daemon needs it.
-  const pingUrl = secret(PING_URL_KEY) ?? "";
-  if (pingUrl === "") console.warn(`The file secrets.env has no ${PING_URL_KEY}. This runtime has no outside heartbeat.`);
-  const beat =
-    pingUrl === ""
-      ? undefined
-      : heartbeat({
-          url: pingUrl,
-          fetch,
-          clock: wall,
-          userAgent: agent,
-          held: (at) => heldOf(instance.runtime.state(), at),
-          // The body of each ping tells the state of the quota. Thus the check shows the reserve.
-          notes: () => [quotaNote(channelQuota(PUSHOVER_CHANNEL, pushoverQuota))],
-          onError: (message) => console.error(redactSecrets(message, values)),
-        });
+  // Each check has its own hook. The hooks make the same pings, and a slow ping to one check does not hold the other.
+  const targets = pingTargets(secret);
+  if (!targets.some((target) => target.key === PING_URL_KEY)) console.warn(`The file secrets.env has no ${PING_URL_KEY}. This runtime has no outside heartbeat.`);
+  const beats = targets.map((target) =>
+    heartbeat({
+      url: target.url,
+      fetch,
+      clock: wall,
+      userAgent: agent,
+      held: (at) => heldOf(instance.runtime.state(), at),
+      // The body of each ping tells the state of the quota. Thus the check shows the reserve.
+      notes: () => [quotaNote(channelQuota(PUSHOVER_CHANNEL, pushoverQuota))],
+      onError: (message) => console.error(redactSecrets(target.key === LOUD_PING_URL_KEY ? `The loud check: ${message}` : message, values)),
+    }),
+  );
 
   // A change of the private files restarts the runtime. Only the profile daemon has a supervisor that starts it again.
   const reload =
@@ -110,10 +111,10 @@ async function runtime(): Promise<ServiceBuilder> {
         })
       : undefined;
   const onPass =
-    beat === undefined && reload === undefined
+    beats.length === 0 && reload === undefined
       ? undefined
       : (pass: PassSummary) => {
-          beat?.(pass);
+          for (const beat of beats) beat(pass);
           reload?.onPass();
         };
 

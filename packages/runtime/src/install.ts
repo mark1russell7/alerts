@@ -70,17 +70,12 @@ interface OutsideCheck {
 }
 
 /**
- * This function reads the check of the heartbeat through the management API of Healthchecks.io. The
+ * This function reads one check of the heartbeat through the management API of Healthchecks.io. The
  * check fails when its period plus its grace is shorter than the gap of two pings. The output holds no key and no URL.
  */
-async function outsideCheck(): Promise<OutsideCheck> {
+async function outsideCheck(key: string, url: string, secrets: readonly string[]): Promise<OutsideCheck> {
   const gap = heartbeatGap(INSTANCE_TIMES);
   const neededSeconds = Math.ceil(gap / 1000);
-  // The status reads secrets.env as the start does: a bad line is a problem, and no problem holds a value.
-  const keys = checksKeys(await readText(() => readFile(join(home, SECRETS_FILE), "utf8")));
-  if (keys.tag === "err") return { ok: false, neededSeconds, problem: keys.error.join(" ") };
-  const { key, url } = keys.value;
-  const secrets = [key, url];
   // The request has the User-Agent with no contact: the status reads no configuration.
   const exchange = checksRequest(key, USER_AGENT_NAME);
   try {
@@ -106,9 +101,15 @@ if (action === "install") {
   process.exitCode = report(await uninstallService(spec, ports, { discovery }));
 } else if (action === "status") {
   const readiness = await probeOnce(readinessProbe(), PROBE_TIMEOUT_MS, ports);
-  const heartbeat = await outsideCheck();
-  console.log(JSON.stringify({ task: await serviceStatus(spec, ports, { discovery }), readiness, heartbeat }, null, 2));
-  if (!readiness.ok || !heartbeat.ok) process.exitCode = 1;
+  // The status reads secrets.env as the start does: a bad line is a problem, and no problem holds a value.
+  const keys = checksKeys(await readText(() => readFile(join(home, SECRETS_FILE), "utf8")));
+  const neededSeconds = Math.ceil(heartbeatGap(INSTANCE_TIMES) / 1000);
+  const secrets = keys.tag === "ok" ? [keys.value.key, keys.value.url, ...(keys.value.loudUrl === undefined ? [] : [keys.value.loudUrl])] : [];
+  const heartbeat: OutsideCheck = keys.tag === "err" ? { ok: false, neededSeconds, problem: keys.error.join(" ") } : await outsideCheck(keys.value.key, keys.value.url, secrets);
+  // The loud check is optional. Without its key, the status has no field of it.
+  const loud = keys.tag === "ok" && keys.value.loudUrl !== undefined ? { loud: await outsideCheck(keys.value.key, keys.value.loudUrl, secrets) } : {};
+  console.log(JSON.stringify({ task: await serviceStatus(spec, ports, { discovery }), readiness, heartbeat, ...loud }, null, 2));
+  if (!readiness.ok || !heartbeat.ok || ("loud" in loud && !loud.loud.ok)) process.exitCode = 1;
 } else {
   console.error(`The action is one of: ${ACTIONS.join(", ")}.`);
   process.exitCode = 2;
