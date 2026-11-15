@@ -570,3 +570,100 @@ export interface MergeState {
   readonly deliveries: readonly Delivery[];
   readonly acks: readonly Acknowledgment[];
 }
+
+// =============================================================================
+// The assessment
+// =============================================================================
+
+/** The level of an incident for a person, or `none`: no message. */
+export type AssessedLevel = Level | "none";
+
+/** The order of the assessed levels, from the lowest. */
+export const ASSESSED_LEVELS: readonly AssessedLevel[] = ["none", ...LEVELS];
+
+/**
+ * The highest levels for the severity and for the urgency of an incident. The level of the table is the
+ * lower of the two values.
+ */
+export interface LevelTable {
+  readonly severity: Readonly<Record<Severity, AssessedLevel>>;
+  readonly urgency: Readonly<Record<Urgency, AssessedLevel>>;
+}
+
+/** A class of kinds with its own table, for example the kinds that can reach `life-safety`. */
+export interface KindClass extends LevelTable {
+  readonly id: string;
+  /** The prefixes of the taxonomy codes of the class, for example `met.tornado`. */
+  readonly kinds: readonly string[];
+}
+
+/** The data of the first assessment. A change of the policy is a change of data, not of code. */
+export interface AssessPolicy {
+  /** The statuses that can make a message. An incident with another status gets `none`. */
+  readonly statuses: readonly Status[];
+  /** The classes, in order. The first class with a prefix of the kind applies. */
+  readonly classes: readonly KindClass[];
+  /** The table of each kind that no class has. */
+  readonly otherwise: LevelTable;
+}
+
+/**
+ * A rule of a person: the highest level of the incidents of some kinds at some places. At each
+ * place, the first rule that matches the place and the kind applies. With no matching rule, the
+ * table level stays.
+ */
+export interface LevelRule {
+  /** The places of the rule. When it is absent, the rule applies at each place of the person. */
+  readonly places?: readonly PlaceId[];
+  /** The prefixes of the taxonomy codes of the rule. When it is absent, the rule applies to each kind. */
+  readonly kinds?: readonly string[];
+  readonly max: AssessedLevel;
+}
+
+/** The places and the rules of one person. The private configuration gives them. */
+export interface PersonWatch {
+  readonly person: PersonId;
+  /** The places that the person watches. */
+  readonly places: readonly PlaceId[];
+  /** The rules of the person, in order. */
+  readonly rules: readonly LevelRule[];
+}
+
+/** A reason of an assessment. The UI shows the reasons, so each level tells why. */
+export type AssessReason =
+  /** Each line of the incident is cancelled or expired. */
+  | { readonly kind: "ended" }
+  /** The policy does not send incidents of this status. */
+  | { readonly kind: "status"; readonly status: Status }
+  /** No place of the person is in the areas of the incident. */
+  | { readonly kind: "no-place" }
+  /**
+   * The areas of the incident are shapes with no code. The core matches only codes until the home of
+   * geography has the tests of shapes.
+   */
+  | { readonly kind: "no-codes" }
+  /** The configuration has no watched place for this id of the person. */
+  | { readonly kind: "unknown-place"; readonly place: PlaceId }
+  /** An area of the incident has a code of this place. */
+  | { readonly kind: "place"; readonly place: PlaceId; readonly codes: readonly RegionCode[] }
+  /** The table gave this level. The class is absent for the table `otherwise`. */
+  | {
+      readonly kind: "table";
+      readonly class?: string;
+      readonly bySeverity: AssessedLevel;
+      readonly byUrgency: AssessedLevel;
+      readonly level: AssessedLevel;
+    }
+  /** A rule of the person lowered the level at this place. The index is the position of the rule. */
+  | { readonly kind: "rule"; readonly place: PlaceId; readonly index: number; readonly max: AssessedLevel };
+
+/** The level of one incident for one person, with its reasons. */
+export interface Assessment {
+  /** The anchor of the incident at the time of the assessment. */
+  readonly incident: ReportId;
+  readonly person: PersonId;
+  readonly level: AssessedLevel;
+  /** The places of the person that the areas of the incident contain. */
+  readonly places: readonly PlaceId[];
+  readonly reasons: readonly AssessReason[];
+}
