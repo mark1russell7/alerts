@@ -1,3 +1,4 @@
+import { distanceKm, locatePoint } from "@mark1russell7/geo";
 import { random, seedsFrom, type Random } from "@mark1russell7/rigor-generators";
 import { describe, expect, it } from "vitest";
 import type {
@@ -8,6 +9,7 @@ import type {
   PersonId,
   PersonWatch,
   PlaceId,
+  Position,
   ReportId,
   Severity,
   Status,
@@ -28,6 +30,7 @@ import {
   regionCovers,
   tableLevel,
 } from "./assess.ts";
+import { assessmentSchema } from "./schemas.ts";
 
 const SEEDS = seedsFrom(process.env["SEED"], [1, 2, 3, 4, 5, 6, 7, 8]);
 
@@ -201,7 +204,7 @@ describe("the places", () => {
     ]);
   });
 
-  it("gives none, with the reason, when the areas are shapes with no code", () => {
+  it("gives none, with the reason, when the areas are shapes and no place has a position", () => {
     const ring = [[-97.5, 37.5], [-97.2, 37.5], [-97.2, 37.8], [-97.5, 37.5]] as const;
     const result = assess(incident({ areas: [{ type: "polygon", rings: [ring] }] }), person(), places);
     expect(result.level).toBe("none");
@@ -218,6 +221,102 @@ describe("the places", () => {
     const result = assess(incident(), person([], [missing, home]), places);
     expect(result.level).toBe("life-safety");
     expect(result.reasons[0]).toEqual({ kind: "unknown-place", place: missing });
+  });
+});
+
+describe("the shapes", () => {
+  // Made-up positions in the ocean near 0, 0, with the codes of Kansas. No position is a real place.
+  const square = [[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]] as const;
+  const polygon = { type: "polygon", rings: [square] } as const;
+  const placed = (at: Position, bufferKm: number): WatchedPlace => ({ ...(places[0] as WatchedPlace), at, bufferKm });
+  const point = (at: Position) => ({ lat: at[1], lon: at[0] });
+  // A position on the equator at a distance east of 0, 0.
+  const east = (km: number): Position => [km / ((6371.0088 * Math.PI) / 180), 0];
+  const byCode = { place: home, codes: [{ system: "ugc", code: "KSC173" }] };
+
+  it("matches a place in a polygon, with the distance 0", () => {
+    expect(matchPlaces({ areas: [polygon] }, [placed([0.5, 0.5], 0)])).toEqual([{ place: home, codes: [], distanceKm: 0 }]);
+    expect(matchPlaces({ areas: [polygon] }, [placed([1, 0.5], 0)])).toEqual([{ place: home, codes: [], distanceKm: 0 }]);
+  });
+
+  it("matches a place out of a polygon when the polygon is in the buffer of the place", () => {
+    const at: Position = [1.05, 0.5];
+    const gap = distanceKm(point(at), point([1, 0.5]));
+    const [match] = matchPlaces({ areas: [polygon] }, [placed(at, 6)]);
+    expect(match?.distanceKm).toBeCloseTo(gap, 3);
+    expect(gap).toBeGreaterThan(5);
+    expect(matchPlaces({ areas: [polygon] }, [placed(at, 5)])).toEqual([]);
+  });
+
+  it("keeps a match by codes when the shapes are far from a place with a position", () => {
+    const areas = [polygon, ...atHome];
+    expect(matchPlaces({ areas }, [placed([1.5, 0.5], 5)])).toEqual([byCode]);
+    const result = assess(incident({ areas }), person([], [home]), [placed([1.5, 0.5], 5)]);
+    expect(result).toMatchObject({ level: "life-safety", places: [home] });
+    expect(result.reasons.find((one) => one.kind === "place")).toEqual({ kind: "place", ...byCode });
+  });
+
+  it("gives the codes and the distance when the codes and a shape both match", () => {
+    expect(matchPlaces({ areas: [polygon, ...atHome] }, [placed([0.5, 0.5], 0)])).toEqual([{ ...byCode, distanceKm: 0 }]);
+  });
+
+  it("matches a place by the code of one block when the polygon of another block is far", () => {
+    // The first CAP block has a polygon, and the second block has only the code of a second county. The list of
+    // areas does not keep the blocks, so the polygon must not remove the place of the second block.
+    const second = { system: "ugc", code: "KSC015" } as const;
+    const place: WatchedPlace = { ...placed([5, 5], 5), codes: [second] };
+    expect(matchPlaces({ areas: [polygon, { type: "code", ...second }] }, [place])).toEqual([{ place: home, codes: [second] }]);
+  });
+
+  it("lets the codes decide for a place with no position", () => {
+    expect(matchPlaces({ areas: [polygon, ...atHome] }, places)).toEqual([byCode]);
+  });
+
+  it("matches a circle with its radius and the buffer of the place", () => {
+    const circle = { type: "circle", center: [0, 0], radiusKm: 10 } as const;
+    expect(matchPlaces({ areas: [circle] }, [placed(east(9), 0)])).toEqual([{ place: home, codes: [], distanceKm: 0 }]);
+    const [near] = matchPlaces({ areas: [circle] }, [placed(east(14), 5)]);
+    expect(near?.distanceKm).toBeCloseTo(4, 6);
+    expect(matchPlaces({ areas: [circle] }, [placed(east(16), 5)])).toEqual([]);
+  });
+
+  it("gives the distance to the nearest shape", () => {
+    const far = { type: "polygon", rings: [[[3, 0], [4, 0], [4, 1], [3, 1], [3, 0]]] } as const;
+    const at: Position = [1.05, 0.5];
+    const [match] = matchPlaces({ areas: [far, polygon] }, [placed(at, 10)]);
+    expect(match?.distanceKm).toBeCloseTo(distanceKm(point(at), point([1, 0.5])), 3);
+  });
+
+  it("adds no place for a shape that geo refuses, and keeps the match by codes", () => {
+    const broken = { type: "polygon", rings: [[[0, 0], [1, 0], [0, 0]]] } as const;
+    expect(matchPlaces({ areas: [broken, ...atHome] }, [placed([5, 5], 0)])).toEqual([byCode]);
+    expect(matchPlaces({ areas: [broken, polygon, ...atHome] }, [placed([5, 5], 0)])).toEqual([byCode]);
+    expect(matchPlaces({ areas: [broken] }, [placed([5, 5], 0)])).toEqual([]);
+    expect(matchPlaces({ areas: [broken, polygon] }, [placed([0.5, 0.5], 0)])).toEqual([{ place: home, codes: [], distanceKm: 0 }]);
+  });
+
+  it("matches an area of the place when the areas also have shapes", () => {
+    expect(matchPlaces({ areas: [polygon, { type: "place", place: home }] }, [placed([5, 5], 0)])).toEqual([{ place: home, codes: [] }]);
+  });
+
+  it("gives the distance in the reason of the assessment, and the schema accepts the assessment", () => {
+    const result = assess(incident({ areas: [polygon] }), person([], [home]), [placed([1.05, 0.5], 10)]);
+    expect(result.level).toBe("life-safety");
+    const reason = result.reasons.find((one) => one.kind === "place");
+    expect(reason).toMatchObject({ kind: "place", place: home, codes: [] });
+    expect(reason?.kind === "place" ? reason.distanceKm : undefined).toBeGreaterThan(5);
+    expect(assessmentSchema.safeParse(result).success).toBe(true);
+  });
+
+  it.each(SEEDS)("matches more places with a larger buffer, and a buffer of 0 matches the polygon (seed %i)", (seed) => {
+    const r = random(seed);
+    for (let round = 0; round < 200; round += 1) {
+      const at: Position = [r.range(-1, 2), r.range(-1, 2)];
+      const matched = (bufferKm: number): boolean => matchPlaces({ areas: [polygon] }, [placed(at, bufferKm)]).length === 1;
+      expect(matched(0)).toBe(locatePoint(point(at), { type: "Polygon", coordinates: [square] }) !== "outside");
+      const buffer = r.range(0, 200);
+      if (matched(buffer)) expect(matched(buffer * 2)).toBe(true);
+    }
   });
 });
 
