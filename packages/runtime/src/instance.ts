@@ -4,17 +4,18 @@
  * clocks and the transports. This module reads no file, no environment variable and no clock.
  */
 import { delay, type Clock, type WallClock } from "@mark1russell7/algebra/clock";
-import { localPlaces, sourceCovers, sourcePlaces, type ChannelDescriptor, type DelayLimitOptions, type ParsedConfig, type SecretLookup, type SourceDescriptor } from "@mark1russell7/alerts";
+import { localPlaces, sourceCovers, sourcePlaces, type ChannelDescriptor, type ParsedConfig, type SecretLookup, type SourceDescriptor } from "@mark1russell7/alerts";
 import { CHANNEL_ID, createPushoverChannel, isPushoverKey, pushoverDescriptor, PUSHOVER_REPEAT_MS, PUSHOVER_TIMEOUT_MS, type PushoverChannelOptions } from "@mark1russell7/alerts-channel-pushover";
 import { createIpawsSource, IPAWS_DESCRIPTOR, WEA_EXPECTATION } from "@mark1russell7/alerts-source-ipaws";
 import { createNwsSource, NWS_DESCRIPTOR } from "@mark1russell7/alerts-source-nws-api";
 import type { Pace, Transport } from "polite-crawler/api";
-import { HostScheduler } from "polite-crawler/politeness";
+import { DEFAULT_POLICY, HostScheduler, type PolitenessPolicy } from "polite-crawler/politeness";
 import { requireKey, type InstanceCheck } from "./config.ts";
 import type { DeliveryOptions } from "./delivery.ts";
 import type { RuntimeLog } from "./log.ts";
 import { createLoop, loopTimes, type LoopTimes, type RuntimeLoop } from "./loop.ts";
 import { openRuntime, type Pass, type Runtime, type RuntimeOptions } from "./runtime.ts";
+import { DELAY_LIMITS } from "./view.ts";
 
 /** The name of the secret that holds the API token of the Pushover application. */
 export const PUSHOVER_TOKEN = "PUSHOVER_APP_TOKEN";
@@ -22,18 +23,17 @@ export const PUSHOVER_TOKEN = "PUSHOVER_APP_TOKEN";
 /** The name of the key of `secrets.env` that holds the address of the outside heartbeat. */
 export const PING_URL_KEY = "HEALTHCHECKS_PING_URL";
 
-/**
- * The User-Agent of each request to a source. The NWS asks for the name of the application and a
- * contact. The contact is the page of the project, thus no request names a person.
- */
-export const USER_AGENT = "alerts-runtime (+https://github.com/mark1russell7/alerts)";
+/** The name of the application in the User-Agent of each request. The NWS asks for a name and a contact. */
+export const USER_AGENT_NAME = "alerts-runtime";
 
 /**
- * The quantile and the level of the two limits of each expectation. In normal work, 1 copy in 100 or
- * fewer comes after the limit of the delay. A run of misses makes a source late by chance in 1 case
- * in 20 or fewer.
+ * This function gives the User-Agent of each request of the instance: the name, and the contact of the
+ * operator when the configuration has one. Without a contact, no request names a person or an account.
  */
-export const DELAY_LIMITS: DelayLimitOptions = { quantile: 0.99, level: 0.95 };
+export const userAgent = (contact: string | undefined): string => (contact === undefined ? USER_AGENT_NAME : `${USER_AGENT_NAME} (+${contact})`);
+
+// The limits of the delays are in `view.ts`, because the measure of the IEM list reads them too.
+export { DELAY_LIMITS };
 
 /**
  * The descriptors of the channels of the instance. The loader of the configuration checks each
@@ -43,6 +43,25 @@ export const INSTANCE_CHANNELS: readonly ChannelDescriptor[] = [pushoverDescript
 
 /** The descriptors of the sources of the instance. The function `describe` of each source gives the same descriptor. */
 export const INSTANCE_SOURCES: readonly SourceDescriptor[] = [NWS_DESCRIPTOR, IPAWS_DESCRIPTOR];
+
+/**
+ * The politeness policy of the sources. After 5 failures in a row, a host stops for the longest step of the backoff, not for
+ * the hour of `DEFAULT_POLICY`. A stop of one hour hides each alert of that hour.
+ *
+ * - Each failure after the stop stops the host again. Thus a failed host gets one request in each 5 minutes, as at the end of the backoff.
+ * - After an outage, the health of a source comes up in the stop and two intervals. One interval is the wait for the next pass.
+ *   The other interval is the limit of a fetch.
+ */
+export const SOURCE_POLICY: PolitenessPolicy = { ...DEFAULT_POLICY, failureStopMs: DEFAULT_POLICY.backoffCapMs };
+
+/**
+ * This function gives the pace of the sources of an instance: one scheduler for `sources` hosts on the clocks of the
+ * instance, and `SOURCE_POLICY`. The pace of the sources reads the clocks of the instance, not the clock of polite-crawler.
+ */
+export function sourcePace(clock: Clock, wall: WallClock, sources: number): Pace & { readonly scheduler: HostScheduler } {
+  const scheduler = new HostScheduler({ now: () => wall.now(), sleep: (ms, signal) => delay(clock, ms, signal).catch(() => undefined) }, sources);
+  return { scheduler, now: () => wall.now(), policy: SOURCE_POLICY };
+}
 
 /** The channel stops its own call at this time limit. */
 const CALL_LIMIT = PUSHOVER_TIMEOUT_MS;
@@ -139,11 +158,9 @@ export interface Instance {
  */
 export function openInstance(options: InstanceOptions): Instance {
   const { clock, wall } = options;
-  // The pace of the sources reads the clocks of the instance, not the clock of polite-crawler.
   const factories = [createNwsSource, createIpawsSource] as const;
-  const scheduler = new HostScheduler({ now: () => wall.now(), sleep: (ms, signal) => delay(clock, ms, signal).catch(() => undefined) }, factories.length);
-  const pace: Pace = { scheduler, now: () => wall.now() };
-  const sources = factories.map((make) => make({ pace, transport: options.transport, userAgent: USER_AGENT }));
+  const pace = sourcePace(clock, wall, factories.length);
+  const sources = factories.map((make) => make({ pace, transport: options.transport, userAgent: userAgent(options.config.config.contact) }));
 
   const descriptors = sources.map((source) => source.describe());
   const kinds = [...new Set(descriptors.flatMap((descriptor) => descriptor.kinds))];

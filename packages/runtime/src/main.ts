@@ -30,7 +30,7 @@ import { writeFileAtomic } from "@procedures/fs/files";
 import { alertsHome, configPath, envSecrets } from "./config.ts";
 import { heartbeat, type PassSummary } from "./heartbeat.ts";
 import { PROFILES, declare } from "./index.ts";
-import { DAEMON_CHECK, INSTANCE_CHECK, openInstance, PING_URL_KEY, USER_AGENT } from "./instance.ts";
+import { DAEMON_CHECK, INSTANCE_CHECK, openInstance, PING_URL_KEY, userAgent } from "./instance.ts";
 import { openRuntimeLog } from "./log.ts";
 import { GOOD_CONFIG_FILE, privateFiles, reloadHook, startConfig } from "./reload.ts";
 import { supervisor } from "./supervise.ts";
@@ -55,19 +55,22 @@ async function runtime(): Promise<ServiceBuilder> {
   // A problem names the line and the key of a bad line, or the code of a read error. It holds no value and no path.
   const check = name === "daemon" ? DAEMON_CHECK : INSTANCE_CHECK;
   const files = privateFiles(home, configPath(process.env, process.cwd()));
-  const started = await startConfig(files, check, (path, text) => writeFileAtomic(path, text));
-  if (started.fallback.length > 0) console.error(`The file config.json has problems. The runtime uses the last good copy ${GOOD_CONFIG_FILE}:\n- ${started.fallback.join("\n- ")}`);
-  for (const note of started.notes) console.error(note);
-  const keys = started.keys;
+  const loaded = await startConfig(files, check, (path, text) => writeFileAtomic(path, text));
+  if (loaded.fallback.length > 0) console.error(`The file config.json has problems. The runtime uses the last good copy ${GOOD_CONFIG_FILE}:\n- ${loaded.fallback.join("\n- ")}`);
+  for (const note of loaded.notes) console.error(note);
+  const keys = loaded.keys;
   const values = Object.values(keys);
 
   const secret = envSecrets(keys);
   const wall = wallClock();
+  const config = loaded.parsed;
+  // Each request to the server of another party has this User-Agent.
+  const agent = userAgent(config.config.contact);
 
   // The outside heartbeat. Without it, a stop of this process is silent. The check of the profile daemon needs it.
   const pingUrl = secret(PING_URL_KEY) ?? "";
   if (pingUrl === "") console.warn(`The file secrets.env has no ${PING_URL_KEY}. This runtime has no outside heartbeat.`);
-  const beat = pingUrl === "" ? undefined : heartbeat({ url: pingUrl, fetch, clock: wall, userAgent: USER_AGENT, onError: (message) => console.error(redactSecrets(message, values)) });
+  const beat = pingUrl === "" ? undefined : heartbeat({ url: pingUrl, fetch, clock: wall, userAgent: agent, onError: (message) => console.error(redactSecrets(message, values)) });
 
   // A change of the private files restarts the runtime. Only the profile daemon has a supervisor that starts it again.
   const reload =
@@ -75,7 +78,7 @@ async function runtime(): Promise<ServiceBuilder> {
       ? reloadHook({
           files,
           check,
-          started: started.texts,
+          started: loaded.texts,
           restart: () => {
             console.error("The private files changed, and they pass the check. The runtime stops, and the supervisor starts it again.");
             void service.lifecycle?.shutdown("The private files changed.");
@@ -93,12 +96,12 @@ async function runtime(): Promise<ServiceBuilder> {
 
   const log = openRuntimeLog(join(home, "runtime.sqlite"));
   const instance = openInstance({
-    config: started.parsed,
+    config,
     secret,
     log,
     clock: realClock,
     wall,
-    transport: fetchTransport({ userAgent: USER_AGENT }),
+    transport: fetchTransport({ userAgent: agent }),
     pushover: fetch,
     run: randomUUID(),
     ...(onPass === undefined ? {} : { onPass }),

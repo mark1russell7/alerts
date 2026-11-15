@@ -110,6 +110,7 @@ import {
   healthStateSchema,
   incidentSchema,
   instantSchema,
+  isContactUrl,
   kindClassSchema,
   kindSchema,
   latenessLimitSchema,
@@ -670,6 +671,35 @@ describe("the private configuration", () => {
     expect(pathsOf(JSON.stringify(wrong))).toEqual(["places[0].bufferKm", "places[1].codes[0].code"]);
     // The form holds, and the load finds the secret that the store does not have.
     expect(problemsOf(JSON.stringify(CONFIG), () => undefined)).toEqual([expect.stringContaining("names the secret PUSHOVER_USER")]);
+  });
+
+  it("accepts only printable ASCII in a contact, with no space, no parenthesis and no backslash", () => {
+    const breaks = ["https://example.org/\r\nX: y", "https://example.org/\na", "https://example.org/\ta", "https://example.org/ a", "https://example.org/\u0000", "https://example.org/\u007f", "https://example.org/a)", "https://example.org/(a"];
+    // A header with a character after ASCII stops the fetch. A backslash escapes the parenthesis that ends the comment.
+    const others = ["https://exämple.org/", "https://example.org/\\", "mailto:operator@example.org "];
+    for (const text of [...breaks, ...others]) expect(isContactUrl(text)).toBe(false);
+    for (const text of ["https://example.org", "https://example.org/operator?topic=alerts", "HTTPS://alerts.example.org:8443/#contact", "mailto:operator@example.org", "mailto:a+b@example.org?subject=alerts"]) {
+      expect(isContactUrl(text)).toBe(true);
+    }
+  });
+
+  it("refuses a contact with no host, no address or another scheme", () => {
+    for (const text of ["https://", "https://localhost", "https://example.org@", "https:example.org", "http://example.org", "ftp://example.org", "mailto:operator", "mailto:@example.org", "example.org"]) {
+      expect(isContactUrl(text)).toBe(false);
+    }
+  });
+
+  it("accepts a contact of the operator as an https URL or a mailto URL, and refuses other forms with no quote of the value", () => {
+    holds(alertConfigSchema, { ...CONFIG, contact: "https://example.org/operator" });
+    holds(alertConfigSchema, { ...CONFIG, contact: "mailto:operator@example.org" });
+    const headerBreaks = ["https://example.org/\r\nX-PRIVATE: 1", "https://example.org/\tPRIVATE", "https://example.org/ PRIVATE", "mailto:PRIVATE@example.org\u0000", "mailto:PRIVATE@example.org\u007f"];
+    const comments = ["https://example.org/PRIVATE)", "https://example.org/(PRIVATE"];
+    for (const contact of ["http://example.org/PRIVATE", "PRIVATE@example.org", "", 7, ...headerBreaks, ...comments]) {
+      const problems = problemsOf(JSON.stringify({ ...CONFIG, contact }));
+      expect(problems).toHaveLength(1);
+      expect(problems[0]?.startsWith("contact: ")).toBe(true);
+      expect(problems[0]).not.toContain("PRIVATE");
+    }
   });
 
   it("gives no value of the configuration and no value of a secret in a problem", () => {

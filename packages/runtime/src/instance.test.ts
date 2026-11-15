@@ -3,17 +3,20 @@ import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fakeClock, type FakeClock, type WallClock } from "@mark1russell7/algebra/clock";
-import { CONFIG_FORMAT, parseConfig, type AlertConfig, type ChannelId, type EscalationPolicy, type PersonId, type PlaceId, type SecretLookup, type SourceId } from "@mark1russell7/alerts";
+import { CONFIG_FORMAT, parseConfig, type AlertConfig, type Watch, type ChannelId, type EscalationPolicy, type PersonId, type PlaceId, type SecretLookup, type SourceId } from "@mark1russell7/alerts";
 import { PUSHOVER_TIMEOUT_MS, type PushoverChannelOptions } from "@mark1russell7/alerts-channel-pushover";
-import { CANARY_PATH } from "@mark1russell7/alerts-source-nws-api";
+import { CANARY_PATH, createNwsSource } from "@mark1russell7/alerts-source-nws-api";
 import type { Exchange, Transport } from "polite-crawler/api";
+import { DEFAULT_POLICY } from "polite-crawler/politeness";
 import { afterEach, describe, expect, it } from "vitest";
-import { DAEMON_CHECK, INSTANCE_CHANNELS, INSTANCE_CHECK, INSTANCE_SOURCES, INSTANCE_TIMES, instanceProblems, openInstance, PING_URL_KEY, USER_AGENT, type Instance } from "./instance.ts";
+import { DAEMON_CHECK, INSTANCE_CHANNELS, INSTANCE_CHECK, INSTANCE_SOURCES, INSTANCE_TIMES, instanceProblems, openInstance, PING_URL_KEY, SOURCE_POLICY, sourcePace, USER_AGENT_NAME, type Instance } from "./instance.ts";
 import { openRuntimeLog, type RuntimeLog } from "./log.ts";
 
 // The Flood Warning was sent at 14:54 UTC on 2026-11-14, and it expires at 06:00 UTC on 2026-11-15.
 // The keepalive was sent at 22:44:55 UTC. Thus at T0 the warning is active, and the keepalive is recent.
 const T0 = Date.UTC(2026, 10, 14, 22, 50);
+/** The host of the NWS API. */
+const HOST = "api.weather.gov";
 const MINUTE = 60_000;
 const pushover = "pushover" as ChannelId;
 const person = "person-1" as PersonId;
@@ -194,17 +197,25 @@ describe("openInstance", () => {
     ]);
   });
 
-  it("names the project in the User-Agent of each request, and no request holds the position of a place", async () => {
+  it("gives no contact in the User-Agent without a contact in the configuration, and no request holds a position or an account", async () => {
     const { instance, clock, net } = await open();
     await finish(clock, instance.runtime.pass());
     const hosts = new Set(net.exchanges.map((exchange) => new URL(exchange.url).hostname));
     expect(hosts).toEqual(new Set(["api.weather.gov", "apps.fema.gov"]));
     for (const exchange of net.exchanges) {
-      expect(exchange.headers["user-agent"]).toBe(USER_AGENT);
+      expect(exchange.headers["user-agent"]).toBe(USER_AGENT_NAME);
       const text = JSON.stringify(exchange);
       expect(text).not.toContain(String(LONGITUDE));
       expect(text).not.toContain(String(LATITUDE));
+      expect(text).not.toContain("github.com");
     }
+  });
+
+  it("gives the contact of the configuration in the User-Agent of each request", async () => {
+    const { instance, clock, net } = await open(store(SECRETS), { ...CONFIG, contact: "mailto:operator@example.org" });
+    await finish(clock, instance.runtime.pass());
+    expect(net.exchanges.length).toBeGreaterThan(0);
+    expect(new Set(net.exchanges.map((exchange) => exchange.headers["user-agent"]))).toEqual(new Set(["alerts-runtime (+mailto:operator@example.org)"]));
   });
 
   it("gives the loop the times of the sources and of the channel", async () => {
@@ -280,5 +291,27 @@ describe("the check of the instance", () => {
     expect(DAEMON_CHECK.channels).toBe(INSTANCE_CHECK.channels);
     expect(DAEMON_CHECK.problems(parsed, store(SECRETS))).toEqual([`The file secrets.env has no ${PING_URL_KEY}. The live instance needs its outside heartbeat.`]);
     expect(DAEMON_CHECK.problems(parsed, store({ ...SECRETS, [PING_URL_KEY]: "https://hc-ping.example/test" }))).toEqual([]);
+  });
+});
+
+describe("sourcePace", () => {
+  it("stops a host after 5 failures for the longest step of the backoff, not for one hour", async () => {
+    const clock = fakeClock(T0);
+    const wall: WallClock = { time: "wall", now: () => clock.now(), after: (ms, run) => clock.after(ms, run) };
+    const pace = sourcePace(clock, wall, 1);
+    expect(pace.policy).toBe(SOURCE_POLICY);
+    expect(SOURCE_POLICY.failureStopMs).toBe(SOURCE_POLICY.backoffCapMs);
+    expect(SOURCE_POLICY.failureStopMs).toBeLessThan(DEFAULT_POLICY.failureStopMs);
+    const transport: Transport = async () => ({ status: 500, statusText: "Internal Server Error", headers: {}, body: "" });
+    const source = createNwsSource({ pace, transport, userAgent: USER_AGENT_NAME });
+    const watch: Watch = { places: [{ id: place, codes: [{ system: "state", code: "TX" }], bufferKm: 0 }] };
+    // Each fetch asks for the alerts of the state and for the canary. Each answer of HTTP 500 is one failure.
+    for (let fetch = 0; fetch < SOURCE_POLICY.maxFailures && pace.scheduler.stopOf(HOST) === undefined; fetch++) {
+      await finish(clock, source.fetch({ watch }));
+    }
+    const stop = pace.scheduler.stopOf(HOST);
+    expect(stop).toBeDefined();
+    expect((stop?.until ?? 0) - clock.now()).toBeGreaterThan(0);
+    expect((stop?.until ?? Number.POSITIVE_INFINITY) - clock.now()).toBeLessThanOrEqual(SOURCE_POLICY.backoffCapMs);
   });
 });
