@@ -4,16 +4,11 @@
  */
 
 import type { Area, SourceDescriptor } from "@mark1russell7/alerts";
-import { EVENT_CODES, PHENOMENA } from "@mark1russell7/alerts-format-nws";
+import { KIND_PREFIXES } from "@mark1russell7/alerts-format-nws";
 import { ORIGIN, SOURCE_ID } from "./map.ts";
 
 /** The countries and territories of the NWS, as ISO 3166 codes. */
 const COVERAGE: readonly Area[] = ["US", "PR", "GU", "AS", "VI", "MP"].map((code) => ({ type: "code", system: "iso3166", code }));
-
-/** The first parts of the taxonomy codes in the kind tables: the kinds that the source covers. */
-export const KIND_PREFIXES: readonly string[] = [
-  ...new Set([...Object.values(PHENOMENA), ...Object.values(EVENT_CODES)].map((hazard) => hazard.code.split(".", 1)[0] ?? "other")),
-].sort();
 
 /** The descriptor of the NWS API source. */
 export const NWS_DESCRIPTOR: SourceDescriptor = {
