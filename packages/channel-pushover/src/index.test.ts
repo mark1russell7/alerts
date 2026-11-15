@@ -1,7 +1,7 @@
 import type { Level, Message, PersonId, ReportId } from "@mark1russell7/alerts";
 import type { PushoverFetch } from "@procedures/notify/pushover";
 import { describe, expect, it } from "vitest";
-import { createPushoverChannel, cut, isQuotaRefusal, priorityOf, pushoverDescriptor, pushoverMessageOf } from "./index.ts";
+import { createPushoverChannel, cut, isPushoverKey, isQuotaRefusal, priorityOf, pushoverDescriptor, pushoverMessageOf } from "./index.ts";
 
 // Fake keys: 30 letters and digits, as Pushover keys are. No real key is in this repository.
 const TOKEN = "t".repeat(30);
@@ -113,6 +113,13 @@ describe("pushoverMessageOf", () => {
   it("refuses an address with no user key and a message that expired", () => {
     expect(pushoverMessageOf(message("notice"), {}, AT)).toEqual({ refused: "The address has no user key." });
     expect(pushoverMessageOf(message("notice", { expires: AT }), ADDRESS, AT)).toEqual({ refused: "The message expired before the send." });
+  });
+});
+
+describe("isPushoverKey", () => {
+  it("accepts 30 letters and digits, and nothing else", () => {
+    expect([TOKEN, USER, "aZ09".repeat(7) + "aZ"].map(isPushoverKey)).toEqual([true, true, true]);
+    expect([TOKEN.slice(1), TOKEN + "t", "t".repeat(29) + "-", " " + TOKEN.slice(1), "", undefined, 30].map(isPushoverKey)).toEqual(Array(7).fill(false));
   });
 });
 

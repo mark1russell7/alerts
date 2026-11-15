@@ -1,0 +1,147 @@
+/**
+ * This module makes the instance of the owner from the private configuration: the sources, the
+ * Pushover channel, the runtime and its loop. The entry `main.ts` reads the files, and it gives the
+ * clocks and the transports. This module reads no file, no environment variable and no clock.
+ */
+import { delay, type Clock, type WallClock } from "@mark1russell7/algebra/clock";
+import { loadConfig, localPlaces, sourceCovers, sourcePlaces, type AlertConfig, type DelayLimitOptions, type SecretLookup } from "@mark1russell7/alerts";
+import { CHANNEL_ID, createPushoverChannel, isPushoverKey, pushoverDescriptor, PUSHOVER_REPEAT_MS, PUSHOVER_TIMEOUT_MS, type PushoverChannelOptions } from "@mark1russell7/alerts-channel-pushover";
+import { createIpawsSource, WEA_EXPECTATION } from "@mark1russell7/alerts-source-ipaws";
+import { createNwsSource } from "@mark1russell7/alerts-source-nws-api";
+import type { Pace, Transport } from "polite-crawler/api";
+import { HostScheduler } from "polite-crawler/politeness";
+import type { DeliveryOptions } from "./delivery.ts";
+import type { RuntimeLog } from "./log.ts";
+import { createLoop, loopTimes, type RuntimeLoop } from "./loop.ts";
+import { openRuntime, type Pass, type Runtime } from "./runtime.ts";
+
+/** The name of the secret that holds the API token of the Pushover application. */
+export const PUSHOVER_TOKEN = "PUSHOVER_APP_TOKEN";
+
+/**
+ * The User-Agent of each request to a source. The NWS asks for the name of the application and a
+ * contact. The contact is the page of the project, thus no request names a person.
+ */
+export const USER_AGENT = "alerts-runtime (+https://github.com/mark1russell7/alerts)";
+
+/**
+ * The quantile and the level of the two limits of each expectation. In normal work, 1 copy in 100 or
+ * fewer comes after the limit of the delay. A run of misses makes a source late by chance in 1 case
+ * in 20 or fewer.
+ */
+export const DELAY_LIMITS: DelayLimitOptions = { quantile: 0.99, level: 0.95 };
+
+/** The options of `openInstance`. */
+export interface InstanceOptions {
+  /** The private configuration, after the check of its schema. */
+  readonly config: AlertConfig;
+  /** The secret store of the instance. It gives the keys of the file `secrets.env`. */
+  readonly secret: SecretLookup;
+  readonly log: RuntimeLog;
+  /** The monotonic clock of the service. The loop and the pace of the sources use it. */
+  readonly clock: Clock;
+  /** The clock of the runtime. It gives each instant. */
+  readonly wall: WallClock;
+  /** The transport of the requests of the sources. A test gives a transport with faults. */
+  readonly transport: Transport;
+  /** The fetch of the Pushover channel. */
+  readonly pushover: PushoverChannelOptions["fetch"];
+  /** The id of this run. Each start of the process has a new id. */
+  readonly run: string;
+  /** The runtime starts this hook at the end of each pass with no error. */
+  readonly onPass?: (pass: Pass) => void | Promise<void>;
+  /** The loop gives each failed pass to this function. */
+  readonly onError?: (error: unknown, failures: number) => void;
+}
+
+/** The instance: the runtime and its loop. */
+export interface Instance {
+  readonly runtime: Runtime;
+  readonly loop: RuntimeLoop;
+}
+
+/**
+ * This function makes the instance. It throws when the configuration or the secret store has a
+ * problem. A problem is a missing secret, a key with a bad form, or a place that no source covers.
+ * The message names ids, fields and the names of secrets, and no value of a secret.
+ *
+ * - The sources are the NWS API and IPAWS. Each source gets the codes of the places. It gets the
+ *   position of a place only when the place shares it with that source.
+ * - The channel is Pushover. Each time of the delivery comes from a fact of the channel.
+ * - The times of the loop come from the limits of the runtime.
+ */
+export function openInstance(options: InstanceOptions): Instance {
+  const { config, clock, wall } = options;
+  // The pace of the sources reads the clocks of the instance, not the clock of polite-crawler.
+  const factories = [createNwsSource, createIpawsSource] as const;
+  const scheduler = new HostScheduler({ now: () => wall.now(), sleep: (ms, signal) => delay(clock, ms, signal).catch(() => undefined) }, factories.length);
+  const pace: Pace = { scheduler, now: () => wall.now() };
+  const sources = factories.map((make) => make({ pace, transport: options.transport, userAgent: USER_AGENT }));
+
+  const descriptors = sources.map((source) => source.describe());
+  const kinds = [...new Set(descriptors.flatMap((descriptor) => descriptor.kinds))];
+  const places = localPlaces(config);
+
+  const loaded = loadConfig(config, [pushoverDescriptor()], options.secret);
+  const token = options.secret(PUSHOVER_TOKEN) ?? "";
+  // A bad key fails each send. Thus it stops the start, before the first alert.
+  const tokenProblems =
+    token === ""
+      ? [`The secret store has no value for ${PUSHOVER_TOKEN}, the API token of the Pushover application.`]
+      : isPushoverKey(token)
+        ? []
+        : [`The value of ${PUSHOVER_TOKEN} is not a key of Pushover: 30 letters and digits.`];
+  const userProblems = loaded.recipients.flatMap((recipient) => {
+    const user = recipient.addresses[CHANNEL_ID]?.["user"];
+    return user === undefined || isPushoverKey(user) ? [] : [`The Pushover user key of ${recipient.watch.person} is not 30 letters and digits.`];
+  });
+  // A place that no source covers gets no alert. The usual cause is a missing code of a level.
+  const placeProblems = places.flatMap((place) =>
+    descriptors.some((descriptor) => kinds.some((kind) => sourceCovers(descriptor, place, kind)))
+      ? []
+      : [`No source covers the place ${place.id}. Give the place its codes at each level: the NWS zone and county, SAME, the state and the country (iso3166).`],
+  );
+  const problems = [...tokenProblems, ...loaded.problems, ...userProblems, ...placeProblems];
+  if (problems.length > 0) throw new Error(`The instance does not start. The configuration has these problems:\n- ${problems.join("\n- ")}`);
+
+  const pushover = createPushoverChannel({ token, fetch: options.pushover, now: () => wall.now() });
+  // The channel stops its own call at its time limit.
+  const callLimit = PUSHOVER_TIMEOUT_MS;
+  const delivery: DeliveryOptions = {
+    recipients: loaded.recipients,
+    channels: [pushover],
+    // A `life-safety` message repeats until the person acknowledges it. A poll at the pace of the repeats sees an acknowledgment in one repeat.
+    pollEvery: PUSHOVER_REPEAT_MS,
+    // A failed call goes again after the time limit of one call. Pushover asks for a wait of 5 seconds or more after a failure.
+    retry: callLimit,
+    callLimit,
+    // A send ends by the time limit of the channel. A second send of its key goes after its retry.
+    flightLimit: callLimit + callLimit,
+  };
+
+  const runtime: Runtime = openRuntime({
+    log: options.log,
+    clock: wall,
+    sources,
+    watch: (source) => ({ places: sourcePlaces(config, source.id) }),
+    view: {
+      places,
+      kinds,
+      expectations: [WEA_EXPECTATION],
+      delay: DELAY_LIMITS,
+    },
+    run: options.run,
+    delivery,
+    // The loop exists before the first pass, and only a pass starts a wake.
+    wake: () => loop.wake(),
+    ...(options.onPass === undefined ? {} : { onPass: options.onPass }),
+  });
+  const loop = createLoop({
+    pass: () => runtime.pass(),
+    clock,
+    wall,
+    times: loopTimes(runtime.config.sources, { delivery }),
+    ...(options.onError === undefined ? {} : { onError: options.onError }),
+  });
+  return { runtime, loop };
+}

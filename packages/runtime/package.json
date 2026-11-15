@@ -13,10 +13,15 @@
   },
   "dependencies": {
     "@mark1russell7/alerts": "workspace:*",
-    "@mark1russell7/algebra": "^0.8.7",
-    "@mark1russell7/service": "^0.8.12",
+    "@mark1russell7/alerts-channel-pushover": "workspace:*",
+    "@mark1russell7/alerts-source-ipaws": "workspace:*",
+    "@mark1russell7/alerts-source-nws-api": "workspace:*",
+    "@mark1russell7/algebra": "^0.8.9",
+    "@mark1russell7/quantity": "^0.4.0",
+    "@mark1russell7/service": "^0.8.16",
     "@mark1russell7/sqlite": "^0.2.6",
-    "@mark1russell7/text": "^0.0.5"
+    "@mark1russell7/text": "^0.0.5",
+    "polite-crawler": "^0.6.2"
   },
   "devDependencies": {
     "@mark1russell7/cue": "^2.0.0",

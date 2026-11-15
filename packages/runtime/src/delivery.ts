@@ -4,7 +4,7 @@
  * and it cancels the repeats of each escalation that is over. The core decides each of these. The step does the
  * calls of the channels, and it writes each result to the log after the call.
  */
-import type { Clock } from "@mark1russell7/algebra/clock";
+import type { WallClock } from "@mark1russell7/algebra/clock";
 import {
   acknowledgmentOf,
   incidents,
@@ -91,7 +91,7 @@ export interface DeliveryStep {
 
 /** What the delivery reads and writes in the runtime. */
 export interface DeliveryContext {
-  readonly clock: Clock;
+  readonly clock: WallClock;
   readonly places: readonly WatchedPlace[];
   state(): RuntimeState;
   /**
