@@ -564,7 +564,7 @@ export const sendOutcomeSchema: z.ZodType<SendOutcome, SendOutcome> = schemaOf<S
       z.strictObject({ ok: z.literal(true), receipt: receiptSchema, accepted: instantSchema }),
       z.strictObject({
         ok: z.literal(false),
-        kind: z.enum(["network", "timeout", "server", "rate-limited", "auth", "refused"]),
+        kind: z.enum(["network", "timeout", "server", "rate-limited", "reserved", "auth", "refused"]),
         message: z.string(),
         retryAfter: durationSchema.exactOptional(),
       }),

@@ -286,6 +286,18 @@ describe("the delivery step of a pass", () => {
     log.close();
   });
 
+  it("keeps the wait of a send in the reserve of a channel across a restart, and the heartbeat holds no fail for it", async () => {
+    const reserved: Script = { send: () => ({ ok: false, kind: "reserved", message: "The quota keeps its last units for life-safety.", retryAfter: 600 * SECOND }) };
+    const { runtime, log } = open({ pushover: reserved }, openRuntimeLog(":memory:"), fakeWallClock(T0));
+    const pass = await runtime.pass();
+    expect(pass.delivery?.failures.map((failure) => failure.kind)).toEqual(["reserved"]);
+    const state = rebuild(log.read(), runtime.config);
+    expect(Object.values(state.refusals).map((refusal) => [refusal.kind, refusal.retryAt])).toEqual([["reserved", T0 + 600 * SECOND]]);
+    expect(holdStep({}, pass)).toEqual({});
+    expect(heldOf(state, T0 + 30 * SECOND)).toEqual({});
+    log.close();
+  });
+
   it("writes the refusals of a step after its deliveries, thus the log keeps the hold of the pass also when the accept is later", async () => {
     const OTHER: Recipient = { ...RECIPIENT, watch: { ...RECIPIENT.watch, person: "person-2" as PersonId } };
     // The channel refuses the key of person-2 at once. It accepts the key of person-1 after the refusal, with a time after

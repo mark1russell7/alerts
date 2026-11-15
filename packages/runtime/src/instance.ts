@@ -129,6 +129,11 @@ export interface InstanceOptions {
   readonly transport: Transport;
   /** The fetch of the Pushover channel. */
   readonly pushover: PushoverChannelOptions["fetch"];
+  /**
+   * The gate of the monthly messages of the Pushover application. The entry gives it a store in a file,
+   * thus the count holds across a restart. With no gate, the channel counts nothing.
+   */
+  readonly pushoverQuota?: PushoverChannelOptions["quota"];
   /** The id of this run. Each start of the process has a new id. */
   readonly run: string;
   /** The runtime starts this hook at the end of each pass with no error. */
@@ -189,7 +194,7 @@ export function openInstance(options: InstanceOptions): Instance {
   const cache = options.shapes;
   const shapes = keepShapes({ store, places, onShapes: options.onShapes, close: () => cache?.close() });
 
-  const pushover = createPushoverChannel({ token, fetch: options.pushover, now: () => wall.now() });
+  const pushover = createPushoverChannel({ token, fetch: options.pushover, now: () => wall.now(), ...(options.pushoverQuota === undefined ? {} : { quota: options.pushoverQuota }) });
   const callLimit = CALL_LIMIT;
   const delivery: DeliveryOptions = {
     recipients,

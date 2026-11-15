@@ -546,12 +546,19 @@ export type Address = Readonly<Record<string, string>>;
 /** The receipt of a sent message, as the channel gives it. */
 export type Receipt = Readonly<Record<string, string>>;
 
-/** The result of a send. */
+/**
+ * The result of a send. A failed send has one of these kinds:
+ *
+ * - `network`, `timeout` and `server`: the channel can have the message.
+ * - `rate-limited`: the provider refuses each message until the retry.
+ * - `reserved`: the channel keeps the last units of its quota for a higher level. It still sends a message of that level.
+ * - `auth` and `refused`: the provider refused the key or the message.
+ */
 export type SendOutcome =
   | { readonly ok: true; readonly receipt: Receipt; readonly accepted: Instant }
   | {
       readonly ok: false;
-      readonly kind: "network" | "timeout" | "server" | "rate-limited" | "auth" | "refused";
+      readonly kind: "network" | "timeout" | "server" | "rate-limited" | "reserved" | "auth" | "refused";
       readonly message: string;
       readonly retryAfter?: Duration;
     };

@@ -1,8 +1,8 @@
 import type { Level, Message, PersonId, ReportId } from "@mark1russell7/alerts";
 import type { PushoverFetch } from "@procedures/notify/pushover";
-import { QuotaError } from "polite-crawler/api";
+import { quotaGate, type QuotaGate } from "polite-crawler/api";
 import { describe, expect, it } from "vitest";
-import { createPushoverChannel, isPushoverKey, priorityOf, pushoverDescriptor, pushoverMessageOf } from "./index.ts";
+import { createPushoverChannel, isPushoverKey, priorityOf, PUSHOVER_QUOTA, pushoverCost, pushoverDescriptor, pushoverMessageOf } from "./index.ts";
 
 // Fake keys: 30 letters and digits, as Pushover keys are. No real key is in this repository.
 const TOKEN = "t".repeat(30);
@@ -22,15 +22,15 @@ const message = (level: Level, extra: Partial<Message> = {}): Message => ({
   ...extra,
 });
 
-/** A fake Pushover server: it records each call and gives the next answer. */
-const server = (...answers: Array<{ status: number; body: unknown } | Error>) => {
+/** A fake Pushover server: it records each call and gives the next answer, with its headers. */
+const server = (...answers: Array<{ status: number; body: unknown; headers?: Record<string, string> } | Error>) => {
   const calls: Array<{ url: string; body: string | undefined }> = [];
   const fetch: PushoverFetch = async (url, init) => {
     calls.push({ url, body: init.body });
     const answer = answers.shift();
     if (answer === undefined) throw new Error("The fake server has no more answers.");
     if (answer instanceof Error) throw answer;
-    return { status: answer.status, text: async () => JSON.stringify(answer.body), headers: { get: () => null } };
+    return { status: answer.status, text: async () => JSON.stringify(answer.body), headers: { get: (name: string) => answer.headers?.[name.toLowerCase()] ?? null } };
   };
   return { fetch, calls };
 };
@@ -157,16 +157,6 @@ describe("send", () => {
     expect(fields(fake.calls[0]?.body)["priority"]).toBe("-1");
   });
 
-  it("gives a refusal of the quota as rate-limited, with the wait to the reset, and Pushover gets no call", async () => {
-    const fake = server(new QuotaError("The quota Pushover messages is used until 2026-12-01.", "pushover:app", AT + 60_000));
-    const channel = createPushoverChannel({ token: TOKEN, fetch: fake.fetch, now: () => AT });
-    expect(await channel.send({ message: message("urgent"), address: ADDRESS })).toEqual({
-      ok: false,
-      kind: "rate-limited",
-      message: "The quota Pushover messages is used until 2026-12-01.",
-      retryAfter: 60_000,
-    });
-  });
 
   it("gives the failures of Pushover and of the network", async () => {
     const fake = server({ status: 429, body: { status: 0, errors: ["limit"] } }, new TypeError("fetch failed"), { status: 400, body: { status: 0, user: "invalid", errors: ["user identifier is invalid"] } });
@@ -184,6 +174,86 @@ describe("send", () => {
     expect(await channel.send({ message: message("urgent"), address: { user: "nope" } })).toMatchObject({ ok: false, kind: "refused" });
     expect(await channel.send({ message: message("urgent"), address: {} })).toEqual({ ok: false, kind: "refused", message: "The address has no user key." });
     expect(fake.calls).toEqual([]);
+  });
+});
+
+describe("the quota of the month", () => {
+  // Midnight in America/Chicago on 1 December, as Pushover gives the reset: seconds since the epoch.
+  const RESET = Date.UTC(2026, 11, 1, 6);
+  const limits = (remaining: number) => ({ "x-limit-app-limit": "10000", "x-limit-app-remaining": String(remaining), "x-limit-app-reset": String(RESET / 1000) });
+  const gateOf = () => quotaGate(PUSHOVER_QUOTA, { key: "pushover:app", now: () => AT });
+  const sent = (request: string, remaining?: number) => ({ status: 200, body: { status: 1, request, receipt: RECEIPT }, ...(remaining === undefined ? {} : { headers: limits(remaining) }) });
+
+  it("costs 1 unit below priority 2 and 0 at priority 2", () => {
+    expect([-2, -1, 0, 1, 2].map(pushoverCost)).toEqual([1, 1, 1, 1, 0]);
+  });
+
+  it("takes one unit for a message below life-safety and none for life-safety, and the count of Pushover corrects the gate", async () => {
+    const local = gateOf();
+    const quiet = server(sent("req-1"), sent("req-2"));
+    const counting = createPushoverChannel({ token: TOKEN, fetch: quiet.fetch, now: () => AT, quota: local });
+    await counting.send({ message: message("urgent"), address: ADDRESS });
+    await counting.send({ message: message("life-safety"), address: ADDRESS });
+    expect(local.state().used).toBe(1);
+
+    const gate = gateOf();
+    const fake = server(sent("req-1", 7_496), sent("req-2", 7_495));
+    const channel = createPushoverChannel({ token: TOKEN, fetch: fake.fetch, now: () => AT, quota: gate });
+    expect(await channel.send({ message: message("urgent"), address: ADDRESS })).toMatchObject({ ok: true });
+    expect(gate.state().used).toBe(2_504);
+    expect(await channel.send({ message: message("life-safety"), address: ADDRESS })).toMatchObject({ ok: true });
+    expect(gate.state().used).toBe(2_505);
+  });
+
+  it("refuses a message below life-safety in the reserve with reserved and the wait to the reset, with no call, and still sends life-safety", async () => {
+    const gate = gateOf();
+    const fake = server(sent("req-1", 1_000), sent("req-2", 999));
+    const channel = createPushoverChannel({ token: TOKEN, fetch: fake.fetch, now: () => AT, quota: gate });
+    expect(await channel.send({ message: message("urgent"), address: ADDRESS })).toMatchObject({ ok: true });
+    expect(await channel.send({ message: message("urgent"), address: ADDRESS })).toEqual({ ok: false, kind: "reserved", message: expect.stringContaining("Pushover messages"), retryAfter: RESET - AT });
+    expect(await channel.send({ message: message("notice"), address: ADDRESS })).toMatchObject({ ok: false, kind: "reserved" });
+    expect(fake.calls).toHaveLength(1);
+    expect(await channel.send({ message: message("life-safety"), address: ADDRESS })).toMatchObject({ ok: true });
+    expect(fake.calls).toHaveLength(2);
+  });
+
+  it("sends a life-safety message at 0 left, and gives rate-limited with the reset of Pushover to a message below it", async () => {
+    const gate = gateOf();
+    gate.note({ remaining: 0, resetAt: RESET });
+    const fake = server(sent("req-1"));
+    const channel = createPushoverChannel({ token: TOKEN, fetch: fake.fetch, now: () => AT, quota: gate });
+    expect(await channel.send({ message: message("urgent"), address: ADDRESS })).toEqual({ ok: false, kind: "rate-limited", message: expect.stringContaining("Pushover messages"), retryAfter: RESET - AT });
+    expect(fake.calls).toEqual([]);
+    expect(await channel.send({ message: message("life-safety"), address: ADDRESS })).toMatchObject({ ok: true });
+    expect(fake.calls).toHaveLength(1);
+  });
+
+  it("notes 0 left from a refusal of Pushover over its limit, thus the next message below life-safety gets no call", async () => {
+    const gate = gateOf();
+    const fake = server({ status: 429, body: { status: 0, errors: ["application over limit"] }, headers: limits(0) });
+    const channel = createPushoverChannel({ token: TOKEN, fetch: fake.fetch, now: () => AT, quota: gate });
+    expect(await channel.send({ message: message("urgent"), address: ADDRESS })).toMatchObject({ ok: false, kind: "rate-limited" });
+    expect(gate.state().blockedUntil).toBe(RESET);
+    expect(await channel.send({ message: message("urgent"), address: ADDRESS })).toMatchObject({ ok: false, kind: "rate-limited", retryAfter: RESET - AT });
+    expect(fake.calls).toHaveLength(1);
+  });
+
+  it("gives back the unit of a message that Pushover refused", async () => {
+    const gate = gateOf();
+    const fake = server({ status: 400, body: { status: 0, user: "invalid", errors: ["user identifier is invalid"] } });
+    const channel = createPushoverChannel({ token: TOKEN, fetch: fake.fetch, now: () => AT, quota: gate });
+    expect(await channel.send({ message: message("urgent"), address: ADDRESS })).toMatchObject({ ok: false, kind: "refused" });
+    expect(gate.state().used).toBe(0);
+  });
+
+  it("sends with no count when the store of the gate fails, and keeps the outcome when the count fails", async () => {
+    const fault = (): never => {
+      throw new Error("The disk is full.");
+    };
+    const broken: QuotaGate = { quota: PUSHOVER_QUOTA, key: "pushover:app", take: fault, note: fault, state: fault };
+    const fake = server(sent("req-1", 5_000));
+    const channel = createPushoverChannel({ token: TOKEN, fetch: fake.fetch, now: () => AT, quota: broken });
+    expect(await channel.send({ message: message("urgent"), address: ADDRESS })).toMatchObject({ ok: true, receipt: { request: "req-1" } });
   });
 });
 

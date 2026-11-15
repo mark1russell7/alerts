@@ -11,7 +11,8 @@
  * `ALERTS_HOME` (the folder `.alerts` in the home folder). The value in parentheses is the value
  * without the variable. An empty value counts as no value, and a relative path starts at the working
  * folder. The folder holds the private files of the instance: `config.json`,
- * `secrets.env`, the log `runtime.sqlite` and the outlines `shapes.sqlite`. No repository holds them.
+ * `secrets.env`, the log `runtime.sqlite`, the outlines `shapes.sqlite` and the counts of the quotas
+ * `quotas.sqlite`. No repository holds them.
  *
  * The key `HEALTHCHECKS_PING_URL` of `secrets.env` gives the outside heartbeat (`heartbeat.ts`). The
  * profile `daemon` of the live instance does not start without it. Another profile starts with a warning.
@@ -21,15 +22,17 @@
  */
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
+import { PUSHOVER_QUOTA } from "@mark1russell7/alerts-channel-pushover";
 import { openShapeCache, SHAPES_FILE } from "@mark1russell7/alerts-shapes-nws";
 import { realClock, wallClock } from "@mark1russell7/algebra/clock";
 import type { ServiceBuilder } from "@mark1russell7/service";
 import { errorMessage } from "@mark1russell7/text";
 import { redactSecrets } from "@mark1russell7/text/redact";
-import { fetchTransport } from "polite-crawler/api";
+import { SqliteHostStateStore } from "polite-crawler";
+import { fetchTransport, quotaGate } from "polite-crawler/api";
 import { writeFileAtomic } from "@procedures/fs/files";
 import { alertsHome, configPath, envSecrets } from "./config.ts";
-import { heartbeat, heldOf, type PassSummary } from "./heartbeat.ts";
+import { heartbeat, heldOf, quotaNote, type PassSummary } from "./heartbeat.ts";
 import { PROFILES, declare } from "./index.ts";
 import { DAEMON_CHECK, INSTANCE_CHECK, openInstance, PING_URL_KEY, userAgent } from "./instance.ts";
 import { openRuntimeLog } from "./log.ts";
@@ -69,10 +72,26 @@ async function runtime(): Promise<ServiceBuilder> {
   // Each request to the server of another party has this User-Agent.
   const agent = userAgent(config.config.contact);
 
+  // The count of the Pushover messages of the month. The file keeps it across a restart. The key names the application, not its token.
+  const quotas = new SqliteHostStateStore(join(home, "quotas.sqlite"));
+  const pushoverQuota = quotaGate(PUSHOVER_QUOTA, { key: "pushover:app", store: quotas, now: () => wall.now() });
+
   // The outside heartbeat. Without it, a stop of this process is silent. The check of the profile daemon needs it.
   const pingUrl = secret(PING_URL_KEY) ?? "";
   if (pingUrl === "") console.warn(`The file secrets.env has no ${PING_URL_KEY}. This runtime has no outside heartbeat.`);
-  const beat = pingUrl === "" ? undefined : heartbeat({ url: pingUrl, fetch, clock: wall, userAgent: agent, held: (at) => heldOf(instance.runtime.state(), at), onError: (message) => console.error(redactSecrets(message, values)) });
+  const beat =
+    pingUrl === ""
+      ? undefined
+      : heartbeat({
+          url: pingUrl,
+          fetch,
+          clock: wall,
+          userAgent: agent,
+          held: (at) => heldOf(instance.runtime.state(), at),
+          // The body of each ping tells the state of the quota. Thus the check shows the reserve.
+          notes: () => [quotaNote("pushover", pushoverQuota)],
+          onError: (message) => console.error(redactSecrets(message, values)),
+        });
 
   // A change of the private files restarts the runtime. Only the profile daemon has a supervisor that starts it again.
   const reload =
@@ -108,6 +127,7 @@ async function runtime(): Promise<ServiceBuilder> {
     wall,
     transport: fetchTransport({ userAgent: agent }),
     pushover: fetch,
+    pushoverQuota,
     run: randomUUID(),
     ...(onPass === undefined ? {} : { onPass }),
     // The output gets no secret, also when an error quotes a request.
@@ -120,7 +140,7 @@ async function runtime(): Promise<ServiceBuilder> {
   });
 
   // The service closes the log and the store of shapes in its shutdown.
-  const service = declare({ port: port("PORT", 8080), probePort: port("PROBE_PORT", 9090), profile, loop: instance.loop, log, shapes: instance.shapes });
+  const service = declare({ port: port("PORT", 8080), probePort: port("PROBE_PORT", 9090), profile, loop: instance.loop, log, shapes: instance.shapes, quotas });
   return service;
 }
 
