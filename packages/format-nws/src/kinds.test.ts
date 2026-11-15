@@ -1,14 +1,16 @@
+import { categoryOf, knownKind, LIFE_SAFETY_KINDS, hasKind, UNKNOWN_KIND, unknownKinds } from "@mark1russell7/alerts";
+import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import {
-  categoryOf,
+  categoryOf as movedCategoryOf,
   EVENT_CODES,
   fromEventCode,
   fromEventName,
   fromPhenomenon,
+  NAME_ALIASES,
   PHENOMENA,
   resolveKind,
   SIGNIFICANCE,
-  UNKNOWN_KIND,
 } from "./kinds.ts";
 import { parseVtec, type Vtec } from "./vtec.ts";
 
@@ -18,6 +20,30 @@ describe("the kind tables", () => {
       expect(categoryOf(hazard.code), hazard.code).not.toBe("other");
       expect(hazard.code).toMatch(/^[a-z]+(\.[a-z0-9-]+)+$/);
     }
+  });
+
+  // The gate of the taxonomy: a code with a typo does not match the life-safety class.
+  const tableCodes = [...Object.values(PHENOMENA), ...Object.values(EVENT_CODES), ...Object.values(NAME_ALIASES)].map((hazard) => hazard.code);
+
+  it("give only codes of the taxonomy of the core", () => {
+    expect(unknownKinds(tableCodes)).toEqual([]);
+    expect(knownKind(UNKNOWN_KIND)).toBe(true);
+  });
+
+  it("give a code of the taxonomy for each input, also for an input that no table knows", () => {
+    const codes = [...Object.keys(EVENT_CODES), ...Object.keys(PHENOMENA).flatMap((phenomenon) => Object.keys(SIGNIFICANCE).map((letter) => phenomenon + letter))];
+    const names = [...Object.keys(NAME_ALIASES), ...Object.values(EVENT_CODES).map((event) => event.label)];
+    const text = (known: readonly string[]): fc.Arbitrary<string> => fc.oneof(fc.constantFrom(...known), fc.string());
+    const facts = fc.record({ nwsCode: text(codes), sameCode: text([...codes, "NWS"]), name: text(names) }, { requiredKeys: [] });
+    fc.assert(fc.property(facts, (input) => knownKind(resolveKind(input).kind.code)));
+  });
+
+  it("keep the moved categoryOf as the function of the core", () => {
+    expect(movedCategoryOf).toBe(categoryOf);
+  });
+
+  it("reach each kind of the life-safety class", () => {
+    for (const prefix of LIFE_SAFETY_KINDS) expect(tableCodes.filter((code) => hasKind([prefix], code)), prefix).not.toEqual([]);
   });
 
   it("calculate a code of phenomenon and significance", () => {

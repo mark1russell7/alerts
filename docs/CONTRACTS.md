@@ -87,6 +87,7 @@ The rules of each adapter:
    - The hash input is a JSON array that starts with the scheme `alerts-id/1` and the kind of id. Each copy of the system gives the same id.
 5. **The fixtures are real and contain no personal data.** Each adapter keeps recorded answers of its source in `fixtures/`, with the expected reports. The places of the tests are public places, not the places of a real person.
 6. **A canary when the source has one.** For example: the national feed of the NWS has one or more active alerts. A national feed with no alert is more likely a fault than a calm country.
+7. **The kinds are codes of the taxonomy.** Each kind that `map` gives is a code of `TAXONOMY`. A kind that the tables do not know is `other.unknown`, with a problem. A gate test of the adapter holds this rule with `unknownKinds`.
 
 The testkit gives one conformance suite, and each adapter passes it. The suite examines the laws of `map` on the fixtures and on mutated fixtures. It examines the outcomes of `fetch` behind a fault proxy: cut, delay, reset, 429, 500 and a changed body. It also examines the descriptor.
 
@@ -204,6 +205,16 @@ For `life-safety`, the system prefers a duplicate to a miss.
 - When two copies cannot reach each other, both can send. Then the person can get the alert two times. The person does not get it zero times.
 - The message key is the SHA-256 of the incident report, the level, the person and the step. A channel that can drop a repeated key does so.
 
+## The taxonomy
+
+`TAXONOMY` of the core holds each kind code and its plain name. A code is dotted, for example `met.flood.flash`.
+
+- The first part is a category: the 12 categories of CAP 1.2, then `cyber`, `market`, `civic` and `system`. `categoryOf` gives it.
+- The taxonomy is a tree. The parent of each code is also a code, and each category is a root.
+- The taxonomy is closed. `knownKind` tells if a code is in it. The coverage codes `system.coverage.<code>` are a family of the core.
+- A code with a typo does not match the life-safety class, so it can stop a wake. Thus each adapter has a gate test, and each policy names only known codes.
+- The kinds go from physical events to technical outages. A new adapter adds its new codes to `TAXONOMY` in its pull request.
+
 ## Levels and the first night rule
 
 | Level | What it does |
@@ -239,7 +250,15 @@ So an incident is `life-safety` when each of these conditions is true:
 - The severity is `severe`, `extreme` or `unknown`.
 - The urgency is `immediate`, `expected` or `unknown`.
 
-The life-safety class holds tornado, flash flood, extreme wind, hurricane, storm surge, fire, tsunami and earthquake shaking. It also holds evacuation, shelter in place, civil danger, civil emergency, and chemical, biological, radiological and nuclear hazards. For these kinds, an unknown value counts as high, because a miss costs more than a false alarm. A tornado watch has the urgency `future`, so it is `urgent`: a push at once that does not wake the person.
+A kind is in the life-safety class when its warning tells the people at a place to act at once to save their lives. They take shelter, leave, or go to high ground. The class holds tornado, flash flood, extreme wind, hurricane, typhoon, storm surge, fire, tsunami, earthquake shaking, debris flow and volcanic eruption. It also holds the national emergency (EAN), evacuation, shelter in place, civil danger, civil emergency, and chemical, biological, radiological and nuclear hazards. For these kinds, an unknown value counts as high, because a miss costs more than a false alarm. A tornado watch has the urgency `future`, so it is `urgent`: a push at once that does not wake the person.
+
+Some dangerous kinds are not in the class. Their danger comes over hours, or it is on the road or at sea. These kinds reach `urgent` at most:
+
+- extreme heat, extreme cold, a coastal flood, a river flood, a winter storm and a blizzard.
+- a dust storm and a snow squall, which are dangers to drivers.
+- the marine kinds, and ashfall. The ashfall codes are children of `geo.volcano`, not of the eruption.
+
+A severe thunderstorm with the destructive damage threat is also not in the class. The damage threat tags of the NWS and the Wireless Emergency Alert handling of the issuer are inputs of AL-31.
 
 Each lookup only grows with the severity and with the urgency. So a more severe or more urgent incident does not get a lower level. Tests hold this order and the rule above for each value.
 
@@ -279,4 +298,3 @@ The area `{ type: "place" }` covers that watched place only. Only the reports of
 - The link rule of each family of kind, for rule 3 of the merge.
 - The calculation of the level from probabilities and costs (AL-31), with the base rates from the event log.
 - The merge state grows with each report. A compaction of the incidents that ended before a horizon keeps it small. It must keep the three laws.
-- The taxonomy: the list of codes, from the CAP and NWS event names first (AL-5).
