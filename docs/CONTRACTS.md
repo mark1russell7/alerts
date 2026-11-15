@@ -27,6 +27,7 @@ fetch ──► Observation ──► map ──► Report ──► merge state
 | `@mark1russell7/alerts-format-<name>` | `packages/format-<name>` | The reader of one message format that two or more sources use: `format-cap` for CAP 1.2, `format-nws` for VTEC and the NWS kinds. |
 | `@mark1russell7/alerts-fetch` | `packages/fetch` | The fetch parts that the sources share: the request through polite-crawler, and the map from an answer to a failure. |
 | `@mark1russell7/alerts-source-<id>` | `packages/source-<id>` | One source adapter as procedures. |
+| `@mark1russell7/alerts-atlas` | `packages/atlas` | The source atlas: each signal class, the candidate sources of each class with a decision and its reason, and the records of the research rounds. Its gate needs 2 or more sources with no risk for each class, or a reason. |
 | `@mark1russell7/alerts-channel-<id>` | `packages/channel-<id>` | One delivery channel as procedures. |
 | `@mark1russell7/alerts-runtime` | `packages/runtime` | The service: the loops, the event log, the delivery ledger and the heartbeat, on `@mark1russell7/service` and the SQLite home. |
 | `@mark1russell7/alerts-testkit` | `packages/testkit` | The conformance tests of the adapters, the fixtures and the fault plans. |
