@@ -23,7 +23,6 @@ export {
   OVERLAP_MS,
   readAnswer,
   sinceOf,
-  statesOf,
   WINDOW_MS,
 } from "./fetch.ts";
 export type { IpawsFetchInput, IpawsFetchOptions, Since } from "./fetch.ts";

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isSameCode, isUgcCode, parseSameLocation, STATE_FIPS, STATE_POSTAL, stateOfSame, stateOfUgc } from "./codes.ts";
+import { isSameCode, isUgcCode, parseSameLocation, sameOfCountyUgc, STATE_FIPS, STATE_POSTAL, stateOfSame, stateOfUgc } from "./codes.ts";
 
 describe("isUgcCode", () => {
   it.each(["KSZ001", "TXC123", "GMZ250", "PKZ414"])("accepts %s", (code) => {
@@ -56,5 +56,17 @@ describe("the state codes", () => {
     expect(stateOfSame("020173")).toBe("KS");
     expect(stateOfSame("048000")).toBe("TX");
     expect(stateOfSame("003001")).toBeUndefined();
+  });
+});
+
+describe("sameOfCountyUgc", () => {
+  it("gives the SAME code of the full county", () => {
+    expect(sameOfCountyUgc("KSC173")).toBe("020173");
+    expect(sameOfCountyUgc("txc019")).toBe("048019");
+    expect(stateOfSame(sameOfCountyUgc("TXC463") ?? "")).toBe(stateOfUgc("TXC463"));
+  });
+
+  it.each(["KSZ083", "GMZ250", "TXC01", "", "XXC001"])("gives no code for %j", (code) => {
+    expect(sameOfCountyUgc(code)).toBeUndefined();
   });
 });

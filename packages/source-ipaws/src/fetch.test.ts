@@ -3,7 +3,7 @@ import type { FetchOutcome, PlaceId, Watch, WatchedPlace } from "@mark1russell7/
 import type { Exchange, Reply, Transport } from "polite-crawler/api";
 import { HostScheduler } from "polite-crawler/politeness";
 import { describe, expect, it } from "vitest";
-import { createIpawsFetch, CURSOR_SINCE, FEED_PATH, feedTime, keeps, LOOKBACK_MS, OVERLAP_MS, sinceOf, statesOf } from "./fetch.ts";
+import { createIpawsFetch, CURSOR_SINCE, FEED_PATH, feedTime, keeps, LOOKBACK_MS, OVERLAP_MS, sinceOf } from "./fetch.ts";
 
 const fixture = (path: string): string => readFileSync(new URL(path, import.meta.url), "utf8");
 /** The real answer of the feed when IPAWS has no new alert. */
@@ -23,8 +23,6 @@ const ugc = (code: string): string => `<geocode><valueName>UGC</valueName><value
 /** A place of the tests. The codes are public regions, not the places of an owner. */
 const place = (id: string, codes: WatchedPlace["codes"]): WatchedPlace => ({ id: id as PlaceId, codes, bufferKm: 0 });
 const KANSAS = place("a", [{ system: "ugc", code: "KSZ083" }]);
-const TEXAS = place("b", [{ system: "state", code: "tx" }]);
-const NO_STATE = place("c", [{ system: "fips", code: "20173" }]);
 
 const BASE = "https://ipaws.test/rest";
 const START = Date.parse("2026-11-15T00:00:00.400Z");
@@ -95,17 +93,7 @@ describe("feedTime and sinceOf", () => {
   });
 });
 
-describe("statesOf and keeps", () => {
-  it("gives the states of the places from the state, UGC and SAME codes", () => {
-    expect(statesOf({ places: [KANSAS, TEXAS] })).toEqual(new Set(["KS", "TX"]));
-    expect(statesOf({ places: [place("d", [{ system: "same", code: "048019" }])] })).toEqual(new Set(["TX"]));
-  });
-
-  it("gives all states when a place has no code of a state", () => {
-    expect(statesOf({ places: [KANSAS, NO_STATE] })).toBeUndefined();
-    expect(statesOf({ places: [place("e", [{ system: "ugc", code: "GMZ250" }])] })).toBeUndefined();
-  });
-
+describe("keeps", () => {
   it("keeps each alert of the NWS, also out of the watched states", () => {
     expect(keeps(NEW_ALERT, new Set(["KS"]))).toBe(true);
   });
