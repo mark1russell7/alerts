@@ -32,7 +32,7 @@ import { random } from "@mark1russell7/rigor-generators";
 import { startFaultProxy } from "@mark1russell7/rigor-proxy";
 import { startScriptedServer } from "@mark1russell7/rigor-testkit/http";
 import { fetchTransport, type Transport } from "polite-crawler/api";
-import { fastClock } from "./source-down.ts";
+import { caseClock } from "./source-down.ts";
 
 /** The id and the seed of the case. The jitter of the pace of each arm comes from this seed and the name of the arm. */
 export const CASE_6_ID = "al-13-case-6";
@@ -263,7 +263,7 @@ export async function runStaleArm(arm: StaleArm, settings: StaleSettings = CASE_
   const server = await startScriptedServer({ routes: [{ path: LIST_PATH, replies: fresh.map((fetch) => ({ fields: JSON_TYPE, body: listOf(fetch) })) }] });
   const behind = olds.size === 0 ? undefined : await startScriptedServer({ routes: [] });
   const proxy = behind === undefined ? undefined : await startFaultProxy({ target: { host: behind.host, port: behind.port }, plan: faultPlanOf(oldAnswersOf(arm)), protocol: "http" });
-  const clock = fastClock(settings.start, settings.speed);
+  const clock = caseClock(settings.start, settings.speed);
   const counts: StaleRoutes = { direct: 0, old: 0 };
   const transport = staleTransport({
     inner: fetchTransport({ userAgent: USER_AGENT }),

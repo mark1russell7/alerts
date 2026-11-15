@@ -8,6 +8,7 @@ import {
   CASE_5_ORIGIN,
   CASE_5_SETTINGS,
   canaryAnswer,
+  caseClock,
   DOWN_ARMS,
   type DownArm,
   type DownPass,
@@ -15,7 +16,6 @@ import {
   downGatesOf,
   downLimits,
   downVerdictOf,
-  fastClock,
   faultsOf,
   outageOf,
   outageTransport,
@@ -122,9 +122,9 @@ describe("canaryAnswer", () => {
   });
 });
 
-describe("fastClock", () => {
-  it("moves faster than real time, and ends a wait and a timer early in real time", async () => {
-    const clock = fastClock(1_000_000, 1000);
+describe("caseClock", () => {
+  it("moves faster than real time, ends a wait at an abort, and refuses a speed of 0", async () => {
+    const clock = caseClock(1_000_000, 1000);
     const started = clock.now();
     await clock.sleep(2000);
     expect(clock.now() - started).toBeGreaterThanOrEqual(2000);
@@ -132,12 +132,12 @@ describe("fastClock", () => {
     expect(fired - started).toBeGreaterThanOrEqual(5000);
     const aborted = new AbortController();
     aborted.abort();
-    await clock.sleep(60 * MINUTE, aborted.signal);
-    expect(() => fastClock(0, 0.5)).toThrow(RangeError);
+    await expect(clock.sleep(60 * MINUTE, aborted.signal)).resolves.toBeUndefined();
+    expect(() => caseClock(0, 0)).toThrow(RangeError);
   });
 
   it("never ends a wait or a timer before its time on the clock, at a speed where each timer is near 1 ms", async () => {
-    const clock = fastClock(0, 1000);
+    const clock = caseClock(0, 1000);
     for (let wait = 0; wait < 20; wait += 1) {
       const from = clock.now();
       await clock.sleep(1500);
@@ -148,7 +148,7 @@ describe("fastClock", () => {
   });
 
   it("fires a timer of 0 ms after the call of after, not in it", async () => {
-    const clock = fastClock(0, 1000);
+    const clock = caseClock(0, 1000);
     let fired = false;
     const fires = new Promise<void>((resolve) =>
       clock.after(0, () => {
@@ -162,7 +162,7 @@ describe("fastClock", () => {
   });
 
   it("stops a timer with the function that after gives", async () => {
-    const clock = fastClock(0, 1000);
+    const clock = caseClock(0, 1000);
     let fired = false;
     const cancel = clock.after(1000, () => {
       fired = true;
