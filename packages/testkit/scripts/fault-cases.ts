@@ -9,6 +9,7 @@ import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { FRAMINGS } from "@mark1russell7/rigor-testkit/http";
 import { runCutInBody } from "../src/cut-in-body.ts";
+import { changesOf, runChangedFormat } from "../src/changed-format.ts";
 import { runSlowSource, SLOW_ARMS, trickleMs } from "../src/slow-source.ts";
 
 const at = process.argv.indexOf("--out");
@@ -75,4 +76,22 @@ report(slow.id, slow.verdict, [
   ),
   "",
   `Read: ${yes(slow.verdict.read)}. Gates: ${SLOW_ARMS.map((arm) => `${arm} ${yes(slow.verdict.gates[arm])}`).join(", ")}. Pass: **${yes(slow.verdict.pass)}**.`,
+]);
+
+const format = await runChangedFormat();
+write("case-3.json", format);
+const levelled = format.baseline.levels.filter((one) => one.level !== "none").length;
+report(format.id, format.verdict, [
+  `## ${format.id}: a changed format`,
+  "",
+  `The main body has ${String(format.bodyBytes)} bytes and ${String(format.baseline.reports)} reports. ${String(levelled)} alerts have a level for the person of the case.`,
+  "",
+  "| Arm | Answered | Reports | Fatal problems | Other problems | Health | Changed levels | Gate |",
+  "| --- | --- | --- | --- | --- | --- | --- | --- |",
+  ...format.records.map(
+    (r) =>
+      `| ${r.arm} | ${yes(r.answered)} | ${String(r.reports)} | ${String(r.fatal.length)} | ${String(r.other.length)} | ${r.health} | ${String(changesOf(r).length)} | ${yes(format.verdict.gates[r.arm])} |`,
+  ),
+  "",
+  `Read: ${yes(format.verdict.read)}. Pass: **${yes(format.verdict.pass)}**.`,
 ]);
