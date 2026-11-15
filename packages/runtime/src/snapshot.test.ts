@@ -157,7 +157,7 @@ describe("snapshotStep", () => {
 });
 
 describe("a snapshot source in the runtime", () => {
-  /** This function runs the answers, one fetch for each minute, and restarts the runtime before the answer at `restartAt`. */
+  /** This function gives the answers to the runtime, one fetch for each minute, and restarts the runtime before the answer at `restartAt`. */
   async function run(answers: readonly Answer[], listing: boolean, restartAt?: number) {
     const clock = fakeWallClock(T0);
     let fetches = 0;
