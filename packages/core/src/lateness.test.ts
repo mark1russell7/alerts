@@ -1,11 +1,11 @@
-import { quantileInterval } from "@mark1russell7/rigor-statistics";
+import { clopperPearson, quantileInterval } from "@mark1russell7/rigor-statistics";
 import { random, seedsFrom } from "@mark1russell7/rigor-generators";
 import { describe, expect, it } from "vitest";
 import { assess } from "./assess.ts";
 import type { ObservationId, PersonId, PersonWatch, PlaceId, Report, SourceDescriptor, SourceId, WatchedPlace } from "./contracts.ts";
 import { coverage } from "./coverage.ts";
 import { reportId } from "./ids.ts";
-import { carriages, delayLimit, delaysOf, lateness, lateSources, reportPasses, type Carriage, type Expectation } from "./lateness.ts";
+import { carriages, delayLimit, delaysOf, lateLimits, lateness, lateSources, missLimit, missRecord, reportPasses, type Carriage, type Expectation } from "./lateness.ts";
 import { incidents, normalize } from "./merge.ts";
 import { NO_SYSTEM_LINES, SOURCE_SUBJECT, systemReports, type SystemSnapshot } from "./system-reports.ts";
 
@@ -167,7 +167,7 @@ describe("the lateness", () => {
     started,
     ...(arrived === undefined ? {} : { arrived }),
   });
-  const LIMIT = { [EXPECT.id]: 600_000 };
+  const LIMIT = { [EXPECT.id]: { delay: 600_000, misses: 1 } };
 
   it("only measures when the expectation has no limit", () => {
     expect(lateness([check(0)], [EXPECT], {}, 10_000_000)).toEqual([{ expectation: EXPECT.id, from: API, to: WEA, state: "no-limit", missed: [] }]);
@@ -202,9 +202,98 @@ describe("the lateness", () => {
     expect(back).toMatchObject({ state: "met", missed: [] });
   });
 
+  it("is late only at the count of misses of the limit", () => {
+    const two = { [EXPECT.id]: { delay: 600_000, misses: 2 } };
+    const checks = [check(0, 30_000), check(1_000_000), check(2_000_000)];
+    expect(lateness(checks, [EXPECT], two, 1_700_000)[0]).toMatchObject({ state: "met", missed: ["r1000000"] });
+    expect(lateness(checks, [EXPECT], two, 1_700_000)[0]!.since).toBeUndefined();
+    expect(lateness(checks, [EXPECT], two, 2_600_000)[0]).toMatchObject({ state: "late", missed: ["r1000000", "r2000000"], since: 2_600_000 });
+    expect(lateness(checks.slice(1), [EXPECT], two, 1_700_000)[0]!.state).toBe("no-data");
+  });
+
+  it("takes a count below 1 as 1", () => {
+    expect(lateness([check(0)], [EXPECT], { [EXPECT.id]: { delay: 600_000, misses: 0 } }, 600_000)[0]).toMatchObject({ state: "late", since: 600_000 });
+  });
+
   it("gives the late sources", () => {
-    const states = lateness([check(0)], [EXPECT, { ...EXPECT, id: "other", to: "x" as SourceId }], { [EXPECT.id]: 1, other: 1 }, 10);
+    const states = lateness([check(0)], [EXPECT, { ...EXPECT, id: "other", to: "x" as SourceId }], { [EXPECT.id]: { delay: 1, misses: 1 }, other: { delay: 1, misses: 1 } }, 10);
     expect(lateSources(states)).toEqual([WEA]);
+  });
+});
+
+describe("the limit of the misses", () => {
+  const check = (started: number, arrived?: number, expectation = EXPECT.id): Carriage => ({
+    expectation,
+    report: `r${started}` as Carriage["report"],
+    started,
+    ...(arrived === undefined ? {} : { arrived }),
+  });
+  const DELAY = 600_000;
+
+  it("counts only the checks that passed their limit, and a copy after its limit is a miss", () => {
+    const checks = [check(0, 10_000), check(1_000_000, 1_700_000), check(2_000_000, 2_100_000), check(3_000_000)];
+    // The check after the miss is not a trial.
+    expect(missRecord(checks, EXPECT.id, DELAY, 3_599_999)).toEqual({ trials: 2, misses: 1 });
+    expect(missRecord(checks, EXPECT.id, DELAY, 3_600_000)).toEqual({ trials: 3, misses: 2 });
+    expect(missRecord([...checks, check(0, 1, "other")], EXPECT.id, DELAY, 3_600_000)).toEqual({ trials: 3, misses: 2 });
+  });
+
+  it("counts a long stop of the source as one miss", () => {
+    const stop = [check(0, 1_000), ...[1, 2, 3, 4, 5, 6].map((hour) => check(hour * 3_600_000)), check(7 * 3_600_000, 7 * 3_600_000 + 1_000)];
+    expect(missRecord(stop, EXPECT.id, DELAY, 10 * 3_600_000)).toEqual({ trials: 2, misses: 1 });
+  });
+
+  it("does not change with the order of the checks", () => {
+    const checks = [check(0, 10_000), check(1_000_000), check(2_000_000, 2_100_000), check(3_000_000, 3_010_000), check(4_000_000)];
+    const reversed = [...checks].reverse();
+    expect(missRecord(reversed, EXPECT.id, DELAY, 5_000_000)).toEqual(missRecord(checks, EXPECT.id, DELAY, 5_000_000));
+  });
+
+  it("gives no count with no trials", () => {
+    expect(missLimit({ trials: 0, misses: 0 }, 0.95)).toBeUndefined();
+  });
+
+  it("gives the smallest count whose chance in normal work is at most 1 - level", () => {
+    for (const level of [0.9, 0.95, 0.99]) {
+      for (const [misses, trials] of [[0, 5], [0, 50], [0, 400], [3, 400], [40, 400], [150, 400], [9, 10]] as const) {
+        const k = missLimit({ trials, misses }, level)!;
+        const { high } = clopperPearson(misses, trials, level);
+        expect(k).toBeGreaterThanOrEqual(1);
+        expect(high ** k).toBeLessThanOrEqual(1 - level);
+        if (k > 1) expect(high ** (k - 1)).toBeGreaterThan(1 - level);
+      }
+    }
+  });
+
+  it("needs more misses for a source that misses more in normal work", () => {
+    const counts = [0, 4, 40, 120, 240].map((misses) => missLimit({ trials: 400, misses }, 0.95)!);
+    expect(counts).toEqual([...counts].sort((a, b) => a - b));
+    expect(counts[0]).toBe(1);
+    expect(counts[4]).toBeGreaterThan(counts[0]!);
+  });
+});
+
+describe("the limits of an expectation", () => {
+  const check = (started: number, arrived?: number): Carriage => ({
+    expectation: EXPECT.id,
+    report: `r${started}` as Carriage["report"],
+    started,
+    ...(arrived === undefined ? {} : { arrived }),
+  });
+  const OPTIONS = { quantile: 0.99, level: 0.95 };
+
+  it("gives no limits for a sample that is too small", () => {
+    expect(lateLimits([check(0, 1_000)], [EXPECT], 10_000, OPTIONS)).toEqual({ [EXPECT.id]: undefined });
+  });
+
+  it("calculates the delay from the copies that came by the time, and the misses for that delay", () => {
+    const checks = Array.from({ length: 400 }, (_, i) => check(i * 1_000_000, i * 1_000_000 + 30_000 + (i % 50) * 1_000));
+    const late = check(400 * 1_000_000, 400 * 1_000_000 + 5_000_000);
+    const at = 400 * 1_000_000 + 1_000_000;
+    const limits = lateLimits([...checks, late], [EXPECT], at, OPTIONS);
+    const delay = delayLimit(delaysOf(checks, EXPECT.id), OPTIONS)!;
+    expect(limits[EXPECT.id]).toEqual({ delay, misses: missLimit(missRecord([...checks, late], EXPECT.id, delay, at), OPTIONS.level) });
+    expect(limits[EXPECT.id]!.misses).toBeGreaterThanOrEqual(1);
   });
 });
 
@@ -219,7 +308,7 @@ describe("the effect of a late source", () => {
   });
 
   it("gives a line of system reports to the person who watches the sources", () => {
-    const LIMIT = { [EXPECT.id]: 600_000 };
+    const LIMIT = { [EXPECT.id]: { delay: 600_000, misses: 1 } };
     const snap = (checks: readonly Carriage[], at: number): SystemSnapshot => ({
       sources: SOURCES,
       health: HEALTH,
@@ -237,7 +326,7 @@ describe("the effect of a late source", () => {
         onset: 600_000,
         about: [{ system: SOURCE_SUBJECT, id: WEA, label: "The WEA feed" }],
         headline: "The WEA feed is late: it did not carry the reports of The API in time.",
-        description: "Reports with no copy: 1. The limit of the delay is 600 seconds, from the measured delays.",
+        description: "Reports with no copy: 1. The limit of the delay is 600 seconds, and the limit of the misses is 1, from the measured delays and misses.",
       },
     ]);
 
