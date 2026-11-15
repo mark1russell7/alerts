@@ -49,16 +49,22 @@ export interface PushoverChannelOptions extends PushoverMapOptions {
 /** The refusal of a quota, as `QuotaError` of `polite-crawler/api` gives it. */
 interface QuotaRefusal {
   readonly message: string;
+  readonly key: string;
   readonly resetAt: number;
 }
 
 /**
  * This function tells if an error of the fetch is a `QuotaError` of `polite-crawler/api`. It reads
- * the fields of the error, its name and `resetAt`. A test with `instanceof` fails when two copies of
- * the package exist.
+ * the name of the error, a string `key` and a finite `resetAt`. A test with `instanceof` fails when
+ * two copies of the package exist.
+ *
+ * This check is local until `isQuotaError` of `polite-crawler/api` is on npm, in 0.6.4. Then the
+ * channel uses that function, and this one goes.
  */
 export function isQuotaRefusal(error: unknown): error is QuotaRefusal {
-  return error instanceof Error && error.name === "QuotaError" && typeof (error as { resetAt?: unknown }).resetAt === "number";
+  if (!(error instanceof Error) || error.name !== "QuotaError") return false;
+  const fields = error as { key?: unknown; resetAt?: unknown };
+  return typeof fields.key === "string" && typeof fields.resetAt === "number" && Number.isFinite(fields.resetAt);
 }
 
 /** This function gives the descriptor of the channel for a platform. */
@@ -83,7 +89,8 @@ export function pushoverDescriptor(platform?: "ios" | "android"): ChannelDescrip
  *
  * - `send` does not throw. A refusal of the quota is a failure of the kind `rate-limited`, thus the escalation goes to its next step.
  * - `status` does not throw. A receipt that the channel cannot read keeps the state `accepted`.
- * - `cancel` throws when Pushover does not stop the repeats, thus the caller can try again.
+ * - `cancel` is idempotent. A cancel that Pushover refuses ends without an error, because Pushover does not know the receipt (it keeps a receipt for one week). Thus no repeats continue.
+ * - `cancel` throws for each other failure, thus the caller can try again. A request that Pushover refused does not go again, because many refusals can block the address of the caller.
  */
 export function createPushoverChannel(options: PushoverChannelOptions): ChannelProcedures {
   const now = options.now ?? Date.now;
@@ -146,7 +153,8 @@ export function createPushoverChannel(options: PushoverChannelOptions): ChannelP
       // A message below priority 2 does not repeat, thus nothing stops.
       if (id === undefined) return;
       const { result } = await call(pushoverCancelRequest(options.token, id), extractPushoverCancelled);
-      if (!result.ok) throw new Error(`Pushover did not stop the repeats (${result.kind}): ${result.errors.join(" ")}`);
+      // A refusal tells that Pushover does not know the receipt: it is old, or it is not of this application. Nothing repeats under it.
+      if (!result.ok && result.kind !== "refused") throw new Error(`Pushover did not stop the repeats (${result.kind}): ${result.errors.join(" ")}`);
     },
   };
 }

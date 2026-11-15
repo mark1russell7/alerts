@@ -39,9 +39,11 @@ const fields = (body: string | undefined): Record<string, string> => Object.from
 /** The fields of `QuotaError` of `polite-crawler/api` that the channel reads. */
 class QuotaError extends Error {
   override readonly name: string = "QuotaError";
+  readonly key: string;
   readonly resetAt: number;
-  constructor(message: string, resetAt: number) {
+  constructor(message: string, resetAt: number, key = "pushover-messages") {
     super(message);
+    this.key = key;
     this.resetAt = resetAt;
   }
 }
@@ -201,12 +203,32 @@ describe("cancel", () => {
     expect(fake.calls[0]?.url).toContain(`/receipts/${RECEIPT}/cancel.json`);
     await expect(channel.cancel({ receipt: { receipt: RECEIPT } })).rejects.toThrow(/Pushover did not stop the repeats \(server\)/);
   });
+
+  it("is idempotent: a cancel of a receipt that Pushover does not know returns after one call", async () => {
+    const fake = server(
+      { status: 400, body: { status: 0, receipt: "not found", errors: ["receipt not found; may be invalid or expired"] } },
+      { status: 200, body: { status: 0, errors: ["the receipt is not active"] } },
+    );
+    const channel = createPushoverChannel({ token: TOKEN, fetch: fake.fetch });
+    await expect(channel.cancel({ receipt: { receipt: RECEIPT } })).resolves.toBeUndefined();
+    await expect(channel.cancel({ receipt: { receipt: RECEIPT } })).resolves.toBeUndefined();
+    expect(fake.calls).toHaveLength(2);
+  });
+
+  it("throws when the token, the network or the time limit stops the cancel", async () => {
+    const fake = server({ status: 401, body: { status: 0, token: "invalid", errors: ["application token is invalid"] } }, new TypeError("fetch failed"));
+    const channel = createPushoverChannel({ token: TOKEN, fetch: fake.fetch });
+    await expect(channel.cancel({ receipt: { receipt: RECEIPT } })).rejects.toThrow(/\(auth\)/);
+    await expect(channel.cancel({ receipt: { receipt: RECEIPT } })).rejects.toThrow(/\(network\)/);
+  });
 });
 
 describe("isQuotaRefusal", () => {
-  it("reads the name and the reset of the error", () => {
+  it("reads the name, the key and the reset of the error", () => {
     expect(isQuotaRefusal(new QuotaError("used", 1))).toBe(true);
     expect(isQuotaRefusal(new Error("other"))).toBe(false);
-    expect(isQuotaRefusal({ name: "QuotaError", resetAt: 1 })).toBe(false);
+    expect(isQuotaRefusal({ name: "QuotaError", key: "k", resetAt: 1 })).toBe(false);
+    expect(isQuotaRefusal(new QuotaError("used", Number.NaN))).toBe(false);
+    expect(isQuotaRefusal(Object.assign(new QuotaError("used", 1), { key: 7 }))).toBe(false);
   });
 });
