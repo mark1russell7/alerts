@@ -77,8 +77,8 @@ export interface DeliveryStep {
   /** The deliveries that the step wrote: the sends of the step, and the late sends of earlier steps. */
   readonly sent: readonly Delivery[];
   /**
-   * The keys of the sends that the channel accepted when the log already had a delivery of the key, for
-   * example from another copy of the system. The log keeps the first delivery. The cancel by tag of the
+   * The keys of the sends that the channel accepted when the log already had a delivery of the key.
+   * Another copy of the system can cause this. The log keeps the first delivery. The cancel by tag of the
    * channel stops the repeats of each copy.
    */
   readonly duplicates: readonly string[];
@@ -133,8 +133,8 @@ const UNSURE: ReadonlySet<string> = new Set(["network", "timeout", "server"]);
  * changes nothing in the log, thus the next step decides it again.
  *
  * - A send that passes its time limit stays in flight, thus it does not get a second send.
- * - The channel can have a copy that the log does not keep: a copy past its flight limit, or a copy whose
- *   send failed with no answer. On a channel that repeats, the step stops that copy by its copy id, and
+ * - The channel can have a copy that the log does not keep. This is a copy past its flight limit, or a
+ *   copy whose send failed with no answer. On a channel that repeats, the step stops that copy by its copy id, and
  *   the new copy goes in parallel. A stop by the delivery key here can also stop the new copy.
  * - A failed stop goes again at a later step. A stale copy that the channel accepts writes no delivery,
  *   and its stop goes again.
