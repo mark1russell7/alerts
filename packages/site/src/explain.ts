@@ -89,14 +89,20 @@ export function reasonText(reason: AssessReason, incident: Pick<Incident, "sever
       return "The areas have no codes, and no shape can match: no place of this person has a position.";
     case "unknown-place":
       return `The configuration has no place "${reason.place}".`;
-    case "place":
-      if (reason.distanceKm !== undefined) {
-        if (reason.distanceKm === 0) return `A shape of the incident contains ${nameOf(reason.place)}.`;
-        return `A shape of the incident is ${kilometers(reason.distanceKm)} from ${nameOf(reason.place)}, in the buffer of the place.`;
+    case "place": {
+      const shape =
+        reason.distanceKm === undefined
+          ? undefined
+          : reason.distanceKm === 0
+            ? `A shape of the incident contains ${nameOf(reason.place)}.`
+            : `A shape of the incident is ${kilometers(reason.distanceKm)} from ${nameOf(reason.place)}, in the buffer of the place.`;
+      if (reason.codes.length > 0) {
+        const codes = `The incident covers ${nameOf(reason.place)}: ${reason.codes.map((code) => code.code).join(", ")}.`;
+        return shape === undefined ? codes : `${codes} ${shape}`;
       }
-      // A system report names the place itself, so its match has no codes.
-      if (reason.codes.length === 0) return `The area of the report is ${nameOf(reason.place)}.`;
-      return `The incident covers ${nameOf(reason.place)}: ${reason.codes.map((code) => code.code).join(", ")}.`;
+      // A system report names the place itself, so its match has no codes and no distance.
+      return shape ?? `The area of the report is ${nameOf(reason.place)}.`;
+    }
     case "subject":
       return `The person watches the subject ${reason.subject.system}${reason.subject.id === undefined ? "" : ` ${reason.subject.id}`}.`;
     case "table": {

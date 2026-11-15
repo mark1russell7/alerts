@@ -176,11 +176,11 @@ export function regionCovers(area: RegionCode, place: RegionCode): boolean {
 /** A place in the areas of an incident, with the codes or the distance that decided the match. */
 export interface PlaceMatch {
   readonly place: PlaceId;
-  /** The codes of the place that the areas cover. The list is empty for a match by a shape. */
+  /** The codes of the place that the areas cover. The list is empty for a match by a shape only. */
   readonly codes: readonly RegionCode[];
   /**
    * The great-circle distance in kilometers from the place to the nearest shape of the areas. It is 0
-   * in a shape. It is present only for a match by a shape.
+   * in a shape. It is present only when that distance is in the buffer of the place.
    */
   readonly distanceKm?: number;
 }
@@ -189,10 +189,12 @@ export interface PlaceMatch {
  * This function gives the places that the areas of an incident cover, in the order of the places.
  *
  * - An area of a watched place covers that place.
- * - When the areas have a polygon or a circle, and the place has a position, the shapes decide. The
- *   place matches when the distance from its position to the nearest shape is not more than its buffer.
- * - Else the region codes decide.
- * - When `@mark1russell7/geo` refuses a shape, the codes also decide. This choice is on the safe side.
+ * - The region codes are the floor of each match. A place matches when the areas cover one of its codes.
+ * - A shape adds a place. It does not remove a match by codes. A place with a position also matches when
+ *   the distance to the nearest polygon or circle is not more than its buffer.
+ * - A shape that `@mark1russell7/geo` refuses adds no place.
+ * - The rule stays until the areas keep their CAP block. Today one list holds the areas of all blocks,
+ *   so the shape of one block cannot remove a place from a block with only codes.
  */
 export function matchPlaces(incident: Pick<Incident, "areas">, places: readonly WatchedPlace[]): PlaceMatch[] {
   const shapes = incident.areas.filter(isShape);
@@ -202,22 +204,21 @@ export function matchPlaces(incident: Pick<Incident, "areas">, places: readonly 
     const covered = place.codes.filter((code) => codes.some((area) => regionCovers(area, code)));
     const byCodes = covered.length > 0 || ids.has(place.id) ? [{ place: place.id, codes: covered }] : [];
     if (ids.has(place.id) || shapes.length === 0 || place.at === undefined) return byCodes;
-    const { nearest, refused } = nearestShape(shapes, place.at);
-    if (nearest <= place.bufferKm) return [{ place: place.id, codes: [], distanceKm: nearest }];
-    return refused ? byCodes : [];
+    const nearest = nearestShape(shapes, place.at);
+    const near = nearest <= place.bufferKm;
+    if (covered.length > 0) return [{ place: place.id, codes: covered, ...(near ? { distanceKm: nearest } : {}) }];
+    return near ? [{ place: place.id, codes: [], distanceKm: nearest }] : [];
   });
 }
 
-// The distance to the nearest shape that geo reads, and whether geo refused a shape.
-function nearestShape(shapes: readonly MapShape[], at: Position): { nearest: number; refused: boolean } {
+// The distance to the nearest shape that geo reads. A shape that geo refuses adds no distance.
+function nearestShape(shapes: readonly MapShape[], at: Position): number {
   let nearest = Number.POSITIVE_INFINITY;
-  let refused = false;
   for (const shape of shapes) {
     const distance = shapeDistanceKm(shape, at);
-    if (distance === undefined) refused = true;
-    else nearest = Math.min(nearest, distance);
+    if (distance !== undefined) nearest = Math.min(nearest, distance);
   }
-  return { nearest, refused };
+  return nearest;
 }
 
 /**

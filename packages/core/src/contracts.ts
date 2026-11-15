@@ -780,8 +780,8 @@ export type AssessReason =
   | { readonly kind: "unknown-place"; readonly place: PlaceId }
   /**
    * An area of the incident covers this place. The codes are the codes of the place that the areas have.
-   * For a match by a shape, the codes are empty. Then `distanceKm` is the distance from the place to the
-   * nearest shape, and it is 0 in a shape.
+   * `distanceKm` is the distance from the place to the nearest shape, and it is 0 in a shape. It is
+   * present when that distance is in the buffer of the place. For a match by a shape only, the codes are empty.
    */
   | { readonly kind: "place"; readonly place: PlaceId; readonly codes: readonly RegionCode[]; readonly distanceKm?: number }
   /** The person watches a subject of the incident. */

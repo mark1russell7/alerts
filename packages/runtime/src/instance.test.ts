@@ -3,7 +3,7 @@ import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fakeClock, type FakeClock, type WallClock } from "@mark1russell7/algebra/clock";
-import { CONFIG_FORMAT, parseConfig, type AlertConfig, type Watch, type ChannelId, type EscalationPolicy, type PersonId, type PlaceId, type SecretLookup, type SourceId } from "@mark1russell7/alerts";
+import { CONFIG_FORMAT, matchPlaces, parseConfig, type AlertConfig, type Watch, type ChannelId, type EscalationPolicy, type PersonId, type PlaceId, type SecretLookup, type SourceId } from "@mark1russell7/alerts";
 import { PUSHOVER_TIMEOUT_MS, type PushoverChannelOptions } from "@mark1russell7/alerts-channel-pushover";
 import { CANARY_PATH, createNwsSource } from "@mark1russell7/alerts-source-nws-api";
 import type { Exchange, Transport } from "polite-crawler/api";
@@ -178,14 +178,19 @@ describe("openInstance", () => {
     expect(net.exchanges.map((exchange) => exchange.url)).toContain("https://api.weather.gov/alerts/active?area=TX");
   });
 
-  it("sends no message to a place in the county but out of the polygon of the warning", async () => {
-    // A public point in McMullen County TX, 8.9 km north of the polygon. The buffer of the place is 5 km.
+  it("sends the warning by the county code to a place in the county but out of the polygon", async () => {
+    // A public point in McMullen County TX, 8.9 km north of the polygon. The buffer of the place is 5 km. A shape adds
+    // a place and does not remove a match by codes, so the county code matches the place.
     const outside = { ...CONFIG.places[0]!, at: [LONGITUDE, 28.46] as const };
     const { instance, clock, server } = open(store(SECRETS), { ...CONFIG, places: [outside] });
     const pass = await finish(clock, instance.runtime.pass());
     expect(pass.fetched).toEqual(["nws-api", "ipaws"]);
-    expect(server.calls).toHaveLength(0);
-    expect(pass.delivery?.sent ?? []).toHaveLength(0);
+    expect(server.calls).toHaveLength(1);
+    expect(pass.delivery?.sent).toHaveLength(1);
+    const [incident] = pass.view.incidents;
+    const [match] = matchPlaces(incident!, [outside]);
+    expect(match?.codes.map((code) => code.code)).toEqual(["TXC311", "048311"]);
+    expect(match?.distanceKm).toBeUndefined();
   });
 
   it("sends the warning when each exchange takes real time, as on a busy runner", async () => {

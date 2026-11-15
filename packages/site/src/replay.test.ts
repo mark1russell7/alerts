@@ -272,6 +272,9 @@ describe("the words of the page", () => {
       "A shape of the incident is 5.6 km from the home of A, in the Valley, in the buffer of the place.",
     );
     expect(reasonText({ kind: "place", place, codes: [], distanceKm: 0.01 }, incident!)).toContain("less than 0.1 km");
+    expect(reasonText({ kind: "place", place, codes: [{ system: "ugc", code: "KSC173" }], distanceKm: 0 }, incident!)).toBe(
+      "The incident covers the home of A, in the Valley: KSC173. A shape of the incident contains the home of A, in the Valley.",
+    );
   });
 
   it("counts the steps from 1 in the labels, and the last label names the count of the steps", () => {

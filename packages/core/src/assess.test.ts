@@ -248,11 +248,24 @@ describe("the shapes", () => {
     expect(matchPlaces({ areas: [polygon] }, [placed(at, 5)])).toEqual([]);
   });
 
-  it("lets the shapes decide over the codes for a place with a position", () => {
+  it("keeps a match by codes when the shapes are far from a place with a position", () => {
     const areas = [polygon, ...atHome];
-    expect(matchPlaces({ areas }, [placed([1.5, 0.5], 5)])).toEqual([]);
+    expect(matchPlaces({ areas }, [placed([1.5, 0.5], 5)])).toEqual([byCode]);
     const result = assess(incident({ areas }), person([], [home]), [placed([1.5, 0.5], 5)]);
-    expect(result).toMatchObject({ level: "none", places: [], reasons: [{ kind: "no-place" }] });
+    expect(result).toMatchObject({ level: "life-safety", places: [home] });
+    expect(result.reasons.find((one) => one.kind === "place")).toEqual({ kind: "place", ...byCode });
+  });
+
+  it("gives the codes and the distance when the codes and a shape both match", () => {
+    expect(matchPlaces({ areas: [polygon, ...atHome] }, [placed([0.5, 0.5], 0)])).toEqual([{ ...byCode, distanceKm: 0 }]);
+  });
+
+  it("matches a place by the code of one block when the polygon of another block is far", () => {
+    // The first CAP block has a polygon, and the second block has only the code of a second county. The list of
+    // areas does not keep the blocks, so the polygon must not remove the place of the second block.
+    const second = { system: "ugc", code: "KSC015" } as const;
+    const place: WatchedPlace = { ...placed([5, 5], 5), codes: [second] };
+    expect(matchPlaces({ areas: [polygon, { type: "code", ...second }] }, [place])).toEqual([{ place: home, codes: [second] }]);
   });
 
   it("lets the codes decide for a place with no position", () => {
@@ -274,7 +287,7 @@ describe("the shapes", () => {
     expect(match?.distanceKm).toBeCloseTo(distanceKm(point(at), point([1, 0.5])), 3);
   });
 
-  it("lets the codes decide too when geo refuses a shape, on the safe side", () => {
+  it("adds no place for a shape that geo refuses, and keeps the match by codes", () => {
     const broken = { type: "polygon", rings: [[[0, 0], [1, 0], [0, 0]]] } as const;
     expect(matchPlaces({ areas: [broken, ...atHome] }, [placed([5, 5], 0)])).toEqual([byCode]);
     expect(matchPlaces({ areas: [broken, polygon, ...atHome] }, [placed([5, 5], 0)])).toEqual([byCode]);

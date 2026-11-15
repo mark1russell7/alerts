@@ -454,14 +454,15 @@ A person also watches subjects, other than places, in `PersonWatch.subjects`: a 
 
 The positions of the places do not go to a source. A source fetches by area, for example all the alerts of a state, and the core matches the places on the machine of the instance. So a `WatchedPlace` gives an adapter region codes and a buffer, and no name, no address and no position. A source that needs a position gets it only when the owner lets that source get it.
 
-The core matches the area of a report to a place with one rule for each source. A polygon or a circle comes first, with the buffer of the place. Else the region codes decide.
+The core matches the area of a report to a place with one rule for each source. The region codes are the floor of each match. A polygon or a circle can add a place, with the buffer of the place.
 
-- When the areas have a shape and the place has a position, the shapes decide. The place matches when the great-circle distance from its position to the nearest shape is not more than its buffer.
-- A position in a shape has the distance 0. The reason `place` of the assessment then has `distanceKm` and no codes.
+- A place matches when the areas cover one of its codes. A shape does not remove this match.
+- A place with a position also matches when the great-circle distance from its position to the nearest shape is not more than its buffer.
+- A position in a shape has the distance 0. The reason `place` of the assessment has `distanceKm` when the distance is in the buffer. A match by a shape only has no codes.
 - A place with no position matches by its codes only.
 - `@mark1russell7/geo` gives the distances. An edge of a polygon is a straight line in longitude and latitude, as in GeoJSON (RFC 7946).
-- When `@mark1russell7/geo` refuses a shape, for example a ring with fewer than 4 positions, the region codes also decide. This choice is on the safe side.
-- The list of areas does not keep the area blocks of a CAP message. Thus a shape of one block also decides for a block with only codes.
+- A shape that `@mark1russell7/geo` refuses, for example a ring with fewer than 4 positions, adds no place.
+- The list of areas does not keep the area blocks of a CAP message. The IPAWS adapter and the merge put the areas of all blocks in one list. Thus a shape cannot remove a place: the place can be in a block with only codes. The next part of the plan gives each area the key of its block. Then the shape of a block decides for that block.
 
 Two codes match when their systems and their values are equal. The first digit of a SAME code is a part of the county, and `0` is the full county. So a part also matches the full county, and the match errs on the safe side.
 
