@@ -322,6 +322,26 @@ export interface CanaryResult {
 }
 
 /**
+ * The record of one fetch of a source. The runtime writes one record when each fetch ends, and the
+ * core calculates the health of the source from the records.
+ */
+export interface FetchRecord {
+  readonly source: SourceId;
+  /** The time at which the fetch started. */
+  readonly at: Instant;
+  /** The time that the fetch took. */
+  readonly took: Duration;
+  /** The failure of the fetch. It is absent when the fetch passed. */
+  readonly failure?: FetchFailure;
+  /** The count of observations of the fetch that the log did not have before. */
+  readonly fresh: number;
+  /** The count of fatal problems that the map gave for the observations of the fetch. */
+  readonly fatal: number;
+  /** The result of the canary check of the observations of the fetch, when the source has a canary. */
+  readonly canary?: CanaryResult;
+}
+
+/**
  * The procedures of one source. Each source package registers them under the path
  * `alerts.source.<id>.<name>`.
  *

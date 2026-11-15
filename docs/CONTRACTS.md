@@ -88,16 +88,20 @@ The testkit gives one conformance suite, and each adapter passes it. The suite e
 
 ## Health and coverage
 
-The core calculates the health of each source from the outcomes of its fetches, not the adapter. The health is a state machine on `@mark1russell7/algebra`:
+The core calculates the health of each source from the records of its fetches, not the adapter. The runtime writes one `FetchRecord` when each fetch ends. The health is a state machine on `@mark1russell7/algebra`, and `HEALTH_MACHINE` is its document.
 
 | State | When |
 | --- | --- |
-| `unknown` | No fetch yet. |
+| `unknown` | No fetch passed yet. |
 | `healthy` | The last fetch passed, in less than `slowAfter`. |
 | `slow` | The last fetch passed, in `slowAfter` or more. |
-| `failing` | The last fetches failed, or the canary failed. |
-| `silent` | No new message for `maxQuiet`, for a source where quiet is not normal. |
-| `changed` | The map gave problems. |
+| `failing` | The last `failAfter` fetches failed, or no fetch passed for `staleAfter`, or the last canary check failed. |
+| `silent` | No fresh observation for `maxQuiet`, for a source where quiet is not normal. |
+| `changed` | The map gave fatal problems for the last passed fetch. |
+
+The default of `failAfter` is 2 fetches, and the default of `staleAfter` is 3 intervals. When two conditions are true, the first state of this order applies: `failing`, `unknown`, `changed`, `silent`, `slow`, `healthy`. A stuck loop of the runtime writes no record, so the stale timer makes the source `failing`. A failed canary holds until a canary check passes.
+
+The health is a pure fold. `observeFetch` adds one record, and `advanceHealth` moves the time. Each step gives the changes of state as transitions, and the time of its next timer in `wakeAt`. A replay of the transitions against the document finds each change that the document does not permit. Tests replay random records, and compare each state with a direct calculation from the records.
 
 Each change of state is a system report.
 
