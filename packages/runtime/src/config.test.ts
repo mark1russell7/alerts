@@ -3,7 +3,20 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { CONFIG_FORMAT, type AlertConfig, type ChannelDescriptor, type ChannelId, type PersonId, type PlaceId } from "@mark1russell7/alerts";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { alertsHome, ConfigRefused, configPath, DEFAULT_ALERTS_HOME, envSecrets, fileSource, readConfig, requireConfig, type ConfigSource } from "./config.ts";
+import {
+  alertsHome,
+  checkConfig,
+  ConfigRefused,
+  configPath,
+  DEFAULT_ALERTS_HOME,
+  envSecrets,
+  fileSource,
+  readConfig,
+  readSecrets,
+  requireConfig,
+  SECRETS_FILE,
+  type ConfigSource,
+} from "./config.ts";
 
 const PUSHOVER = "pushover" as ChannelId;
 const PERSON = "person:a" as PersonId;
@@ -111,6 +124,54 @@ describe("readConfig", () => {
     expect(await problemsOf("{")).toEqual(["The configuration is not valid JSON."]);
     expect(await problemsOf(JSON.stringify({ ...CONFIG, extra: 1 }))).toHaveLength(1);
     expect(await problemsOf(JSON.stringify(CONFIG), envSecrets({}))).toEqual([expect.stringContaining("names the secret PUSHOVER_USER")]);
+  });
+});
+
+describe("readSecrets and checkConfig", () => {
+  let home = "";
+  beforeAll(async () => {
+    home = await mkdtemp(join(tmpdir(), `alerts-secrets-${PRIVATE}-`));
+  });
+  afterAll(async () => {
+    await rm(home, { recursive: true, force: true });
+  });
+  const writeSecrets = (text: string): Promise<void> => writeFile(join(home, SECRETS_FILE), text, "utf8");
+
+  it("reads the keys of secrets.env in the private folder", async () => {
+    await writeSecrets(`# a comment\nPUSHOVER_USER=${PRIVATE}-user\nEMPTY=\n`);
+    expect(await readSecrets(home)).toEqual({ tag: "ok", value: { PUSHOVER_USER: `${PRIVATE}-user`, EMPTY: "" } });
+  });
+
+  it("gives the code of a file that cannot be read, and not its path", async () => {
+    expect(await readSecrets(join(home, "absent"))).toEqual({ tag: "err", error: ["The file secrets.env cannot be read (ENOENT)."] });
+  });
+
+  it("gives the problem of a bad line with its line and no value", async () => {
+    await writeSecrets(`PUSHOVER_USER=${PRIVATE}-user\n${PRIVATE} no equals sign\n`);
+    const read = await readSecrets(home);
+    expect(read.tag).toBe("err");
+    const problems = read.tag === "err" ? read.error : [];
+    expect(problems).toEqual([expect.stringMatching(/^The file secrets\.env: .*2/)]);
+    expect(problems.join("\n")).not.toContain(PRIVATE);
+  });
+
+  it("checks a configuration with the keys of the private folder, as the start does", async () => {
+    await writeSecrets(`PUSHOVER_USER=${PRIVATE}-user\n`);
+    const checked = await checkConfig(textSource(JSON.stringify(CONFIG)), home, [CHANNEL]);
+    expect(checked.tag === "ok" ? checked.value.config : undefined).toEqual(CONFIG);
+  });
+
+  it("refuses a configuration that names a key that secrets.env does not have", async () => {
+    await writeSecrets("OTHER=value\n");
+    expect(await checkConfig(textSource(JSON.stringify(CONFIG)), home, [CHANNEL])).toEqual({ tag: "err", error: [expect.stringContaining("names the secret PUSHOVER_USER")] });
+  });
+
+  it("gives the problems of secrets.env before it reads the configuration", async () => {
+    let reads = 0;
+    const counted: ConfigSource = { name: "The test source", read: async () => ((reads += 1), JSON.stringify(CONFIG)) };
+    const checked = await checkConfig(counted, join(home, "absent"), [CHANNEL]);
+    expect(checked).toEqual({ tag: "err", error: ["The file secrets.env cannot be read (ENOENT)."] });
+    expect(reads).toBe(0);
   });
 });
 

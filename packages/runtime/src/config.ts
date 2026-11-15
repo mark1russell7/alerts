@@ -9,7 +9,8 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { parseConfig, type ChannelDescriptor, type ParsedConfig, type SecretLookup } from "@mark1russell7/alerts";
 import { resolvePath } from "@mark1russell7/files";
-import { err, tryCatchAsync, type Result } from "@mark1russell7/optional";
+import { err, ok, tryCatchAsync, type Result } from "@mark1russell7/optional";
+import { parseEnvFile } from "@mark1russell7/service/host";
 import { countOf } from "@mark1russell7/text";
 
 /**
@@ -35,6 +36,9 @@ export const DEFAULT_ALERTS_HOME = "~/.alerts";
 
 /** This name is the name of the configuration file in the private folder. */
 export const CONFIG_FILE = "config.json";
+
+/** This name is the name of the file of keys in the private folder. */
+export const SECRETS_FILE = "secrets.env";
 
 /**
  * This function gives the private folder from the environment. The path can start with `~`. A relative
@@ -65,6 +69,31 @@ export function envSecrets(env: Readonly<Record<string, string | undefined>>): S
     const value = env[name];
     return value === undefined || value === "" ? undefined : value;
   };
+}
+
+/**
+ * This function reads the file of keys `secrets.env` in the private folder. A problem gives the line
+ * and the key of a bad line, or the code of a read error. It holds no value and no path.
+ */
+export async function readSecrets(home: string): Promise<Result<Readonly<Record<string, string>>, readonly string[]>> {
+  const text = await tryCatchAsync(
+    () => readFile(join(home, SECRETS_FILE), "utf8"),
+    (thrown): readonly string[] => [`The file ${SECRETS_FILE} cannot be read (${codeOf(thrown)}).`],
+  );
+  if (text.tag === "err") return err(text.error);
+  const parsed = parseEnvFile(text.value);
+  return parsed.problems.length > 0 ? err(parsed.problems.map((problem) => `The file ${SECRETS_FILE}: ${problem}`)) : ok(parsed.env);
+}
+
+/**
+ * This function checks a configuration with the keys of the private folder, as the start of the runtime
+ * does. A writer of the configuration uses it before its new file replaces `config.json`, because a
+ * bad `config.json` stops the next start.
+ */
+export async function checkConfig(source: ConfigSource, home: string, channels: readonly ChannelDescriptor[]): Promise<Result<ParsedConfig, readonly string[]>> {
+  const secrets = await readSecrets(home);
+  if (secrets.tag === "err") return err(secrets.error);
+  return readConfig(source, channels, envSecrets(secrets.value));
 }
 
 /**

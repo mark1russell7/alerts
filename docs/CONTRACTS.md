@@ -445,7 +445,15 @@ The function `parseConfig` reads the JSON text of the configuration. It checks t
 
 The runtime reads the text with `requireConfig`. A `ConfigSource` gives the text. Today it is the private file `config.json` in the folder `ALERTS_HOME`, or in `~/.alerts` with no variable. A procedure that gives the configuration replaces the file later, with the same interface.
 
-The entry reads the keys of `secrets.env` in the same folder with `parseEnvFile` of `@mark1russell7/service/host`. `envSecrets` gives them as the secret store. The keys do not go into `process.env`, because each child process gets that environment. On a problem, `requireConfig` throws `ConfigRefused`, and the process does not start. A read error gives only its code, because the path can hold a user name.
+The entry reads the keys of `secrets.env` in the same folder with `readSecrets`, on `parseEnvFile` of `@mark1russell7/service/host`. `envSecrets` gives them as the secret store. The keys do not go into `process.env`, because each child process gets that environment. On a problem, `requireConfig` throws `ConfigRefused`, and the process does not start. A read error gives only its code, because the path can hold a user name.
+
+A bad `config.json` stops the next start. Thus a writer of the configuration does these steps:
+
+1. Write the new file in the folder `ALERTS_HOME`, next to `config.json`.
+2. Start `node src/check.ts <file>` in the runtime package. The check uses `checkConfig`, with the keys and the channels of the start.
+3. Rename the file to `config.json` only when the exit code is 0. Code 1 gives the problems, and code 2 gives a wrong command.
+
+The output of the check gives the count of the places, the people, the contacts and the policies, or the problems. It holds no value and no path.
 
 The function `sourcePlaces` gives the places for one source, with no label, and with a position only when the place shares it with that source. The function `localPlaces` gives each position for the matching on the machine of the instance.
 
