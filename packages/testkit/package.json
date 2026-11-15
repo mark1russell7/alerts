@@ -14,8 +14,10 @@
   },
   "dependencies": {
     "@mark1russell7/alerts": "workspace:*",
+    "@mark1russell7/alerts-channel-pushover": "workspace:*",
     "@mark1russell7/alerts-runtime": "workspace:*",
     "@mark1russell7/alerts-source-nws-api": "workspace:*",
+    "@mark1russell7/algebra": "^0.8.7",
     "@mark1russell7/rigor-chaos": "^0.2.2",
     "@mark1russell7/rigor-proxy": "^0.2.1",
     "@mark1russell7/rigor-testkit": "^0.1.7",
