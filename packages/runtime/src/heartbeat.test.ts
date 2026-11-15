@@ -1,10 +1,29 @@
 import type { SourceId } from "@mark1russell7/alerts";
 import { fakeWallClock } from "@mark1russell7/algebra/clock";
+import { random, seedsFrom } from "@mark1russell7/rigor-generators";
 import { describe, expect, it } from "vitest";
-import { heartbeat, heartbeatStep, pingOf, pingUrl, type HeartbeatFetch, type HeartbeatState, type PassSummary } from "./heartbeat.ts";
+import {
+  checkOfPingUrl,
+  checksRequest,
+  checkTimesProblem,
+  heartbeat,
+  HEARTBEAT_EVERY,
+  HEARTBEAT_LIMIT,
+  HEARTBEAT_START,
+  heartbeatGap,
+  heartbeatStep,
+  holdStep,
+  pingOf,
+  pingUrl,
+  type HeartbeatFetch,
+  type HeartbeatState,
+  type PassSummary,
+} from "./heartbeat.ts";
+import { INSTANCE_TIMES } from "./instance.ts";
 
 const T0 = Date.UTC(2026, 10, 15, 12, 0);
 const SECOND = 1000;
+const SEEDS = seedsFrom(process.env["SEED"], [1, 2, 3, 4]);
 // A fake ping URL. No check has it.
 const URL_OF_CHECK = "https://hc-ping.com/00000000-0000-4000-8000-000000000000";
 const AGENT = "alerts-runtime (test)";
@@ -20,15 +39,19 @@ const healthy = (at: number): PassSummary => ({
     ],
   },
 });
-const refused = (at: number, kind = "auth"): PassSummary => ({
+/** A pass with a refused send on Pushover that goes again at `retryAt`, and a status call that failed on the network. */
+const refused = (at: number, kind = "auth", retryAt = at + 10 * SECOND): PassSummary => ({
   ...healthy(at),
   delivery: {
+    sent: [],
     failures: [
-      { call: "send", channel: "pushover", kind },
-      { call: "status", channel: "pushover", kind: "network" },
+      { call: "send", channel: "pushover", kind, retryAt },
+      { call: "status", channel: "pushover", kind: "network", retryAt },
     ],
   },
 });
+/** A pass with a send on Pushover. */
+const sent = (at: number): PassSummary => ({ ...healthy(at), delivery: { sent: [{ channel: "pushover" }], failures: [] } });
 
 const settle = async (): Promise<void> => {
   for (let turn = 0; turn < 5; turn++) await new Promise((resolve) => setImmediate(resolve));
@@ -64,40 +87,71 @@ function open(answer?: () => Promise<number>, onError: (message: string) => void
   return { clock, server, errors, hook };
 }
 
+/** This function runs the steps of a list of passes, and gives the kind of each ping, or `-` for no ping. */
+function kindsOf(passes: readonly PassSummary[], every = 60 * SECOND): string[] {
+  let state: HeartbeatState = HEARTBEAT_START;
+  return passes.map((pass) => {
+    const step = heartbeatStep(state, pass, every);
+    state = step.state;
+    return step.ping?.kind ?? "-";
+  });
+}
+
 describe("the steps of the heartbeat", () => {
   it("pings at the first pass, then once in each 60 s", () => {
-    let state: HeartbeatState = {};
-    const kinds: (string | undefined)[] = [];
-    for (const at of [T0, T0 + 30 * SECOND, T0 + 60 * SECOND, T0 + 90 * SECOND, T0 + 121 * SECOND]) {
-      const step = heartbeatStep(state, healthy(at), 60 * SECOND);
-      state = step.state;
-      kinds.push(step.ping?.kind);
-    }
-    expect(kinds).toEqual(["success", undefined, "success", undefined, "success"]);
+    expect(kindsOf([T0, T0 + 30 * SECOND, T0 + 60 * SECOND, T0 + 90 * SECOND, T0 + 121 * SECOND].map(healthy))).toEqual(["success", "-", "success", "-", "success"]);
   });
 
-  it("pings fail at once when a channel refuses a send, and success at once after it", () => {
-    const first = heartbeatStep({}, healthy(T0), 60 * SECOND);
-    const fail = heartbeatStep(first.state, refused(T0 + SECOND), 60 * SECOND);
+  it("pings fail at once when a channel refuses a send, and success at once after a send on it", () => {
+    let state = heartbeatStep(HEARTBEAT_START, healthy(T0), 60 * SECOND).state;
+    const fail = heartbeatStep(state, refused(T0 + SECOND), 60 * SECOND);
     expect(fail.ping).toEqual({ kind: "fail", body: "The channel pushover gave the kind auth to a send." });
-    const again = heartbeatStep(fail.state, refused(T0 + 2 * SECOND), 60 * SECOND);
-    expect(again.ping).toBeUndefined();
-    const back = heartbeatStep(again.state, healthy(T0 + 3 * SECOND), 60 * SECOND);
+    state = fail.state;
+    const back = heartbeatStep(state, sent(T0 + 2 * SECOND), 60 * SECOND);
     expect(back.ping?.kind).toBe("success");
   });
 
-  it("pings again when the wall clock steps back", () => {
-    const first = heartbeatStep({}, healthy(T0), 60 * SECOND);
-    expect(heartbeatStep(first.state, healthy(T0 - 3600 * SECOND), 60 * SECOND).ping?.kind).toBe("success");
+  it("holds the fail through the passes before the retry: one fail ping and no success ping", () => {
+    const passes = [healthy(T0), refused(T0 + SECOND, "auth", T0 + 11 * SECOND), healthy(T0 + 4 * SECOND), healthy(T0 + 8 * SECOND), refused(T0 + 11 * SECOND, "auth", T0 + 21 * SECOND)];
+    expect(kindsOf(passes)).toEqual(["success", "fail", "-", "-", "-"]);
+  });
+
+  it("ends the fail at the first pass at or after the retry with no refusal on the channel", () => {
+    const passes = [refused(T0, "auth", T0 + 10 * SECOND), healthy(T0 + 9 * SECOND), healthy(T0 + 10 * SECOND)];
+    expect(kindsOf(passes)).toEqual(["fail", "-", "success"]);
+  });
+
+  it("keeps the fail when one pass has a send and a refusal on the channel", () => {
+    const both: PassSummary = { ...healthy(T0 + SECOND), delivery: { sent: [{ channel: "pushover" }], failures: [{ call: "send", channel: "pushover", kind: "rate-limited", retryAt: T0 + 30 * SECOND }] } };
+    expect(holdStep(holdStep({}, refused(T0)), both)).toEqual({ pushover: { kinds: ["rate-limited"], until: T0 + 30 * SECOND } });
+  });
+
+  it("adds the kinds and keeps the latest retry while the fail holds", () => {
+    const held = holdStep(holdStep({}, refused(T0, "rate-limited", T0 + 30 * SECOND)), refused(T0 + SECOND, "auth", T0 + 11 * SECOND));
+    expect(held).toEqual({ pushover: { kinds: ["auth", "rate-limited"], until: T0 + 30 * SECOND } });
+    expect(pingOf(healthy(T0 + SECOND), held).body).toBe("The channel pushover gave the kind auth to a send.\nThe channel pushover gave the kind rate-limited to a send.");
   });
 
   it("gives success to a failure that can pass, and puts the state of each source in the body", () => {
-    expect(pingOf({ ...healthy(T0), delivery: { failures: [{ call: "send", channel: "pushover", kind: "network" }] } })).toEqual({
+    expect(pingOf({ ...healthy(T0), delivery: { sent: [], failures: [{ call: "send", channel: "pushover", kind: "network", retryAt: T0 }] } })).toEqual({
       kind: "success",
       body: "nws-api: healthy\nipaws: failing",
     });
     expect(pingOf(refused(T0, "rate-limited")).kind).toBe("fail");
     expect(pingOf(refused(T0, "refused")).kind).toBe("fail");
+  });
+
+  it("pings again when the wall clock steps back", () => {
+    expect(kindsOf([healthy(T0), healthy(T0 - 3600 * SECOND)])).toEqual(["success", "success"]);
+  });
+
+  it("starts no ping while a ping is in flight, keeps the last ping, and still holds a fail", () => {
+    const first = heartbeatStep(HEARTBEAT_START, healthy(T0), 60 * SECOND);
+    const busy = heartbeatStep(first.state, refused(T0 + SECOND), 60 * SECOND, true);
+    expect(busy.ping).toBeUndefined();
+    expect(busy.state.last).toEqual({ at: T0, kind: "success" });
+    expect(Object.keys(busy.state.held)).toEqual(["pushover"]);
+    expect(heartbeatStep(busy.state, healthy(T0 + 2 * SECOND), 60 * SECOND).ping?.kind).toBe("fail");
   });
 
   it("adds /fail to the path of the ping URL and keeps its query", () => {
@@ -107,8 +161,101 @@ describe("the steps of the heartbeat", () => {
   });
 });
 
+describe("the gap of two pings", () => {
+  it("adds the period, two pass limits, the longest wait, the ping limit, and a pass and a wait for each failed pass", () => {
+    const times = { passLimit: 80 * SECOND, retryCap: 60 * SECOND };
+    expect(heartbeatGap(times, { failedPasses: 0 })).toBe(HEARTBEAT_EVERY + 160 * SECOND + 60 * SECOND + HEARTBEAT_LIMIT);
+    expect(heartbeatGap(times, { failedPasses: 2 }) - heartbeatGap(times, { failedPasses: 0 })).toBe(280 * SECOND);
+    // The instance: two sources with an interval of 60 s, and two calls of 10 s. One failed pass is let pass.
+    expect(heartbeatGap(INSTANCE_TIMES)).toBe(430 * SECOND);
+  });
+
+  it.each(SEEDS)("bounds the gap of two success pings in runs of passes with random times (seed %s)", (seed) => {
+    const r = random(seed).fork("gap");
+    const times = { passLimit: 80 * SECOND, retryCap: 60 * SECOND };
+    for (let run = 0; run < 200; run++) {
+      let state: HeartbeatState = HEARTBEAT_START;
+      let start = T0;
+      let arrival: number | undefined;
+      let failed = 0;
+      for (let pass = 0; pass < 40; pass++) {
+        const end = start + r.range(0, times.passLimit);
+        if (r.chance(0.1)) failed += 1;
+        else {
+          // The time of a pass is in the pass. The ping starts at its end and arrives within the limit.
+          const step = heartbeatStep(state, healthy(r.range(start, end)), HEARTBEAT_EVERY);
+          state = step.state;
+          if (step.ping !== undefined) {
+            const next = end + r.range(0, HEARTBEAT_LIMIT);
+            if (arrival !== undefined) {
+              expect(next - arrival).toBeLessThanOrEqual(heartbeatGap(times, { failedPasses: failed }));
+            }
+            arrival = next;
+            failed = 0;
+          }
+        }
+        start = end + r.range(0, times.retryCap);
+      }
+    }
+  });
+
+  it("is reached by a run: the time of the first pass at its end, the time of the next pass at its start", () => {
+    const times = { passLimit: 80 * SECOND, retryCap: 60 * SECOND };
+    // Each pass takes the pass limit, and each wait is the longest wait. The first ping arrives at the end of its pass.
+    const first = { at: T0 + 80 * SECOND, end: T0 + 80 * SECOND };
+    const second = { at: first.at + HEARTBEAT_EVERY - 1, end: first.at + HEARTBEAT_EVERY - 1 + 80 * SECOND };
+    const third = { at: second.end + 60 * SECOND, end: second.end + 140 * SECOND };
+    expect(kindsOf([first, second, third].map((pass) => healthy(pass.at)))).toEqual(["success", "-", "success"]);
+    expect(third.end + HEARTBEAT_LIMIT - first.end).toBe(heartbeatGap(times, { failedPasses: 0 }) - 1);
+  });
+});
+
+describe("the check of Healthchecks.io", () => {
+  const answer = (checks: unknown): string => JSON.stringify({ checks });
+  const check = { name: "alerts", ping_url: URL_OF_CHECK, status: "up", timeout: 60, grace: 400 };
+
+  it("asks the management API with the key and the User-Agent", () => {
+    expect(checksRequest("key-test", AGENT)).toEqual({
+      method: "GET",
+      url: "https://healthchecks.io/api/v3/checks/",
+      headers: { accept: "application/json", "user-agent": AGENT, "x-api-key": "key-test" },
+      body: null,
+    });
+  });
+
+  it("finds the check of the ping URL, and gives its times in milliseconds", () => {
+    const other = { ...check, ping_url: "https://hc-ping.com/11111111-1111-4111-8111-111111111111", timeout: 86400 };
+    expect(checkOfPingUrl(answer([other, { ...check, ping_url: `${URL_OF_CHECK}/` }]), URL_OF_CHECK)).toEqual({ ok: true, check: { status: "up", timeout: 60 * SECOND, grace: 400 * SECOND } });
+  });
+
+  it("gives a problem with no URL for no check, a key that only reads, a cron check and a bad answer", () => {
+    const problems = [
+      checkOfPingUrl(answer([]), URL_OF_CHECK),
+      checkOfPingUrl(answer([{ name: "alerts", unique_key: "abc", timeout: 60, grace: 400 }]), URL_OF_CHECK),
+      checkOfPingUrl(answer([{ ...check, timeout: undefined, schedule: "* * * * *" }]), URL_OF_CHECK),
+      checkOfPingUrl("{", URL_OF_CHECK),
+      checkOfPingUrl("{}", URL_OF_CHECK),
+    ].map((result) => (result.ok ? "ok" : result.problem));
+    expect(problems).toEqual([
+      expect.stringMatching(/^No check of the key has the ping URL/),
+      expect.stringMatching(/^No check of the key has the ping URL/),
+      "The check has a cron schedule. The heartbeat needs a check with a period.",
+      "The answer of the management API is not valid JSON.",
+      "The answer of the management API has no list of checks.",
+    ]);
+    for (const problem of problems) expect(problem).not.toContain("00000000");
+  });
+
+  it("refuses a check whose period plus grace is shorter than the gap", () => {
+    const gap = heartbeatGap(INSTANCE_TIMES);
+    expect(checkTimesProblem({ status: "up", timeout: 60 * SECOND, grace: 370 * SECOND }, gap)).toBeUndefined();
+    expect(checkTimesProblem({ status: "new", timeout: 86400 * SECOND, grace: 3600 * SECOND }, gap)).toBeUndefined();
+    expect(checkTimesProblem({ status: "up", timeout: 60 * SECOND, grace: 60 * SECOND }, gap)).toBe("The period plus the grace of the check is 120 s. The heartbeat needs 430 s or more.");
+  });
+});
+
 describe("the hook of the heartbeat", () => {
-  it("posts the ping with the User-Agent and the body, and returns before the answer", async () => {
+  it("posts the ping with the User-Agent and the body, and ends before the answer", async () => {
     let answer: (status: number) => void = () => undefined;
     const { server, hook, errors } = open(() => new Promise((resolve) => (answer = resolve)));
     expect(hook(healthy(T0))).toBeUndefined();
@@ -131,15 +278,30 @@ describe("the hook of the heartbeat", () => {
     hook(healthy(T0));
     await settle();
     // The ping is in flight, thus a new kind starts no second ping.
-    hook(refused(T0 + SECOND));
+    hook(refused(T0 + SECOND, "auth", T0 + 60 * SECOND));
     await settle();
     expect(server.calls).toHaveLength(1);
     await clock.advance(10 * SECOND);
     await settle();
     expect(errors).toEqual(["The success ping of the heartbeat failed. It took longer than 10000 ms."]);
-    hook(refused(T0 + 11 * SECOND));
+    // The fail of the pass in flight holds, thus the next pass pings it.
+    hook(healthy(T0 + 11 * SECOND));
     await settle();
     expect(server.calls.map((call) => call.url)).toEqual([URL_OF_CHECK, `${URL_OF_CHECK}/fail`]);
+  });
+
+  it("pings again at the next pass after a lost ping", async () => {
+    let status = 503;
+    const { server, hook, errors } = open(async () => status);
+    hook(healthy(T0));
+    await settle();
+    status = 200;
+    hook(healthy(T0 + SECOND));
+    await settle();
+    hook(healthy(T0 + 2 * SECOND));
+    await settle();
+    expect(server.calls).toHaveLength(2);
+    expect(errors).toEqual(["The success ping of the heartbeat got the status 503."]);
   });
 
   it("removes the ping URL from the text of a failed fetch", async () => {

@@ -12,6 +12,7 @@ import {
   observeFetch,
   startHealth,
   type Acknowledgment,
+  type ChannelId,
   type Cursor,
   type Delivery,
   type EndMark,
@@ -53,6 +54,18 @@ export interface RuntimeState {
   readonly cancelled: readonly string[];
   /** The start of each escalation, in the order of the log. */
   readonly starts: readonly EscalationStart[];
+  /**
+   * The open copies, by copy id: each send on a channel that repeats with no delivery of its copy and no
+   * `settled` event. The channel can repeat them. After a restart, the delivery step stops them.
+   */
+  readonly copies: Readonly<Record<string, OpenCopy>>;
+}
+
+/** The send of an open copy. */
+export interface OpenCopy {
+  /** The delivery key of the send. */
+  readonly key: string;
+  readonly channel: ChannelId;
 }
 
 /** The state before the first event. */
@@ -65,6 +78,7 @@ export const EMPTY_RUNTIME: RuntimeState = {
   lines: NO_SYSTEM_LINES,
   cancelled: [],
   starts: [],
+  copies: {},
 };
 
 /** This function adds one event to the state. */
@@ -107,7 +121,14 @@ function partsOf(event: RuntimeEvent): MergeParts | undefined {
       return { acks: [event.acknowledgment] };
     case "ended":
     case "back":
-      return { ends: event.reports.map((report) => ({ report, at: event.time, ended: event.type === "ended" })) };
+      return {
+        ends: event.reports.map((report) => ({
+          report,
+          at: event.time,
+          ended: event.type === "ended",
+          ...(event.type === "ended" && event.asOf !== undefined ? { asOf: event.asOf } : {}),
+        })),
+      };
     default:
       return undefined;
   }
@@ -139,9 +160,23 @@ function foldRest(state: RuntimeState, event: RuntimeEvent, context: FoldContext
       return { ...base, starts: [...state.starts, event.start] };
     case "cancelled":
       return state.cancelled.includes(event.delivery) ? base : { ...base, cancelled: [...state.cancelled, event.delivery].sort(compare) };
+    case "attempt":
+      return { ...base, copies: { ...state.copies, [event.copy]: { key: event.key, channel: event.channel } } };
+    case "delivery":
+      return event.copy === undefined ? base : { ...base, copies: without(state.copies, event.copy) };
+    case "settled":
+      return { ...base, copies: without(state.copies, event.copy) };
     default:
       return base;
   }
+}
+
+// The open copies with no entry for one copy id.
+function without(copies: RuntimeState["copies"], copy: string): RuntimeState["copies"] {
+  if (!Object.hasOwn(copies, copy)) return copies;
+  const rest = { ...copies };
+  delete rest[copy];
+  return rest;
 }
 
 // The order of the code units, the same in each copy and each locale.

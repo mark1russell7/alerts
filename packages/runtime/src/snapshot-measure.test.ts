@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { flapCounts, listRuns, type ListFetch } from "./snapshot-measure.ts";
+import { flapCounts, listRuns, missesDecision, type FlapBound, type ListFetch } from "./snapshot-measure.ts";
 
 const MINUTE = 60_000;
 const at = (index: number): number => index * 2 * MINUTE;
@@ -92,5 +92,43 @@ describe("flapCounts", () => {
     const keys = Array.from({ length: 50 }, (_, index) => `k${String(index)}`);
     const runs = listRuns([list(0, ...keys), list(1), list(2, ...keys), list(3, ...keys)], 0);
     expect(flapCounts(runs, 1)).toEqual([{ misses: 1, flaps: 50, trials: 100, starts: 1, lists: 3, largest: 50 }]);
+  });
+});
+
+describe("missesDecision", () => {
+  // The bounds use exact binary fractions, so each product is exact. The bound of the false ends is highByList * lists * largest.
+  const bound = (misses: number, highByList: number, largest = 0): FlapBound => ({ misses, highByList, lists: 64, largest });
+  // At 1 miss: 0.5 * 64 * 4 = 128. At 2 misses: 0.125 * 64 * 2 = 16. At 3 and more: 0.03125 * 64 = 2.
+  const BOUNDS = [bound(1, 0.5, 4), bound(2, 0.125, 2), bound(3, 0.03125), bound(4, 0.03125)];
+
+  it("gives the smallest count of misses whose false ends are the share or less of the true ends", () => {
+    expect(missesDecision(BOUNDS, 64, 0.0625)).toEqual({ decided: true, misses: 3, share: 2 / 64 });
+    expect(missesDecision(BOUNDS, 256, 0.0625)).toEqual({ decided: true, misses: 2, share: 16 / 256 });
+    expect(missesDecision(BOUNDS, 2048, 0.0625)).toEqual({ decided: true, misses: 1, share: 128 / 2048 });
+  });
+
+  it("gives the same decision for the bounds in any order", () => {
+    expect(missesDecision([...BOUNDS].reverse(), 64, 0.0625)).toEqual(missesDecision(BOUNDS, 64, 0.0625));
+  });
+
+  it("counts a list with no false end as one false end, because a future list can have one", () => {
+    expect(missesDecision([bound(1, 0.03125)], 32, 0.0625)).toEqual({ decided: true, misses: 1, share: 2 / 32 });
+    expect(missesDecision([bound(1, 0.03125)], 31, 0.0625).decided).toBe(false);
+  });
+
+  it("gives no decision with too few true ends, and tells the count that a decision needs", () => {
+    const decision = missesDecision(BOUNDS, 16, 0.0625);
+    expect(decision.decided).toBe(false);
+    expect(decision.decided ? "" : decision.reason).toBe("At 3 misses, the bound of the false ends is 2.0, more than 0.0625 of 16 true ends. A decision needs about 32 true ends with no new false end.");
+  });
+
+  it("gives no decision with no true end and with no bound", () => {
+    expect(missesDecision(BOUNDS, 0, 0.0625)).toEqual({ decided: false, reason: "The measure has no true end. A decision needs about 32 true ends with no new false end." });
+    expect(missesDecision([], 100, 0.0625)).toEqual({ decided: false, reason: "The measure has no count of misses." });
+  });
+
+  it("refuses a share outside 0 and 1, and a count of ends that is not a count", () => {
+    for (const share of [0, 1, -0.5, Number.NaN]) expect(() => missesDecision(BOUNDS, 64, share)).toThrow(RangeError);
+    for (const ends of [-1, 1.5, Number.NaN]) expect(() => missesDecision(BOUNDS, ends, 0.0625)).toThrow(RangeError);
   });
 });

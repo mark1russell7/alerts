@@ -245,6 +245,9 @@ importers:
       '@mark1russell7/collections':
         specifier: ^0.10.2
         version: 0.10.2(zod@4.6.7)
+      '@mark1russell7/geo':
+        specifier: ^0.2.1
+        version: 0.2.1
       '@mark1russell7/optional':
         specifier: ^1.2.0
         version: 1.2.0
@@ -437,8 +440,8 @@ importers:
         specifier: workspace:*
         version: link:../source-nws-api
       '@mark1russell7/geo':
-        specifier: ^0.1.0
-        version: 0.1.0
+        specifier: ^0.2.1
+        version: 0.2.1
       '@mark1russell7/sqlite':
         specifier: ^0.2.6
         version: 0.2.6
@@ -665,6 +668,9 @@ importers:
       '@mark1russell7/rigor-testkit':
         specifier: ^0.1.7
         version: 0.1.7(@opentelemetry/api@1.10.0)(fast-check@4.10.2)
+      '@procedures/notify':
+        specifier: ^0.57.0
+        version: 0.57.0(@mark1russell7/rigor-testkit@0.1.7(@opentelemetry/api@1.10.0)(fast-check@4.10.2))
       polite-crawler:
         specifier: ^0.6.2
         version: 0.6.2
@@ -942,8 +948,8 @@ packages:
     resolution: {integrity: sha512-FiiKK/sAbp39ypGv+2XzYRc+s911pdCtu97UQ4LiKmQKHjqPiyocGO48r2YObucxUkQhnm9mCdkiQxW6rFjiAg==}
     engines: {node: '>=22'}
 
-  '@mark1russell7/geo@0.1.0':
-    resolution: {integrity: sha512-wdIfFArGYEWNuO3+w6/QOv5UT/NMKYgjS5l+LR9/lZaoLscf3gEK8nYFpvKdaRwqZNRnbvDBvkAftUqyHv9FYg==}
+  '@mark1russell7/geo@0.2.1':
+    resolution: {integrity: sha512-T/DB8810mppYuWHAQ43Sy0sE/dQWse9vlr8bHGt+8QXk6ZMJS4eZ+t5qUGC4Wf0PcFKulhg43VLcQKZcRVtNvg==}
     engines: {node: '>=22.12'}
 
   '@mark1russell7/optional@1.2.0':
@@ -1094,9 +1100,27 @@ packages:
       express:
         optional: true
 
+  '@procedures/client@0.57.0':
+    resolution: {integrity: sha512-0UUFLYXgH9Xou68fzd1/xKOIsh4uplwjvwEG/qqNc6oahzGNiDhz/MVXDhY5EgFFTVrChATP+mH52xf+zrTT+Q==}
+    engines: {node: '>=22'}
+    peerDependencies:
+      express: ^4.0.0 || ^5.0.0
+    peerDependenciesMeta:
+      express:
+        optional: true
+
   '@procedures/notify@0.56.0':
     resolution: {integrity: sha512-UR3Z0R8SpBzkO4LJiN7KfmNki+LcAKjrUwKuiJ/zKczgtzt4qWV6TZGTJv69qYwdcn6frAfZaGf1eXO5Kk669g==}
     engines: {node: '>=22'}
+
+  '@procedures/notify@0.57.0':
+    resolution: {integrity: sha512-MmW4GW1uZ+Dwawm4trMRP701/0M+FGSUFIKkrgdxXG9fwl8ZI5f/Fx8tCa+OnGZzWY4UJMyTOFZsQqFLdqUVaQ==}
+    engines: {node: '>=22'}
+    peerDependencies:
+      '@mark1russell7/rigor-testkit': ^0.1.7
+    peerDependenciesMeta:
+      '@mark1russell7/rigor-testkit':
+        optional: true
 
   '@publint/pack@0.1.7':
     resolution: {integrity: sha512-4EDEmvxWtgsCnnVeBvtFIFZtUhPPt1+bA9JrSwU4Sa//6oKtzCSlGGXYJr44OD9aGISymbieJ4mCKHUygUDU+g==}
@@ -2302,7 +2326,7 @@ snapshots:
 
   '@mark1russell7/files@0.0.3': {}
 
-  '@mark1russell7/geo@0.1.0':
+  '@mark1russell7/geo@0.2.1':
     dependencies:
       '@mark1russell7/optional': 1.2.0
       '@mark1russell7/predicates': 0.1.2
@@ -2409,10 +2433,46 @@ snapshots:
       - pg
       - utf-8-validate
 
+  '@procedures/client@0.57.0':
+    dependencies:
+      '@mark1russell7/algebra': 0.8.9(zod@4.6.7)
+      '@mark1russell7/coeval': 0.34.0(zod@4.6.7)
+      '@mark1russell7/collections': 0.10.2(zod@4.6.7)
+      '@mark1russell7/quantity': 0.4.0(zod@4.6.7)
+      '@mark1russell7/service': 0.8.16(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
+      '@opentelemetry/api': 1.10.0
+      '@types/ws': 8.18.2
+      ws: 8.23.0
+      zod: 4.6.7
+    transitivePeerDependencies:
+      - '@grpc/grpc-js'
+      - amqplib
+      - bufferutil
+      - ioredis
+      - mongodb
+      - pg
+      - utf-8-validate
+
   '@procedures/notify@0.56.0':
     dependencies:
       '@procedures/client': 0.56.0
       zod: 4.6.7
+    transitivePeerDependencies:
+      - '@grpc/grpc-js'
+      - amqplib
+      - bufferutil
+      - express
+      - ioredis
+      - mongodb
+      - pg
+      - utf-8-validate
+
+  '@procedures/notify@0.57.0(@mark1russell7/rigor-testkit@0.1.7(@opentelemetry/api@1.10.0)(fast-check@4.10.2))':
+    dependencies:
+      '@procedures/client': 0.57.0
+      zod: 4.6.7
+    optionalDependencies:
+      '@mark1russell7/rigor-testkit': 0.1.7(@opentelemetry/api@1.10.0)(fast-check@4.10.2)
     transitivePeerDependencies:
       - '@grpc/grpc-js'
       - amqplib

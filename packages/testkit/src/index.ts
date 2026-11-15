@@ -76,7 +76,6 @@ export {
   type CallFailure,
   type LogSummary,
 } from "./late-accept.ts";
-export { ledgerOf, pushoverApi, receiptOf, type AcceptedMessage, type PushoverLedger } from "./pushover.ts";
 export {
   CASE_5_ID,
   CASE_5_ORIGIN,

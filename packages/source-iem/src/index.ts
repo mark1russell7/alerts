@@ -10,7 +10,7 @@ import { createIemFetch, type IemFetchOptions } from "./fetch.ts";
 import { mapObservation } from "./map.ts";
 
 export { IEM_DESCRIPTOR } from "./descriptor.ts";
-export { createIemFetch, IEM_BASE_URL, isListRow, keepsRow, LIST_PATH, readAnswer, rowBody } from "./fetch.ts";
+export { createIemFetch, IEM_BASE_URL, isListRow, keepsRow, LIST_PATH, listTime, readAnswer, rowBody } from "./fetch.ts";
 export type { IemFetchInput, IemFetchOptions } from "./fetch.ts";
 export { EVENT_PAGE, mapObservation, ROW_FIELDS, SOURCE_ID } from "./map.ts";
 
