@@ -27,6 +27,8 @@ export {
   CAP_CATEGORIES,
   CAP_CERTAINTY,
   CAP_CERTAINTY_ALIASES,
+  CAP_CERTAINTY_BANDS,
+  CAP_CERTAINTY_SOURCE,
   CAP_NOT_ALERTS,
   CAP_OPERATIONS,
   CAP_RESPONSES,
@@ -37,4 +39,5 @@ export {
   capList,
   capTime,
   capValue,
+  type CertaintyBand,
 } from "./values.ts";
