@@ -1,7 +1,7 @@
 import type { Duration } from "@mark1russell7/alerts";
-import { add } from "@mark1russell7/quantity";
+import { add, type Quantity } from "@mark1russell7/quantity";
 import { daemon, kubernetes, localDev, service } from "@mark1russell7/service";
-import type { Profile, ServiceBuilder } from "@mark1russell7/service";
+import type { Profile, ServiceBuilder, Timing } from "@mark1russell7/service";
 import { probeServer } from "@mark1russell7/service/http";
 import { LOOPBACK, attachApi } from "./api.ts";
 import type { RuntimeLoop } from "./loop.ts";
@@ -19,6 +19,15 @@ export * from "./state.ts";
 export * from "./view.ts";
 
 const s = (value: number) => ({ value, unit: "s" });
+
+/** The service has this time to start. A supervisor waits this time and one readiness interval for the ready probe. */
+export const STARTUP_BUDGET: Quantity = s(30);
+
+/** A supervisor sends this message on the IPC channel to stop the service in stages. */
+export const STOP_MESSAGE = "shutdown";
+
+/** The readiness policy of the service. The probe `/readiness` passes after one check passes. */
+export const READINESS: Extract<Timing, { type: "debounce" }> = { type: "debounce", interval: s(5), failAfter: 3, recoverAfter: 1 };
 
 /**
  * These are the profiles of the shutdown, by name. `local` is for the computer of a developer.
@@ -78,7 +87,9 @@ export const declare = (options: Options): ServiceBuilder =>
     // The probes have a port of their own. Thus they answer through the whole shutdown.
     .healthServer(probeServer({ port: options.probePort, host: LOOPBACK, server_retry_after: s(1) }))
     // The policies apply to the checks of the service.
-    .readiness({ type: "debounce", interval: s(5), failAfter: 3, recoverAfter: 1 })
+    .readiness(READINESS)
     .liveness({ type: "window", failAfter: s(45) })
-    .startup(s(30))
-    .profile(holdingPasses(options.profile, options.loop.times.passLimit));
+    .startup(STARTUP_BUDGET)
+    .profile(holdingPasses(options.profile, options.loop.times.passLimit))
+    // A Windows process cannot catch a signal from its parent. Thus a supervisor sends this message, and the shutdown drains the pass.
+    .trigger("ipc-message", { match: STOP_MESSAGE, as: "SIGTERM" });

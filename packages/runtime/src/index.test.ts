@@ -5,7 +5,7 @@ import type { Rule, Scenario } from "@mark1russell7/service";
 import { realClock, wallClock } from "@mark1russell7/algebra/clock";
 import type { SourceId } from "@mark1russell7/alerts";
 import { describe, expect, it } from "vitest";
-import { PROFILES, createLoop, declare, type Pass, type Status } from "./index.ts";
+import { PROFILES, STOP_MESSAGE, createLoop, declare, type Pass, type Status } from "./index.ts";
 
 const s = (value: number) => ({ value, unit: "s" });
 
@@ -85,6 +85,8 @@ describe("the declaration of the service", () => {
         ["worker", "passes"],
       ]);
       expect(description.checks.map((check) => [check.name, check.gates])).toEqual([["passes.progress", "liveness"]]);
+      // A supervisor on Windows stops the service with a message, because the process cannot catch its signal.
+      expect(description.shutdown.messages).toEqual([{ match: STOP_MESSAGE, as: "SIGTERM" }]);
       // each rule holds, and no field of the declaration is missing (a "depends" finding of the rule "declaration")
       const findings = lint(description, POD, [O10, O16]);
       expect(findings.map((finding) => [finding.rule, finding.verdict])).toEqual([

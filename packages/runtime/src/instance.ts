@@ -6,13 +6,13 @@
 import { delay, type Clock, type WallClock } from "@mark1russell7/algebra/clock";
 import { localPlaces, sourceCovers, sourcePlaces, type ChannelDescriptor, type DelayLimitOptions, type ParsedConfig, type SecretLookup } from "@mark1russell7/alerts";
 import { CHANNEL_ID, createPushoverChannel, isPushoverKey, pushoverDescriptor, PUSHOVER_REPEAT_MS, PUSHOVER_TIMEOUT_MS, type PushoverChannelOptions } from "@mark1russell7/alerts-channel-pushover";
-import { createIpawsSource, WEA_EXPECTATION } from "@mark1russell7/alerts-source-ipaws";
-import { createNwsSource } from "@mark1russell7/alerts-source-nws-api";
+import { createIpawsSource, IPAWS_DESCRIPTOR, WEA_EXPECTATION } from "@mark1russell7/alerts-source-ipaws";
+import { createNwsSource, NWS_DESCRIPTOR } from "@mark1russell7/alerts-source-nws-api";
 import type { Pace, Transport } from "polite-crawler/api";
 import { HostScheduler } from "polite-crawler/politeness";
 import type { DeliveryOptions } from "./delivery.ts";
 import type { RuntimeLog } from "./log.ts";
-import { createLoop, loopTimes, type RuntimeLoop } from "./loop.ts";
+import { createLoop, loopTimes, type LoopTimes, type RuntimeLoop } from "./loop.ts";
 import { openRuntime, type Pass, type Runtime } from "./runtime.ts";
 
 /** The name of the secret that holds the API token of the Pushover application. */
@@ -36,6 +36,15 @@ export const DELAY_LIMITS: DelayLimitOptions = { quantile: 0.99, level: 0.95 };
  * recipient against this list. Thus the loader and the instance agree on the channels.
  */
 export const INSTANCE_CHANNELS: readonly ChannelDescriptor[] = [pushoverDescriptor()];
+
+/** The channel stops its own call at this time limit. */
+const CALL_LIMIT = PUSHOVER_TIMEOUT_MS;
+
+/**
+ * The times of the loop of the instance. They come from the intervals of the sources and the time
+ * limit of the Pushover channel. The host reads them before a start: the stop grace holds one pass.
+ */
+export const INSTANCE_TIMES: LoopTimes = loopTimes([NWS_DESCRIPTOR, IPAWS_DESCRIPTOR], { delivery: { callLimit: CALL_LIMIT, retry: CALL_LIMIT } });
 
 /** The options of `openInstance`. */
 export interface InstanceOptions {
@@ -111,8 +120,7 @@ export function openInstance(options: InstanceOptions): Instance {
   if (problems.length > 0) throw new Error(`The instance does not start. The configuration has these problems:\n- ${problems.join("\n- ")}`);
 
   const pushover = createPushoverChannel({ token, fetch: options.pushover, now: () => wall.now() });
-  // The channel stops its own call at its time limit.
-  const callLimit = PUSHOVER_TIMEOUT_MS;
+  const callLimit = CALL_LIMIT;
   const delivery: DeliveryOptions = {
     recipients,
     channels: [pushover],

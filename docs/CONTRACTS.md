@@ -375,6 +375,20 @@ The instance does not start when it finds one of these problems:
 
 The environment gives `PORT` (8080), `PROBE_PORT` (9090) and `SERVICE_PROFILE` (`local`, `daemon` or `pod`). The folder `ALERTS_HOME` (`.alerts` in the home folder) holds the private files: `config.json`, `secrets.env` and the log `runtime.sqlite`. No repository holds them. A problem of `secrets.env` names its line and its key, and no value. The output of a failed pass shows no value of `secrets.env`.
 
+### The host on one computer
+
+The module `host.ts` gives the host of the live instance as data. A boot task starts a supervisor, and the supervisor starts the runtime:
+
+- `node src/install.ts install` installs the boot task, and starts it. A boot task needs an elevated shell one time. `remove` stops the supervisor and removes the task. `status` gives the state of the task.
+- The boot task starts the supervisor at the start of the computer, before a logon. It starts the supervisor again 1 minute after a stop.
+- The supervisor starts the runtime with the profile `daemon` on the ports 4750 and 4751. The runtime is ready when `/readiness` passes, in its startup budget plus one readiness interval.
+- The supervisor uses `/liveness` each 10 seconds. After 3 failures in sequence, it stops the runtime and starts it again. A stuck loop fails the liveness.
+- A stop goes as the message `shutdown` on the IPC channel, because a Windows process cannot catch a signal of its parent. Then the runtime drains its pass.
+- The stop grace is the sum of the caps of the phases of the runtime, plus 2 seconds. After the grace, the supervisor stops the process tree. The supervisor holds the grace in its phase `tear down dependencies`.
+- The host keeps its files in the folder `host` of `ALERTS_HOME`: the task file, the locks, the discovery files and the logs of the runtime.
+
+A lock keeps one runtime on the computer. The live instance runs from a checkout of its own, not from a working copy. Thus a change of branch does not change the code that runs.
+
 ## People and places
 
 The contracts carry only ids: `PersonId` and `PlaceId`. The runtime gets people, places, addresses and the night rule of each person from the private configuration.
