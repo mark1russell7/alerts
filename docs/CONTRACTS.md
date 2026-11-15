@@ -56,7 +56,13 @@ The links are transitive: when A links to B and B links to C, the three reports 
 
 A line is a report and the reports of its source that update or cancel it. The head of a line is its last report: no report of the same source references it. An incident is live at a time when one or more heads are not cancelled and not expired at that time. Its severity, urgency and certainty are the highest of its live heads. Its corroboration is the count of the different origins of its reports.
 
-A cancel ends only its own line. A copy from another source can miss the cancel. Then the incident stays live until that copy expires. This error is on the safe side.
+A copy of a message from another source does not get the references of the line. The rule of the copies closes this gap:
+
+- Two reports of one origin with a shared correlation key tell of one event.
+- The later report replaces the earlier report, from any source, when it names each region code of the earlier report.
+- A replaced report is not a head. Thus a cancel of the NWS also ends the copy of that alert from IPAWS.
+
+A later report that names only a part of the codes replaces nothing. A report with no region code is not replaced. Then the copy stays live until it expires or its source ends it. This error is on the safe side. The rule reads only the reports of the group, so it keeps the three laws.
 
 The incident id is its anchor: its smallest report id. The anchor can change when two incidents merge. So an acknowledgment and a delivery point to a report of the incident, not to the anchor.
 
@@ -247,11 +253,25 @@ The runtime does one delivery step in each pass, after the system reports:
 
 Each call of a channel has a time limit. A failed call writes nothing, so the next step decides it again. Before it goes again, a call waits for the time that the channel tells, or for the retry time of the configuration.
 
+A send that passes its time limit stays in flight, because the provider can accept it later:
+
+- No second send of its key starts until the first send ends, or until the flight limit `flightLimit` ends. The flight limit is not shorter than the time limit.
+- A late send that the provider accepts gets its delivery in the log at the next step. Thus its acknowledgment and its cancel work.
+- After the flight limit, a second send goes. A late first send that lands after it is a duplicate, and the log keeps one delivery of the key.
+- A send that the channel accepts in time, and whose write to the log fails, also gets its delivery at the next step. Thus no second send goes.
+
+The Pushover channel tags each emergency message with its delivery key, and it cancels by the tag. Thus a cancel also stops the repeats of a copy whose receipt the log does not have. A crash after a send and before its write is such a case.
+
+A recipient has no problem from `recipientProblems` before it gets alerts:
+
+- A person who watches a place or a subject has a policy of the level `life-safety`.
+- No rule keeps a life-safety kind, or the coverage of one, below `life-safety`. A rule with no kinds applies to each kind.
+- Each rule names kinds of the taxonomy, and the quiet window has a good time zone and good local times.
+
 The message of a send takes its text from one report of the incident. That report is the latest one with the severity and the urgency of the incident. The body has the instruction first, then the area and the description. The channel cuts the text to its limits.
 
-Two parts wait:
+One part waits:
 
-- A crash after a send and before its write loses the receipt. Then a cancel cannot stop the repeats of that message, and the person acknowledges it in the app. Next, the Pushover channel tags each message with its key and cancels by the tag.
 - The exhaustion alert to the next person waits for a second person (AL-21). Until then, the repeats continue after the exhaustion, and the routes of each pass show it.
 
 ## Levels and the first night rule
@@ -332,7 +352,7 @@ The core gives the format of the private configuration, `AlertConfig` (`alerts-c
 
 The times of the delivery and the rank of a copy are not in `AlertConfig`. They are settings of each copy.
 
-The function `loadConfig` checks a configuration and makes the recipient of each person. The caller gives the secret store, so the core reads no file. The runtime does not start when the load gives a problem. The load finds:
+The schema `alertConfigSchema` checks the JSON of the configuration first. Then the function `loadConfig` checks the references and makes the recipient of each person. The caller gives the secret store, so the core reads no file. The runtime does not start when the load gives a problem. The load finds:
 
 - two places or two people with one id, and a place with no region code
 - a place of a person or of a rule that the configuration or the person does not have
@@ -340,6 +360,8 @@ The function `loadConfig` checks a configuration and makes the recipient of each
 - each problem of `recipientProblems`
 
 A problem names ids, fields and the names of secrets. It does not hold the value of a secret, a label or a position.
+
+The function `parseConfig` reads the JSON text of the configuration. It checks the JSON, then the schema, then the references. Its result is a `Result` of `@mark1russell7/optional`: the configuration and the recipients, or the problems. The runtime starts only with an `ok` result. A problem of the JSON does not quote the text, because the text can hold a private value.
 
 The function `sourcePlaces` gives the places for one source, with no label, and with a position only when the place shares it with that source. The function `localPlaces` gives each position for the matching on the machine of the instance.
 
@@ -353,9 +375,19 @@ Two codes match when their systems and their values are equal. The first digit o
 
 The area `{ type: "place" }` covers that watched place only. Only the reports of the core use it. An area with only shapes matches no place until `@mark1russell7/geo` has the tests. The assessment then gives the reason `no-codes`. The first sources, the NWS and IPAWS, give codes with each area.
 
+## The schemas
+
+The file `schemas.ts` of the core has one zod 4 schema for each data type of the contracts and of the configuration. A schema checks data at a trust boundary. The boundaries are the output of a map function, the event log, the private configuration and the procedure tools.
+
+- The types stay the source of truth. The type check fails when a schema and its type are different. This includes each optional key and each readonly key.
+- Each object is strict, so an unknown key fails. An optional key with the value `undefined` also fails.
+- No schema has a transform, so `z.toJSONSchema` converts each one for the procedure tools.
+- A refinement holds each rule of a value that a type cannot hold, for example the anchor of an incident or a known kind code.
+- The function `checkWith` checks a value with a schema at a boundary. Each problem names the path and the rule, for example `places[0].bufferKm`. It does not hold the value.
+
 ## Open points
 
-- The procedure schemas: Standard Schema validators (zod 4) for each input and output, in the core package.
+- The procedure tools take the schema of each input and output from `schemas.ts`.
 - The link rule of each family of kind, for rule 3 of the merge.
 - The calculation of the level from probabilities and costs (AL-31), with the base rates from the event log.
 - The merge state grows with each report. A compaction of the incidents that ended before a horizon keeps it small. It must keep the three laws.

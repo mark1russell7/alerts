@@ -109,6 +109,17 @@ export function stateOfUgc(code: string): string | undefined {
   return prefix in STATE_FIPS ? prefix : undefined;
 }
 
+/**
+ * This function gives the SAME code of a county UGC code, for example `020173` for `KSC173`. The number
+ * of a county UGC code is the FIPS code of the county. A zone code, or a code with no state, gives `undefined`.
+ */
+export function sameOfCountyUgc(code: string): string | undefined {
+  const text = code.trim().toUpperCase();
+  if (!isUgcCode(text) || text[2] !== "C") return undefined;
+  const state = STATE_FIPS[text.slice(0, 2)];
+  return state === undefined ? undefined : `0${state}${text.slice(3)}`;
+}
+
 /** This function gives the postal code of the state of a SAME location code, or `undefined`. */
 export function stateOfSame(code: string): string | undefined {
   const location = parseSameLocation(code);

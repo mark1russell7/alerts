@@ -13,7 +13,7 @@ export { checkCanary, keepaliveSent, KEEPALIVE_MAX_AGE_MS } from "./check.ts";
 export { NWS_DESCRIPTOR } from "./descriptor.ts";
 export { CANARY_PATH, createNwsFetch, NWS_BASE_URL, queriesOf, readAnswer, WEA_PATH } from "./fetch.ts";
 export type { NwsFetchInput, NwsFetchOptions, Query, QueryOptions } from "./fetch.ts";
-export { KNOWN_FIELDS, mapObservation, ORIGIN, SOURCE_ID } from "./map.ts";
+export { KNOWN_FIELDS, mapObservation, SOURCE_ID } from "./map.ts";
 
 /**
  * This function makes the procedures of the NWS API source: `describe`, `fetch`, `map` and `check`.

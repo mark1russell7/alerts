@@ -42,8 +42,15 @@ export interface DeliveryOptions {
   readonly pollEvery: Duration;
   /** The wait before a failed call goes again, when the channel tells no wait. */
   readonly retry: Duration;
-  /** The longest time of one call of a channel. */
+  /** The longest time that a step waits for one call of a channel. */
   readonly callLimit: Duration;
+  /**
+   * The longest time that a send stays in flight. A send that passes `callLimit` goes on, and no second
+   * send of its key starts until it ends or this time ends. A late send that the channel accepts gets
+   * its delivery in the log. After this time, a second send goes, and the cancel by tag of the channel
+   * stops a duplicate. It is not shorter than `callLimit`.
+   */
+  readonly flightLimit: Duration;
   /** The rank of this copy of the system, and the wait of each rank. */
   readonly rank?: number;
   readonly rankDelay?: Duration;
@@ -64,7 +71,14 @@ export interface DeliveryFailure {
 export interface DeliveryStep {
   /** The escalations after the polls of the step. */
   readonly routes: readonly Route[];
+  /** The deliveries that the step wrote: the sends of the step, and the late sends of earlier steps. */
   readonly sent: readonly Delivery[];
+  /**
+   * The keys of the sends that the channel accepted when the log already had a delivery of the key. A
+   * late send after a second send of the same key is one. The log keeps the first delivery. The cancel
+   * by tag of the channel stops the repeats of each copy.
+   */
+  readonly duplicates: readonly string[];
   readonly acknowledged: readonly Acknowledgment[];
   /** The delivery keys that the step cancelled. */
   readonly cancelled: readonly string[];
@@ -85,6 +99,8 @@ export interface DeliveryContext {
    * different from the events of the log with the same ids. It throws when the write fails.
    */
   append(events: readonly RuntimeEvent[]): readonly string[];
+  /** The step starts this function when a late send ends with a delivery. The next pass then writes it soon. */
+  readonly wake?: (() => void) | undefined;
 }
 
 /** The dispatcher of the deliveries: one step for each pass. */
@@ -94,8 +110,9 @@ export interface Dispatcher {
 
 /**
  * This function makes the dispatcher. Each call of a channel goes through a time limit. A failed call
- * changes nothing in the log, thus the next step decides it again. The times of the polls and of the
- * waits are in memory only. After a restart, each receipt gets a poll at once.
+ * changes nothing in the log, thus the next step decides it again. A send that passes its time limit
+ * stays in flight, thus it does not get a second send. The times of the polls, the waits and the
+ * flights are in memory only. After a restart, each receipt gets a poll at once.
  */
 export function createDispatcher(options: DeliveryOptions, context: DeliveryContext): Dispatcher {
   const { clock } = context;
@@ -109,8 +126,13 @@ export function createDispatcher(options: DeliveryOptions, context: DeliveryCont
   }
   const polling = new Set(descriptors.filter((descriptor) => descriptor.ack === "poll").map((descriptor) => descriptor.id as string));
   const recipients = new Map(options.recipients.map((recipient) => [recipient.watch.person as string, recipient]));
+  if (!(options.flightLimit >= options.callLimit)) throw new Error(`The flight limit (${options.flightLimit} ms) is shorter than the call limit (${options.callLimit} ms).`);
   const polled = new Map<string, Instant>();
   const waits = new Map<string, Instant>();
+  // The send in flight of each key. Each flight is an object, thus a late end does not remove a later flight of the same key.
+  const flying = new Map<string, { readonly since: Instant }>();
+  // The deliveries of the sends that ended after their step. The next step writes them.
+  const landed: Delivery[] = [];
   const later = (call: string, key: string): string => `${call} ${key}`;
 
   return {
@@ -157,6 +179,31 @@ export function createDispatcher(options: DeliveryOptions, context: DeliveryCont
         return false;
       };
 
+      // 0. The late sends that ended with a delivery. They go to the log first, thus the routes see them and send no second copy.
+      const sent: Delivery[] = [];
+      const duplicates: string[] = [];
+      const arrived = landed.splice(0);
+      // A key of the log, or a key of an earlier delivery of this batch, makes a duplicate.
+      const logged = new Set(context.state().merge.deliveries.map((delivery) => delivery.key));
+      const fresh: Delivery[] = [];
+      for (const delivery of arrived) {
+        if (logged.has(delivery.key)) {
+          duplicates.push(delivery.key);
+          continue;
+        }
+        logged.add(delivery.key);
+        fresh.push(delivery);
+      }
+      try {
+        write(fresh.map((delivery) => ({ ...envelope("delivery", `delivery:${delivery.key}`, at), delivery })));
+      } catch (error) {
+        // The deliveries stay for the next step. The log has none of them.
+        landed.unshift(...arrived);
+        throw error;
+      }
+      for (const delivery of fresh) polled.set(delivery.key, at);
+      sent.push(...fresh);
+
       // 1. The polls. An acknowledgment changes the escalations, thus the routes come again after it.
       const first = routesNow();
       const due = first.flatMap((entry) => entry.polls).filter((delivery) => (polled.get(delivery.key) ?? Number.NEGATIVE_INFINITY) + options.pollEvery <= at && ready("status", delivery.key));
@@ -179,12 +226,21 @@ export function createDispatcher(options: DeliveryOptions, context: DeliveryCont
       write(routes.filter((entry) => entry.fresh).map((entry) => ({ ...envelope("escalation", startId(entry), at), start: entry.start })));
 
       // 3. The sends and the cancels. Each result goes to the log at once, thus a crash loses the fewest results.
-      const sent: Delivery[] = [];
       const cancelled: string[] = [];
       const work: Promise<void>[] = [];
       for (const entry of routes) {
         for (const send of entry.plan.sends) {
           const key = messageKey(send);
+          const flight = flying.get(key);
+          if (flight !== undefined) {
+            const ends = flight.since + options.flightLimit;
+            if (at < ends) {
+              waiting.push(ends);
+              continue;
+            }
+            // The send hangs past its flight limit. A second send goes, and the cancel by tag stops a duplicate.
+            flying.delete(key);
+          }
           if (!ready("send", key)) continue;
           work.push(
             (async () => {
@@ -196,19 +252,52 @@ export function createDispatcher(options: DeliveryOptions, context: DeliveryCont
                 return;
               }
               const message = messageOf(entry.incident, context.state().merge.reports, send);
+              const deliveryOf = (accepted: Extract<SendOutcome, { ok: true }>): Delivery => ({ key: message.key, incident: send.incident, level: send.level, person: send.person, channel: send.channel, step: send.step, at: accepted.accepted, receipt: accepted.receipt });
+              // The send stays in flight until it ends, also after the time limit of the step.
+              const flight = { since: at };
+              flying.set(key, flight);
+              let late = false;
+              const call = Promise.resolve()
+                .then(() => channel.send({ message, address }))
+                .then(
+                  (result) => result,
+                  (error): SendOutcome => ({ ok: false, kind: "network", message: `The send threw: ${errorMessage(error)}` }),
+                );
+              void call.then((result) => {
+                if (flying.get(key) === flight) flying.delete(key);
+                if (!late || !result.ok) return;
+                landed.push(deliveryOf(result));
+                context.wake?.();
+              });
               const outcome = await limited<SendOutcome>(
-                Promise.resolve().then(() => channel.send({ message, address })),
+                call,
                 options.callLimit,
                 clock,
-                () => ({ ok: false, kind: "timeout", message: `The send took longer than ${options.callLimit} ms.` }),
+                () => {
+                  late = true;
+                  return { ok: false, kind: "timeout", message: `The send took longer than ${options.callLimit} ms. It stays in flight for up to ${options.flightLimit} ms.` };
+                },
                 (error) => ({ ok: false, kind: "network", message: `The send threw: ${errorMessage(error)}` }),
               );
               if (!outcome.ok) {
                 fail("send", target, outcome.kind, outcome.message, outcome.retryAfter);
                 return;
               }
-              const delivery: Delivery = { key: message.key, incident: send.incident, level: send.level, person: send.person, channel: send.channel, step: send.step, at: outcome.accepted, receipt: outcome.receipt };
-              write([{ ...envelope("delivery", `delivery:${delivery.key}`, clock.now()), delivery }]);
+              const delivery = deliveryOf(outcome);
+              let different: readonly string[];
+              try {
+                different = context.append([{ ...envelope("delivery", `delivery:${delivery.key}`, clock.now()), delivery }]);
+              } catch (error) {
+                // The channel has the message, and the log does not. The next step writes the delivery first, thus no second send goes.
+                landed.push(delivery);
+                context.wake?.();
+                throw error;
+              }
+              conflicts.push(...different);
+              if (different.length > 0) {
+                duplicates.push(delivery.key);
+                return;
+              }
               // A new delivery gets its first poll after one interval.
               polled.set(delivery.key, at);
               sent.push(delivery);
@@ -256,7 +345,7 @@ export function createDispatcher(options: DeliveryOptions, context: DeliveryCont
       for (const key of polled.keys()) if (!keep.has(key)) polled.delete(key);
       const polls = open.map((delivery) => (polled.get(delivery.key) ?? at) + options.pollEvery);
       const wakeAt = earliest([...after.map((entry) => entry.plan.wakeAt), ...polls, ...failures.map((failure) => failure.retryAt), ...waiting]);
-      return { routes: after, sent, acknowledged, cancelled, failures, conflicts, ...(wakeAt === undefined ? {} : { wakeAt }) };
+      return { routes: after, sent, duplicates, acknowledged, cancelled, failures, conflicts, ...(wakeAt === undefined ? {} : { wakeAt }) };
     },
   };
 

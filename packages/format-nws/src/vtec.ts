@@ -114,9 +114,27 @@ export function formatVtec(vtec: Vtec): string {
  * thus get two keys. Then the CAP references of the messages still link them.
  */
 export function vtecKey(vtec: Vtec, sent: Instant): CorrelationKey {
-  const year = new Date(vtec.start ?? sent).getUTCFullYear();
-  const number = String(vtec.eventNumber).padStart(4, "0");
-  return { system: "vtec", id: `${vtec.office}.${vtec.phenomenon}.${vtec.significance}.${number}.${String(year)}` };
+  return vtecEventKey({ ...vtec, year: new Date(vtec.start ?? sent).getUTCFullYear() });
+}
+
+/** The parts of a VTEC event that give its correlation key. */
+export interface VtecEvent {
+  /** The office with four letters, for example `KTOP`. */
+  readonly office: string;
+  readonly phenomenon: string;
+  readonly significance: string;
+  readonly eventNumber: number;
+  /** The year of the event, from the start of the event as `vtecKey` gives it. */
+  readonly year: number;
+}
+
+/**
+ * This function gives the correlation key of a VTEC event from its parts, for example
+ * `KTOP.TO.W.0012.2026`. A source with no VTEC string, for example a list of events, uses it.
+ */
+export function vtecEventKey(event: VtecEvent): CorrelationKey {
+  const number = String(event.eventNumber).padStart(4, "0");
+  return { system: "vtec", id: `${event.office}.${event.phenomenon}.${event.significance}.${number}.${String(event.year)}` };
 }
 
 /**

@@ -195,6 +195,12 @@ export const KIND_PREFIXES: readonly string[] = [
   ...new Set([...Object.values(PHENOMENA), ...Object.values(EVENT_CODES)].map((hazard) => hazard.code.split(".", 1)[0] ?? "other")),
 ].sort();
 
+/**
+ * The first parts of the taxonomy codes of the VTEC phenomena only: the kinds that a source of VTEC
+ * events covers. A SAME code with no VTEC phenomenon, for example a civil emergency, is not in this list.
+ */
+export const VTEC_KIND_PREFIXES: readonly string[] = [...new Set(Object.values(PHENOMENA).map((hazard) => hazard.code.split(".", 1)[0] ?? "other"))].sort();
+
 /** This function calculates the event code of a phenomenon and a significance, for example `TO` and `W`. */
 export function fromPhenomenon(phenomenon: string, significance: string): EventCode | undefined {
   const hazard = PHENOMENA[phenomenon];

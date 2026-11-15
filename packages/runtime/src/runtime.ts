@@ -35,6 +35,11 @@ export interface RuntimeOptions {
   readonly fetchLimit?: (source: SourceDescriptor) => Duration;
   /** The recipients and the channels. Without them, a pass sends nothing. */
   readonly delivery?: DeliveryOptions;
+  /**
+   * The runtime starts this function when work that ended after its pass needs a pass soon: a late send
+   * with a delivery. The loop of the service gives its `wake()` here.
+   */
+  readonly wake?: () => void;
   /** The runtime starts this hook at the end of each pass with no error. The outside heartbeat goes here. */
   readonly onPass?: (pass: Pass) => void | Promise<void>;
 }
@@ -92,7 +97,7 @@ export function openRuntime(options: RuntimeOptions): Runtime {
 
   append([{ ...envelope("started", `started:${options.run}`, clock.now()), run: options.run }]);
 
-  const dispatcher = options.delivery === undefined ? undefined : createDispatcher(options.delivery, { clock, places: config.places, state: () => state, append });
+  const dispatcher = options.delivery === undefined ? undefined : createDispatcher(options.delivery, { clock, places: config.places, state: () => state, append, wake: options.wake });
 
   const fetchOne = async (source: SourceProcedures, descriptor: SourceDescriptor): Promise<readonly string[]> => {
     const started = clock.now();

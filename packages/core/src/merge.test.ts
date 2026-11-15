@@ -64,6 +64,8 @@ function randomState(r: Random): MergeState {
         sent: T0 + r.below(3) * 60_000,
         references: r.chance(0.4) ? [`k${event}.${r.below(3)}`] : [],
         correlation: r.chance(0.5) ? [{ system: "vtec", id: `KTOP.TO.W.${event}` }] : [],
+        // Two sizes of area, so that the rule of the copies replaces some reports and keeps others.
+        areas: r.chance(0.5) ? [{ type: "code", system: "ugc", code: "KSZ083" }] : [{ type: "code", system: "ugc", code: "KSZ083" }, { type: "code", system: "ugc", code: "KSZ084" }],
         severity: r.pick(["moderate", "severe", "extreme"] as const),
         op: r.pick(["alert", "update", "cancel"] as const),
         status: r.chance(0.9) ? "actual" : "test",
@@ -218,6 +220,71 @@ describe("the incidents", () => {
     const list = incidents(randomState(random(11)), T0);
     expect(list.map((i) => i.anchor)).toEqual([...list.map((i) => i.anchor)].sort());
     for (const incident of list) expect(incident.anchor).toBe([...incident.reports].sort()[0]);
+  });
+});
+
+describe("the copies of one event", () => {
+  const vtec = [{ system: "vtec", id: "KTOP.TO.W.0012.2025" }];
+  const codes = (...list: string[]): Report["areas"] => list.map((code) => ({ type: "code", system: "ugc", code }));
+  const later = T0 + 600_000;
+  const at = T0 + 700_000;
+  // The alert of the NWS API, and a copy of it from IPAWS: one origin, one VTEC event, one sent time.
+  const alert = report({ key: "api-1", correlation: vtec, areas: codes("KSC177", "KSC045") });
+  const copy = report({ key: "ipaws-1", source: "ipaws", correlation: vtec, areas: codes("KSC177", "KSC045") });
+  const liveOf = (...reports: Report[]): boolean | undefined => incidents(normalize({ reports }), at)[0]?.live;
+
+  it("ends the copy of another source when a later report of the origin names each of its codes", () => {
+    const cancel = report({ key: "api-2", op: "cancel", sent: later, references: ["api-1"], correlation: vtec, areas: codes("KSC177", "KSC045") });
+    expect(liveOf(alert, copy)).toBe(true);
+    expect(liveOf(alert, copy, cancel)).toBe(false);
+    // A later update replaces the copy too: the incident takes its severity.
+    const update = report({ key: "api-2", op: "update", sent: later, references: ["api-1"], correlation: vtec, areas: codes("KSC177", "KSC045"), severity: "severe" });
+    expect(incidents(normalize({ reports: [alert, copy, update] }), at)[0]?.severity).toBe("severe");
+  });
+
+  it("keeps the copy live when the later report names only a part of its codes", () => {
+    // The NWS cancels the warning for one county. The update for the other county is missing.
+    const partial = report({ key: "api-2", op: "cancel", sent: later, references: ["api-1"], correlation: vtec, areas: codes("KSC045") });
+    const [incident] = incidents(normalize({ reports: [alert, copy, partial] }), at);
+    expect(incident?.live).toBe(true);
+    expect(incident?.areas).toContainEqual({ type: "code", system: "ugc", code: "KSC177" });
+  });
+
+  it("does not end a copy of another origin, of the same sent time, of another event or with no code", () => {
+    const cancel = (fields: Partial<Draft>): Report => report({ key: "api-2", op: "cancel", sent: later, references: ["api-1"], correlation: vtec, areas: codes("KSC177", "KSC045"), ...fields });
+    expect(liveOf(alert, { ...copy, origin: "fema" }, cancel({}))).toBe(true);
+    expect(liveOf(alert, copy, cancel({ sent: T0 }))).toBe(true);
+    const other = report({ key: "ipaws-1", source: "ipaws", correlation: [{ system: "vtec", id: "KTOP.TO.W.0013.2025" }, ...vtec], areas: codes("KSC177", "KSC045") });
+    // The copy shares the event of the cancel, so the cancel ends it. A copy that shares no key is not in the incident.
+    expect(liveOf(alert, other, cancel({}))).toBe(false);
+    const shapeOnly = report({ key: "ipaws-1", source: "ipaws", correlation: vtec, areas: [{ type: "polygon", rings: [[[-95.8, 39.0], [-95.6, 39.0], [-95.6, 39.1], [-95.8, 39.0]]] }] });
+    expect(liveOf(alert, shapeOnly, cancel({}))).toBe(true);
+  });
+
+  it.each(SEEDS)("ends no code that no later report of the origin and event names (seed %i)", (seed) => {
+    const r = random(seed);
+    const pool = ["KSC177", "KSC045", "KSC139", "KSC197"];
+    for (let round = 0; round < 50; round += 1) {
+      const reports = Array.from({ length: r.int(2, 6) }, (_, i) =>
+        report({
+          key: `k${i}`,
+          source: r.pick(["nws-api", "ipaws", "iem"]),
+          sent: T0 + r.below(4) * 60_000,
+          op: r.pick(["alert", "update", "cancel"] as const),
+          correlation: vtec,
+          areas: codes(...r.sample(pool, r.int(1, pool.length))),
+        }),
+      );
+      const [incident] = incidents(normalize({ reports }), at);
+      // Each live report that no later report covers keeps its codes in the incident.
+      for (const held of reports) {
+        if (held.op === "cancel") continue;
+        const covered = reports.some((other) => other.sent > held.sent && held.areas.every((area) => other.areas.some((x) => JSON.stringify(x) === JSON.stringify(area))));
+        if (covered) continue;
+        expect(incident?.live, `seed ${seed} round ${round}`).toBe(true);
+        for (const area of held.areas) expect(incident?.areas).toContainEqual(area);
+      }
+    }
   });
 });
 

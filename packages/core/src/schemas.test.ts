@@ -2,6 +2,7 @@ import { random, seedsFrom } from "@mark1russell7/rigor-generators";
 import { describe, expect, expectTypeOf, it } from "vitest";
 import { z } from "zod";
 import { assess, DEFAULT_ASSESS_POLICY } from "./assess.ts";
+import { CONFIG_FORMAT, loadConfig, type AlertConfig } from "./config.ts";
 import type {
   Acknowledgment,
   Address,
@@ -77,6 +78,8 @@ import * as schemas from "./schemas.ts";
 import {
   acknowledgmentSchema,
   addressSchema,
+  addressValueSchema,
+  alertConfigSchema,
   areaSchema,
   assessedLevelSchema,
   assessmentSchema,
@@ -88,6 +91,8 @@ import {
   certaintySchema,
   channelDescriptorSchema,
   channelIdSchema,
+  checkWith,
+  contactConfigSchema,
   correlationKeySchema,
   coverageSchema,
   cursorSchema,
@@ -118,8 +123,11 @@ import {
   observationIdSchema,
   observationSchema,
   operationSchema,
+  parseConfig,
+  personConfigSchema,
   personIdSchema,
   personWatchSchema,
+  placeConfigSchema,
   placeIdSchema,
   positionSchema,
   quietWindowSchema,
@@ -129,6 +137,7 @@ import {
   reportSchema,
   responseTypeSchema,
   schemaOf,
+  secretRefSchema,
   sendOutcomeSchema,
   severitySchema,
   significanceSchema,
@@ -336,6 +345,7 @@ describe("the type of each schema", () => {
     expectTypeOf<z.input<typeof reportSchema>>().toEqualTypeOf<Report>();
     expectTypeOf<z.input<typeof personWatchSchema>>().toEqualTypeOf<PersonWatch>();
     expectTypeOf<z.input<typeof watchSchema>>().toEqualTypeOf<Watch>();
+    expectTypeOf<z.input<typeof alertConfigSchema>>().toEqualTypeOf<AlertConfig>();
   });
 });
 
@@ -366,7 +376,7 @@ describe("the JSON Schema of each schema", () => {
   const exported = Object.entries(schemas).filter(([name]) => name.endsWith("Schema"));
 
   it("has each exported schema", () => {
-    expect(exported.length).toBe(66);
+    expect(exported.length).toBe(72);
     for (const [name, schema] of exported) expect(schema instanceof z.ZodType, name).toBe(true);
   });
 
@@ -590,5 +600,104 @@ describe("the value rules", () => {
     fails(areaSchema, { type: "code", system: "ugc", code: "KSZ083", place: "place:a" });
     fails(fetchFailureSchema, { kind: "auth", message: "401", retryAfter: 1_000 });
     fails(levelTableSchema, { severity: { extreme: "urgent" }, urgency: DEFAULT_ASSESS_POLICY.otherwise.urgency });
+  });
+});
+
+describe("the private configuration", () => {
+  // The places of the fixtures, with made-up labels. The secret holds a name, not a value.
+  const CONFIG: AlertConfig = {
+    format: CONFIG_FORMAT,
+    places: [
+      { id: KANSAS.id, label: "Place A", at: [-97.46, 37.68], codes: KANSAS.codes, bufferKm: 5, sharePosition: [API] },
+      { id: TEXAS.id, label: "Place B", codes: TEXAS.codes, bufferKm: 0 },
+    ],
+    people: [{ watch: { person: PERSON, places: [KANSAS.id, TEXAS.id], rules: [] }, label: "Person A" }],
+    contacts: [{ person: PERSON, channel: PUSHOVER, address: { user: { secret: "PUSHOVER_USER" }, device: "phone" } }],
+    policies: [ESCALATION],
+  };
+
+  it("accepts a configuration, and the load takes the parsed value", () => {
+    holds(alertConfigSchema, CONFIG);
+    const parsed = alertConfigSchema.parse(JSON.parse(JSON.stringify(CONFIG)));
+    const loaded = loadConfig(parsed, [CHANNEL], (name) => (name === "PUSHOVER_USER" ? "user-test" : undefined));
+    expect(loaded.problems).toEqual([]);
+    expect(loaded.recipients.map((recipient) => recipient.addresses)).toEqual([{ [PUSHOVER]: { user: "user-test", device: "phone" } }]);
+  });
+
+  it("refuses a wrong form, and leaves the references to the load", () => {
+    fails(alertConfigSchema, { ...CONFIG, format: "alerts-config/2" });
+    fails(alertConfigSchema, { ...CONFIG, extra: 1 });
+    fails(alertConfigSchema, { ...CONFIG, contacts: undefined });
+    fails(secretRefSchema, { secret: "" });
+    // A reference to a secret does not hold its value.
+    fails(addressValueSchema, { secret: "PUSHOVER_USER", value: "user-test" });
+    fails(addressValueSchema, 7);
+    fails(contactConfigSchema, { person: PERSON, channel: PUSHOVER, address: { user: 7 } });
+    fails(placeConfigSchema, { id: KANSAS.id, codes: KANSAS.codes, bufferKm: 0 });
+    fails(personConfigSchema, { watch: { person: PERSON, places: [], rules: [] }, policies: [{ ...ESCALATION, level: "loud" }] });
+    // A person who watches a place that the configuration does not have is a problem of the load, not of the form.
+    holds(alertConfigSchema, { ...CONFIG, people: [{ watch: { person: PERSON, places: ["place:z"], rules: [] } }] });
+  });
+
+  const store = (name: string): string | undefined => (name === "PUSHOVER_USER" ? "user-test" : undefined);
+  const problemsOf = (text: string, secret = store): readonly string[] => {
+    const parsed = parseConfig(text, [CHANNEL], secret);
+    return parsed.tag === "err" ? parsed.error : [];
+  };
+
+  it("parses the JSON text of a configuration, and gives the recipients", () => {
+    const parsed = parseConfig(JSON.stringify(CONFIG), [CHANNEL], store);
+    expect(parsed.tag).toBe("ok");
+    if (parsed.tag === "ok") {
+      expect(parsed.value.config).toEqual(CONFIG);
+      expect(parsed.value.recipients.map((recipient) => recipient.addresses)).toEqual([{ [PUSHOVER]: { user: "user-test", device: "phone" } }]);
+    }
+  });
+
+  it("gives the problems of the JSON, of the form and of the references, each with its path", () => {
+    expect(problemsOf("{")).toEqual(["The configuration is not valid JSON."]);
+    // The path of a problem is its text before the first colon.
+    const pathsOf = (text: string): string[] => problemsOf(text).map((problem) => problem.slice(0, problem.indexOf(": ")));
+    expect(pathsOf("7")).toEqual(["(root)"]);
+    const wrong = { ...CONFIG, places: [{ ...CONFIG.places[0], bufferKm: "5" }, { ...CONFIG.places[1], codes: [{ system: "ugc", code: 7 }] }] };
+    expect(pathsOf(JSON.stringify(wrong))).toEqual(["places[0].bufferKm", "places[1].codes[0].code"]);
+    // The form holds, and the load finds the secret that the store does not have.
+    expect(problemsOf(JSON.stringify(CONFIG), () => undefined)).toEqual([expect.stringContaining("names the secret PUSHOVER_USER")]);
+  });
+
+  it("gives no value of the configuration and no value of a secret in a problem", () => {
+    // Each check looks for the start of the value, because the JSON parser quotes only a part of a text.
+    const prefix = "PRIVATE";
+    const value = `${prefix}-VALUE`;
+    // The message of the JSON parser quotes this text.
+    expect(problemsOf(`{"label": ${value}}`).join(" ")).not.toContain(prefix);
+    const wrong = {
+      ...CONFIG,
+      format: `alerts-config/${value}`,
+      places: [{ ...CONFIG.places[0], label: [value], bufferKm: value, at: [500, 37.68] }],
+      contacts: [{ ...CONFIG.contacts[0], address: { user: { secret: "PUSHOVER_USER", value } } }],
+    };
+    const problems = problemsOf(JSON.stringify(wrong));
+    expect(problems.length).toBeGreaterThanOrEqual(4);
+    expect(problems.join(" ")).not.toContain(prefix);
+    // The load: the store holds the value of one secret, and the problem names only the other secret.
+    const twoSecrets = { ...CONFIG, contacts: [{ ...CONFIG.contacts[0], address: { user: { secret: "PUSHOVER_USER" }, device: { secret: "MISSING" } } }] };
+    const loadProblems = problemsOf(JSON.stringify(twoSecrets), (name) => (name === "PUSHOVER_USER" ? value : undefined));
+    expect(loadProblems).toEqual([expect.stringContaining("names the secret MISSING")]);
+    expect(loadProblems.join(" ")).not.toContain(prefix);
+  });
+
+  it("gives each issue of a schema with its path, and a value that holds", () => {
+    expect(checkWith(secretRefSchema, { secret: "NAME" })).toEqual({ tag: "ok", value: { secret: "NAME" } });
+    expect(checkWith(secretRefSchema, { secret: "" })).toEqual({ tag: "err", error: ["secret: The name of a secret is a non-empty string."] });
+  });
+
+  it("gives a JSON Schema with the format as a constant", () => {
+    expect(z.toJSONSchema(alertConfigSchema)).toMatchObject({
+      type: "object",
+      additionalProperties: false,
+      required: ["format", "places", "people", "contacts", "policies"],
+      properties: { format: { const: CONFIG_FORMAT } },
+    });
   });
 });
