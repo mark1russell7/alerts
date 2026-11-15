@@ -52,7 +52,7 @@
 
   <ol class="pipeline" aria-label="The pipeline at this step">
     <li><span class="n" id="count-messages">0</span><span class="what">messages</span><span class="how">from the source</span></li>
-    <li><span class="n" id="count-reports">0</span><span class="what">reports</span><span class="how"><code>mapObservation</code></span></li>
+    <li><span class="n" id="count-reports">0</span><span class="what">reports</span><span class="how"><code>mapObservation</code>, <code>systemReports</code></span></li>
     <li><span class="n" id="count-incidents">0</span><span class="what">live incidents</span><span class="how"><code>add</code>, <code>incidents</code></span></li>
     <li><span class="n" id="count-levels">0</span><span class="what">levels sent</span><span class="how"><code>assess</code></span></li>
   </ol>
@@ -67,6 +67,7 @@
         <li><span class="swatch level-notice"></span>Notice</li>
         <li><span class="swatch level-none"></span>No person</li>
         <li><span class="swatch test"></span>Test</li>
+        <li><span class="swatch gap"></span>Coverage gap</li>
       </ul>
       <p class="hint">The core matches a home by its zone and county codes. The map draws the shapes, and decides nothing.</p>
     </section>
@@ -75,6 +76,12 @@
       <h3 id="levels-h">By level</h3>
       <p class="hint">Each person gets one level for each incident. Open an entry to see the reasons.</p>
       <div id="levels"></div>
+    </section>
+
+    <section class="panel sources-panel" aria-labelledby="sources-h">
+      <h3 id="sources-h">Sources</h3>
+      <p class="hint">The core also watches its sources. A fold of the fetch log gives the health of each source. The coverage counts the independent sources at each home.</p>
+      <div id="sources"></div>
     </section>
 
     <section class="panel" aria-labelledby="incidents-h">
@@ -96,6 +103,7 @@
     <li><strong>Map.</strong> A source adapter turns each message into a report, in one format for each source.</li>
     <li><strong>Merge.</strong> The core joins the reports of one event: by a reference, by a shared key (VTEC) or by a link rule.</li>
     <li><strong>Assess.</strong> The policy gives each person a level for each incident, with the reasons.</li>
+    <li><strong>Watch.</strong> The core folds the fetch log of each source into its health. When a home has too few independent sources, the core makes a system report.</li>
     <li><strong>Deliver.</strong> The channels send the level, and escalate until the person acknowledges a life-safety message.</li>
   </ol>
 

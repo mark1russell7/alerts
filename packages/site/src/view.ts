@@ -1,12 +1,25 @@
 /**
- * The view of the demo. It draws one frame of the replay: the map, the view by level, the
- * incidents and the message of the step. The view only draws: the frames hold each decision.
+ * The view of the demo. It draws one frame of the replay: the map, the view by level, the sources,
+ * the incidents and the message of the step. The view only draws: the frames hold each decision.
  */
 
-import type { AssessedLevel, Assessment, Incident, Report, Position } from "@mark1russell7/alerts";
+import type { AssessedLevel, Assessment, HealthState, Incident, Report, Position } from "@mark1russell7/alerts";
 import { h } from "@mark1russell7/site-pages/chrome";
-import { COUNTIES, PEOPLE, PLACES, RIVER, ZONES, type Zone } from "./demo.ts";
-import { clock, joinFacts, LEVEL_MEANINGS, LEVEL_WORDS, nameOf, OP_WORDS, reasonText } from "./explain.ts";
+import { COUNTIES, PEOPLE, PLACES, RIVER, SOURCES, ZONES, type Zone } from "./demo.ts";
+import {
+  changeText,
+  clock,
+  HEALTH_WORDS,
+  incidentLabel,
+  joinFacts,
+  KIND_WORDS,
+  LEVEL_MEANINGS,
+  LEVEL_WORDS,
+  nameOf,
+  OP_WORDS,
+  reasonText,
+  shortName,
+} from "./explain.ts";
 import { LEVELS_DOWN, topLevel, type Frame } from "./replay.ts";
 
 const SVG = "http://www.w3.org/2000/svg";
@@ -45,6 +58,12 @@ const centroid = (ring: readonly Position[]): Position => [
 /** This function gives the assessments of one incident. */
 const of = (frame: Frame, incident: Incident): Assessment[] => frame.assessments.filter((assessment) => assessment.incident === incident.anchor);
 
+/** This function gives each incident of a frame: the incidents of the source and of the system reports. */
+const allIncidents = (frame: Frame): Incident[] => [...frame.incidents, ...frame.sources.incidents];
+
+/** This function gives each assessment of a frame: the assessments of the source and of the system reports. */
+const allAssessments = (frame: Frame): Assessment[] => [...frame.assessments, ...frame.sources.assessments];
+
 /** This function gives the incident level class of the map: the highest level of a person, or `test`. */
 function levelClass(frame: Frame, incident: Incident): string {
   if (incident.status !== "actual") return "test";
@@ -81,10 +100,19 @@ export function drawMap(frame: Frame, selected: string | undefined, select: (anc
     label.append(s("tspan", { class: "zone-code", x: X([x, y]), dy: 26 }, zone.code));
     map.append(label);
   }
+  // A ring marks each home that a live system report names as its area: a gap of the coverage.
+  for (const incident of frame.sources.incidents.filter((one) => one.live)) {
+    for (const area of incident.areas) {
+      const place = area.type === "place" ? PLACES.find((one) => one.id === area.place) : undefined;
+      if (place?.at === undefined) continue;
+      const level = topLevel(frame.sources.assessments.filter((assessment) => assessment.incident === incident.anchor));
+      map.append(s("circle", { class: `gap level-${level}`, "data-place": place.id, cx: X(place.at), cy: Y(place.at), r: 42 }));
+    }
+  }
   for (const place of PLACES) {
     if (place.at === undefined) continue;
     const person = PEOPLE.find((one) => one.places.includes(place.id));
-    const level = person === undefined ? "none" : topLevel(frame.assessments.filter((assessment) => assessment.person === person.person));
+    const level = person === undefined ? "none" : topLevel(allAssessments(frame).filter((assessment) => assessment.person === person.person));
     const letter = person === undefined ? "?" : nameOf(person.person).slice(-1);
     const pin = s("g", { class: `pin level-${level}`, transform: `translate(${String(X(place.at))},${String(Y(place.at))})` });
     pin.append(s("circle", { r: 22 }), s("text", { y: 8 }, letter));
@@ -98,11 +126,15 @@ export function levelChip(level: AssessedLevel): HTMLElement {
   return h("span", { class: `chip level-${level}` }, LEVEL_WORDS[level]);
 }
 
-/** This function draws the view by level: a lane for each level, with each person and incident in it. */
+/**
+ * This function draws the view by level: a lane for each level, with each person and incident in it.
+ * The lanes also hold the system reports, because the same assessment gives their levels.
+ */
 export function drawLevels(frame: Frame): HTMLElement {
   const lanes = h("div", { class: "lanes" });
+  const incidents = allIncidents(frame);
   for (const level of LEVELS_DOWN) {
-    const here = frame.assessments.filter((assessment) => assessment.level === level && (level !== "none" || isLive(frame, assessment)));
+    const here = allAssessments(frame).filter((assessment) => assessment.level === level && (level !== "none" || isLive(incidents, assessment)));
     const lane = h(
       "section",
       { class: `lane level-${level}`, "data-level": level, "aria-label": LEVEL_WORDS[level] },
@@ -111,16 +143,16 @@ export function drawLevels(frame: Frame): HTMLElement {
     );
     const list = h("ul", {});
     for (const assessment of here) {
-      const incident = frame.incidents.find((one) => one.anchor === assessment.incident);
+      const incident = incidents.find((one) => one.anchor === assessment.incident);
       if (incident === undefined) continue;
       list.append(
         h(
           "li",
-          { class: "entry", "data-person": assessment.person },
+          { class: `entry${incident.status === "system" ? " system" : ""}`, "data-person": assessment.person },
           h(
             "details",
             {},
-            h("summary", {}, h("strong", {}, nameOf(assessment.person)), " · ", incident.kind.label),
+            h("summary", {}, h("strong", {}, nameOf(assessment.person)), " · ", incidentLabel(incident)),
             h("ol", { class: "reasons" }, ...assessment.reasons.map((reason) => h("li", {}, reasonText(reason, incident)))),
           ),
         ),
@@ -134,7 +166,7 @@ export function drawLevels(frame: Frame): HTMLElement {
 }
 
 // The lane `none` shows only the live incidents. An ended incident sends nothing, and the incident list shows it.
-const isLive = (frame: Frame, assessment: Assessment): boolean => frame.incidents.some((incident) => incident.anchor === assessment.incident && incident.live);
+const isLive = (incidents: readonly Incident[], assessment: Assessment): boolean => incidents.some((incident) => incident.anchor === assessment.incident && incident.live);
 
 /** This function draws the list of the incidents, with the reports of each and the facts that join them. */
 export function drawIncidents(frame: Frame, selected: string | undefined, select: (anchor: string) => void): HTMLElement {
@@ -228,13 +260,124 @@ export function drawMessage(frame: Frame): HTMLElement {
   return box;
 }
 
-/** This function gives the four counts of the pipeline at a frame. */
+/**
+ * This function gives the four counts of the pipeline at a frame. The reports, the incidents and
+ * the levels include the system reports, because the merge and the assessment carry them too.
+ */
 export function counts(frames: readonly Frame[], index: number): { messages: number; reports: number; incidents: number; levels: number } {
   const frame = frames[index]!;
   return {
     messages: frames.slice(0, index + 1).filter((one) => one.step.message !== undefined).length,
     reports: frame.state.reports.length,
-    incidents: frame.incidents.filter((incident) => incident.live).length,
-    levels: frame.assessments.filter((assessment) => assessment.level !== "none").length,
+    incidents: allIncidents(frame).filter((incident) => incident.live).length,
+    levels: allAssessments(frame).filter((assessment) => assessment.level !== "none").length,
   };
+}
+
+/** The class of the chip of each health state. */
+const STATE_TONES: Readonly<Record<HealthState, string>> = {
+  unknown: "quiet",
+  healthy: "good",
+  slow: "warn",
+  failing: "bad",
+  silent: "bad",
+  changed: "bad",
+};
+
+/**
+ * This function draws the sources of one frame. It shows the health of each source and the
+ * coverage of each kind at each home. It also shows the system reports and the level of each person.
+ */
+export function drawSources(frame: Frame): HTMLElement {
+  const { sources } = frame;
+
+  const health = h("ul", { class: "health", "aria-label": "The health of each source" });
+  for (const entry of sources.health) {
+    const descriptor = SOURCES.find((source) => source.id === entry.source);
+    health.append(
+      h(
+        "li",
+        { class: "source", "data-source": entry.source, "data-state": entry.state },
+        h("div", { class: "row" }, h("strong", {}, shortName(entry.source)), h("span", { class: `chip state ${STATE_TONES[entry.state]}` }, HEALTH_WORDS[entry.state])),
+        h("p", { class: "facts" }, `Since ${clock(entry.since)}. ${entry.reason}`),
+        descriptor === undefined ? null : h("p", { class: "domains" }, "Outside domains: ", ...descriptor.dependsOn.flatMap((domain, index) => [index === 0 ? "" : ", ", h("code", {}, domain)])),
+        ...sources.transitions.filter((change) => change.instance === entry.source).map((change) => h("p", { class: "change" }, changeText(change))),
+      ),
+    );
+  }
+
+  const coverage = h("ul", { class: "coverage", "aria-label": "The coverage of each kind at each home" });
+  for (const entry of sources.coverage) {
+    coverage.append(
+      h(
+        "li",
+        { class: entry.short ? "short" : "met", "data-place": entry.place, "data-kind": entry.kind },
+        h("span", { class: "home" }, shortName(entry.place)),
+        h("span", { class: "kind" }, KIND_WORDS[entry.kind] ?? entry.kind),
+        h("span", { class: "count" }, `${String(entry.independent)} of ${String(entry.required)}`),
+        h("span", { class: `chip ${entry.short ? "bad" : "good"}` }, entry.short ? "Short" : "Met"),
+        h("span", { class: "up" }, entry.sources.length === 0 ? "No source is up." : `Up: ${entry.sources.map(shortName).join(", ")}`),
+      ),
+    );
+  }
+
+  const reports = h("div", { class: "system", "aria-label": "The system reports" });
+  if (sources.incidents.length === 0) reports.append(h("p", { class: "empty" }, "No system report. Each source is up, and each coverage meets the policy."));
+  const byId = new Map<string, Report>(frame.state.reports.map((report) => [report.id, report]));
+  const fresh = new Set<string>(sources.reports.map((report) => report.id));
+  for (const incident of sources.incidents) {
+    const lines = incident.reports.flatMap((id) => byId.get(id) ?? []).sort((a, b) => a.sent - b.sent || (a.key < b.key ? -1 : 1));
+    const assessments = sources.assessments.filter((assessment) => assessment.incident === incident.anchor);
+    const card = h(
+      "article",
+      { class: `system-card${incident.live ? "" : " ended"}`, "data-kind": incident.kind.code, "aria-label": `${incidentLabel(incident)}, ${incident.live ? "live" : "ended"}` },
+      h(
+        "header",
+        {},
+        h("h5", {}, incidentLabel(incident)),
+        h("span", { class: `chip ${incident.live ? "live" : "ended"}` }, incident.live ? "Live" : "Ended"),
+        levelChip(topLevel(assessments)),
+      ),
+      h("p", { class: "facts" }, `Severity ${incident.severity}, urgency ${incident.urgency}.`),
+    );
+    const steps = h("ol", { class: "reports" });
+    lines.forEach((report, index) => {
+      steps.append(
+        h(
+          "li",
+          { class: fresh.has(report.id) ? "new" : "" },
+          h("span", { class: "when" }, clock(report.sent)),
+          h("span", { class: `op op-${report.op}` }, OP_WORDS[report.op]),
+          h("span", { class: "said" }, report.headline),
+          report.description === undefined ? null : h("span", { class: "said quiet" }, report.description),
+          ...joinFacts(report, lines.slice(0, index)).map((fact) => h("span", { class: "join" }, `Merge rule ${String(fact.rule)}: ${fact.text}`)),
+        ),
+      );
+    });
+    const people = h(
+      "ul",
+      { class: "people" },
+      ...assessments.map((assessment) =>
+        h(
+          "li",
+          { "data-person": assessment.person, "data-level": assessment.level },
+          h(
+            "details",
+            {},
+            h("summary", {}, h("strong", {}, nameOf(assessment.person)), " ", levelChip(assessment.level)),
+            h("ol", { class: "reasons" }, ...assessment.reasons.map((reason) => h("li", {}, reasonText(reason, incident)))),
+          ),
+        ),
+      ),
+    );
+    card.append(steps, people);
+    reports.append(card);
+  }
+
+  return h(
+    "div",
+    { class: "sources" },
+    h("div", { class: "part" }, h("h4", {}, "Health"), health, h("h4", {}, "Coverage at each home"), h("p", { class: "hint" }, "Independent sources that are up, of the count that the policy needs."), coverage),
+    h("div", { class: "part" }, h("h4", {}, "System reports"), reports),
+  );
 }
