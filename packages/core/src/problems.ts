@@ -5,9 +5,18 @@
 
 import type { MapProblem } from "./contracts.ts";
 
-/** The place where a map function or a reader puts the problems of a message. */
+/**
+ * The effect of a problem on the report. `fatal`: no report. `lossy`: the report lacks a value of the
+ * message, or holds a fallback in its place. `note`: the report is whole, and the message has more.
+ */
+export type ProblemEffect = "note" | "lossy" | "fatal";
+
+/**
+ * The place where a map function or a reader puts the problems of a message. The default effect is
+ * `lossy`, because a loss that the health does not see changes the level of an alert silently.
+ */
 export interface ProblemSink {
-  add(path: string, message: string, fatal?: boolean): void;
+  add(path: string, message: string, effect?: ProblemEffect): void;
 }
 
 /**
@@ -23,14 +32,19 @@ export class Problems implements ProblemSink {
     this.prefix = prefix;
   }
 
-  /** This method adds one problem. A problem is not fatal if the caller does not say so. */
-  add(path: string, message: string, fatal = false): void {
+  /** This method adds one problem. A problem is lossy if the caller does not give another effect. */
+  add(path: string, message: string, effect: ProblemEffect = "lossy"): void {
     const full = this.prefix === "" ? path : path === "" ? this.prefix : `${this.prefix}.${path}`;
-    this.list.push({ path: full, message, fatal });
+    this.list.push(effect === "lossy" ? { path: full, message, fatal: false, lossy: true } : { path: full, message, fatal: effect === "fatal" });
   }
 
   /** The count of the fatal problems. A `FetchRecord` holds this count for the observations of a fetch. */
   get fatal(): number {
     return this.list.filter((problem) => problem.fatal).length;
+  }
+
+  /** The count of the lossy problems. A `FetchRecord` holds this count for the observations of a fetch. */
+  get lossy(): number {
+    return this.list.filter((problem) => problem.lossy === true).length;
   }
 }

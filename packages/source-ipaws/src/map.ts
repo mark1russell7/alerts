@@ -141,16 +141,19 @@ function knownValues<T extends string>(values: readonly string[], allowed: Reado
   return known;
 }
 
-/** This function maps one CAP message to a report, or to no report and its problems. */
+/**
+ * This function maps one CAP message to a report, or to no report and its problems. A value of the
+ * message that the report does not hold is a lossy problem.
+ */
 function mapAlert(alert: CapAlert, observation: Observation, languages: readonly string[], problems: Problems): Report | undefined {
   const key = alert.identifier.trim();
   if (key === "") {
-    problems.add("identifier", "the alert has no identifier", true);
+    problems.add("identifier", "the alert has no identifier", "fatal");
     return undefined;
   }
   const sent = capTime(alert.sent, "sent", problems);
   if (sent === undefined) {
-    problems.add("sent", "the alert has no valid sent time", true);
+    problems.add("sent", "the alert has no valid sent time", "fatal");
     return undefined;
   }
   const messageType = alert.msgType.trim().toLowerCase();

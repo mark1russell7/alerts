@@ -371,9 +371,9 @@ export const fetchOutcomeSchema: z.ZodType<FetchOutcome, FetchOutcome> = schemaO
     .readonly(),
 );
 
-/** This schema checks a part of a message that the map function did not understand. */
+/** This schema checks a part of a message that the map function did not understand. The field `lossy` is absent or true. */
 export const mapProblemSchema: z.ZodType<MapProblem, MapProblem> = schemaOf<MapProblem>()(
-  z.strictObject({ path: z.string(), message: z.string(), fatal: z.boolean() }).readonly(),
+  z.strictObject({ path: z.string(), message: z.string(), fatal: z.boolean(), lossy: z.literal(true).exactOptional() }).readonly(),
 );
 
 /** This schema checks the result of the map function. */
@@ -386,7 +386,7 @@ export const canaryResultSchema: z.ZodType<CanaryResult, CanaryResult> = schemaO
   z.strictObject({ pass: z.boolean(), reason: z.string() }).readonly(),
 );
 
-/** This schema checks the record of one fetch. The two counts are integers, 0 or more (`contracts.ts`, lines 347 and 349). */
+/** This schema checks the record of one fetch. The three counts are integers, 0 or more (`contracts.ts`, lines 356, 358 and 360). */
 export const fetchRecordSchema: z.ZodType<FetchRecord, FetchRecord> = schemaOf<FetchRecord>()(
   z
     .strictObject({
@@ -396,6 +396,7 @@ export const fetchRecordSchema: z.ZodType<FetchRecord, FetchRecord> = schemaOf<F
       failure: fetchFailureSchema.exactOptional(),
       fresh: count(),
       fatal: count(),
+      lossy: count().exactOptional(),
       canary: canaryResultSchema.exactOptional(),
     })
     .readonly(),
@@ -434,7 +435,7 @@ export const sourceHealthSchema: z.ZodType<SourceHealth, SourceHealth> = schemaO
     .readonly(),
 );
 
-/** This schema checks the coverage of one kind at one place. The two counts are integers, 0 or more (`contracts.ts`, lines 405 and 421). */
+/** This schema checks the coverage of one kind at one place. The two counts are integers, 0 or more (`contracts.ts`, lines 416 and 432). */
 export const coverageSchema: z.ZodType<Coverage, Coverage> = schemaOf<Coverage>()(
   z
     .strictObject({

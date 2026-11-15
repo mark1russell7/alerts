@@ -8,7 +8,6 @@ import type {
   Category,
   Certainty,
   CorrelationKey,
-  Instant,
   MapProblem,
   MapResult,
   Observation,
@@ -24,7 +23,19 @@ import type {
 import { categoryOf, Problems, reportId } from "@mark1russell7/alerts";
 import { errorMessage } from "@mark1russell7/text";
 
-import { isSameCode, isUgcCode, parseVtec, resolveKind, vtecKey, type Vtec } from "@mark1russell7/alerts-format-nws";
+import {
+  CAP_CATEGORIES,
+  CAP_CERTAINTY,
+  CAP_NOT_ALERTS,
+  CAP_OPERATIONS,
+  CAP_RESPONSES,
+  CAP_SEVERITY,
+  CAP_STATUS,
+  CAP_URGENCY,
+  capTime,
+  capValue,
+} from "@mark1russell7/alerts-format-cap";
+import { hasVtec, isSameCode, isUgcCode, parseVtec, resolveKind, vtecKey, type Vtec } from "@mark1russell7/alerts-format-nws";
 
 /** The id of this source. */
 export const SOURCE_ID = "nws-api" as SourceId;
@@ -32,7 +43,7 @@ export const SOURCE_ID = "nws-api" as SourceId;
 /** The authority that issues each message of this source: the NWS. The descriptor lists it in `origins`. */
 export const ORIGIN = "nws";
 
-/** The fields of the properties of an NWS alert that the map function knows. A different field is a problem. */
+/** The fields of the properties of an NWS alert that the map function knows. A different field is a note. */
 export const KNOWN_FIELDS: ReadonlySet<string> = new Set([
   "@id",
   "@type",
@@ -68,40 +79,6 @@ export const KNOWN_FIELDS: ReadonlySet<string> = new Set([
   "eventCode",
 ]);
 
-const STATUS: ReadonlySet<string> = new Set<Status>(["actual", "exercise", "system", "test", "draft"]);
-const OPERATIONS: ReadonlySet<string> = new Set<Operation>(["alert", "update", "cancel"]);
-const SEVERITY: ReadonlySet<string> = new Set<Severity>(["extreme", "severe", "moderate", "minor", "unknown"]);
-const URGENCY: ReadonlySet<string> = new Set<Urgency>(["immediate", "expected", "future", "past", "unknown"]);
-const CERTAINTY: ReadonlySet<string> = new Set<Certainty>(["observed", "likely", "possible", "unlikely", "unknown"]);
-const RESPONSES: ReadonlySet<string> = new Set<ResponseType>([
-  "shelter",
-  "evacuate",
-  "prepare",
-  "execute",
-  "avoid",
-  "monitor",
-  "assess",
-  "allclear",
-  "none",
-]);
-const CATEGORIES: ReadonlySet<string> = new Set<Category>([
-  "geo",
-  "met",
-  "safety",
-  "security",
-  "rescue",
-  "fire",
-  "health",
-  "env",
-  "transport",
-  "infra",
-  "cbrne",
-  "other",
-]);
-/** The CAP message types that are not alerts. They give no report and no problem. */
-const NOT_ALERTS: ReadonlySet<string> = new Set(["ack", "error"]);
-const ISO_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})$/;
-
 type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
 type JsonObject = { [key: string]: Json };
 
@@ -110,24 +87,35 @@ const textOf = (value: unknown): string | undefined => (typeof value === "string
 /** This function gives a list of the texts of a value: a text, or a list of texts. */
 const textsOf = (value: unknown): string[] =>
   typeof value === "string" ? [value] : Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+const typeOf = (value: unknown): string => (Array.isArray(value) ? "a list" : value === null ? "null" : `a ${typeof value}`);
 
-/** This function reads a time of the message. An absent time gives `undefined`, and a bad time is a problem. */
-function timeOf(value: unknown, path: string, problems: Problems): Instant | undefined {
-  if (value === null || value === undefined) return undefined;
-  if (typeof value !== "string" || !ISO_TIME.test(value) || Number.isNaN(Date.parse(value))) {
-    problems.add(path, `the time ${JSON.stringify(value)} is not an ISO 8601 time with a zone`);
-    return undefined;
-  }
-  return Date.parse(value);
+/** This function reads a text field. An absent field, null and a blank text give `undefined`. Another value is a lossy problem. */
+function textAt(value: unknown, path: string, problems: Problems): string | undefined {
+  if (value !== undefined && value !== null && typeof value !== "string") problems.add(path, `the value is ${typeOf(value)}, not a text`);
+  return textOf(value);
 }
 
-/** This function reads one value of a CAP list of values, in lower case. An unknown value is a problem. */
-function oneOf<T extends string>(value: unknown, allowed: ReadonlySet<string>, fallback: T, path: string, problems: Problems): T {
-  const text = typeof value === "string" ? value.trim().toLowerCase() : undefined;
-  if (text !== undefined && allowed.has(text)) return text as T;
-  if (value !== null && value !== undefined) problems.add(path, `the value ${JSON.stringify(value)} is not known: the map uses ${fallback}`);
-  else if (fallback !== "unknown") problems.add(path, `the value is absent: the map uses ${fallback}`);
-  return fallback;
+/** This function reads a text, or a list of texts. Each item that is not a text is a lossy problem. */
+function textsAt(value: unknown, path: string, problems: Problems): string[] {
+  if (value === undefined || value === null) return [];
+  if (typeof value === "string") return [value];
+  if (!Array.isArray(value)) {
+    problems.add(path, `the value is ${typeOf(value)}, not a text or a list of texts`);
+    return [];
+  }
+  const texts: string[] = [];
+  value.forEach((item, index) => {
+    if (typeof item === "string") texts.push(item);
+    else problems.add(`${path}[${index}]`, `the item is ${typeOf(item)}, not a text`);
+  });
+  return texts;
+}
+
+/** This function reads an object field. An absent field and null give `undefined`. Another value is a lossy problem. */
+function objectAt(value: unknown, path: string, problems: Problems): JsonObject | undefined {
+  if (isObject(value)) return value;
+  if (value !== undefined && value !== null) problems.add(path, `the value is ${typeOf(value)}, not an object`);
+  return undefined;
 }
 
 const isPosition = (value: unknown): value is [number, number] =>
@@ -139,8 +127,9 @@ const isPosition = (value: unknown): value is [number, number] =>
   Math.abs(value[1]) <= 90;
 
 /**
- * This function reads the rings of one GeoJSON polygon. A bad hole is a problem, and the area does not
- * have it. A bad outside ring is a problem, and the function gives no area.
+ * This function reads the rings of one GeoJSON polygon. A ring that does not close is a note, and the
+ * function closes it. A bad hole is a lossy problem, and the area does not have it. A bad outside ring
+ * is a lossy problem, and the function gives no area.
  */
 function polygonOf(rings: unknown, path: string, problems: Problems): Area | undefined {
   if (!Array.isArray(rings) || rings.length === 0) {
@@ -158,7 +147,7 @@ function polygonOf(rings: unknown, path: string, problems: Problems): Area | und
     const first = positions[0]!;
     const last = positions[positions.length - 1]!;
     if (first[0] !== last[0] || first[1] !== last[1]) {
-      problems.add(`${path}[${index}]`, "the ring does not close: the map closes it");
+      problems.add(`${path}[${index}]`, "the ring does not close: the map closes it", "note");
       positions.push(first);
     }
     good.push(positions);
@@ -195,7 +184,7 @@ function areasOf(feature: JsonObject, properties: JsonObject, problems: Problems
     return areas;
   }
   for (const field of Object.keys(geocode)) {
-    if (!(field in REGION_CODES)) problems.add(`properties.geocode.${field}`, "the map function does not know this field");
+    if (!(field in REGION_CODES)) problems.add(`properties.geocode.${field}`, "the map function does not know this field", "note");
   }
   for (const [field, { system, normal, valid }] of Object.entries(REGION_CODES)) {
     const value = geocode[field];
@@ -219,40 +208,48 @@ const REGION_CODES: Readonly<Record<string, { system: string; normal: (text: str
   SAME: { system: "same", normal: (text) => text.trim(), valid: isSameCode },
 };
 
-/** This function reads the CAP references: the current list and the expired list of the NWS. */
-function referencesOf(properties: JsonObject, key: string, parameters: JsonObject | undefined): string[] {
+/**
+ * This function reads the CAP references: the current list and the expired list of the NWS. A reference
+ * with no identifier is a lossy problem, because the core cannot link the report to it.
+ */
+function referencesOf(properties: JsonObject, key: string, parameters: JsonObject | undefined, problems: Problems): string[] {
   const keys = new Set<string>();
   const references = properties["references"];
   if (Array.isArray(references)) {
-    for (const reference of references) {
+    references.forEach((reference, index) => {
       const identifier = isObject(reference) ? textOf(reference["identifier"]) : undefined;
-      if (identifier !== undefined) keys.add(identifier);
-    }
+      if (identifier === undefined) problems.add(`properties.references[${index}]`, "the reference has no identifier");
+      else keys.add(identifier);
+    });
+  } else if (references !== undefined && references !== null) {
+    problems.add("properties.references", `the value is ${typeOf(references)}, not a list`);
   }
   // Each expired reference is "sender,identifier,sent", and the references are separated by spaces
-  for (const text of textsOf(parameters?.["expiredReferences"])) {
+  for (const text of textsAt(parameters?.["expiredReferences"], "properties.parameters.expiredReferences", problems)) {
     for (const reference of text.trim().split(/\s+/)) {
+      if (reference === "") continue;
       const identifier = reference.split(",")[1];
       if (identifier !== undefined && identifier !== "") keys.add(identifier);
+      else problems.add("properties.parameters.expiredReferences", `the reference ${JSON.stringify(reference)} is not "sender,identifier,sent"`);
     }
   }
   keys.delete(key);
   return [...keys];
 }
 
-/** This function gives the name and value pairs of the message that the report does not hold in a field of its own. */
-function parametersOf(properties: JsonObject, parameters: JsonObject | undefined): Record<string, string[]> {
+/**
+ * This function gives the name and value pairs of the message that the report does not hold in a field of
+ * its own. A parameter keeps each value as a text. An event code or a field that is not a text is a lossy problem.
+ */
+function parametersOf(properties: JsonObject, parameters: JsonObject | undefined, eventCode: JsonObject | undefined, problems: Problems): Record<string, string[]> {
   const result: Record<string, string[]> = {};
   for (const [name, value] of Object.entries(parameters ?? {})) {
     if (name === "expiredReferences") continue;
     result[name] = Array.isArray(value) ? value.map((item) => (typeof item === "string" ? item : JSON.stringify(item))) : [typeof value === "string" ? value : JSON.stringify(value)];
   }
-  const eventCode = properties["eventCode"];
-  if (isObject(eventCode)) {
-    for (const [name, value] of Object.entries(eventCode)) result[`eventCode.${name}`] = textsOf(value);
-  }
+  for (const [name, value] of Object.entries(eventCode ?? {})) result[`eventCode.${name}`] = textsAt(value, `properties.eventCode.${name}`, problems);
   for (const name of ["note", "scope", "code", "language", "@id"]) {
-    const value = textOf(properties[name]);
+    const value = textAt(properties[name], `properties.${name}`, problems);
     if (value !== undefined) result[name] = [value];
   }
   return result;
@@ -266,44 +263,56 @@ function withoutAbsent<T extends object>(value: T): Present<T> {
   return Object.fromEntries(Object.entries(value).filter(([, field]) => field !== undefined)) as Present<T>;
 }
 
-/** This function maps one alert (a GeoJSON feature) to a report, or to no report and its problems. */
+/**
+ * This function maps one alert (a GeoJSON feature) to a report, or to no report and its problems. A
+ * value that the report lacks, or holds as a fallback, is a lossy problem, so the health shows the loss.
+ */
 function mapFeature(feature: unknown, observation: Observation, problems: Problems): Report | undefined {
   if (!isObject(feature) || feature["type"] !== "Feature") {
-    problems.add("", "the message is not a GeoJSON feature", true);
+    problems.add("", "the message is not a GeoJSON feature", "fatal");
     return undefined;
   }
   const properties = feature["properties"];
   if (!isObject(properties)) {
-    problems.add("properties", "the feature has no properties", true);
+    problems.add("properties", "the feature has no properties", "fatal");
     return undefined;
   }
   for (const field of Object.keys(properties)) {
-    if (!KNOWN_FIELDS.has(field)) problems.add(`properties.${field}`, "the map function does not know this field");
+    if (!KNOWN_FIELDS.has(field)) problems.add(`properties.${field}`, "the map function does not know this field", "note");
   }
   const key = textOf(properties["id"]);
   if (key === undefined) {
-    problems.add("properties.id", "the alert has no identifier", true);
+    problems.add("properties.id", "the alert has no identifier", "fatal");
     return undefined;
   }
-  const sent = timeOf(properties["sent"], "properties.sent", problems);
+  const sent = capTime(properties["sent"], "properties.sent", problems);
   if (sent === undefined) {
-    problems.add("properties.sent", "the alert has no valid sent time", true);
+    problems.add("properties.sent", "the alert has no valid sent time", "fatal");
     return undefined;
   }
   const messageType = typeof properties["messageType"] === "string" ? properties["messageType"].trim().toLowerCase() : undefined;
-  if (messageType !== undefined && NOT_ALERTS.has(messageType)) return undefined;
+  if (messageType !== undefined && CAP_NOT_ALERTS.has(messageType)) return undefined;
 
-  const parameters = isObject(properties["parameters"]) ? properties["parameters"] : undefined;
+  const parameters = objectAt(properties["parameters"], "properties.parameters", problems);
+  const eventCode = objectAt(properties["eventCode"], "properties.eventCode", problems);
+  const vtecTexts = textsAt(parameters?.["VTEC"], "properties.parameters.VTEC", problems);
   const vtec: Vtec[] = [];
-  for (const text of textsOf(parameters?.["VTEC"])) {
+  for (const text of vtecTexts) {
     const parsed = parseVtec(text);
     if (parsed === undefined) problems.add("properties.parameters.VTEC", `the text ${JSON.stringify(text)} is not a P-VTEC string`);
     else vtec.push(parsed);
   }
-  const eventCode = isObject(properties["eventCode"]) ? properties["eventCode"] : undefined;
   const nwsCode = textsOf(eventCode?.["NationalWeatherService"])[0];
   const sameCode = textsOf(eventCode?.["SAME"])[0];
-  const name = textOf(properties["event"]);
+  // An NWS alert of a VTEC event carries its P-VTEC string. With no string, the core cannot follow the event.
+  if (vtecTexts.length === 0 && nwsCode !== undefined && hasVtec(nwsCode)) {
+    problems.add("properties.parameters.VTEC", `the alert has no P-VTEC string, and the event ${JSON.stringify(nwsCode)} has one`);
+  }
+  const name = textAt(properties["event"], "properties.event", problems);
+  // CAP requires the event name. With no name, the label of the report is the label of the kind
+  if (name === undefined && (typeof properties["event"] === "string" || properties["event"] === undefined || properties["event"] === null)) {
+    problems.add("properties.event", "the alert has no event name");
+  }
   const resolved = resolveKind({
     vtec,
     ...(nwsCode === undefined ? {} : { nwsCode }),
@@ -312,19 +321,23 @@ function mapFeature(feature: unknown, observation: Observation, problems: Proble
   });
   if (!resolved.known) problems.add("properties.event", `the kind tables do not know the event ${JSON.stringify(name ?? nwsCode ?? sameCode)}`);
 
-  const categories = textsOf(properties["category"])
+  const categories = textsAt(properties["category"], "properties.category", problems)
     .map((category) => category.trim().toLowerCase())
     .filter((category) => {
-      if (CATEGORIES.has(category)) return true;
+      if (CAP_CATEGORIES.has(category)) return true;
       problems.add("properties.category", `the category ${JSON.stringify(category)} is not a CAP category`);
       return false;
     }) as Category[];
-  if (categories.length === 0) categories.push(categoryOf(resolved.kind.code));
+  if (categories.length === 0) {
+    const fallback = categoryOf(resolved.kind.code);
+    problems.add("properties.category", `the alert has no CAP category: the map uses ${fallback}`);
+    categories.push(fallback);
+  }
 
-  const response = textsOf(properties["response"])
+  const response = textsAt(properties["response"], "properties.response", problems)
     .map((value) => value.trim().toLowerCase())
     .filter((value) => {
-      if (RESPONSES.has(value)) return true;
+      if (CAP_RESPONSES.has(value)) return true;
       problems.add("properties.response", `the response ${JSON.stringify(value)} is not a CAP response`);
       return false;
     }) as ResponseType[];
@@ -338,45 +351,51 @@ function mapFeature(feature: unknown, observation: Observation, problems: Proble
 
   // A field with no value is absent from the report, so two copies of one report are equal
   const optional = withoutAbsent({
-    effective: timeOf(properties["effective"], "properties.effective", problems),
-    onset: timeOf(properties["onset"], "properties.onset", problems),
-    expires: timeOf(properties["expires"], "properties.expires", problems),
-    ends: timeOf(properties["ends"], "properties.ends", problems),
-    areaText: textOf(properties["areaDesc"]),
-    description: textOf(properties["description"]),
-    instruction: textOf(properties["instruction"]),
-    web: textOf(properties["web"]),
+    effective: capTime(properties["effective"], "properties.effective", problems),
+    onset: capTime(properties["onset"], "properties.onset", problems),
+    expires: capTime(properties["expires"], "properties.expires", problems),
+    ends: capTime(properties["ends"], "properties.ends", problems),
+    areaText: textAt(properties["areaDesc"], "properties.areaDesc", problems),
+    description: textAt(properties["description"], "properties.description", problems),
+    instruction: textAt(properties["instruction"], "properties.instruction", problems),
+    web: textAt(properties["web"], "properties.web", problems),
   });
+  // The NWS gives an expiry time for each alert. With no expiry time, the incident does not end at a time.
+  if (properties["expires"] === undefined || properties["expires"] === null) problems.add("properties.expires", "the alert has no expiry time");
   // Each NWS alert has region codes. Only a code matches a watch until the core can match shapes, so an
   // alert with no valid code reaches nobody. A changed format gives this case, and health must show it.
   const areas = areasOf(feature, properties, problems);
   if (!areas.some((area) => area.type === "code")) {
-    problems.add("properties.geocode", "the alert has no valid region code: no watch can match it", true);
+    problems.add("properties.geocode", "the alert has no valid region code: no watch can match it", "fatal");
     return undefined;
   }
+  const senderName = textAt(properties["senderName"], "properties.senderName", problems);
+  const sender = textAt(properties["sender"], "properties.sender", problems);
+  const headline = textAt(properties["headline"], "properties.headline", problems);
   const report: Report = {
     id: reportId({ source: SOURCE_ID, key, sent }),
     source: SOURCE_ID,
     origin: ORIGIN,
     key,
-    references: referencesOf(properties, key, parameters),
+    references: referencesOf(properties, key, parameters, problems),
     correlation: [...correlation.values()],
-    status: oneOf<Status>(properties["status"], STATUS, "actual", "properties.status", problems),
-    op: oneOf<Operation>(messageType, OPERATIONS, "alert", "properties.messageType", problems),
+    status: capValue<Status>(properties["status"], CAP_STATUS, "actual", "properties.status", problems),
+    op: capValue<Operation>(properties["messageType"], CAP_OPERATIONS, "alert", "properties.messageType", problems),
     kind: resolved.kind,
     categories,
-    severity: oneOf<Severity>(properties["severity"], SEVERITY, "unknown", "properties.severity", problems),
-    urgency: oneOf<Urgency>(properties["urgency"], URGENCY, "unknown", "properties.urgency", problems),
-    certainty: oneOf<Certainty>(properties["certainty"], CERTAINTY, "unknown", "properties.certainty", problems),
+    severity: capValue<Severity>(properties["severity"], CAP_SEVERITY, "unknown", "properties.severity", problems),
+    urgency: capValue<Urgency>(properties["urgency"], CAP_URGENCY, "unknown", "properties.urgency", problems),
+    certainty: capValue<Certainty>(properties["certainty"], CAP_CERTAINTY, "unknown", "properties.certainty", problems),
     response,
     sent,
     received: observation.fetched,
     areas,
     about: [],
-    sender: textOf(properties["senderName"]) ?? textOf(properties["sender"]) ?? "NWS",
-    headline: textOf(properties["headline"]) ?? textsOf(parameters?.["NWSheadline"])[0] ?? name ?? key,
+    sender: senderName ?? sender ?? "NWS",
+    // The parameters keep the NWS headline as a text, so the headline loses no value when it uses it
+    headline: headline ?? textsOf(parameters?.["NWSheadline"])[0] ?? name ?? key,
     observation: observation.id,
-    parameters: parametersOf(properties, parameters),
+    parameters: parametersOf(properties, parameters, eventCode, problems),
     ...optional,
   };
   return report;

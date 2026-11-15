@@ -180,10 +180,10 @@ describe("the map of other messages", () => {
     expect(originOf("nws@example.org")).toBe("ipaws-authority");
   });
 
-  it("tells of an unknown geocode, and does not make an area of it", () => {
+  it("gives a lossy problem for an unknown geocode, and does not make an area of it", () => {
     const { report, problems } = mapOne(authority("<geocode><valueName>FIPS6</valueName><value>020173</value></geocode>"));
     expect(codesOf(report)).toEqual([]);
-    expect(problems).toEqual([{ path: "info[0].area[0].geocode", message: 'the map function does not know the geocode "FIPS6"', fatal: false }]);
+    expect(problems).toEqual([{ path: "info[0].area[0].geocode", message: 'the map function does not know the geocode "FIPS6"', fatal: false, lossy: true }]);
   });
 
   it("gives the areas of each block of the chosen language, and tells of the second block", () => {

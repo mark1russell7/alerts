@@ -311,13 +311,22 @@ export type FetchOutcome =
     }
   | { readonly ok: false; readonly failure: FetchFailure };
 
-/** A part of a message that the map function did not understand. Problems tell of a format change. */
+/**
+ * A part of a message that the map function did not understand. Problems tell of a format change. A
+ * problem has one of three effects. A fatal problem gives no report. A lossy problem gives a report that
+ * lacks a value of the message, or holds a fallback in its place. A note gives a whole report.
+ */
 export interface MapProblem {
   /** The path in the message, for example `features[3].properties.onset`. */
   readonly path: string;
   readonly message: string;
   /** True: the map function could not make a report from the message. */
   readonly fatal: boolean;
+  /**
+   * True: the report lacks a value of the message, or holds a fallback in its place. The field is
+   * absent for a note and for a fatal problem.
+   */
+  readonly lossy?: true;
 }
 
 /** The result of the map function. */
@@ -348,6 +357,8 @@ export interface FetchRecord {
   readonly fresh: number;
   /** The count of fatal problems that the map gave for the observations of the fetch. */
   readonly fatal: number;
+  /** The count of lossy problems that the map gave for the observations of the fetch. An absent count is 0. */
+  readonly lossy?: number;
   /** The result of the canary check of the observations of the fetch, when the source has a canary. */
   readonly canary?: CanaryResult;
 }

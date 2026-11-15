@@ -99,7 +99,7 @@ describe("readCap", () => {
     expect(alertOf(read).identifier).toBe("P-1");
   });
 
-  it("gives a problem for an alert with no namespace, and takes CAP 1.2", () => {
+  it("gives a note for an alert with no namespace, and takes CAP 1.2", () => {
     const read = readCap(message("").replace(` ${CAP}`, ""));
     expect(alertOf(read).version).toBe("1.2");
     expect(read.ok && read.problems).toContainEqual({
@@ -109,12 +109,12 @@ describe("readCap", () => {
     });
   });
 
-  it("gives a problem for each absent required element and each unknown element", () => {
+  it("gives a lossy problem for each absent required element, and a note for each unknown element", () => {
     const read = readCap(`<alert ${CAP}><identifier>T-2</identifier><colour>red</colour><info><event>Test</event></info></alert>`);
-    const paths = read.ok ? read.problems.map((problem) => problem.path) : [];
-    expect(paths).toEqual(
-      expect.arrayContaining(["alert.sender", "alert.sent", "alert.scope", "alert.colour", "alert.info[0].category", "alert.info[0].urgency"]),
-    );
+    const lossy = read.ok ? read.problems.filter((problem) => problem.lossy === true).map((problem) => problem.path) : [];
+    const notes = read.ok ? read.problems.filter((problem) => problem.lossy !== true && !problem.fatal).map((problem) => problem.path) : [];
+    expect(lossy).toEqual(expect.arrayContaining(["alert.sender", "alert.sent", "alert.scope", "alert.info[0].category", "alert.info[0].urgency"]));
+    expect(notes).toEqual(["alert.colour"]);
     expect(alertOf(read).sent).toBe("");
   });
 

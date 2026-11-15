@@ -12,6 +12,7 @@ export {
   fromEventCode,
   fromEventName,
   fromPhenomenon,
+  hasVtec,
   KIND_PREFIXES,
   NAME_ALIASES,
   PHENOMENA,

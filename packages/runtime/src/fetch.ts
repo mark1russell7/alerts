@@ -1,7 +1,7 @@
 /**
  * This module makes the events of one fetch. It is pure: the runtime gives the outcome, the times and
  * the ids that the log has. The runtime applies the map of a source to each observation of the fetch.
- * The fatal problems of the last passed fetch give the health. The log keeps only the new observations and
+ * The fatal and lossy problems of the last passed fetch give the health. The log keeps only the new observations and
  * their reports, thus a read that repeats does not make the file larger.
  */
 import type { CanaryResult, FetchOutcome, FetchRecord, Instant, MapProblem, MapResult, Observation, ObservationId, Report, SourceId, SourceProcedures } from "@mark1russell7/alerts";
@@ -35,17 +35,27 @@ export function fetchEvents(input: FetchInput): (ObservationEvent | FetchEvent)[
   const fresh = unique.filter((observation) => !input.known(observation.id));
   const isFresh = new Set(fresh.map((observation) => observation.id));
   let fatal = 0;
+  let lossy = 0;
   const reports: Report[] = [];
   const problems: MapProblem[] = [];
   for (const observation of unique) {
     const result = mapSafely(input.procedures, observation);
     fatal += result.problems.filter((problem) => problem.fatal).length;
+    lossy += result.problems.filter((problem) => problem.lossy === true).length;
     if (!isFresh.has(observation.id)) continue;
     reports.push(...result.reports);
     problems.push(...result.problems);
   }
   const canary = checkSafely(input.procedures, outcome.observations);
-  const record: FetchRecord = { source, at: started, took, fresh: fresh.length, fatal, ...(canary === undefined ? {} : { canary }) };
+  const record: FetchRecord = {
+    source,
+    at: started,
+    took,
+    fresh: fresh.length,
+    fatal,
+    ...(lossy > 0 ? { lossy } : {}),
+    ...(canary === undefined ? {} : { canary }),
+  };
   const observed = fresh.map((observation): ObservationEvent => ({ ...envelope("observation", observation.id, ended), observation }));
   return [...observed, { ...envelope("fetch", id, ended), record, ...(outcome.cursor === undefined ? {} : { cursor: outcome.cursor }), reports, problems }];
 }

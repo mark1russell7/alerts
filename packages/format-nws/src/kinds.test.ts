@@ -7,6 +7,7 @@ import {
   fromEventCode,
   fromEventName,
   fromPhenomenon,
+  hasVtec,
   NAME_ALIASES,
   PHENOMENA,
   resolveKind,
@@ -94,5 +95,28 @@ describe("resolveKind", () => {
   it("keeps the name of an unknown event and says so", () => {
     expect(resolveKind({ name: "Volcanic Haze Notice" })).toEqual({ kind: { code: UNKNOWN_KIND, label: "Volcanic Haze Notice" }, known: false });
     expect(resolveKind({})).toEqual({ kind: { code: UNKNOWN_KIND, label: "Unknown event" }, known: false });
+  });
+});
+
+describe("hasVtec", () => {
+  it("is true for the code of each phenomenon and significance, in any case", () => {
+    for (const [phenomenon, significance] of [["BZ", "W"], ["TO", "W"], ["FF", "W"], ["SC", "Y"], ["CF", "S"], ["HW", "A"]] as const) {
+      expect(hasVtec(`${phenomenon}${significance}`)).toBe(true);
+      expect(hasVtec(` ${phenomenon.toLowerCase()}${significance.toLowerCase()} `)).toBe(true);
+    }
+  });
+
+  it("is false for the outlook, the civil messages, the tests and the statements with no VTEC", () => {
+    for (const code of ["HWO", "FRW", "LEW", "SPS", "TST", "ADR", "EAN", "CDW", "EVI", "NWS", "", "BZWX"]) expect(hasVtec(code)).toBe(false);
+  });
+
+  it("agrees with fromPhenomenon for each pair of the tables", () => {
+    for (const phenomenon of Object.keys(PHENOMENA)) {
+      for (const significance of Object.keys(SIGNIFICANCE)) {
+        const code = `${phenomenon}${significance}`;
+        if (["HWO", "FRW", "LEW"].includes(code)) continue;
+        expect(hasVtec(code)).toBe(code.length === 3);
+      }
+    }
   });
 });

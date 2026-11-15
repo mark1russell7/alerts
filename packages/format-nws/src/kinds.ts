@@ -203,6 +203,21 @@ export function fromPhenomenon(phenomenon: string, significance: string): EventC
   return { code: hazard.code, label: `${hazard.label} ${STAGE_WORDS[stage]}`, significance: stage };
 }
 
+/**
+ * These three-letter codes split into a phenomenon and a significance, but their events have no P-VTEC
+ * string. They are the outlook `HWO`, and the civil messages `FRW` and `LEW`.
+ */
+const NO_VTEC: ReadonlySet<string> = new Set(["HWO", "FRW", "LEW"]);
+
+/**
+ * This function tells if the alerts of an NWS event code carry a P-VTEC string. The NWS API gives a
+ * VTEC event the code of its phenomenon and its significance, for example `BZW` for `BZ.W`.
+ */
+export function hasVtec(nwsCode: string): boolean {
+  const upper = nwsCode.trim().toUpperCase();
+  return upper.length === 3 && !NO_VTEC.has(upper) && fromPhenomenon(upper.slice(0, 2), upper.slice(2)) !== undefined;
+}
+
 /** This function gives the event code of a three-letter code: a row of the table, or a phenomenon and a significance. */
 export function fromEventCode(value: string): EventCode | undefined {
   const upper = value.trim().toUpperCase();

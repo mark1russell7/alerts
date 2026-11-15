@@ -191,7 +191,7 @@ const isObject = (value: unknown): value is XmlObject => typeof value === "objec
 /** This function reports each element of an object that the reader does not know. */
 function checkKnown(node: XmlObject, known: ReadonlySet<string>, path: string, problems: Problems): void {
   for (const name of Object.keys(node)) {
-    if (name !== "#text" && !known.has(name)) problems.add(`${path}.${name}`, "the reader does not know this element");
+    if (name !== "#text" && !known.has(name)) problems.add(`${path}.${name}`, "the reader does not know this element", "note");
   }
 }
 
@@ -351,7 +351,7 @@ export function readCap(xml: string): CapRead {
   const namespace = declaredNamespace(xml, root, prefixOf(root.name));
   let version: CapVersion = "1.2";
   if (namespace === undefined) {
-    problems.add("alert", "the alert does not declare its namespace: the reader takes CAP 1.2");
+    problems.add("alert", "the alert does not declare its namespace: the reader takes CAP 1.2", "note");
   } else {
     const known = CAP_NAMESPACES[namespace];
     if (known === undefined) return { ok: false, reason: `the namespace ${namespace} is not CAP 1.1 or CAP 1.2` };

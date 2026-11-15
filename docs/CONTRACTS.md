@@ -79,7 +79,13 @@ Each source package registers three or more procedures under `alerts.source.<id>
 The rules of each adapter:
 
 1. **An empty answer is not a failure.** `{ ok: true, observations: [], complete: true }` means "no alert". A failure is `{ ok: false }`. The health uses the difference.
-2. **The map tells of format changes.** A field that the map does not understand is a `MapProblem`. A fatal problem makes no report. Only fatal problems move the health to `changed`. So when the map cannot read an area or a subject that a watch can match, it gives a fatal problem. Until the core matches shapes, an area needs a region code or a place.
+2. **The map tells of format changes.** A part of a message that the map does not understand is a `MapProblem`. Each problem has one effect:
+   - A **fatal** problem makes no report.
+   - A **lossy** problem (`lossy: true`) keeps the report, but the report lacks a value of the message or holds a fallback in its place.
+   - A **note** keeps the whole report. The message has more than the report holds, for example an unknown field.
+
+   Fatal and lossy problems move the health to `changed`. Notes do not. So a renamed value that the map replaces with a fallback shows in the health.
+   When the map cannot read an area or a subject that a watch can match, it gives a fatal problem. Until the core matches shapes, an area needs a region code or a place.
 3. **The descriptor tells the truth about dependencies.** `origins` names the authorities whose messages the source carries. `dependsOn` names the failure domains outside the cell: providers, CDNs, transmitters. `uses` names the resources of the cell: `internet`, `power`, `receiver`. The coverage uses both.
 4. **The ids are hashes of content.** The core gives the id functions in `ids.ts`. An adapter does not make its own ids.
    - `observationId`: the SHA-256 of the source id, the content type, the request URL and the body. The fetch time is not part of it, so a poll with no change gives the same id. The URL is the part that the `map` function reads. A URL with the time of the poll gives the URL with no time, and a test holds that `map` does not read the time.
@@ -103,7 +109,7 @@ The core calculates the health of each source from the records of its fetches, n
 | `slow` | The last fetch passed, in `slowAfter` or more. |
 | `failing` | The last `failAfter` fetches failed, or no fetch passed for `staleAfter`, or the last canary check failed. |
 | `silent` | No fresh observation for `maxQuiet`, for a source where quiet is not normal. |
-| `changed` | The map gave fatal problems for the last passed fetch. |
+| `changed` | The map gave fatal or lossy problems for the last passed fetch. |
 
 The default of `failAfter` is 2 fetches, and the default of `staleAfter` is 3 intervals. When two conditions are true, the first state of this order applies: `failing`, `unknown`, `changed`, `silent`, `slow`, `healthy`. A stuck loop of the runtime writes no record, so the stale timer makes the source `failing`. A failed canary holds until a canary check passes.
 
