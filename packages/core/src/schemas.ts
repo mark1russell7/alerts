@@ -810,16 +810,22 @@ export const placeConfigSchema: z.ZodType<PlaceConfig, PlaceConfig> = schemaOf<P
     .readonly(),
 );
 
+// The printable ASCII characters, with no space, no parenthesis and no backslash.
+const CONTACT_CHARACTERS = /^[\x21-\x27\x2a-\x5b\x5d-\x7e]+$/;
+// An `https` URL with a host of two labels or more, or a `mailto` URL with one address.
+const CONTACT_FORMS = [
+  /^https:\/\/[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+(?::[0-9]{1,5})?(?:[/?#].*)?$/i,
+  /^mailto:[^@/?#]+@[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+(?:\?.*)?$/i,
+];
+
 /**
- * This function tells if a text is an `https` URL or a `mailto` URL: the forms of the contact of an operator.
- * The contact goes into a header. Thus it has no space, no control character and no parenthesis, which ends
- * the comment of the User-Agent. The URL parser removes tabs and line breaks, thus this check comes first.
+ * This function tells if a text is an `https` URL with a host, or a `mailto` URL with an address: the forms
+ * of the contact of an operator. The contact goes into the comment of the User-Agent. Thus it has only
+ * printable ASCII characters, with no space, no parenthesis and no backslash. A header with other
+ * characters stops the fetch. A parenthesis ends the comment, and a backslash escapes the next character.
  */
 export function isContactUrl(text: string): boolean {
-  if (/[\s\u0000-\u001f\u007f()]/.test(text)) return false;
-  if (!URL.canParse(text)) return false;
-  const protocol = new URL(text).protocol;
-  return protocol === "https:" || protocol === "mailto:";
+  return CONTACT_CHARACTERS.test(text) && CONTACT_FORMS.some((form) => form.test(text));
 }
 
 /** This schema checks a person of the configuration: the watch, and the policies of the person when they are not the default. */
