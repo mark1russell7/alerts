@@ -3,12 +3,12 @@ import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fakeClock, type FakeClock, type WallClock } from "@mark1russell7/algebra/clock";
-import { CONFIG_FORMAT, type AlertConfig, type ChannelId, type EscalationPolicy, type PersonId, type PlaceId, type SecretLookup, type SourceId } from "@mark1russell7/alerts";
+import { CONFIG_FORMAT, parseConfig, type AlertConfig, type ChannelId, type EscalationPolicy, type PersonId, type PlaceId, type SecretLookup, type SourceId } from "@mark1russell7/alerts";
 import { PUSHOVER_TIMEOUT_MS, type PushoverChannelOptions } from "@mark1russell7/alerts-channel-pushover";
 import { CANARY_PATH } from "@mark1russell7/alerts-source-nws-api";
 import type { Exchange, Transport } from "polite-crawler/api";
 import { afterEach, describe, expect, it } from "vitest";
-import { openInstance, USER_AGENT, type Instance } from "./instance.ts";
+import { INSTANCE_CHANNELS, openInstance, USER_AGENT, type Instance } from "./instance.ts";
 import { openRuntimeLog, type RuntimeLog } from "./log.ts";
 
 // The Flood Warning was sent at 14:54 UTC on 2026-11-14, and it expires at 06:00 UTC on 2026-11-15.
@@ -126,7 +126,10 @@ afterEach(() => {
   opened = [];
 });
 
-function open(secret: SecretLookup = store(SECRETS)) {
+function open(secret: SecretLookup = store(SECRETS), config: AlertConfig = CONFIG) {
+  // The entry reads the configuration so: a refused parse stops the start before the instance.
+  const parsed = parseConfig(JSON.stringify(config), INSTANCE_CHANNELS, secret);
+  if (parsed.tag === "err") throw new Error(parsed.error.join("\n"));
   const folder = mkdtempSync(join(tmpdir(), "alerts-instance-"));
   const log = openRuntimeLog(join(folder, "runtime.sqlite"));
   opened.push({ log, folder });
@@ -135,7 +138,7 @@ function open(secret: SecretLookup = store(SECRETS)) {
   const wall: WallClock = { time: "wall", now: () => clock.now(), after: (ms, run) => clock.after(ms, run) };
   const net = network();
   const server = pushoverServer();
-  const instance: Instance = openInstance({ config: CONFIG, secret, log, clock, wall, transport: net.transport, pushover: server.fetch, run: "run-1" });
+  const instance: Instance = openInstance({ config: parsed.value, secret, log, clock, wall, transport: net.transport, pushover: server.fetch, run: "run-1" });
   return { instance, clock, net, server };
 }
 
@@ -191,13 +194,7 @@ describe("openInstance", () => {
     // The place has no code of the country. The coverage of each source is a list of countries.
     const place = CONFIG.places[0]!;
     const config: AlertConfig = { ...CONFIG, places: [{ ...place, codes: place.codes.filter((code) => code.system !== "iso3166") }] };
-    const folder = mkdtempSync(join(tmpdir(), "alerts-instance-"));
-    const log = openRuntimeLog(join(folder, "runtime.sqlite"));
-    opened.push({ log, folder });
-    const clock = fakeClock(T0);
-    const wall: WallClock = { time: "wall", now: () => clock.now(), after: (ms, run) => clock.after(ms, run) };
-    const start = () => openInstance({ config, secret: store(SECRETS), log, clock, wall, transport: network().transport, pushover: pushoverServer().fetch, run: "run-1" });
-    expect(messageOf(start)).toContain("No source covers the place place-1.");
+    expect(messageOf(() => open(store(SECRETS), config))).toContain("No source covers the place place-1.");
   });
 
   it("does not start with a key that is not a key of Pushover, and no message holds the bad value", () => {

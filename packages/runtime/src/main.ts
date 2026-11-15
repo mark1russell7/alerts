@@ -13,13 +13,13 @@ import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { realClock, wallClock } from "@mark1russell7/algebra/clock";
-import { alertConfigSchema } from "@mark1russell7/alerts";
+import { parseConfig } from "@mark1russell7/alerts";
 import { parseEnvFile } from "@mark1russell7/service/host";
 import { errorMessage } from "@mark1russell7/text";
 import { redactSecrets } from "@mark1russell7/text/redact";
 import { fetchTransport } from "polite-crawler/api";
 import { PROFILES, declare } from "./index.ts";
-import { openInstance, USER_AGENT } from "./instance.ts";
+import { INSTANCE_CHANNELS, openInstance, USER_AGENT } from "./instance.ts";
 import { openRuntimeLog } from "./log.ts";
 
 /** This function gives a port from the environment, or the fallback when the variable is not set. */
@@ -41,20 +41,16 @@ const secrets = parseEnvFile(readFileSync(join(home, "secrets.env"), "utf8"));
 if (secrets.problems.length > 0) throw new Error(`The file secrets.env has these problems:\n- ${secrets.problems.join("\n- ")}`);
 const values = Object.values(secrets.env);
 
-// The message of a JSON error can quote the text of the file. Thus it does not go to the output.
-const json = ((): unknown => {
-  try {
-    return JSON.parse(readFileSync(join(home, "config.json"), "utf8"));
-  } catch {
-    throw new Error("The file config.json is not valid JSON.");
-  }
-})();
-const config = alertConfigSchema.parse(json);
+const secret = (key: string): string | undefined => secrets.env[key];
+
+// A problem of the parse holds no value of the file and no value of a secret.
+const parsed = parseConfig(readFileSync(join(home, "config.json"), "utf8"), INSTANCE_CHANNELS, secret);
+if (parsed.tag === "err") throw new Error(`The file config.json has these problems:\n- ${parsed.error.join("\n- ")}`);
 
 const log = openRuntimeLog(join(home, "runtime.sqlite"));
 const instance = openInstance({
-  config,
-  secret: (key) => secrets.env[key],
+  config: parsed.value,
+  secret,
   log,
   clock: realClock,
   wall: wallClock(),

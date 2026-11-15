@@ -370,7 +370,7 @@ The function `openInstance` makes the instance of the owner from the private con
 The instance does not start when it finds one of these problems:
 
 - a missing secret, or a key that does not have the form of a Pushover key (30 letters and digits)
-- each problem of `loadConfig`
+- each problem of `parseConfig`: the JSON, the schema and the references
 - a place that no source covers. Usually the place does not have a code of each level: the zone, the county, SAME, the state and the country.
 
 The environment gives `PORT` (8080), `PROBE_PORT` (9090) and `SERVICE_PROFILE` (`local`, `daemon` or `pod`). The folder `ALERTS_HOME` (`.alerts` in the home folder) holds the private files: `config.json`, `secrets.env` and the log `runtime.sqlite`. No repository holds them. A problem of `secrets.env` names its line and its key, and no value. The output of a failed pass shows no value of `secrets.env`.
