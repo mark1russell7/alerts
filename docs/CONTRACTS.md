@@ -273,13 +273,22 @@ A send that passes its time limit stays in flight, because the provider can acce
 Each send of a key has a new copy id: the run id, `-` and a count. It has only letters, digits, `_` and `-` (`COPY_ID`), because a stop puts it in the path of a URL. The channel can have a copy that the log does not keep:
 
 - a copy past its flight limit;
-- a copy whose send failed with no answer: a time-out, a network failure or a server failure.
+- a copy whose send failed with no answer: a time-out, a network failure or a server failure;
+- a copy of a key that the log already has, with another receipt.
 
 On a channel that repeats, the step stops such a copy by its copy id. The next copy goes in parallel. The step does not cancel by the delivery key here, because that cancel also stops the next copy. A failed stop goes again at a later step. A stale copy that the channel accepts later gets its stop again.
 
 The Pushover channel tags each emergency message with its delivery key and its copy id. A cancel of a receipt goes by the delivery key. Thus it also stops the repeats of a copy whose receipt the log does not have. A crash after a send and before its write is such a case. A stop of one copy goes by its copy id.
 
-The copies to stop are in memory only. Thus a restart loses the stop of a hung copy of the last run. The cancel by the delivery key at the end of its escalation stops that copy. AL-32 writes each attempt and its copy id to the log before the send, and a restart stops the copies with no delivery.
+The log keeps each copy on a channel that repeats, and its end. Thus a restart does not lose the stop of a hung copy (AL-32):
+
+- Before each send on a channel that repeats, the step writes an `attempt` event with the delivery key, the channel and the copy id.
+- The `delivery` event of an accepted send has the copy id. It ends the copy.
+- A `settled` event ends a copy that needs no stop: the channel refused its send, or a stop of the copy went after the end of its send.
+- The state has the open copies: each attempt with no end. The first step after a restart stops each of them by its copy id.
+- A stop of a copy whose send did not end does not end the copy. The channel can accept that copy later, and then its stop goes again.
+
+A write of the `attempt` event that fails throws, and the send does not go.
 
 A recipient has no problem from `recipientProblems` before it gets alerts:
 
@@ -396,7 +405,7 @@ The environment gives `PORT` (8080), `PROBE_PORT` (9090) and `SERVICE_PROFILE` (
 
 The module `host.ts` gives the host of the live instance as data. A boot task starts a supervisor, and the supervisor starts the runtime:
 
-- `node src/install.ts install` installs the boot task, and starts it. A boot task needs an elevated shell one time. `remove` stops the supervisor and removes the task. `status` gives the state of the task and the result of one readiness probe. It exits with 1 when the runtime is not ready.
+- `node src/install.ts install` installs the boot task, and starts it. A boot task needs an elevated shell one time. `remove` stops the supervisor and removes the task. `status` gives the state of the task, the result of one readiness probe and the times of the outside check. It exits with 1 when the runtime is not ready or the check is too short.
 - After each install, and after each change of `config.json` or `secrets.env`, start `status` when the ready wait passed. A runtime that is not ready sends no alert, and only its log tells it.
 - The boot task starts the supervisor at the start of the computer, before a logon. It starts the supervisor again 1 minute after a stop.
 - The supervisor starts the runtime with the profile `daemon` on the ports 4750 and 4751. The runtime is ready when `/readiness` passes, in its startup budget plus one readiness interval.
@@ -412,11 +421,14 @@ A lock keeps one runtime on the computer. The live instance runs from a checkout
 The runtime cannot tell the person that it stopped. A check of Healthchecks.io tells it. The module `heartbeat.ts` gives the hook `onPass` of the runtime:
 
 - After each pass with no error, the hook pings the check. A ping of the same kind goes once in each 60 seconds. When the pings stop, Healthchecks.io alerts the owner: the process stopped, the computer stopped, or its network is down.
-- A pass in which a channel gave `auth`, `refused` or `rate-limited` to a send pings `/fail`, because then the system cannot tell the person. The next pass with no such failure pings success at once.
+- A pass in which a channel gave `auth`, `refused` or `rate-limited` to a send pings `/fail`, because then the system cannot tell the person.
+- The fail of a channel holds until a send on the channel goes, or until the pass of the retry has no refusal on it. The delivery step sends a failed call again at the first pass at or after its `retryAt`. Thus the check does not go down and up at each retry.
 - The body of a success ping gives the state of each source. The body of a fail ping gives the channel and the kind. No body holds a place, a person or the text of a failure.
-- The hook starts the ping and ends at once. One ping is in flight at a time, for 10 seconds or less. A failed ping goes to the log, and its text holds no ping URL.
+- The hook starts the ping and ends at once. One ping is in flight at a time, for 10 seconds or less. A failed ping goes to the log, and its text holds no ping URL. The next pass pings again.
 - The key `HEALTHCHECKS_PING_URL` of `secrets.env` gives the ping URL, with `https`. The profile `daemon` does not start without it.
-- The period of the check is 1 minute. Its grace is the longest pass plus a margin. A new check alerts only after its first ping, thus the first install checks that the check is up.
+- `heartbeatGap` gives the longest time between two success pings: the period of the pings, two pass limits, the longest wait of the loop and the ping limit. Each failed pass adds a pass limit and a wait. The check lets one failed pass go.
+- The period plus the grace of the check must be this gap or more: 430 seconds for the instance. `install.ts status` reads the check with `HEALTHCHECKS_API_KEY`, and fails when it is shorter.
+- A new check alerts only after its first ping. Thus the first install checks that the check is up.
 
 ## People and places
 
@@ -446,7 +458,15 @@ The function `parseConfig` reads the JSON text of the configuration. It checks t
 
 The runtime reads the text with `requireConfig`. A `ConfigSource` gives the text. Today it is the private file `config.json` in the folder `ALERTS_HOME`, or in `~/.alerts` with no variable. A procedure that gives the configuration replaces the file later, with the same interface.
 
-The entry reads the keys of `secrets.env` in the same folder with `parseEnvFile` of `@mark1russell7/service/host`. `envSecrets` gives them as the secret store. The keys do not go into `process.env`, because each child process gets that environment. On a problem, `requireConfig` throws `ConfigRefused`, and the process does not start. A read error gives only its code, because the path can hold a user name.
+The entry reads the keys of `secrets.env` in the same folder with `readSecrets`, on `parseEnvFile` of `@mark1russell7/service/host`. `envSecrets` gives them as the secret store. The keys do not go into `process.env`, because each child process gets that environment. On a problem, `requireConfig` throws `ConfigRefused`, and the process does not start. A read error gives only its code, because the path can hold a user name.
+
+A bad `config.json` stops the next start. Thus a writer of the configuration does these steps:
+
+1. Write the new file in the folder `ALERTS_HOME`, next to `config.json`.
+2. Start `node src/check.ts <file>` in the runtime package. The check uses `checkConfig`, with the keys and the channels of the start.
+3. Rename the file to `config.json` only when the exit code is 0. Code 1 gives the problems, and code 2 gives a wrong command.
+
+The output of the check gives the count of the places, the people, the contacts and the policies, or the problems. It holds no value and no path.
 
 The function `sourcePlaces` gives the places for one source, with no label, and with a position only when the place shares it with that source. The function `localPlaces` gives each position for the matching on the machine of the instance.
 

@@ -5,6 +5,7 @@
  * - `node src/install.ts install` installs the task and starts it.
  * - `node src/install.ts remove` stops the supervisor and removes the task.
  * - `node src/install.ts status` tells if the task exists, its state, and the result of one readiness probe of the runtime.
+ *   It also reads the check of the heartbeat on Healthchecks.io. The period plus the grace of the check must be the gap of two pings or more.
  *
  * After each install, and after each change of `config.json` or `secrets.env`, start `status` when the
  * time of the ready wait passed. A runtime that is not ready sends no alert.
@@ -12,12 +13,19 @@
  * The environment gives `ALERTS_HOME`, the folder of the private files, as for `main.ts`. Without
  * it, the folder is `.alerts` in the home folder.
  */
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { valueIn } from "@mark1russell7/quantity";
-import { installService, nodeHostPorts, probeOnce, serviceStatus, uninstallService, type ServiceOutcome } from "@mark1russell7/service/host";
+import { installService, nodeHostPorts, parseEnvFile, probeOnce, serviceStatus, uninstallService, type ServiceOutcome } from "@mark1russell7/service/host";
+import { errorMessage } from "@mark1russell7/text";
+import { redactSecrets } from "@mark1russell7/text/redact";
+import { fetchTransport, send, statusLine } from "polite-crawler/api";
+import { HostScheduler, realClock } from "polite-crawler/politeness";
 import { alertsHome } from "./config.ts";
+import { checkOfPingUrl, checksRequest, checkTimesProblem, heartbeatGap } from "./heartbeat.ts";
 import { hostTask, READY_WITHIN, readinessProbe, supervisorDiscovery } from "./host.ts";
+import { INSTANCE_TIMES, USER_AGENT_NAME } from "./instance.ts";
 
 const ACTIONS = ["install", "remove", "status"] as const;
 const action = process.argv[2];
@@ -50,6 +58,51 @@ function report(outcome: ServiceOutcome): number {
 // The longest time of one readiness probe of the status.
 const PROBE_TIMEOUT_MS = 2000;
 
+/** The result of the read of the outside check. The times are in seconds, as Healthchecks.io shows them. */
+interface OutsideCheck {
+  readonly ok: boolean;
+  readonly status?: string;
+  readonly periodSeconds?: number;
+  readonly graceSeconds?: number;
+  /** The period plus the grace that the heartbeat needs. */
+  readonly neededSeconds: number;
+  readonly problem?: string;
+}
+
+/**
+ * This function reads the check of the heartbeat through the management API of Healthchecks.io. The
+ * check fails when its period plus its grace is shorter than the gap of two pings. The output holds no key and no URL.
+ */
+async function outsideCheck(): Promise<OutsideCheck> {
+  const gap = heartbeatGap(INSTANCE_TIMES);
+  const neededSeconds = Math.ceil(gap / 1000);
+  let env: Readonly<Record<string, string>>;
+  try {
+    env = parseEnvFile(readFileSync(join(home, "secrets.env"), "utf8")).env;
+  } catch {
+    return { ok: false, neededSeconds, problem: "The status cannot read the file secrets.env." };
+  }
+  const key = env["HEALTHCHECKS_API_KEY"] ?? "";
+  const url = env["HEALTHCHECKS_PING_URL"] ?? "";
+  if (key === "" || url === "") return { ok: false, neededSeconds, problem: "The file secrets.env needs HEALTHCHECKS_API_KEY and HEALTHCHECKS_PING_URL for this check." };
+  const secrets = [key, url];
+  // The request has the User-Agent with no contact: the status reads no configuration.
+  const exchange = checksRequest(key, USER_AGENT_NAME);
+  try {
+    const pace = { scheduler: new HostScheduler(realClock, 1), now: realClock.now };
+    const input = { source: "Healthchecks.io", host: new URL(exchange.url).host, what: "the checks of the project", exchange, secrets, redact: redactSecrets };
+    const answer = await send(pace, fetchTransport({ userAgent: USER_AGENT_NAME }), input);
+    if (answer.reply.status !== 200) return { ok: false, neededSeconds, problem: `The management API gave ${statusLine(answer.reply)}.` };
+    const found = checkOfPingUrl(answer.reply.body, url);
+    if (!found.ok) return { ok: false, neededSeconds, problem: found.problem };
+    const problem = checkTimesProblem(found.check, gap);
+    const seen = { status: found.check.status, periodSeconds: found.check.timeout / 1000, graceSeconds: found.check.grace / 1000, neededSeconds };
+    return problem === undefined ? { ok: true, ...seen } : { ok: false, ...seen, problem };
+  } catch (error) {
+    return { ok: false, neededSeconds, problem: redactSecrets(errorMessage(error), secrets) };
+  }
+}
+
 if (action === "install") {
   const code = report(await installService(spec, ports, { start: true }));
   if (code === 0) console.log(`The runtime is ready in ${valueIn(READY_WITHIN, "s")} s or less. Then start: node src/install.ts status`);
@@ -58,8 +111,9 @@ if (action === "install") {
   process.exitCode = report(await uninstallService(spec, ports, { discovery }));
 } else if (action === "status") {
   const readiness = await probeOnce(readinessProbe(), PROBE_TIMEOUT_MS, ports);
-  console.log(JSON.stringify({ task: await serviceStatus(spec, ports, { discovery }), readiness }, null, 2));
-  if (!readiness.ok) process.exitCode = 1;
+  const heartbeat = await outsideCheck();
+  console.log(JSON.stringify({ task: await serviceStatus(spec, ports, { discovery }), readiness, heartbeat }, null, 2));
+  if (!readiness.ok || !heartbeat.ok) process.exitCode = 1;
 } else {
   console.error(`The action is one of: ${ACTIONS.join(", ")}.`);
   process.exitCode = 2;

@@ -9,7 +9,7 @@ import { CANARY_PATH, createNwsSource } from "@mark1russell7/alerts-source-nws-a
 import type { Exchange, Transport } from "polite-crawler/api";
 import { DEFAULT_POLICY } from "polite-crawler/politeness";
 import { afterEach, describe, expect, it } from "vitest";
-import { INSTANCE_CHANNELS, INSTANCE_TIMES, openInstance, SOURCE_POLICY, sourcePace, USER_AGENT_NAME, type Instance } from "./instance.ts";
+import { INSTANCE_CHANNELS, INSTANCE_CHECK, INSTANCE_SOURCES, INSTANCE_TIMES, instanceProblems, openInstance, SOURCE_POLICY, sourcePace, USER_AGENT_NAME, type Instance } from "./instance.ts";
 import { openRuntimeLog, type RuntimeLog } from "./log.ts";
 
 // The Flood Warning was sent at 14:54 UTC on 2026-11-14, and it expires at 06:00 UTC on 2026-11-15.
@@ -269,6 +269,37 @@ describe("openInstance", () => {
     expect(message).toContain("The value of PUSHOVER_APP_TOKEN is not a key of Pushover");
     expect(message).toContain("The Pushover user key of person-1 is not 30 letters and digits.");
     expect(message).not.toMatch(/bad-token-value|bad-user-value/);
+  });
+});
+
+describe("the check of the instance", () => {
+  const parse = (config: AlertConfig, secret: SecretLookup) => {
+    const parsed = parseConfig(JSON.stringify(config), INSTANCE_CHECK.channels, secret);
+    if (parsed.tag === "err") throw new Error(parsed.error.join("\n"));
+    return parsed.value;
+  };
+
+  it("has the descriptors that the sources of the instance give", () => {
+    const { instance } = open();
+    expect(instance.runtime.config.sources).toEqual(INSTANCE_SOURCES);
+  });
+
+  it("finds each problem that stops the start, and no message holds a value of a secret", () => {
+    const place = CONFIG.places[0]!;
+    const uncovered: AlertConfig = { ...CONFIG, places: [{ ...place, codes: place.codes.filter((code) => code.system !== "iso3166") }] };
+    const bad = store({ PUSHOVER_APP_TOKEN: "bad-token-value", PUSHOVER_USER_KEY: "bad-user-value" });
+    const problems = INSTANCE_CHECK.problems(parse(uncovered, bad), bad);
+    expect(problems).toEqual([
+      expect.stringContaining("The value of PUSHOVER_APP_TOKEN is not a key of Pushover"),
+      "The Pushover user key of person-1 is not 30 letters and digits.",
+      expect.stringContaining("No source covers the place place-1."),
+    ]);
+    expect(problems.join("\n")).not.toMatch(/bad-token-value|bad-user-value/);
+    expect(messageOf(() => open(bad, uncovered))).toContain(problems.join("\n- "));
+  });
+
+  it("finds no problem in a configuration that starts", () => {
+    expect(instanceProblems(parse(CONFIG, store(SECRETS)), store(SECRETS), INSTANCE_SOURCES)).toEqual([]);
   });
 });
 
