@@ -17,5 +17,6 @@ export * from "./health.ts";
 export * from "./coverage.ts";
 export * from "./lateness.ts";
 export * from "./problems.ts";
+export * from "./schemas.ts";
 export * from "./system-reports.ts";
 export * from "./taxonomy.ts";

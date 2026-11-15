@@ -4,9 +4,9 @@
  */
 
 import { observationId, type Cursor, type FetchFailure, type FetchOutcome, type Instant, type Observation, type Watch } from "@mark1russell7/alerts";
+import { createRequester, problemDetail } from "@mark1russell7/alerts-fetch";
 import { isUgcCode, WEA_EVENT_CODES } from "@mark1russell7/alerts-format-nws";
-import { errorMessage } from "@mark1russell7/text";
-import { ApiError, poll, type Answer, type Condition, type Exchange, type Pace, type Reply, type Transport } from "polite-crawler/api";
+import type { Condition, Pace, Reply, Transport } from "polite-crawler/api";
 
 import { SOURCE_ID } from "./map.ts";
 
@@ -109,37 +109,6 @@ export function queriesOf(watch: Watch, options: QueryOptions = {}): Query[] {
   ];
 }
 
-/** The text of a problem answer of the NWS API (RFC 7807), when the body is one. */
-function problemDetail(body: string): string | undefined {
-  try {
-    const parsed: unknown = JSON.parse(body);
-    if (typeof parsed === "object" && parsed !== null && "detail" in parsed && typeof parsed.detail === "string") return parsed.detail;
-  } catch {
-    // The body is not JSON: the status line tells enough.
-  }
-  return undefined;
-}
-
-/** This function maps an answer that is not a success to a failure of the fetch. */
-export function failureOf(answer: Answer): FetchFailure {
-  const { reply, classified } = answer;
-  const detail = problemDetail(reply.body);
-  const message = `${String(reply.status)} ${reply.statusText}${detail === undefined ? "" : `: ${detail}`}`.trim();
-  const retryAfter = classified.retryAfterMs === undefined ? {} : { retryAfter: classified.retryAfterMs };
-  switch (classified.outcome) {
-    case "rate-limited":
-      return { kind: "rate-limited", message, ...retryAfter };
-    case "unavailable":
-      return { kind: "server", message, ...retryAfter };
-    case "blocked":
-      return reply.status === 401 ? { kind: "auth", message } : { kind: "refused", message };
-    case "error":
-      return reply.status >= 500 ? { kind: "server", message, ...retryAfter } : { kind: "refused", message };
-    default:
-      return { kind: "refused", message: `${message} (${classified.outcome})` };
-  }
-}
-
 /** The observations of one answer. The value `complete` is true if the answer was a full list of alerts. */
 interface Read {
   readonly observations: Observation[];
@@ -194,15 +163,21 @@ type QueryResult = { readonly ok: true; readonly read: Read } | { readonly ok: f
  * Each query is a conditional GET (`poll` of polite-crawler), with the ETag and the date of the last
  * full answer of its URL. A 304 answer has no body. Then the query gives the observations of the
  * last full answer again, unchanged. No message is new, so the log gets no new fact.
+ *
+ * The requester of `@mark1russell7/alerts-fetch` sends each query. It reads the problem text of the
+ * NWS API (RFC 9457) into the message of a failure.
  */
 export function createNwsFetch(options: NwsFetchOptions): (input: NwsFetchInput, signal?: AbortSignal) => Promise<FetchOutcome> {
-  // A loop, not a pattern with `\/+$`: that pattern takes quadratic time on a text with many slashes (CodeQL js/polynomial-redos)
-  const given = options.baseUrl ?? NWS_BASE_URL;
-  let end = given.length;
-  while (end > 0 && given[end - 1] === "/") end -= 1;
-  const baseUrl = given.slice(0, end);
-  const host = new URL(baseUrl).host;
-  const timeoutMs = options.timeoutMs ?? 15_000;
+  const requester = createRequester({
+    source: SOURCE_ID,
+    pace: options.pace,
+    transport: options.transport,
+    baseUrl: options.baseUrl ?? NWS_BASE_URL,
+    headers: { accept: "application/geo+json", "user-agent": options.userAgent },
+    ...(options.minIntervalMs === undefined ? {} : { minIntervalMs: options.minIntervalMs }),
+    ...(options.timeoutMs === undefined ? {} : { timeoutMs: options.timeoutMs }),
+    detail: problemDetail,
+  });
   const now = options.pace.now;
   // One store of conditions, because each query sends the same accept header
   const conditions = new Map<string, Condition>();
@@ -210,41 +185,9 @@ export function createNwsFetch(options: NwsFetchOptions): (input: NwsFetchInput,
   const lastRead = new Map<string, Read>();
 
   async function query(path: string, signal: AbortSignal | undefined): Promise<QueryResult> {
-    const url = `${baseUrl}${path}`;
-    const exchange: Exchange = {
-      method: "GET",
-      url,
-      headers: { accept: "application/geo+json", "user-agent": options.userAgent },
-      body: null,
-    };
-    let timedOut = false;
-    let latency = 0;
-    // The latency is the time of the transport only. The wait of the scheduler is not part of it.
-    const timed: Transport = async (request, outer) => {
-      const own = AbortSignal.timeout(timeoutMs);
-      own.addEventListener("abort", () => (timedOut = true), { once: true });
-      const started = now();
-      try {
-        return await options.transport(request, outer === undefined ? own : AbortSignal.any([outer, own]));
-      } finally {
-        latency = now() - started;
-      }
-    };
-    let answer: Answer;
-    try {
-      answer = await poll(
-        options.pace,
-        timed,
-        conditions,
-        { source: SOURCE_ID, host, minIntervalMs: options.minIntervalMs ?? 1000, what: `the alerts ${path}`, exchange },
-        signal,
-      );
-    } catch (error) {
-      if (signal?.aborted === true) throw error;
-      if (timedOut) return { ok: false, failure: { kind: "timeout", message: `no answer in ${String(timeoutMs)} ms: ${url}` } };
-      const message = error instanceof ApiError ? error.message : errorMessage(error);
-      return { ok: false, failure: { kind: "network", message } };
-    }
+    const requested = await requester.get({ path, what: `the alerts ${path}`, conditions }, signal);
+    if (!requested.ok) return { ok: false, failure: requested.failure };
+    const { url, answer, latency } = requested;
     if (answer.classified.outcome === "not-modified") {
       const previous = lastRead.get(url);
       if (previous !== undefined) return { ok: true, read: previous };
@@ -252,7 +195,6 @@ export function createNwsFetch(options: NwsFetchOptions): (input: NwsFetchInput,
       conditions.delete(url);
       return { ok: false, failure: { kind: "network", message: `a 304 answer with no earlier full answer: ${url}` } };
     }
-    if (answer.classified.outcome !== "ok") return { ok: false, failure: failureOf(answer) };
     const read = readAnswer(answer.reply, url, now(), latency);
     if (read === undefined) {
       // poll keeps the condition of each 2xx answer. A body that does not parse must not be the base of a later 304.
