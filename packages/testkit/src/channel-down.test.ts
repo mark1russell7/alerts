@@ -148,8 +148,7 @@ describe("the request gates of case 7", () => {
   it("fails `paced` for more requests in progress than the maxInFlight of the channel, and for no maxInFlight", () => {
     const over = channelGatesOf(recordOf("control", { inFlight: 3 }));
     expect(over.gates.paced).toBe(false);
-    expect(over.problems.join("
-")).toContain("3 requests were in progress at one time, more than 2");
+    expect(over.problems.join("\n")).toContain("3 requests were in progress at one time, more than 2");
     const { maxInFlight, ...none } = recordOf("control");
     expect(maxInFlight).toBe(2);
     expect(channelGatesOf(none).gates.paced).toBe(false);
@@ -165,8 +164,7 @@ describe("the request gates of case 7", () => {
     expect(channelGatesOf(at(OUTAGE_END + PROBE_LIMIT)).gates.probed).toBe(true);
     const late = channelGatesOf(at(OUTAGE_END + PROBE_LIMIT + 1));
     expect(late.gates.probed).toBe(false);
-    expect(late.problems.join("
-")).toContain(`the first stop came ${String(PROBE_LIMIT + 1)} ms after the outage`);
+    expect(late.problems.join("\n")).toContain(`the first stop came ${String(PROBE_LIMIT + 1)} ms after the outage`);
     expect(channelGatesOf(recordOf("error", { exchanges: [timed(STOP, 1_000)] })).gates.probed).toBe(false);
   });
 });
@@ -196,8 +194,7 @@ describe("the verdict of case 7", () => {
     const noStop = exchangesOf(channelOutageOf("error")).map((exchange) => (exchange.path === STOP && exchange.start < OUTAGE_END ? { ...exchange, path: "/1/messages.json" } : exchange));
     const verdict = channelVerdictOf(allRecords({ error: { exchanges: noStop } }));
     expect(verdict.read).toBe(false);
-    expect(verdict.problems.join("
-")).toContain("error: the outage held no stop");
+    expect(verdict.problems.join("\n")).toContain("error: the outage held no stop");
   });
 
   it("cannot read when an arm with an outage has no fault, or a delivery before the end of the outage", () => {
