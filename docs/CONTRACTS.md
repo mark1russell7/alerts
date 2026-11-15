@@ -178,7 +178,7 @@ Each channel package registers four procedures under `alerts.channel.<id>`:
 
 | Procedure | Effects | Rule |
 | --- | --- | --- |
-| `describe` | none | It gives the `ChannelDescriptor`: the failure domains, the break through Do Not Disturb, the repeats, the kind of acknowledgment and the cost. |
+| `describe` | none | It gives the `ChannelDescriptor`: the failure domains, the cell resources, the break through Do Not Disturb, the repeats, the kind of acknowledgment and the cost. |
 | `send` | writes `network` | It sends one `Message` to one `Address`. When `message.quiet` is true, it uses its silent mode. A failure is `{ ok: false }`. It does not throw. |
 | `status` | reads `network` | It gives the state of a receipt: accepted, delivered, acknowledged, expired or failed. |
 | `cancel` | writes `network` | It stops the repeats of a message. It is idempotent. |
@@ -250,7 +250,6 @@ The assessment reads no clock, because the level is about the incident. The esca
 - Tests hold a window across midnight, the two days of the change, an hour that occurs two times and an hour that does not occur.
 - A bad window gives no quiet send. A message that is too loud is not a miss. `quietWindowProblems` finds the bad window.
 - The system does not use the Quiet Hours of Pushover. The core holds the one rule, so each channel follows the same rule.
-
 
 Each assessment has its reasons: the gate that stopped it, the class, the two lookups, the places and the rules. The UI shows them.
 
