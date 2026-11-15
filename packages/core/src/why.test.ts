@@ -1,6 +1,6 @@
 import { random, seedsFrom, type Random } from "@mark1russell7/rigor-generators";
 import { describe, expect, it } from "vitest";
-import { SUBJECT_SYSTEMS, type EdgeOrigin, type NodeKey, type WhyRecord } from "./contracts.ts";
+import { SUBJECT_SYSTEMS, type EdgeOrigin, type NodeKey, type PlaceId, type WhyRecord } from "./contracts.ts";
 import { whyRecordSchema } from "./schemas.ts";
 import { fitsWhy, kindOfNode, NO_LABELS, placeWhy, plainLabel, WHY_FULL_COVERAGE, WHY_LIMITS, whyLine, type WhyLabels } from "./why.ts";
 
@@ -47,7 +47,9 @@ const labelsOf =
   (node) =>
     entries[node];
 
-const HOME = placeWhy(["home"])!;
+const ids = (...names: string[]): PlaceId[] => names.map((name) => name as PlaceId);
+
+const HOME = placeWhy(ids("home"))!;
 
 describe("the why line", () => {
   // The gate of AL-35: each why text keeps the limits of its channel and holds no address, point or code.
@@ -157,9 +159,9 @@ describe("the why line", () => {
 
 describe("placeWhy", () => {
   it("gives the place with the first id, whatever the order of the places", () => {
-    const why = placeWhy(["work", "home", "lake"]);
+    const why = placeWhy(ids("work", "home", "lake"));
     expect(why).toEqual({ rule: "reach.place.places", subject: "place:home", kind: "place", anchor: "place:home", origin: "places", coverage: 1 });
-    expect(placeWhy(["lake", "work", "home"])).toEqual(why);
+    expect(placeWhy(ids("lake", "work", "home"))).toEqual(why);
     expect(whyRecordSchema.safeParse(why).success).toBe(true);
   });
 
