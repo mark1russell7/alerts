@@ -120,6 +120,18 @@ export function sameOfCountyUgc(code: string): string | undefined {
   return state === undefined ? undefined : `0${state}${text.slice(3)}`;
 }
 
+/**
+ * This function gives the county UGC code of a SAME location code, for example `KSC173` for `020173`. It is the
+ * reverse of `sameOfCountyUgc`. A part of a county (`120173`) gives the code of the full county. A code of a full
+ * state (`020000`), a state with no postal code or a text that is not a SAME code gives `undefined`.
+ */
+export function countyUgcOfSame(code: string): string | undefined {
+  const location = parseSameLocation(code);
+  if (location === undefined || location.county === "000") return undefined;
+  const state = STATE_POSTAL[location.state];
+  return state === undefined ? undefined : `${state}C${location.county}`;
+}
+
 /** This function gives the postal code of the state of a SAME location code, or `undefined`. */
 export function stateOfSame(code: string): string | undefined {
   const location = parseSameLocation(code);

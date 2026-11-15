@@ -1,0 +1,95 @@
+{
+ "@context": {
+  "@version": "1.1"
+ },
+ "type": "FeatureCollection",
+ "features": [
+  {
+   "id": "https://api.weather.gov/zones/county/KSC015",
+   "type": "Feature",
+   "geometry": null,
+   "properties": {
+    "@id": "https://api.weather.gov/zones/county/KSC015",
+    "@type": "wx:Zone",
+    "id": "KSC015",
+    "type": "county",
+    "name": "Butler",
+    "effectiveDate": "2026-04-16T18:00:00+00:00",
+    "expirationDate": "2200-01-01T00:00:00+00:00",
+    "state": "KS",
+    "forecastOffice": "https://api.weather.gov/offices/ICT",
+    "gridIdentifier": "ICT",
+    "awipsLocationIdentifier": "ICT",
+    "cwa": [
+     "ICT"
+    ],
+    "forecastOffices": [
+     "https://api.weather.gov/offices/ICT"
+    ],
+    "timeZone": [
+     "America/Chicago"
+    ],
+    "observationStations": [],
+    "radarStation": null
+   }
+  },
+  {
+   "id": "https://api.weather.gov/zones/county/KSC079",
+   "type": "Feature",
+   "geometry": null,
+   "properties": {
+    "@id": "https://api.weather.gov/zones/county/KSC079",
+    "@type": "wx:Zone",
+    "id": "KSC079",
+    "type": "county",
+    "name": "Harvey",
+    "effectiveDate": "2026-04-16T18:00:00+00:00",
+    "expirationDate": "2200-01-01T00:00:00+00:00",
+    "state": "KS",
+    "forecastOffice": "https://api.weather.gov/offices/ICT",
+    "gridIdentifier": "ICT",
+    "awipsLocationIdentifier": "ICT",
+    "cwa": [
+     "ICT"
+    ],
+    "forecastOffices": [
+     "https://api.weather.gov/offices/ICT"
+    ],
+    "timeZone": [
+     "America/Chicago"
+    ],
+    "observationStations": [],
+    "radarStation": null
+   }
+  },
+  {
+   "id": "https://api.weather.gov/zones/county/KSC173",
+   "type": "Feature",
+   "geometry": null,
+   "properties": {
+    "@id": "https://api.weather.gov/zones/county/KSC173",
+    "@type": "wx:Zone",
+    "id": "KSC173",
+    "type": "county",
+    "name": "Sedgwick",
+    "effectiveDate": "2026-04-16T18:00:00+00:00",
+    "expirationDate": "2200-01-01T00:00:00+00:00",
+    "state": "KS",
+    "forecastOffice": "https://api.weather.gov/offices/ICT",
+    "gridIdentifier": "ICT",
+    "awipsLocationIdentifier": "ICT",
+    "cwa": [
+     "ICT"
+    ],
+    "forecastOffices": [
+     "https://api.weather.gov/offices/ICT"
+    ],
+    "timeZone": [
+     "America/Chicago"
+    ],
+    "observationStations": [],
+    "radarStation": null
+   }
+  }
+ ]
+}

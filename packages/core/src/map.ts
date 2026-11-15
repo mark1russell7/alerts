@@ -85,6 +85,13 @@ export interface MapView {
   readonly unshaped: readonly RegionCode[];
 }
 
+/** One region of the basemap: its code, its name and its shapes, from the store of shapes. */
+export interface MapRegion {
+  readonly code: RegionCode;
+  readonly name: string;
+  readonly shapes: readonly MapShape[];
+}
+
 /** The severities, from the highest. */
 const SEVERITY_ORDER: readonly Severity[] = ["extreme", "severe", "moderate", "minor", "unknown"];
 
