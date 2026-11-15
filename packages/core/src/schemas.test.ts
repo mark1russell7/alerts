@@ -110,6 +110,7 @@ import {
   healthStateSchema,
   incidentSchema,
   instantSchema,
+  isContactUrl,
   kindClassSchema,
   kindSchema,
   latenessLimitSchema,
@@ -672,10 +673,19 @@ describe("the private configuration", () => {
     expect(problemsOf(JSON.stringify(CONFIG), () => undefined)).toEqual([expect.stringContaining("names the secret PUSHOVER_USER")]);
   });
 
+  it("refuses a contact that breaks a header: a line break, a tab, a space, a control character or a parenthesis", () => {
+    const breaks = ["https://example.org/\r\nX: y", "https://example.org/\na", "https://example.org/\ta", "https://example.org/ a", "https://example.org/\u0000", "https://example.org/\u007f", "https://example.org/a)", "https://example.org/(a"];
+    for (const text of breaks) expect(isContactUrl(text)).toBe(false);
+    expect(isContactUrl("https://example.org/operator?topic=alerts")).toBe(true);
+    expect(isContactUrl("mailto:operator@example.org")).toBe(true);
+  });
+
   it("accepts a contact of the operator as an https URL or a mailto URL, and refuses other forms with no quote of the value", () => {
     holds(alertConfigSchema, { ...CONFIG, contact: "https://example.org/operator" });
     holds(alertConfigSchema, { ...CONFIG, contact: "mailto:operator@example.org" });
-    for (const contact of ["http://example.org/PRIVATE", "PRIVATE@example.org", "", 7]) {
+    const headerBreaks = ["https://example.org/\r\nX-PRIVATE: 1", "https://example.org/\tPRIVATE", "https://example.org/ PRIVATE", "mailto:PRIVATE@example.org\u0000", "mailto:PRIVATE@example.org\u007f"];
+    const comments = ["https://example.org/PRIVATE)", "https://example.org/(PRIVATE"];
+    for (const contact of ["http://example.org/PRIVATE", "PRIVATE@example.org", "", 7, ...headerBreaks, ...comments]) {
       const problems = problemsOf(JSON.stringify({ ...CONFIG, contact }));
       expect(problems).toHaveLength(1);
       expect(problems[0]?.startsWith("contact: ")).toBe(true);

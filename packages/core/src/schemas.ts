@@ -810,8 +810,13 @@ export const placeConfigSchema: z.ZodType<PlaceConfig, PlaceConfig> = schemaOf<P
     .readonly(),
 );
 
-/** This function tells if a text is an `https` URL or a `mailto` URL: the forms of the contact of an operator. */
+/**
+ * This function tells if a text is an `https` URL or a `mailto` URL: the forms of the contact of an operator.
+ * The contact goes into a header. Thus it has no space, no control character and no parenthesis, which ends
+ * the comment of the User-Agent. The URL parser removes tabs and line breaks, thus this check comes first.
+ */
 export function isContactUrl(text: string): boolean {
+  if (/[\s\u0000-\u001f\u007f()]/.test(text)) return false;
   if (!URL.canParse(text)) return false;
   const protocol = new URL(text).protocol;
   return protocol === "https:" || protocol === "mailto:";
