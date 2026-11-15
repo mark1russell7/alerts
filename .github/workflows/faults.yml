@@ -13,6 +13,8 @@ on:
       - packages/source-nws-api/**
       - packages/format-nws/**
       - packages/core/**
+      - packages/runtime/**
+      - packages/channel-pushover/**
       - pnpm-lock.yaml
       - .github/workflows/faults.yml
   # A person starts a run on a branch with no pull request: gh workflow run faults.yml --ref <branch>
@@ -47,6 +49,8 @@ jobs:
             packages/source-nws-api/**
             packages/format-nws/**
             packages/core/**
+            packages/runtime/**
+            packages/channel-pushover/**
             pnpm-lock.yaml
             .github/workflows/faults.yml
 
