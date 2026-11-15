@@ -26,7 +26,7 @@ import {
   type SourceDescriptor,
   type SystemLines,
 } from "@mark1russell7/alerts";
-import type { RuntimeEvent } from "./events.ts";
+import type { RefusalKind, RuntimeEvent } from "./events.ts";
 
 /** What the fold reads from the configuration: the descriptors of the sources and the options of the health. */
 export interface FoldContext {
@@ -59,6 +59,17 @@ export interface RuntimeState {
    * `settled` event. The channel can repeat them. After a restart, the delivery step stops them.
    */
   readonly copies: Readonly<Record<string, OpenCopy>>;
+  /** The last refusal of each delivery key with no later delivery of the key, by the key. */
+  readonly refusals: Readonly<Record<string, Refusal>>;
+}
+
+/** The last refusal of a delivery key. */
+export interface Refusal {
+  readonly channel: ChannelId;
+  readonly kind: RefusalKind;
+  /** The time of the refusal. */
+  readonly at: Instant;
+  readonly retryAt: Instant;
 }
 
 /** The send of an open copy. */
@@ -79,6 +90,7 @@ export const EMPTY_RUNTIME: RuntimeState = {
   cancelled: [],
   starts: [],
   copies: {},
+  refusals: {},
 };
 
 /** This function adds one event to the state. */
@@ -155,20 +167,26 @@ function foldRest(state: RuntimeState, event: RuntimeEvent, context: FoldContext
       return state.cancelled.includes(event.delivery) ? base : { ...base, cancelled: [...state.cancelled, event.delivery].sort(compare) };
     case "attempt":
       return { ...base, copies: { ...state.copies, [event.copy]: { key: event.key, channel: event.channel } } };
-    case "delivery":
-      return event.copy === undefined ? base : { ...base, copies: without(state.copies, event.copy) };
+    case "delivery": {
+      const refusals = without(state.refusals, event.delivery.key);
+      return { ...base, refusals, copies: event.copy === undefined ? state.copies : without(state.copies, event.copy) };
+    }
     case "settled":
       return { ...base, copies: without(state.copies, event.copy) };
+    case "refused": {
+      const refusals = { ...state.refusals, [event.key]: { channel: event.channel, kind: event.kind, at: event.time, retryAt: event.retryAt } };
+      return { ...base, refusals, copies: event.copy === undefined ? state.copies : without(state.copies, event.copy) };
+    }
     default:
       return base;
   }
 }
 
-// The open copies with no entry for one copy id.
-function without(copies: RuntimeState["copies"], copy: string): RuntimeState["copies"] {
-  if (!Object.hasOwn(copies, copy)) return copies;
-  const rest = { ...copies };
-  delete rest[copy];
+// The record with no entry for one id.
+function without<T>(record: Readonly<Record<string, T>>, id: string): Readonly<Record<string, T>> {
+  if (!Object.hasOwn(record, id)) return record;
+  const rest = { ...record };
+  delete rest[id];
   return rest;
 }
 
