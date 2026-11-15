@@ -1,0 +1,66 @@
+# The measure of the sent times of the WEA copies (AL-8). The core finds the IPAWS copy of an NWS message only at the same
+# sent time, to the millisecond. Each run reads the history of the NWS API and the IPAWS archive of OpenFEMA. It counts
+# the messages with a copy in the incident and no copy at the sent time. The count must be 0, so the job fails above 0.
+# The requests name no state and no place. The job sends requests to outside servers, so it operates in CI only.
+name: Measure WEA
+
+on:
+  # The NWS API keeps 7 days, and each run reads the last 6.5 days. Thus the runs of each day overlap.
+  schedule:
+    - cron: "17 9 * * *"
+  # A pull request that changes the measure gets a run, as a smoke test of the script.
+  pull_request:
+    paths:
+      - packages/source-ipaws/scripts/measure.ts
+      - packages/source-ipaws/src/sent-measure.ts
+      - .github/workflows/measure-wea.yml
+  # A person starts a run of a different range: an ISO time for start and end. An empty value gives the default.
+  workflow_dispatch:
+    inputs:
+      start:
+        description: The start of the range, as an ISO time. The default is 6.5 days before the end.
+        default: ""
+      end:
+        description: The end of the range, as an ISO time. The default is the time of the run.
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: measure-wea-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  measure:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 26
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # The script writes the summary of the job. It ends with the code 1 when a request fails, or when the count is above 0.
+      - name: Measure the range
+        working-directory: packages/source-ipaws
+        env:
+          START: ${{ inputs.start || '' }}
+          END: ${{ inputs.end || '' }}
+        run: node scripts/measure.ts --start="$START" --end="$END" --out="$GITHUB_WORKSPACE/measure"
+      # The records hold only the messages of the NWS. The step uploads them also when the measure fails.
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: measure-wea-${{ github.run_id }}-${{ github.run_attempt }}
+          path: measure/
+          if-no-files-found: error
+          retention-days: 90
