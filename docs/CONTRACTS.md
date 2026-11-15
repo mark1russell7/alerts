@@ -480,6 +480,10 @@ The runtime cannot tell the person that it stopped. A check of Healthchecks.io t
 - The body of a success ping gives the state of each source. The body of a fail ping gives the channel and the kind, or the count of the overdue sends and the age of the oldest. No body holds a place, a person or the text of a failure.
 - The hook starts the ping and ends at once. One ping is in flight at a time, for 10 seconds or less. A failed ping goes to the log, and its text holds no ping URL. The next pass pings again.
 - The key `HEALTHCHECKS_PING_URL` of `secrets.env` gives the ping URL, with `https`. The profile `daemon` does not start without it.
+- The optional key `HEALTHCHECKS_LOUD_PING_URL` gives a second check: the loud check. Its integration makes a phone call to the person, and it shares no channel with the instance.
+- The heartbeat sends each ping to the two checks, with one hook for each check. A slow ping to one check does not hold the other. Without the key, nothing changes.
+- The loud check has a longer grace than the first check. Thus a short stop, for example a reboot, does not make a phone call.
+- `install.ts status` also reads the loud check, when `secrets.env` has its key.
 - `heartbeatGap` gives the longest time between two success pings: the period of the pings, two pass limits, the longest wait of the loop and the ping limit. Each failed pass adds a pass limit and a wait. The check lets one failed pass go.
 - The period plus the grace of the check must be this gap or more: 430 seconds for the instance. `install.ts status` reads the check with `HEALTHCHECKS_API_KEY`, and fails when it is shorter.
 - A new check alerts only after its first ping. Thus the first install checks that the check is up.
