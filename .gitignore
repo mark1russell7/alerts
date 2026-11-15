@@ -73,6 +73,9 @@ venv/
 # Build output
 dist/
 
+# The coverage reports of vitest: CI makes them, and git does not keep them
+coverage/
+
 # The npm build of each package (tsdown): release.yml builds it, and git does not keep it
 build/
 
