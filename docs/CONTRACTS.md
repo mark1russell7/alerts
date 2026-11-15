@@ -400,6 +400,8 @@ The shadow score (`shadowScore`) is the first step. It operates next to the tabl
 - The probability of an observed event is that of the certainty `observed`. The probability of a warning is the verified share of its kind. The measure of the warnings decides over the certainty word of the sender. Each other incident gets the probability of its certainty.
 - For each field, the longest prefix of the kind with that field decides. A prefix ends at a dot, as in `hasKind`.
 - Each value has its interval. The score keeps the key of the priors that gave each factor, so the UI tells the source.
+- The expected harm (`expectedOf`) is the probability times the deaths, and the probability times the injuries. `mul` of `@mark1russell7/interval` rounds each interval outward. Thus the interval holds each exact product.
+- Each count of the priors is from 0 to `Number.MAX_SAFE_INTEGER`. Thus each product has a finite interval.
 - A factor that the priors do not give makes a score with no read. The score names each missing factor. It does not take 0 or a default value.
 - `assessWithShadow` adds the score as the last reason of an assessment with a reason of the table. The level and the other reasons stay those of `assess`. A seeded gate test holds this.
 

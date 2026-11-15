@@ -854,6 +854,15 @@ export interface ScoreFactor {
   readonly from: { readonly table: "kinds" | "certainty"; readonly key: string };
 }
 
+/**
+ * The expected harm of an incident: the probability of the event times the deaths and the injuries of
+ * one event. Each interval holds each product of a point of the two intervals.
+ */
+export interface ExpectedHarm {
+  readonly deaths: Estimate;
+  readonly injuries: Estimate;
+}
+
 /** A factor of the shadow score that the priors do not give. */
 export type ScoreGap = "probability" | "deaths" | "injuries";
 
@@ -871,6 +880,8 @@ export type ShadowScore =
       readonly deaths: ScoreFactor;
       /** The injuries in one event of the kind. */
       readonly injuries: ScoreFactor;
+      /** The probability times the deaths and the injuries of one event. */
+      readonly expected: ExpectedHarm;
     }
   | { readonly read: false; readonly missing: readonly ScoreGap[] };
 

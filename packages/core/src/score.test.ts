@@ -21,7 +21,7 @@ import type {
 } from "./contracts.ts";
 import { ASSESSED_LEVELS } from "./contracts.ts";
 import { assessmentSchema, scorePriorsSchema, shadowScoreSchema } from "./schemas.ts";
-import { assessWithShadow, PRIORS_FORMAT, shadowScore } from "./score.ts";
+import { assessWithShadow, expectedOf, PRIORS_FORMAT, shadowScore } from "./score.ts";
 
 const SEEDS = seedsFrom(process.env["SEED"], [1, 2, 3, 4, 5, 6, 7, 8]);
 
@@ -70,7 +70,7 @@ function incident(kind: string, fields: Partial<Omit<Incident, "kind">> = {}, si
 describe("shadowScore", () => {
   it("gives a warning the verified share of its kind, and not the certainty word", () => {
     const score = shadowScore(incident("met.tornado", {}, "warning"), PRIORS);
-    expect(score).toEqual({
+    expect(score).toMatchObject({
       read: true,
       probability: { estimate: estimate(0.3, 0.28, 0.33), from: { table: "kinds", key: "met.tornado" } },
       deaths: { estimate: estimate(0.04, 0.03, 0.06), from: { table: "kinds", key: "met.tornado" } },
@@ -99,6 +99,40 @@ describe("shadowScore", () => {
     expect(tornado.read && tornado.probability.from.key).toBe("met.tornado");
   });
 
+  it("multiplies the probability and each count, and an exact product gives exact bounds", () => {
+    const dyadic: ScorePriors = {
+      format: PRIORS_FORMAT,
+      kinds: { "met.tornado": { verified: estimate(0.5, 0.25, 1), deaths: estimate(2, 1, 4), injuries: estimate(3, 2, 8) } },
+      certainty: {},
+    };
+    const score = shadowScore(incident("met.tornado", {}, "warning"), dyadic);
+    expect(score.read && score.expected).toEqual({ deaths: estimate(1, 0.25, 4), injuries: estimate(1.5, 0.5, 8) });
+  });
+
+  it("rounds an inexact product outward, so the interval holds the exact product", () => {
+    const tenth = estimate(0.1, 0.1, 0.1);
+    const product = expectedOf(tenth, tenth);
+    // The float product of 0.1 and 0.1 is not exact. Thus each bound is one step out from it.
+    expect(product.value).toBe(0.1 * 0.1);
+    expect(product.low).toBeLessThan(product.value);
+    expect(product.high).toBeGreaterThan(product.value);
+    expect(product.high - product.low).toBeLessThan(1e-17);
+  });
+
+  it("keeps the low bound at 0 or more when a product underflows", () => {
+    const tiny = estimate(Number.MIN_VALUE, Number.MIN_VALUE, Number.MIN_VALUE);
+    const product = expectedOf(tiny, tiny);
+    expect(product).toEqual({ value: 0, low: 0, high: Number.MIN_VALUE });
+    expect(expectedOf(estimate(0, 0, 0), estimate(5, 1, 9))).toEqual(estimate(0, 0, 0));
+  });
+
+  it("gives a finite interval for the largest counts of the priors", () => {
+    const largest = estimate(Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER);
+    const product = expectedOf(estimate(1, 1, 1), largest);
+    expect(product).toEqual(largest);
+    expect(Number.isFinite(expectedOf(estimate(0.7, 0.6, 1), largest).high)).toBe(true);
+  });
+
   it("has no read when the priors do not give a factor, and names each missing factor", () => {
     expect(shadowScore(incident("geo.earthquake", { certainty: "unknown" }), PRIORS)).toEqual({ read: false, missing: ["probability", "deaths", "injuries"] });
     expect(shadowScore(incident("geo.earthquake"), PRIORS)).toEqual({ read: false, missing: ["deaths", "injuries"] });
@@ -119,6 +153,7 @@ describe("scorePriorsSchema", () => {
     expect(scorePriorsSchema.safeParse(withKind({ deaths: estimate(0.5, 0.6, 0.7) })).success).toBe(false);
     expect(scorePriorsSchema.safeParse(withKind({ verified: estimate(1.2, 1, 1.4) })).success).toBe(false);
     expect(scorePriorsSchema.safeParse(withKind({ deaths: estimate(-1, -1, 0) })).success).toBe(false);
+    expect(scorePriorsSchema.safeParse(withKind({ deaths: estimate(1, 0, Number.MAX_SAFE_INTEGER + 1) })).success).toBe(false);
     expect(scorePriorsSchema.safeParse({ ...PRIORS, certainty: { sure: estimate(1, 1, 1) } }).success).toBe(false);
     expect(scorePriorsSchema.safeParse({ ...PRIORS, format: "alerts-priors/2" }).success).toBe(false);
   });
@@ -198,6 +233,19 @@ describe("the gate of the shadow score", () => {
       expect(shadow.reasons.filter((reason) => reason.kind === "shadow").length).toBeLessThanOrEqual(1);
       expect(assessmentSchema.safeParse(shadow).success).toBe(true);
       if (shadow.reasons.length > plain.reasons.length) scored++;
+      for (const reason of shadow.reasons) {
+        if (reason.kind !== "shadow" || !reason.score.read) continue;
+        // The interval of each expected count holds the float products of the bounds.
+        const { probability, deaths, injuries, expected } = reason.score;
+        for (const [count, harm] of [
+          [deaths.estimate, expected.deaths],
+          [injuries.estimate, expected.injuries],
+        ] as const) {
+          expect(harm.low).toBeGreaterThanOrEqual(0);
+          expect(harm.low).toBeLessThanOrEqual(probability.estimate.low * count.low);
+          expect(harm.high).toBeGreaterThanOrEqual(probability.estimate.high * count.high);
+        }
+      }
     }
     // The draws reach the score: a gate that sees no score cannot hold the rule.
     expect(scored).toBeGreaterThan(50);
