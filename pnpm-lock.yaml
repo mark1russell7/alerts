@@ -601,6 +601,9 @@ importers:
       '@mark1russell7/alerts-runtime':
         specifier: workspace:*
         version: link:../runtime
+      '@mark1russell7/alerts-source-iem':
+        specifier: workspace:*
+        version: link:../source-iem
       '@mark1russell7/alerts-source-nws-api':
         specifier: workspace:*
         version: link:../source-nws-api
