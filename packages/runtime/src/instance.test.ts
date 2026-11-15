@@ -238,7 +238,12 @@ describe("openInstance", () => {
     const pass = await finish(clock, instance.runtime.pass());
     expect(pass.view.step.reports.map((report) => report.kind.code)).toEqual(["system.quota.low", "system.quota.reserve"]);
     expect(server.calls.map((call) => call.fields["title"])).toEqual([expect.stringContaining("sends only life-safety messages")]);
-    expect(pass.delivery?.failures.map((failure) => failure.kind)).toEqual(["reserved", "reserved"]);
+    // Pushover takes 2 calls at a time, thus the third message waits for the next pass. The reserve holds it there.
+    expect(pass.delivery?.failures.map((failure) => failure.kind)).toEqual(["reserved"]);
+    await clock.advance(1000);
+    const next = await finish(clock, instance.runtime.pass());
+    expect(next.delivery?.failures.map((failure) => failure.kind)).toEqual(["reserved"]);
+    expect(server.calls).toHaveLength(1);
     expect(notices.state().used).toBe(1);
   });
 
