@@ -3,7 +3,7 @@
  * events and the configuration, and of nothing else. Thus a restart reads the log and gets the same
  * state as a run with no restart.
  */
-import type { Acknowledgment, Cursor, Delivery, EscalationStart, FetchRecord, Instant, MapProblem, Observation, Report } from "@mark1russell7/alerts";
+import type { Acknowledgment, Cursor, Delivery, EscalationStart, FetchRecord, Instant, MapProblem, Observation, Report, ReportId, SourceId } from "@mark1russell7/alerts";
 
 /** The fields of each event. The log of `@mark1russell7/sqlite` reads `id`, `at` and `type`. */
 interface Envelope<T extends string> {
@@ -35,6 +35,18 @@ export interface FetchEvent extends Envelope<"fetch"> {
   readonly problems: readonly MapProblem[];
 }
 
+/** Reports of a snapshot source left its complete lists. The merge reads them as ended from the time of the event. */
+export interface EndedEvent extends Envelope<"ended"> {
+  readonly source: SourceId;
+  readonly reports: readonly ReportId[];
+}
+
+/** Reports of a snapshot source that ended are in a complete list of the source again. The merge reads them as live. */
+export interface BackEvent extends Envelope<"back"> {
+  readonly source: SourceId;
+  readonly reports: readonly ReportId[];
+}
+
 /** One step of the system reports, with the observation of each report. */
 export interface SystemEvent extends Envelope<"system"> {
   readonly reports: readonly Report[];
@@ -63,10 +75,20 @@ export interface EscalationEvent extends Envelope<"escalation"> {
 }
 
 /** One event of the log of the runtime. */
-export type RuntimeEvent = StartedEvent | ObservationEvent | FetchEvent | SystemEvent | EscalationEvent | DeliveryEvent | AcknowledgmentEvent | CancelledEvent;
+export type RuntimeEvent =
+  | StartedEvent
+  | ObservationEvent
+  | FetchEvent
+  | EndedEvent
+  | BackEvent
+  | SystemEvent
+  | EscalationEvent
+  | DeliveryEvent
+  | AcknowledgmentEvent
+  | CancelledEvent;
 
 /** The types of the events. */
-export const EVENT_TYPES: readonly RuntimeEvent["type"][] = ["started", "observation", "fetch", "system", "escalation", "delivery", "acknowledgment", "cancelled"];
+export const EVENT_TYPES: readonly RuntimeEvent["type"][] = ["started", "observation", "fetch", "ended", "back", "system", "escalation", "delivery", "acknowledgment", "cancelled"];
 
 /** This function gives the fields of the envelope of an event at a time. */
 export function envelope<T extends RuntimeEvent["type"]>(type: T, id: string, time: Instant): Envelope<T> {

@@ -170,15 +170,16 @@ describe("the gate of the taxonomy", () => {
 });
 
 describe("the IEM copy and the NWS API copy of one event, in the core", () => {
+  const nwsObservation: Observation = {
+    id: "observation-nws-api" as ObservationId,
+    source: NWS_API_SOURCE,
+    fetched: FETCHED - 60_000,
+    contentType: "application/geo+json",
+    body: NWS_NEW,
+    transport: { latency: 0 },
+  };
+
   it("are one incident with one origin, and the level of the NWS API copy", () => {
-    const nwsObservation: Observation = {
-      id: "observation-nws-api" as ObservationId,
-      source: NWS_API_SOURCE,
-      fetched: FETCHED - 60_000,
-      contentType: "application/geo+json",
-      body: NWS_NEW,
-      transport: { latency: 0 },
-    };
     const nws = mapNwsApi(nwsObservation).reports;
     expect(nws).toHaveLength(1);
     const iem = observationsOf(LIST_0108)
@@ -195,5 +196,26 @@ describe("the IEM copy and the NWS API copy of one event, in the core", () => {
     expect(incident?.reports).toHaveLength(8);
     // The IEM copies alone give an incident of the same event with an unknown level
     expect(incidents(normalize({ reports: iem }), FETCHED)[0]).toMatchObject({ live: true, corroboration: 1, severity: "unknown" });
+  });
+
+  // A false end of the IEM rows is safe only while the NWS API copy stays a head. The rows replace that
+  // copy when they are later and together name each of its codes. This gate holds the tie of the two times.
+  it("stay live when each IEM row of the event ends, because the rows and the NWS API copy of one product have the same sent time", () => {
+    const [api] = mapNwsApi(nwsObservation).reports;
+    expect(api).toBeDefined();
+    const rows = observationsOf(LIST_0108)
+      .map(mapOne)
+      .filter((report) => report.correlation.some((key) => key.id === api?.correlation[0]?.id));
+    expect(rows.map((row) => row.areas.find((area) => area.type === "code" && area.system === "ugc"))).toContainEqual({ type: "code", system: "ugc", code: "TXC137" });
+    for (const row of rows) expect([row.origin, row.sent, row.correlation]).toEqual([api?.origin, api?.sent, api?.correlation]);
+    // The rows together name each code of the message, so only the tie keeps the message a head.
+    const codes = (reports: readonly Report[]): string[] => [...new Set(reports.flatMap((report) => report.areas.flatMap((area) => (area.type === "code" ? [`${area.system}:${area.code}`] : []))))].sort();
+    expect(codes(rows)).toEqual(codes(api === undefined ? [] : [api]));
+
+    const ended = FETCHED + 4 * 60_000;
+    const ends = rows.map((row) => ({ report: row.id, at: ended, ended: true }));
+    expect(incidents(normalize({ reports: [...(api === undefined ? [] : [api]), ...rows], ends }), ended + 60_000)).toMatchObject([{ live: true, severity: "severe" }]);
+    // The rows alone end with the list.
+    expect(incidents(normalize({ reports: rows, ends }), ended + 60_000)).toMatchObject([{ live: false }]);
   });
 });

@@ -14,6 +14,9 @@ const COVERAGE: readonly Area[] = ["US", "PR", "VI", "GU", "MP"].map((code) => (
  * The descriptor of the IEM source. Each report of IEM is a copy of an NWS message, so its origin is
  * the NWS. IEM reads the NWS products from its own feeds, so the source does not depend on the NWS
  * API or its network. The source has no canary: the list has no keepalive row.
+ *
+ * The list is a snapshot. A row that ends leaves the list with no cancel. Thus the runtime ends the
+ * report of a row that is absent from complete lists.
  */
 export const IEM_DESCRIPTOR: SourceDescriptor = {
   id: SOURCE_ID,
@@ -27,4 +30,5 @@ export const IEM_DESCRIPTOR: SourceDescriptor = {
   interval: 120_000,
   slowAfter: 10_000,
   auth: "none",
+  listing: "snapshot",
 };

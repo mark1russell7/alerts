@@ -1,8 +1,8 @@
 import { canonicalJson, random, seedsFrom, type Random } from "@mark1russell7/rigor-generators";
 import { describe, expect, it } from "vitest";
-import type { Acknowledgment, ChannelId, Delivery, Incident, MergeState, ObservationId, PersonId, Report, SourceId, Status } from "./contracts.ts";
+import type { Acknowledgment, ChannelId, Delivery, EndMark, Incident, MergeState, ObservationId, PersonId, Report, SourceId, Status } from "./contracts.ts";
 import { reportId } from "./ids.ts";
-import { EMPTY_STATE, acknowledgedLevel, add, incidents, join, normalize, sentLevel, type LinkRule } from "./merge.ts";
+import { EMPTY_STATE, acknowledgedLevel, add, endedReports, incidents, join, normalize, sentLevel, type LinkRule } from "./merge.ts";
 
 const SEEDS = seedsFrom(process.env["SEED"], [1, 2, 3, 4, 5, 6, 7, 8]);
 const HOUR = 3_600_000;
@@ -53,6 +53,7 @@ function randomState(r: Random): MergeState {
   const reports: Report[] = [];
   const deliveries: Delivery[] = [];
   const acks: Acknowledgment[] = [];
+  const ends: EndMark[] = [];
   for (let i = r.int(0, 8); i > 0; i -= 1) {
     const event = r.below(4);
     const key = `k${event}.${r.below(3)}`;
@@ -84,7 +85,12 @@ function randomState(r: Random): MergeState {
     const incident = reports.length > 0 ? r.pick(reports).id : report({ key: "k0.0" }).id;
     acks.push({ incident, level: r.pick(["urgent", "life-safety"] as const), person, at: T0 + r.below(3), via: "ui" });
   }
-  return normalize({ reports, deliveries, acks });
+  // Marks at a small set of times, so that two marks of one report often have the same time.
+  for (let i = r.int(0, 3); i > 0; i -= 1) {
+    const ended = reports.length > 0 ? r.pick(reports).id : report({ key: "k0.0" }).id;
+    ends.push({ report: ended, at: T0 + r.below(3) * HOUR, ended: r.chance(0.7) });
+  }
+  return normalize({ reports, deliveries, acks, ends });
 }
 
 describe("the join", () => {
@@ -103,7 +109,12 @@ describe("the join", () => {
     const r = random(seed);
     for (let round = 0; round < 30; round += 1) {
       const all = join(join(randomState(r), randomState(r)), randomState(r));
-      const parts = [...all.reports.map((x) => ({ reports: [x] })), ...all.deliveries.map((x) => ({ deliveries: [x] })), ...all.acks.map((x) => ({ acks: [x] }))];
+      const parts = [
+        ...all.reports.map((x) => ({ reports: [x] })),
+        ...all.deliveries.map((x) => ({ deliveries: [x] })),
+        ...all.acks.map((x) => ({ acks: [x] })),
+        ...all.ends.map((x) => ({ ends: [x] })),
+      ];
       // Each part arrives one or more times, in a random order.
       const arrivals = r.shuffle([...parts, ...r.sample(parts, r.int(0, parts.length))]);
       const built = arrivals.reduce(add, EMPTY_STATE);
@@ -124,6 +135,50 @@ describe("the join", () => {
     const delivery: Delivery = { key: "m", incident: report({ key: "k" }).id, level: "urgent", person, channel: pushover, step: 0, at: T0 };
     const state = add(add(EMPTY_STATE, { deliveries: [delivery] }), { deliveries: [{ ...delivery }] });
     expect(state.deliveries).toHaveLength(1);
+  });
+
+  it("keeps each end mark one time", () => {
+    const mark: EndMark = { report: report({ key: "k" }).id, at: T0, ended: true };
+    expect(add(add(EMPTY_STATE, { ends: [mark] }), { ends: [{ ...mark }] }).ends).toEqual([mark]);
+  });
+});
+
+describe("the end marks of a snapshot source", () => {
+  const row = report({ key: "row", source: "iem", correlation: [{ system: "vtec", id: "KTOP.TO.W.1" }] });
+  const mark = (at: number, ended: boolean): EndMark => ({ report: row.id, at, ended });
+  const liveAt = (ends: readonly EndMark[], at: number): boolean | undefined => incidents(normalize({ reports: [row], ends }), at)[0]?.live;
+
+  it("ends a report from the time of its mark, and not before", () => {
+    const ends = [mark(T0 + 600_000, true)];
+    expect(liveAt(ends, T0 + 599_999)).toBe(true);
+    expect(liveAt(ends, T0 + 600_000)).toBe(false);
+    expect([...endedReports(normalize({ ends }), T0 + 600_000)]).toEqual([row.id]);
+  });
+
+  it("makes a report live again with a later mark that is not an end", () => {
+    const ends = [mark(T0 + 600_000, true), mark(T0 + 1_200_000, false)];
+    expect(liveAt(ends, T0 + 900_000)).toBe(false);
+    expect(liveAt(ends, T0 + 1_200_000)).toBe(true);
+    expect(liveAt([...ends, mark(T0 + 1_800_000, true)], T0 + 1_800_000)).toBe(false);
+  });
+
+  it("keeps a report live when an end and a return have one time, in each order", () => {
+    expect(liveAt([mark(T0, true), mark(T0, false)], T0 + 1)).toBe(true);
+    expect(liveAt([mark(T0, false), mark(T0, true)], T0 + 1)).toBe(true);
+  });
+
+  it("keeps the incident live while a different head is live, with the level of the live heads", () => {
+    const api = report({ key: "api", correlation: row.correlation, severity: "severe" });
+    const [one] = incidents(normalize({ reports: [row, api], ends: [mark(T0, true)] }), T0 + 1);
+    expect(one).toMatchObject({ live: true, severity: "severe", corroboration: 1 });
+    const [ended] = incidents(normalize({ reports: [row, api], ends: [mark(T0, true), { report: api.id, at: T0, ended: true }] }), T0 + 1);
+    expect(ended?.live).toBe(false);
+  });
+
+  it("changes no group: a mark reads only the field live", () => {
+    const api = report({ key: "api", correlation: row.correlation });
+    const groups = (ends: readonly EndMark[]) => incidents(normalize({ reports: [row, api], ends }), T0 + 1).map((incident) => incident.reports);
+    expect(groups([mark(T0, true)])).toEqual(groups([]));
   });
 });
 

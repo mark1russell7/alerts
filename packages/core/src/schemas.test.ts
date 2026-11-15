@@ -5,6 +5,7 @@ import { assess, DEFAULT_ASSESS_POLICY } from "./assess.ts";
 import { CONFIG_FORMAT, loadConfig, type AlertConfig } from "./config.ts";
 import type {
   Acknowledgment,
+  EndMark,
   Address,
   Area,
   AssessedLevel,
@@ -77,6 +78,7 @@ import { incidents, normalize } from "./merge.ts";
 import * as schemas from "./schemas.ts";
 import {
   acknowledgmentSchema,
+  endMarkSchema,
   addressSchema,
   addressValueSchema,
   alertConfigSchema,
@@ -326,6 +328,7 @@ describe("the type of each schema", () => {
     expectTypeOf<z.output<typeof escalationPolicySchema>>().toEqualTypeOf<EscalationPolicy>();
     expectTypeOf<z.output<typeof deliverySchema>>().toEqualTypeOf<Delivery>();
     expectTypeOf<z.output<typeof acknowledgmentSchema>>().toEqualTypeOf<Acknowledgment>();
+    expectTypeOf<z.output<typeof endMarkSchema>>().toEqualTypeOf<EndMark>();
     expectTypeOf<z.output<typeof assessedLevelSchema>>().toEqualTypeOf<AssessedLevel>();
     expectTypeOf<z.output<typeof levelTableSchema>>().toEqualTypeOf<LevelTable>();
     expectTypeOf<z.output<typeof kindClassSchema>>().toEqualTypeOf<KindClass>();
@@ -376,7 +379,7 @@ describe("the JSON Schema of each schema", () => {
   const exported = Object.entries(schemas).filter(([name]) => name.endsWith("Schema"));
 
   it("has each exported schema", () => {
-    expect(exported.length).toBe(72);
+    expect(exported.length).toBe(73);
     for (const [name, schema] of exported) expect(schema instanceof z.ZodType, name).toBe(true);
   });
 
@@ -399,6 +402,8 @@ describe("the round trip of real values", () => {
   it("accepts the values of the source and the channel contracts", () => {
     holds(sourceDescriptorSchema, DESCRIPTOR);
     holds(sourceDescriptorSchema, { ...DESCRIPTOR, coverage: "global", maxQuiet: HOUR });
+    holds(sourceDescriptorSchema, { ...DESCRIPTOR, listing: "snapshot" });
+    fails(sourceDescriptorSchema, { ...DESCRIPTOR, listing: "stream" });
     holds(channelDescriptorSchema, CHANNEL);
     holds(observationSchema, OBSERVATION);
     holds(reportSchema, WARNING);
@@ -466,6 +471,8 @@ describe("the round trip of real values", () => {
     const ack: Acknowledgment = { incident: incident.anchor, level: "life-safety", person: PERSON, at: T0 + 60_000, via: "ui" };
     holds(acknowledgmentSchema, ack);
     holds(acknowledgmentSchema, { ...ack, via: PUSHOVER });
+    holds(endMarkSchema, { report: ack.incident, at: T0, ended: true });
+    fails(endMarkSchema, { report: ack.incident, at: T0, ended: "yes" });
   });
 
   it("accepts the first policy and the lateness of the core", () => {
