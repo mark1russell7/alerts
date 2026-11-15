@@ -3,9 +3,9 @@
  * the live incidents. After each pass, the instance starts a refresh of the store of shapes. The refresh ends before the
  * next fetch of the alerts. Thus the alerts come first. The match by shape and the map route read the outlines here.
  */
-import type { Incident, Instant, MapRegion, RegionCode, ShapeLookup, WatchedPlace } from "@mark1russell7/alerts";
+import type { AlertConfig, Incident, Instant, MapRegion, PlaceConfig, RegionCode, ShapeLookup, WatchedPlace } from "@mark1russell7/alerts";
 import { stateOfCode } from "@mark1russell7/alerts-format-nws";
-import { compareCodes, type Refreshed, type ShapeStore, type Wanted } from "@mark1russell7/alerts-shapes-nws";
+import { compareCodes, zoneCodesNear, type Refreshed, type ShapeStore, type Wanted } from "@mark1russell7/alerts-shapes-nws";
 import { errorMessage } from "@mark1russell7/text";
 
 /** The outcome of one refresh of the outlines: its result, or the error that it threw. */
@@ -55,6 +55,38 @@ export function wantedShapes(places: readonly WatchedPlace[], incidents: readonl
     }
   }
   return { states: [...states].sort(compareCodes), codes: liveCodes(incidents) };
+}
+
+/**
+ * This function gives the configuration with the codes of the zones near each place with a position. The zones come from
+ * `regionsOf`, for each state of a code of the place. The codes are the codes of `zoneCodesNear`, with the buffer of the place.
+ *
+ * - The codes of the file stay first, in their order. The added codes follow, and a code of the file is not added again.
+ * - A place with no position, or with no outline of its states, keeps its codes.
+ * - A place near the line of a state gets only the zones of the states of its codes. A code of the next state adds its zones.
+ */
+export function withZoneCodes(config: AlertConfig, regionsOf: (state: string) => readonly MapRegion[]): AlertConfig {
+  return { ...config, places: config.places.map((place) => placeWithZoneCodes(place, regionsOf)) };
+}
+
+// The place with the codes of the zones near its position.
+function placeWithZoneCodes(place: PlaceConfig, regionsOf: (state: string) => readonly MapRegion[]): PlaceConfig {
+  if (place.at === undefined) return place;
+  const states = new Set<string>();
+  for (const code of place.codes) {
+    const state = stateOfCode(code);
+    if (state !== undefined) states.add(state);
+  }
+  const regions = [...states].sort(compareCodes).flatMap((state) => regionsOf(state));
+  if (regions.length === 0) return place;
+  const known = new Set(place.codes.map(codeKey));
+  const added = zoneCodesNear(regions, place.at, place.bufferKm).filter((code) => !known.has(codeKey(code)));
+  return added.length === 0 ? place : { ...place, codes: [...place.codes, ...added] };
+}
+
+/** This function gives a key of the codes of each place. Two configurations with one key have the same codes. */
+export function placeCodesKey(config: AlertConfig): string {
+  return JSON.stringify(config.places.map((place) => [place.id, place.codes.map(codeKey)]));
 }
 
 /** The outlines of the instance. */
