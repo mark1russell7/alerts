@@ -1,0 +1,90 @@
+/**
+ * This module holds the events of the log of the runtime. The state of the runtime is a fold of these
+ * events and the configuration, and of nothing else. Thus a restart reads the log and gets the same
+ * state as a run with no restart.
+ */
+import type { Acknowledgment, Cursor, Delivery, FetchRecord, Instant, MapProblem, Observation, Report } from "@mark1russell7/alerts";
+
+/** The fields of each event. The log of `@mark1russell7/sqlite` reads `id`, `at` and `type`. */
+interface Envelope<T extends string> {
+  /** The id of the event. The log keeps one event for each id, thus an append that repeats changes nothing. */
+  readonly id: string;
+  /** The time of the event as an ISO 8601 text, for a person who reads the file. */
+  readonly at: string;
+  readonly type: T;
+  /** The time of the event in milliseconds since the epoch. The fold reads this value, not `at`. */
+  readonly time: Instant;
+}
+
+/** A run of the runtime starts. The first start is the start of the health of each source. */
+export interface StartedEvent extends Envelope<"started"> {
+  readonly run: string;
+}
+
+/** A new observation of a source. Its id is the id of the observation, thus a repeat is not new. */
+export interface ObservationEvent extends Envelope<"observation"> {
+  readonly observation: Observation;
+}
+
+/** The end of one fetch: the record for the health, the next cursor, and the reports of the new observations. */
+export interface FetchEvent extends Envelope<"fetch"> {
+  readonly record: FetchRecord;
+  readonly cursor?: Cursor;
+  readonly reports: readonly Report[];
+  /** The problems of the map of the new observations. */
+  readonly problems: readonly MapProblem[];
+}
+
+/** One step of the system reports, with the observation of each report. */
+export interface SystemEvent extends Envelope<"system"> {
+  readonly reports: readonly Report[];
+  readonly observations: readonly Observation[];
+}
+
+/** One accepted send. */
+export interface DeliveryEvent extends Envelope<"delivery"> {
+  readonly delivery: Delivery;
+}
+
+/** One acknowledgment of a person. */
+export interface AcknowledgmentEvent extends Envelope<"acknowledgment"> {
+  readonly acknowledgment: Acknowledgment;
+}
+
+/** The repeats of a delivery stopped. The escalation does not cancel it again. */
+export interface CancelledEvent extends Envelope<"cancelled"> {
+  /** The key of the delivery. */
+  readonly delivery: string;
+}
+
+/** One event of the log of the runtime. */
+export type RuntimeEvent = StartedEvent | ObservationEvent | FetchEvent | SystemEvent | DeliveryEvent | AcknowledgmentEvent | CancelledEvent;
+
+/** The types of the events. */
+export const EVENT_TYPES: readonly RuntimeEvent["type"][] = ["started", "observation", "fetch", "system", "delivery", "acknowledgment", "cancelled"];
+
+/** This function gives the fields of the envelope of an event at a time. */
+export function envelope<T extends RuntimeEvent["type"]>(type: T, id: string, time: Instant): Envelope<T> {
+  return { id, at: new Date(time).toISOString(), type, time };
+}
+
+/**
+ * This function changes a stored JSON value into an event, and throws for a value that is not one.
+ * It examines only the envelope and the type. The log holds only the events of the runtime, and
+ * SQLite examines the integrity of the file.
+ */
+export function parseEvent(value: unknown): RuntimeEvent {
+  const event = value as Partial<Envelope<string>> | null;
+  if (
+    typeof event !== "object" ||
+    event === null ||
+    typeof event.id !== "string" ||
+    typeof event.at !== "string" ||
+    typeof event.time !== "number" ||
+    !Number.isFinite(event.time) ||
+    !(EVENT_TYPES as readonly unknown[]).includes(event.type)
+  ) {
+    throw new TypeError(`The log has a value that is not an event of the runtime: ${JSON.stringify(value)?.slice(0, 200)}`);
+  }
+  return value as RuntimeEvent;
+}
