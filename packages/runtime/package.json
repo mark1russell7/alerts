@@ -23,9 +23,9 @@
     "@mark1russell7/optional": "^1.2.0",
     "@mark1russell7/quantity": "^0.4.0",
     "@mark1russell7/service": "^0.8.16",
-    "@mark1russell7/sqlite": "^0.2.6",
-    "@mark1russell7/text": "^0.0.5",
-    "polite-crawler": "^0.6.2"
+    "@mark1russell7/sqlite": "^0.3.2",
+    "@mark1russell7/text": "^0.0.6",
+    "polite-crawler": "^0.7.3"
   },
   "devDependencies": {
     "@mark1russell7/cue": "^2.0.0",
