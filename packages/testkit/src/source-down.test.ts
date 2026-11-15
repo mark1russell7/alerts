@@ -1,7 +1,7 @@
 import type { HealthState } from "@mark1russell7/alerts";
+import { SOURCE_POLICY } from "@mark1russell7/alerts-runtime";
 import { CANARY_PATH, checkCanary, readAnswer, WEA_PATH } from "@mark1russell7/alerts-source-nws-api";
 import type { Exchange, Reply, Transport } from "polite-crawler/api";
-import { DEFAULT_POLICY } from "polite-crawler/politeness";
 import { describe, expect, it } from "vitest";
 import { caseBodies, MAIN_PATH } from "./nws.ts";
 import {
@@ -70,7 +70,7 @@ describe("the plan of the case", () => {
   });
 
   it("takes the limits from the default policy of polite-crawler and the interval of the source", () => {
-    expect(LIMITS).toEqual({ intervalMs: MINUTE, detectMs: 3 * MINUTE, recoverMs: DEFAULT_POLICY.backoffCapMs + 2 * MINUTE, stopAfter: DEFAULT_POLICY.maxFailures });
+    expect(LIMITS).toEqual({ intervalMs: MINUTE, detectMs: 3 * MINUTE, recoverMs: SOURCE_POLICY.backoffCapMs + 2 * MINUTE, stopAfter: SOURCE_POLICY.maxFailures });
     expect(LIMITS.recoverMs).toBe(7 * MINUTE);
   });
 

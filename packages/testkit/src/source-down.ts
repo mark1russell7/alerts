@@ -1,7 +1,7 @@
 /**
  * AL-13, case 5: a source down. The host of the NWS source does not answer for a time, and then it answers again.
  *
- * The NWS source has the default pace of `polite-crawler`, as in production. The case clock moves `speed` times faster
+ * The NWS source has the pace of an instance (`sourcePace` and `SOURCE_POLICY`), as in production. The case clock moves `speed` times faster
  * than real time. Thus an arm of 80 minutes takes 80 seconds at the speed 60. In the outage window, each request goes
  * to a fault proxy of `@mark1russell7/rigor-proxy`. The proxy stops each request before the server. The case has five
  * arms:
@@ -19,13 +19,13 @@
  *   of `polite-crawler` and two intervals of the source.
  */
 import { DEFAULT_COVERAGE_POLICY, type HealthState } from "@mark1russell7/alerts";
-import { openRuntime, openRuntimeLog, type RuntimeOptions } from "@mark1russell7/alerts-runtime";
+import { openRuntime, openRuntimeLog, SOURCE_POLICY, sourcePace, type RuntimeOptions } from "@mark1russell7/alerts-runtime";
 import { CANARY_PATH, createNwsSource, NWS_DESCRIPTOR, SOURCE_ID } from "@mark1russell7/alerts-source-nws-api";
 import { type Fault, faultPlanOf } from "@mark1russell7/rigor-chaos";
 import { random } from "@mark1russell7/rigor-generators";
 import { startFaultProxy } from "@mark1russell7/rigor-proxy";
 import { fetchTransport, type Reply, type Transport } from "polite-crawler/api";
-import { DEFAULT_POLICY, HostScheduler, type Clock as PoliteClock, type PolitenessPolicy } from "polite-crawler/politeness";
+import type { Clock as PoliteClock, PolitenessPolicy } from "polite-crawler/politeness";
 import { type CaseBodies, caseBodies, NWS_WATCH, startNwsServer } from "./nws.ts";
 
 /** The id and the seed of the case. The jitter of the backoff of each arm comes from this seed and the name of the arm. */
@@ -63,7 +63,7 @@ export interface DownSettings {
 
 /**
  * The settings of the case in CI, as the prediction states. The outage starts between two fetches. Each arm is long
- * enough to show the end of a stop of the host for failures, 60 minutes in `DEFAULT_POLICY`.
+ * enough to show the end of the stop of one hour of `DEFAULT_POLICY` of `polite-crawler`, the policy before `SOURCE_POLICY`.
  */
 export const CASE_5_SETTINGS: DownSettings = { speed: 60, armMs: 80 * MINUTE, outageAtMs: 4.5 * MINUTE, shortMs: 3 * MINUTE, longMs: 10 * MINUTE, connections: 64 };
 
@@ -83,7 +83,7 @@ export interface DownLimits {
  * This function gives the limits of the gates. A wait of the backoff ends in `backoffCapMs` after the end of the outage.
  * A fetch starts in one interval after that, and it ends in one more interval, its limit in the runtime.
  */
-export function downLimits(policy: PolitenessPolicy = DEFAULT_POLICY, intervalMs: number = NWS_DESCRIPTOR.interval): DownLimits {
+export function downLimits(policy: PolitenessPolicy = SOURCE_POLICY, intervalMs: number = NWS_DESCRIPTOR.interval): DownLimits {
   return { intervalMs, detectMs: 3 * intervalMs, recoverMs: policy.backoffCapMs + 2 * intervalMs, stopAfter: policy.maxFailures };
 }
 
@@ -289,8 +289,9 @@ export async function runDownArm(arm: DownArm, settings: DownSettings = CASE_5_S
     counts,
   });
   const jitter = random(`${CASE_5_ID}-${arm}`);
-  // The pace of production: one request at a time to the host, the default policy and the default limits of the source.
-  const source = createNwsSource({ pace: { scheduler: new HostScheduler(clock, 1), now: clock.now, random: () => jitter.next() }, transport, userAgent: USER_AGENT, baseUrl: CASE_5_ORIGIN });
+  // The pace of production: the pace of an instance on the case clock, with the jitter of the arm. The timers of the case clock are its monotonic clock.
+  const pace = { ...sourcePace({ now: clock.now, after: clock.after }, clock, 1), random: () => jitter.next() };
+  const source = createNwsSource({ pace, transport, userAgent: USER_AGENT, baseUrl: CASE_5_ORIGIN });
   const log = openRuntimeLog(":memory:");
   const passes: DownPass[] = [];
   let error: string | undefined;
