@@ -107,6 +107,7 @@ export function pushoverDescriptor(platform?: "ios" | "android"): ChannelDescrip
  * - `send` does not throw. A refusal of the quota is a failure of the kind `rate-limited`, thus the escalation goes to its next step.
  * - `status` does not throw. A receipt that the channel cannot read keeps the state `accepted`.
  * - `cancel` stops the repeats by the tag of the receipt: the delivery key. Thus it also stops a copy of a send whose receipt the log does not have. A receipt with no tag stops by its id.
+ * - `cancel({ copy })` stops one copy by its copy id, the second tag of the message. The other copies of the key continue.
  * - `cancel` is idempotent. A cancel that Pushover refuses ends without an error, because Pushover does not know the receipt (it keeps a receipt for one week). Thus no repeats continue.
  * - `cancel` throws for each other failure, thus the caller can try again. A request that Pushover refused does not go again, because many refusals can block the address of the caller.
  */
@@ -133,10 +134,10 @@ export function createPushoverChannel(options: PushoverChannelOptions): ChannelP
   return {
     describe: () => descriptor,
 
-    async send({ message, address }): Promise<SendOutcome> {
+    async send({ message, address, copy }): Promise<SendOutcome> {
       const at = now();
       if (!isPushoverKey(options.token)) return { ok: false, kind: "auth", message: "The API token is not 30 letters and digits." };
-      const mapped = pushoverMessageOf(message, address, at, options);
+      const mapped = pushoverMessageOf(message, address, at, options, copy);
       if ("refused" in mapped) return { ok: false, kind: "refused", message: mapped.refused };
       let request: PushoverRequest;
       try {
@@ -172,11 +173,17 @@ export function createPushoverChannel(options: PushoverChannelOptions): ChannelP
       return statusOf(result, at);
     },
 
-    async cancel({ receipt }) {
-      const tag = receipt["tag"];
-      const id = receipt["receipt"];
-      // The tag stops each message of the delivery key, also a copy whose receipt the log does not have.
-      const request = tag !== undefined ? pushoverCancelByTagRequest(options.token, tag) : id !== undefined ? pushoverCancelRequest(options.token, id) : undefined;
+    async cancel(target) {
+      let request: PushoverRequest | undefined;
+      if ("copy" in target) {
+        // The copy id is the second tag of the message. It stops only this copy, and the new copy of the key continues.
+        request = pushoverCancelByTagRequest(options.token, target.copy);
+      } else {
+        const tag = target.receipt["tag"];
+        const id = target.receipt["receipt"];
+        // The tag stops each message of the delivery key, also a copy whose receipt the log does not have.
+        request = tag !== undefined ? pushoverCancelByTagRequest(options.token, tag) : id !== undefined ? pushoverCancelRequest(options.token, id) : undefined;
+      }
       // A message below priority 2 does not repeat, thus nothing stops.
       if (request === undefined) return;
       const { result } = await call(request, extractPushoverCancelled);

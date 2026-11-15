@@ -46,6 +46,7 @@ The repo is public. It holds the general framework only. People, places, keys an
 | AL-20 | Preparedness planner | later | Hazard likelihood times exposure gives what to buy and do first, and an action plan for each hazard and each person. |
 | AL-31 | Priority from probabilities and costs | blocked | The probability that the event is real, times the exposure of the people, times the harm and the urgency, against the cost to interrupt the person. The base rates come from the event log of AL-11. |
 | AL-21 | Alerts for other people | later | More recipients, each with their own places, channels and night rule. |
+| AL-32 | The stop of a hung copy after a restart | later | The log keeps each attempt of a send and its copy id before the send. After a restart, the system stops each copy with no delivery. |
 | AL-22 | A home cluster copy | later | A third copy of the system on a home cluster. |
 | AL-26 | Provider redundancy at each layer | later | Two or more providers at each layer: power, network path, DNS resolvers, hosting, push service and the APIs of each source. |
 | AL-27 | Emergency radio | later | Radio for when phones and the internet fail: receivers, licensed radio and an off-grid text mesh. |

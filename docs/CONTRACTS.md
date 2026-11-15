@@ -203,9 +203,9 @@ Each channel package registers four procedures under `alerts.channel.<id>`:
 | Procedure | Effects | Rule |
 | --- | --- | --- |
 | `describe` | none | It gives the `ChannelDescriptor`: the failure domains, the cell resources, the break through Do Not Disturb, the repeats, the kind of acknowledgment and the cost. |
-| `send` | writes `network` | It sends one `Message` to one `Address`. When `message.quiet` is true, it uses its silent mode. A failure is `{ ok: false }`. It does not throw. |
+| `send` | writes `network` | It sends one `Message` to one `Address`, with the copy id of this send. When `message.quiet` is true, it uses its silent mode. A failure is `{ ok: false }`. It does not throw. |
 | `status` | reads `network` | It gives the state of a receipt: accepted, delivered, acknowledged, expired or failed. |
-| `cancel` | writes `network` | It stops the repeats of a message. It is idempotent. |
+| `cancel` | writes `network` | It stops the repeats of a message: each copy of a receipt, or one copy by its copy id. It is idempotent. |
 
 The channel does not escalate. The core does:
 
@@ -259,10 +259,19 @@ A send that passes its time limit stays in flight, because the provider can acce
 
 - No second send of its key starts until the first send ends, or until the flight limit `flightLimit` ends. The flight limit is not shorter than the time limit.
 - A late send that the provider accepts gets its delivery in the log at the next step. Thus its acknowledgment and its cancel work.
-- After the flight limit, a second send goes. A late first send that lands after it is a duplicate, and the log keeps one delivery of the key.
+- After the flight limit, a second send goes. A late first send that lands after it gets no delivery in the log.
 - A send that the channel accepts in time, and whose write to the log fails, also gets its delivery at the next step. Thus no second send goes.
 
-The Pushover channel tags each emergency message with its delivery key, and it cancels by the tag. Thus a cancel also stops the repeats of a copy whose receipt the log does not have. A crash after a send and before its write is such a case.
+Each send of a key has a new copy id. The channel can have a copy that the log does not keep:
+
+- a copy past its flight limit;
+- a copy whose send failed with no answer: a time-out, a network failure or a server failure.
+
+On a channel that repeats, the step stops such a copy by its copy id. The next copy goes in parallel. The step does not cancel by the delivery key here, because that cancel also stops the next copy. A failed stop goes again at a later step. A stale copy that the channel accepts later gets its stop again.
+
+The Pushover channel tags each emergency message with its delivery key and its copy id. A cancel of a receipt goes by the delivery key. Thus it also stops the repeats of a copy whose receipt the log does not have. A crash after a send and before its write is such a case. A stop of one copy goes by its copy id.
+
+The copies to stop are in memory only. Thus a restart loses the stop of a hung copy of the last run. The cancel by the delivery key at the end of its escalation stops that copy. AL-32 writes each attempt and its copy id to the log before the send, and a restart stops the copies with no delivery.
 
 A recipient has no problem from `recipientProblems` before it gets alerts:
 

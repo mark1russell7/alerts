@@ -142,6 +142,14 @@ describe("send", () => {
     expect(fields(fake.calls[0]?.body)).toMatchObject({ token: TOKEN, user: USER, priority: "2", retry: "30", expire: "10800", tags: "k".repeat(64) });
   });
 
+  it("tags a life-safety message with the delivery key and the copy id, and keeps the delivery key in the receipt", async () => {
+    const fake = server({ status: 200, body: { status: 1, request: "req-1", receipt: RECEIPT } });
+    const channel = createPushoverChannel({ token: TOKEN, fetch: fake.fetch, now: () => AT });
+    const sent = await channel.send({ message: message("life-safety"), address: ADDRESS, copy: "run-1.2" });
+    expect(sent).toEqual({ ok: true, receipt: { request: "req-1", receipt: RECEIPT, tag: "k".repeat(64) }, accepted: AT });
+    expect(fields(fake.calls[0]?.body)).toMatchObject({ tags: `${"k".repeat(64)},run-1.2` });
+  });
+
   it("sends a quiet notice at -1, and a message below priority 2 has no receipt", async () => {
     const fake = server({ status: 200, body: { status: 1, request: "req-2" } });
     const channel = createPushoverChannel({ token: TOKEN, fetch: fake.fetch, now: () => AT });
@@ -216,6 +224,14 @@ describe("cancel", () => {
     const channel = createPushoverChannel({ token: TOKEN, fetch: fake.fetch });
     await channel.cancel({ receipt: { request: "req", receipt: RECEIPT, tag: "k".repeat(64) } });
     expect(fake.calls.map((call) => call.url)).toEqual([`https://api.pushover.net/1/receipts/cancel_by_tag/${"k".repeat(64)}.json`]);
+    expect(fields(fake.calls[0]?.body)).toEqual({ token: TOKEN });
+  });
+
+  it("stops one copy by its copy id, thus the other copies of the key continue", async () => {
+    const fake = server({ status: 200, body: { status: 1, request: "req", canceled: 1 } });
+    const channel = createPushoverChannel({ token: TOKEN, fetch: fake.fetch });
+    await channel.cancel({ copy: "run-1.1" });
+    expect(fake.calls.map((call) => call.url)).toEqual(["https://api.pushover.net/1/receipts/cancel_by_tag/run-1.1.json"]);
     expect(fields(fake.calls[0]?.body)).toEqual({ token: TOKEN });
   });
 
