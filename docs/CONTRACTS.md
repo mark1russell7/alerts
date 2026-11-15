@@ -24,10 +24,14 @@ fetch ──► Observation ──► map ──► Report ──► merge state
 | Package | Folder | What it holds |
 | --- | --- | --- |
 | `@mark1russell7/alerts` | `packages/core` | The contracts, the merge, the assessment, the routing, the escalation, the health and the coverage. Pure functions on an injected clock. |
+| `@mark1russell7/alerts-format-<name>` | `packages/format-<name>` | The reader of one message format that two or more sources use: `format-cap` for CAP 1.2, `format-nws` for VTEC and the NWS kinds. |
 | `@mark1russell7/alerts-source-<id>` | `packages/source-<id>` | One source adapter as procedures. |
 | `@mark1russell7/alerts-channel-<id>` | `packages/channel-<id>` | One delivery channel as procedures. |
 | `@mark1russell7/alerts-runtime` | `packages/runtime` | The service: the loops, the event log, the delivery ledger and the heartbeat, on `@mark1russell7/service` and the SQLite home. |
 | `@mark1russell7/alerts-testkit` | `packages/testkit` | The conformance tests of the adapters, the fixtures and the fault plans. |
+| `@alerts/site` | `packages/site` | The public site: a demo that replays made-up messages through the real code. It holds no person and no place. |
+
+The preparedness planner (AL-20) and the app with the map of the watched places (AL-18) get their folders when they start. A package of this repo is for a general part. A part that names a person or a place stays in the private configuration.
 
 The repo is public. It holds no person, no place, no address and no key. The private configuration gives them at run time: people and places from a private store, keys from `~/.alerts/secrets.env`.
 
