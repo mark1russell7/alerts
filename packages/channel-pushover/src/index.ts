@@ -5,7 +5,7 @@
  */
 
 import { COPY_ID, type ChannelDescriptor, type ChannelId, type ChannelProcedures, type Instant, type SendOutcome } from "@mark1russell7/alerts";
-import { isQuotaError, type QuotaError } from "polite-crawler/api";
+import { isQuotaError, type Quota, type QuotaError, type QuotaGate, type QuotaReading, type QuotaState } from "polite-crawler/api";
 import {
   callPushover,
   extractPushoverCancelled,
@@ -21,6 +21,7 @@ import {
   type PushoverFetch,
   type PushoverRequest,
   type PushoverResponse,
+  type PushoverSent,
   pushoverSendRequest,
 } from "@procedures/notify/pushover";
 import { type PushoverMapOptions, pushoverMessageOf, sendFailureOf, statusOf } from "./map.ts";
@@ -37,6 +38,37 @@ export const PUSHOVER_REPEAT_MS: number = PUSHOVER_RETRY_MIN_MS;
 /** The id of the channel. */
 export const CHANNEL_ID = "pushover" as ChannelId;
 
+/** The count of messages that Pushover gives one application in a month, with no paid upgrade. */
+export const PUSHOVER_MONTHLY_LIMIT = 10_000;
+
+/**
+ * The units of the monthly quota that only a `life-safety` message can use. Pushover refuses each
+ * message at 0 left, also at priority 2. Thus the reserve must hold the `life-safety` messages until
+ * the reset. The value 1000 is an assumption. It ends when the log of the live instance gives the count
+ * of the `life-safety` sends of 30 days.
+ */
+export const PUSHOVER_RESERVE = 1_000;
+
+/**
+ * The monthly quota of the messages of one application. Its window starts at midnight in
+ * `America/Chicago` on the first day of the month, as the reset of the example of the Pushover API.
+ * The count of each answer of Pushover corrects the local count.
+ */
+export const PUSHOVER_QUOTA: Quota = {
+  name: "Pushover messages",
+  limit: PUSHOVER_MONTHLY_LIMIT,
+  reserve: PUSHOVER_RESERVE,
+  window: { kind: "calendar", unit: "month", timeZone: "America/Chicago" },
+};
+
+/**
+ * This function gives the units of a message in the quota: 0 at priority 2, and 1 below it. Thus the
+ * quota does not stop a `life-safety` message at any time.
+ */
+export function pushoverCost(priority: number): number {
+  return priority === 2 ? 0 : 1;
+}
+
 /**
  * This function tells if a value has the form of a key of Pushover: 30 letters and digits. The API token of an
  * application, a user key and a group key have this form. A start of the system examines each key with it, thus a
@@ -50,12 +82,17 @@ export function isPushoverKey(value: unknown): value is string {
 export interface PushoverChannelOptions extends PushoverMapOptions {
   /** The API token of the application. The private configuration gives it at run time. */
   readonly token: string;
-  /**
-   * The fetch of each call. A fetch with a gate, for example `withQuota(gate, fetch)` of
-   * `polite-crawler/api`, can refuse a call over the quota. The channel then gives `rate-limited`, with
-   * the reset of the quota as the retry.
-   */
+  /** The fetch of each call. */
   readonly fetch: PushoverFetch;
+  /**
+   * The gate of the monthly messages of the application, for example `quotaGate(PUSHOVER_QUOTA, ...)` of
+   * `polite-crawler/api` with a store in a file. With no gate, the channel counts nothing.
+   *
+   * - A send takes the units of `pushoverCost` before its call. A `life-safety` message takes no unit.
+   * - A refusal of the gate gives `reserved` while Pushover still sends. Else it gives `rate-limited`.
+   * - The count of each answer of Pushover goes into the gate. A message that Pushover refused gives back its unit.
+   */
+  readonly quota?: QuotaGate | undefined;
   /** The platform of the device of the person. It adds the push service of the platform to `dependsOn`. */
   readonly platform?: "ios" | "android" | undefined;
   /** The time limit of one call. The default is 10 seconds. */
@@ -96,20 +133,9 @@ export function createPushoverChannel(options: PushoverChannelOptions): ChannelP
   const timeoutMs = options.timeoutMs ?? PUSHOVER_TIMEOUT_MS;
   const descriptor = pushoverDescriptor(options.platform);
 
-  /** One call. A refusal of the quota stops the call before Pushover counts it. */
-  const call = async <Result>(request: PushoverRequest, extract: (response: PushoverResponse) => Result | PushoverFailure) => {
-    let quota: QuotaError | undefined;
-    const guarded: PushoverFetch = async (url, init) => {
-      try {
-        return await options.fetch(url, init);
-      } catch (error) {
-        if (isQuotaError(error)) quota = error;
-        throw error;
-      }
-    };
-    const result = await callPushover(guarded, request, extract, { timeoutMs });
-    return { result, quota };
-  };
+  /** One call. */
+  const call = <Result>(request: PushoverRequest, extract: (response: PushoverResponse) => Result | PushoverFailure): Promise<Result | PushoverFailure> =>
+    callPushover(options.fetch, request, extract, { timeoutMs });
 
   return {
     describe: () => descriptor,
@@ -126,8 +152,20 @@ export function createPushoverChannel(options: PushoverChannelOptions): ChannelP
       } catch (error) {
         return { ok: false, kind: "refused", message: error instanceof Error ? error.message : "The message breaks a rule of the Pushover API." };
       }
-      const { result, quota } = await call(request, extractPushoverSent);
-      if (quota !== undefined) return { ok: false, kind: "rate-limited", message: quota.message, retryAfter: Math.max(0, quota.resetAt - at) };
+      const gate = options.quota;
+      // A message with no priority has the normal priority 0.
+      const cost = pushoverCost(mapped.priority ?? 0);
+      let taken: QuotaState | undefined;
+      if (gate !== undefined && cost > 0) {
+        try {
+          taken = gate.take(cost);
+        } catch (error) {
+          // A refusal of the gate stops the send. A fault of the store of the gate does not: the message goes with no count.
+          if (isQuotaError(error)) return quotaRefusal(gate, error, at);
+        }
+      }
+      const result = await call(request, extractPushoverSent);
+      if (gate !== undefined) noteAnswer(gate, result, taken === undefined ? undefined : { cost, at: taken.at });
       if (!result.ok) return sendFailureOf(result, at);
       // An emergency carries the delivery key as its tag. The receipt keeps the tag, thus a cancel stops each copy of the key.
       const tag = mapped.emergency?.tags?.[0];
@@ -149,7 +187,7 @@ export function createPushoverChannel(options: PushoverChannelOptions): ChannelP
       } catch (error) {
         return { state: "accepted", at, reason: error instanceof Error ? error.message : "The receipt is not valid." };
       }
-      const { result } = await call(request, extractPushoverReceipt);
+      const result = await call(request, extractPushoverReceipt);
       if (!result.ok) return { state: "accepted", at, reason: `The receipt was not read: ${result.errors.join(" ")}` };
       return statusOf(result, at);
     },
@@ -168,9 +206,40 @@ export function createPushoverChannel(options: PushoverChannelOptions): ChannelP
       }
       // A message below priority 2 does not repeat, thus nothing stops.
       if (request === undefined) return;
-      const { result } = await call(request, extractPushoverCancelled);
+      const result = await call(request, extractPushoverCancelled);
       // A refusal tells that Pushover does not know the receipt: it is old, or it is not of this application. Nothing repeats under it.
       if (!result.ok && result.kind !== "refused") throw new Error(`Pushover did not stop the repeats (${result.kind}): ${result.errors.join(" ")}`);
     },
   };
+}
+
+/**
+ * This function gives the refusal of the gate. Pushover refuses each message after an answer with 0
+ * left, or when the window has no unit left. Else the gate keeps the reserve for `life-safety`.
+ */
+function quotaRefusal(gate: QuotaGate, error: QuotaError, at: Instant): SendOutcome {
+  const state = gate.state();
+  const full = state.blockedUntil !== undefined || state.used >= gate.quota.limit;
+  return { ok: false, kind: full ? "rate-limited" : "reserved", message: error.message, retryAfter: Math.max(0, error.resetAt - at) };
+}
+
+/** This function gives the count of an answer of Pushover, as a reading of the gate. */
+function readingOf(result: PushoverSent | PushoverFailure): QuotaReading | undefined {
+  if (result.ok) return result.limits === undefined ? undefined : { remaining: result.limits.remaining, resetAt: result.limits.resetAt };
+  return result.kind === "rate-limited" ? { remaining: 0, ...(result.resetAt === undefined ? {} : { resetAt: result.resetAt }) } : undefined;
+}
+
+/**
+ * This function puts the answer of Pushover into the gate. A message that Pushover refused gives back
+ * its unit. A failed write of the count does not change the outcome of the send, and the next answer
+ * gives the count again.
+ */
+function noteAnswer(gate: QuotaGate, result: PushoverSent | PushoverFailure, taken: { readonly cost: number; readonly at: number | undefined } | undefined): void {
+  try {
+    if (!result.ok && (result.kind === "auth" || result.kind === "refused") && taken?.at !== undefined) gate.giveBack?.(taken.cost, taken.at);
+    const reading = readingOf(result);
+    if (reading !== undefined) gate.note(reading);
+  } catch {
+    // The count of the gate can be low until the next answer. The send has its outcome.
+  }
 }

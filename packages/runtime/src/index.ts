@@ -61,6 +61,8 @@ export interface Options {
   readonly log: { close(): void };
   /** The outlines of the instance. The service stops their refresh and closes their cache in the phase `tear down dependencies`. */
   readonly shapes?: { close(): Promise<void> };
+  /** The store of the counts of the quotas of the channels. The service closes it in the phase `tear down dependencies`. */
+  readonly quotas?: { close(): void };
 }
 
 /**
@@ -80,6 +82,7 @@ export const declare = (options: Options): ServiceBuilder =>
   attachApi(service("runtime"), { port: options.port, loop: options.loop })
     .dependency("log", { system: null, knobs: {}, operations: {} }, { connect: () => undefined, close: () => options.log.close() })
     .dependency("shapes", { system: null, knobs: {}, operations: {} }, { connect: () => undefined, close: () => options.shapes?.close() })
+    .dependency("quotas", { system: null, knobs: {}, operations: {} }, { connect: () => undefined, close: () => options.quotas?.close() })
     .worker("passes", options.loop.worker.knobs, options.loop.worker)
     // A stuck loop fails liveness. Then the supervisor stops the process and starts it again.
     .check(

@@ -11,18 +11,24 @@ import type { Duration, HealthState, Instant, SourceId } from "@mark1russell7/al
 import type { WallClock } from "@mark1russell7/algebra/clock";
 import { errorMessage } from "@mark1russell7/text";
 import { redactSecrets } from "@mark1russell7/text/redact";
-import type { Exchange } from "polite-crawler/api";
+import type { Exchange, QuotaGate } from "polite-crawler/api";
 import type { RefusalKind } from "./events.ts";
 import type { LoopTimes } from "./loop.ts";
 
-/** The record has each kind of `RefusalKind`, thus the list below cannot lose a kind. */
-const REFUSALS: Readonly<Record<RefusalKind, true>> = { auth: true, refused: true, "rate-limited": true };
+/**
+ * The record has each kind of `RefusalKind`, thus the lists below cannot lose a kind. The value tells if
+ * the kind stops each delivery to the person.
+ */
+const REFUSALS: Readonly<Record<RefusalKind, boolean>> = { auth: true, refused: true, "rate-limited": true, reserved: false };
+
+/** The kinds of a refused send. The log keeps a `refused` event for each of them. */
+export const REFUSAL_KINDS = Object.keys(REFUSALS) as readonly RefusalKind[];
 
 /**
- * The kinds of a failed send that stop each delivery to the person until the owner acts. They are the
- * kinds of `RefusalKind`, thus the log keeps a `refused` event for each of them.
+ * The kinds of a refused send that stop each delivery to the person until the owner acts. The kind
+ * `reserved` is not one of them: the channel still sends a `life-safety` message.
  */
-export const UNREACHABLE = Object.keys(REFUSALS) as readonly RefusalKind[];
+export const UNREACHABLE: readonly RefusalKind[] = REFUSAL_KINDS.filter((kind) => REFUSALS[kind]);
 const unreachable: ReadonlySet<string> = new Set(UNREACHABLE);
 
 /** The time between two pings of the same kind. */
@@ -100,7 +106,7 @@ export interface RefusalView {
  * This function gives the refused channels at the time `at` from the state of the log. The hook of the
  * heartbeat starts from them at its first pass, thus a restart does not end the fail of a refused channel.
  *
- * - A refusal counts when its retry is after `at`, and no delivery on its channel came after it in the log.
+ * - A refusal counts when its kind is in `UNREACHABLE` and its retry is after `at`. Also, no delivery on its channel came after it in the log.
  * - The step writes the refusals of a pass after the deliveries of the pass. Thus a send and a refusal in one
  *   pass keep the fail, as in `holdStep`. The order of the log decides, not the times, because a channel can
  *   give a time of acceptance after the time of the refusal.
@@ -111,7 +117,7 @@ export function heldOf(state: RefusalView, at: Instant): HeartbeatState["held"] 
   const held: Record<string, HeldFail> = {};
   for (const refused of Object.values(state.refusals)) {
     const last = (state.delivered[refused.channel] ?? 0) === refused.deliveries;
-    if (last && refused.retryAt > at) hold(held, refused.channel, refused.kind, refused.retryAt);
+    if (last && refused.retryAt > at && unreachable.has(refused.kind)) hold(held, refused.channel, refused.kind, refused.retryAt);
   }
   return held;
 }
@@ -194,8 +200,32 @@ export interface HeartbeatOptions {
    * state of the runtime. The hook starts it one time. The default is no refused channel.
    */
   readonly held?: (at: Instant) => HeartbeatState["held"];
+  /**
+   * This function gives more lines for the body of each ping, for example the state of the quota of a
+   * channel. A line holds no place, no person and no secret.
+   */
+  readonly notes?: (at: Instant) => readonly string[];
   /** The heartbeat gives each failed ping to this function. Its text holds no URL. */
   readonly onError: (message: string) => void;
+}
+
+/** The parts of a quota gate of `polite-crawler/api` that `quotaNote` reads. */
+export type QuotaView = Pick<QuotaGate, "quota" | "state">;
+
+/**
+ * This function gives the line of the state of a quota for the body of a ping. In the reserve, the
+ * channel sends only the highest level until the reset. Thus the check shows the reserve, and the
+ * ping stays `success`.
+ */
+export function quotaNote(channel: string, gate: QuotaView): string {
+  const state = gate.state();
+  const { limit } = gate.quota;
+  const reserve = gate.quota.reserve ?? 0;
+  const until = (time: Instant | undefined): string => (time === undefined ? "" : ` until ${new Date(time).toISOString()}`);
+  if (state.blockedUntil !== undefined) return `${channel}: the provider refuses each message${until(state.blockedUntil)}.`;
+  if (state.used >= limit) return `${channel}: all ${limit} units of the window are used${until(state.resetAt)}.`;
+  if (state.left === 0) return `${channel}: ${state.used} of ${limit} units are used. The channel keeps the last ${reserve} units for life-safety${until(state.resetAt)}.`;
+  return `${channel}: ${state.used} of ${limit} units are used, and ${state.left} are left before the reserve of ${reserve}.`;
 }
 
 /** This function gives the URL of a ping: the ping URL, or the ping URL and `/fail`. A query of the ping URL stays. */
@@ -224,6 +254,15 @@ export function heartbeat(options: HeartbeatOptions): (pass: PassSummary) => voi
   let state = HEARTBEAT_START;
   let started = false;
   let flight = false;
+  // A fault of the notes does not stop the ping. The ping then goes with no note.
+  const notes = (at: Instant): readonly string[] => {
+    try {
+      return options.notes?.(at) ?? [];
+    } catch (error) {
+      options.onError(`The notes of the ping failed. ${redactSecrets(errorMessage(error), [options.url])}`);
+      return [];
+    }
+  };
   // A lost ping does not count. Thus one lost ping does not make the gap of two pings longer.
   const lost = (message: string): void => {
     state = { held: state.held };
@@ -241,7 +280,8 @@ export function heartbeat(options: HeartbeatOptions): (pass: PassSummary) => voi
     const controller = new AbortController();
     const cancel = options.clock.after(limit, () => controller.abort());
     const kind = step.ping.kind;
-    const request = { method: "POST" as const, headers: { "user-agent": options.userAgent, "content-type": "text/plain; charset=utf-8" }, body: step.ping.body, signal: controller.signal };
+    const body = [step.ping.body, ...notes(pass.at)].filter((line) => line !== "").join("\n");
+    const request = { method: "POST" as const, headers: { "user-agent": options.userAgent, "content-type": "text/plain; charset=utf-8" }, body, signal: controller.signal };
     Promise.resolve()
       .then(() => options.fetch(pingUrl(options.url, kind), request))
       .then(

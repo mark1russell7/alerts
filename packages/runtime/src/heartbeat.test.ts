@@ -1,6 +1,8 @@
 import type { ChannelId, PersonId, ReportId, SourceId } from "@mark1russell7/alerts";
+import { PUSHOVER_QUOTA } from "@mark1russell7/alerts-channel-pushover";
 import { fakeWallClock } from "@mark1russell7/algebra/clock";
 import { random, seedsFrom } from "@mark1russell7/rigor-generators";
+import { quotaGate } from "polite-crawler/api";
 import { describe, expect, it } from "vitest";
 import {
   checkOfPingUrl,
@@ -16,6 +18,8 @@ import {
   holdStep,
   pingOf,
   pingUrl,
+  quotaNote,
+  REFUSAL_KINDS,
   UNREACHABLE,
   type HeartbeatFetch,
   type HeartbeatState,
@@ -147,6 +151,14 @@ describe("the steps of the heartbeat", () => {
     expect(pingOf(refused(T0, "refused")).kind).toBe("fail");
   });
 
+  it("gives success to a send in the reserve of a quota, and holds no fail for it", () => {
+    expect(UNREACHABLE).toEqual(["auth", "refused", "rate-limited"]);
+    expect(REFUSAL_KINDS).toEqual([...UNREACHABLE, "reserved"]);
+    expect(holdStep({}, refused(T0, "reserved"))).toEqual({});
+    expect(pingOf(refused(T0, "reserved")).kind).toBe("success");
+    expect(heldOf({ refusals: { a: { channel: "pushover", kind: "reserved", retryAt: T0 + 60 * SECOND, deliveries: 0 } }, delivered: {} }, T0)).toEqual({});
+  });
+
   it("pings again when the wall clock steps back", () => {
     expect(kindsOf([healthy(T0), healthy(T0 - 3600 * SECOND)])).toEqual(["success", "success"]);
   });
@@ -213,7 +225,8 @@ describe("the refused channels of the log", () => {
         const failures = CHANNELS.filter(() => r.chance(0.3)).map((channel) => ({
           call: "send",
           channel,
-          kind: UNREACHABLE[r.int(0, UNREACHABLE.length - 1)]!,
+          // Each kind of a refusal, also `reserved`, which neither way holds.
+          kind: REFUSAL_KINDS[r.int(0, REFUSAL_KINDS.length - 1)]!,
           retryAt: at + r.int(0, 200) * SECOND,
         }));
         const refusedAt = at + r.int(0, 10) * SECOND;
@@ -251,6 +264,27 @@ describe("the refused channels of the log", () => {
         for (const refusal of Object.values(state.refusals)) expect(refusal.retryAt, `seed ${seed}, a restart after pass ${stop}`).toBeGreaterThan(restart);
       }
     }
+  });
+});
+
+describe("the note of a quota", () => {
+  // Midnight in America/Chicago on 1 December.
+  const RESET = Date.UTC(2026, 11, 1, 6);
+  const gateAt = () => quotaGate(PUSHOVER_QUOTA, { key: "pushover:app", now: () => T0 });
+
+  it("gives the units used and left before the reserve, the reserve with its end, and the block of the provider", () => {
+    const gate = gateAt();
+    expect(quotaNote("pushover", gate)).toBe("pushover: 0 of 10000 units are used, and 9000 are left before the reserve of 1000.");
+    gate.note({ remaining: 1_000 });
+    expect(quotaNote("pushover", gate)).toBe(`pushover: 9000 of 10000 units are used. The channel keeps the last 1000 units for life-safety until ${new Date(RESET).toISOString()}.`);
+    gate.note({ remaining: 0, resetAt: RESET });
+    expect(quotaNote("pushover", gate)).toBe(`pushover: the provider refuses each message until ${new Date(RESET).toISOString()}.`);
+  });
+
+  it("gives the end of a window with each unit used", () => {
+    const gate = gateAt();
+    gate.note({ remaining: 0 });
+    expect(quotaNote("pushover", gate)).toMatch(/^pushover: (all 10000 units of the window are used|the provider refuses each message) until 2026-12-01T06:00:00\.000Z\.$/);
   });
 });
 
@@ -441,6 +475,27 @@ describe("the hook of the heartbeat", () => {
     hook(healthy(T0));
     await settle();
     expect(errors).toEqual(["The success ping of the heartbeat got the status 404."]);
+  });
+
+  it("adds the notes to the body of each ping, and a fault of the notes gives an error with no URL and no note", async () => {
+    const clock = fakeWallClock(T0);
+    const server = pings();
+    const errors: string[] = [];
+    let fault = false;
+    const notes = (at: number): readonly string[] => {
+      if (fault) throw new Error(`The store of ${URL_OF_CHECK} failed.`);
+      return [`pushover: a note at ${at}`];
+    };
+    const hook = heartbeat({ url: URL_OF_CHECK, fetch: server.fetch, clock, userAgent: AGENT, notes, onError: (message) => errors.push(message) });
+    hook(healthy(T0));
+    await settle();
+    fault = true;
+    hook(refused(T0 + SECOND));
+    await settle();
+    expect(server.calls.map((call) => call.body)).toEqual([`nws-api: healthy\nipaws: failing\npushover: a note at ${T0}`, "The channel pushover gave the kind auth to a send."]);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toContain("The notes of the ping failed.");
+    expect(errors[0]).not.toContain(URL_OF_CHECK);
   });
 
   it("refuses a ping URL that is not a URL or has no https, and names no URL", () => {

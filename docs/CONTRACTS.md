@@ -297,7 +297,7 @@ The log keeps each copy on a channel that repeats, and its end. Thus a restart d
 
 A write of the `attempt` event that fails throws, and the send does not go.
 
-The log also keeps each refused send. A refused send is a refusal, a bad key or a full quota, in the time limit of the send:
+The log also keeps each refused send. A refused send is a refusal, a bad key, a full quota or a quota in its reserve, in the time limit of the send:
 
 - The `refused` event has the delivery key, the channel, the kind and the retry time.
 - The state keeps the last refusal of each key. A delivery of the key removes it.
@@ -440,6 +440,8 @@ The runtime cannot tell the person that it stopped. A check of Healthchecks.io t
 
 - After each pass with no error, the hook pings the check. A ping of the same kind goes once in each 60 seconds. When the pings stop, Healthchecks.io alerts the owner: the process stopped, the computer stopped, or its network is down.
 - A pass in which a channel gave `auth`, `refused` or `rate-limited` to a send pings `/fail`, because then the system cannot tell the person.
+- A send that a channel gave `reserved` does not ping `/fail`. The channel keeps the last units of its quota for `life-safety`, thus it still tells the person of the highest level.
+- The body of each ping also gives the state of the quota of each channel with a quota.
 - The fail of a channel holds until a send on the channel goes, or until the pass of the retry has no refusal on it. The delivery step sends a failed call again at the first pass at or after its `retryAt`. Thus the check does not go down and up at each retry.
 - The fail of a channel holds across a restart. At its first pass, the hook starts from `heldOf` of the log: each refusal with no later delivery on its channel in the log, with a retry after that pass. The order of the log decides, not the times. Thus a restart does not ping `success` while the channel refuses.
 - The body of a success ping gives the state of each source. The body of a fail ping gives the channel and the kind. No body holds a place, a person or the text of a failure.

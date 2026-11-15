@@ -4,10 +4,10 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fakeClock, type FakeClock, type WallClock } from "@mark1russell7/algebra/clock";
 import { CONFIG_FORMAT, matchPlaces, parseConfig, type AlertConfig, type Watch, type ChannelId, type EscalationPolicy, type PersonId, type PlaceId, type SecretLookup, type SourceId } from "@mark1russell7/alerts";
-import { PUSHOVER_TIMEOUT_MS, type PushoverChannelOptions } from "@mark1russell7/alerts-channel-pushover";
+import { PUSHOVER_QUOTA, PUSHOVER_TIMEOUT_MS, type PushoverChannelOptions } from "@mark1russell7/alerts-channel-pushover";
 import { memoryCache, type ShapeCache } from "@mark1russell7/alerts-shapes-nws";
 import { CANARY_PATH, createNwsSource } from "@mark1russell7/alerts-source-nws-api";
-import type { Exchange, Transport } from "polite-crawler/api";
+import { quotaGate, type Exchange, type Transport } from "polite-crawler/api";
 import { DEFAULT_POLICY } from "polite-crawler/politeness";
 import { afterEach, describe, expect, it } from "vitest";
 import { DAEMON_CHECK, INSTANCE_CHANNELS, INSTANCE_CHECK, INSTANCE_SOURCES, INSTANCE_TIMES, instanceProblems, openInstance, PING_URL_KEY, SOURCE_POLICY, sourcePace, USER_AGENT_NAME, type Instance, type InstanceOptions } from "./instance.ts";
@@ -183,6 +183,23 @@ describe("openInstance", () => {
     expect(pass.delivery?.sent).toHaveLength(1);
     // The source asks for the alerts of the state. The match to the county is local.
     expect(net.exchanges.map((exchange) => exchange.url)).toContain("https://api.weather.gov/alerts/active?area=TX");
+  });
+
+  it("gives the gate of the month to the Pushover channel: a send counts, and the reserve stops a send below life-safety", async () => {
+    const gate = quotaGate(PUSHOVER_QUOTA, { key: "pushover:app", now: () => T0 });
+    const counted = await open(undefined, undefined, undefined, undefined, { pushoverQuota: gate });
+    await finish(counted.clock, counted.instance.runtime.pass());
+    expect(counted.server.calls).toHaveLength(1);
+    const priority = counted.server.calls[0]?.fields["priority"];
+    expect(priority).not.toBe("2");
+    expect(gate.state().used).toBe(1);
+
+    const full = quotaGate(PUSHOVER_QUOTA, { key: "pushover:app", now: () => T0 });
+    full.note({ remaining: 1_000 });
+    const held = await open(undefined, undefined, undefined, undefined, { pushoverQuota: full });
+    const pass = await finish(held.clock, held.instance.runtime.pass());
+    expect(held.server.calls).toEqual([]);
+    expect(pass.delivery?.failures.map((failure) => failure.kind)).toEqual(["reserved"]);
   });
 
   it("sends the warning by the county code to a place in the county but out of the polygon", async () => {
