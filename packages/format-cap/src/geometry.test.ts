@@ -1,13 +1,9 @@
-import type { MapProblem, Position } from "@mark1russell7/alerts";
+import { Problems, type Position } from "@mark1russell7/alerts";
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import { capCircle, capPolygon, capPosition } from "./geometry.ts";
 
-/** A problem list for the tests. */
-function sink(): { readonly list: MapProblem[]; add(path: string, message: string, fatal?: boolean): void } {
-  const list: MapProblem[] = [];
-  return { list, add: (path, message, fatal = false) => list.push({ path, message, fatal }) };
-}
+const sink = (): Problems => new Problems();
 
 /** This function writes a ring as a CAP polygon: `lat,lon` with spaces between the points. */
 const capText = (ring: readonly Position[]): string => ring.map(([lon, lat]) => `${String(lat)},${String(lon)}`).join(" ");
@@ -53,13 +49,14 @@ describe("the areas of a CAP message", () => {
     const area = capPolygon("1,1 1,2 2,2 2,1", "p", problems);
     expect(area).toEqual({ type: "polygon", rings: [[[1, 1], [2, 1], [2, 2], [1, 2], [1, 1]]] });
     expect(problems.list).toEqual([{ path: "p", message: "the polygon does not close: the map adds its first point at the end", fatal: false }]);
+    expect(problems.lossy).toBe(0);
   });
 
   it("gives no area for a bad point or for fewer than 4 points", () => {
     for (const text of ["1,1 1,2 1,1", "1,1 1,2 x,y 1,1", "", "1,1 200,2 2,2 1,1"]) {
       const problems = sink();
       expect(capPolygon(text, "p", problems), text).toBeUndefined();
-      expect(problems.list.length, text).toBeGreaterThan(0);
+      expect(problems.lossy, text).toBeGreaterThan(0);
     }
   });
 
@@ -72,7 +69,7 @@ describe("the areas of a CAP message", () => {
     for (const text of ["32.9,-97.0", "32.9,-97.0 -1", "32.9,-97.0 ten", "100,0 5"]) {
       const problems = sink();
       expect(capCircle(text, "c", problems), text).toBeUndefined();
-      expect(problems.list).toHaveLength(1);
+      expect([problems.list.length, problems.lossy]).toEqual([1, 1]);
     }
   });
 });

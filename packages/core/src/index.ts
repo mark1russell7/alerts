@@ -2,7 +2,8 @@
  * The signal core of the alert system. It holds the contracts of the event, the source and the
  * channel. It also holds the id functions, the merge, the first assessment and the escalation. It
  * holds the health of the sources, the lateness across sources, the coverage and the system reports.
- * The map functions put their problems in its collector.
+ *
+ * It holds the taxonomy of the kinds. The map functions put their problems in its collector.
  * `docs/CONTRACTS.md` explains them.
  */
 export * from "./contracts.ts";
@@ -10,8 +11,11 @@ export * from "./ids.ts";
 export * from "./merge.ts";
 export * from "./assess.ts";
 export * from "./escalation.ts";
+export * from "./delivery.ts";
+export * from "./config.ts";
 export * from "./health.ts";
 export * from "./coverage.ts";
 export * from "./lateness.ts";
 export * from "./problems.ts";
 export * from "./system-reports.ts";
+export * from "./taxonomy.ts";

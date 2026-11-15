@@ -247,7 +247,8 @@ function healthCondition(health: SourceHealth, title: string): Condition {
 function lateCondition(entry: Lateness, titles: ReadonlyMap<SourceId, string>): Condition {
   const to = titles.get(entry.to) ?? entry.to;
   const from = titles.get(entry.from) ?? entry.from;
-  const limit = entry.limit ?? 0;
+  const delay = entry.limit?.delay ?? 0;
+  const misses = entry.limit?.misses ?? 1;
   return {
     // Each new miss is a new fact, so it gives an update.
     facts: { expectation: entry.expectation, from: entry.from, to: entry.to, missed: entry.missed },
@@ -259,8 +260,8 @@ function lateCondition(entry: Lateness, titles: ReadonlyMap<SourceId, string>): 
     areas: [],
     about: [{ system: SOURCE_SUBJECT, id: entry.to, label: to }],
     headline: `${to} is late: it did not carry the reports of ${from} in time.`,
-    description: `Reports with no copy: ${entry.missed.length}. The limit of the delay is ${Math.round(limit / 1000)} seconds, from the measured delays.`,
-    parameters: { expectation: [entry.expectation], missed: entry.missed, limit: [String(limit)] },
+    description: `Reports with no copy: ${entry.missed.length}. The limit of the delay is ${Math.round(delay / 1000)} seconds, and the limit of the misses is ${misses}, from the measured delays and misses.`,
+    parameters: { expectation: [entry.expectation], missed: entry.missed, delay: [String(delay)], misses: [String(misses)] },
   };
 }
 

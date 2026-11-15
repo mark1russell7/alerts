@@ -1,10 +1,11 @@
 import { readdirSync, readFileSync } from "node:fs";
-import type { Observation, ObservationId, Report } from "@mark1russell7/alerts";
+import type { MapProblem, Observation, ObservationId, Report } from "@mark1russell7/alerts";
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import { NWS_DESCRIPTOR } from "./descriptor.ts";
 import { mapObservation, ORIGIN, SOURCE_ID } from "./map.ts";
 import { isSameCode, isUgcCode, mainVtec, parseVtec, PHENOMENA, vtecKey, type Vtec } from "@mark1russell7/alerts-format-nws";
+import { CAP_CATEGORIES, CAP_CERTAINTY, CAP_NOT_ALERTS, CAP_OPERATIONS, CAP_RESPONSES, CAP_SEVERITY, CAP_STATUS, CAP_URGENCY } from "@mark1russell7/alerts-format-cap";
 
 const FIXTURES = new URL("../fixtures/", import.meta.url);
 const NAMES = readdirSync(FIXTURES).filter((name) => name.endsWith(".json"));
@@ -21,7 +22,7 @@ const observe = (body: string): Observation => ({
   transport: { latency: 0 },
 });
 
-const mapOne = (body: unknown): { report: Report | undefined; problems: readonly { path: string; message: string; fatal: boolean }[] } => {
+const mapOne = (body: unknown): { report: Report | undefined; problems: readonly MapProblem[] } => {
   const result = mapObservation(observe(typeof body === "string" ? body : JSON.stringify(body)));
   return { report: result.reports[0], problems: result.problems };
 };
@@ -137,6 +138,44 @@ describe("the map of broken alerts", () => {
     expect(report?.status).toBe("actual");
     expect(problems.map((problem) => problem.path).sort()).toEqual(["properties.colour", "properties.severity", "properties.status"]);
     expect(problems.every((problem) => !problem.fatal)).toBe(true);
+    // The fallbacks lose a value of the message. The unknown field is only a note: the report is whole.
+    const lossy = problems.filter((problem) => problem.lossy === true).map((problem) => problem.path);
+    expect(lossy.sort()).toEqual(["properties.severity", "properties.status"]);
+  });
+
+  it.each<[string, Record<string, unknown>, string, string]>([
+    ["an absent severity", { severity: undefined }, "properties.severity", "the value is absent: the map uses unknown"],
+    ["an absent urgency", { urgency: null }, "properties.urgency", "the value is absent: the map uses unknown"],
+    ["an absent certainty", { certainty: " " }, "properties.certainty", "the value is absent: the map uses unknown"],
+    ["an absent expiry time", { expires: undefined }, "properties.expires", "the alert has no expiry time"],
+    ["an absent event name", { event: undefined }, "properties.event", "the alert has no event name"],
+    ["a VTEC event with no VTEC", { parameters: {} }, "properties.parameters.VTEC", 'the alert has no P-VTEC string, and the event "FLW" has one'],
+    ["parameters that are not an object", { parameters: "x" }, "properties.parameters", "the value is a string, not an object"],
+    ["event codes that are not an object", { eventCode: ["FLW"] }, "properties.eventCode", "the value is a list, not an object"],
+    ["references that are not a list", { references: "x" }, "properties.references", "the value is a string, not a list"],
+    ["a reference with no identifier", { references: [{ sender: "w-nws.webmaster@noaa.gov" }] }, "properties.references[0]", "the reference has no identifier"],
+    ["a description that is not a text", { description: 7 }, "properties.description", "the value is a number, not a text"],
+    ["a category list with no CAP category", { category: [] }, "properties.category", "the alert has no CAP category: the map uses met"],
+    ["a response that is not a text", { response: [true] }, "properties.response[0]", "the item is a boolean, not a text"],
+  ])("gives a lossy problem for %s", (_name, change, path, message) => {
+    const { report, problems } = mapOne(withProperties(change));
+    expect(report).toBeDefined();
+    expect(problems).toContainEqual({ path, message, fatal: false, lossy: true });
+  });
+
+  it("gives a lossy problem for an expired reference that is not sender, identifier and sent", () => {
+    const parameters = { ...base.properties.parameters, expiredReferences: ["w-nws.webmaster@noaa.gov,urn:oid:2.49.0.1.840.0.1,2026-11-14T10:00:00-06:00 broken"] };
+    const { report, problems } = mapOne(withProperties({ parameters }));
+    expect(report?.references).toContain("urn:oid:2.49.0.1.840.0.1");
+    expect(problems).toEqual([
+      { path: "properties.parameters.expiredReferences", message: 'the reference "broken" is not "sender,identifier,sent"', fatal: false, lossy: true },
+    ]);
+  });
+
+  it("gives no problem for the fields that the NWS leaves empty", () => {
+    const { report, problems } = mapOne(withProperties({ onset: null, ends: null, headline: null, instruction: null, references: [], response: undefined }));
+    expect(report).toBeDefined();
+    expect(problems).toEqual([]);
   });
 
   it("keeps the label of an unknown event and says so", () => {
@@ -144,7 +183,7 @@ describe("the map of broken alerts", () => {
       withProperties({ event: "Volcanic Haze Notice", eventCode: { SAME: ["NWS"], NationalWeatherService: ["VHN"] }, parameters: {} }),
     );
     expect(report?.kind).toEqual({ code: "other.unknown", label: "Volcanic Haze Notice" });
-    expect(problems).toContainEqual({ path: "properties.event", message: 'the kind tables do not know the event "Volcanic Haze Notice"', fatal: false });
+    expect(problems).toContainEqual({ path: "properties.event", message: 'the kind tables do not know the event "Volcanic Haze Notice"', fatal: false, lossy: true });
   });
 
   it("closes an open ring, and drops a polygon with a bad outside ring", () => {
@@ -179,7 +218,7 @@ describe("the region codes of an alert", () => {
     const { geocode: _geocode, ...properties } = base.properties;
     expect(mapOne({ ...base, properties })).toEqual({
       report: undefined,
-      problems: [{ path: "properties.geocode", message: "the alert has no geocode", fatal: false }, NO_CODE],
+      problems: [{ path: "properties.geocode", message: "the alert has no geocode", fatal: false, lossy: true }, NO_CODE],
     });
   });
 
@@ -203,8 +242,8 @@ describe("the region codes of an alert", () => {
       { type: "code", system: "same", code: "048019" },
     ]);
     expect(problems).toEqual([
-      { path: "properties.geocode.UGC[1]", message: 'the value "TX-Z-124" is not a UGC code', fatal: false },
-      { path: "properties.geocode.UGC[2]", message: "the value 7 is not a UGC code", fatal: false },
+      { path: "properties.geocode.UGC[1]", message: 'the value "TX-Z-124" is not a UGC code', fatal: false, lossy: true },
+      { path: "properties.geocode.UGC[2]", message: "the value 7 is not a UGC code", fatal: false, lossy: true },
     ]);
   });
 
@@ -256,6 +295,69 @@ describe("the map function", () => {
         const changed = { ...source, properties: { ...source.properties, [field]: value } };
         const result = mapObservation(observe(JSON.stringify(changed)));
         return result.reports.length <= 1 && result.problems.every((problem) => typeof problem.path === "string");
+      }),
+    );
+  });
+
+  // The fields that the report holds. A field of the message that the map does not read is not here.
+  const HELD = [
+    "@id", "id", "areaDesc", "geocode", "references", "sent", "effective", "onset", "expires", "ends", "status", "messageType",
+    "category", "severity", "certainty", "urgency", "event", "sender", "senderName", "headline", "description", "instruction",
+    "response", "note", "parameters", "scope", "code", "language", "web", "eventCode",
+  ];
+  const OBJECTS = new Set(["geocode", "parameters", "eventCode"]);
+  const loses = (problems: readonly MapProblem[], field: string): boolean =>
+    problems.some((problem) => (problem.fatal || problem.lossy === true) && problem.path.startsWith(`properties.${field}`));
+  const withField = (name: string, field: string, value: unknown): unknown => {
+    const source = feature(name);
+    return { ...source, properties: { ...source.properties, [field]: value } };
+  };
+
+  it("gives a fatal or a lossy problem when a field that the report holds has a value of the wrong JSON type", () => {
+    const scalar = fc.oneof(fc.integer(), fc.double({ noNaN: true }), fc.boolean());
+    const wrong = (field: string): fc.Arbitrary<unknown> =>
+      OBJECTS.has(field)
+        ? fc.oneof(scalar, fc.string(), fc.array(fc.jsonValue(), { minLength: 1 }))
+        : fc.oneof(scalar, fc.dictionary(fc.string(), fc.jsonValue()), fc.array(scalar, { minLength: 1 }));
+    const change = fc.tuple(fc.constantFrom(...NAMES), fc.constantFrom(...HELD)).chain(([name, field]) => fc.tuple(fc.constant(name), fc.constant(field), wrong(field)));
+    fc.assert(
+      fc.property(change, ([name, field, value]) => {
+        const { problems } = mapOne(withField(name, field, value));
+        expect(loses(problems, field), `${name} ${field} ${JSON.stringify(value)}`).toBe(true);
+      }),
+    );
+  });
+
+  it("gives a lossy problem when a CAP value of a recorded alert is not a CAP value", () => {
+    const sets: Record<string, ReadonlySet<string>> = {
+      status: CAP_STATUS,
+      messageType: new Set([...CAP_OPERATIONS, ...CAP_NOT_ALERTS]),
+      severity: CAP_SEVERITY,
+      urgency: CAP_URGENCY,
+      certainty: CAP_CERTAINTY,
+      category: CAP_CATEGORIES,
+      response: CAP_RESPONSES,
+    };
+    const change = fc
+      .tuple(fc.constantFrom(...NAMES), fc.constantFrom(...Object.keys(sets)))
+      .chain(([name, field]) => fc.tuple(fc.constant(name), fc.constant(field), fc.string().filter((value) => !sets[field]!.has(value.trim().toLowerCase()))));
+    fc.assert(
+      fc.property(change, ([name, field, value]) => {
+        const { report, problems } = mapOne(withField(name, field, value));
+        expect(report, `${name} ${field} ${JSON.stringify(value)}`).toBeDefined();
+        expect(problems.some((problem) => problem.lossy === true && problem.path === `properties.${field}`), `${name} ${field} ${JSON.stringify(value)}`).toBe(true);
+      }),
+    );
+  });
+
+  it("gives the same report and only a note for a field that the map does not know", () => {
+    const change = fc.tuple(fc.constantFrom(...NAMES), fc.string().map((name) => `x-${name}`), fc.jsonValue());
+    fc.assert(
+      fc.property(change, ([name, field, value]) => {
+        const before = mapOne(feature(name)).report;
+        const after = mapOne(withField(name, field, value));
+        expect(after.problems).toEqual([{ path: `properties.${field}`, message: "the map function does not know this field", fatal: false }]);
+        expect({ ...after.report, observation: undefined }).toEqual({ ...before, observation: undefined });
       }),
     );
   });

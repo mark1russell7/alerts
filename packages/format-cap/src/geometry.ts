@@ -30,8 +30,8 @@ const samePosition = (a: Position, b: Position): boolean => a[0] === b[0] && a[1
 
 /**
  * This function reads a CAP polygon: points with spaces between them. CAP 1.2 asks for 4 points or more,
- * and the last point is the first point. A ring that does not close is a problem, and the function
- * closes it. A bad point, or fewer than 4 points, is a problem, and the function gives no area.
+ * and the last point is the first point. A ring that does not close is a note, and the function closes
+ * it. A bad point, or fewer than 4 points, is a lossy problem, and the function gives no area.
  */
 export function capPolygon(text: string, path: string, problems: ProblemSink): Area | undefined {
   const ring: Position[] = [];
@@ -47,7 +47,7 @@ export function capPolygon(text: string, path: string, problems: ProblemSink): A
   const first = ring[0];
   const last = ring[ring.length - 1];
   if (first !== undefined && last !== undefined && !samePosition(first, last)) {
-    problems.add(path, "the polygon does not close: the map adds its first point at the end");
+    problems.add(path, "the polygon does not close: the map adds its first point at the end", "note");
     ring.push(first);
   }
   if (ring.length < 4) {

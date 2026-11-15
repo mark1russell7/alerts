@@ -1,14 +1,17 @@
+import { categoryOf, knownKind, LIFE_SAFETY_KINDS, hasKind, UNKNOWN_KIND, unknownKinds } from "@mark1russell7/alerts";
+import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import {
-  categoryOf,
+  categoryOf as movedCategoryOf,
   EVENT_CODES,
   fromEventCode,
   fromEventName,
   fromPhenomenon,
+  hasVtec,
+  NAME_ALIASES,
   PHENOMENA,
   resolveKind,
   SIGNIFICANCE,
-  UNKNOWN_KIND,
 } from "./kinds.ts";
 import { parseVtec, type Vtec } from "./vtec.ts";
 
@@ -18,6 +21,30 @@ describe("the kind tables", () => {
       expect(categoryOf(hazard.code), hazard.code).not.toBe("other");
       expect(hazard.code).toMatch(/^[a-z]+(\.[a-z0-9-]+)+$/);
     }
+  });
+
+  // The gate of the taxonomy: a code with a typo does not match the life-safety class.
+  const tableCodes = [...Object.values(PHENOMENA), ...Object.values(EVENT_CODES), ...Object.values(NAME_ALIASES)].map((hazard) => hazard.code);
+
+  it("give only codes of the taxonomy of the core", () => {
+    expect(unknownKinds(tableCodes)).toEqual([]);
+    expect(knownKind(UNKNOWN_KIND)).toBe(true);
+  });
+
+  it("give a code of the taxonomy for each input, also for an input that no table knows", () => {
+    const codes = [...Object.keys(EVENT_CODES), ...Object.keys(PHENOMENA).flatMap((phenomenon) => Object.keys(SIGNIFICANCE).map((letter) => phenomenon + letter))];
+    const names = [...Object.keys(NAME_ALIASES), ...Object.values(EVENT_CODES).map((event) => event.label)];
+    const text = (known: readonly string[]): fc.Arbitrary<string> => fc.oneof(fc.constantFrom(...known), fc.string());
+    const facts = fc.record({ nwsCode: text(codes), sameCode: text([...codes, "NWS"]), name: text(names) }, { requiredKeys: [] });
+    fc.assert(fc.property(facts, (input) => knownKind(resolveKind(input).kind.code)));
+  });
+
+  it("keep the moved categoryOf as the function of the core", () => {
+    expect(movedCategoryOf).toBe(categoryOf);
+  });
+
+  it("reach each kind of the life-safety class", () => {
+    for (const prefix of LIFE_SAFETY_KINDS) expect(tableCodes.filter((code) => hasKind([prefix], code)), prefix).not.toEqual([]);
   });
 
   it("calculate a code of phenomenon and significance", () => {
@@ -68,5 +95,28 @@ describe("resolveKind", () => {
   it("keeps the name of an unknown event and says so", () => {
     expect(resolveKind({ name: "Volcanic Haze Notice" })).toEqual({ kind: { code: UNKNOWN_KIND, label: "Volcanic Haze Notice" }, known: false });
     expect(resolveKind({})).toEqual({ kind: { code: UNKNOWN_KIND, label: "Unknown event" }, known: false });
+  });
+});
+
+describe("hasVtec", () => {
+  it("is true for the code of each phenomenon and significance, in any case", () => {
+    for (const [phenomenon, significance] of [["BZ", "W"], ["TO", "W"], ["FF", "W"], ["SC", "Y"], ["CF", "S"], ["HW", "A"]] as const) {
+      expect(hasVtec(`${phenomenon}${significance}`)).toBe(true);
+      expect(hasVtec(` ${phenomenon.toLowerCase()}${significance.toLowerCase()} `)).toBe(true);
+    }
+  });
+
+  it("is false for the outlook, the civil messages, the tests and the statements with no VTEC", () => {
+    for (const code of ["HWO", "FRW", "LEW", "SPS", "TST", "ADR", "EAN", "CDW", "EVI", "NWS", "", "BZWX"]) expect(hasVtec(code)).toBe(false);
+  });
+
+  it("agrees with fromPhenomenon for each pair of the tables", () => {
+    for (const phenomenon of Object.keys(PHENOMENA)) {
+      for (const significance of Object.keys(SIGNIFICANCE)) {
+        const code = `${phenomenon}${significance}`;
+        if (["HWO", "FRW", "LEW"].includes(code)) continue;
+        expect(hasVtec(code)).toBe(code.length === 3);
+      }
+    }
   });
 });

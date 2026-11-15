@@ -1,0 +1,31 @@
+/**
+ * The descriptor of the IPAWS source: the facts that the core uses for the schedule, the health
+ * and the coverage.
+ */
+
+import type { Area, SourceDescriptor } from "@mark1russell7/alerts";
+import { KIND_PREFIXES } from "@mark1russell7/alerts-format-nws";
+import { ORIGINS, SOURCE_ID } from "./map.ts";
+
+/** The countries and territories of IPAWS, as ISO 3166 codes. */
+const COVERAGE: readonly Area[] = ["US", "PR", "GU", "AS", "VI", "MP"].map((code) => ({ type: "code", system: "iso3166", code }));
+
+/**
+ * The descriptor of the IPAWS source. The source has no canary: the feed has no keepalive message,
+ * and a quiet feed is normal. Gaps of 12 hours with no alert occur. The lateness of the NWS API
+ * source against this source examines its content.
+ */
+export const IPAWS_DESCRIPTOR: SourceDescriptor = {
+  id: SOURCE_ID,
+  title: "FEMA IPAWS public alert feed (IPAWS-OPEN)",
+  origins: [ORIGINS.nws, ORIGINS.authority],
+  // The feed answers through the Cloudflare network (apps.fema.gov)
+  dependsOn: ["provider:fema-ipaws", "cdn:cloudflare"],
+  uses: ["internet", "power"],
+  kinds: KIND_PREFIXES,
+  coverage: COVERAGE,
+  transport: "poll",
+  interval: 60_000,
+  slowAfter: 10_000,
+  auth: "none",
+};

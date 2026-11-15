@@ -6,7 +6,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import type { FetchOutcome, PlaceId, Watch } from "@mark1russell7/alerts";
-import { CANARY_PATH, createNwsFetch } from "@mark1russell7/alerts-source-nws-api";
+import { CANARY_PATH, createNwsFetch, WEA_PATH } from "@mark1russell7/alerts-source-nws-api";
 import { splitBytes } from "@mark1russell7/rigor-proxy";
 import { type Framing, type ScriptedRequest, type ScriptedServer, startScriptedServer } from "@mark1russell7/rigor-testkit/http";
 import { fetchTransport } from "polite-crawler/api";
@@ -21,6 +21,7 @@ export const BODY_PARTS = 4;
 
 const USER_AGENT = "alerts-testkit/0 (fault suite)";
 const CONTENT_TYPE = { "content-type": "application/geo+json" };
+const EMPTY: Uint8Array = new TextEncoder().encode(JSON.stringify({ type: "FeatureCollection", features: [] }));
 
 /** The result of one fetch, with no body. */
 export type OutcomeSummary =
@@ -35,7 +36,10 @@ export interface CaseBodies {
   readonly canary: Uint8Array;
   /** The count of the features of the main body. */
   readonly features: number;
-  /** The count of the observations of a whole fetch: the features of the main body and of the canary body. */
+  /**
+   * The count of the observations of a whole fetch: the different features of the main body and of the canary body. The
+   * fetch keeps one observation of a feature in two answers, and the keepalive fixture is in both bodies.
+   */
   readonly observations: number;
 }
 
@@ -62,11 +66,12 @@ export function caseBodies(options: BodyOptions = {}): CaseBodies {
     sent === undefined ? feature : { ...(feature as object), properties: { ...(feature as { properties: object }).properties, sent } };
   const canary = names.filter((name) => name.includes("keepalive")).map((name) => fresh(read(name)));
   const encode = (value: unknown): Uint8Array => new TextEncoder().encode(JSON.stringify(value));
+  const different = new Set([...features, ...canary].map((feature) => JSON.stringify(feature)));
   return {
     main: encode({ type: "FeatureCollection", features }),
     canary: encode({ type: "FeatureCollection", features: canary }),
     features: features.length,
-    observations: features.length + canary.length,
+    observations: different.size,
   };
 }
 
@@ -114,11 +119,15 @@ export async function fetchOnce(baseUrl: string, limits: FetchLimits): Promise<O
   return "thrown" in result ? { ok: false, kind: "thrown", message: result.thrown } : summaryOf(result.outcome);
 }
 
-/** This function starts the scripted server of a framing. The main reply has `BODY_PARTS` parts. The canary reply has one part. */
+/**
+ * This function starts the scripted server of a framing. The main reply has `BODY_PARTS` parts. The reply of the national WEA
+ * query is an empty collection, and the canary reply has one part. So a whole fetch has the three queries of production.
+ */
 export function startNwsServer(bodies: CaseBodies, framing: Framing): Promise<ScriptedServer> {
   return startScriptedServer({
     routes: [
       { path: MAIN_PATH, replies: [{ fields: CONTENT_TYPE, body: splitBytes(bodies.main, BODY_PARTS), framing }] },
+      { path: WEA_PATH, replies: [{ fields: CONTENT_TYPE, body: EMPTY }] },
       { path: CANARY_PATH, replies: [{ fields: CONTENT_TYPE, body: bodies.canary }] },
     ],
   });

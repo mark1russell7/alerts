@@ -19,7 +19,11 @@ export interface ObservationIdInput {
   readonly source: SourceId;
   readonly contentType: string;
   readonly body: string;
-  /** The URL of the request. The `map` function of an adapter can read it, so it is part of the content. */
+  /**
+   * The part of the URL of the request that the `map` function of the adapter reads. The `map` function
+   * can read the URL, so it is part of the content. A part that `map` does not read, for example the time
+   * of a poll, is not in it. Then a poll with no change gives the same id.
+   */
   readonly url?: string;
 }
 

@@ -60,7 +60,7 @@ export const CAP_CATEGORIES: ReadonlySet<string> = new Set<Category>([
  */
 const ISO_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})$/;
 
-/** This function reads a time of a message. An absent time gives `undefined`, and a bad time is a problem. */
+/** This function reads a time of a message. An absent time gives `undefined`, and a bad time is a lossy problem. */
 export function capTime(value: unknown, path: string, problems: ProblemSink): Instant | undefined {
   if (value === null || value === undefined) return undefined;
   if (typeof value !== "string" || !ISO_TIME.test(value) || Number.isNaN(Date.parse(value))) {
@@ -71,14 +71,15 @@ export function capTime(value: unknown, path: string, problems: ProblemSink): In
 }
 
 /**
- * This function reads one value of a CAP list of values, in lower case. An unknown value is a problem,
- * and the function gives the fallback. An absent value is a problem only if the fallback is not `unknown`.
+ * This function reads one value of a CAP list of values, in lower case. In CAP 1.2, each element of
+ * these lists is necessary. So an unknown value and an absent value are lossy problems, and the function
+ * gives the fallback.
  */
 export function capValue<T extends string>(value: unknown, allowed: ReadonlySet<string>, fallback: T, path: string, problems: ProblemSink): T {
   const text = typeof value === "string" ? value.trim().toLowerCase() : undefined;
   if (text !== undefined && text !== "" && allowed.has(text)) return text as T;
   if (value !== null && value !== undefined && text !== "") problems.add(path, `the value ${JSON.stringify(value)} is not known: the map uses ${fallback}`);
-  else if (fallback !== "unknown") problems.add(path, `the value is absent: the map uses ${fallback}`);
+  else problems.add(path, `the value is absent: the map uses ${fallback}`);
   return fallback;
 }
 

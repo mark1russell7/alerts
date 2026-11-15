@@ -306,6 +306,26 @@ describe("one pass of the runtime", () => {
     log.close();
   });
 
+  it("counts the lossy problems of a fetch, and not the notes", async () => {
+    const seen = [observation(API, "w1", T0, { key: "w1", issued: T0 }), observation(API, "w2", T0, { key: "w2", issued: T0 })];
+    const source: SourceProcedures = {
+      describe: () => descriptor(API, MINUTE),
+      fetch: async () => ({ ok: true, observations: seen, complete: true }),
+      map: ({ observation: one }) => ({
+        ...map({ observation: one }),
+        problems: [
+          { path: "properties.severity", message: "an unknown value", fatal: false, lossy: true },
+          { path: "properties.colour", message: "an unknown field", fatal: false },
+        ],
+      }),
+    };
+    const { runtime, log } = open([source]);
+    await runtime.pass();
+    const event = [...log.read()].find((entry) => entry.type === "fetch");
+    expect(event?.type === "fetch" ? [event.record.fatal, event.record.lossy, event.problems.length] : undefined).toEqual([0, 2, 4]);
+    log.close();
+  });
+
   it("keeps the state of the log when a write fails, and does the work again in the next pass", async () => {
     const clock = fakeClock(T0);
     const inner = openRuntimeLog(":memory:");

@@ -8,9 +8,8 @@ import {
   advanceHealth,
   carriages,
   coverage,
-  delayLimit,
-  delaysOf,
   incidents,
+  lateLimits,
   lateness,
   lateSources,
   startHealth,
@@ -38,7 +37,7 @@ export interface ViewConfig extends FoldContext {
   readonly kinds: readonly string[];
   /** The sources that carry the reports of other sources. */
   readonly expectations: readonly Expectation[];
-  /** The quantile and the level of the limit of each expectation. The limit comes from the delays in the log. */
+  /** The quantile and the level of the two limits of each expectation: the delay and the count of misses. They come from the log. */
   readonly delay: DelayLimitOptions;
   readonly coverage?: CoveragePolicy;
 }
@@ -62,7 +61,7 @@ export function systemView(state: RuntimeState, config: ViewConfig, at: Instant)
   const health = steps.map((step) => step.health);
   const found = incidents(state.merge, at);
   const checks = carriages(state.merge, found, config.expectations);
-  const limits = Object.fromEntries(config.expectations.map((expectation) => [expectation.id, delayLimit(delaysOf(checks, expectation.id), config.delay)]));
+  const limits = lateLimits(checks, config.expectations, at, config.delay);
   const late = lateness(checks, config.expectations, limits, at);
   const covered = coverage({ sources: config.sources, health, late: lateSources(late), places: config.places, kinds: config.kinds }, config.coverage);
   const step = systemReports(state.lines, { sources: config.sources, health, coverage: covered, threats: threats(found, config.places), lateness: late }, at);

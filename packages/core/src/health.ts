@@ -53,12 +53,12 @@ export const HEALTH_MACHINE: Machine = {
     slow: { note: "the last fetch passed in slowAfter or more" },
     failing: { note: "fail_after fetches in a row failed, no fetch passed for stale_after, or the canary failed" },
     silent: { note: "no fresh observation for max_quiet, for a source where quiet is not normal" },
-    changed: { note: "the map gave fatal problems for the last passed fetch" },
+    changed: { note: "the map gave fatal or lossy problems for the last passed fetch" },
   },
   events: {
-    "app.fetch-passed": { kind: "app", note: "a fetch passed in less than slowAfter, with no fatal problem of the map" },
-    "app.fetch-slow": { kind: "app", note: "a fetch passed in slowAfter or more, with no fatal problem of the map" },
-    "app.fetch-changed": { kind: "app", note: "a fetch passed, and the map gave fatal problems" },
+    "app.fetch-passed": { kind: "app", note: "a fetch passed in less than slowAfter, with no fatal or lossy problem of the map" },
+    "app.fetch-slow": { kind: "app", note: "a fetch passed in slowAfter or more, with no fatal or lossy problem of the map" },
+    "app.fetch-changed": { kind: "app", note: "a fetch passed, and the map gave fatal or lossy problems" },
     "app.fetch-failed": { kind: "app", note: "a fetch failed" },
     "app.canary-passed": { kind: "app", note: "the canary check of a fetch passed" },
     "app.canary-failed": { kind: "app", note: "the canary check of a fetch failed" },
@@ -122,6 +122,8 @@ export interface PassedFetch {
   readonly at: Instant;
   readonly took: Duration;
   readonly fatal: number;
+  /** The count of lossy problems. An absent count is 0. */
+  readonly lossy?: number;
 }
 
 /** The state of the fold of the health. It is data, so the runtime can keep it in its log. */
@@ -171,10 +173,11 @@ export function observeFetch(track: HealthTrack, record: FetchRecord, descriptor
     next = { ...next, failures: next.failures + 1, lastFailure: { at: record.at, failure: record.failure } };
     next = change(next, HEALTH_EVENTS.failed, end, descriptor, options, transitions);
   } else {
-    const passed: PassedFetch = { at: record.at, took: record.took, fatal: record.fatal };
+    const lossy = record.lossy ?? 0;
+    const passed: PassedFetch = { at: record.at, took: record.took, fatal: record.fatal, ...(lossy > 0 ? { lossy } : {}) };
     const quietFrom = record.fresh > 0 || next.quietFrom === undefined ? end : next.quietFrom;
     next = { ...next, failures: 0, staleFrom: end, quietFrom, passed };
-    const event = record.fatal > 0 ? HEALTH_EVENTS.changed : record.took >= descriptor.slowAfter ? HEALTH_EVENTS.slow : HEALTH_EVENTS.passed;
+    const event = record.fatal + lossy > 0 ? HEALTH_EVENTS.changed : record.took >= descriptor.slowAfter ? HEALTH_EVENTS.slow : HEALTH_EVENTS.passed;
     next = change(next, event, end, descriptor, options, transitions);
     if (record.canary !== undefined) {
       next = { ...next, canary: record.canary };
@@ -240,6 +243,18 @@ function change(track: HealthTrack, on: HealthEvent, at: Instant, descriptor: So
   return { ...track, state: to, since: time, time };
 }
 
+// The reason of the state changed. A fetch with no lossy problem keeps the text of the fatal problems only.
+function changedReason(passed: PassedFetch): string {
+  const lossy = passed.lossy ?? 0;
+  const counts =
+    lossy === 0
+      ? `${passed.fatal} fatal problems`
+      : passed.fatal === 0
+        ? `${lossy} lossy problems`
+        : `${passed.fatal} fatal problems and ${lossy} lossy problems`;
+  return `The map gave ${counts} for the last passed fetch.`;
+}
+
 /**
  * The conditions in the order of their weight. The first condition that holds gives the state:
  * failing, then unknown, then changed, then silent, then slow, then healthy.
@@ -257,7 +272,7 @@ function classify(track: HealthTrack, descriptor: SourceDescriptor, options: Hea
     return { state: "failing", reason: `The canary failed: ${track.canary.reason}` };
   }
   if (track.passed === undefined) return { state: "unknown", reason: "No fetch passed yet." };
-  if (track.passed.fatal > 0) return { state: "changed", reason: `The map gave ${track.passed.fatal} fatal problems for the last passed fetch.` };
+  if (track.passed.fatal + (track.passed.lossy ?? 0) > 0) return { state: "changed", reason: changedReason(track.passed) };
   const quiet = maxQuiet(descriptor);
   if (quiet !== undefined && track.quietFrom !== undefined && track.time - track.quietFrom >= quiet) {
     return { state: "silent", reason: `No fresh observation in ${seconds(track.time - track.quietFrom)}, and the limit is ${seconds(quiet)}.` };

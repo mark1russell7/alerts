@@ -121,6 +121,20 @@ describe("the health of a source", () => {
     expect(run(BASE, [fetchAt(0), fetchAt(1, { fatal: 3 }), fetchAt(2)], START + 3 * MINUTE).health.state).toBe("healthy");
   });
 
+  it("is changed when the map gives lossy problems, and tells the two counts", () => {
+    const at = START + 2 * MINUTE;
+    expect(run(BASE, [fetchAt(0), fetchAt(1, { lossy: 5 })], at).health).toMatchObject({
+      state: "changed",
+      reason: "The map gave 5 lossy problems for the last passed fetch.",
+    });
+    expect(run(BASE, [fetchAt(0), fetchAt(1, { fatal: 1, lossy: 2 })], at).health).toMatchObject({
+      state: "changed",
+      reason: "The map gave 1 fatal problems and 2 lossy problems for the last passed fetch.",
+    });
+    expect(run(BASE, [fetchAt(0), fetchAt(1, { lossy: 0 })], at).health.state).toBe("healthy");
+    expect(run(BASE, [fetchAt(0), fetchAt(1, { lossy: 5 }), fetchAt(2)], START + 3 * MINUTE).health.state).toBe("healthy");
+  });
+
   it("is failing while the last canary failed, through fetches with no canary", () => {
     const bad: CanaryResult = { pass: false, reason: "The newest test message is 40 minutes old." };
     const good: CanaryResult = { pass: true, reason: "The newest test message is 2 minutes old." };
@@ -156,7 +170,7 @@ function oracle(descriptor: SourceDescriptor, records: readonly FetchRecord[], n
   if (now - staleFrom >= (options.staleAfter ?? DEFAULT_STALE_INTERVALS * descriptor.interval)) return "failing";
   if (canary !== undefined && !canary.pass) return "failing";
   if (last === undefined) return "unknown";
-  if (last.fatal > 0) return "changed";
+  if (last.fatal + (last.lossy ?? 0) > 0) return "changed";
   const fresh = passed.filter((record) => record.fresh > 0).at(-1) ?? passed[0]!;
   if (descriptor.maxQuiet !== undefined && now - end(fresh) >= descriptor.maxQuiet) return "silent";
   if (last.took >= descriptor.slowAfter) return "slow";
@@ -174,6 +188,7 @@ function randomRecords(r: Random): FetchRecord[] {
       took,
       fresh: r.chance(0.4) ? r.int(1, 5) : 0,
       fatal: r.chance(0.1) ? r.int(1, 3) : 0,
+      ...(r.chance(0.1) ? { lossy: r.int(1, 3) } : {}),
       ...(r.chance(0.25) ? { failure: r.pick([failed, { kind: "timeout", message: "30 s" } as const]) } : {}),
       ...(r.chance(0.2) ? { canary: { pass: r.chance(0.6), reason: "test" } } : {}),
     };
