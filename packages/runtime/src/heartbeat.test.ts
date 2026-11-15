@@ -176,6 +176,46 @@ describe("the steps of the heartbeat", () => {
   });
 });
 
+describe("the overdue sends", () => {
+  // A pass in which the send on Pushover failed on the network again, and the oldest due send is from `since`.
+  const overdue = (at: number, since: number, sends = 1): PassSummary => ({
+    ...healthy(at),
+    delivery: { sent: [], failures: [{ call: "send", channel: "pushover", kind: "network", retryAt: at + 10 * SECOND }], overdue: [{ channel: "pushover", sends, since }] },
+  });
+
+  it("pings fail for an overdue send whatever the kind of its failures, and success after its delivery", () => {
+    let state = heartbeatStep(HEARTBEAT_START, healthy(T0), 60 * SECOND).state;
+    // A failure of the kind network alone holds no fail.
+    const unsure = heartbeatStep(state, refused(T0 + SECOND, "network"), 60 * SECOND);
+    expect(unsure.ping).toBeUndefined();
+    state = unsure.state;
+    const fail = heartbeatStep(state, overdue(T0 + 150 * SECOND, T0), 60 * SECOND);
+    expect(fail.ping).toEqual({ kind: "fail", body: "The channel pushover has overdue sends: 1. The oldest is 150 s after its due time." });
+    expect(heartbeatStep(fail.state, sent(T0 + 160 * SECOND), 60 * SECOND).ping?.kind).toBe("success");
+  });
+
+  it("gives the lines of the refusals first, then the overdue sends of each channel in the order of the ids", () => {
+    const pass: PassSummary = {
+      ...healthy(T0 + 200 * SECOND),
+      delivery: {
+        sent: [],
+        failures: [{ call: "send", channel: "sms", kind: "auth", retryAt: T0 + 210 * SECOND }],
+        overdue: [
+          { channel: "sms", sends: 1, since: T0 + 50 * SECOND },
+          { channel: "pushover", sends: 3, since: T0 },
+        ],
+      },
+    };
+    expect(pingOf(pass).body).toBe(
+      ["The channel sms gave the kind auth to a send.", "The channel pushover has overdue sends: 3. The oldest is 200 s after its due time.", "The channel sms has overdue sends: 1. The oldest is 150 s after its due time."].join("\n"),
+    );
+  });
+
+  it("pings success for an empty list of overdue sends", () => {
+    expect(pingOf({ ...healthy(T0), delivery: { sent: [], failures: [], overdue: [] } }).kind).toBe("success");
+  });
+});
+
 describe("the refused channels of the log", () => {
   const view = (refusals: RefusalView["refusals"], delivered: RefusalView["delivered"] = {}): RefusalView => ({ refusals, delivered });
 

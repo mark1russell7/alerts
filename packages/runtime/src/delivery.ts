@@ -52,6 +52,12 @@ export interface DeliveryOptions {
    * new copy goes. It is not shorter than `callLimit`.
    */
   readonly flightLimit: Duration;
+  /**
+   * A due send with no delivery is overdue after this time, whatever the kind of its failures. The heartbeat
+   * fails while a send is overdue. `overdueLimit` gives the time from the times of the loop and the delivery.
+   * Without it, the step gives no overdue send.
+   */
+  readonly overdueAfter?: Duration;
   /** The rank of this copy of the system, and the wait of each rank. */
   readonly rank?: number;
   readonly rankDelay?: Duration;
@@ -69,6 +75,26 @@ export interface DeliveryFailure {
   readonly kind: string;
   readonly message: string;
   readonly retryAt: Instant;
+}
+
+/** The overdue sends of one channel. */
+export interface OverdueSends {
+  readonly channel: ChannelId;
+  /** The count of the overdue sends on the channel. */
+  readonly sends: number;
+  /** The earliest due time of an overdue send on the channel. */
+  readonly since: Instant;
+}
+
+/**
+ * This function gives the time after which a due send with no delivery is overdue.
+ *
+ * - The first step after the due time starts within `passLimit`, because the loop starts each pass within that time.
+ * - Each try of the send ends by its flight limit. A failed try goes again after its retry.
+ * - Thus two full tries end within this time. An overdue send failed two times or more.
+ */
+export function overdueLimit(times: { readonly passLimit: Duration; readonly flightLimit: Duration; readonly retry: Duration }): Duration {
+  return times.passLimit + 2 * (times.flightLimit + times.retry);
 }
 
 /** The result of one delivery step. */
@@ -98,6 +124,12 @@ export interface DeliveryStep {
   readonly failures: readonly DeliveryFailure[];
   /** The ids of the events that are different from the events of the log with the same ids. */
   readonly conflicts: readonly string[];
+  /**
+   * The channels with overdue sends, in the order of their ids. An overdue send is due, and it has no delivery
+   * `overdueAfter` after its due time. The due time comes from the log, thus a restart keeps it. A send
+   * that the reserve of a quota holds (`reserved`) is not overdue, because the reserve holds it on purpose.
+   */
+  readonly overdue: readonly OverdueSends[];
   /** The next time of a step of an escalation, of a poll or of a call that goes again. */
   readonly wakeAt?: Instant;
 }
@@ -164,6 +196,9 @@ const thrownFailure = (thrown: unknown, otherwise: string): CallFailure => ({ ki
  *   the step stops that copy by its copy id. The new copy goes in parallel. A stop by the delivery key here can also stop the new copy.
  * - A failed stop goes again at a later step. A stale copy that the channel accepts writes no delivery,
  *   and its stop goes again.
+ * - After a step with a failed stop on a channel, each step sends only one stop on that channel: the probe.
+ *   Thus an outage of the channel costs one stop at each retry, not one stop for each copy. After a good
+ *   probe, the other stops go at the next step.
  *
  * The times of the polls and the flights are in memory only. After a restart, each receipt gets a poll
  * at once. The log keeps each refused send, thus the wait of its retry holds after a restart. Before each send on a channel that repeats, the log keeps its copy. The log also
@@ -193,6 +228,8 @@ export function createDispatcher(options: DeliveryOptions, context: DeliveryCont
   const flying = new Map<string, Flight>();
   // The stale copies that the channel can repeat, by copy id. Each step stops them.
   const stopping = new Map<string, { readonly key: string; readonly channel: ChannelId }>();
+  // The channels whose last step of stops had a failed stop. Each step sends one stop on such a channel: the probe.
+  const down = new Set<ChannelId>();
   let copies = 0;
   // The copies whose send did not end. A stop of such a copy does not end it, because the channel can accept it later.
   const pending = new Set<string>();
@@ -448,13 +485,25 @@ export function createDispatcher(options: DeliveryOptions, context: DeliveryCont
         }
       }
       // 4. The stops of the stale copies, in parallel with the sends. A failed stop goes again at a later step.
+      // On a channel that is down, only the first ready stop goes: the probe. The other stops wait for a step after a good probe.
       const stopped: string[] = [];
+      const probed = new Set<ChannelId>();
+      const held = new Set<ChannelId>();
+      const failedStops = new Set<ChannelId>();
+      const goodStops = new Set<ChannelId>();
       for (const [copy, target] of stopping) {
         if (!ready("copy", copy)) continue;
         const channel = byId.get(target.channel);
         if (channel === undefined) {
           stopping.delete(copy);
           continue;
+        }
+        if (down.has(target.channel)) {
+          if (probed.has(target.channel)) {
+            held.add(target.channel);
+            continue;
+          }
+          probed.add(target.channel);
         }
         work.push(
           (async () => {
@@ -468,9 +517,16 @@ export function createDispatcher(options: DeliveryOptions, context: DeliveryCont
               (thrown) => thrownFailure(thrown, "The stop of the copy failed."),
             );
             if (failure !== undefined) {
+              failedStops.add(target.channel);
               fail("copy", { ...target, copy }, failure.kind, failure.message);
+              // The copy goes to the end of the order. Thus the next probe is another copy, and one bad copy does not hold the others.
+              if (stopping.get(copy) === target) {
+                stopping.delete(copy);
+                stopping.set(copy, target);
+              }
               return;
             }
+            goodStops.add(target.channel);
             // A late accept during the stop puts a new entry, thus its stop goes again.
             if (stopping.get(copy) === target) stopping.delete(copy);
             stopped.push(copy);
@@ -482,6 +538,14 @@ export function createDispatcher(options: DeliveryOptions, context: DeliveryCont
 
       // Each call ends before the step ends. A write that failed throws after all of them.
       const settled = await Promise.allSettled(work);
+      // A channel is down after a step with a failed stop, and up after a step whose stops all ended well.
+      for (const id of failedStops) down.add(id);
+      for (const id of goodStops) if (!failedStops.has(id)) down.delete(id);
+      // After a good probe, the held stops go at the next step. It comes soon, not at the next poll.
+      if ([...held].some((id) => !down.has(id))) {
+        waiting.push(at + options.retry);
+        context.wake?.();
+      }
       // The refusals of the step come after each delivery of the step in the log. Thus only a delivery of a later step
       // ends the hold of a refused channel after a restart, as in the pass. The order decides, not the times: a channel
       // can give a time of acceptance after the time of the refusal.
@@ -501,7 +565,8 @@ export function createDispatcher(options: DeliveryOptions, context: DeliveryCont
       for (const key of polled.keys()) if (!keep.has(key)) polled.delete(key);
       const polls = open.map((delivery) => (polled.get(delivery.key) ?? at) + options.pollEvery);
       const wakeAt = earliest([...after.map((entry) => entry.plan.wakeAt), ...polls, ...failures.map((failure) => failure.retryAt), ...waiting]);
-      return { routes: after, sent, duplicates, stopped, acknowledged, cancelled, failures, conflicts, ...(wakeAt === undefined ? {} : { wakeAt }) };
+      const overdue = overdueSends(after, context.state().refusals, at, options.overdueAfter);
+      return { routes: after, sent, duplicates, stopped, acknowledged, cancelled, failures, conflicts, overdue, ...(wakeAt === undefined ? {} : { wakeAt }) };
     },
   };
 
@@ -519,6 +584,21 @@ export function createDispatcher(options: DeliveryOptions, context: DeliveryCont
       (error) => ({ ok: false as const, kind: "network", message: `The status threw: ${errorMessage(error)}` }),
     );
   }
+}
+
+/**
+ * This function gives the overdue sends of each channel at `at`. An overdue send is a send of the routes after the
+ * step, due for `after` or more. A send whose last refusal is `reserved` is not overdue. With no `after`, no send is overdue.
+ */
+function overdueSends(routes: readonly Route[], refusals: RuntimeState["refusals"], at: Instant, after: Duration | undefined): OverdueSends[] {
+  if (after === undefined) return [];
+  const byChannel = new Map<ChannelId, { readonly sends: number; readonly since: Instant }>();
+  for (const send of routes.flatMap((entry) => entry.plan.sends)) {
+    if (at - send.due < after || refusals[messageKey(send)]?.kind === "reserved") continue;
+    const before = byChannel.get(send.channel);
+    byChannel.set(send.channel, { sends: (before?.sends ?? 0) + 1, since: Math.min(before?.since ?? send.due, send.due) });
+  }
+  return [...byChannel].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)).map(([channel, sends]) => ({ channel, ...sends }));
 }
 
 // The event of a delivery, with the copy id of its send.

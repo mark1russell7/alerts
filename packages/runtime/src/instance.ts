@@ -4,7 +4,7 @@
  * clocks and the transports. This module reads no file, no environment variable and no clock.
  */
 import { delay, type Clock, type WallClock } from "@mark1russell7/algebra/clock";
-import { localPlaces, sourceCovers, sourcePlaces, type ChannelDescriptor, type ParsedConfig, type SecretLookup, type SourceDescriptor } from "@mark1russell7/alerts";
+import { localPlaces, sourceCovers, sourcePlaces, type ChannelDescriptor, type Duration, type ParsedConfig, type SecretLookup, type SourceDescriptor } from "@mark1russell7/alerts";
 import { CHANNEL_ID, createPushoverChannel, isPushoverKey, pushoverDescriptor, PUSHOVER_REPEAT_MS, PUSHOVER_TIMEOUT_MS, type PushoverChannelOptions } from "@mark1russell7/alerts-channel-pushover";
 import { createIpawsSource, IPAWS_DESCRIPTOR, WEA_EXPECTATION } from "@mark1russell7/alerts-source-ipaws";
 import { createShapeStore, type ShapeCache, type ShapeStore } from "@mark1russell7/alerts-shapes-nws";
@@ -12,7 +12,7 @@ import { createNwsSource, NWS_DESCRIPTOR } from "@mark1russell7/alerts-source-nw
 import type { Pace, Transport } from "polite-crawler/api";
 import { DEFAULT_POLICY, HostScheduler, type PolitenessPolicy } from "polite-crawler/politeness";
 import { requireKey, type InstanceCheck } from "./config.ts";
-import type { DeliveryOptions } from "./delivery.ts";
+import { overdueLimit, type DeliveryOptions } from "./delivery.ts";
 import type { RuntimeLog } from "./log.ts";
 import { createLoop, loopTimes, type LoopTimes, type RuntimeLoop } from "./loop.ts";
 import { channelQuota } from "./quota.ts";
@@ -74,6 +74,19 @@ const CALL_LIMIT = PUSHOVER_TIMEOUT_MS;
  * limit of the Pushover channel. The host reads them before a start: the stop grace holds one pass.
  */
 export const INSTANCE_TIMES: LoopTimes = loopTimes(INSTANCE_SOURCES, { delivery: { callLimit: CALL_LIMIT, retry: CALL_LIMIT } });
+
+/** The times of the delivery step of an instance. The fault cases of the channel use these times. */
+export const DELIVERY_TIMES: Pick<DeliveryOptions, "pollEvery" | "retry" | "callLimit" | "flightLimit"> & { readonly overdueAfter: Duration } = {
+  // A `life-safety` message repeats until the person acknowledges it. A poll at the pace of the repeats sees an acknowledgment in one repeat.
+  pollEvery: PUSHOVER_REPEAT_MS,
+  // A failed call goes again after the time limit of one call. Pushover asks for a wait of 5 seconds or more after a failure.
+  retry: CALL_LIMIT,
+  callLimit: CALL_LIMIT,
+  // A send ends by the time limit of the channel. A second send of its key goes after its retry.
+  flightLimit: CALL_LIMIT + CALL_LIMIT,
+  // A send with no delivery two full tries after its due time makes the heartbeat fail: 140 s.
+  overdueAfter: overdueLimit({ passLimit: INSTANCE_TIMES.passLimit, flightLimit: CALL_LIMIT + CALL_LIMIT, retry: CALL_LIMIT }),
+};
 
 /**
  * This function gives the problems of a configuration that stop the start of the instance. A problem
@@ -235,18 +248,7 @@ export function openInstance(options: InstanceOptions): Instance {
     ...(options.pushoverQuota === undefined ? {} : { quota: options.pushoverQuota }),
     ...(options.pushoverReserveNotices === undefined ? {} : { reserveNotices: options.pushoverReserveNotices }),
   });
-  const callLimit = CALL_LIMIT;
-  const delivery: DeliveryOptions = {
-    recipients,
-    channels: [pushover],
-    // A `life-safety` message repeats until the person acknowledges it. A poll at the pace of the repeats sees an acknowledgment in one repeat.
-    pollEvery: PUSHOVER_REPEAT_MS,
-    // A failed call goes again after the time limit of one call. Pushover asks for a wait of 5 seconds or more after a failure.
-    retry: callLimit,
-    callLimit,
-    // A send ends by the time limit of the channel. A second send of its key goes after its retry.
-    flightLimit: callLimit + callLimit,
-  };
+  const delivery: DeliveryOptions = { recipients, channels: [pushover], ...DELIVERY_TIMES };
 
   const runtime: Runtime = openRuntime({
     log: options.log,
