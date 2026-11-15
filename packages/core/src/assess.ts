@@ -77,6 +77,12 @@ export const HEALTH_KIND = "system.health";
  */
 export const COVERAGE_KIND = "system.coverage";
 
+/**
+ * The prefix of the kinds of the quota reports of the core. The stage follows it:
+ * `system.quota.reserve`. An adapter does not map a message to this prefix.
+ */
+export const QUOTA_KIND = "system.quota";
+
 /** The table of the coverage of the kinds that can reach `life-safety`. */
 const COVERAGE_TABLE: LevelTable = {
   severity: { extreme: "life-safety", severe: "urgent", moderate: "notice", minor: "digest", unknown: "urgent" },
@@ -103,7 +109,7 @@ export const DEFAULT_ASSESS_POLICY: AssessPolicy = {
   classes: [
     { id: "life-safety", kinds: LIFE_SAFETY_KINDS, ...LIFE_SAFETY_TABLE },
     { id: "system-coverage", kinds: LIFE_SAFETY_KINDS.map((kind) => `${COVERAGE_KIND}.${kind}`), statuses: ["system"], ...COVERAGE_TABLE },
-    { id: "system", kinds: [HEALTH_KIND, COVERAGE_KIND], statuses: ["system"], ...SYSTEM_TABLE },
+    { id: "system", kinds: [HEALTH_KIND, COVERAGE_KIND, QUOTA_KIND], statuses: ["system"], ...SYSTEM_TABLE },
   ],
   otherwise: OTHER_TABLE,
 };

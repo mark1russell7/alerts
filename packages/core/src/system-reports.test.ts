@@ -1,10 +1,12 @@
 import { random, seedsFrom } from "@mark1russell7/rigor-generators";
 import { describe, expect, it } from "vitest";
 import { assess } from "./assess.ts";
-import type { Coverage, HealthState, Incident, Observation, PersonId, PersonWatch, PlaceId, Report, ReportId, SourceDescriptor, SourceHealth, SourceId, WatchedPlace } from "./contracts.ts";
+import { messageOf } from "./delivery.ts";
+import type { ChannelId, ChannelQuota, Coverage, HealthState, Incident, Observation, PersonId, PersonWatch, PlaceId, Report, ReportId, SourceDescriptor, SourceHealth, SourceId, WatchedPlace } from "./contracts.ts";
 import type { Lateness } from "./lateness.ts";
 import { incidents, normalize } from "./merge.ts";
-import { addSystemReports, gapGrade, NO_SYSTEM_LINES, SOURCE_SUBJECT, SYSTEM_SOURCE, systemReports, threats, type SystemLines, type SystemSnapshot } from "./system-reports.ts";
+import { addSystemReports, CHANNEL_SUBJECT, gapGrade, NO_SYSTEM_LINES, quotaStages, SOURCE_SUBJECT, SYSTEM_SOURCE, systemReports, threats, type SystemLines, type SystemSnapshot } from "./system-reports.ts";
+import { unknownKinds } from "./taxonomy.ts";
 
 const SEEDS = seedsFrom(process.env["SEED"], [1, 2, 3, 4, 5, 6, 7, 8]);
 const TORNADO = "met.tornado";
@@ -185,6 +187,90 @@ describe("the coverage reports", () => {
   });
 });
 
+describe("the quota reports", () => {
+  // Midnight in America/Chicago on 1 December: the end of the window.
+  const WINDOW = Date.UTC(2026, 11, 1, 6);
+  const HOUR = 3_600_000;
+  const PUSHOVER = "pushover" as ChannelId;
+  const quota = (used: number, fields: Partial<ChannelQuota> = {}): ChannelQuota => ({ channel: PUSHOVER, limit: 10_000, reserve: 1_000, used, resetAt: WINDOW, ...fields });
+  const WATCHER: PersonWatch = { ...NEIGHBOR, subjects: [{ system: CHANNEL_SUBJECT }] };
+  const codes = (reports: readonly Report[]) => reports.map((report) => [report.op, report.kind.code]);
+
+  it("reaches each stage at its count: low at 2 reserves left, reserve at 1 reserve, spent at 0 or at a block", () => {
+    expect(quotaStages(quota(7_999))).toEqual([]);
+    expect(quotaStages(quota(8_000))).toEqual(["low"]);
+    expect(quotaStages(quota(8_999))).toEqual(["low"]);
+    expect(quotaStages(quota(9_000))).toEqual(["low", "reserve"]);
+    expect(quotaStages(quota(9_999))).toEqual(["low", "reserve"]);
+    expect(quotaStages(quota(10_000))).toEqual(["low", "reserve", "spent"]);
+    expect(quotaStages(quota(5, { blockedUntil: WINDOW }))).toEqual(["low", "reserve", "spent"]);
+    expect(quotaStages(quota(99, { limit: 100, reserve: 0 }))).toEqual([]);
+    expect(unknownKinds(["system.quota", "system.quota.low", "system.quota.reserve", "system.quota.spent"])).toEqual([]);
+  });
+
+  it("gives one alert for each stage in a window, no update for a new count, and a cancel of each line at the reset", () => {
+    const low = systemReports(NO_SYSTEM_LINES, snapshot({ quotas: [quota(8_000)] }), 100);
+    expect(low.reports).toMatchObject([
+      {
+        op: "alert",
+        status: "system",
+        kind: { code: "system.quota.low", label: "Low quota of a channel" },
+        severity: "moderate",
+        urgency: "expected",
+        areas: [],
+        about: [{ system: CHANNEL_SUBJECT, id: "pushover" }],
+        headline: "pushover: 2000 of 10000 units of the window are left.",
+      },
+    ]);
+    expect(systemReports(low.lines, snapshot({ quotas: [quota(8_500)] }), 200).reports).toEqual([]);
+    const reserve = systemReports(low.lines, snapshot({ quotas: [quota(9_000)] }), 300);
+    expect(reserve.reports).toMatchObject([
+      { op: "alert", references: [], kind: { code: "system.quota.reserve" }, severity: "severe", urgency: "expected", headline: `pushover sends only life-safety messages until ${new Date(WINDOW).toISOString()}.` },
+    ]);
+    expect(systemReports(reserve.lines, snapshot({ quotas: [quota(9_500)] }), 400).reports).toEqual([]);
+    const reset = systemReports(reserve.lines, snapshot({ quotas: [quota(0, { resetAt: WINDOW + 31 * 24 * HOUR })] }), 500);
+    expect(codes(reset.reports)).toEqual([
+      ["cancel", "system.quota.low"],
+      ["cancel", "system.quota.reserve"],
+    ]);
+    expect(reset.lines.open).toEqual({});
+  });
+
+  it("gives the spent line with the end of the block, at immediate", () => {
+    const spent = systemReports(NO_SYSTEM_LINES, snapshot({ quotas: [quota(9_100, { blockedUntil: WINDOW + HOUR })] }), 100);
+    expect(codes(spent.reports)).toEqual([
+      ["alert", "system.quota.low"],
+      ["alert", "system.quota.reserve"],
+      ["alert", "system.quota.spent"],
+    ]);
+    expect(spent.reports[2]).toMatchObject({ urgency: "immediate", headline: `pushover sends no message until ${new Date(WINDOW + HOUR).toISOString()}.` });
+  });
+
+  it("keeps each open line of a quota when the snapshot has no quotas, and ends the lines when the quotas have no stage", () => {
+    const both = systemReports(NO_SYSTEM_LINES, snapshot({ quotas: [quota(9_000)], health: [healthOf("failing")] }), 100);
+    const unread = systemReports(both.lines, snapshot(), 200);
+    expect(codes(unread.reports)).toEqual([["cancel", "system.health.failing"]]);
+    expect(Object.keys(unread.lines.open)).toEqual(["quota/pushover/low", "quota/pushover/reserve"]);
+    const none = systemReports(unread.lines, snapshot({ quotas: [] }), 300);
+    expect(codes(none.reports)).toEqual([
+      ["cancel", "system.quota.low"],
+      ["cancel", "system.quota.reserve"],
+    ]);
+  });
+
+  it("goes to the person who watches the channels at notice, and only the message of the reserve line uses the reserve", () => {
+    const step = systemReports(NO_SYSTEM_LINES, snapshot({ quotas: [quota(9_000)] }), 100);
+    expect(levels(step.reports, WATCHER)).toEqual(["notice", "notice"]);
+    expect(levels(step.reports, OPERATOR)).toEqual(["none", "none"]);
+    const found = incidents(normalize({ reports: step.reports }), 200);
+    const uses = found.map((incident) => {
+      const send = { incident: incident.anchor, level: "notice" as const, person: WATCHER.person, step: 0, channel: PUSHOVER, due: 200, quiet: false };
+      return [incident.kind.code, messageOf(incident, step.reports, send).useReserve ?? false];
+    });
+    expect(Object.fromEntries(uses)).toEqual({ "system.quota.low": false, "system.quota.reserve": true });
+  });
+});
+
 describe("the properties of the fold", () => {
   const states: HealthState[] = ["unknown", "healthy", "slow", "failing", "silent", "changed"];
   const sources = ["a", "b", "c"].map((id) => ({ ...API, id: id as SourceId, title: `Source ${id}` }));
@@ -202,7 +288,11 @@ describe("the properties of the fold", () => {
       const late: Lateness[] = r.chance(0.3)
         ? [{ expectation: "a-to-b", from: "a" as SourceId, to: "b" as SourceId, state: "late", limit: { delay: 60_000, misses: 1 }, missed: [`report:${r.int(0, 3)}` as ReportId], since: step }]
         : [];
-      const input = snapshot({ sources, health, coverage, lateness: late, threats: r.chance(0.3) ? [{ place: KANSAS.id, kind: TORNADO }] : [] });
+      // A snapshot with no quotas is a failed read of the counts.
+      const quotas: ChannelQuota[] | undefined = r.chance(0.2)
+        ? undefined
+        : [{ channel: "pushover" as ChannelId, limit: 100, reserve: 10, used: r.int(70, 100), resetAt: 5_000_000, ...(r.chance(0.1) ? { blockedUntil: 5_000_000 } : {}) }];
+      const input = snapshot({ sources, health, coverage, lateness: late, threats: r.chance(0.3) ? [{ place: KANSAS.id, kind: TORNADO }] : [], ...(quotas === undefined ? {} : { quotas }) });
       const before = lines;
       const result = systemReports(lines, input, step * 1_000);
       const label = `seed ${seed} step ${step}`;
@@ -217,14 +307,15 @@ describe("the properties of the fold", () => {
       // The open lines are the conditions of the snapshot.
       const down = health.filter((entry) => ["failing", "silent", "changed"].includes(entry.state)).length + late.length;
       const short = coverage.filter((entry) => !entry.proven || entry.independent < entry.required).length;
-      expect(Object.keys(result.lines.open), label).toHaveLength(down + short);
+      const staged = quotas === undefined ? Object.keys(before.open).filter((name) => name.startsWith("quota/")).length : quotas.flatMap(quotaStages).length;
+      expect(Object.keys(result.lines.open), label).toHaveLength(down + short + staged);
       // The same snapshot again gives no report.
       expect(systemReports(result.lines, input, step * 1_000 + 1).reports, label).toEqual([]);
       lines = result.lines;
       all.push(...result.reports);
       // The live incidents of the merge are the open lines.
       const live = incidents(normalize({ reports: all }), step * 1_000).filter((incident) => incident.live);
-      expect(live, label).toHaveLength(down + short);
+      expect(live, label).toHaveLength(down + short + staged);
     }
     expect(new Set(all.map((report) => report.key)).size).toBe(all.length);
     // All the reports in one call give the last lines. A report of another source changes nothing.

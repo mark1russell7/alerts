@@ -62,6 +62,16 @@ export const PUSHOVER_QUOTA: Quota = {
 };
 
 /**
+ * The messages that tell of the entry into the reserve: one in each window of `PUSHOVER_QUOTA`. Such a
+ * message passes the reserve. Thus the person knows that only `life-safety` comes until the reset.
+ */
+export const PUSHOVER_RESERVE_NOTICES: Quota = {
+  name: "Pushover reserve notices",
+  limit: 1,
+  window: PUSHOVER_QUOTA.window,
+};
+
+/**
  * This function gives the units of a message in the quota: 0 at priority 2, and 1 below it. Thus the
  * quota does not stop a `life-safety` message at any time.
  */
@@ -93,6 +103,11 @@ export interface PushoverChannelOptions extends PushoverMapOptions {
    * - The count of each answer of Pushover goes into the gate. A message that Pushover refused gives back its unit.
    */
   readonly quota?: QuotaGate | undefined;
+  /**
+   * The gate of `PUSHOVER_RESERVE_NOTICES`, with the store of `quota`. A message with `useReserve` passes the
+   * reserve when this gate gives it a unit. With no such gate, the reserve stops it as the others.
+   */
+  readonly reserveNotices?: QuotaGate | undefined;
   /** The platform of the device of the person. It adds the push service of the platform to `dependsOn`. */
   readonly platform?: "ios" | "android" | undefined;
   /** The time limit of one call. The default is 10 seconds. */
@@ -156,16 +171,23 @@ export function createPushoverChannel(options: PushoverChannelOptions): ChannelP
       // A message with no priority has the normal priority 0.
       const cost = pushoverCost(mapped.priority ?? 0);
       let taken: QuotaState | undefined;
+      let notice: QuotaState | undefined;
       if (gate !== undefined && cost > 0) {
         try {
           taken = gate.take(cost);
         } catch (error) {
           // A refusal of the gate stops the send. A fault of the store of the gate does not: the message goes with no count.
-          if (isQuotaError(error)) return quotaRefusal(gate, error, at);
+          if (isQuotaError(error)) {
+            const refusal = quotaRefusal(gate, error, at);
+            const pass = refusal.kind === "reserved" && message.useReserve === true ? takeNotice(options.reserveNotices) : "refused";
+            if (pass === "refused") return refusal;
+            notice = pass;
+          }
         }
       }
       const result = await call(request, extractPushoverSent);
       if (gate !== undefined) noteAnswer(gate, result, taken === undefined ? undefined : { cost, at: taken.at });
+      if (options.reserveNotices !== undefined && notice !== undefined) noteAnswer(options.reserveNotices, result, { cost: 1, at: notice.at }, false);
       if (!result.ok) return sendFailureOf(result, at);
       // An emergency carries the delivery key as its tag. The receipt keeps the tag, thus a cancel stops each copy of the key.
       const tag = mapped.emergency?.tags?.[0];
@@ -217,7 +239,7 @@ export function createPushoverChannel(options: PushoverChannelOptions): ChannelP
  * This function gives the refusal of the gate. Pushover refuses each message after an answer with 0
  * left, or when the window has no unit left. Else the gate keeps the reserve for `life-safety`.
  */
-function quotaRefusal(gate: QuotaGate, error: QuotaError, at: Instant): SendOutcome {
+function quotaRefusal(gate: QuotaGate, error: QuotaError, at: Instant): Extract<SendOutcome, { readonly ok: false }> {
   const state = gate.state();
   const full = state.blockedUntil !== undefined || state.used >= gate.quota.limit;
   return { ok: false, kind: full ? "rate-limited" : "reserved", message: error.message, retryAfter: Math.max(0, error.resetAt - at) };
@@ -230,14 +252,27 @@ function readingOf(result: PushoverSent | PushoverFailure): QuotaReading | undef
 }
 
 /**
+ * This function takes the unit of a message of the reserve. It gives `refused` when the window has no
+ * such unit left. A fault of the store gives the message its pass with no count, as for the quota.
+ */
+function takeNotice(gate: QuotaGate | undefined): QuotaState | "refused" | undefined {
+  if (gate === undefined) return "refused";
+  try {
+    return gate.take(1);
+  } catch (error) {
+    return isQuotaError(error) ? "refused" : undefined;
+  }
+}
+
+/**
  * This function puts the answer of Pushover into the gate. A message that Pushover refused gives back
  * its unit. A failed write of the count does not change the outcome of the send, and the next answer
- * gives the count again.
+ * gives the count again. The gate of the reserve notices counts no reading of Pushover.
  */
-function noteAnswer(gate: QuotaGate, result: PushoverSent | PushoverFailure, taken: { readonly cost: number; readonly at: number | undefined } | undefined): void {
+function noteAnswer(gate: QuotaGate, result: PushoverSent | PushoverFailure, taken: { readonly cost: number; readonly at: number | undefined } | undefined, reads = true): void {
   try {
     if (!result.ok && (result.kind === "auth" || result.kind === "refused") && taken?.at !== undefined) gate.giveBack?.(taken.cost, taken.at);
-    const reading = readingOf(result);
+    const reading = reads ? readingOf(result) : undefined;
     if (reading !== undefined) gate.note(reading);
   } catch {
     // The count of the gate can be low until the next answer. The send has its outcome.

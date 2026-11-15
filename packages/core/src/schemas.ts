@@ -543,6 +543,7 @@ export const messageSchema: z.ZodType<Message, Message> = schemaOf<Message>()(
       incident: reportIdSchema,
       expires: instantSchema.exactOptional(),
       quiet: z.boolean(),
+      useReserve: z.boolean().exactOptional(),
     })
     .readonly()
     .refine((message) => !(message.level === "life-safety" && message.quiet), {

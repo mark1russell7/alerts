@@ -16,6 +16,7 @@ import {
   systemReports,
   threats,
   type Coverage,
+  type ChannelQuota,
   type CoveragePolicy,
   type DelayLimitOptions,
   type Expectation,
@@ -62,8 +63,11 @@ export interface SystemView {
   readonly wakeAt?: Instant;
 }
 
-/** This function gives the view of the system at the time `at`. */
-export function systemView(state: RuntimeState, config: ViewConfig, at: Instant): SystemView {
+/**
+ * This function gives the view of the system at the time `at`. The quotas are the counts of the channels
+ * at `at`. With no quotas, each open line of a quota stays open.
+ */
+export function systemView(state: RuntimeState, config: ViewConfig, at: Instant, quotas?: readonly ChannelQuota[]): SystemView {
   const steps = config.sources.map((source) => advanceHealth(state.health[source.id] ?? startHealth(source.id, state.start ?? at), at, source, config.health));
   const health = steps.map((step) => step.health);
   const found = incidents(state.merge, at);
@@ -71,7 +75,7 @@ export function systemView(state: RuntimeState, config: ViewConfig, at: Instant)
   const limits = lateLimits(checks, config.expectations, at, config.delay);
   const late = lateness(checks, config.expectations, limits, at);
   const covered = coverage({ sources: config.sources, health, late: lateSources(late), places: config.places, kinds: config.kinds }, config.coverage);
-  const step = systemReports(state.lines, { sources: config.sources, health, coverage: covered, threats: threats(found, config.places), lateness: late }, at);
+  const step = systemReports(state.lines, { sources: config.sources, health, coverage: covered, threats: threats(found, config.places), lateness: late, ...(quotas === undefined ? {} : { quotas }) }, at);
   // An incident that expires changes the threats, thus its end is a timer too.
   const ends = found.flatMap((incident) => (incident.live && incident.expires !== undefined && incident.expires > at ? [incident.expires] : []));
   const wakeAt = earliest([...steps.map((entry) => entry.wakeAt), ...late.map((entry) => entry.wakeAt), ...ends]);
