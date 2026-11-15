@@ -4,13 +4,14 @@
  * clocks and the transports. This module reads no file, no environment variable and no clock.
  */
 import { delay, type Clock, type WallClock } from "@mark1russell7/algebra/clock";
-import { localPlaces, sourceCovers, sourcePlaces, type ChannelDescriptor, type ParsedConfig, type SecretLookup } from "@mark1russell7/alerts";
+import { localPlaces, sourceCovers, sourcePlaces, type ChannelDescriptor, type ParsedConfig, type SecretLookup, type SourceDescriptor } from "@mark1russell7/alerts";
 import { CHANNEL_ID, createPushoverChannel, isPushoverKey, pushoverDescriptor, PUSHOVER_REPEAT_MS, PUSHOVER_TIMEOUT_MS, type PushoverChannelOptions } from "@mark1russell7/alerts-channel-pushover";
 import { createIpawsSource, IPAWS_DESCRIPTOR, WEA_EXPECTATION } from "@mark1russell7/alerts-source-ipaws";
 import { createShapeStore, type ShapeCache } from "@mark1russell7/alerts-shapes-nws";
 import { createNwsSource, NWS_DESCRIPTOR } from "@mark1russell7/alerts-source-nws-api";
 import type { Pace, Transport } from "polite-crawler/api";
 import { DEFAULT_POLICY, HostScheduler, type PolitenessPolicy } from "polite-crawler/politeness";
+import type { InstanceCheck } from "./config.ts";
 import type { DeliveryOptions } from "./delivery.ts";
 import type { RuntimeLog } from "./log.ts";
 import { createLoop, loopTimes, type LoopTimes, type RuntimeLoop } from "./loop.ts";
@@ -39,6 +40,9 @@ export { DELAY_LIMITS };
  */
 export const INSTANCE_CHANNELS: readonly ChannelDescriptor[] = [pushoverDescriptor()];
 
+/** The descriptors of the sources of the instance. The function `describe` of each source gives the same descriptor. */
+export const INSTANCE_SOURCES: readonly SourceDescriptor[] = [NWS_DESCRIPTOR, IPAWS_DESCRIPTOR];
+
 /**
  * The politeness policy of the sources. After 5 failures in a row, a host stops for the longest step of the backoff, not for
  * the hour of `DEFAULT_POLICY`. A stop of one hour hides each alert of that hour.
@@ -65,7 +69,41 @@ const CALL_LIMIT = PUSHOVER_TIMEOUT_MS;
  * The times of the loop of the instance. They come from the intervals of the sources and the time
  * limit of the Pushover channel. The host reads them before a start: the stop grace holds one pass.
  */
-export const INSTANCE_TIMES: LoopTimes = loopTimes([NWS_DESCRIPTOR, IPAWS_DESCRIPTOR], { delivery: { callLimit: CALL_LIMIT, retry: CALL_LIMIT } });
+export const INSTANCE_TIMES: LoopTimes = loopTimes(INSTANCE_SOURCES, { delivery: { callLimit: CALL_LIMIT, retry: CALL_LIMIT } });
+
+/**
+ * This function gives the problems of a configuration that stop the start of the instance. A problem
+ * is a missing token, a key with a bad form, or a place that no source covers. The message names ids,
+ * fields and the names of secrets, and no value.
+ */
+export function instanceProblems(parsed: ParsedConfig, secret: SecretLookup, descriptors: readonly SourceDescriptor[]): string[] {
+  const token = secret(PUSHOVER_TOKEN) ?? "";
+  // A bad key fails each send. Thus it stops the start, before the first alert.
+  const tokenProblems =
+    token === ""
+      ? [`The secret store has no value for ${PUSHOVER_TOKEN}, the API token of the Pushover application.`]
+      : isPushoverKey(token)
+        ? []
+        : [`The value of ${PUSHOVER_TOKEN} is not a key of Pushover: 30 letters and digits.`];
+  const userProblems = parsed.recipients.flatMap((recipient) => {
+    const user = recipient.addresses[CHANNEL_ID]?.["user"];
+    return user === undefined || isPushoverKey(user) ? [] : [`The Pushover user key of ${recipient.watch.person} is not 30 letters and digits.`];
+  });
+  // A place that no source covers gets no alert. The usual cause is a missing code of a level.
+  const kinds = [...new Set(descriptors.flatMap((descriptor) => descriptor.kinds))];
+  const placeProblems = localPlaces(parsed.config).flatMap((place) =>
+    descriptors.some((descriptor) => kinds.some((kind) => sourceCovers(descriptor, place, kind)))
+      ? []
+      : [`No source covers the place ${place.id}. Give the place its codes at each level: the NWS zone and county, SAME, the state and the country (iso3166).`],
+  );
+  return [...tokenProblems, ...userProblems, ...placeProblems];
+}
+
+/** The check of a configuration file for the live instance: its channels and the problems that stop its start. */
+export const INSTANCE_CHECK: InstanceCheck = {
+  channels: INSTANCE_CHANNELS,
+  problems: (parsed, secret) => instanceProblems(parsed, secret, INSTANCE_SOURCES),
+};
 
 /** The options of `openInstance`. */
 export interface InstanceOptions {
@@ -133,26 +171,9 @@ export function openInstance(options: InstanceOptions): Instance {
 
   const { config, recipients } = options.config;
   const places = localPlaces(config);
-  const token = options.secret(PUSHOVER_TOKEN) ?? "";
-  // A bad key fails each send. Thus it stops the start, before the first alert.
-  const tokenProblems =
-    token === ""
-      ? [`The secret store has no value for ${PUSHOVER_TOKEN}, the API token of the Pushover application.`]
-      : isPushoverKey(token)
-        ? []
-        : [`The value of ${PUSHOVER_TOKEN} is not a key of Pushover: 30 letters and digits.`];
-  const userProblems = recipients.flatMap((recipient) => {
-    const user = recipient.addresses[CHANNEL_ID]?.["user"];
-    return user === undefined || isPushoverKey(user) ? [] : [`The Pushover user key of ${recipient.watch.person} is not 30 letters and digits.`];
-  });
-  // A place that no source covers gets no alert. The usual cause is a missing code of a level.
-  const placeProblems = places.flatMap((place) =>
-    descriptors.some((descriptor) => kinds.some((kind) => sourceCovers(descriptor, place, kind)))
-      ? []
-      : [`No source covers the place ${place.id}. Give the place its codes at each level: the NWS zone and county, SAME, the state and the country (iso3166).`],
-  );
-  const problems = [...tokenProblems, ...userProblems, ...placeProblems];
+  const problems = instanceProblems(options.config, options.secret, descriptors);
   if (problems.length > 0) throw new Error(`The instance does not start. The configuration has these problems:\n- ${problems.join("\n- ")}`);
+  const token = options.secret(PUSHOVER_TOKEN) ?? "";
 
   // The store of shapes shares the pace of the sources. Thus its requests to the NWS API keep the rests of that host.
   const store = options.shapes === undefined ? undefined : createShapeStore({ pace, transport: options.transport, userAgent: agent, cache: options.shapes });

@@ -17,16 +17,14 @@
  * profile `daemon` of the live instance does not start without it. Another profile starts with a warning.
  */
 import { randomUUID } from "node:crypto";
-import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { openShapeCache, SHAPES_FILE } from "@mark1russell7/alerts-shapes-nws";
 import { realClock, wallClock } from "@mark1russell7/algebra/clock";
 import type { ServiceBuilder } from "@mark1russell7/service";
-import { parseEnvFile } from "@mark1russell7/service/host";
 import { errorMessage } from "@mark1russell7/text";
 import { redactSecrets } from "@mark1russell7/text/redact";
 import { fetchTransport } from "polite-crawler/api";
-import { alertsHome, configPath, envSecrets, fileSource, requireConfig } from "./config.ts";
+import { alertsHome, configPath, envSecrets, fileSource, readSecrets, requireConfig } from "./config.ts";
 import { heartbeat } from "./heartbeat.ts";
 import { PROFILES, declare } from "./index.ts";
 import { INSTANCE_CHANNELS, openInstance, userAgent } from "./instance.ts";
@@ -50,12 +48,13 @@ async function runtime(): Promise<ServiceBuilder> {
 
   const home = alertsHome(process.env, process.cwd());
 
-  // A problem of the file names its line and its key, and no value.
-  const secrets = parseEnvFile(readFileSync(join(home, "secrets.env"), "utf8"));
-  if (secrets.problems.length > 0) throw new Error(`The file secrets.env has these problems:\n- ${secrets.problems.join("\n- ")}`);
-  const values = Object.values(secrets.env);
+  // A problem names the line and the key of a bad line, or the code of a read error. It holds no value and no path.
+  const secrets = await readSecrets(home);
+  if (secrets.tag === "err") throw new Error(`The private files have these problems:\n- ${secrets.error.join("\n- ")}`);
+  const keys = secrets.value;
+  const values = Object.values(keys);
 
-  const secret = envSecrets(secrets.env);
+  const secret = envSecrets(keys);
   const wall = wallClock();
 
   // A problem of the configuration holds no value of the file, no value of a secret and no path.
@@ -64,7 +63,7 @@ async function runtime(): Promise<ServiceBuilder> {
   const agent = userAgent(config.config.contact);
 
   // The outside heartbeat. Without it, a stop of this process is silent.
-  const pingUrl = secrets.env["HEALTHCHECKS_PING_URL"] ?? "";
+  const pingUrl = keys["HEALTHCHECKS_PING_URL"] ?? "";
   if (pingUrl === "") {
     if (name === "daemon") throw new Error("The file secrets.env has no HEALTHCHECKS_PING_URL. The live instance needs its outside heartbeat.");
     console.warn("The file secrets.env has no HEALTHCHECKS_PING_URL. This runtime has no outside heartbeat.");
