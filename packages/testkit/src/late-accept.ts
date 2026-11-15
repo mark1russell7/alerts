@@ -14,7 +14,7 @@
  * - `single`: for each delivery key, one accepted message has no cancel before the first acknowledgment of the key.
  * - `stopped`: a cancel or an acknowledgment reaches each accepted message. Thus no repeats continue.
  */
-import { type Clock, realClock } from "@mark1russell7/algebra/clock";
+import { wallClock } from "@mark1russell7/algebra/clock";
 import {
   type ChannelId,
   type EscalationPolicy,
@@ -150,13 +150,8 @@ const USER = `casefouruser${"0".repeat(18)}`;
 const RECIPIENT: Recipient = { watch: { person: PERSON, places: [PLACE.id], rules: [] }, policies: [POLICY], addresses: { pushover: { user: USER } } };
 const VIEW: RuntimeOptions["view"] = { places: [PLACE], kinds: ["met"], expectations: [], delay: { quantile: 0.9, level: 0.9 } };
 
-/**
- * The clock of the case. The runtime reads the time of the epoch through a `Clock`. A `Clock` of
- * `@mark1russell7/algebra/clock` reads the monotonic time, and a `WallClock` of algebra 0.8.9 is not a `Clock`. Thus
- * this clock reads `Date.now()` and uses the timers of `realClock`. It is local until the runtime takes a `WallClock`.
- * The alerts lead has that change since 2026-11-15.
- */
-const EPOCH_CLOCK: Clock = { now: () => Date.now(), after: (ms, run) => realClock.after(ms, run) };
+/** The clock of the case: the instant of the platform. Its timers do not keep the process alive. */
+const EPOCH_CLOCK = wallClock({ unref: true });
 
 /** One tornado warning for Sedgwick County, sent at `sent`, for 45 minutes. */
 function warningOf(seen: Observation, sent: number): Report {
@@ -245,7 +240,7 @@ export async function runArm(arm: AcceptArm, settings: AcceptSettings = CASE_4_S
       log,
       clock,
       sources: [sourceOf(clock.now())],
-      watch: { places: [PLACE], kinds: ["met"] },
+      watch: () => ({ places: [PLACE], kinds: ["met"] }),
       view: VIEW,
       run: `${CASE_4_ID}-${arm}`,
       delivery: {
