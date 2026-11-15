@@ -1,0 +1,54 @@
+{
+  "type": "Feature",
+  "geometry": null,
+  "properties": {
+    "id": "urn:demo:xlak:0101",
+    "areaDesc": "Lake Shore; Harbor",
+    "geocode": {
+      "SAME": [
+        "099001"
+      ],
+      "UGC": [
+        "XXZ001",
+        "XXZ002"
+      ]
+    },
+    "references": [],
+    "sent": "2026-05-04T12:00:00Z",
+    "effective": "2026-05-04T12:00:00Z",
+    "onset": "2026-05-04T13:00:00Z",
+    "expires": "2026-05-04T18:00:00Z",
+    "ends": "2026-05-04T18:00:00Z",
+    "status": "Actual",
+    "messageType": "Alert",
+    "category": "Met",
+    "severity": "Severe",
+    "certainty": "Likely",
+    "urgency": "Expected",
+    "event": "High Wind Warning",
+    "sender": "forecast@lake-office.example",
+    "senderName": "Lake Forecast Office (made up)",
+    "headline": "High Wind Warning from 1 PM to 6 PM for Lake Shore and Harbor",
+    "description": "West winds of 40 to 50 mph, with gusts to 65 mph, are likely on the shore. This message is made up for the demo. No real office sent it, and no real place is in it.",
+    "instruction": "Secure loose objects outside.",
+    "response": "Prepare",
+    "parameters": {
+      "NWSheadline": [
+        "HIGH WIND WARNING FROM 1 PM TO 6 PM FOR LAKE SHORE AND HARBOR"
+      ],
+      "VTEC": [
+        "/O.NEW.XLAK.HW.W.0003.260504T1300Z-260504T1800Z/"
+      ]
+    },
+    "scope": "Public",
+    "language": "en-US",
+    "eventCode": {
+      "SAME": [
+        "HWW"
+      ],
+      "NationalWeatherService": [
+        "HWW"
+      ]
+    }
+  }
+}

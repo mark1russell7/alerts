@@ -1,0 +1,107 @@
+{
+  "type": "Feature",
+  "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+      [
+        [
+          0.18,
+          0.32
+        ],
+        [
+          0.4,
+          0.3
+        ],
+        [
+          0.56,
+          0.16
+        ],
+        [
+          0.8,
+          0.14
+        ],
+        [
+          0.82,
+          0.02
+        ],
+        [
+          0.36,
+          0.02
+        ],
+        [
+          0.2,
+          0.18
+        ],
+        [
+          0.18,
+          0.32
+        ]
+      ]
+    ]
+  },
+  "properties": {
+    "id": "urn:demo:xlak:0105",
+    "areaDesc": "West County; East County",
+    "geocode": {
+      "SAME": [
+        "099002",
+        "099001"
+      ],
+      "UGC": [
+        "XXC002",
+        "XXC001"
+      ]
+    },
+    "references": [
+      {
+        "identifier": "urn:demo:xlak:0102",
+        "sender": "forecast@lake-office.example",
+        "sent": "2026-05-04T12:20:00Z"
+      },
+      {
+        "identifier": "urn:demo:xhil:0201",
+        "sender": "forecast@hill-office.example",
+        "sent": "2026-05-04T12:35:00Z"
+      },
+      {
+        "identifier": "urn:demo:xlak:0103",
+        "sender": "forecast@lake-office.example",
+        "sent": "2026-05-04T13:05:00Z"
+      }
+    ],
+    "sent": "2026-05-04T14:40:00Z",
+    "effective": "2026-05-04T14:40:00Z",
+    "onset": "2026-05-04T14:40:00Z",
+    "expires": "2026-05-04T14:55:00Z",
+    "status": "Actual",
+    "messageType": "Cancel",
+    "category": "Met",
+    "severity": "Minor",
+    "certainty": "Observed",
+    "urgency": "Past",
+    "event": "Flash Flood Warning",
+    "sender": "forecast@lake-office.example",
+    "senderName": "Lake Forecast Office (made up)",
+    "headline": "The Flash Flood Warning is cancelled",
+    "description": "The water goes down, and the river is in its banks again. This message is made up for the demo. No real office sent it, and no real place is in it.",
+    "response": "AllClear",
+    "parameters": {
+      "NWSheadline": [
+        "THE FLASH FLOOD WARNING IS CANCELLED"
+      ],
+      "VTEC": [
+        "/O.CAN.XLAK.FF.W.0007.000000T0000Z-260504T1700Z/"
+      ]
+    },
+    "scope": "Public",
+    "language": "en-US",
+    "eventCode": {
+      "SAME": [
+        "FFW"
+      ],
+      "NationalWeatherService": [
+        "FFW"
+      ]
+    }
+  }
+}

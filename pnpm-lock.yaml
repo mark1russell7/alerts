@@ -332,6 +332,12 @@ importers:
 
   packages/site:
     devDependencies:
+      '@mark1russell7/alerts':
+        specifier: workspace:*
+        version: link:../core
+      '@mark1russell7/alerts-source-nws-api':
+        specifier: workspace:*
+        version: link:../source-nws-api
       '@mark1russell7/cue':
         specifier: ^2.0.0
         version: 2.1.4

@@ -16,6 +16,7 @@
 <header class="top">
   <a class="brand" href="./">alerts</a>
   <nav aria-label="Site">
+    <a href="#demo">Demo</a>
     <a href="./releases/">Releases</a>
     <a href="./status/">Status</a>
     <a href="https://github.com/mark1russell7/alerts">GitHub</a>
@@ -23,9 +24,80 @@
   </nav>
 </header>
 
-<main>
+<main class="intro">
   <h1>alerts</h1>
   <p class="lead">One stream of alerts from many sources (weather, news, service status and more), with dedup, ranking and delivery that survives faults.</p>
+  <p class="note">The demo below runs the real code of the system in your browser. The messages, the places and the people are made up. The page calls no server.</p>
+</main>
+
+<section id="demo" class="demo" aria-labelledby="demo-title">
+  <div class="demo-head">
+    <h2 id="demo-title">From a message to a level</h2>
+    <p class="clock" aria-label="The time of the step"><span id="clock">--:-- UTC</span></p>
+  </div>
+
+  <div class="player">
+    <div class="buttons">
+      <button id="back" type="button">Back</button>
+      <button id="play" type="button" class="primary" aria-pressed="false">Play</button>
+      <button id="next" type="button">Next</button>
+    </div>
+    <ol id="rail" class="rail" aria-label="The steps of the replay"></ol>
+  </div>
+
+  <div class="story-box" aria-live="polite">
+    <h3 id="step-title">Step</h3>
+    <p id="story" class="story"></p>
+  </div>
+
+  <ol class="pipeline" aria-label="The pipeline at this step">
+    <li><span class="n" id="count-messages">0</span><span class="what">messages</span><span class="how">from the source</span></li>
+    <li><span class="n" id="count-reports">0</span><span class="what">reports</span><span class="how"><code>mapObservation</code></span></li>
+    <li><span class="n" id="count-incidents">0</span><span class="what">live incidents</span><span class="how"><code>add</code>, <code>incidents</code></span></li>
+    <li><span class="n" id="count-levels">0</span><span class="what">levels sent</span><span class="how"><code>assess</code></span></li>
+  </ol>
+
+  <div class="board">
+    <section class="panel map-panel" aria-labelledby="map-h">
+      <h3 id="map-h">Map</h3>
+      <div id="map" class="map-box"></div>
+      <ul class="legend" aria-label="The colors of the levels">
+        <li><span class="swatch level-life-safety"></span>Life-safety</li>
+        <li><span class="swatch level-urgent"></span>Urgent</li>
+        <li><span class="swatch level-notice"></span>Notice</li>
+        <li><span class="swatch level-none"></span>No person</li>
+        <li><span class="swatch test"></span>Test</li>
+      </ul>
+      <p class="hint">The core matches a home by its zone and county codes. The map draws the shapes, and decides nothing.</p>
+    </section>
+
+    <section class="panel" aria-labelledby="levels-h">
+      <h3 id="levels-h">By level</h3>
+      <p class="hint">Each person gets one level for each incident. Open an entry to see the reasons.</p>
+      <div id="levels"></div>
+    </section>
+
+    <section class="panel" aria-labelledby="incidents-h">
+      <h3 id="incidents-h">Incidents</h3>
+      <p class="hint">The core joins the messages of one event into one incident. Select an incident to show it on the map.</p>
+      <div id="incidents"></div>
+    </section>
+
+    <section class="panel" aria-labelledby="message-h">
+      <h3 id="message-h">The message of this step</h3>
+      <div id="message"></div>
+    </section>
+  </div>
+</section>
+
+<main class="outro">
+  <h2>How it works</h2>
+  <ol class="how-list">
+    <li><strong>Map.</strong> A source adapter turns each message into a report, in one format for each source.</li>
+    <li><strong>Merge.</strong> The core joins the reports of one event: by a reference, by a shared key (VTEC) or by a link rule.</li>
+    <li><strong>Assess.</strong> The policy gives each person a level for each incident, with the reasons.</li>
+    <li><strong>Deliver.</strong> The channels send the level, and escalate until the person acknowledges a life-safety message.</li>
+  </ol>
 
   <h2>Get the code</h2>
   <div class="command">

@@ -1,0 +1,99 @@
+{
+  "type": "Feature",
+  "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+      [
+        [
+          0.18,
+          0.32
+        ],
+        [
+          0.4,
+          0.3
+        ],
+        [
+          0.56,
+          0.16
+        ],
+        [
+          0.8,
+          0.14
+        ],
+        [
+          0.82,
+          0.02
+        ],
+        [
+          0.36,
+          0.02
+        ],
+        [
+          0.2,
+          0.18
+        ],
+        [
+          0.18,
+          0.32
+        ]
+      ]
+    ]
+  },
+  "properties": {
+    "id": "urn:demo:xlak:0103",
+    "areaDesc": "West County; East County",
+    "geocode": {
+      "SAME": [
+        "099002",
+        "099001"
+      ],
+      "UGC": [
+        "XXC002",
+        "XXC001"
+      ]
+    },
+    "references": [
+      {
+        "identifier": "urn:demo:xlak:0102",
+        "sender": "forecast@lake-office.example",
+        "sent": "2026-05-04T12:20:00Z"
+      }
+    ],
+    "sent": "2026-05-04T13:05:00Z",
+    "effective": "2026-05-04T13:05:00Z",
+    "onset": "2026-05-04T13:05:00Z",
+    "expires": "2026-05-04T17:00:00Z",
+    "ends": "2026-05-04T17:00:00Z",
+    "status": "Actual",
+    "messageType": "Update",
+    "category": "Met",
+    "severity": "Severe",
+    "certainty": "Observed",
+    "urgency": "Immediate",
+    "event": "Flash Flood Warning",
+    "sender": "forecast@lake-office.example",
+    "senderName": "Lake Forecast Office (made up)",
+    "headline": "Flash Flood Warning extended until 5 PM, and now also for East County",
+    "description": "The flood moves down the river to the harbor. This message is made up for the demo. No real office sent it, and no real place is in it.",
+    "instruction": "Move to higher ground now.",
+    "response": "Evacuate",
+    "parameters": {
+      "NWSheadline": [
+        "FLASH FLOOD WARNING EXTENDED UNTIL 5 PM, AND NOW ALSO FOR EAST COUNTY"
+      ],
+      "VTEC": [
+        "/O.EXT.XLAK.FF.W.0007.000000T0000Z-260504T1700Z/"
+      ]
+    },
+    "scope": "Public",
+    "language": "en-US",
+    "eventCode": {
+      "SAME": [
+        "FFW"
+      ],
+      "NationalWeatherService": [
+        "FFW"
+      ]
+    }
+  }
+}

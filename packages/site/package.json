@@ -13,6 +13,8 @@
     "build": "vite build"
   },
   "devDependencies": {
+    "@mark1russell7/alerts": "workspace:*",
+    "@mark1russell7/alerts-source-nws-api": "workspace:*",
     "@mark1russell7/cue": "^2.0.0",
     "@mark1russell7/site-pages": "^0.4.8",
     "@types/node": "^26.6.5",
