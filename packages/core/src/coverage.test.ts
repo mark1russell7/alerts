@@ -69,6 +69,15 @@ describe("sourceCovers", () => {
     expect(sourceCovers(source("world", { coverage: "global" }), TEXAS, TORNADO)).toBe(true);
   });
 
+  it("counts a SAME code of the coverage only when it holds the code of the place", () => {
+    const sameSource = (code: string) => source(code, { coverage: [{ type: "code", system: "same", code }] });
+    expect(sourceCovers(sameSource("020000"), KANSAS, TORNADO)).toBe(true);
+    expect(sourceCovers(sameSource("000000"), TEXAS, TORNADO)).toBe(true);
+    // A part of the county does not hold the full county, so the coverage shows the gap.
+    expect(sourceCovers(sameSource("120173"), KANSAS, TORNADO)).toBe(false);
+    expect(sourceCovers(sameSource("020000"), TEXAS, TORNADO)).toBe(false);
+  });
+
   // Made-up positions in the ocean near 0, 0. No position is a real place.
   it("matches a shape of the coverage only to a place with a position in the shape", () => {
     const circle = source("circle", { coverage: [{ type: "circle", center: [0, 0], radiusKm: 500 }] });

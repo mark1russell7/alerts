@@ -166,17 +166,28 @@ export function tableLevel(policy: AssessPolicy, incident: Pick<Incident, "kind"
 }
 
 /**
- * This function tells if a code of an area covers a code of a place. The codes must be of one
- * system and equal, with one more rule for SAME. The first digit of a SAME code is a part of the
- * county, and `0` is the full county. So two SAME codes of one county match unless they name two
- * different parts. This choice is on the safe side.
+ * This function tells if a code of an area and a code of a place name regions that meet. The codes
+ * must be of one system and equal, with one more rule for SAME (`sameScope`). Thus a SAME code of a
+ * state meets each county of that state, and a part of a county meets the full county. The match of
+ * the places uses this rule. It is on the safe side: an alert for a part of a region goes to the places
+ * of that region.
  */
 export function regionCovers(area: RegionCode, place: RegionCode): boolean {
   if (area.system !== place.system) return false;
   if (area.code === place.code) return true;
-  if (area.system !== "same" || !SAME.test(area.code) || !SAME.test(place.code)) return false;
-  const [areaPart, placePart] = [area.code[0], place.code[0]];
-  return area.code.slice(1) === place.code.slice(1) && (areaPart === "0" || placePart === "0");
+  return area.system === "same" && sameRelation(area.code, place.code, "meets");
+}
+
+/**
+ * This function tells if the region of a code of an area holds all of the region of a code of a place.
+ * The codes must be of one system and equal, with one more rule for SAME (`sameScope`). The coverage of
+ * the sources uses this rule. It is on the safe side: a source of a part of a county does not hide a gap
+ * of the full county.
+ */
+export function regionContains(area: RegionCode, place: RegionCode): boolean {
+  if (area.system !== place.system) return false;
+  if (area.code === place.code) return true;
+  return area.system === "same" && sameRelation(area.code, place.code, "contains");
 }
 
 /** A place in the areas of an incident, with the codes or the distance that decided the match. */
@@ -322,6 +333,29 @@ function noMatch(incident: Pick<Incident, "areas" | "about">, places: readonly W
 
 // A SAME code: a part digit, two digits of the state and three digits of the county.
 const SAME = /^\d{6}$/;
+
+/**
+ * This function gives the levels of a SAME code `PSSCCC`: the state `SS`, the county `CCC` and the part
+ * `P`. `undefined` is all of a level. The part `0` is the full county, the county `000` is the full
+ * state, and `000000` is the full country (47 CFR 11.31). A code that is not 6 digits gives `undefined`.
+ */
+function sameScope(code: string): readonly (string | undefined)[] | undefined {
+  if (!SAME.test(code)) return undefined;
+  const [part, state, county] = [code.slice(0, 1), code.slice(1, 3), code.slice(3)];
+  if (county === "000") return state === "00" ? [undefined, undefined, undefined] : [state, undefined, undefined];
+  return [state, county, part === "0" ? undefined : part];
+}
+
+/**
+ * This function compares the levels of two SAME codes. The first contains the second when each of its
+ * levels is all of the level or equal. The two meet when each level is all of the level in one of them,
+ * or equal.
+ */
+function sameRelation(first: string, second: string, relation: "meets" | "contains"): boolean {
+  const [outer, inner] = [sameScope(first), sameScope(second)];
+  if (outer === undefined || inner === undefined) return false;
+  return outer.every((level, at) => level === undefined || level === inner[at] || (relation === "meets" && inner[at] === undefined));
+}
 
 function rank(level: AssessedLevel): number {
   return ASSESSED_LEVELS.indexOf(level);

@@ -149,7 +149,8 @@ The cell is the copy of the system on one machine. Its internet link, its power 
 
 - A source counts when its health is in `policy.up`. The first policy counts `healthy` and `slow`. A source with no health is `unknown`.
 - A source covers a kind when one of its prefixes has the kind. A source of a part of the kind does not count.
-- A source covers a place when its coverage is `global`, or when a code of its coverage covers a code of the place. So a place lists its codes at each level: the NWS zone and county, SAME, the state (`state`) and the country (`iso3166`).
+- A source covers a place when its coverage is `global`, or when a code of its coverage holds a code of the place (`regionContains`). So a place lists its codes at each level: the NWS zone and county, SAME, the state (`state`) and the country (`iso3166`).
+- A SAME code of a part of a county does not hold the full county. This rule errs on the safe side for the coverage: a source of a part does not hide a gap.
 - A shape of the coverage covers a place when the shape contains the position of the place. The buffer does not count, as for the codes.
 - A shape covers no place with no position. A shape that `@mark1russell7/geo` refuses covers no place, so the coverage shows a gap.
 
@@ -537,7 +538,11 @@ The core matches the area of a report to a place with one rule for each source. 
 - A shape that `@mark1russell7/geo` refuses, for example a ring with fewer than 4 positions, adds no place.
 - The list of areas does not keep the area blocks of a CAP message. The IPAWS adapter and the merge put the areas of all blocks in one list. Thus a shape cannot remove a place: the place can be in a block with only codes. The next part of the plan gives each area the key of its block. Then the shape of a block decides for that block.
 
-Two codes match when their systems and their values are equal. The first digit of a SAME code is a part of the county, and `0` is the full county. So a part also matches the full county, and the match errs on the safe side.
+Two codes match when their systems and their values are equal, or when two SAME codes name regions that meet (`regionCovers`). A SAME code `PSSCCC` has the part `P`, the state `SS` and the county `CCC`. The part `0` is the full county, the county `000` is the full state, and `000000` is the full country (47 CFR 11.31).
+
+- A part matches the full county, and the full county matches each part. Two different parts do not match.
+- A code of a state matches each county of that state. `000000` matches each SAME code.
+- The rule errs on the safe side: an alert for a full state goes to each place of that state.
 
 The area `{ type: "place" }` covers that watched place only. Only the reports of the core use it. When the areas have no code and no place, and no place of the person has a position, the assessment gives the reason `no-codes`. The first sources, the NWS and IPAWS, give codes with each area.
 
