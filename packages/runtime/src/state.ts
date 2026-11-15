@@ -14,6 +14,7 @@ import {
   type Acknowledgment,
   type Cursor,
   type Delivery,
+  type EndMark,
   type EscalationStart,
   type HealthOptions,
   type HealthTrack,
@@ -82,14 +83,16 @@ export function rebuild(events: Iterable<RuntimeEvent>, context: FoldContext): R
   const reports: Report[] = [];
   const deliveries: Delivery[] = [];
   const acks: Acknowledgment[] = [];
+  const ends: EndMark[] = [];
   for (const event of events) {
     state = foldRest(state, event, context);
     const parts = partsOf(event);
     reports.push(...(parts?.reports ?? []));
     deliveries.push(...(parts?.deliveries ?? []));
     acks.push(...(parts?.acks ?? []));
+    ends.push(...(parts?.ends ?? []));
   }
-  return { ...state, merge: normalize({ reports, deliveries, acks }) };
+  return { ...state, merge: normalize({ reports, deliveries, acks, ends }) };
 }
 
 // The parts of the merge in an event.
@@ -102,6 +105,9 @@ function partsOf(event: RuntimeEvent): MergeParts | undefined {
       return { deliveries: [event.delivery] };
     case "acknowledgment":
       return { acks: [event.acknowledgment] };
+    case "ended":
+    case "back":
+      return { ends: event.reports.map((report) => ({ report, at: event.time, ended: event.type === "ended" })) };
     default:
       return undefined;
   }

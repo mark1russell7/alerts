@@ -11,6 +11,7 @@ import type {
   Acknowledgment,
   Certainty,
   Delivery,
+  EndMark,
   Incident,
   Instant,
   Level,
@@ -24,19 +25,20 @@ import type {
 import { LEVELS } from "./contracts.ts";
 
 /** The merge state with no part. */
-export const EMPTY_STATE: MergeState = { reports: [], deliveries: [], acks: [] };
+export const EMPTY_STATE: MergeState = { reports: [], deliveries: [], acks: [], ends: [] };
 
 /** The parts of a merge state, in any order and with duplicates. */
 export interface MergeParts {
   readonly reports?: readonly Report[];
   readonly deliveries?: readonly Delivery[];
   readonly acks?: readonly Acknowledgment[];
+  readonly ends?: readonly EndMark[];
 }
 
 /**
  * This function gives the one form of a merge state. It keeps one report for each id: for two
- * contents of one id, the content with the smaller canonical JSON. It keeps each delivery and each
- * acknowledgment one time.
+ * contents of one id, the content with the smaller canonical JSON. It keeps each delivery, each
+ * acknowledgment and each end mark one time.
  */
 export function normalize(parts: MergeParts): MergeState {
   const reports = new Map<ReportId, { readonly report: Report; readonly text: string }>();
@@ -49,6 +51,7 @@ export function normalize(parts: MergeParts): MergeState {
     reports: [...reports.entries()].sort(([a], [b]) => compare(a, b)).map(([, held]) => held.report),
     deliveries: uniqueByText(parts.deliveries ?? []),
     acks: uniqueByText(parts.acks ?? []),
+    ends: uniqueByText(parts.ends ?? []),
   };
 }
 
@@ -58,6 +61,7 @@ export function join(a: MergeState, b: MergeState): MergeState {
     reports: [...a.reports, ...b.reports],
     deliveries: [...a.deliveries, ...b.deliveries],
     acks: [...a.acks, ...b.acks],
+    ends: [...a.ends, ...b.ends],
   });
 }
 
@@ -67,6 +71,7 @@ export function add(state: MergeState, parts: MergeParts): MergeState {
     reports: [...state.reports, ...(parts.reports ?? [])],
     deliveries: [...state.deliveries, ...(parts.deliveries ?? [])],
     acks: [...state.acks, ...(parts.acks ?? [])],
+    ends: [...state.ends, ...(parts.ends ?? [])],
   });
 }
 
@@ -142,9 +147,26 @@ export function incidents(state: MergeState, at: Instant, options: IncidentOptio
   // The edges go in the two directions, so the strong components are the connected components.
   // The nodes of a component keep the order of the reports: the order of their ids.
   const components = stronglyConnectedComponents(reports.keys(), (index) => edges[index]!);
+  const ended = endedReports(state, at);
   return components
-    .map((component) => incidentOf(component.map((index) => reports[index]!), at))
+    .map((component) => incidentOf(component.map((index) => reports[index]!), at, ended))
     .sort((a, b) => compare(a.anchor, b.anchor));
+}
+
+/**
+ * This function gives the reports that ended at a time: each report whose latest end mark at or before
+ * the time has `ended` true. A mark after the time changes nothing, so a replay of a past time gives
+ * the past value.
+ */
+export function endedReports(state: MergeState, at: Instant): ReadonlySet<ReportId> {
+  const latest = new Map<ReportId, EndMark>();
+  for (const mark of state.ends) {
+    if (mark.at > at) continue;
+    const held = latest.get(mark.report);
+    // At one time, the mark with `ended` false wins. Thus the order of the marks changes nothing.
+    if (held === undefined || mark.at > held.at || (mark.at === held.at && !mark.ended)) latest.set(mark.report, mark);
+  }
+  return new Set([...latest.values()].filter((mark) => mark.ended).map((mark) => mark.report));
 }
 
 /**
@@ -176,7 +198,7 @@ function top<T>(items: readonly T[], rank: (item: T) => number): T {
   return items.reduce((best, item) => (rank(item) > rank(best) ? item : best));
 }
 
-function incidentOf(group: readonly Report[], at: Instant): Incident {
+function incidentOf(group: readonly Report[], at: Instant, ended: ReadonlySet<ReportId>): Incident {
   const superseded = new Set<string>();
   for (const report of group) {
     for (const reference of report.references) superseded.add(JSON.stringify([report.source, reference]));
@@ -186,7 +208,7 @@ function incidentOf(group: readonly Report[], at: Instant): Incident {
   let heads = group.filter((report) => !superseded.has(JSON.stringify([report.source, report.key])) && !replaced.has(report.id));
   // A cycle of references leaves no head. Then each report counts as a head.
   if (heads.length === 0) heads = [...group];
-  const liveHeads = heads.filter((report) => report.op !== "cancel" && !(report.expires !== undefined && report.expires <= at));
+  const liveHeads = heads.filter((report) => report.op !== "cancel" && !(report.expires !== undefined && report.expires <= at) && !ended.has(report.id));
   const basis = liveHeads.length > 0 ? liveHeads : heads;
   const stated = basis.map((report) => ({ report, ...knownValues(report, events) }));
   const first = group[0]!;

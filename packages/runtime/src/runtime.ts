@@ -5,13 +5,14 @@
  * that it gets.
  */
 import type { WallClock } from "@mark1russell7/algebra/clock";
-import type { Duration, FetchOutcome, Instant, SourceDescriptor, SourceId, SourceProcedures, Watch } from "@mark1russell7/alerts";
+import type { Duration, FetchOutcome, Instant, ReportId, SourceDescriptor, SourceId, SourceProcedures, Watch } from "@mark1russell7/alerts";
 import { errorMessage } from "@mark1russell7/text";
 import { createDispatcher, type DeliveryOptions, type DeliveryStep } from "./delivery.ts";
 import { envelope, type RuntimeEvent } from "./events.ts";
 import { fetchEvents } from "./fetch.ts";
 import { limited } from "./limit.ts";
 import type { RuntimeLog } from "./log.ts";
+import { SNAPSHOT_MISSES, snapshotStep } from "./snapshot.ts";
 import { fold, rebuild, type RuntimeState } from "./state.ts";
 import { earliest, nextFetch, systemEvent, systemView, type SystemView, type ViewConfig } from "./view.ts";
 
@@ -36,6 +37,11 @@ export interface RuntimeOptions {
   readonly run: string;
   /** This function gives the longest time of one fetch of a source. The default is the interval of the source. */
   readonly fetchLimit?: (source: SourceDescriptor) => Duration;
+  /**
+   * The count of complete fetches in a row that miss a report of a snapshot source before its end. The
+   * default is `SNAPSHOT_MISSES`.
+   */
+  readonly snapshotMisses?: number;
   /** The recipients and the channels. Without them, a pass sends nothing. */
   readonly delivery?: DeliveryOptions;
   /**
@@ -102,13 +108,26 @@ export function openRuntime(options: RuntimeOptions): Runtime {
 
   const dispatcher = options.delivery === undefined ? undefined : createDispatcher(options.delivery, { clock, places: config.places, state: () => state, append, wake: options.wake });
 
+  // The misses of the reports of each snapshot source, in memory only. A restart starts them at 0.
+  const misses = new Map<SourceId, ReadonlyMap<ReportId, number>>();
+  const limit = options.snapshotMisses ?? SNAPSHOT_MISSES;
+  if (!Number.isInteger(limit) || limit < 1) throw new Error(`The count of snapshot misses is ${limit}, not an integer of 1 or more.`);
+
   const fetchOne = async (source: SourceProcedures, descriptor: SourceDescriptor): Promise<readonly string[]> => {
     const started = clock.now();
     const cursor = state.cursors[descriptor.id];
     // A fetch that throws at once is a failure of its source too, not a failure of the pass.
     const work = Promise.resolve().then(() => source.fetch({ watch: options.watch(descriptor), ...(cursor === undefined ? {} : { cursor }) }));
     const outcome = await bounded(work, options.fetchLimit?.(descriptor) ?? descriptor.interval, clock);
-    return append(fetchEvents({ source: descriptor.id, procedures: source, started, ended: clock.now(), outcome, known: (id) => log.has(id) }));
+    const ended = clock.now();
+    const conflicts = append(fetchEvents({ source: descriptor.id, procedures: source, started, ended, outcome, known: (id) => log.has(id) }));
+    if (descriptor.listing !== "snapshot") return conflicts;
+    // The step reads the merge state after the fetch, thus a new report of the fetch has no miss.
+    const step = snapshotStep({ source: descriptor.id, started, ended, outcome, merge: state.merge, misses: misses.get(descriptor.id) ?? new Map(), limit });
+    const more = append(step.events);
+    // The counts change only after the write. A failed write leaves the old counts, thus the end comes later.
+    misses.set(descriptor.id, step.misses);
+    return [...conflicts, ...more];
   };
 
   return {

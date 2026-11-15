@@ -38,7 +38,7 @@ The repo is public. It holds no person, no place, no address and no key. The pri
 
 ## The merge laws
 
-The merge state is a set of grow-only sets: reports, acknowledgments and deliveries. The join of two states is their union. So the join is:
+The merge state is a set of grow-only sets: reports, acknowledgments, deliveries and end marks. The join of two states is their union. So the join is:
 
 - **idempotent**: `join(a, a) = a`. A duplicate report changes nothing.
 - **commutative**: `join(a, b) = join(b, a)`. The order of arrival changes nothing.
@@ -54,7 +54,7 @@ The groups of reports are a function of the merge state alone, with no clock. Tw
 
 The links are transitive: when A links to B and B links to C, the three reports are in one incident. A link rule gives the blocks of a report, for example its family of kind and its day. The merge tests only two reports that share a block. So the cost grows with the size of the blocks, not with the square of the count of reports.
 
-A line is a report and the reports of its source that update or cancel it. The head of a line is its last report: no report of the same source references it. An incident is live at a time when one or more heads are not cancelled and not expired at that time. Its corroboration is the count of the different origins of its reports.
+A line is a report and the reports of its source that update or cancel it. The head of a line is its last report: no report of the same source references it. An incident is live at a time when one or more heads are not cancelled, not expired and not ended at that time. Its corroboration is the count of the different origins of its reports.
 
 The severity, urgency and certainty of an incident are the highest of its live heads. An `unknown` value of a head takes the value of the latest report of its event with a known value. That report is not later than the head and is not a cancel. A tie of time takes the highest value. Thus a row of IEM keeps the values of the message of the NWS.
 
@@ -65,6 +65,8 @@ A copy of a message from another source does not get the references of the line.
 - A replaced report is not a head. Thus a cancel of the NWS also ends the copy of that alert from IPAWS. The rows of IEM, one for each county, end the NWS message of two counties.
 
 For each code, the latest reports that name it stay. So the rule loses no later statement of a code. A code that no later report names keeps its report live, and a report with no region code is not replaced. Then the report stays live until it expires or its source ends it. This error is on the safe side. The rule reads only the reports of the group, so it keeps the three laws.
+
+An end mark tells that a report of a snapshot source left the list of the source (`ended: true`), or is in the list again (`ended: false`). A report is ended at a time when its latest mark at or before that time is an end. When two marks of one report have the same time, the report stays live. This choice is on the safe side, and it is a function of the set, so the three laws hold. A mark changes no group. It changes only the field `live` and the levels of the live heads. An ended report still gives its known values to the fill of `unknown` values, as an expired report does.
 
 The incident id is its anchor: its smallest report id. The anchor can change when two incidents merge. So an acknowledgment and a delivery point to a report of the incident, not to the anchor.
 
@@ -102,7 +104,12 @@ The rules of each adapter:
    - The hash input is a JSON array that starts with the scheme `alerts-id/1` and the kind of id. Each copy of the system gives the same id.
 5. **The fixtures are real and contain no personal data.** Each adapter keeps recorded answers of its source in `fixtures/`, with the expected reports. The places of the tests are public places, not the places of a real person.
 6. **A canary when the source has one.** For example: the national feed of the NWS has one or more active alerts. A national feed with no alert is more likely a fault than a calm country.
-7. **The kinds are codes of the taxonomy.** Each kind that `map` gives is a code of `TAXONOMY`. A kind that the tables do not know is `other.unknown`, with a problem. A gate test of the adapter holds this rule with `unknownKinds`.
+7. **A snapshot source tells it.** A source whose complete fetch gives each message in effect sets `listing: "snapshot"`. A message of such a list ends when it leaves the list, with no cancel.
+   - After `SNAPSHOT_MISSES` complete fetches in a row with no observation of a live report, the runtime writes an `ended` event.
+   - A failed fetch or an incomplete fetch counts nothing.
+   - A report that ended and is in a complete list again gets a `back` event.
+   - The counts are in memory only. A restart makes an end later, not sooner.
+8. **The kinds are codes of the taxonomy.** Each kind that `map` gives is a code of `TAXONOMY`. A kind that the tables do not know is `other.unknown`, with a problem. A gate test of the adapter holds this rule with `unknownKinds`.
 
 The testkit gives one conformance suite, and each adapter passes it. The suite examines the laws of `map` on the fixtures and on mutated fixtures. It examines the outcomes of `fetch` behind a fault proxy: cut, delay, reset, 429, 500 and a changed body. It also examines the descriptor.
 
@@ -442,4 +449,5 @@ The file `schemas.ts` of the core has one zod 4 schema for each data type of the
 - The procedure tools take the schema of each input and output from `schemas.ts`.
 - The link rule of each family of kind, for rule 3 of the merge.
 - The calculation of the level from probabilities and costs (AL-31), with the base rates from the event log.
+- The count of misses that ends a report of a snapshot source is 2 (`SNAPSHOT_MISSES`). This value is a shortcut. A measure of the flap rate of the IEM list replaces it (AL-8).
 - The merge state grows with each report. A compaction of the incidents that ended before a horizon keeps it small. It must keep the three laws.

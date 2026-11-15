@@ -260,6 +260,12 @@ export interface SourceDescriptor {
    */
   readonly maxQuiet?: Duration;
   readonly auth: "none" | "key" | "oauth";
+  /**
+   * `snapshot`: each complete fetch gives all the messages that are in effect, and a message that ends
+   * leaves the list with no cancel. Then the runtime ends a report that is absent from complete fetches.
+   * Absent: a stream. A message stays until its cancel or its expiry.
+   */
+  readonly listing?: "snapshot";
   /** A plain sentence of the canary check, when the source has one. */
   readonly canary?: string;
 }
@@ -456,7 +462,7 @@ export interface Incident {
   readonly expires?: Instant;
   readonly areas: readonly Area[];
   readonly about: readonly Subject[];
-  /** False when each line of reports is cancelled or expired at the time of the calculation. */
+  /** False when each line of reports is cancelled, expired or ended at the time of the calculation. */
   readonly live: boolean;
   /** The count of different origins that report the event. */
   readonly corroboration: number;
@@ -624,15 +630,28 @@ export interface Acknowledgment {
 // =============================================================================
 
 /**
- * The merge state: three grow-only sets. The join of two states is their union, so each copy of
+ * A mark of the runtime on a report of a snapshot source. The latest mark of a report at a time tells
+ * if the report ended. At one time, a mark with `ended` false wins, so a tie keeps the report live.
+ */
+export interface EndMark {
+  readonly report: ReportId;
+  readonly at: Instant;
+  /** True: the report left the list of its source. False: the report is in the list again. */
+  readonly ended: boolean;
+}
+
+/**
+ * The merge state: four grow-only sets. The join of two states is their union, so each copy of
  * the system that gets the same parts gets the same state. `normalize` gives the one form of a
- * state. It has one report for each id, in the order of the ids. It has each delivery and each
- * acknowledgment one time, in the order of their canonical JSON.
+ * state. It has one report for each id, in the order of the ids. It has each delivery, each
+ * acknowledgment and each end mark one time, in the order of their canonical JSON.
  */
 export interface MergeState {
   readonly reports: readonly Report[];
   readonly deliveries: readonly Delivery[];
   readonly acks: readonly Acknowledgment[];
+  /** The end marks of the reports of the snapshot sources. */
+  readonly ends: readonly EndMark[];
 }
 
 // =============================================================================
