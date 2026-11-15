@@ -1,7 +1,8 @@
 import type { Level, Message, PersonId, ReportId } from "@mark1russell7/alerts";
 import type { PushoverFetch } from "@procedures/notify/pushover";
+import { QuotaError } from "polite-crawler/api";
 import { describe, expect, it } from "vitest";
-import { createPushoverChannel, cut, isPushoverKey, isQuotaRefusal, priorityOf, pushoverDescriptor, pushoverMessageOf } from "./index.ts";
+import { createPushoverChannel, isPushoverKey, priorityOf, pushoverDescriptor, pushoverMessageOf } from "./index.ts";
 
 // Fake keys: 30 letters and digits, as Pushover keys are. No real key is in this repository.
 const TOKEN = "t".repeat(30);
@@ -36,18 +37,6 @@ const server = (...answers: Array<{ status: number; body: unknown } | Error>) =>
 
 const fields = (body: string | undefined): Record<string, string> => Object.fromEntries(new URLSearchParams(body ?? ""));
 
-/** The fields of `QuotaError` of `polite-crawler/api` that the channel reads. */
-class QuotaError extends Error {
-  override readonly name: string = "QuotaError";
-  readonly key: string;
-  readonly resetAt: number;
-  constructor(message: string, resetAt: number, key = "pushover-messages") {
-    super(message);
-    this.key = key;
-    this.resetAt = resetAt;
-  }
-}
-
 describe("priorityOf", () => {
   it("gives the emergency priority to life-safety, and -1 to a quiet message and to the digest", () => {
     expect(priorityOf("life-safety", false)).toBe(2);
@@ -60,12 +49,23 @@ describe("priorityOf", () => {
   });
 });
 
-describe("cut", () => {
-  it("cuts by code points and ends a cut text with an ellipsis", () => {
-    expect(cut("short", 10)).toBe("short");
-    expect(cut("abcdef", 4)).toBe("abc…");
-    expect(cut("🌪🌪🌪", 2)).toBe("🌪…");
-    expect([...cut("🌪".repeat(300), 250)].length).toBe(250);
+describe("the cut of a long title and body", () => {
+  const mapped = (title: string, body: string) => {
+    const result = pushoverMessageOf(message("urgent", { title, body }), ADDRESS, AT);
+    if ("refused" in result) throw new Error(result.refused);
+    return result;
+  };
+
+  it("cuts by code points as Pushover counts them, and ends a cut text with an ellipsis", () => {
+    expect(mapped("short", "body")).toMatchObject({ title: "short", message: "body" });
+    const long = mapped("🌪".repeat(300), "🌪".repeat(1100));
+    expect(long.title).toBe(`${"🌪".repeat(249)}…`);
+    expect([...long.message]).toHaveLength(1024);
+  });
+
+  it("keeps each grapheme whole: a flag of two code points is not split", () => {
+    // 124 flags are 248 code points. The next flag does not fit with the ellipsis in 250.
+    expect(mapped("🇺🇸".repeat(200), "body").title).toBe(`${"🇺🇸".repeat(124)}…`);
   });
 });
 
@@ -158,7 +158,7 @@ describe("send", () => {
   });
 
   it("gives a refusal of the quota as rate-limited, with the wait to the reset, and Pushover gets no call", async () => {
-    const fake = server(new QuotaError("The quota Pushover messages is used until 2026-12-01.", AT + 60_000));
+    const fake = server(new QuotaError("The quota Pushover messages is used until 2026-12-01.", "pushover:app", AT + 60_000));
     const channel = createPushoverChannel({ token: TOKEN, fetch: fake.fetch, now: () => AT });
     expect(await channel.send({ message: message("urgent"), address: ADDRESS })).toEqual({
       ok: false,
@@ -260,15 +260,5 @@ describe("cancel", () => {
     const channel = createPushoverChannel({ token: TOKEN, fetch: fake.fetch });
     await expect(channel.cancel({ receipt: { receipt: RECEIPT } })).rejects.toThrow(/\(auth\)/);
     await expect(channel.cancel({ receipt: { receipt: RECEIPT } })).rejects.toThrow(/\(network\)/);
-  });
-});
-
-describe("isQuotaRefusal", () => {
-  it("reads the name, the key and the reset of the error", () => {
-    expect(isQuotaRefusal(new QuotaError("used", 1))).toBe(true);
-    expect(isQuotaRefusal(new Error("other"))).toBe(false);
-    expect(isQuotaRefusal({ name: "QuotaError", key: "k", resetAt: 1 })).toBe(false);
-    expect(isQuotaRefusal(new QuotaError("used", Number.NaN))).toBe(false);
-    expect(isQuotaRefusal(Object.assign(new QuotaError("used", 1), { key: 7 }))).toBe(false);
   });
 });

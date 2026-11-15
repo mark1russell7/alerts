@@ -5,6 +5,7 @@
  */
 
 import { COPY_ID, type ChannelDescriptor, type ChannelId, type ChannelProcedures, type Instant, type SendOutcome } from "@mark1russell7/alerts";
+import { isQuotaError, type QuotaError } from "polite-crawler/api";
 import {
   callPushover,
   extractPushoverCancelled,
@@ -24,7 +25,7 @@ import {
 } from "@procedures/notify/pushover";
 import { type PushoverMapOptions, pushoverMessageOf, sendFailureOf, statusOf } from "./map.ts";
 
-export { cut, priorityOf, pushoverMessageOf, sendFailureOf, statusOf } from "./map.ts";
+export { priorityOf, pushoverMessageOf, sendFailureOf, statusOf } from "./map.ts";
 export type { PushoverMapOptions, Refusal } from "./map.ts";
 
 /** The time limit of one call when the options give none, in milliseconds. */
@@ -50,9 +51,9 @@ export interface PushoverChannelOptions extends PushoverMapOptions {
   /** The API token of the application. The private configuration gives it at run time. */
   readonly token: string;
   /**
-   * The fetch of each call. The runtime gives `withQuota(gate, fetch)` of `polite-crawler/api`, with a
-   * cost of 1 for `/messages.json` and 0 for the other calls. Thus the channel cannot send more
-   * messages than the monthly limit of the application.
+   * The fetch of each call. A fetch with a gate, for example `withQuota(gate, fetch)` of
+   * `polite-crawler/api`, can refuse a call over the quota. The channel then gives `rate-limited`, with
+   * the reset of the quota as the retry.
    */
   readonly fetch: PushoverFetch;
   /** The platform of the device of the person. It adds the push service of the platform to `dependsOn`. */
@@ -61,27 +62,6 @@ export interface PushoverChannelOptions extends PushoverMapOptions {
   readonly timeoutMs?: number | undefined;
   /** This function gives the time in milliseconds since the epoch. The default is `Date.now`. */
   readonly now?: (() => Instant) | undefined;
-}
-
-/** The refusal of a quota, as `QuotaError` of `polite-crawler/api` gives it. */
-interface QuotaRefusal {
-  readonly message: string;
-  readonly key: string;
-  readonly resetAt: number;
-}
-
-/**
- * This function tells if an error of the fetch is a `QuotaError` of `polite-crawler/api`. It reads
- * the name of the error, a string `key` and a finite `resetAt`. A test with `instanceof` fails when
- * two copies of the package exist.
- *
- * This check is local until `isQuotaError` of `polite-crawler/api` is on npm, in 0.6.4. Then the
- * channel uses that function, and this one goes.
- */
-export function isQuotaRefusal(error: unknown): error is QuotaRefusal {
-  if (!(error instanceof Error) || error.name !== "QuotaError") return false;
-  const fields = error as { key?: unknown; resetAt?: unknown };
-  return typeof fields.key === "string" && typeof fields.resetAt === "number" && Number.isFinite(fields.resetAt);
 }
 
 /** This function gives the descriptor of the channel for a platform. */
@@ -118,12 +98,12 @@ export function createPushoverChannel(options: PushoverChannelOptions): ChannelP
 
   /** One call. A refusal of the quota stops the call before Pushover counts it. */
   const call = async <Result>(request: PushoverRequest, extract: (response: PushoverResponse) => Result | PushoverFailure) => {
-    let quota: QuotaRefusal | undefined;
+    let quota: QuotaError | undefined;
     const guarded: PushoverFetch = async (url, init) => {
       try {
         return await options.fetch(url, init);
       } catch (error) {
-        if (isQuotaRefusal(error)) quota = error;
+        if (isQuotaError(error)) quota = error;
         throw error;
       }
     };
