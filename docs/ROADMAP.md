@@ -34,7 +34,7 @@ The repo is public. It holds the general framework only. People, places, keys an
 | AL-14 | More hazards | blocked | Earthquakes, floods, hurricanes, air quality, wildfire smoke, space weather and power outages, each with two or more sources. |
 | AL-15 | Text and voice | blocked | Text messages and voice calls as the next step of the escalation, on a second provider. |
 | AL-16 | A cloud copy | blocked | A second copy of the system on a cloud server. The merge makes the copies agree. |
-| AL-17 | People and places from the private store | blocked | The system reads people and places from the private configuration at run time. |
+| AL-17 | People and places from the private store | in progress | The system reads people and places from the private configuration at run time. The format `AlertConfig` and its load are done in the core. The schema of the format, the loader of the runtime and the store of the owner are next. |
 | AL-18 | A UI with a map and overlays | blocked | Live incidents, warning areas, places and coverage on a map, with a view by criticality. |
 | AL-19 | Technical outages and news | blocked | Status pages, cloud regions, internet outages and breaking news, with the same merge and priority. |
 | AL-25 | Radio input through an SDR | blocked | A software-defined radio receives NOAA Weather Radio, and the system decodes its SAME headers. This input needs no internet. |
