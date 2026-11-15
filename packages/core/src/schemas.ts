@@ -80,6 +80,7 @@ import {
   type Watch,
   type WatchedPlace,
 } from "./contracts.ts";
+import { CONFIG_FORMAT, type AddressValue, type AlertConfig, type ContactConfig, type PersonConfig, type PlaceConfig, type SecretRef } from "./config.ts";
 import type { Lateness, LatenessLimit, LatenessState } from "./lateness.ts";
 import { CATEGORIES, knownKind } from "./taxonomy.ts";
 
@@ -754,6 +755,65 @@ export const latenessSchema: z.ZodType<Lateness, Lateness> = schemaOf<Lateness>(
       missed: z.array(reportIdSchema).readonly(),
       since: instantSchema.exactOptional(),
       wakeAt: instantSchema.exactOptional(),
+    })
+    .readonly(),
+);
+
+// =============================================================================
+// The private configuration
+// =============================================================================
+
+/** This schema checks a reference to a secret. The name is not empty. The value stays in the secret store. */
+export const secretRefSchema: z.ZodType<SecretRef, SecretRef> = schemaOf<SecretRef>()(
+  z.strictObject({ secret: z.string().min(1, "The name of a secret is a non-empty string.") }).readonly(),
+);
+
+/** This schema checks one field of an address: a text, or a reference to a secret. */
+export const addressValueSchema: z.ZodType<AddressValue, AddressValue> = schemaOf<AddressValue>()(z.union([z.string(), secretRefSchema]));
+
+/** This schema checks a place of the configuration. */
+export const placeConfigSchema: z.ZodType<PlaceConfig, PlaceConfig> = schemaOf<PlaceConfig>()(
+  z
+    .strictObject({
+      id: placeIdSchema,
+      label: z.string(),
+      at: positionSchema.exactOptional(),
+      codes: z.array(regionCodeSchema).readonly(),
+      bufferKm: z.number(),
+      sharePosition: z.array(sourceIdSchema).readonly().exactOptional(),
+    })
+    .readonly(),
+);
+
+/** This schema checks a person of the configuration: the watch, and the policies of the person when they are not the default. */
+export const personConfigSchema: z.ZodType<PersonConfig, PersonConfig> = schemaOf<PersonConfig>()(
+  z
+    .strictObject({
+      watch: personWatchSchema,
+      label: z.string().exactOptional(),
+      policies: z.array(escalationPolicySchema).readonly().exactOptional(),
+    })
+    .readonly(),
+);
+
+/** This schema checks one address of one person on one channel. */
+export const contactConfigSchema: z.ZodType<ContactConfig, ContactConfig> = schemaOf<ContactConfig>()(
+  z.strictObject({ person: personIdSchema, channel: channelIdSchema, address: z.record(z.string(), addressValueSchema).readonly() }).readonly(),
+);
+
+/**
+ * This schema checks the JSON of the private configuration at the load. It checks the form of each
+ * value. Then `loadConfig` checks the references: the ids, the places of each person, the contacts and
+ * the secrets.
+ */
+export const alertConfigSchema: z.ZodType<AlertConfig, AlertConfig> = schemaOf<AlertConfig>()(
+  z
+    .strictObject({
+      format: z.literal(CONFIG_FORMAT),
+      places: z.array(placeConfigSchema).readonly(),
+      people: z.array(personConfigSchema).readonly(),
+      contacts: z.array(contactConfigSchema).readonly(),
+      policies: z.array(escalationPolicySchema).readonly(),
     })
     .readonly(),
 );

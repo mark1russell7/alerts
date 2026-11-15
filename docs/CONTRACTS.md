@@ -346,7 +346,7 @@ The core gives the format of the private configuration, `AlertConfig` (`alerts-c
 
 The times of the delivery and the rank of a copy are not in `AlertConfig`. They are settings of each copy.
 
-The function `loadConfig` checks a configuration and makes the recipient of each person. The caller gives the secret store, so the core reads no file. The runtime does not start when the load gives a problem. The load finds:
+The schema `alertConfigSchema` checks the JSON of the configuration first. Then the function `loadConfig` checks the references and makes the recipient of each person. The caller gives the secret store, so the core reads no file. The runtime does not start when the load gives a problem. The load finds:
 
 - two places or two people with one id, and a place with no region code
 - a place of a person or of a rule that the configuration or the person does not have
@@ -367,9 +367,18 @@ Two codes match when their systems and their values are equal. The first digit o
 
 The area `{ type: "place" }` covers that watched place only. Only the reports of the core use it. An area with only shapes matches no place until `@mark1russell7/geo` has the tests. The assessment then gives the reason `no-codes`. The first sources, the NWS and IPAWS, give codes with each area.
 
+## The schemas
+
+The file `schemas.ts` of the core has one zod 4 schema for each data type of the contracts and of the configuration. A schema checks data at a trust boundary. The boundaries are the output of a map function, the event log, the private configuration and the procedure tools.
+
+- The types stay the source of truth. The type check fails when a schema and its type are different. This includes each optional key and each readonly key.
+- Each object is strict, so an unknown key fails. An optional key with the value `undefined` also fails.
+- No schema has a transform, so `z.toJSONSchema` converts each one for the procedure tools.
+- A refinement holds each rule of a value that a type cannot hold, for example the anchor of an incident or a known kind code.
+
 ## Open points
 
-- The procedure schemas: Standard Schema validators (zod 4) for each input and output, in the core package.
+- The procedure tools take the schema of each input and output from `schemas.ts`.
 - The link rule of each family of kind, for rule 3 of the merge.
 - The calculation of the level from probabilities and costs (AL-31), with the base rates from the event log.
 - The merge state grows with each report. A compaction of the incidents that ended before a horizon keeps it small. It must keep the three laws.
