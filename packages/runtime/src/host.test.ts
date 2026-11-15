@@ -7,7 +7,8 @@ import { declareSupervisor, HOST_PORTS, hostGroup, hostTask, RUNTIME_GRACE, RUNT
 import { STOP_MESSAGE } from "./index.ts";
 import { INSTANCE_TIMES } from "./instance.ts";
 
-const HOME = join("/home/test", ".alerts");
+// A folder of the private files with no user name in it.
+const HOME = join("/var/lib", "alerts");
 const ROOT = join("/srv/alerts", "packages", "runtime");
 const NODE = "/usr/bin/node";
 const OPTIONS = { home: HOME, root: ROOT, node: NODE };
