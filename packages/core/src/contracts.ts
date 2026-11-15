@@ -944,3 +944,219 @@ export interface Assessment {
   readonly places: readonly PlaceId[];
   readonly reasons: readonly AssessReason[];
 }
+
+// =============================================================================
+// Relevance: how much an incident touches one person (AL-35, `docs/RELEVANCE.md`)
+// =============================================================================
+
+/** The three kinds of the subjects of an incident. */
+export type SubjectKind = "place" | "topic" | "entity";
+
+/**
+ * A system of the ids of subjects. The system `place` holds the watched places of a person. The system
+ * `topic` holds the codes of the taxonomy and their prefixes.
+ */
+export type SubjectSystem =
+  | "place"
+  | "point"
+  | "polygon"
+  | "ugc"
+  | "same"
+  | "fips"
+  | "state"
+  | "iso3166"
+  | "geonames"
+  | "icao"
+  | "topic"
+  | "iptc"
+  | "cap-category"
+  | "cve"
+  | "wikidata"
+  | "asn"
+  | "domain"
+  | "provider-region"
+  | "ticker"
+  | "lei"
+  | "purl";
+
+/**
+ * The kind of the subjects of each system. The list is closed. A new system comes with the first source or
+ * default that gives its ids.
+ */
+export const SUBJECT_SYSTEMS: Readonly<Record<SubjectSystem, SubjectKind>> = {
+  place: "place",
+  point: "place",
+  polygon: "place",
+  ugc: "place",
+  same: "place",
+  fips: "place",
+  state: "place",
+  iso3166: "place",
+  geonames: "place",
+  icao: "place",
+  topic: "topic",
+  iptc: "topic",
+  "cap-category": "topic",
+  cve: "entity",
+  wikidata: "entity",
+  asn: "entity",
+  domain: "entity",
+  "provider-region": "entity",
+  ticker: "entity",
+  lei: "entity",
+  purl: "entity",
+};
+
+/**
+ * The key of a node of an interest graph: `person`, or `<system>:<id>` with a system of `SUBJECT_SYSTEMS`.
+ * Examples are `place:home`, `ugc:KSC173`, `topic:infra.power.outage` and `domain:example.com`. The id is the
+ * text after the first colon, thus an id can hold a colon, as in `purl:pkg:npm/example`.
+ */
+export type NodeKey = string;
+
+/**
+ * The kind of an edge. The first four are the kinds of dependency of Rinaldi, Peerenboom and Kelly (2001). An
+ * edge of the kind `interest` goes into the person.
+ */
+export type EdgeKind = "physical" | "cyber" | "geographic" | "logical" | "interest";
+
+/**
+ * The origin of the weight of an edge. Each origin except `person` is one layer of the defaults.
+ * - `base`: the human base, the same for each person.
+ * - `places`: the watched places of the person.
+ * - `services`: the services that the person names.
+ * - `work`: the tools and the services of a kind of work.
+ * - `data`: public data, for example the service area of a power utility.
+ * - `measured`: a measure of the system, for example the DNS providers of a domain.
+ * - `person`: the person set the value. No default replaces it.
+ */
+export type EdgeOrigin = "base" | "places" | "services" | "work" | "data" | "measured" | "person";
+
+/** One edge of an interest graph: the cause at `from` can impair the node at `to`, with a chance. */
+export interface InterestEdge {
+  /** The id of the edge. The exact sum expands the edges in the order of their ids, thus the order of a file has no effect. */
+  readonly id: string;
+  /** The cause. It is not `person`. */
+  readonly from: NodeKey;
+  /** The node that the cause can impair, or `person`. */
+  readonly to: NodeKey;
+  readonly kind: EdgeKind;
+  /**
+   * The chance that an effect passes along the edge, from 0 to 1. The interval is the doubt of a default. An
+   * unknown edge gets a wide interval, not 0. For a supply with a backup, the weight is the need times the
+   * chance that an outage lasts longer than the backup.
+   */
+  readonly weight: Estimate;
+  readonly origin: EdgeOrigin;
+  /** The data or the measure that gave the weight, for example `eia-861/2025`. */
+  readonly source?: string;
+  /** The day of the source or of the choice of the person, `YYYY-MM-DD`. */
+  readonly date?: string;
+  /** False when the person turned the route off. The edge stays in the graph as a row, and the reach does not use it. */
+  readonly on: boolean;
+}
+
+/**
+ * A mute of a person. An incident matches when its kind has a prefix in `kinds`, and an entry of the incident
+ * is in `subjects`. An absent list matches each incident. A mute has one list or both. A matched incident does
+ * not reach the person on any path, except an incident of the mandatory class (`RelevancePolicy`).
+ */
+export interface Mute {
+  readonly id: string;
+  /** The prefixes of the taxonomy codes, as in `LevelRule`. */
+  readonly kinds?: readonly string[];
+  /** The subjects of the incidents that the mute matches. */
+  readonly subjects?: readonly NodeKey[];
+  /** The mute has effect until this time. With no end, it has effect until the person removes it. */
+  readonly until?: Instant;
+  /** The day that the person set the mute, `YYYY-MM-DD`. */
+  readonly date: string;
+}
+
+/**
+ * The interest graph of one person, the format `alerts-interest/1`. The file is private configuration. The
+ * repository holds the model, the taxonomy and the defaults from public data, and no graph of a real person.
+ */
+export interface InterestGraph {
+  readonly format: "alerts-interest/1";
+  readonly person: PersonId;
+  readonly edges: readonly InterestEdge[];
+  readonly mutes: readonly Mute[];
+  /** The private labels of the nodes, for the text of an alert. The why record holds only the keys. */
+  readonly labels?: Readonly<Record<NodeKey, string>>;
+}
+
+/** A subject of an incident that is a node of the graph of a person. */
+export interface SubjectEntry {
+  readonly node: NodeKey;
+  readonly kind: SubjectKind;
+  /**
+   * The chance that the incident hits the subject when the event is real. It is the share of the area near a
+   * place for a place, and 1 for a topic or a named entity.
+   */
+  readonly hit: Estimate;
+}
+
+/** One path from a subject of an incident to the person. */
+export interface RelevancePath {
+  readonly subject: NodeKey;
+  /** The ids of the edges of the path, in order from the subject. */
+  readonly edges: readonly string[];
+  /** The chance that each part of the path is on: the hit chance times the weight of each edge. */
+  readonly chance: number;
+}
+
+/**
+ * The record of why an incident reaches a person. The delivery puts it in the text of each channel. It holds
+ * keys and no labels, and the runtime gives the private labels.
+ */
+export interface WhyRecord {
+  /** A stable id of the reason, `reach.<subject kind>.<origin>`, for example `reach.place.base`. */
+  readonly rule: string;
+  readonly subject: NodeKey;
+  readonly kind: SubjectKind;
+  /** The first node after the subject, when the path has two nodes or more between the subject and the person. */
+  readonly via?: NodeKey;
+  /** The last node before the person: the place, the service or the topic of the interest. */
+  readonly anchor: NodeKey;
+  /** The origin of the last edge of the path, the interest edge. */
+  readonly origin: EdgeOrigin;
+  /** The reach of the shown paths alone, divided by the full reach, from 0 to 1. */
+  readonly coverage: number;
+}
+
+/** The effect of a mute on an incident: it does not reach the person, or it reaches the person with no sound. */
+export type MuteEffect = "absent" | "silent";
+
+/** The policy of the relevance. */
+export interface RelevancePolicy {
+  /** The most edges of a path. A longer path does not count. */
+  readonly hopCap: number;
+  /** The most paths in a relevance, from the strongest. */
+  readonly topPaths: number;
+  /** The effect of a mute on an incident of the mandatory class. A mute removes each other incident that it matches. */
+  readonly mandatory: MuteEffect;
+}
+
+/** The relevance of an incident for one person. */
+export interface Relevance {
+  /**
+   * The reach: the chance that at least one path from a subject of the incident to the person is fully on.
+   * The value comes from the point weights. The interval comes from the ends of the intervals of the weights.
+   */
+  readonly reach: Estimate;
+  /** The lower bound at the point weights: the chance of the best path. */
+  readonly best: number;
+  /** The upper bound at the point weights: noisy-OR over the paths. */
+  readonly noisyOr: number;
+  /** The strongest paths, from the strongest. */
+  readonly paths: readonly RelevancePath[];
+  /** The why, from the strongest path. It is absent when no path reaches the person. */
+  readonly why?: WhyRecord;
+  /** The edge with the largest Birnbaum importance: the reach with the edge on, minus the reach with the edge off. */
+  readonly weakest?: { readonly edge: string; readonly importance: number };
+  /** The edge to ask the person about: the largest importance times the width of the weight interval, of the edges with a default weight. */
+  readonly next?: { readonly edge: string; readonly gain: number };
+  /** The mute that matched, and its effect. When the effect is `absent`, the reach is 0 and the relevance has no path. */
+  readonly muted?: { readonly mute: string; readonly effect: MuteEffect };
+}
