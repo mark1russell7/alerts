@@ -15,26 +15,15 @@
  * - `stopped`: a cancel or an acknowledgment reaches each accepted message. Thus no repeats continue.
  */
 import { wallClock } from "@mark1russell7/algebra/clock";
-import {
-  type ChannelId,
-  type EscalationPolicy,
-  type Observation,
-  type ObservationId,
-  type PersonId,
-  type PlaceId,
-  type Recipient,
-  type Report,
-  reportId,
-  type SourceId,
-  type SourceProcedures,
-  type WatchedPlace,
-} from "@mark1russell7/alerts";
 import { createPushoverChannel } from "@mark1russell7/alerts-channel-pushover";
-import { openRuntime, openRuntimeLog, type RuntimeOptions } from "@mark1russell7/alerts-runtime";
+import { openRuntime, openRuntimeLog } from "@mark1russell7/alerts-runtime";
 import { type Fault, faultPlanOf } from "@mark1russell7/rigor-chaos";
 import { startFaultProxy } from "@mark1russell7/rigor-proxy";
 import { startScriptedServer } from "@mark1russell7/rigor-testkit/http";
 import { type PushoverLedger, type PushoverLedgerMessage, pushoverApi, pushoverFetchTo, pushoverLedgerOf } from "@procedures/notify/testing";
+import { type CallFailure, deliveryFixture, FIXTURE_PLACE, type LogSummary, logSummaryOf } from "./delivery-fixture.ts";
+
+export type { CallFailure, LogSummary } from "./delivery-fixture.ts";
 
 /** The id of the case. */
 export const CASE_4_ID = "al-13-case-4";
@@ -89,22 +78,6 @@ export const CASE_4_SETTINGS: AcceptSettings = {
   receipts: 12,
 };
 
-/** A failed call of one pass, as the delivery step gives it. */
-export interface CallFailure {
-  readonly call: string;
-  readonly kind: string;
-  readonly message: string;
-}
-
-/** What the log of the runtime holds at the end of an arm. */
-export interface LogSummary {
-  /** The key and the Pushover receipt of each delivery. */
-  readonly deliveries: readonly { readonly key: string; readonly receipt?: string }[];
-  readonly acknowledgments: number;
-  /** The delivery keys of the cancels. */
-  readonly cancelled: readonly string[];
-}
-
 /** The record of one arm. */
 export interface AcceptRecord {
   readonly arm: AcceptArm;
@@ -137,76 +110,11 @@ export interface AcceptRun {
   readonly verdict: AcceptVerdict;
 }
 
-const MINUTE = 60_000;
-const SOURCE = "case-4" as SourceId;
-const PUSHOVER = "pushover" as ChannelId;
-const PERSON = "person-1" as PersonId;
-/** A public place in Kansas: Sedgwick County KS. */
-const PLACE: WatchedPlace = { id: "place:a" as PlaceId, codes: [{ system: "ugc", code: "KSZ083" }], bufferKm: 0 };
-const POLICY: EscalationPolicy = { level: "life-safety", steps: [{ channel: PUSHOVER, at: 0 }], exhaustedAfter: 20 * MINUTE };
-/** The token and the user key are test values of 30 letters and digits. The scripted API does not examine them. */
-const TOKEN = `casefourtoken${"0".repeat(17)}`;
-const USER = `casefouruser${"0".repeat(18)}`;
-const RECIPIENT: Recipient = { watch: { person: PERSON, places: [PLACE.id], rules: [] }, policies: [POLICY], addresses: { pushover: { user: USER } } };
-const VIEW: RuntimeOptions["view"] = { places: [PLACE], kinds: ["met"], expectations: [], delay: { quantile: 0.9, level: 0.9 } };
+/** The source, the person and the test values of the case. */
+const FIXTURE = deliveryFixture("case-4", "casefour");
 
 /** The clock of the case: the instant of the platform. Its timers do not keep the process alive. */
 const EPOCH_CLOCK = wallClock({ unref: true });
-
-/** One tornado warning for Sedgwick County, sent at `sent`, for 45 minutes. */
-function warningOf(seen: Observation, sent: number): Report {
-  return {
-    id: reportId({ source: SOURCE, key: "w1", sent }),
-    source: SOURCE,
-    origin: "nws",
-    key: "w1",
-    references: [],
-    correlation: [],
-    status: "actual",
-    op: "alert",
-    kind: { code: "met.tornado", label: "Tornado Warning" },
-    categories: ["met"],
-    severity: "extreme",
-    urgency: "immediate",
-    certainty: "observed",
-    response: ["shelter"],
-    sent,
-    received: seen.fetched,
-    expires: sent + 45 * MINUTE,
-    areas: [{ type: "code", system: "ugc", code: "KSZ083" }],
-    about: [],
-    sender: "case-4",
-    headline: "Tornado Warning for Sedgwick County KS",
-    instruction: "TAKE COVER NOW!",
-    observation: seen.id,
-    parameters: {},
-  };
-}
-
-/** A source with one warning. Its interval is longer than an arm, thus it fetches one time. */
-function sourceOf(sent: number): SourceProcedures {
-  return {
-    describe: () => ({
-      id: SOURCE,
-      title: "The source of case 4",
-      origins: ["nws"],
-      dependsOn: ["provider:case-4"],
-      uses: ["internet", "power"],
-      kinds: ["met"],
-      coverage: [{ type: "code", system: "ugc", code: "KSZ083" }],
-      transport: "poll",
-      interval: 60 * MINUTE,
-      slowAfter: 10_000,
-      auth: "none",
-    }),
-    fetch: async () => ({
-      ok: true,
-      observations: [{ id: "case-4:w1" as ObservationId, source: SOURCE, fetched: sent, contentType: "application/json", body: "{}", transport: { latency: 0 } }],
-      complete: true,
-    }),
-    map: ({ observation }) => ({ reports: [warningOf(observation, sent)], problems: [] }),
-  };
-}
 
 /** This function gives the fault of an arm on connection 0, or `undefined` for `prompt`. */
 export function faultOf(arm: AcceptArm, settings: AcceptSettings): Fault | undefined {
@@ -224,7 +132,7 @@ export async function runArm(arm: AcceptArm, settings: AcceptSettings = CASE_4_S
   const proxy = await startFaultProxy({ target: { host: server.host, port: server.port }, plan: faultPlanOf(fault === undefined ? [] : [fault]), protocol: "http" });
   const base = `http://${proxy.host}:${String(proxy.port)}`;
   // The channel calls the address of the Pushover API. This fetch sends each call to the proxy, with the same path and query.
-  const channel = createPushoverChannel({ token: TOKEN, fetch: pushoverFetchTo(base), timeoutMs: settings.channelLimitMs });
+  const channel = createPushoverChannel({ token: FIXTURE.token, fetch: pushoverFetchTo(base), timeoutMs: settings.channelLimitMs });
   const log = openRuntimeLog(":memory:");
   const clock = EPOCH_CLOCK;
   const failures: CallFailure[] = [];
@@ -235,12 +143,12 @@ export async function runArm(arm: AcceptArm, settings: AcceptSettings = CASE_4_S
     const runtime = openRuntime({
       log,
       clock,
-      sources: [sourceOf(clock.now())],
-      watch: () => ({ places: [PLACE], kinds: ["met"] }),
-      view: VIEW,
+      sources: [FIXTURE.sourceOf(clock.now())],
+      watch: () => ({ places: [FIXTURE_PLACE], kinds: ["met"] }),
+      view: FIXTURE.view,
       run: `${CASE_4_ID}-${arm}`,
       delivery: {
-        recipients: [RECIPIENT],
+        recipients: [FIXTURE.recipient],
         channels: [channel],
         pollEvery: settings.pollEveryMs,
         retry: settings.retryMs,
@@ -261,16 +169,7 @@ export async function runArm(arm: AcceptArm, settings: AcceptSettings = CASE_4_S
     error = thrown instanceof Error ? thrown.message : String(thrown);
   }
   const ledger = pushoverLedgerOf([...server.requests]);
-  const events = [...log.read()];
-  const summary: LogSummary = {
-    deliveries: events.flatMap((event) => {
-      if (event.type !== "delivery") return [];
-      const receipt = event.delivery.receipt?.["receipt"];
-      return [{ key: event.delivery.key, ...(receipt === undefined ? {} : { receipt }) }];
-    }),
-    acknowledgments: events.filter((event) => event.type === "acknowledgment").length,
-    cancelled: events.flatMap((event) => (event.type === "cancelled" ? [event.delivery] : [])),
-  };
+  const summary: LogSummary = logSummaryOf(log);
   log.close();
   await proxy.close();
   await server.close();
@@ -292,13 +191,20 @@ export async function runLateAccept(given: Partial<AcceptSettings> = {}): Promis
 /** The first tag of a message, or a text for a message with no tag. A `life-safety` message has the delivery key as its first tag. */
 const tagOf = (message: PushoverLedgerMessage): string => message.tags[0] ?? "(no tag)";
 
+/** The parts of the record of an arm that `acceptGatesOf` reads. The records of case 4 and case 7 have them. */
+export interface DeliveryEvidence {
+  readonly arm: string;
+  readonly ledger: PushoverLedger;
+  readonly log: LogSummary;
+}
+
 /**
  * This function gives the gates of one record, and a problem for each gate that fails.
  *
  * A message counts for `single` when no cancel reached it before the first acknowledgment of its key. With no
  * acknowledgment, each message with no cancel counts.
  */
-export function acceptGatesOf(record: AcceptRecord): { readonly gates: Readonly<Record<AcceptGate, boolean>>; readonly problems: readonly string[] } {
+export function acceptGatesOf(record: DeliveryEvidence): { readonly gates: Readonly<Record<AcceptGate, boolean>>; readonly problems: readonly string[] } {
   const problems: string[] = [];
   const { messages } = record.ledger;
   const receipts = new Set(messages.map((message) => message.receipt));

@@ -67,7 +67,7 @@ const recordOf = (arm: AcceptArm, requests: readonly ScriptedRequest[], extra: P
     arm,
     faulted: true,
     ledger,
-    log: { deliveries: last === undefined ? [] : [{ key: KEY, receipt: last.receipt }], acknowledgments: last === undefined ? 0 : 1, cancelled: [] },
+    log: { deliveries: last === undefined ? [] : [{ key: KEY, at: 0, receipt: last.receipt }], acknowledgments: last === undefined ? 0 : 1, cancelled: [] },
     failures: [],
     duplicates: 0,
     passes: 20,
@@ -156,7 +156,7 @@ describe("acceptGatesOf", () => {
 
   it("fails delivered with no accepted message, and when the log names a receipt that the API did not give", () => {
     expect(acceptGatesOf(recordOf("hang-before-accept", [])).gates.delivered).toBe(false);
-    const record = recordOf("prompt", PROMPT, { log: { deliveries: [{ key: KEY, receipt: pushoverReceiptOf(5) }], acknowledgments: 1, cancelled: [] } });
+    const record = recordOf("prompt", PROMPT, { log: { deliveries: [{ key: KEY, at: 0, receipt: pushoverReceiptOf(5) }], acknowledgments: 1, cancelled: [] } });
     expect(acceptGatesOf(record).gates.delivered).toBe(false);
   });
 });
