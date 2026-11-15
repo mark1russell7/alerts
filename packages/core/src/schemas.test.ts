@@ -383,7 +383,7 @@ describe("the JSON Schema of each schema", () => {
   const exported = Object.entries(schemas).filter(([name]) => name.endsWith("Schema"));
 
   it("has each exported schema", () => {
-    expect(exported.length).toBe(93);
+    expect(exported.length).toBe(94);
     for (const [name, schema] of exported) expect(schema instanceof z.ZodType, name).toBe(true);
   });
 

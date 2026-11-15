@@ -6,14 +6,14 @@ import { SUBJECT_SYSTEMS, type NodeKey, type PlaceId, type SubjectKind, type Why
  * The limit of the why line on each kind of channel. A channel descriptor gives the limit of its kind in its
  * field `why`. `docs/RELEVANCE.md` tells the reasons of the values.
  */
-export const WHY_LIMITS = {
+export const WHY_LIMITS: Readonly<Record<"push" | "text" | "call", WhyLimit>> = {
   /** A push message: 80 characters. */
   push: { chars: 80 },
   /** A text message: 40 characters, each of the GSM-7 base set. */
   text: { chars: 40 },
   /** A voice call: 12 words. */
   call: { words: 12 },
-} as const satisfies Readonly<Record<string, WhyLimit>>;
+};
 
 /**
  * The label of a node of the interest graph for the person, or `undefined`. The runtime gives the labels from the
