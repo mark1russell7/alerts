@@ -3,7 +3,8 @@
  *
  * The NWS source has the pace of an instance (`sourcePace` and `SOURCE_POLICY`), as in production. The case clock moves `speed` times faster
  * than real time. Thus an arm of 80 minutes takes 80 seconds at the speed 60. Each request of an arm goes through a
- * fault proxy of `@mark1russell7/rigor-proxy` to the server. The proxy reads the case clock.
+ * fault proxy of `@mark1russell7/rigor-proxy` to the server. The clock of the proxy has the speed and the start of the
+ * case clock.
  *
  * The plan of an arm with an outage has one fault of a window (the format `rigor-faults/2`). The proxy stops each
  * request of the window before the server. This includes a request on a connection that opened before the window. The
@@ -25,7 +26,7 @@
  * A gate has no read when the samples cannot decide it.
  */
 import { DEFAULT_COVERAGE_POLICY, type HealthState } from "@mark1russell7/alerts";
-import { delay, wallClock } from "@mark1russell7/algebra/clock";
+import { delay, platformClock, wallClock } from "@mark1russell7/algebra/clock";
 import { openRuntime, openRuntimeLog, SOURCE_POLICY, sourcePace, type RuntimeOptions } from "@mark1russell7/alerts-runtime";
 import { CANARY_PATH, createNwsSource, NWS_DESCRIPTOR, SOURCE_ID } from "@mark1russell7/alerts-source-nws-api";
 import { type FaultPlan, type FaultWindow, faultPlanOf, type HealthSample, type WindowFault, type WindowResponse, windowResponse } from "@mark1russell7/rigor-chaos";
@@ -226,8 +227,10 @@ export async function runDownArm(arm: DownArm, settings: DownSettings = CASE_5_S
   const server = await startNwsServer(bodies, "length");
   const start = Date.now();
   const clock = caseClock(start, settings.speed);
-  // The proxy reads the case clock from the start of the arm. Thus the windows of the plan are in the time of the arm.
-  const proxy = await startFaultProxy({ target: { host: server.host, port: server.port }, plan: planOf(arm, settings), protocol: "http", clock, origin: start });
+  // The proxy takes a monotonic clock. This scaled clock has the speed and the start of the case clock.
+  // Thus the windows of the plan, from the origin `start`, are in the time of the arm.
+  const proxyClock = platformClock({ speed: settings.speed, start });
+  const proxy = await startFaultProxy({ target: { host: server.host, port: server.port }, plan: planOf(arm, settings), protocol: "http", clock: proxyClock, origin: start });
   const sent: number[] = [];
   const transport = caseTransport({
     inner: fetchTransport({ userAgent: USER_AGENT }),
