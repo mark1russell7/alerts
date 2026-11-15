@@ -39,6 +39,8 @@ export interface FetchEvent extends Envelope<"fetch"> {
 export interface EndedEvent extends Envelope<"ended"> {
   readonly source: SourceId;
   readonly reports: readonly ReportId[];
+  /** The time of the data of the list that ended the reports (`asOf` of the fetch), if the list has a time. */
+  readonly asOf?: Instant;
 }
 
 /** Reports of a snapshot source that ended are in a complete list of the source again. The merge reads them as live. */

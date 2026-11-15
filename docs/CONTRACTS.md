@@ -68,6 +68,8 @@ For each code, the latest reports that name it stay. So the rule loses no later 
 
 An end mark tells that a report of a snapshot source left the list of the source (`ended: true`), or is in the list again (`ended: false`). A report is ended at a time when its latest mark at or before that time is an end. When two marks of one report have the same time, the report stays live. This choice is on the safe side, and it is a function of the set, so the three laws hold. A mark changes no group. It changes only the field `live` and the levels of the live heads. An ended report still gives its known values to the fill of `unknown` values, as an expired report does.
 
+An end mark can also hold the time of the data of the list that ended the report (`asOf`). The runtime reads it to refuse an old list. The merge does not read it.
+
 The incident id is its anchor: its smallest report id. The anchor can change when two incidents merge. So an acknowledgment and a delivery point to a report of the incident, not to the anchor.
 
 A delivery is one accepted send. A failed send makes no delivery, so its step stays due and the runtime tries it again. The sent level of a person for an incident is the highest level of the deliveries to the person for its reports. This value only grows, so a merge does not send an alert again.
@@ -109,6 +111,10 @@ The rules of each adapter:
    - A failed fetch or an incomplete fetch counts nothing.
    - A report that ended and is in a complete list again gets a `back` event.
    - The counts are in memory only. A restart makes an end later, not sooner.
+   - A cache can give an old list that is complete. A complete fetch of a snapshot source gives the time of its data (`asOf`): the time of its newest product.
+   - An absent report counts a miss only when its `sent` time is not after `asOf`. A newer report keeps its count.
+   - The end mark keeps the `asOf` of the list that ended the report. A report comes back only in a list with a later `asOf`.
+   - A list with no `asOf` counts as current.
 8. **The kinds are codes of the taxonomy.** Each kind that `map` gives is a code of `TAXONOMY`. A kind that the tables do not know is `other.unknown`, with a problem. A gate test of the adapter holds this rule with `unknownKinds`.
 
 The testkit gives one conformance suite, and each adapter passes it. The suite examines the laws of `map` on the fixtures and on mutated fixtures. It examines the outcomes of `fetch` behind a fault proxy: cut, delay, reset, 429, 500 and a changed body. It also examines the descriptor.

@@ -121,7 +121,14 @@ function partsOf(event: RuntimeEvent): MergeParts | undefined {
       return { acks: [event.acknowledgment] };
     case "ended":
     case "back":
-      return { ends: event.reports.map((report) => ({ report, at: event.time, ended: event.type === "ended" })) };
+      return {
+        ends: event.reports.map((report) => ({
+          report,
+          at: event.time,
+          ended: event.type === "ended",
+          ...(event.type === "ended" && event.asOf !== undefined ? { asOf: event.asOf } : {}),
+        })),
+      };
     default:
       return undefined;
   }
