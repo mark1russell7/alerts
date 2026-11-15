@@ -10,6 +10,9 @@
 export {
   COW_MARGIN_MS,
   COW_PHENOMENA,
+  COW_QUERY_PHENOMENA,
+  COW_UNVERIFIED,
+  COW_UNVERIFIED_PHENOMENA,
   COW_URL,
   cowQuery,
   cowSettings,
@@ -22,12 +25,15 @@ export {
   tallyCow,
   type CowCount,
   type CowPhenomenon,
+  type CowQueryPhenomenon,
   type CowRead,
   type CowTally,
+  type CowUnverified,
+  type CowUnverifiedPhenomenon,
   type CowWarning,
   type CowWindow,
 } from "./cow.ts";
-export { checkRates, gatedValues, type GateBreak, type Gated } from "./gate.ts";
+export { checkRates, gatedValues, type GateBreak, type GateCheck, type Gated, type GateNoRead } from "./gate.ts";
 export {
   DETAILS_COLUMNS,
   detailsFiles,
@@ -44,12 +50,16 @@ export {
 export {
   BOOTSTRAP_RUNS,
   cowRates,
+  cowUnverifiedRates,
   LEVEL,
   METHODS,
+  MIN_YEAR_COUNT,
   nceiRates,
+  noReadOf,
   RATES_FORMAT,
   ratesFile,
   type CowRate,
+  type CowUnverifiedRate,
   type NceiRate,
   type PerYear,
   type Range,

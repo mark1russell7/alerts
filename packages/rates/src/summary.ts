@@ -4,9 +4,9 @@
 
 import { escapeMarkdown } from "@mark1russell7/text";
 
-import { COW_PHENOMENA } from "./cow.ts";
-import type { GateBreak } from "./gate.ts";
-import type { Range, RatesFile } from "./rates.ts";
+import { COW_PHENOMENA, COW_UNVERIFIED_PHENOMENA } from "./cow.ts";
+import type { GateCheck } from "./gate.ts";
+import type { Range, RatesFile, Share } from "./rates.ts";
 
 /** The count of event types in the table of NCEI: the types with the most deaths. */
 export const TOP_TYPES = 15;
@@ -16,8 +16,11 @@ const percentRange = ([low, high]: Range): string => `${percent(low)} to ${perce
 const number = (value: number): string => (Number.isInteger(value) ? String(value) : value.toFixed(1));
 const numberRange = ([low, high]: Range): string => `${number(low)} to ${number(high)}`;
 
-/** The result of the gate: no committed file, or the breaks against the committed file. */
-export type GateResult = { readonly committed: false } | { readonly committed: true; readonly breaks: readonly GateBreak[] };
+/** The result of the gate: no committed file, or the breaks and the no reads against the committed file. */
+export type GateResult = { readonly committed: false } | ({ readonly committed: true } & GateCheck);
+
+/** This function gives the state of the gate for two shares: `reads`, or `no read` when one share has a reason of no read. */
+const readState = (...shares: readonly Share[]): string => (shares.some((share) => share.noRead !== null) ? "no read" : "reads");
 
 /** This function gives the summary of a file of base rates in Markdown, with the result of the gate. */
 export function ratesSummary(file: RatesFile, gate: GateResult): string {
@@ -26,13 +29,20 @@ export function ratesSummary(file: RatesFile, gate: GateResult): string {
   lines.push("## The base rates", "");
   lines.push(`Fetched at ${file.fetched}. Each interval has the level ${percent(file.level)}.`, "");
   lines.push(`### The verified share of the NWS warnings (IEM Cow, ${String(cow.years.first)} to ${String(cow.years.last)})`, "");
-  lines.push("| Phenomenon | Kind | Warnings | Verified | Share | Wilson | Over the years | Own hazard | Own hazard over the years |");
-  lines.push("| --- | --- | ---: | ---: | ---: | --- | --- | ---: | --- |");
+  lines.push("| Phenomenon | Kind | Warnings | Verified | Share | Wilson | Over the years | Own hazard | Own hazard over the years | Gate |");
+  lines.push("| --- | --- | ---: | ---: | ---: | --- | --- | ---: | --- | --- |");
   for (const phenomenon of COW_PHENOMENA) {
     const rate = cow.phenomena[phenomenon];
     lines.push(
-      `| ${phenomenon} ${rate.label} | \`${rate.kind}\` | ${String(rate.warnings)} | ${String(rate.verified)} | ${percent(rate.share.value)} | ${percentRange(rate.share.wilson)} | ${percentRange(rate.share.overYears)} | ${percent(rate.ownShare.value)} | ${percentRange(rate.ownShare.overYears)} |`,
+      `| ${phenomenon} ${rate.label} | \`${rate.kind}\` | ${String(rate.warnings)} | ${String(rate.verified)} | ${percent(rate.share.value)} | ${percentRange(rate.share.wilson)} | ${percentRange(rate.share.overYears)} | ${percent(rate.ownShare.value)} | ${percentRange(rate.ownShare.overYears)} | ${readState(rate.share, rate.ownShare)} |`,
     );
+  }
+  lines.push("", "### The phenomena that Cow does not verify", "");
+  lines.push("The file has no share for these phenomena. Their counts are a note.", "");
+  for (const phenomenon of COW_UNVERIFIED_PHENOMENA) {
+    const rate = cow.unverified[phenomenon];
+    lines.push(`- **${phenomenon} ${rate.label}** (\`${rate.kind}\`): ${String(rate.verified)} verified of ${String(rate.warnings)}. ${escapeMarkdown(rate.reason)} In place of the share: ${escapeMarkdown(rate.instead)}`);
+    for (const source of rate.sources) lines.push(`  - ${escapeMarkdown(source)}`);
   }
   lines.push("", `### The deaths and injuries of each event type (NCEI Storm Events, ${String(ncei.years.first)} to ${String(ncei.years.last)})`, "");
   lines.push(`The ${String(TOP_TYPES)} types with the most deaths. The counts are direct plus indirect.`, "");
@@ -52,11 +62,16 @@ export function ratesSummary(file: RatesFile, gate: GateResult): string {
   }
   lines.push("", "### The gate", "");
   if (!gate.committed) lines.push("There is no committed file. The gate examined nothing.");
-  else if (gate.breaks.length === 0) lines.push("Each value is in the gate interval of the committed file.");
+  else if (gate.breaks.length === 0) lines.push(gate.noReads.length === 0 ? "Each value is in the gate interval of the committed file." : "Each value that the gate reads is in the gate interval of the committed file.");
   else {
     lines.push(`${String(gate.breaks.length)} values are out of the gate interval of the committed file:`, "");
     lines.push("| Measure | New value | Gate interval |", "| --- | ---: | --- |");
     for (const { path, value, gate: range } of gate.breaks) lines.push(`| ${escapeMarkdown(path)} | ${String(value)} | ${String(range[0])} to ${String(range[1])} |`);
+  }
+  if (gate.committed && gate.noReads.length > 0) {
+    lines.push("", `**No read:** the gate cannot read ${String(gate.noReads.length)} values. A no read is not a pass.`, "");
+    lines.push("| Measure | Reason |", "| --- | --- |");
+    for (const { path, reason } of gate.noReads) lines.push(`| ${escapeMarkdown(path)} | ${escapeMarkdown(reason)} |`);
   }
   return `${lines.join("\n")}\n`;
 }

@@ -1,7 +1,21 @@
 import { knownKind } from "@mark1russell7/alerts";
 import { describe, expect, it } from "vitest";
 
-import { COW_MARGIN_MS, COW_PHENOMENA, cowQuery, cowSettings, cowWindows, phenomenonKind, readCow, splitWindow, tallyCow, type CowWarning } from "./cow.ts";
+import {
+  COW_MARGIN_MS,
+  COW_PHENOMENA,
+  COW_QUERY_PHENOMENA,
+  COW_UNVERIFIED,
+  COW_UNVERIFIED_PHENOMENA,
+  cowQuery,
+  cowSettings,
+  cowWindows,
+  phenomenonKind,
+  readCow,
+  splitWindow,
+  tallyCow,
+  type CowWarning,
+} from "./cow.ts";
 
 /** A synthetic Cow answer, with the structure of the real answers. */
 interface Event {
@@ -40,7 +54,7 @@ describe("the windows and queries of Cow", () => {
     expect(() => cowWindows(2025, 2024)).toThrow(RangeError);
   });
 
-  it("asks for the six phenomena of a window with a margin of one day, with no office and no state", () => {
+  it("asks for the phenomena of the shares and the unverified phenomena, with a margin of one day, with no office and no state", () => {
     const query = cowQuery(may);
     expect(query).toBe("?begints=2024-04-30T00:00:00Z&endts=2024-06-02T00:00:00Z&phenomena=TO&phenomena=SV&phenomena=FF&phenomena=MA&phenomena=SQ&phenomena=EW");
     expect(query).not.toMatch(/wfo|state|ugc/i);
@@ -48,8 +62,20 @@ describe("the windows and queries of Cow", () => {
   });
 
   it("gives a kind of the taxonomy for each phenomenon", () => {
-    for (const phenomenon of COW_PHENOMENA) expect(knownKind(phenomenonKind(phenomenon).kind), phenomenon).toBe(true);
+    for (const phenomenon of COW_QUERY_PHENOMENA) expect(knownKind(phenomenonKind(phenomenon).kind), phenomenon).toBe(true);
     expect(phenomenonKind("TO")).toEqual({ kind: "met.tornado", label: "Tornado" });
+  });
+
+  it("keeps the extreme wind warning out of the shares, with its reason, its evidence and the value in its place", () => {
+    expect(COW_PHENOMENA).not.toContain("EW");
+    expect(COW_UNVERIFIED_PHENOMENA).toEqual(["EW"]);
+    expect(COW_QUERY_PHENOMENA).toEqual([...COW_PHENOMENA, ...COW_UNVERIFIED_PHENOMENA]);
+    for (const phenomenon of COW_UNVERIFIED_PHENOMENA) {
+      const { reason, sources, instead } = COW_UNVERIFIED[phenomenon];
+      expect(reason.length).toBeGreaterThan(0);
+      expect(instead.length).toBeGreaterThan(0);
+      expect(sources.length).toBeGreaterThan(0);
+    }
   });
 
   it("cuts a window in two halves at a whole day, down to one day", () => {

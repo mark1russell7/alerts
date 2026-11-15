@@ -1,11 +1,13 @@
 {
-  "format": "alerts-rates/1",
+  "format": "alerts-rates/2",
   "fetched": "2026-11-15T19:20:28.924Z",
   "level": 0.95,
   "methods": {
     "share": "The Wilson score interval of the verified warnings in all the warnings, at the level of the file.",
     "overYears": "The percentile bootstrap interval over the years: 10000 draws of the years with replacement, with a fixed seed for each measure.",
     "gate": "The hull of the intervals of a measure and its value. A new value out of the gate interval of the committed file stops the workflow. A measure that a file does not have is 0 with the gate interval 0 to 0.",
+    "noRead": "The gate reads a share only when each year has 10 or more verified and 10 or more unverified warnings. Otherwise the gate gives no read for the share: not a pass and not a break.",
+    "unverified": "Cow links no storm report to some phenomena. The file keeps their counts with the reason and the evidence, and it has no share for them.",
     "cow": "One request for each month, with one day of margin before and after the month. A warning counts in the month of its start. The id of a warning counts one time.",
     "ncei": "The rows of each file of details, by EVENT_TYPE. The deaths and injuries of a type are the sums of the direct and indirect counts."
   },
@@ -123,7 +125,8 @@
           "gate": [
             0.2583836232588687,
             0.27304249040635026
-          ]
+          ],
+          "noRead": null
         },
         "ownShare": {
           "value": 0.26564852656485266,
@@ -138,7 +141,8 @@
           "gate": [
             0.2583836232588687,
             0.27304249040635026
-          ]
+          ],
+          "noRead": null
         },
         "byYear": {
           "2021": {
@@ -187,7 +191,8 @@
           "gate": [
             0.47195412584347635,
             0.504045956519586
-          ]
+          ],
+          "noRead": null
         },
         "ownShare": {
           "value": 0.48945209066837375,
@@ -202,7 +207,8 @@
           "gate": [
             0.47195412584347635,
             0.504045956519586
-          ]
+          ],
+          "noRead": null
         },
         "byYear": {
           "2021": {
@@ -251,7 +257,8 @@
           "gate": [
             0.3930845794612953,
             0.4521072796934866
-          ]
+          ],
+          "noRead": null
         },
         "ownShare": {
           "value": 0.427246790299572,
@@ -266,7 +273,8 @@
           "gate": [
             0.3930845794612953,
             0.4521072796934866
-          ]
+          ],
+          "noRead": null
         },
         "byYear": {
           "2021": {
@@ -315,7 +323,8 @@
           "gate": [
             0.1869310563827535,
             0.20157734360996593
-          ]
+          ],
+          "noRead": null
         },
         "ownShare": {
           "value": 0.18931130643510183,
@@ -330,7 +339,8 @@
           "gate": [
             0.18194195628806878,
             0.19786775867546863
-          ]
+          ],
+          "noRead": null
         },
         "byYear": {
           "2021": {
@@ -379,7 +389,8 @@
           "gate": [
             0.010576923076923078,
             0.3019559902200489
-          ]
+          ],
+          "noRead": "too few verified or unverified warnings in a year (2021: 0 verified of 126, 2022: 0 verified of 306)"
         },
         "ownShare": {
           "value": 0.17901234567901234,
@@ -394,7 +405,8 @@
           "gate": [
             0.010576923076923078,
             0.3019559902200489
-          ]
+          ],
+          "noRead": "too few verified or unverified warnings in a year (2021: 0 verified of 126, 2022: 0 verified of 306)"
         },
         "byYear": {
           "2021": {
@@ -423,43 +435,22 @@
             "verifiedOwn": 91
           }
         }
-      },
+      }
+    },
+    "unverified": {
       "EW": {
         "kind": "met.wind.extreme",
         "label": "Extreme Wind",
+        "reason": "Cow links no storm report to an extreme wind warning. Each EW warning is unverified by construction, not by measure.",
+        "sources": [
+          "The Cow request ?begints=2024-09-26T00:00:00Z&endts=2024-09-28T00:00:00Z&phenomena=EW (sent on 2026-11-15): 6 EW warnings and 482 storm reports (SV 104, TO 61, FF 304, MA 11, DS 2). The stats have warned_reports 0 and events_verified 0. Each EW warning has an empty stormreports_all.",
+          "The measure of 2021 to 2025 (rates.yml, run 43751844753): 24 EW warnings, 0 verified.",
+          "The Cow page https://mesonet.agron.iastate.edu/cow/ (read on 2026-11-15), the parameter phenomena: \"the currently supported Storm Based Warning types are Tornado (TO), Severe Thunderstorm (SV), Flash Flood (FF), Marine (MA), and Dust Storm (DS).\" The list has no EW."
+        ],
+        "instead": "The CAP certainty of the alert.",
         "warnings": 24,
         "verified": 0,
         "verifiedOwn": 0,
-        "share": {
-          "value": 0,
-          "wilson": [
-            1.3877787807814457e-17,
-            0.13797620467498017
-          ],
-          "overYears": [
-            0,
-            0
-          ],
-          "gate": [
-            0,
-            0.13797620467498017
-          ]
-        },
-        "ownShare": {
-          "value": 0,
-          "wilson": [
-            1.3877787807814457e-17,
-            0.13797620467498017
-          ],
-          "overYears": [
-            0,
-            0
-          ],
-          "gate": [
-            0,
-            0.13797620467498017
-          ]
-        },
         "byYear": {
           "2021": {
             "warnings": 4,

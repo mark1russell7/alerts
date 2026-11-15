@@ -3,10 +3,10 @@
  * Cow). Cow compares each storm-based warning with the local storm reports in its polygon. A warning
  * with one or more reports is verified.
  *
- * The requests are national: they name no office and no state. One request asks for the six
- * phenomena of one month. Cow gives only the warnings that start and end in the window of a request.
- * Thus each request has a margin of one day before and after its month, and the reader keeps only the
- * warnings that start in the month.
+ * The requests are national: they name no office and no state. One request asks for the phenomena of
+ * `COW_QUERY_PHENOMENA` in one month. Cow gives only the warnings that start and end in the window of
+ * a request. Thus each request has a margin of one day before and after its month. The reader keeps
+ * only the warnings that start in the month.
  */
 
 import { PHENOMENA } from "@mark1russell7/alerts-format-nws";
@@ -14,19 +14,58 @@ import { PHENOMENA } from "@mark1russell7/alerts-format-nws";
 /** The URL of the Cow service of IEM. */
 export const COW_URL = "https://mesonet.agron.iastate.edu/api/1/cow.json";
 
-/** The VTEC phenomena of the measure: the warnings that Cow verifies with storm reports. */
-export const COW_PHENOMENA = ["TO", "SV", "FF", "MA", "SQ", "EW"] as const;
+/** The VTEC phenomena of the verified shares: the warnings that Cow verifies with storm reports. */
+export const COW_PHENOMENA = ["TO", "SV", "FF", "MA", "SQ"] as const;
 
-/** One phenomenon of the measure. */
+/** One phenomenon of the verified shares. */
 export type CowPhenomenon = (typeof COW_PHENOMENA)[number];
+
+/** The reason that a phenomenon is not in the verified shares, with its evidence. */
+export interface CowUnverified {
+  /** The reason in plain words. */
+  readonly reason: string;
+  /** Each line of evidence: a Cow request with its answer, or a line of the IEM documentation. */
+  readonly sources: readonly string[];
+  /** The value that the score uses in place of the verified share. */
+  readonly instead: string;
+}
+
+/**
+ * The phenomena that Cow does not verify. A share of 0 verified warnings for these phenomena is not
+ * a measure. As a prior, it gives the probability 0 and the expected harm 0. Thus the file of the base
+ * rates has no verified share for them. The measure keeps their counts as a note.
+ */
+export const COW_UNVERIFIED = {
+  EW: {
+    reason: "Cow links no storm report to an extreme wind warning. Each EW warning is unverified by construction, not by measure.",
+    sources: [
+      "The Cow request ?begints=2024-09-26T00:00:00Z&endts=2024-09-28T00:00:00Z&phenomena=EW (sent on 2026-11-15): 6 EW warnings and 482 storm reports (SV 104, TO 61, FF 304, MA 11, DS 2). The stats have warned_reports 0 and events_verified 0. Each EW warning has an empty stormreports_all.",
+      "The measure of 2021 to 2025 (rates.yml, run 43751844753): 24 EW warnings, 0 verified.",
+      'The Cow page https://mesonet.agron.iastate.edu/cow/ (read on 2026-11-15), the parameter phenomena: "the currently supported Storm Based Warning types are Tornado (TO), Severe Thunderstorm (SV), Flash Flood (FF), Marine (MA), and Dust Storm (DS)." The list has no EW.',
+    ],
+    instead: "The CAP certainty of the alert.",
+  },
+} as const satisfies Readonly<Record<string, CowUnverified>>;
+
+/** One phenomenon that Cow does not verify. */
+export type CowUnverifiedPhenomenon = keyof typeof COW_UNVERIFIED;
+
+/** The phenomena of `COW_UNVERIFIED`, in a fixed order. */
+export const COW_UNVERIFIED_PHENOMENA = Object.keys(COW_UNVERIFIED) as readonly CowUnverifiedPhenomenon[];
+
+/** The phenomena of each request: the verified phenomena, and the unverified phenomena for their counts. */
+export const COW_QUERY_PHENOMENA: readonly CowQueryPhenomenon[] = [...COW_PHENOMENA, ...COW_UNVERIFIED_PHENOMENA];
+
+/** One phenomenon of the requests. */
+export type CowQueryPhenomenon = CowPhenomenon | CowUnverifiedPhenomenon;
 
 /**
  * The report types of Cow (`lsrtype`) for the hazard of each phenomenon. A warning with a report of
  * these types is verified by its own hazard. A tornado also verifies a severe thunderstorm warning,
- * as in the verification of the NWS. An extreme wind warning has no report type of its own, so the
- * wind and tornado reports verify it, at the wind limit of Cow.
+ * as in the verification of the NWS. The counts of an extreme wind warning use the wind and tornado
+ * reports. At this time, Cow links no report to it (`COW_UNVERIFIED`).
  */
-export const OWN_REPORT_TYPES: Readonly<Record<CowPhenomenon, readonly string[]>> = {
+export const OWN_REPORT_TYPES: Readonly<Record<CowQueryPhenomenon, readonly string[]>> = {
   TO: ["TO"],
   SV: ["SV", "TO"],
   FF: ["FF"],
@@ -48,7 +87,7 @@ export interface CowWindow {
 export interface CowWarning {
   /** The id of Cow: the year, the office, the event number, the phenomenon and the significance. */
   readonly id: string;
-  readonly phenomenon: CowPhenomenon;
+  readonly phenomenon: CowQueryPhenomenon;
   /** The start of the warning, in milliseconds since the epoch. */
   readonly issue: number;
   /** True when Cow verified the warning with one or more storm reports of any type. */
@@ -59,7 +98,7 @@ export interface CowWarning {
 
 /** The warnings of one Cow answer. */
 export interface CowRead {
-  /** The warnings of the measure that start in the window. */
+  /** The warnings of `COW_QUERY_PHENOMENA` that start in the window. */
   readonly warnings: readonly CowWarning[];
   /** The parameters that Cow used, from its answer. */
   readonly params: Readonly<Record<string, unknown>>;
@@ -101,10 +140,10 @@ export function queryTime(time: number): string {
 
 /**
  * This function gives the query of one window: the window with its margins, and each phenomenon of
- * the measure. The query names no office and no state. Cow uses its defaults for each other parameter.
+ * `COW_QUERY_PHENOMENA`. The query names no office and no state. Cow uses its defaults for each other parameter.
  */
 export function cowQuery(window: CowWindow): string {
-  const phenomena = COW_PHENOMENA.map((phenomenon) => `&phenomena=${phenomenon}`).join("");
+  const phenomena = COW_QUERY_PHENOMENA.map((phenomenon) => `&phenomena=${phenomenon}`).join("");
   return `?begints=${queryTime(window.start - COW_MARGIN_MS)}&endts=${queryTime(window.end + COW_MARGIN_MS)}${phenomena}`;
 }
 
@@ -120,12 +159,12 @@ function featuresOf(answer: Readonly<Record<string, unknown>>, name: string): re
   });
 }
 
-const isPhenomenon = (value: unknown): value is CowPhenomenon => typeof value === "string" && (COW_PHENOMENA as readonly string[]).includes(value);
+const isPhenomenon = (value: unknown): value is CowQueryPhenomenon => typeof value === "string" && (COW_QUERY_PHENOMENA as readonly string[]).includes(value);
 
 /**
- * This function reads one Cow answer. It keeps the warnings of the measure that start in the window.
- * It throws an error when the answer does not have the structure of Cow, or when its counts do not
- * agree with its warnings.
+ * This function reads one Cow answer. It keeps the warnings of `COW_QUERY_PHENOMENA` that start in
+ * the window. It throws an error when the answer does not have the structure of Cow, or when its
+ * counts do not agree with its warnings.
  */
 export function readCow(body: string, window: CowWindow): CowRead {
   const answer: unknown = JSON.parse(body);
@@ -188,11 +227,11 @@ export interface CowTally extends CowCount {
  * This function counts the warnings of each phenomenon, over all the windows and in each year. A
  * warning with the id of an earlier warning does not count again.
  */
-export function tallyCow(warnings: Iterable<CowWarning>): Record<CowPhenomenon, CowTally> {
+export function tallyCow(warnings: Iterable<CowWarning>): Record<CowQueryPhenomenon, CowTally> {
   const seen = new Set<string>();
   const empty = (): { warnings: number; verified: number; verifiedOwn: number } => ({ warnings: 0, verified: 0, verifiedOwn: 0 });
-  const totals = Object.fromEntries(COW_PHENOMENA.map((phenomenon) => [phenomenon, { ...empty(), byYear: {} as Record<string, ReturnType<typeof empty>> }])) as Record<
-    CowPhenomenon,
+  const totals = Object.fromEntries(COW_QUERY_PHENOMENA.map((phenomenon) => [phenomenon, { ...empty(), byYear: {} as Record<string, ReturnType<typeof empty>> }])) as Record<
+    CowQueryPhenomenon,
     ReturnType<typeof empty> & { byYear: Record<string, ReturnType<typeof empty>> }
   >;
   for (const warning of warnings) {
@@ -211,7 +250,7 @@ export function tallyCow(warnings: Iterable<CowWarning>): Record<CowPhenomenon, 
 }
 
 /** This function gives the kind of the taxonomy and the plain name of a phenomenon, from the tables of `format-nws`. */
-export function phenomenonKind(phenomenon: CowPhenomenon): { readonly kind: string; readonly label: string } {
+export function phenomenonKind(phenomenon: CowQueryPhenomenon): { readonly kind: string; readonly label: string } {
   const hazard = PHENOMENA[phenomenon];
   if (hazard === undefined) throw new Error(`The NWS tables have no phenomenon ${phenomenon}.`);
   return { kind: hazard.code, label: hazard.label };

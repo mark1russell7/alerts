@@ -376,6 +376,49 @@ importers:
         specifier: ^5.0.3
         version: 5.1.0(@opentelemetry/api@1.10.0)(@types/node@26.6.6)(@vitest/coverage-v8@5.1.0)(vite@8.3.8(@types/node@26.6.6)(esbuild@0.28.2)(tsx@4.23.15)(yaml@2.9.1))
 
+  packages/rates:
+    dependencies:
+      '@mark1russell7/alerts-format-cap':
+        specifier: workspace:*
+        version: link:../format-cap
+      '@mark1russell7/alerts-format-nws':
+        specifier: workspace:*
+        version: link:../format-nws
+      '@mark1russell7/rigor-statistics':
+        specifier: ^0.2.1
+        version: 0.2.4
+      '@mark1russell7/text':
+        specifier: ^0.0.6
+        version: 0.0.6
+      '@procedures/json':
+        specifier: ^0.57.0
+        version: 0.57.0
+    devDependencies:
+      '@mark1russell7/alerts':
+        specifier: workspace:*
+        version: link:../core
+      '@mark1russell7/alerts-fetch':
+        specifier: workspace:*
+        version: link:../fetch
+      '@mark1russell7/cue':
+        specifier: ^2.0.0
+        version: 2.1.4
+      '@types/node':
+        specifier: ^26.6.5
+        version: 26.6.6
+      '@vitest/coverage-v8':
+        specifier: ^5.0.3
+        version: 5.1.0(vitest@5.1.0)
+      polite-crawler:
+        specifier: ^0.7.3
+        version: 0.7.4(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
+      typescript:
+        specifier: ^7.0.2
+        version: 7.0.2
+      vitest:
+        specifier: ^5.0.3
+        version: 5.1.0(@opentelemetry/api@1.10.0)(@types/node@26.6.6)(@vitest/coverage-v8@5.1.0)(vite@8.3.8(@types/node@26.6.6)(esbuild@0.28.2)(tsx@4.23.15)(yaml@2.9.1))
+
   packages/runtime:
     dependencies:
       '@mark1russell7/alerts':
@@ -1151,8 +1194,16 @@ packages:
       express:
         optional: true
 
+  '@procedures/compiler@0.57.0':
+    resolution: {integrity: sha512-awkSHJHUqBL/r1652rHfzWX5GtSayzQXLu4S6YgusHEC1v7HFuPloiKY/e1x+tmb+fCSVY0Ge16jXKPahaPwWg==}
+    engines: {node: '>=22'}
+
   '@procedures/fs@0.57.0':
     resolution: {integrity: sha512-zNuq6My3GdB72JNTCMu/oBQuuS2FrLDRZgfkrtzlLXDPkbSxItN6F+jJ0T2FvZZl6bKQUN3dHOl3uYKUEF1Wfg==}
+    engines: {node: '>=22'}
+
+  '@procedures/json@0.57.0':
+    resolution: {integrity: sha512-s5ubrb4QhAB+zLJnSHZ4lLIB1Sm8KacOXPANqx5DEa3+o8OrKJlNAP1H3qDY8vayJ9oxXi2z10GEPO9vwDednQ==}
     engines: {node: '>=22'}
 
   '@procedures/notify@0.56.0':
@@ -2366,7 +2417,7 @@ snapshots:
     dependencies:
       '@mark1russell7/algebra': 0.8.10(zod@4.6.7)
       '@mark1russell7/optional': 1.2.0
-      '@mark1russell7/rigor-statistics': 0.2.1
+      '@mark1russell7/rigor-statistics': 0.2.4
     transitivePeerDependencies:
       - zod
 
@@ -2513,9 +2564,40 @@ snapshots:
       - pg
       - utf-8-validate
 
+  '@procedures/compiler@0.57.0':
+    dependencies:
+      '@mark1russell7/coeval': 0.34.0(zod@4.6.7)
+      '@procedures/client': 0.57.0
+      zod: 4.6.7
+    transitivePeerDependencies:
+      - '@grpc/grpc-js'
+      - amqplib
+      - bufferutil
+      - express
+      - ioredis
+      - mongodb
+      - pg
+      - utf-8-validate
+
   '@procedures/fs@0.57.0':
     dependencies:
       '@procedures/client': 0.57.0
+      zod: 4.6.7
+    transitivePeerDependencies:
+      - '@grpc/grpc-js'
+      - amqplib
+      - bufferutil
+      - express
+      - ioredis
+      - mongodb
+      - pg
+      - utf-8-validate
+
+  '@procedures/json@0.57.0':
+    dependencies:
+      '@procedures/client': 0.57.0
+      '@procedures/compiler': 0.57.0
+      yaml: 2.9.1
       zod: 4.6.7
     transitivePeerDependencies:
       - '@grpc/grpc-js'

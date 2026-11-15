@@ -8,7 +8,7 @@
  * The requests name no office and no state. The script examines robots.txt of each host first. It
  * writes `rates.json` and `summary.md` in the folder of `--out`. With `--check`, it compares each
  * value with the gate interval of the committed file. A value out of its interval gives the exit
- * code 1.
+ * code 1. A value that the gate cannot read gives a warning annotation of the workflow, and no failure.
  *
  * Start: `node scripts/measure.ts --out=<folder> [--check=data/rates.json] [--cow-years=2021-2025] [--ncei-years=2016-2025]`
  */
@@ -204,7 +204,7 @@ const file = ratesFile({
   ncei: { years: nceiYears, files: ncei.files, harms: ncei.harms },
 });
 const committed = check === undefined ? undefined : await committedFile(check);
-const gate: GateResult = committed === undefined ? { committed: false } : { committed: true, breaks: checkRates(committed, file) };
+const gate: GateResult = committed === undefined ? { committed: false } : { committed: true, ...checkRates(committed, file) };
 const summary = ratesSummary(file, gate);
 await mkdir(out, { recursive: true });
 await writeFile(join(out, "rates.json"), `${JSON.stringify(file, null, 2)}\n`);
@@ -212,6 +212,10 @@ await writeFile(join(out, "summary.md"), summary);
 const stepSummary = process.env["GITHUB_STEP_SUMMARY"];
 if (stepSummary !== undefined && stepSummary !== "") await appendFile(stepSummary, summary);
 console.log(summary);
+/** This function escapes the text of a workflow command, as the runner of GitHub reads it. */
+const command = (text: string): string => text.replaceAll("%", "%25").replaceAll("\r", "%0D").replaceAll("\n", "%0A");
+// A no read is a warning on the check line of the run, not only a line of the log. A no read is not a pass.
+if (gate.committed) for (const item of gate.noReads) console.log(`::warning title=No read of the gate::${command(`${item.path}: ${item.reason}`)}`);
 if (gate.committed && gate.breaks.length > 0) {
   for (const item of gate.breaks) console.error(`The value ${String(item.value)} of ${item.path} is out of its gate interval ${String(item.gate[0])} to ${String(item.gate[1])}.`);
   process.exitCode = 1;
