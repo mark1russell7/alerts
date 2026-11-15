@@ -101,7 +101,7 @@ describe("the scripted Pushover API", () => {
       expect(tagged.status).toBe(200);
       const ledger = ledgerOf(server.requests);
       expect(ledger.counts).toEqual({ sends: 1, reads: 1, cancels: 1, tagCancels: 1, other: 0 });
-      expect(ledger.messages).toEqual([{ receipt: receiptOf(0), tag: KEY, position: 0, connection: 0, readAt: 1, cancelledAt: 2 }]);
+      expect(ledger.messages).toEqual([{ receipt: receiptOf(0), tags: [KEY], position: 0, connection: 0, readAt: 1, cancelledAt: 2 }]);
     } finally {
       await server.close();
     }
@@ -137,6 +137,22 @@ describe("acceptGatesOf", () => {
   it("passes when a cancel by tag reaches the first message before the acknowledgment", () => {
     const fixed = [send(0, 0), tagCancel(1, KEY), send(1, 1), read(1, 1), cancel(1, 1)];
     expect(acceptGatesOf(recordOf("late-answer", fixed)).gates).toEqual({ delivered: true, single: true, stopped: true });
+  });
+
+  it("keeps each tag of a message: a cancel by the copy tag stops only that copy, also after the next send", () => {
+    const copies = [send(0, 0, `${KEY},copy-0`), send(1, 1, `${KEY},copy-1`), tagCancel(2, "copy-0"), read(1, 1), cancel(1, 1)];
+    const ledger = ledgerOf(copies);
+    expect(ledger.messages.map((message) => message.tags)).toEqual([
+      [KEY, "copy-0"],
+      [KEY, "copy-1"],
+    ]);
+    expect(ledger.messages.map((message) => message.cancelledAt)).toEqual([2, 4]);
+    expect(acceptGatesOf(recordOf("hang-after-accept", copies)).gates).toEqual({ delivered: true, single: true, stopped: true });
+  });
+
+  it("stops each copy with a cancel by the key tag", () => {
+    const copies = [send(0, 0, `${KEY},copy-0`), send(1, 1, `${KEY},copy-1`), tagCancel(2, KEY)];
+    expect(ledgerOf(copies).messages.map((message) => message.cancelledAt)).toEqual([2, 2]);
   });
 
   it("does not count a cancel by tag before the send, or a cancel of another tag", () => {

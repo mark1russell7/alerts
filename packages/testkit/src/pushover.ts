@@ -52,15 +52,15 @@ export function pushoverApi(receipts: number): ScriptedServerOptions {
 /** One message that the scripted API accepted. Each position is the place of a request in the records of the server. */
 export interface AcceptedMessage {
   readonly receipt: string;
-  /** The first tag of the message. The Pushover channel tags a `life-safety` message with its delivery key. */
-  readonly tag?: string;
+  /** The tags of the message, in the order of the form. The Pushover channel puts the delivery key first. */
+  readonly tags: readonly string[];
   /** The position of the send. */
   readonly position: number;
   /** The connection of the send, as the server numbers them. */
   readonly connection: number;
   /** The position of the first read of the receipt. The person acknowledged the message at this read. */
   readonly readAt?: number;
-  /** The position of the first cancel that reached the message: a cancel of its receipt, or a cancel of its tag after the send. */
+  /** The position of the first cancel after the send that reached the message: a cancel of its receipt, or of one of its tags. */
   readonly cancelledAt?: number;
 }
 
@@ -78,7 +78,7 @@ const TAG_CANCEL = /^\/1\/receipts\/cancel_by_tag\/([^/]+)\.json$/;
 
 /** This function gives the ledger of the records of a scripted Pushover API. */
 export function ledgerOf(requests: readonly ScriptedRequest[]): PushoverLedger {
-  const sends: { receipt: string; tag?: string; position: number; connection: number }[] = [];
+  const sends: { receipt: string; tags: readonly string[]; position: number; connection: number }[] = [];
   const reads = new Map<string, number>();
   const cancels: { position: number; receipt?: string; tag?: string }[] = [];
   let other = 0;
@@ -87,8 +87,8 @@ export function ledgerOf(requests: readonly ScriptedRequest[]): PushoverLedger {
   for (const [position, request] of requests.entries()) {
     const path = request.target.split("?")[0] ?? "";
     if (request.method === "POST" && path === SEND && request.reply >= 0) {
-      const tag = new URLSearchParams(request.body).get("tags")?.split(",")[0];
-      sends.push({ receipt: receiptOf(request.reply), position, connection: request.connection, ...(tag === undefined || tag === "" ? {} : { tag }) });
+      const tags = (new URLSearchParams(request.body).get("tags") ?? "").split(",").filter((tag) => tag !== "");
+      sends.push({ receipt: receiptOf(request.reply), tags, position, connection: request.connection });
       continue;
     }
     const read = request.method === "GET" ? READ.exec(path) : null;
@@ -112,7 +112,7 @@ export function ledgerOf(requests: readonly ScriptedRequest[]): PushoverLedger {
   }
   const messages = sends.map((send): AcceptedMessage => {
     const readAt = reads.get(send.receipt);
-    const cancelledAt = cancels.find((c) => c.position > send.position && (c.receipt === send.receipt || (c.tag !== undefined && c.tag === send.tag)))?.position;
+    const cancelledAt = cancels.find((c) => c.position > send.position && (c.receipt === send.receipt || (c.tag !== undefined && send.tags.includes(c.tag))))?.position;
     return { ...send, ...(readAt === undefined ? {} : { readAt }), ...(cancelledAt === undefined ? {} : { cancelledAt }) };
   });
   return {

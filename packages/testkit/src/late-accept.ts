@@ -298,8 +298,8 @@ export async function runLateAccept(given: Partial<AcceptSettings> = {}): Promis
   return { id: CASE_4_ID, settings, records, verdict: acceptVerdictOf(records, settings) };
 }
 
-/** The tag of a message, or a text for a message with no tag. A `life-safety` message has the delivery key as its tag. */
-const tagOf = (message: AcceptedMessage): string => message.tag ?? "(no tag)";
+/** The first tag of a message, or a text for a message with no tag. A `life-safety` message has the delivery key as its first tag. */
+const tagOf = (message: AcceptedMessage): string => message.tags[0] ?? "(no tag)";
 
 /**
  * This function gives the gates of one record, and a problem for each gate that fails.
