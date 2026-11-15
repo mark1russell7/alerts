@@ -6,17 +6,17 @@
  * the elements of that data. Thus the tests examine the map with no DOM.
  */
 
-import { TAXONOMY, type MapIncident, type MapPlace, type MapRegion, type MapShape, type MapView, type Position } from "@mark1russell7/alerts";
+import { MAP_VIEW, TAXONOMY, type MapIncident, type MapPlace, type MapRegion, type MapShape, type MapView, type Position } from "@mark1russell7/alerts";
 import { h } from "@mark1russell7/site-pages/chrome";
 import { geoArea, geoCircle, geoMercator, geoPath, type ExtendedGeometryCollection, type GeoGeometryObjects, type GeoPath } from "d3-geo";
 import { LEVEL_WORDS, levelChip, s } from "./draw.ts";
 
-/** The width of the view box of the map. */
-export const MAP_WIDTH = 1000;
+/** The width of the view box of the map. The core simplifies the basemap for this view box. */
+export const MAP_WIDTH = MAP_VIEW.width;
 /** The height of the view box of the map. */
-export const MAP_HEIGHT = 640;
+export const MAP_HEIGHT = MAP_VIEW.height;
 /** The space between the shapes and the edge of the view box. */
-const PAD = 24;
+const PAD = MAP_VIEW.pad;
 
 /**
  * The length of one degree of a great circle in km: π × 6371.0088 / 180, from the mean radius of the Earth.

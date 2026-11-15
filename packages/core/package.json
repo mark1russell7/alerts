@@ -14,7 +14,7 @@
   "dependencies": {
     "@mark1russell7/algebra": "^0.8.9",
     "@mark1russell7/collections": "^0.10.2",
-    "@mark1russell7/geo": "^0.2.1",
+    "@mark1russell7/geo": "^0.3.0",
     "@mark1russell7/interval": "^0.1.0",
     "@mark1russell7/optional": "^1.2.0",
     "@mark1russell7/rigor-generators": "^0.1.16",

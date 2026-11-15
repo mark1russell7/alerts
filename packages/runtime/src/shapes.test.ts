@@ -1,7 +1,7 @@
 import { CONFIG_FORMAT, type AlertConfig, type Incident, type MapRegion, type PlaceConfig, type PlaceId, type Position, type RegionCode, type ReportId, type WatchedPlace } from "@mark1russell7/alerts";
 import type { Refreshed, RefreshInput, ShapeStore } from "@mark1russell7/alerts-shapes-nws";
 import { describe, expect, it } from "vitest";
-import { keepShapes, liveCodes, placeCodesKey, shapeReport, wantedShapes, withZoneCodes } from "./shapes.ts";
+import { keepShapes, liveCodes, placeCodesKey, shapeReport, wantedShapes, withZoneCodes, type ShapeOutcome } from "./shapes.ts";
 
 const T0 = Date.UTC(2026, 10, 15, 18, 0, 0);
 const RING = [
@@ -33,12 +33,20 @@ function incident(anchor: string, codes: readonly RegionCode[], live = true): In
 
 const REFRESHED: Refreshed = { requests: 2, failures: [], problems: [], stop: "done" };
 
-/** A fake store. It has a region for each UGC code in `known`, and each refresh waits until the test ends it. */
-function fakeStore(known: readonly string[]) {
+/**
+ * A fake store. It has a region for each UGC code in `known`, and the regions of `states` for the basemap of each state.
+ * Each refresh waits until the test ends it. A region keeps its array of shapes, as in the real store.
+ */
+function fakeStore(known: readonly string[], states: Readonly<Record<string, readonly MapRegion[]>> = {}) {
   const calls: RefreshInput[] = [];
   let end: ((value: Refreshed) => void) | undefined;
   let fail: ((error: unknown) => void) | undefined;
-  const region = (id: string): MapRegion => ({ code: { system: "ugc", code: id }, name: `Zone ${id}`, shapes: [{ type: "polygon", rings: [RING] }] });
+  const regions = new Map<string, MapRegion>();
+  const region = (id: string): MapRegion => {
+    const held = regions.get(id) ?? { code: { system: "ugc", code: id }, name: `Zone ${id}`, shapes: [{ type: "polygon", rings: [RING] }] };
+    regions.set(id, held);
+    return held;
+  };
   const zoneOf = (code: RegionCode): string | undefined => {
     const text = code.code.toUpperCase();
     if (code.system === "ugc") return text;
@@ -54,7 +62,7 @@ function fakeStore(known: readonly string[]) {
       const id = zoneOf(code);
       return id !== undefined && known.includes(id) ? region(id) : undefined;
     },
-    basemap: () => [],
+    basemap: (state) => states[state] ?? [],
     nextDue: () => undefined,
     refresh: (input) => {
       calls.push(input);
@@ -231,6 +239,41 @@ describe("keepShapes", () => {
     expect(keeper.basemap().map((region) => region.code.code)).toEqual(["KSC173", "KSZ083", "TXC167"]);
     expect(keeper.lookup({ system: "same", code: "020173" })).toHaveLength(1);
     expect(keeper.lookup({ system: "ugc", code: "TXC029" })).toBeUndefined();
+    await keeper.close();
+  });
+
+  it("gives each region of each watched state, simplified, and simplifies again only after a change", async () => {
+    // A public county of Kansas. Its south edge has 3 positions that are 1 m from the line, thus the simplification removes them.
+    const harvey: MapRegion = { code: { system: "ugc", code: "KSC079" }, name: "Harvey", shapes: [{ type: "polygon", rings: [[[-98, 37], [-97.75, 37.00001], [-97.5, 37], [-97.25, 37.00001], [-97, 37], [-97, 38], [-98, 38], [-98, 37]]] }] };
+    const fake = fakeStore(["KSZ083", "KSC173", "TXC167"], { KS: [harvey] });
+    const outcomes: ShapeOutcome[] = [];
+    const keeper = keepShapes({ store: fake.store, places: [KANSAS], onShapes: (outcome) => outcomes.push(outcome) });
+    const first = keeper.basemap();
+    expect(first.map((region) => region.code.code)).toEqual(["KSC079", "KSC173", "KSZ083"]);
+    const ring = first[0]!.shapes[0]!.type === "polygon" ? first[0]!.shapes[0]!.rings[0]! : [];
+    expect(ring).toHaveLength(5);
+    expect(new Set(ring.map(([lon, lat]) => `${String(lon)},${String(lat)}`))).toEqual(new Set(["-98,37", "-97,37", "-97,38", "-98,38"]));
+    // The same regions give the same simplified copy.
+    expect(keeper.basemap()).toBe(first);
+    keeper.afterPass([incident("a", [{ system: "ugc", code: "TXC167" }])], undefined);
+    const second = keeper.basemap();
+    expect(second).not.toBe(first);
+    expect(second.map((region) => region.code.code)).toEqual(["KSC079", "KSC173", "KSZ083", "TXC167"]);
+    expect(outcomes).toEqual([]);
+    await keeper.close();
+  });
+
+  it("gives the full outlines and reports the error one time when the simplification throws", async () => {
+    // The ring is not closed, thus geo refuses it.
+    const open: MapRegion = { code: { system: "ugc", code: "KSC079" }, name: "Harvey", shapes: [{ type: "polygon", rings: [[[-98, 37], [-97, 37], [-97, 38], [-98, 38]]] }] };
+    const fake = fakeStore([], { KS: [open] });
+    const outcomes: ShapeOutcome[] = [];
+    const keeper = keepShapes({ store: fake.store, places: [KANSAS], onShapes: (outcome) => outcomes.push(outcome) });
+    expect(keeper.basemap()).toEqual([open]);
+    expect(keeper.basemap()[0]).toBe(open);
+    expect(outcomes).toHaveLength(1);
+    expect(outcomes[0]).toMatchObject({ ok: false, step: "basemap" });
+    expect(shapeReport(outcomes[0]!)).toMatch(/^The simplification of the basemap threw, thus the map has the full outlines: .*linear ring/);
     await keeper.close();
   });
 
