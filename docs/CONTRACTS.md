@@ -181,7 +181,7 @@ The level for a person is the highest level at the places of the person. A rule 
 
 The assessment reads no clock. At night, only `life-safety` breaks through Do Not Disturb, so the levels hold the night rule. Each assessment has its reasons: the gate that stopped it, the class, the two lookups, the places and the rules. The UI shows them.
 
-The table becomes the calculation of AL-30. The calculation multiplies the probability that the event is real, the impact on the person and the urgency. It compares the result with the cost to interrupt the person at that time. The probabilities come from base rates that the event log measures, not from values that a person sets.
+The table becomes the calculation of AL-31. The calculation multiplies the probability that the event is real, the impact on the person and the urgency. It compares the result with the cost to interrupt the person at that time. The probabilities come from base rates that the event log measures, not from values that a person sets.
 
 ## People and places
 
@@ -197,6 +197,6 @@ Two codes match when their systems and their values are equal. The first digit o
 
 - The procedure schemas: Standard Schema validators (zod 4) for each input and output, in the core package.
 - The link rule of each family of kind, for rule 3 of the merge.
-- The calculation of the level from probabilities and costs (AL-30), with the base rates from the event log.
+- The calculation of the level from probabilities and costs (AL-31), with the base rates from the event log.
 - The merge state grows with each report. A compaction of the incidents that ended before a horizon keeps it small. It must keep the three laws.
 - The taxonomy: the list of codes, from the CAP and NWS event names first (AL-5).
