@@ -399,6 +399,9 @@ importers:
       '@mark1russell7/text':
         specifier: ^0.0.5
         version: 0.0.5
+      '@procedures/fs':
+        specifier: ^0.57.0
+        version: 0.57.0
       polite-crawler:
         specifier: ^0.6.2
         version: 0.6.2
@@ -1036,6 +1039,19 @@ packages:
     peerDependenciesMeta:
       express:
         optional: true
+
+  '@procedures/client@0.57.0':
+    resolution: {integrity: sha512-0UUFLYXgH9Xou68fzd1/xKOIsh4uplwjvwEG/qqNc6oahzGNiDhz/MVXDhY5EgFFTVrChATP+mH52xf+zrTT+Q==}
+    engines: {node: '>=22'}
+    peerDependencies:
+      express: ^4.0.0 || ^5.0.0
+    peerDependenciesMeta:
+      express:
+        optional: true
+
+  '@procedures/fs@0.57.0':
+    resolution: {integrity: sha512-zNuq6My3GdB72JNTCMu/oBQuuS2FrLDRZgfkrtzlLXDPkbSxItN6F+jJ0T2FvZZl6bKQUN3dHOl3uYKUEF1Wfg==}
+    engines: {node: '>=22'}
 
   '@procedures/notify@0.56.0':
     resolution: {integrity: sha512-UR3Z0R8SpBzkO4LJiN7KfmNki+LcAKjrUwKuiJ/zKczgtzt4qWV6TZGTJv69qYwdcn6frAfZaGf1eXO5Kk669g==}
@@ -2340,6 +2356,40 @@ snapshots:
       - '@grpc/grpc-js'
       - amqplib
       - bufferutil
+      - ioredis
+      - mongodb
+      - pg
+      - utf-8-validate
+
+  '@procedures/client@0.57.0':
+    dependencies:
+      '@mark1russell7/algebra': 0.8.9(zod@4.6.7)
+      '@mark1russell7/coeval': 0.34.0(zod@4.6.7)
+      '@mark1russell7/collections': 0.10.2(zod@4.6.7)
+      '@mark1russell7/quantity': 0.4.0(zod@4.6.7)
+      '@mark1russell7/service': 0.8.16(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
+      '@opentelemetry/api': 1.10.0
+      '@types/ws': 8.18.2
+      ws: 8.23.0
+      zod: 4.6.7
+    transitivePeerDependencies:
+      - '@grpc/grpc-js'
+      - amqplib
+      - bufferutil
+      - ioredis
+      - mongodb
+      - pg
+      - utf-8-validate
+
+  '@procedures/fs@0.57.0':
+    dependencies:
+      '@procedures/client': 0.57.0
+      zod: 4.6.7
+    transitivePeerDependencies:
+      - '@grpc/grpc-js'
+      - amqplib
+      - bufferutil
+      - express
       - ioredis
       - mongodb
       - pg

@@ -8,7 +8,7 @@ import { PUSHOVER_TIMEOUT_MS, type PushoverChannelOptions } from "@mark1russell7
 import { CANARY_PATH } from "@mark1russell7/alerts-source-nws-api";
 import type { Exchange, Transport } from "polite-crawler/api";
 import { afterEach, describe, expect, it } from "vitest";
-import { INSTANCE_CHANNELS, INSTANCE_CHECK, INSTANCE_SOURCES, INSTANCE_TIMES, instanceProblems, openInstance, USER_AGENT, type Instance } from "./instance.ts";
+import { DAEMON_CHECK, INSTANCE_CHANNELS, INSTANCE_CHECK, INSTANCE_SOURCES, INSTANCE_TIMES, instanceProblems, openInstance, PING_URL_KEY, USER_AGENT, type Instance } from "./instance.ts";
 import { openRuntimeLog, type RuntimeLog } from "./log.ts";
 
 // The Flood Warning was sent at 14:54 UTC on 2026-11-14, and it expires at 06:00 UTC on 2026-11-15.
@@ -273,5 +273,12 @@ describe("the check of the instance", () => {
 
   it("finds no problem in a configuration that starts", () => {
     expect(instanceProblems(parse(CONFIG, store(SECRETS)), store(SECRETS), INSTANCE_SOURCES)).toEqual([]);
+  });
+
+  it("needs the key of the outside heartbeat only for the live instance", () => {
+    const parsed = parse(CONFIG, store(SECRETS));
+    expect(DAEMON_CHECK.channels).toBe(INSTANCE_CHECK.channels);
+    expect(DAEMON_CHECK.problems(parsed, store(SECRETS))).toEqual([`The file secrets.env has no ${PING_URL_KEY}. The live instance needs its outside heartbeat.`]);
+    expect(DAEMON_CHECK.problems(parsed, store({ ...SECRETS, [PING_URL_KEY]: "https://hc-ping.example/test" }))).toEqual([]);
   });
 });

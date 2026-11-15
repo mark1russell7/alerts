@@ -10,7 +10,7 @@ import { createIpawsSource, IPAWS_DESCRIPTOR, WEA_EXPECTATION } from "@mark1russ
 import { createNwsSource, NWS_DESCRIPTOR } from "@mark1russell7/alerts-source-nws-api";
 import type { Pace, Transport } from "polite-crawler/api";
 import { HostScheduler } from "polite-crawler/politeness";
-import type { InstanceCheck } from "./config.ts";
+import { requireKey, type InstanceCheck } from "./config.ts";
 import type { DeliveryOptions } from "./delivery.ts";
 import type { RuntimeLog } from "./log.ts";
 import { createLoop, loopTimes, type LoopTimes, type RuntimeLoop } from "./loop.ts";
@@ -18,6 +18,9 @@ import { openRuntime, type Pass, type Runtime, type RuntimeOptions } from "./run
 
 /** The name of the secret that holds the API token of the Pushover application. */
 export const PUSHOVER_TOKEN = "PUSHOVER_APP_TOKEN";
+
+/** The name of the key of `secrets.env` that holds the address of the outside heartbeat. */
+export const PING_URL_KEY = "HEALTHCHECKS_PING_URL";
 
 /**
  * The User-Agent of each request to a source. The NWS asks for the name of the application and a
@@ -83,6 +86,12 @@ export const INSTANCE_CHECK: InstanceCheck = {
   channels: INSTANCE_CHANNELS,
   problems: (parsed, secret) => instanceProblems(parsed, secret, INSTANCE_SOURCES),
 };
+
+/**
+ * The check of the live instance, the profile `daemon`. It adds the key of the outside heartbeat to
+ * `INSTANCE_CHECK`, because the live instance does not start without its heartbeat.
+ */
+export const DAEMON_CHECK: InstanceCheck = requireKey(INSTANCE_CHECK, PING_URL_KEY, "The live instance needs its outside heartbeat.");
 
 /** The options of `openInstance`. */
 export interface InstanceOptions {
