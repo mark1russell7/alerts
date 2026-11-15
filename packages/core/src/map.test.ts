@@ -1,0 +1,154 @@
+import { random, seedsFrom } from "@mark1russell7/rigor-generators";
+import { describe, expect, it } from "vitest";
+import type { Area, AssessedLevel, Assessment, Coverage, Incident, PersonId, PlaceId, RegionCode, ReportId, Severity } from "./contracts.ts";
+import { mapView, regionRank, type MapInput, type MapPlaceInput, type MapShape, type ShapeLookup } from "./map.ts";
+
+const SEEDS = seedsFrom(process.env["SEED"], [1, 2, 3, 4, 5, 6, 7, 8]);
+const PERSON_A = "person:a" as PersonId;
+const PERSON_B = "person:b" as PersonId;
+const PLACE_A = "place:a" as PlaceId;
+const PLACE_B = "place:b" as PlaceId;
+
+const zone: RegionCode = { system: "ugc", code: "KSZ083" };
+const county: RegionCode = { system: "ugc", code: "KSC173" };
+const state: RegionCode = { system: "state", code: "KS" };
+const square = (lon: number, lat: number): MapShape => ({
+  type: "polygon",
+  rings: [[[lon, lat], [lon + 0.1, lat], [lon + 0.1, lat + 0.1], [lon, lat + 0.1], [lon, lat]]],
+});
+
+// A store of shapes with a zone, a county and the state of Kansas. Each other code has no shape.
+const SHAPES = new Map<string, readonly MapShape[]>([
+  ["ugc KSZ083", [square(-97.5, 37.6)]],
+  ["ugc KSC173", [square(-97.6, 37.5), square(-97.2, 37.5)]],
+  ["state KS", [square(-102, 37)]],
+]);
+const shape: ShapeLookup = (code) => SHAPES.get(`${code.system} ${code.code}`);
+
+// Public places in Kansas and Texas, with made-up labels.
+const kansas: MapPlaceInput = { id: PLACE_A, label: "Place A", codes: [state, county, zone], bufferKm: 0 };
+const texas: MapPlaceInput = { id: PLACE_B, label: "Place B", at: [-98.49, 29.42], codes: [{ system: "same", code: "048029" }], bufferKm: 5 };
+
+function incident(anchor: string, fields: Partial<Incident> = {}): Incident {
+  return {
+    anchor: anchor.padEnd(64, "0") as ReportId,
+    reports: [anchor.padEnd(64, "0") as ReportId],
+    status: "actual",
+    kind: { code: "met.tornado", label: "Tornado Warning" },
+    severity: "extreme",
+    urgency: "immediate",
+    certainty: "observed",
+    areas: [{ type: "code", ...zone }],
+    about: [],
+    live: true,
+    corroboration: 1,
+    ...fields,
+  };
+}
+
+function assessment(of: Incident, level: AssessedLevel, places: readonly PlaceId[] = [], person: PersonId = PERSON_A): Assessment {
+  return { incident: of.anchor, person, level, places, reasons: [] };
+}
+
+function gap(place: PlaceId, kind: string, short: boolean): Coverage {
+  return { place, kind, sources: [], independent: short ? 1 : 2, required: 2, proven: true, faults: [], commonResources: [] };
+}
+
+const input = (fields: Partial<MapInput>): MapInput => ({ incidents: [], assessments: [], places: [kansas, texas], coverage: [], shape, ...fields });
+
+describe("regionRank", () => {
+  it("puts a zone before a county, a county before a state, and a state before a country", () => {
+    const codes: RegionCode[] = [{ system: "iso3166", code: "US" }, state, { system: "same", code: "020173" }, county, zone, { system: "other", code: "x" }];
+    expect(codes.map(regionRank)).toEqual([3, 2, 1, 1, 0, 4]);
+  });
+});
+
+describe("the incidents of the map", () => {
+  it("keep each polygon and circle, give the shapes of each code, and list each code with no shape", () => {
+    const circle: Area = { type: "circle", center: [-97.3, 37.7], radiusKm: 10 };
+    const unknown: RegionCode = { system: "ugc", code: "KSZ999" };
+    const view = mapView(input({ incidents: [incident("a", { areas: [square(-97, 38), circle, { type: "code", ...county }, { type: "code", ...unknown }, { type: "place", place: PLACE_B }] })] }));
+    const [only] = view.incidents;
+    expect(only?.shapes).toEqual([square(-97, 38), circle, ...(SHAPES.get("ugc KSC173") ?? [])]);
+    expect(only?.unshaped).toEqual([unknown]);
+    expect(view.unshaped).toEqual([unknown]);
+    // The county covers place A, and the area of place B names place B.
+    expect(only?.places).toEqual([PLACE_A, PLACE_B]);
+  });
+
+  it("drop each incident that ended", () => {
+    const view = mapView(input({ incidents: [incident("a", { live: false }), incident("b")] }));
+    expect(view.incidents.map((entry) => entry.anchor[0])).toEqual(["b"]);
+  });
+
+  it("take the highest level over each person, and none with no assessment", () => {
+    const [a, b] = [incident("a"), incident("b")];
+    const view = mapView(input({ incidents: [a, b], assessments: [assessment(a, "notice"), assessment(a, "urgent", [], PERSON_B), assessment(a, "none")] }));
+    expect(view.incidents.map((entry) => [entry.anchor[0], entry.level])).toEqual([
+      ["a", "urgent"],
+      ["b", "none"],
+    ]);
+  });
+
+  it("go from the highest level, then from the highest severity, then by the anchor", () => {
+    const severities: Severity[] = ["minor", "extreme", "unknown", "severe"];
+    const incidents = [...severities.map((severity, index) => incident(`s${"abcd"[index]}`, { severity })), incident("t"), incident("u")];
+    const [top] = incidents.slice(-1);
+    const view = mapView(input({ incidents, assessments: top === undefined ? [] : [assessment(top, "life-safety")] }));
+    expect(view.incidents.map((entry) => entry.anchor.replace(/0+$/, ""))).toEqual(["u", "sb", "t", "sd", "sa", "sc"]);
+  });
+
+  it("list each code with no shape once, in the order of the system and the code", () => {
+    const codes: RegionCode[] = [{ system: "ugc", code: "KSZ998" }, { system: "same", code: "020999" }, { system: "ugc", code: "KSZ997" }];
+    const areas = codes.map((code): Area => ({ type: "code", ...code }));
+    const view = mapView(input({ incidents: [incident("a", { areas }), incident("b", { areas: areas.slice(0, 1) })] }));
+    expect(view.unshaped).toEqual([codes[1], codes[2], codes[0]]);
+  });
+});
+
+describe("the places of the map", () => {
+  it("give the shapes of the smallest region with a shape, and keep the position", () => {
+    const view = mapView(input({}));
+    expect(view.places.map((place) => place.shapes)).toEqual([SHAPES.get("ugc KSZ083"), []]);
+    expect(view.places[1]?.at).toEqual(texas.at);
+    // With no zone in the store, the county is the smallest region with a shape.
+    const noZone: ShapeLookup = (code) => (code.code === "KSZ083" ? undefined : shape(code));
+    expect(mapView(input({ shape: noZone })).places[0]?.shapes).toEqual(SHAPES.get("ugc KSC173"));
+  });
+
+  it("take the highest level of the assessments at the place, and list its live incidents in the order of the view", () => {
+    const [a, b, c] = [incident("a"), incident("b"), incident("c", { live: false })];
+    const view = mapView(input({ incidents: [a, b, c], assessments: [assessment(a, "notice", [PLACE_A]), assessment(b, "life-safety", [PLACE_A], PERSON_B)] }));
+    const [first, second] = view.places;
+    expect(first?.level).toBe("life-safety");
+    expect(first?.incidents.map((anchor) => anchor[0])).toEqual(["b", "a"]);
+    expect(second?.level).toBe("none");
+    expect(second?.incidents).toEqual([]);
+  });
+
+  it("list each kind with a short coverage at the place, once", () => {
+    const coverage = [gap(PLACE_A, "met.tornado", true), gap(PLACE_A, "geo.earthquake", true), gap(PLACE_A, "met.flood", false), gap(PLACE_B, "met.tornado", true), gap(PLACE_A, "met.tornado", true)];
+    const view = mapView(input({ coverage }));
+    expect(view.places.map((place) => place.gaps)).toEqual([["geo.earthquake", "met.tornado"], ["met.tornado"]]);
+  });
+});
+
+describe("the order of the input", () => {
+  it.each(SEEDS)("does not change the view (seed %i)", (seed) => {
+    const r = random(seed);
+    const levels: AssessedLevel[] = ["none", "digest", "notice", "urgent", "life-safety"];
+    const severities: Severity[] = ["extreme", "severe", "moderate", "minor", "unknown"];
+    const codes: RegionCode[] = [zone, county, state, { system: "ugc", code: "KSZ998" }];
+    const incidents = Array.from({ length: 12 }, (_, index) =>
+      incident(`i${index.toString(16)}`, {
+        severity: r.pick(severities),
+        live: r.int(0, 4) > 0,
+        areas: r.sample(codes, r.int(1, codes.length)).map((code): Area => ({ type: "code", ...code })),
+      }),
+    );
+    const assessments = incidents.flatMap((entry) => (r.int(0, 2) > 0 ? [assessment(entry, r.pick(levels), r.int(0, 1) > 0 ? [PLACE_A] : [], r.pick([PERSON_A, PERSON_B]))] : []));
+    const view = mapView(input({ incidents, assessments }));
+    const shuffled = mapView(input({ incidents: r.shuffle([...incidents]), assessments: r.shuffle([...assessments]) }));
+    expect(shuffled).toEqual(view);
+  });
+});

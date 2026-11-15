@@ -413,6 +413,20 @@ Two codes match when their systems and their values are equal. The first digit o
 
 The area `{ type: "place" }` covers that watched place only. Only the reports of the core use it. An area with only shapes matches no place until `@mark1russell7/geo` has the tests. The assessment then gives the reason `no-codes`. The first sources, the NWS and IPAWS, give codes with each area.
 
+## The map
+
+The function `mapView` of the core gives the view of the map from the state of one pass. It takes the incidents, the assessments, the places, the coverage and a `ShapeLookup`. The view is a pure calculation, and the order of its inputs does not change it.
+
+- Incidents: each live incident, from the highest level, then the highest severity, then the anchor. The level is the highest level over each person.
+- Shapes: each polygon and circle of an incident, and the shapes of each region code from the store. A code with no shape goes to `unshaped`, and the renderer lists it as text.
+- Places: the label, the position and the shapes of the smallest region with a shape. Each place also has its highest level, its live incidents and its gaps of coverage.
+
+The level of a place is an upper bound. An assessment keeps only the highest level of its places. Thus a rule that lowers the level at one place does not show on the map.
+
+The store of shapes fetches each zone and county of a state, not one code. A fetch of the code of a place names the place to the server. The map has no tiles from an outside server, because the tiles around a place also name the place. The renderer draws the outlines of the states, the counties and the zones.
+
+The view holds labels and positions. Only a route on the loopback address gives it, and `GET /status` does not hold it.
+
 ## The schemas
 
 The file `schemas.ts` of the core has one zod 4 schema for each data type of the contracts and of the configuration. A schema checks data at a trust boundary. The boundaries are the output of a map function, the event log, the private configuration and the procedure tools.
