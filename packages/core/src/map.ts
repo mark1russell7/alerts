@@ -1,0 +1,192 @@
+/**
+ * This module gives the view of the map: the live incidents in the order of their level, with their
+ * shapes. The view also gives each watched place with its highest level and its gaps of coverage. The view is a pure
+ * calculation. A renderer draws it, and a store of shapes gives the outline of each region code.
+ */
+import { higherLevel, matchPlaces } from "./assess.ts";
+import { ASSESSED_LEVELS, type Area, type AssessedLevel, type Assessment, type Coverage, type Incident, type Kind, type PlaceId, type Position, type RegionCode, type ReportId, type Severity, type Instant } from "./contracts.ts";
+import { coverageShort } from "./coverage.ts";
+
+/** A shape of the map in WGS 84: a polygon or a circle. A region code gets its shapes from the store. */
+export type MapShape = Extract<Area, { readonly type: "polygon" } | { readonly type: "circle" }>;
+
+/**
+ * This function gives the shapes of a region code, or `undefined` when the store has no shape for it.
+ * A region with many parts, for example a county with islands, has many shapes.
+ */
+export type ShapeLookup = (code: RegionCode) => readonly MapShape[] | undefined;
+
+/** A place of the map. The label and the position stay on the machine of the instance. */
+export interface MapPlaceInput {
+  readonly id: PlaceId;
+  readonly label: string;
+  readonly at?: Position;
+  readonly codes: readonly RegionCode[];
+  readonly bufferKm: number;
+}
+
+/** These are the inputs of the view of the map. */
+export interface MapInput {
+  /** The incidents of the merge. The view keeps only the live incidents. */
+  readonly incidents: readonly Incident[];
+  /** The assessments of each person for these incidents. */
+  readonly assessments: readonly Assessment[];
+  readonly places: readonly MapPlaceInput[];
+  /** The coverage of each place and kind. A short entry is a gap at its place. */
+  readonly coverage: readonly Coverage[];
+  readonly shape: ShapeLookup;
+}
+
+/** An incident on the map. */
+export interface MapIncident {
+  readonly anchor: ReportId;
+  readonly kind: Kind;
+  /** The highest level of the incident over each person, or `none` when no person gets it. */
+  readonly level: AssessedLevel;
+  readonly severity: Severity;
+  readonly onset?: Instant;
+  readonly expires?: Instant;
+  /** The shapes of the areas: each polygon, each circle and the shapes of each region code. */
+  readonly shapes: readonly MapShape[];
+  /** The region codes of the areas with no shape in the store. The renderer lists them as text. */
+  readonly unshaped: readonly RegionCode[];
+  /** The watched places in the areas, for each person. */
+  readonly places: readonly PlaceId[];
+}
+
+/** A watched place on the map. */
+export interface MapPlace {
+  readonly id: PlaceId;
+  readonly label: string;
+  readonly at?: Position;
+  /**
+   * The shapes of the smallest region of the place with a shape: a zone before a county, a county
+   * before a state. The list is empty when no code of the place has a shape.
+   */
+  readonly shapes: readonly MapShape[];
+  /**
+   * The highest level of the live incidents at the place. An assessment keeps only the highest level
+   * of its places. Thus this level is an upper bound when a rule lowers the level at one place.
+   */
+  readonly level: AssessedLevel;
+  /** The anchors of the live incidents at the place, in the order of the view. */
+  readonly incidents: readonly ReportId[];
+  /** The kinds whose coverage at the place is short. */
+  readonly gaps: readonly string[];
+}
+
+/** The view of the map. */
+export interface MapView {
+  /** The live incidents, from the highest level. In one level, the order is the severity, then the anchor. */
+  readonly incidents: readonly MapIncident[];
+  /** The places, in the order of the input. */
+  readonly places: readonly MapPlace[];
+  /** Each region code of a live incident with no shape, once, in the order of the system and the code. */
+  readonly unshaped: readonly RegionCode[];
+}
+
+/** The severities, from the highest. */
+const SEVERITY_ORDER: readonly Severity[] = ["extreme", "severe", "moderate", "minor", "unknown"];
+
+/**
+ * This function gives the rank of the size of a region code, from the smallest. An NWS zone (`KSZ083`)
+ * is before an NWS county (`KSC173`), a county before a state, and a state before a country.
+ */
+export function regionRank(code: RegionCode): number {
+  switch (code.system) {
+    case "ugc":
+      return code.code[2] === "Z" ? 0 : 1;
+    case "same":
+    case "fips":
+      return 1;
+    case "state":
+      return 2;
+    case "iso3166":
+      return 3;
+    default:
+      return 4;
+  }
+}
+
+/** This function gives the view of the map. The output does not depend on the order of the incidents or the assessments. */
+export function mapView(input: MapInput): MapView {
+  const levels = new Map<string, AssessedLevel>();
+  const placeLevels = new Map<string, AssessedLevel>();
+  for (const assessment of input.assessments) {
+    levels.set(assessment.incident, higherLevel(levels.get(assessment.incident) ?? "none", assessment.level));
+    for (const place of assessment.places) placeLevels.set(place, higherLevel(placeLevels.get(place) ?? "none", assessment.level));
+  }
+
+  const unshaped = new Map<string, RegionCode>();
+  const incidents = input.incidents
+    .filter((incident) => incident.live)
+    .map((incident): MapIncident => {
+      const shapes: MapShape[] = [];
+      const missing: RegionCode[] = [];
+      for (const area of incident.areas) {
+        if (area.type === "polygon" || area.type === "circle") shapes.push(area);
+        else if (area.type === "code") {
+          const code = { system: area.system, code: area.code };
+          const found = input.shape(code);
+          if (found === undefined) {
+            missing.push(code);
+            unshaped.set(codeKey(code), code);
+          } else shapes.push(...found);
+        }
+      }
+      return {
+        anchor: incident.anchor,
+        kind: incident.kind,
+        level: levels.get(incident.anchor) ?? "none",
+        severity: incident.severity,
+        ...(incident.onset === undefined ? {} : { onset: incident.onset }),
+        ...(incident.expires === undefined ? {} : { expires: incident.expires }),
+        shapes,
+        unshaped: missing,
+        places: matchPlaces(incident, input.places).map((match) => match.place),
+      };
+    })
+    .sort(
+      (a, b) =>
+        ASSESSED_LEVELS.indexOf(b.level) - ASSESSED_LEVELS.indexOf(a.level) ||
+        SEVERITY_ORDER.indexOf(a.severity) - SEVERITY_ORDER.indexOf(b.severity) ||
+        compareText(a.anchor, b.anchor),
+    );
+
+  const places = input.places.map((place): MapPlace => {
+    const gaps = input.coverage.filter((entry) => entry.place === place.id && coverageShort(entry)).map((entry) => entry.kind);
+    return {
+      id: place.id,
+      label: place.label,
+      ...(place.at === undefined ? {} : { at: place.at }),
+      shapes: smallestShapes(place.codes, input.shape),
+      level: placeLevels.get(place.id) ?? "none",
+      incidents: incidents.filter((incident) => incident.places.includes(place.id)).map((incident) => incident.anchor),
+      gaps: [...new Set(gaps)].sort(compareText),
+    };
+  });
+
+  return {
+    incidents,
+    places,
+    unshaped: [...unshaped.values()].sort((a, b) => compareText(a.system, b.system) || compareText(a.code, b.code)),
+  };
+}
+
+/** The shapes of the smallest region of the codes with a shape. In one rank, the first code of the place wins. */
+function smallestShapes(codes: readonly RegionCode[], shape: ShapeLookup): readonly MapShape[] {
+  const ranked = codes.map((code, index) => ({ code, index, rank: regionRank(code) })).sort((a, b) => a.rank - b.rank || a.index - b.index);
+  for (const { code } of ranked) {
+    const found = shape(code);
+    if (found !== undefined && found.length > 0) return found;
+  }
+  return [];
+}
+
+function codeKey(code: RegionCode): string {
+  return `${code.system}\u0000${code.code}`;
+}
+
+function compareText(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
