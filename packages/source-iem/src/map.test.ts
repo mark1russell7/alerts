@@ -94,6 +94,17 @@ describe("mapObservation", () => {
     expect(report.correlation).toEqual([{ system: "vtec", id: "PAFC.WS.A.0007.2026" }]);
   });
 
+  it("gives the year of the earlier time of the row: the start or the product", () => {
+    const kansas = { ...ROW, wfo: "TOP", phenomena: "WS", significance: "W", eventid: 3, ugc: "KSZ083", utc_expire: "2026-01-02T18:00:00Z" };
+    // A start in the old year and a product in the new year
+    const started = mapOne(observationOfRow({ ...kansas, utc_issue: "2025-12-31T22:00:00Z", utc_product_issue: "2026-01-01T03:00:00Z" }));
+    expect(started.correlation).toEqual([{ system: "vtec", id: "KTOP.WS.W.0003.2025" }]);
+    expect(started.web).toBe(`${EVENT_PAGE}2025-O-NEW-KTOP-WS-W-0003`);
+    // A product in the old year with a start in the new year, as in section 2.1.6 of NWS Directive 10-1703
+    const early = mapOne(observationOfRow({ ...kansas, utc_issue: "2026-01-02T00:00:00Z", utc_product_issue: "2025-12-31T21:00:00Z" }));
+    expect(early.correlation).toEqual([{ system: "vtec", id: "KTOP.WS.W.0003.2025" }]);
+  });
+
   it("gives no end for a row with no end", () => {
     const report = mapOne(observationOfRow({ ...ROW, utc_expire: null }));
     expect(report.expires).toBeUndefined();
