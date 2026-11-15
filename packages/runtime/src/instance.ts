@@ -9,7 +9,7 @@ import { CHANNEL_ID, createPushoverChannel, isPushoverKey, pushoverDescriptor, P
 import { createIpawsSource, IPAWS_DESCRIPTOR, WEA_EXPECTATION } from "@mark1russell7/alerts-source-ipaws";
 import { createNwsSource, NWS_DESCRIPTOR } from "@mark1russell7/alerts-source-nws-api";
 import type { Pace, Transport } from "polite-crawler/api";
-import { HostScheduler } from "polite-crawler/politeness";
+import { DEFAULT_POLICY, HostScheduler, type PolitenessPolicy } from "polite-crawler/politeness";
 import type { DeliveryOptions } from "./delivery.ts";
 import type { RuntimeLog } from "./log.ts";
 import { createLoop, loopTimes, type LoopTimes, type RuntimeLoop } from "./loop.ts";
@@ -36,6 +36,25 @@ export const DELAY_LIMITS: DelayLimitOptions = { quantile: 0.99, level: 0.95 };
  * recipient against this list. Thus the loader and the instance agree on the channels.
  */
 export const INSTANCE_CHANNELS: readonly ChannelDescriptor[] = [pushoverDescriptor()];
+
+/**
+ * The politeness policy of the sources. After 5 failures in a row, a host stops for the longest step of the backoff, not for
+ * the hour of `DEFAULT_POLICY`. A stop of one hour hides each alert of that hour.
+ *
+ * - Each failure after the stop stops the host again. Thus a failed host gets one request in each 5 minutes, as at the end of the backoff.
+ * - After an outage, the health of a source comes up in the stop and two intervals. One interval is the wait for the next pass.
+ *   The other interval is the limit of a fetch.
+ */
+export const SOURCE_POLICY: PolitenessPolicy = { ...DEFAULT_POLICY, failureStopMs: DEFAULT_POLICY.backoffCapMs };
+
+/**
+ * This function gives the pace of the sources of an instance: one scheduler for `sources` hosts on the clocks of the
+ * instance, and `SOURCE_POLICY`. The pace of the sources reads the clocks of the instance, not the clock of polite-crawler.
+ */
+export function sourcePace(clock: Clock, wall: WallClock, sources: number): Pace & { readonly scheduler: HostScheduler } {
+  const scheduler = new HostScheduler({ now: () => wall.now(), sleep: (ms, signal) => delay(clock, ms, signal).catch(() => undefined) }, sources);
+  return { scheduler, now: () => wall.now(), policy: SOURCE_POLICY };
+}
 
 /** The channel stops its own call at this time limit. */
 const CALL_LIMIT = PUSHOVER_TIMEOUT_MS;
@@ -92,10 +111,8 @@ export interface Instance {
  */
 export function openInstance(options: InstanceOptions): Instance {
   const { clock, wall } = options;
-  // The pace of the sources reads the clocks of the instance, not the clock of polite-crawler.
   const factories = [createNwsSource, createIpawsSource] as const;
-  const scheduler = new HostScheduler({ now: () => wall.now(), sleep: (ms, signal) => delay(clock, ms, signal).catch(() => undefined) }, factories.length);
-  const pace: Pace = { scheduler, now: () => wall.now() };
+  const pace = sourcePace(clock, wall, factories.length);
   const sources = factories.map((make) => make({ pace, transport: options.transport, userAgent: USER_AGENT }));
 
   const descriptors = sources.map((source) => source.describe());
