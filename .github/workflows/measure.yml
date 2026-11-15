@@ -1,0 +1,81 @@
+# The measure of the IEM list against the NWS API (AL-8). Each run fetches the national list of each source for one hour.
+# The records give the rate of the false ends of the IEM rows, the delay of IEM and the tie of the sent times.
+# The count of misses of the snapshot end (SNAPSHOT_MISSES) comes from these records. The requests name no state and no place.
+# The job is timing-sensitive and calls outside servers, so it runs in CI only. It is a measure, not a gate.
+name: Measure
+
+on:
+  schedule:
+    - cron: "23 1,7,13,19 * * *"
+  # A pull request that changes the measure gets a short run, as a smoke test of the script.
+  pull_request:
+    paths:
+      - packages/source-iem/scripts/measure.ts
+      - packages/runtime/src/snapshot-measure.ts
+      - .github/workflows/measure.yml
+  # A person starts a run of a different length: gh workflow run measure.yml -f minutes=30
+  workflow_dispatch:
+    inputs:
+      minutes:
+        description: The length of the measure, in minutes
+        default: "55"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: measure-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  measure:
+    runs-on: ubuntu-latest
+    timeout-minutes: 80
+    permissions:
+      contents: read
+      # The step "All the measures" reads the artifacts of the earlier runs.
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 26
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Measure one window
+        working-directory: packages/source-iem
+        env:
+          MINUTES: ${{ github.event_name == 'pull_request' && '6' || inputs.minutes || '55' }}
+        run: node scripts/measure.ts --minutes="$MINUTES" --out="$GITHUB_WORKSPACE/measure"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: measure-iem-${{ github.run_id }}-${{ github.run_attempt }}
+          path: measure/
+          if-no-files-found: error
+          retention-days: 90
+      # The summary of this window and of the windows of the earlier runs on main, which are each a separate window.
+      - name: All the measures
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for id in $(gh run list --repo "$GITHUB_REPOSITORY" --workflow measure.yml --branch main --status success --limit 90 --json databaseId --jq '.[].databaseId'); do
+            gh run download "$id" --repo "$GITHUB_REPOSITORY" --pattern 'measure-iem-[0-9]*' --dir "past/$id" || echo "No records in run $id."
+          done
+          files=$(find measure past -name records.jsonl 2>/dev/null | sort | paste -sd, -)
+          node packages/source-iem/scripts/measure.ts --from="$files" --out=all
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: github.event_name != 'pull_request'
+        with:
+          name: measure-iem-all-${{ github.run_id }}-${{ github.run_attempt }}
+          path: all/
+          if-no-files-found: error
+          retention-days: 90
