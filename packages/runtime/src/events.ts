@@ -3,7 +3,7 @@
  * events and the configuration, and of nothing else. Thus a restart reads the log and gets the same
  * state as a run with no restart.
  */
-import type { Acknowledgment, Cursor, Delivery, FetchRecord, Instant, MapProblem, Observation, Report } from "@mark1russell7/alerts";
+import type { Acknowledgment, Cursor, Delivery, EscalationStart, FetchRecord, Instant, MapProblem, Observation, Report } from "@mark1russell7/alerts";
 
 /** The fields of each event. The log of `@mark1russell7/sqlite` reads `id`, `at` and `type`. */
 interface Envelope<T extends string> {
@@ -57,11 +57,16 @@ export interface CancelledEvent extends Envelope<"cancelled"> {
   readonly delivery: string;
 }
 
+/** An escalation started. Its start stays the same after a restart, thus each step comes at its time. */
+export interface EscalationEvent extends Envelope<"escalation"> {
+  readonly start: EscalationStart;
+}
+
 /** One event of the log of the runtime. */
-export type RuntimeEvent = StartedEvent | ObservationEvent | FetchEvent | SystemEvent | DeliveryEvent | AcknowledgmentEvent | CancelledEvent;
+export type RuntimeEvent = StartedEvent | ObservationEvent | FetchEvent | SystemEvent | EscalationEvent | DeliveryEvent | AcknowledgmentEvent | CancelledEvent;
 
 /** The types of the events. */
-export const EVENT_TYPES: readonly RuntimeEvent["type"][] = ["started", "observation", "fetch", "system", "delivery", "acknowledgment", "cancelled"];
+export const EVENT_TYPES: readonly RuntimeEvent["type"][] = ["started", "observation", "fetch", "system", "escalation", "delivery", "acknowledgment", "cancelled"];
 
 /** This function gives the fields of the envelope of an event at a time. */
 export function envelope<T extends RuntimeEvent["type"]>(type: T, id: string, time: Instant): Envelope<T> {

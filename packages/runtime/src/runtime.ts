@@ -7,8 +7,10 @@
 import type { Clock } from "@mark1russell7/algebra/clock";
 import type { Duration, FetchOutcome, Instant, SourceDescriptor, SourceId, SourceProcedures, Watch } from "@mark1russell7/alerts";
 import { errorMessage } from "@mark1russell7/text";
+import { createDispatcher, type DeliveryOptions, type DeliveryStep } from "./delivery.ts";
 import { envelope, type RuntimeEvent } from "./events.ts";
 import { fetchEvents } from "./fetch.ts";
+import { limited } from "./limit.ts";
 import type { RuntimeLog } from "./log.ts";
 import { fold, rebuild, type RuntimeState } from "./state.ts";
 import { earliest, nextFetch, systemEvent, systemView, type SystemView, type ViewConfig } from "./view.ts";
@@ -31,6 +33,8 @@ export interface RuntimeOptions {
   readonly run: string;
   /** This function gives the longest time of one fetch of a source. The default is the interval of the source. */
   readonly fetchLimit?: (source: SourceDescriptor) => Duration;
+  /** The recipients and the channels. Without them, a pass sends nothing. */
+  readonly delivery?: DeliveryOptions;
   /** The runtime starts this hook at the end of each pass with no error. The outside heartbeat goes here. */
   readonly onPass?: (pass: Pass) => void | Promise<void>;
 }
@@ -42,7 +46,9 @@ export interface Pass {
   /** The sources that the pass fetched, in the order of the configuration. */
   readonly fetched: readonly SourceId[];
   readonly view: SystemView;
-  /** The time of the next pass: the next fetch of a source, or the next timer of a fold. */
+  /** The delivery step of the pass, when the runtime has a delivery. */
+  readonly delivery?: DeliveryStep;
+  /** The time of the next pass: the next fetch of a source, the next timer of a fold or the next time of the delivery. */
   readonly wakeAt?: Instant;
   /** The ids of the events that are different from the events of the log with the same ids. The log kept its events. */
   readonly conflicts: readonly string[];
@@ -86,10 +92,13 @@ export function openRuntime(options: RuntimeOptions): Runtime {
 
   append([{ ...envelope("started", `started:${options.run}`, clock.now()), run: options.run }]);
 
+  const dispatcher = options.delivery === undefined ? undefined : createDispatcher(options.delivery, { clock, places: config.places, state: () => state, append });
+
   const fetchOne = async (source: SourceProcedures, descriptor: SourceDescriptor): Promise<readonly string[]> => {
     const started = clock.now();
     const cursor = state.cursors[descriptor.id];
-    const work = source.fetch({ watch: options.watch, ...(cursor === undefined ? {} : { cursor }) });
+    // A fetch that throws at once is a failure of its source too, not a failure of the pass.
+    const work = Promise.resolve().then(() => source.fetch({ watch: options.watch, ...(cursor === undefined ? {} : { cursor }) }));
     const outcome = await bounded(work, options.fetchLimit?.(descriptor) ?? descriptor.interval, clock);
     return append(fetchEvents({ source: descriptor.id, procedures: source, started, ended: clock.now(), outcome, known: (id) => log.has(id) }));
   };
@@ -114,8 +123,19 @@ export function openRuntime(options: RuntimeOptions): Runtime {
       const event = systemEvent(view);
       if (event !== undefined) conflicts.push(...append([event]));
 
-      const wakeAt = earliest([...config.sources.map((descriptor) => nextFetch(state, descriptor)), view.wakeAt]);
-      const pass: Pass = { at, fetched: due.map(({ descriptor }) => descriptor.id), view, conflicts, ...(wakeAt === undefined ? {} : { wakeAt }) };
+      // The system reports of this pass are incidents too, thus the delivery comes after their write.
+      const delivery = await dispatcher?.step(at);
+      if (delivery !== undefined) conflicts.push(...delivery.conflicts);
+
+      const wakeAt = earliest([...config.sources.map((descriptor) => nextFetch(state, descriptor)), view.wakeAt, delivery?.wakeAt]);
+      const pass: Pass = {
+        at,
+        fetched: due.map(({ descriptor }) => descriptor.id),
+        view,
+        conflicts,
+        ...(delivery === undefined ? {} : { delivery }),
+        ...(wakeAt === undefined ? {} : { wakeAt }),
+      };
       await options.onPass?.(pass);
       return pass;
     },
@@ -128,17 +148,11 @@ export function openRuntime(options: RuntimeOptions): Runtime {
  * The fetch continues after a timeout, and the runtime ignores its outcome. The adapter owns its transport.
  */
 export function bounded(work: Promise<FetchOutcome>, limit: Duration, clock: Clock): Promise<FetchOutcome> {
-  return new Promise((resolve) => {
-    const cancel = clock.after(limit, () => resolve({ ok: false, failure: { kind: "timeout", message: `The fetch took longer than ${limit} ms.` } }));
-    work.then(
-      (outcome) => {
-        cancel();
-        resolve(outcome);
-      },
-      (error: unknown) => {
-        cancel();
-        resolve({ ok: false, failure: { kind: "network", message: `The fetch threw: ${errorMessage(error)}` } });
-      },
-    );
-  });
+  return limited<FetchOutcome>(
+    work,
+    limit,
+    clock,
+    () => ({ ok: false, failure: { kind: "timeout", message: `The fetch took longer than ${limit} ms.` } }),
+    (error) => ({ ok: false, failure: { kind: "network", message: `The fetch threw: ${errorMessage(error)}` } }),
+  );
 }

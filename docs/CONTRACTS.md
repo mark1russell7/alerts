@@ -219,6 +219,34 @@ For `life-safety`, the system prefers a duplicate to a miss.
 - A code with a typo does not match the life-safety class, so it can stop a wake. Thus each adapter has a gate test, and each policy names only known codes.
 - The kinds go from physical events to technical outages. A new adapter adds its new codes to `TAXONOMY` in its pull request.
 
+## The route and the delivery step
+
+The core function `route` gives the escalations at a time. Each escalation is one incident, one level and one person.
+
+- The levels of an incident and a person are the levels of its starts and its deliveries, and the assessed level.
+- The assessed level counts only when it is higher than those levels and the person has a policy for it. So the level does not go down.
+- Only the highest level continues. A lower level ends at the start of a higher level, so its repeats stop.
+- An escalation continues until an acknowledgment or the end of the incident. An acknowledgment of a level also covers each lower level.
+- The end of an incident is its expiry, or the time when it stops being live.
+
+The start of an escalation is the time at which its level first applied. The runtime writes each start to its log. After a restart, each step comes at its time from the same start.
+
+The runtime does one delivery step in each pass, after the system reports:
+
+1. It polls each open receipt of a channel with the acknowledgment `poll`, one time in each interval. A receipt that the person acknowledged gives an acknowledgment.
+2. It writes the start of each new escalation.
+3. It sends each step that is due, and it cancels the repeats of each escalation that is over.
+4. It writes the result of each call to the log at once, after the call.
+
+Each call of a channel has a time limit. A failed call writes nothing, so the next step decides it again. Before it goes again, a call waits for the time that the channel tells, or for the retry time of the configuration.
+
+The message of a send takes its text from one report of the incident: the latest report with the severity and the urgency of the incident. The body has the instruction first, then the area and the description. The channel cuts the text to its limits.
+
+Two parts wait:
+
+- A crash after a send and before its write loses the receipt. Then a cancel cannot stop the repeats of that message, and the person acknowledges it in the app. Next, the Pushover channel tags each message with its key and cancels by the tag.
+- The exhaustion alert to the next person waits for a second person (AL-21). Until then, the repeats continue after the exhaustion, and the routes of each pass show it.
+
 ## Levels and the first night rule
 
 | Level | What it does |

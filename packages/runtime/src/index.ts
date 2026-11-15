@@ -4,8 +4,10 @@ import { probeServer } from "@mark1russell7/service/http";
 import { attachApi } from "./api.ts";
 
 export { attachApi, type ApiOptions } from "./api.ts";
+export * from "./delivery.ts";
 export * from "./events.ts";
 export * from "./fetch.ts";
+export * from "./limit.ts";
 export * from "./log.ts";
 export * from "./runtime.ts";
 export * from "./state.ts";
