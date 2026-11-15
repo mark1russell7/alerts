@@ -106,15 +106,34 @@ export function formatVtec(vtec: Vtec): string {
 }
 
 /**
+ * This function gives the year of a VTEC event: the UTC year of the earlier of the sent time and
+ * the start. An absent start counts as the sent time. The rule applies to each action and each source.
+ *
+ * NWS Directive 10-1703, section 2.1.6, gives the event number the year of the first issuance. In
+ * its example, a `NEW` at 2100Z on 31 December 2011 with a start of 2 January 2012 has the number of 2011.
+ *
+ * Section 1.6 tells this about the start: "While the Event Beginning Time may be the same as or later
+ * than the Product Issuance Time, it should never be earlier." Thus the year of the `NEW` is not
+ * after the year of a later sent time or start of the event.
+ *
+ * The rule has one limit. An event can start in the old year and have a later message with no time
+ * in the old year. This message is sent in the new year, and its start is absent or in the new year.
+ * The function gives the new year to this message. The CAP references of the messages still link the
+ * two keys in the merge. They do not link a message with no references, or two messages of two sources.
+ */
+export function vtecYear(sent: Instant, start?: Instant): number {
+  return new Date(Math.min(sent, start ?? sent)).getUTCFullYear();
+}
+
+/**
  * This function gives the correlation key of a VTEC event: the office, the phenomenon, the
  * significance, the event number and the year. The event numbers start again each year.
  *
- * The year comes from the start of the event. For an event that already started, the VTEC has no
- * start, so the year comes from the sent time. Near the new year, two messages of one event can
- * thus get two keys. Then the CAP references of the messages still link them.
+ * The year is `vtecYear` of the sent time and the start: the UTC year of the earlier of the two.
+ * Near the new year, two messages of one event can still get two keys. `vtecYear` tells when.
  */
 export function vtecKey(vtec: Vtec, sent: Instant): CorrelationKey {
-  return vtecEventKey({ ...vtec, year: new Date(vtec.start ?? sent).getUTCFullYear() });
+  return vtecEventKey({ ...vtec, year: vtecYear(sent, vtec.start) });
 }
 
 /** The parts of a VTEC event that give its correlation key. */
@@ -124,7 +143,7 @@ export interface VtecEvent {
   readonly phenomenon: string;
   readonly significance: string;
   readonly eventNumber: number;
-  /** The year of the event, from the start of the event as `vtecKey` gives it. */
+  /** The year of the event number, as `vtecYear` gives it from the sent time and the start. */
   readonly year: number;
 }
 

@@ -10,7 +10,7 @@
 
 import { categoryOf, Problems, reportId, UNKNOWN_KIND, type Area, type Kind, type MapResult, type Observation, type Report, type SourceId } from "@mark1russell7/alerts";
 import { capTime } from "@mark1russell7/alerts-format-cap";
-import { fromPhenomenon, NWS_ORIGIN, sameOfCountyUgc, vtecEventKey, vtecOffice } from "@mark1russell7/alerts-format-nws";
+import { fromPhenomenon, NWS_ORIGIN, sameOfCountyUgc, vtecEventKey, vtecOffice, vtecYear } from "@mark1russell7/alerts-format-nws";
 import { errorMessage } from "@mark1russell7/text";
 
 /** The id of this source. */
@@ -56,7 +56,8 @@ function mapRow(row: Row, observation: Observation, problems: Problems): Report 
     return undefined;
   }
 
-  const year = new Date(issue).getUTCFullYear();
+  // The start of a row can be after the first issuance of the event. Thus the year comes from the earlier time.
+  const year = vtecYear(sent, issue);
   const correlation = vtecEventKey({ office, phenomenon, significance, eventNumber, year });
   const found = fromPhenomenon(phenomenon, significance);
   if (found === undefined) problems.add("phenomena", `the kind tables do not know the event ${phenomenon}.${significance}`);
