@@ -24,7 +24,7 @@ import type {
 import { Problems, reportId } from "@mark1russell7/alerts";
 import { errorMessage } from "@mark1russell7/text";
 
-import { categoryOf, parseVtec, resolveKind, vtecKey, type Vtec } from "@mark1russell7/alerts-format-nws";
+import { categoryOf, isSameCode, isUgcCode, parseVtec, resolveKind, vtecKey, type Vtec } from "@mark1russell7/alerts-format-nws";
 
 /** The id of this source. */
 export const SOURCE_ID = "nws-api" as SourceId;
@@ -166,7 +166,10 @@ function polygonOf(rings: unknown, path: string, problems: Problems): Area | und
   return { type: "polygon", rings: good };
 }
 
-/** This function reads the areas of an alert: its geometry and its region codes. */
+/**
+ * This function reads the areas of an alert: its geometry and its region codes. A code of an unknown form
+ * is a problem, and the function drops it, because it matches no watch.
+ */
 function areasOf(feature: JsonObject, properties: JsonObject, problems: Problems): Area[] {
   const areas: Area[] = [];
   const geometry = feature["geometry"];
@@ -187,14 +190,34 @@ function areasOf(feature: JsonObject, properties: JsonObject, problems: Problems
     problems.add("geometry", "the geometry is not an object");
   }
   const geocode = properties["geocode"];
-  if (isObject(geocode)) {
-    for (const ugc of textsOf(geocode["UGC"])) areas.push({ type: "code", system: "ugc", code: ugc.trim().toUpperCase() });
-    for (const same of textsOf(geocode["SAME"])) areas.push({ type: "code", system: "same", code: same.trim() });
-  } else if (geocode !== undefined) {
-    problems.add("properties.geocode", "the geocode is not an object");
+  if (!isObject(geocode)) {
+    problems.add("properties.geocode", geocode === undefined ? "the alert has no geocode" : "the geocode is not an object");
+    return areas;
+  }
+  for (const field of Object.keys(geocode)) {
+    if (!(field in REGION_CODES)) problems.add(`properties.geocode.${field}`, "the map function does not know this field");
+  }
+  for (const [field, { system, normal, valid }] of Object.entries(REGION_CODES)) {
+    const value = geocode[field];
+    const items: readonly Json[] | undefined = typeof value === "string" ? [value] : Array.isArray(value) ? value : undefined;
+    if (items === undefined) {
+      problems.add(`properties.geocode.${field}`, `the geocode has no ${field} list`);
+      continue;
+    }
+    items.forEach((item, index) => {
+      const code = typeof item === "string" ? normal(item) : undefined;
+      if (code !== undefined && valid(code)) areas.push({ type: "code", system, code });
+      else problems.add(`properties.geocode.${field}[${index}]`, `the value ${JSON.stringify(item)} is not a ${field} code`);
+    });
   }
   return areas;
 }
+
+/** The region code lists of the geocode of an NWS alert, with the system, the normal form and the check of each code. */
+const REGION_CODES: Readonly<Record<string, { system: string; normal: (text: string) => string; valid: (code: string) => boolean }>> = {
+  UGC: { system: "ugc", normal: (text) => text.trim().toUpperCase(), valid: isUgcCode },
+  SAME: { system: "same", normal: (text) => text.trim(), valid: isSameCode },
+};
 
 /** This function reads the CAP references: the current list and the expired list of the NWS. */
 function referencesOf(properties: JsonObject, key: string, parameters: JsonObject | undefined): string[] {
@@ -324,6 +347,13 @@ function mapFeature(feature: unknown, observation: Observation, problems: Proble
     instruction: textOf(properties["instruction"]),
     web: textOf(properties["web"]),
   });
+  // Each NWS alert has region codes. Only a code matches a watch until the core can match shapes, so an
+  // alert with no valid code reaches nobody. A changed format gives this case, and health must show it.
+  const areas = areasOf(feature, properties, problems);
+  if (!areas.some((area) => area.type === "code")) {
+    problems.add("properties.geocode", "the alert has no valid region code: no watch can match it", true);
+    return undefined;
+  }
   const report: Report = {
     id: reportId({ source: SOURCE_ID, key, sent }),
     source: SOURCE_ID,
@@ -341,7 +371,7 @@ function mapFeature(feature: unknown, observation: Observation, problems: Proble
     response,
     sent,
     received: observation.fetched,
-    areas: areasOf(feature, properties, problems),
+    areas,
     about: [],
     sender: textOf(properties["senderName"]) ?? textOf(properties["sender"]) ?? "NWS",
     headline: textOf(properties["headline"]) ?? textsOf(parameters?.["NWSheadline"])[0] ?? name ?? key,
