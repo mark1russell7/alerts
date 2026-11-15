@@ -1,5 +1,5 @@
 import { readdirSync, readFileSync } from "node:fs";
-import { gapGrade, health, HEALTH_MACHINE } from "@mark1russell7/alerts";
+import { gapGrade, health, HEALTH_MACHINE, type PlaceId } from "@mark1russell7/alerts";
 import { mapObservation } from "@mark1russell7/alerts-source-nws-api";
 import { describe, expect, it } from "vitest";
 import { COVERAGE_KINDS, FETCHES, FIRST_FETCH, OUTAGE, PEOPLE, PLACES, SOURCES, STEPS, ZONES } from "./demo.ts";
@@ -260,6 +260,18 @@ describe("the words of the page", () => {
     expect(incidentLabel(homeA!)).toBe("Coverage gap: Flash flood, Home of A");
     expect(incidentLabel(homeB!)).toBe("Coverage gap: Flash flood, Home of B");
     expect(incidentLabel(failing!)).toBe(failing!.kind.label);
+  });
+
+  it("tells the distance of a match by a shape", () => {
+    const [incident] = frames[1]!.incidents;
+    const place = "home-a" as PlaceId;
+    expect(reasonText({ kind: "place", place, codes: [], distanceKm: 0 }, incident!)).toBe(
+      "A shape of the incident contains the home of A, in the Valley.",
+    );
+    expect(reasonText({ kind: "place", place, codes: [], distanceKm: 5.56 }, incident!)).toBe(
+      "A shape of the incident is 5.6 km from the home of A, in the Valley, in the buffer of the place.",
+    );
+    expect(reasonText({ kind: "place", place, codes: [], distanceKm: 0.01 }, incident!)).toContain("less than 0.1 km");
   });
 
   it("counts the steps from 1 in the labels, and the last label names the count of the steps", () => {

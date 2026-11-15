@@ -22,9 +22,10 @@ const pushover = "pushover" as ChannelId;
 const person = "person-1" as PersonId;
 const place = "place-1" as PlaceId;
 
-// A public point in McMullen County TX. No request of a source holds it.
+// A public point in McMullen County TX, in the polygon of the recorded Flood Warning. The polygon decides the
+// match, not the county code. No request of a source holds the point.
 const LONGITUDE = -98.55;
-const LATITUDE = 28.46;
+const LATITUDE = 28.3;
 
 const policy = (level: EscalationPolicy["level"]): EscalationPolicy => ({ level, steps: [{ channel: pushover, at: 0 }], exhaustedAfter: 20 * MINUTE });
 
@@ -175,6 +176,16 @@ describe("openInstance", () => {
     expect(pass.delivery?.sent).toHaveLength(1);
     // The source asks for the alerts of the state. The match to the county is local.
     expect(net.exchanges.map((exchange) => exchange.url)).toContain("https://api.weather.gov/alerts/active?area=TX");
+  });
+
+  it("sends no message to a place in the county but out of the polygon of the warning", async () => {
+    // A public point in McMullen County TX, 8.9 km north of the polygon. The buffer of the place is 5 km.
+    const outside = { ...CONFIG.places[0]!, at: [LONGITUDE, 28.46] as const };
+    const { instance, clock, server } = open(store(SECRETS), { ...CONFIG, places: [outside] });
+    const pass = await finish(clock, instance.runtime.pass());
+    expect(pass.fetched).toEqual(["nws-api", "ipaws"]);
+    expect(server.calls).toHaveLength(0);
+    expect(pass.delivery?.sent ?? []).toHaveLength(0);
   });
 
   it("sends the warning when each exchange takes real time, as on a busy runner", async () => {

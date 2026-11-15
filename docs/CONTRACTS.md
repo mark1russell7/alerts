@@ -144,7 +144,8 @@ The cell is the copy of the system on one machine. Its internet link, its power 
 - A source counts when its health is in `policy.up`. The first policy counts `healthy` and `slow`. A source with no health is `unknown`.
 - A source covers a kind when one of its prefixes has the kind. A source of a part of the kind does not count.
 - A source covers a place when its coverage is `global`, or when a code of its coverage covers a code of the place. So a place lists its codes at each level: the NWS zone and county, SAME, the state (`state`) and the country (`iso3166`).
-- An area with only a shape covers no place until `@mark1russell7/geo` has the tests.
+- A shape of the coverage covers a place when the shape contains the position of the place. The buffer does not count, as for the codes.
+- A shape covers no place with no position. A shape that `@mark1russell7/geo` refuses covers no place, so the coverage shows a gap.
 
 The coverage has these parts:
 
@@ -453,11 +454,18 @@ A person also watches subjects, other than places, in `PersonWatch.subjects`: a 
 
 The positions of the places do not go to a source. A source fetches by area, for example all the alerts of a state, and the core matches the places on the machine of the instance. So a `WatchedPlace` gives an adapter region codes and a buffer, and no name, no address and no position. A source that needs a position gets it only when the owner lets that source get it.
 
-The core matches the area of a report to a place with one rule for each source. A polygon or a circle comes first, with the buffer of the place. Else the region codes decide. Polygon math waits for its home, `@mark1russell7/geo`. Until then, the core matches by codes only.
+The core matches the area of a report to a place with one rule for each source. A polygon or a circle comes first, with the buffer of the place. Else the region codes decide.
+
+- When the areas have a shape and the place has a position, the shapes decide. The place matches when the great-circle distance from its position to the nearest shape is not more than its buffer.
+- A position in a shape has the distance 0. The reason `place` of the assessment then has `distanceKm` and no codes.
+- A place with no position matches by its codes only.
+- `@mark1russell7/geo` gives the distances. An edge of a polygon is a straight line in longitude and latitude, as in GeoJSON (RFC 7946).
+- When `@mark1russell7/geo` refuses a shape, for example a ring with fewer than 4 positions, the region codes also decide. This choice is on the safe side.
+- The list of areas does not keep the area blocks of a CAP message. Thus a shape of one block also decides for a block with only codes.
 
 Two codes match when their systems and their values are equal. The first digit of a SAME code is a part of the county, and `0` is the full county. So a part also matches the full county, and the match errs on the safe side.
 
-The area `{ type: "place" }` covers that watched place only. Only the reports of the core use it. An area with only shapes matches no place until `@mark1russell7/geo` has the tests. The assessment then gives the reason `no-codes`. The first sources, the NWS and IPAWS, give codes with each area.
+The area `{ type: "place" }` covers that watched place only. Only the reports of the core use it. When the areas have no code and no place, and no place of the person has a position, the assessment gives the reason `no-codes`. The first sources, the NWS and IPAWS, give codes with each area.
 
 ## The map
 

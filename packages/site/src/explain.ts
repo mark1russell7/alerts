@@ -69,6 +69,11 @@ export const LEVEL_MEANINGS: Readonly<Record<AssessedLevel, string>> = {
   none: "No message.",
 };
 
+// A distance in kilometers for a person: one decimal, and a floor of 0.1.
+function kilometers(distance: number): string {
+  return distance < 0.1 ? "less than 0.1 km" : `${distance.toFixed(1)} km`;
+}
+
 /** This function gives the text of one reason of an assessment. */
 export function reasonText(reason: AssessReason, incident: Pick<Incident, "severity" | "urgency">): string {
   switch (reason.kind) {
@@ -81,10 +86,14 @@ export function reasonText(reason: AssessReason, incident: Pick<Incident, "sever
     case "no-subject":
       return "The incident has no area, and the person watches none of its subjects.";
     case "no-codes":
-      return "The areas are shapes with no codes. The core matches places by their codes only.";
+      return "The areas have no codes, and no shape can match: no place of this person has a position.";
     case "unknown-place":
       return `The configuration has no place "${reason.place}".`;
     case "place":
+      if (reason.distanceKm !== undefined) {
+        if (reason.distanceKm === 0) return `A shape of the incident contains ${nameOf(reason.place)}.`;
+        return `A shape of the incident is ${kilometers(reason.distanceKm)} from ${nameOf(reason.place)}, in the buffer of the place.`;
+      }
       // A system report names the place itself, so its match has no codes.
       if (reason.codes.length === 0) return `The area of the report is ${nameOf(reason.place)}.`;
       return `The incident covers ${nameOf(reason.place)}: ${reason.codes.map((code) => code.code).join(", ")}.`;
