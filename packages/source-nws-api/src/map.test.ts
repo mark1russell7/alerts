@@ -4,7 +4,7 @@ import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import { NWS_DESCRIPTOR } from "./descriptor.ts";
 import { mapObservation, ORIGIN, SOURCE_ID } from "./map.ts";
-import { mainVtec, parseVtec, PHENOMENA, vtecKey, type Vtec } from "@mark1russell7/alerts-format-nws";
+import { isSameCode, isUgcCode, mainVtec, parseVtec, PHENOMENA, vtecKey, type Vtec } from "@mark1russell7/alerts-format-nws";
 
 const FIXTURES = new URL("../fixtures/", import.meta.url);
 const NAMES = readdirSync(FIXTURES).filter((name) => name.endsWith(".json"));
@@ -164,6 +164,77 @@ describe("the map of broken alerts", () => {
     );
     expect(report?.references).toEqual(expect.arrayContaining(["urn:oid:old.1", "urn:oid:old.2"]));
     expect(report?.parameters["expiredReferences"]).toBeUndefined();
+  });
+});
+
+describe("the region codes of an alert", () => {
+  // Each NWS alert has UGC and SAME codes. Until the home of geography matches shapes, only a code
+  // area matches a watch. Thus an alert with no valid code reaches nobody.
+  const base = feature("nws-flw.json");
+  const withGeocode = (geocode: unknown): unknown => ({ ...base, properties: { ...base.properties, geocode } });
+  const NO_CODE = { path: "properties.geocode", message: "the alert has no valid region code: no watch can match it", fatal: true };
+  const codesOf = (report: Report | undefined): unknown[] => (report?.areas ?? []).filter((area) => area.type === "code");
+
+  it("gives a fatal problem, and no report, for an alert with no geocode", () => {
+    const { geocode: _geocode, ...properties } = base.properties;
+    expect(mapOne({ ...base, properties })).toEqual({
+      report: undefined,
+      problems: [{ path: "properties.geocode", message: "the alert has no geocode", fatal: false }, NO_CODE],
+    });
+  });
+
+  it.each([
+    ["an empty geocode", {}, ["properties.geocode.UGC", "properties.geocode.SAME"]],
+    ["lists with other names", { ugc: ["TXZ123"], same: ["048019"] }, ["properties.geocode.ugc", "properties.geocode.same", "properties.geocode.UGC", "properties.geocode.SAME"]],
+    ["a geocode that is not an object", 5, ["properties.geocode"]],
+    ["codes of an unknown form", { UGC: ["TX-Z-123"], SAME: ["48019"] }, ["properties.geocode.UGC[0]", "properties.geocode.SAME[0]"]],
+    ["empty lists", { UGC: [], SAME: [] }, []],
+  ])("gives a fatal problem, and no report, for %s", (_name, geocode, paths) => {
+    const { report, problems } = mapOne(withGeocode(geocode));
+    expect(report).toBeUndefined();
+    expect(problems.filter((problem) => !problem.fatal).map((problem) => problem.path)).toEqual(paths);
+    expect(problems.filter((problem) => problem.fatal)).toEqual([NO_CODE]);
+  });
+
+  it("keeps the valid codes of a report, and gives a problem for each code of an unknown form", () => {
+    const { report, problems } = mapOne(withGeocode({ UGC: ["txz123", "TX-Z-124", 7], SAME: [" 048019 "] }));
+    expect(codesOf(report)).toEqual([
+      { type: "code", system: "ugc", code: "TXZ123" },
+      { type: "code", system: "same", code: "048019" },
+    ]);
+    expect(problems).toEqual([
+      { path: "properties.geocode.UGC[1]", message: 'the value "TX-Z-124" is not a UGC code', fatal: false },
+      { path: "properties.geocode.UGC[2]", message: "the value 7 is not a UGC code", fatal: false },
+    ]);
+  });
+
+  it("gives a report with a valid region code, or a fatal problem, when one field of a recorded alert changes", () => {
+    const valid = (area: Report["areas"][number]): boolean =>
+      area.type !== "code" || (area.system === "ugc" ? isUgcCode(area.code) : area.system === "same" && isSameCode(area.code));
+    const change = fc.constantFrom(...NAMES).chain((name) =>
+      fc.tuple(
+        fc.constant(name),
+        fc.constantFrom(...Object.keys(feature(name).properties), "geocode.UGC", "geocode.SAME"),
+        // An undefined value removes the field, because JSON.stringify drops it.
+        fc.option(fc.jsonValue(), { nil: undefined }),
+      ),
+    );
+    fc.assert(
+      fc.property(change, ([name, field, value]) => {
+        const source = feature(name);
+        const [outer, inner] = field.split(".");
+        const properties =
+          inner === undefined
+            ? { ...source.properties, [field]: value }
+            : { ...source.properties, geocode: { ...source.properties.geocode, [inner]: value } };
+        const result = mapObservation(observe(JSON.stringify({ ...source, properties })));
+        const [report] = result.reports;
+        if (report !== undefined) return report.areas.some((area) => area.type === "code") && report.areas.every(valid);
+        // An acknowledgment or an error message of CAP is not an alert, and gives no report and no problem.
+        const notAlert = outer === "messageType" && typeof value === "string" && ["ack", "error"].includes(value.trim().toLowerCase());
+        return notAlert || result.problems.some((problem) => problem.fatal);
+      }),
+    );
   });
 });
 

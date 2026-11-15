@@ -4,6 +4,7 @@
  */
 
 import { observationId, type Cursor, type FetchFailure, type FetchOutcome, type Instant, type Observation, type Watch } from "@mark1russell7/alerts";
+import { isUgcCode } from "@mark1russell7/alerts-format-nws";
 import { errorMessage } from "@mark1russell7/text";
 import { ApiError, poll, type Answer, type Condition, type Exchange, type Pace, type Reply, type Transport } from "polite-crawler/api";
 
@@ -48,7 +49,6 @@ export interface Query {
 }
 
 const STATE = /^[A-Z]{2}$/;
-const UGC = /^[A-Z]{2}[CZ]\d{3}$/;
 
 /**
  * This function calculates the queries of a watch. A place with a state code gives a query by state
@@ -76,7 +76,7 @@ export function queriesOf(watch: Watch): Query[] {
     const ugc = place.codes
       .filter((code) => code.system === "ugc")
       .map((code) => code.code.trim().toUpperCase())
-      .filter((code) => UGC.test(code));
+      .filter((code) => isUgcCode(code));
     if (ugc.length > 0) for (const zone of ugc) zones.add(zone);
     else national = true;
   }
