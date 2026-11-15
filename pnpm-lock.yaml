@@ -205,6 +205,9 @@ importers:
 
   packages/core:
     dependencies:
+      '@mark1russell7/algebra':
+        specifier: ^0.8.5
+        version: 0.8.5
       '@mark1russell7/collections':
         specifier: ^0.10.1
         version: 0.10.1
