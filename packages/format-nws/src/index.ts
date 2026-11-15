@@ -50,6 +50,7 @@ export {
   vtecEventKey,
   vtecKey,
   vtecTime,
+  vtecYear,
   type Vtec,
   type VtecClass,
   type VtecEvent,

@@ -37,7 +37,8 @@ The repo is public. It holds the general framework only. People, places, keys an
 | AL-17 | People and places from the private store | in progress | The system reads people and places from the private configuration at run time. The format `AlertConfig`, its schema and its load are done in the core. The loader of the runtime is done: the entry reads the private folder through it, and a problem stops the start. Next: a procedure of the private store of the owner replaces the file. |
 | AL-18 | A UI with a map and overlays | in progress | Live incidents, warning areas, places and coverage on a map, with a view by criticality. The view of the map (`mapView` of the core) is done. Next: the store of zone shapes by state, the renderer with no outside tiles, and the local route of the runtime. |
 | AL-33 | Fire weather zones as a region system | later | An NWS fire zone and a forecast zone can have the same code and different outlines. Today each zone code is a forecast zone. A region system for fire zones goes into the match, the store of shapes and the map. |
-| AL-19 | Technical outages and news | blocked | Status pages, cloud regions, internet outages and breaking news, with the same merge and priority. |
+| AL-19 | Technical outages and news | blocked | Status pages, cloud regions, internet outages and breaking news, with the same merge and priority. News has three uses, in this order: a second witness for an official warning, breaking events near the watched places, and a daily digest. This item fetches the feeds, and AL-34 reads them. |
+| AL-34 | A news reader with a ladder of models | later | Free rules and sentiment scores read each news item first. A small model reads the items that they flag, and a larger model reads only the hard cases. The reader gives each item a kind, a place and a probability. Thus news goes into the same merge as the official warnings. Before the reader ships, a test on the same items compares the ladder with one model at low effort. |
 | AL-25 | Radio input through an SDR | blocked | A software-defined radio receives NOAA Weather Radio, and the system decodes its SAME headers. This input needs no internet. |
 
 ## Later
@@ -46,10 +47,10 @@ The repo is public. It holds the general framework only. People, places, keys an
 | --- | --- | --- | --- |
 | AL-20 | Preparedness planner | later | Hazard likelihood times exposure gives what to buy and do first, and an action plan for each hazard and each person. |
 | AL-31 | Priority from probabilities and costs | blocked | The probability that the event is real, times the exposure of the people, times the harm and the urgency, against the cost to interrupt the person. The base rates come from the event log of AL-11. |
-| AL-21 | Alerts for other people | later | More recipients, each with their own places, channels and night rule. |
-| AL-32 | The stop of a hung copy after a restart | later | The log keeps each attempt of a send and its copy id before the send. After a restart, the system stops each copy with no delivery. |
+| AL-21 | Alerts for other people | later | More recipients, each with their own places, channels and night rule. The settings of each person choose the alerts of other people that the system takes in, and how their levels map. Until the settings name a new place, only the worst kinds there wake the person: a tornado warning, an evacuation or a tsunami. |
+| AL-32 | The stop of a hung copy after a restart | later | The log keeps each try of a send and its copy id before the send. After a restart, the system stops each copy with no delivery. |
 | AL-22 | A home cluster copy | later | A third copy of the system on a home cluster. |
-| AL-26 | Provider redundancy at each layer | later | Two or more providers at each layer: power, network path, DNS resolvers, hosting, push service and the APIs of each source. |
+| AL-26 | Provider redundancy at each layer | later | Each copy of the system is a cell on its own physical failure domain: process, node, site, region, provider and DNS provider. The plan also covers the causes that each rung shares: one code version, one source, one push service, one account and one building. The system counts the independent paths from a source to a person, and harness cells measure each failover. |
 | AL-27 | Emergency radio | later | Radio for when phones and the internet fail: receivers, licensed radio and an off-grid text mesh. |
 | AL-23 | Markets | later | Markets as a lens on the same signal stream. |
 | AL-24 | World model | later | Hidden common causes behind separate events, correlations across domains and a general threat level. |

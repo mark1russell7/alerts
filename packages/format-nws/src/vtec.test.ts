@@ -1,7 +1,7 @@
 import { random, seedsFrom, type Random } from "@mark1russell7/rigor-generators";
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
-import { formatVtec, formatVtecTime, mainVtec, NO_TIME, parseVtec, vtecEventKey, vtecKey, vtecTime, type Vtec, type VtecClass } from "./vtec.ts";
+import { formatVtec, formatVtecTime, mainVtec, NO_TIME, parseVtec, vtecEventKey, vtecKey, vtecTime, vtecYear, type Vtec, type VtecClass } from "./vtec.ts";
 
 /** The seeds of the property tests. `SEED=17` or `SEED=1-50` replays or widens a run. */
 const SEEDS = seedsFrom(process.env["SEED"], [1, 2, 3, 4, 5]);
@@ -127,17 +127,62 @@ describe("formatVtec and parseVtec", () => {
   }
 });
 
-describe("vtecKey", () => {
-  const sent = Date.UTC(2026, 11, 31, 22, 0);
+describe("vtecYear", () => {
+  const at = (text: string): number => Date.parse(text);
 
-  it("takes the year from the start of the event", () => {
-    const vtec = parseVtec("/O.NEW.KBOU.WS.W.0003.270101T0600Z-270102T0000Z/") as Vtec;
-    expect(vtecKey(vtec, sent)).toEqual({ system: "vtec", id: "KBOU.WS.W.0003.2027" });
+  it("gives the year of the sent time to a NEW with a start in the next year, as in the example of section 2.1.6", () => {
+    expect(vtecYear(at("2025-12-31T21:00:00Z"), at("2026-01-02T00:00:00Z"))).toBe(2025);
+  });
+
+  it("gives the old year to a message that is sent in the new year, with a start in the old year", () => {
+    expect(vtecYear(at("2026-01-01T03:00:00Z"), at("2025-12-31T22:00:00Z"))).toBe(2025);
+  });
+
+  it("gives the year of the sent time when the start is absent", () => {
+    expect(vtecYear(at("2025-12-31T23:59:00Z"))).toBe(2025);
+    expect(vtecYear(at("2026-01-01T00:00:00Z"), undefined)).toBe(2026);
+  });
+
+  it("gives the new year to a CON with no start that is sent on 1 January: this is the known limit of the rule", () => {
+    const vtec = parseVtec("/O.CON.KTOP.WS.W.0003.000000T0000Z-260101T1200Z/") as Vtec;
+    expect(vtecYear(at("2026-01-01T01:00:00Z"), vtec.start)).toBe(2026);
+  });
+
+  /** A time to the minute from 2000 to 2099. Half of the times are less than three days from a new year. */
+  const instant = fc.oneof(
+    fc.integer({ min: 0, max: 100 * 365 * 24 * 60 }).map((minutes) => Date.UTC(2000, 0, 1) + minutes * 60_000),
+    fc.tuple(fc.integer({ min: 2001, max: 2099 }), fc.integer({ min: -3 * 24 * 60, max: 3 * 24 * 60 })).map(([year, minutes]) => Date.UTC(year, 0, 1) + minutes * 60_000),
+  );
+  const yearOf = (time: number): number => new Date(time).getUTCFullYear();
+
+  it("is not after the year of the sent time or the year of the start, and is one of the two", () => {
+    fc.assert(
+      fc.property(instant, fc.option(instant, { nil: undefined }), (sent, start) => {
+        const year = vtecYear(sent, start);
+        const years = [yearOf(sent), yearOf(start ?? sent)];
+        expect(year).toBeLessThanOrEqual(Math.min(...years));
+        expect(years).toContain(year);
+      }),
+    );
+  });
+});
+
+describe("vtecKey", () => {
+  const sent = Date.UTC(2025, 11, 31, 22, 0);
+
+  it("takes the year of the sent time when the start is in the next year", () => {
+    const vtec = parseVtec("/O.NEW.KTOP.WS.W.0003.260101T0600Z-260102T0000Z/") as Vtec;
+    expect(vtecKey(vtec, sent)).toEqual({ system: "vtec", id: "KTOP.WS.W.0003.2025" });
   });
 
   it("takes the year from the sent time when the event already started", () => {
-    const vtec = parseVtec("/O.CON.KBOU.WS.W.0003.000000T0000Z-270102T0000Z/") as Vtec;
-    expect(vtecKey(vtec, sent)).toEqual({ system: "vtec", id: "KBOU.WS.W.0003.2026" });
+    const vtec = parseVtec("/O.CON.KTOP.WS.W.0003.000000T0000Z-260102T0000Z/") as Vtec;
+    expect(vtecKey(vtec, sent)).toEqual({ system: "vtec", id: "KTOP.WS.W.0003.2025" });
+  });
+
+  it("takes the year of the start when the start is in the year before the sent time", () => {
+    const vtec = parseVtec("/O.EXT.KTOP.WS.W.0003.251231T2300Z-260102T0000Z/") as Vtec;
+    expect(vtecKey(vtec, Date.UTC(2026, 0, 1, 2, 0))).toEqual({ system: "vtec", id: "KTOP.WS.W.0003.2025" });
   });
 });
 
