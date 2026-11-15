@@ -471,8 +471,17 @@ export const LEVELS: readonly Level[] = ["digest", "notice", "urgent", "life-saf
 export interface ChannelDescriptor {
   readonly id: ChannelId;
   readonly title: string;
-  /** The failure domains that the channel needs, for example `provider:pushover` and `provider:apns`. */
+  /**
+   * The failure domains outside the cell that the channel needs, for example `provider:pushover` and
+   * `provider:apns`. Do not put the resources of the cell here.
+   */
   readonly dependsOn: readonly string[];
+  /**
+   * The resources of the cell that the channel uses. A push or a text through an API uses
+   * `internet` and `power`. Thus a fault of the internet link stops each source and each such
+   * channel together.
+   */
+  readonly uses: readonly CellResource[];
   /** True: the channel can sound through silent mode and Do Not Disturb. */
   readonly breaksThrough: boolean;
   /** True: the channel repeats a message by itself until the person acknowledges it. */
