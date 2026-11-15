@@ -12,6 +12,10 @@
  * The script also counts the IEM product times that are not the sent time of an NWS API message of the
  * same event. A later IEM time lets the IEM rows replace the NWS API copy.
  *
+ * Each IEM record has the time of the data of its list (`asOf`) and the sent time of each key. Thus the count
+ * of the runs applies the rule of `snapshotStep` for an old list. The records of earlier measures have no
+ * times, and count as before.
+ *
  * Start it in the folder of the package:
  * `node scripts/measure.ts --minutes=55 --out=measure`, or `node scripts/measure.ts --from=a.jsonl,b.jsonl --out=sum`.
  */
@@ -47,9 +51,15 @@ interface MeasureRecord {
   readonly ok: boolean;
   readonly complete?: boolean;
   readonly failure?: string;
-  /** The ends of the observation ids of the live rows. Only for IEM, the keys of `snapshotStep`. */
+  /** The time of the data of a complete IEM list: the newest product time of the nation. */
+  readonly asOf?: Instant;
+  /** The ends of the observation ids of the live rows, each with its sent time. Only for IEM, the keys of `snapshotStep`. */
+  readonly rowSents?: Readonly<Record<string, Instant>>;
+  /** The VTEC events of the live reports, each with one UGC code (`<event>|<ugc>`) and the newest sent time of its reports. */
+  readonly pairSents?: Readonly<Record<string, Instant>>;
+  /** The keys of `rowSents`. The records before the sent times have only this field. */
   readonly rows?: readonly string[];
-  /** The VTEC events of the live reports, each with one UGC code: `<event>|<ugc>`. */
+  /** The keys of `pairSents`. The records before the sent times have only this field. */
   readonly pairs?: readonly string[];
   /** The sent times of the live reports of each VTEC event. */
   readonly sents?: Readonly<Record<string, readonly Instant[]>>;
@@ -71,6 +81,19 @@ const pairsOf = (report: Report): string[] =>
   report.correlation.filter((key) => key.system === "vtec").flatMap((key) => report.areas.flatMap((area) => (area.type === "code" && area.system === "ugc" ? [`${key.id}|${area.code}`] : [])));
 
 const sorted = (values: Iterable<string>): string[] => [...new Set(values)].sort();
+/** This function gives a record of times in the order of its keys. */
+const ordered = (times: Readonly<Record<string, Instant>>): Record<string, Instant> => Object.fromEntries(Object.entries(times).sort(([a], [b]) => (a < b ? -1 : 1)));
+/** This function keeps the newest time of a key. */
+const newest = (times: Record<string, Instant>, key: string, time: Instant): void => {
+  const known = times[key];
+  if (known === undefined || time > known) times[key] = time;
+};
+/** This function gives the keys of a record of the times: `rows` and `pairs` come from the times when the record has them. */
+const keyed = (record: MeasureRecord): MeasureRecord => ({
+  ...record,
+  ...(record.rowSents === undefined ? {} : { rows: sorted(Object.keys(record.rowSents)) }),
+  ...(record.pairSents === undefined ? {} : { pairs: sorted(Object.keys(record.pairSents)) }),
+});
 
 /** This function fetches one source one time, and gives its record and its next cursor. */
 async function fetchOne(name: "iem" | "nws", source: SourceProcedures, watch: Watch, cursor: Cursor | undefined): Promise<{ record: MeasureRecord; cursor?: Cursor }> {
@@ -83,19 +106,20 @@ async function fetchOne(name: "iem" | "nws", source: SourceProcedures, watch: Wa
   }
   const at = Date.now();
   if (!outcome.ok) return { record: { source: name, started, at, ok: false, failure: outcome.failure.kind } };
-  const rows: string[] = [];
-  const pairs: string[] = [];
+  const rowSents: Record<string, Instant> = {};
+  const pairSents: Record<string, Instant> = {};
   const sents = new Map<string, Set<Instant>>();
   for (const observation of outcome.observations) {
     const reports = source.map({ observation }).reports.filter((report) => live(report, at));
-    if (reports.length > 0) rows.push(observation.id.slice(-16));
     for (const report of reports) {
-      pairs.push(...pairsOf(report));
+      newest(rowSents, observation.id.slice(-16), report.sent);
+      for (const pair of pairsOf(report)) newest(pairSents, pair, report.sent);
       for (const key of report.correlation) if (key.system === "vtec") sents.set(key.id, (sents.get(key.id) ?? new Set()).add(report.sent));
     }
   }
   const times = Object.fromEntries([...sents].sort(([a], [b]) => (a < b ? -1 : 1)).map(([event, set]) => [event, [...set].sort((a, b) => a - b)]));
-  const record: MeasureRecord = { source: name, started, at, ok: true, complete: outcome.complete, ...(name === "iem" ? { rows: sorted(rows) } : {}), pairs: sorted(pairs), sents: times };
+  const iem = name === "iem" ? { ...(outcome.asOf === undefined ? {} : { asOf: outcome.asOf }), rowSents: ordered(rowSents) } : {};
+  const record: MeasureRecord = { source: name, started, at, ok: true, complete: outcome.complete, ...iem, pairSents: ordered(pairSents), sents: times };
   return { record, ...(outcome.cursor === undefined ? {} : { cursor: outcome.cursor }) };
 }
 
@@ -129,6 +153,10 @@ async function measure(path: string): Promise<MeasureRecord[]> {
 interface FlapResult {
   readonly misses: number;
   readonly flaps: number;
+  /** The count of ends that did not come back: the true ends. */
+  readonly ends: number;
+  /** The count of runs of misses in the horizon at the end of a window. They do not count. */
+  readonly censored: number;
   readonly trials: number;
   /** The upper bound of the rate of the false ends for each trial (a key at a list), at `LEVEL`. */
   readonly high: number;
@@ -150,7 +178,7 @@ function flapResults(windows: readonly ListRuns[], hours: number): FlapResult[] 
   const bound = (count: number, total: number): number => (total === 0 ? 1 : clopperPearson(count, total, LEVEL).high);
   const listsPerHour = hours > 0 ? windows.reduce((sum, runs) => sum + runs.lists, 0) / hours : Number.POSITIVE_INFINITY;
   for (let misses = 1; misses <= MOST_MISSES; misses += 1) {
-    const counts = windows.map((runs) => flapCounts(runs, MOST_MISSES)[misses - 1]!);
+    const counts = windows.map((runs) => flapCounts(runs)[misses - 1]!);
     const total = (pick: (count: FlapCount) => number): number => counts.reduce((sum, count) => sum + pick(count), 0);
     const starts = total((count) => count.starts);
     const lists = total((count) => count.lists);
@@ -158,6 +186,8 @@ function flapResults(windows: readonly ListRuns[], hours: number): FlapResult[] 
     results.push({
       misses,
       flaps: total((count) => count.flaps),
+      ends: total((count) => count.ends),
+      censored: total((count) => count.censored),
       trials: total((count) => count.trials),
       high: bound(total((count) => count.flaps), total((count) => count.trials)),
       starts,
@@ -219,9 +249,10 @@ function compare(iem: readonly MeasureRecord[], nws: readonly MeasureRecord[], i
   const endLags: number[] = [];
   let endsNotInNws = 0;
   let endsStillInNws = 0;
-  for (const absence of iemPairs.absences) {
-    if (absence.back !== undefined) continue;
-    const seen = nwsLists.filter((record) => record.pairs?.includes(absence.key));
+  // The true ends at 1 miss: the pairs that left IEM and did not come back in a newer list.
+  for (const end of iemPairs.limits[0]!.ends) {
+    if (end.back !== undefined) continue;
+    const seen = nwsLists.filter((record) => record.pairs?.includes(end.key));
     if (seen.length === 0) {
       endsNotInNws += 1;
       continue;
@@ -230,7 +261,7 @@ function compare(iem: readonly MeasureRecord[], nws: readonly MeasureRecord[], i
     const lastWith = seen.at(-1)!.at;
     const gone = nwsLists.find((record) => record.at > lastWith);
     if (gone === undefined) endsStillInNws += 1;
-    else endLags.push(gone.at - absence.left);
+    else endLags.push(gone.at - end.left);
   }
   // The sent times of each event over the window, in each source.
   const timesOf = (records: readonly MeasureRecord[]): Map<string, Set<Instant>> => {
@@ -265,18 +296,24 @@ async function windowsOf(): Promise<MeasureRecord[][]> {
     await mkdir(out, { recursive: true });
     const path = join(out, "records.jsonl");
     await writeFile(path, "");
-    return [await measure(path)];
+    return [(await measure(path)).map(keyed)];
   }
   const files = from.split(",").filter((file) => file !== "");
-  return Promise.all(files.map(async (file) => (await readFile(file, "utf8")).split("\n").filter((line) => line !== "").map((line) => JSON.parse(line) as MeasureRecord)));
+  return Promise.all(files.map(async (file) => (await readFile(file, "utf8")).split("\n").filter((line) => line !== "").map((line) => keyed(JSON.parse(line) as MeasureRecord))));
 }
 
 const windows = await windowsOf();
 await mkdir(out, { recursive: true });
-const listsOf = (records: readonly MeasureRecord[], keys: (record: MeasureRecord) => readonly string[] | undefined): ListFetch[] =>
-  records.flatMap((record) => (record.source === "iem" ? [{ at: record.at, ...(record.ok && record.complete === true ? { keys: keys(record) ?? [] } : {}) }] : []));
-const rowRuns = windows.map((records) => listRuns(listsOf(records, (record) => record.rows), horizon));
-const pairRuns = windows.map((records) => listRuns(listsOf(records, (record) => record.pairs), horizon));
+/** This function gives the IEM lists of a window. A list has its time and the sent time of each key when the records have them. */
+const listsOf = (records: readonly MeasureRecord[], keys: (record: MeasureRecord) => readonly string[] | undefined, sents: (record: MeasureRecord) => MeasureRecord["rowSents"]): ListFetch[] =>
+  records.flatMap((record): ListFetch[] => {
+    if (record.source !== "iem") return [];
+    if (!(record.ok && record.complete === true)) return [{ at: record.at }];
+    const times = sents(record);
+    return [{ at: record.at, keys: keys(record) ?? [], ...(record.asOf === undefined ? {} : { asOf: record.asOf }), ...(times === undefined ? {} : { sents: times }) }];
+  });
+const rowRuns = windows.map((records) => listRuns(listsOf(records, (record) => record.rows, (record) => record.rowSents), horizon, MOST_MISSES));
+const pairRuns = windows.map((records) => listRuns(listsOf(records, (record) => record.pairs, (record) => record.pairSents), horizon, MOST_MISSES));
 const hours = windows.reduce((sum, records) => {
   const times = records.map((record) => record.at);
   return sum + (times.length < 2 ? 0 : (Math.max(...times) - Math.min(...times)) / HOUR);
@@ -288,8 +325,10 @@ const fetches = (source: "iem" | "nws") => {
   for (const record of records) if (!record.ok) failures[record.failure ?? "unknown"] = (failures[record.failure ?? "unknown"] ?? 0) + 1;
   return { fetches: records.length, complete: records.filter((record) => record.ok && record.complete === true).length, failures };
 };
-const endsOf = (runs: readonly ListRuns[]): number => runs.reduce((total, one) => total + one.absences.filter((absence) => absence.back === undefined).length, 0);
-const censoredOf = (runs: readonly ListRuns[]): number => runs.reduce((total, one) => total + one.censored, 0);
+/** This function sums one count of the runs of the windows. */
+const runsSum = (runs: readonly ListRuns[], pick: (one: ListRuns) => number): number => runs.reduce((total, one) => total + pick(one), 0);
+/** This function gives the old lists and the trials with no miss because the key is newer than its list. */
+const oldOf = (runs: readonly ListRuns[]) => ({ lists: runsSum(runs, (one) => one.lists), old: runsSum(runs, (one) => one.old), held: runsSum(runs, (one) => one.held) });
 const sum = (pick: (comparison: Comparison) => number): number => comparisons.reduce((total, comparison) => total + pick(comparison), 0);
 const summary = {
   windows: windows.length,
@@ -298,9 +337,9 @@ const summary = {
   horizon,
   iem: fetches("iem"),
   nws: fetches("nws"),
-  rows: { flaps: flapResults(rowRuns, hours), ends: endsOf(rowRuns), censored: censoredOf(rowRuns) },
+  rows: { flaps: flapResults(rowRuns, hours), ...oldOf(rowRuns) },
   share: SHARE,
-  pairs: { flaps: flapResults(pairRuns, hours), ends: endsOf(pairRuns), censored: censoredOf(pairRuns) },
+  pairs: { flaps: flapResults(pairRuns, hours), ...oldOf(pairRuns) },
   start: { delay: minutesOf(comparisons.flatMap((comparison) => comparison.delays)), onlyIem: sum((c) => c.onlyIem), onlyNws: sum((c) => c.onlyNws) },
   end: { lag: minutesOf(comparisons.flatMap((comparison) => comparison.endLags)), notInNws: sum((c) => c.endsNotInNws), stillInNws: sum((c) => c.endsStillInNws) },
   tie: {
@@ -311,23 +350,25 @@ const summary = {
   },
 };
 
-const decision = missesDecision(summary.rows.flaps, summary.rows.ends, SHARE);
+// The decision reads the fewest true ends of the counts of misses. Fewer true ends are on the safe side.
+const trueEnds = Math.min(...summary.rows.flaps.map((result) => result.ends));
+const decision = missesDecision(summary.rows.flaps, trueEnds, SHARE);
 const decisionText = decision.decided
   ? `The count of misses is ${String(decision.misses)}. Its false ends are ${decision.share.toExponential(2)} or less of the true ends of the rows, at ${String(LEVEL)}.`
   : `No decision. ${decision.reason}`;
 
 const table = (results: readonly FlapResult[]): string =>
   [
-    "| Count of misses | False ends | Trials | Bound by key | Lists with a start | Observed lists | Bound by list | Most keys of one start | Bound of the lists with a start in a day |",
-    "| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
-    ...results.map((result) => `| ${String(result.misses)} | ${String(result.flaps)} | ${String(result.trials)} | ${result.high.toExponential(2)} | ${String(result.starts)} | ${String(result.lists)} | ${result.highByList.toExponential(2)} | ${String(result.largest)} | ${result.startsPerDay.toFixed(2)} |`),
+    "| Count of misses | False ends | True ends | Runs in the horizon | Trials | Bound by key | Lists with a start | Observed lists | Bound by list | Most keys of one start | Bound of the lists with a start in a day |",
+    "| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+    ...results.map((result) => `| ${String(result.misses)} | ${String(result.flaps)} | ${String(result.ends)} | ${String(result.censored)} | ${String(result.trials)} | ${result.high.toExponential(2)} | ${String(result.starts)} | ${String(result.lists)} | ${result.highByList.toExponential(2)} | ${String(result.largest)} | ${result.startsPerDay.toFixed(2)} |`),
   ].join("\n");
 const markdown = [
   from === undefined ? `# The measure of the IEM list` : `# All the measures of the IEM list`,
   "",
   `${String(summary.windows)} window(s), ${String(summary.hours)} hours. IEM: ${String(summary.iem.complete)} complete lists of ${String(summary.iem.fetches)} fetches. NWS API: ${String(summary.nws.complete)} complete lists of ${String(summary.nws.fetches)} fetches.`,
   "",
-  `A false end is a key that leaves the complete lists for the count of misses or more, and comes back. An absence counts only when ${String(summary.horizon)} complete lists follow its start. The bounds are Clopper-Pearson bounds at ${String(LEVEL)}. One bad list can end many keys at once, so the decision reads the bound by list.`,
+  `A false end is a key that ends at the count of misses and comes back, with the rules of \`snapshotStep\`. A key that is newer than an old list counts no miss, and an ended key comes back only in a newer list. An end counts only when ${String(summary.horizon)} complete lists follow the start of its misses. The bounds are Clopper-Pearson bounds at ${String(LEVEL)}. One bad list can end many keys at once, so the decision reads the bound by list.`,
   "",
   `## The decision of \`SNAPSHOT_MISSES\``,
   "",
@@ -339,7 +380,7 @@ const markdown = [
   "",
   table(summary.rows.flaps),
   "",
-  `Rows that left and did not come back: ${String(summary.rows.ends)}. Absences in the horizon at the end of a window, not counted: ${String(summary.rows.censored)}.`,
+  `The decision reads ${String(trueEnds)} true ends: the fewest of the counts of misses. Old lists: ${String(summary.rows.old)} of ${String(summary.rows.lists)} complete lists have a time before an earlier list. Trials with no miss, because the row is newer than its list: ${String(summary.rows.held)}. The records before the times of the lists count with no times.`,
   "",
   `## The events by UGC code (the liveness of an incident)`,
   "",
