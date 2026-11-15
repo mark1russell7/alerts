@@ -14,6 +14,7 @@
   "dependencies": {
     "@mark1russell7/algebra": "^0.8.7",
     "@mark1russell7/collections": "^0.10.2",
+    "@mark1russell7/optional": "^1.2.0",
     "@mark1russell7/rigor-generators": "^0.1.16",
     "@mark1russell7/rigor-statistics": "^0.2.1",
     "zod": "^4.6.7"
