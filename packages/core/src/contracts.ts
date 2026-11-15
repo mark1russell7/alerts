@@ -529,6 +529,19 @@ export interface ChannelDescriptor {
    * holds each other call for a later step. Without it, the delivery has no limit.
    */
   readonly maxInFlight?: number;
+  /**
+   * The limit of the why line of the channel. `WHY_LIMITS` in `why.ts` holds the limit of each kind of channel.
+   * When it is absent, the messages of the channel have no why line.
+   */
+  readonly why?: WhyLimit;
+}
+
+/** The limit of a why line: the most characters, the most words, or both. */
+export interface WhyLimit {
+  /** The most characters (code points). */
+  readonly chars?: number;
+  /** The most words. */
+  readonly words?: number;
 }
 
 /** One message to one person on one channel. */
@@ -558,6 +571,11 @@ export interface Message {
    * it from the reserve, one time in each window. `messageOf` sets it.
    */
   readonly useReserve?: boolean;
+  /**
+   * The why line: why the message reaches the person, in the limit of the channel. The runtime makes it from the
+   * `WhyRecord` of the route and the private labels. It holds no address, point or region code.
+   */
+  readonly why?: string;
 }
 
 /** The address of a person on a channel, from the private configuration. The repo does not hold an address. */

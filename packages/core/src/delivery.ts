@@ -24,10 +24,12 @@ import {
   type Report,
   type ReportId,
   type WatchedPlace,
+  type WhyRecord,
 } from "./contracts.ts";
 import { escalate, escalationProblems, quietWindowProblems, type EscalationPlan, type EscalationSend } from "./escalation.ts";
 import { messageKey } from "./ids.ts";
 import { unknownKinds } from "./taxonomy.ts";
+import { placeWhy } from "./why.ts";
 
 /** A person of the delivery. The private configuration gives each one. */
 export interface Recipient {
@@ -86,6 +88,11 @@ export interface Route {
   /** The deliveries that need a poll for an acknowledgment: each one with a receipt, no cancel and a channel that polls. */
   readonly polls: readonly Delivery[];
   readonly plan: EscalationPlan;
+  /**
+   * Why the incident reaches the person: today the watched place of the match with the first id (`placeWhy`). A route
+   * of an incident that is not live, or of a match by subjects, has no why.
+   */
+  readonly why?: WhyRecord;
 }
 
 /**
@@ -120,10 +127,12 @@ export function route(input: RouteInput): Route[] {
       for (const item of [...starts, ...deliveries]) if (item.person === person) levels.add(item.level);
       // The level does not go down: an assessed level below a level of the log starts nothing.
       const top = Math.max(-1, ...[...levels].map((level) => LEVELS.indexOf(level)));
-      if (incident.live) {
-        const assessed = assess(incident, recipient.watch, input.places, policy).level;
+      const assessment = incident.live ? assess(incident, recipient.watch, input.places, policy) : undefined;
+      if (assessment !== undefined) {
+        const assessed = assessment.level;
         if (assessed !== "none" && LEVELS.indexOf(assessed) > top && policyOf(assessed) !== undefined) levels.add(assessed);
       }
+      const why = assessment === undefined ? undefined : placeWhy(assessment.places);
       const ordered = LEVELS.filter((level) => levels.has(level));
       // The start in the log of each level, or `undefined`.
       const logged = ordered.map((level) => earliestStart(starts, person, level));
@@ -153,7 +162,7 @@ export function route(input: RouteInput): Route[] {
         const found = logged[index];
         const fresh = found === undefined;
         const start: EscalationStart = { incident: found?.incident ?? incident.anchor, level, person, at: plan.start };
-        routes.push({ incident, person, policy: chosen, start, fresh, deliveries: ours, polls, plan });
+        routes.push({ incident, person, policy: chosen, start, fresh, deliveries: ours, polls, plan, ...(why === undefined ? {} : { why }) });
       });
     }
   }
@@ -206,8 +215,10 @@ export function recipientProblems(recipient: Recipient, channels: readonly Chann
  *
  * A message of the line `system.quota.reserve` can use the reserve of the quota. Else the reserve
  * stops the message that tells of it.
+ *
+ * The `why` is the why line of the channel, from `whyLine`. An empty line gives no field.
  */
-export function messageOf(incident: Incident, reports: readonly Report[], send: EscalationSend): Message {
+export function messageOf(incident: Incident, reports: readonly Report[], send: EscalationSend, why?: string): Message {
   const report = textReport(incident, reports);
   const title = report?.headline.trim() || incident.kind.label;
   const body = [report?.instruction, report?.areaText, report?.description].flatMap((part) => (part === undefined || part.trim() === "" ? [] : [part.trim()])).join("\n\n");
@@ -222,6 +233,7 @@ export function messageOf(incident: Incident, reports: readonly Report[], send: 
     ...(incident.expires === undefined ? {} : { expires: incident.expires }),
     quiet: send.quiet,
     ...(incident.kind.code === `${QUOTA_KIND}.reserve` ? { useReserve: true } : {}),
+    ...(why === undefined || why === "" ? {} : { why }),
   };
 }
 

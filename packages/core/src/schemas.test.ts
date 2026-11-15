@@ -68,6 +68,7 @@ import type {
   Urgency,
   Watch,
   WatchedPlace,
+  WhyLimit,
 } from "./contracts.ts";
 import { coverage } from "./coverage.ts";
 import { escalate } from "./escalation.ts";
@@ -154,6 +155,7 @@ import {
   urgencySchema,
   watchedPlaceSchema,
   watchSchema,
+  whyLimitSchema,
 } from "./schemas.ts";
 import { NO_SYSTEM_LINES, SOURCE_SUBJECT, systemReports } from "./system-reports.ts";
 
@@ -320,6 +322,7 @@ describe("the type of each schema", () => {
     expectTypeOf<z.output<typeof levelSchema>>().toEqualTypeOf<Level>();
     expectTypeOf<z.output<typeof channelDescriptorSchema>>().toEqualTypeOf<ChannelDescriptor>();
     expectTypeOf<z.output<typeof messageSchema>>().toEqualTypeOf<Message>();
+    expectTypeOf<z.output<typeof whyLimitSchema>>().toEqualTypeOf<WhyLimit>();
     expectTypeOf<z.output<typeof addressSchema>>().toEqualTypeOf<Address>();
     expectTypeOf<z.output<typeof receiptSchema>>().toEqualTypeOf<Receipt>();
     expectTypeOf<z.output<typeof sendOutcomeSchema>>().toEqualTypeOf<SendOutcome>();
@@ -380,7 +383,7 @@ describe("the JSON Schema of each schema", () => {
   const exported = Object.entries(schemas).filter(([name]) => name.endsWith("Schema"));
 
   it("has each exported schema", () => {
-    expect(exported.length).toBe(93);
+    expect(exported.length).toBe(94);
     for (const [name, schema] of exported) expect(schema instanceof z.ZodType, name).toBe(true);
   });
 
@@ -409,6 +412,14 @@ describe("the round trip of real values", () => {
     holds(channelDescriptorSchema, { ...CHANNEL, maxInFlight: 2 });
     fails(channelDescriptorSchema, { ...CHANNEL, maxInFlight: 0 });
     fails(channelDescriptorSchema, { ...CHANNEL, maxInFlight: 1.5 });
+    holds(channelDescriptorSchema, { ...CHANNEL, why: { chars: 80 } });
+    fails(channelDescriptorSchema, { ...CHANNEL, why: { chars: 0 } });
+    holds(whyLimitSchema, { chars: 40 });
+    holds(whyLimitSchema, { words: 12 });
+    holds(whyLimitSchema, { chars: 80, words: 12 });
+    fails(whyLimitSchema, { chars: 1.5 });
+    fails(whyLimitSchema, { words: 0 });
+    fails(whyLimitSchema, { lines: 2 });
     holds(observationSchema, OBSERVATION);
     holds(reportSchema, WARNING);
     holds(mapResultSchema, { reports: [WARNING], problems: [{ path: "features[3].properties.onset", message: "The onset is not a date.", fatal: false }] });
@@ -469,6 +480,8 @@ describe("the round trip of real values", () => {
         quiet: send.quiet,
       };
       holds(messageSchema, message);
+      holds(messageSchema, { ...message, why: "Why: your place is in the area" });
+      fails(messageSchema, { ...message, why: "" });
       const delivery: Delivery = { key: message.key, incident: send.incident, level: send.level, person: send.person, channel: send.channel, step: send.step, at: T0 + 500, receipt: { receipt: "r1" } };
       holds(deliverySchema, delivery);
     }
