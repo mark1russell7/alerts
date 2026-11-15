@@ -18,13 +18,14 @@ The repo is public. It holds the general framework only. People, places, keys an
 | AL-5 | Event model and taxonomy | in progress | The core package: the types, the schemas, the id functions and the first taxonomy, from the SAME event codes and the NWS event names. The id functions are done. |
 | AL-6 | Merge reports into incidents | done | Grow-only sets with a union join. Property tests hold the three laws: idempotent, commutative and associative. |
 | AL-7 | Priority calculation | done | The first table: a policy of data, the match of places by codes and the rules of each person. The calculation from probabilities and costs is AL-31. |
-| AL-8 | Weather and emergency sources | in progress | The NWS API, the NWS CAP feed and FEMA IPAWS, each a procedure package with recorded fixtures and a canary. The NWS API source is in review. |
+| AL-8 | Weather and emergency sources | in progress | The NWS API, the NWS CAP feed and FEMA IPAWS, each a procedure package with recorded fixtures and a canary. The NWS API source is done. Its fetch sends conditional requests. |
 | AL-9 | Pushover delivery with acknowledge and escalate | blocked | Emergency priority with iOS Critical Alerts. The core reads the receipt and escalates to the next step. |
 | AL-10 | Source health and coverage | blocked | A health state machine for each source, and the coverage of each kind at each place. A gap is a system alert. |
 | AL-11 | Operate as a service | blocked | The service runner of `@mark1russell7/service`, with an append-only event log in SQLite. |
 | AL-12 | Outside heartbeat | blocked | The running system pings Healthchecks.io. When the pings stop, Healthchecks.io alerts the owner. |
 | AL-13 | Fault tests of the pipeline | blocked | Fault plans from rigor: a source down, slow, duplicated, out of order or with a changed format, a channel down, a copy stopped. A gate holds each case. |
 | AL-29 | A standalone weather radio | waiting | The owner sets up a SAME weather radio at the bed. It needs no internet and no part of this system. |
+| AL-30 | NWWS-OI, the push feed of the NWS | waiting | Each NWS product in CAP within 10 seconds, over XMPP, from servers apart from the NWS API. It is the second path for NWS warnings. The owner asks the NWS for two accounts. |
 
 ## Phase 2: wider and harder
 

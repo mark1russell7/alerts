@@ -58,6 +58,15 @@ const json = (body: unknown, status = 200, headers: Record<string, string> = {})
 
 const collection = (...names: string[]): unknown => ({ type: "FeatureCollection", features: names.map(read) });
 
+/** The answer 304 of a conditional GET: no body. */
+const NOT_MODIFIED: Reply = { status: 304, statusText: "Not Modified", headers: { etag: '"v1"' }, body: "" };
+
+/** This function gives each reply in turn, and then the last reply again. */
+const inTurn = (...replies: Reply[]): (() => Promise<Reply>) => {
+  let index = 0;
+  return async () => replies[Math.min(index++, replies.length - 1)] as Reply;
+};
+
 /** This function makes a fetch whose transport gives one reply for each path. */
 const fetchWith = (replies: Record<string, Reply | ((exchange: Exchange, signal: AbortSignal | undefined) => Promise<Reply>)>, timeoutMs = 1000, baseUrl = BASE) => {
   const sent: Exchange[] = [];
@@ -112,6 +121,40 @@ describe("createNwsFetch", () => {
       return outcome.ok ? outcome.observations.map((observation) => observation.id) : [];
     };
     expect(await ids()).toEqual(await ids());
+  });
+
+  describe("conditional requests", () => {
+    const mainUrl = `${BASE}${MAIN}`;
+    const mainSent = (sent: Exchange[]): Exchange[] => sent.filter((exchange) => exchange.url === mainUrl);
+    const mainOf = (outcome: FetchOutcome): unknown[] =>
+      outcome.ok ? outcome.observations.filter((observation) => observation.transport.url === mainUrl) : [];
+
+    it("sends the ETag of the last full answer, and gives its observations again for a 304", async () => {
+      const full = json(collection("nws-flw.json"), 200, { etag: '"v1"' });
+      const { fetch, sent } = fetchWith({ [MAIN]: inTurn(full, NOT_MODIFIED), [CANARY_PATH]: canary });
+      const first = await fetch({ watch });
+      const second = await fetch({ watch });
+      expect(mainSent(sent).map((exchange) => exchange.headers["if-none-match"])).toEqual([undefined, '"v1"']);
+      expect(second).toMatchObject({ ok: true, complete: true });
+      expect(mainOf(first)).toHaveLength(1);
+      expect(mainOf(second)).toEqual(mainOf(first));
+    });
+
+    it("sends no condition after a body that does not parse", async () => {
+      const cut = json('{"type":"FeatureCollection","features":[', 200, { etag: '"v1"' });
+      const { fetch, sent } = fetchWith({ [MAIN]: inTurn(cut, NOT_MODIFIED), [CANARY_PATH]: canary });
+      expect((await fetch({ watch })).ok).toBe(false);
+      await fetch({ watch });
+      expect(mainSent(sent).map((exchange) => exchange.headers["if-none-match"])).toEqual([undefined, undefined]);
+    });
+
+    it("fails a 304 with no earlier full answer, and then sends no condition", async () => {
+      const { fetch, sent } = fetchWith({ [MAIN]: inTurn(NOT_MODIFIED), [CANARY_PATH]: canary });
+      const outcome = await fetch({ watch });
+      expect(failureOf(outcome)).toEqual({ kind: "network", message: `a 304 answer with no earlier full answer: ${mainUrl}` });
+      await fetch({ watch });
+      expect(mainSent(sent).map((exchange) => exchange.headers["if-none-match"])).toEqual([undefined, undefined]);
+    });
   });
 
   it("gives an empty, complete answer when no alert is active", async () => {
