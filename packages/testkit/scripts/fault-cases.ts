@@ -1,5 +1,5 @@
 /**
- * This script runs the cases of the fault suite (AL-13) and writes their records.
+ * This script starts the cases of the fault suite (AL-13) and writes their records.
  * Usage: node packages/testkit/scripts/fault-cases.ts [--out <folder>]
  *
  * The script writes `<folder>/case-1.json` and a table to `GITHUB_STEP_SUMMARY`. When a gate fails, or a case
@@ -39,7 +39,8 @@ const lines = [
 ];
 const text = lines.join("\n");
 console.log(text);
-if (process.env.GITHUB_STEP_SUMMARY !== undefined) appendFileSync(process.env.GITHUB_STEP_SUMMARY, text);
+const summary = process.env["GITHUB_STEP_SUMMARY"];
+if (summary !== undefined) appendFileSync(summary, text);
 if (!verdict.pass) {
   console.log(`::error::${run.id}: ${verdict.read ? "the gate failed" : "the case cannot read (no read is not a pass)"}. ${String(verdict.problems.length)} problems.`);
   process.exitCode = 1;

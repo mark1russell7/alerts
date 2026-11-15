@@ -9,6 +9,8 @@ describe("caseBodies", () => {
     expect(main.features).toHaveLength(bodies.features);
     expect(bodies.features).toBeGreaterThanOrEqual(14);
     expect(canary.features).toHaveLength(1);
+    // A whole fetch gives the observations of the main query and of the canary query.
+    expect(bodies.observations).toBe(bodies.features + 1);
     // The body ends with its last brace, with no white space. Thus each prefix of the body is not valid JSON.
     const text = new TextDecoder().decode(bodies.main);
     expect(text.trimEnd()).toBe(text);

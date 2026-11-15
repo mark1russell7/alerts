@@ -7,7 +7,7 @@
  * reads a reply that stops early. The gates of the case:
  *
  * - `length` and `chunked`: each cut gives `{ ok: false }` with the kind `network`.
- * - All framings: a cut never gives `{ ok: true, complete: true }`. For `close`, the client cannot see the
+ * - All framings: a cut does not give `{ ok: true, complete: true }` at any time. For `close`, the client cannot see the
  *   cut in the framing, so only the parse of the body can see it.
  */
 import { readdirSync, readFileSync } from "node:fs";
@@ -68,7 +68,7 @@ export interface CutRecord {
   readonly ms: number;
 }
 
-/** The verdict of the case. A case with no read never passes. */
+/** The verdict of the case. A case with no read does not pass. */
 export interface Verdict {
   /** True when each baseline is whole and each cut fell at its point in the body. */
   readonly read: boolean;
@@ -90,8 +90,12 @@ export interface CaseRun {
   readonly verdict: Verdict;
 }
 
-/** This function gives the body of the main reply: one feature collection of each fixture of the NWS source. */
-export function caseBodies(): { readonly main: Uint8Array; readonly canary: Uint8Array; readonly features: number } {
+/**
+ * This function gives the bodies of the replies. The main body is one feature collection of each fixture of the NWS
+ * source. The canary body has the keepalive fixture. A fetch gives the observations of each query, so a whole fetch
+ * gives `observations`: the features of the main body and of the canary body.
+ */
+export function caseBodies(): { readonly main: Uint8Array; readonly canary: Uint8Array; readonly features: number; readonly observations: number } {
   const root = dirname(createRequire(import.meta.url).resolve("@mark1russell7/alerts-source-nws-api/package.json"));
   const folder = join(root, "fixtures");
   const names = readdirSync(folder)
@@ -99,11 +103,13 @@ export function caseBodies(): { readonly main: Uint8Array; readonly canary: Uint
     .sort();
   const read = (name: string): unknown => JSON.parse(readFileSync(join(folder, name), "utf8"));
   const features = names.map(read);
+  const canary = names.filter((name) => name.includes("keepalive")).map(read);
   const encode = (value: unknown): Uint8Array => new TextEncoder().encode(JSON.stringify(value));
   return {
     main: encode({ type: "FeatureCollection", features }),
-    canary: encode({ type: "FeatureCollection", features: names.filter((name) => name.includes("keepalive")).map(read) }),
+    canary: encode({ type: "FeatureCollection", features: canary }),
     features: features.length,
+    observations: features.length + canary.length,
   };
 }
 
@@ -137,7 +143,7 @@ export interface CaseOptions {
   readonly framings?: readonly Framing[];
 }
 
-/** This function runs the case: a baseline and each cut, for each framing. */
+/** This function starts the case: a baseline and each cut, for each framing. It gives the records and the verdict. */
 export async function runCutInBody(options: CaseOptions = {}): Promise<CaseRun> {
   const draws = options.draws ?? CASE_1_DRAWS;
   const bodies = caseBodies();
@@ -194,14 +200,14 @@ export async function runCutInBody(options: CaseOptions = {}): Promise<CaseRun> 
       await server.close();
     }
   }
-  return { id: CASE_1_ID, seed: CASE_1_ID, bodyBytes: bodies.main.length, baselines, records, verdict: verdictOf(baselines, records, bodies.features, draws, options.framings ?? FRAMINGS) };
+  return { id: CASE_1_ID, seed: CASE_1_ID, bodyBytes: bodies.main.length, baselines, records, verdict: verdictOf(baselines, records, bodies.observations, draws, options.framings ?? FRAMINGS) };
 }
 
-/** This function gives the verdict of the records of a run. */
+/** This function gives the verdict of the records of a run. `observations` is the count of a whole fetch. */
 export function verdictOf(
   baselines: readonly Baseline[],
   records: readonly CutRecord[],
-  features: number,
+  observations: number,
   draws: number,
   framings: readonly Framing[] = FRAMINGS,
 ): Verdict {
@@ -214,7 +220,7 @@ export function verdictOf(
     }
     if (!baseline.whole) problems.push(`${framing}: the baseline reply did not start its connection, or the server did not write it whole.`);
     const o = baseline.outcome;
-    if (!(o.ok && o.complete && o.observations === features)) problems.push(`${framing}: the baseline fetch gave ${JSON.stringify(o)}, not ${String(features)} observations, complete.`);
+    if (!(o.ok && o.complete && o.observations === observations)) problems.push(`${framing}: the baseline fetch gave ${JSON.stringify(o)}, not ${String(observations)} observations, complete.`);
     const count = records.filter((r) => r.framing === framing).length;
     if (count !== draws + 3) problems.push(`${framing}: ${String(count)} cuts, not ${String(draws + 3)}.`);
   }
