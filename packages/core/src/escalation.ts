@@ -189,7 +189,7 @@ const ACTIVE: ReadonlySet<EscalationState> = new Set(["sent", "last", "exhausted
  * - The delivery is at least once, not exactly once. A crash after a send and before its record
  *   gives a second send with the same `messageKey`. A channel that drops a repeated key drops it.
  * - A send below `life-safety` at `now` in the quiet window of the person is quiet. A send of
- *   `life-safety` is never quiet.
+ *   `life-safety` is not quiet at any time.
  */
 export function escalate(input: EscalationInput): EscalationPlan {
   const { policy, person, incident, now } = input;
@@ -305,8 +305,8 @@ export function escalationProblems(policy: EscalationPolicy): string[] {
 
 /**
  * This function tells if the time `at` is in the quiet window. It uses the local time of the time
- * zone of the window, so a change to or from daylight saving time moves the window with the clock of
- * the person. The start is in the window, and the end is not. An end before the start crosses
+ * zone of the window. Thus a change to or from daylight saving time moves the window with the clock
+ * of the person. The start is in the window, and the end is not. An end before the start crosses
  * midnight, and an end equal to the start gives the full day.
  *
  * The function does not throw. An absent window, a bad time zone, a bad local time or a bad `at`
@@ -337,7 +337,7 @@ export function quietWindowProblems(window: QuietWindow): string[] {
   return problems;
 }
 
-const LOCAL_TIME = /^([01]d|2[0-3]):([0-5]d)$/;
+const LOCAL_TIME = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
 /** The minutes from the local midnight of a time `HH:MM`. */
 function minutesOf(time: string): number | undefined {

@@ -486,7 +486,7 @@ export interface Message {
   /**
    * True: the channel sends the message in its silent mode, for example Pushover priority `-1`, or a
    * text and no call. The escalation sets it in the quiet window of the person. A `life-safety`
-   * message is never quiet. The channel keeps no rule of its own about the time of day.
+   * message is not quiet at any time. The channel keeps no rule of its own about the time of day.
    */
   readonly quiet: boolean;
 }
