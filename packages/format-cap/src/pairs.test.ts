@@ -1,7 +1,9 @@
 import { readFileSync } from "node:fs";
 import type { CorrelationKey } from "@mark1russell7/alerts";
 import { describe, expect, it } from "vitest";
-import { mainVtec, parseVtec, vtecKey, type Vtec } from "./vtec.ts";
+import { mainVtec, parseVtec, vtecKey, type Vtec } from "@mark1russell7/alerts-format-nws";
+import { chooseInfo } from "./info.ts";
+import { readCap } from "./read.ts";
 
 /**
  * Each pair is one NWS product, as the NWS API and FEMA IPAWS gave it. The two copies have different
@@ -26,14 +28,15 @@ function apiKey(text: string): { key: CorrelationKey | undefined; id: string } {
 }
 
 /**
- * The key of the IPAWS copy. The test reads the CAP elements with patterns, because the CAP reader
- * is in another package. The copy has one info block for each language, so each VTEC occurs twice.
+ * The key of the IPAWS copy: the VTEC parameters of the chosen info block and the sent time of the
+ * alert. The copy has one info block for each language, and each block has the same VTEC.
  */
 function capKey(xml: string): { key: CorrelationKey | undefined; id: string } {
-  const sent = /<sent>([^<]+)<\/sent>/.exec(xml)?.[1] ?? "";
-  const id = /<identifier>([^<]+)<\/identifier>/.exec(xml)?.[1] ?? "";
-  const vtec = [...xml.matchAll(/<valueName>VTEC<\/valueName>\s*<value>([^<]+)<\/value>/g)].map((match) => match[1] ?? "");
-  return { key: keyOf([...new Set(vtec)], sent), id };
+  const read = readCap(xml);
+  if (!read.ok) throw new Error(`the IPAWS copy does not read: ${read.reason}`);
+  const chosen = chooseInfo(read.alert.infos);
+  const vtec = (chosen?.info.parameters ?? []).filter((pair) => pair.valueName === "VTEC").map((pair) => pair.value);
+  return { key: keyOf(vtec, read.alert.sent), id: read.alert.identifier };
 }
 
 describe("one NWS product through two sources", () => {

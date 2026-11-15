@@ -45,6 +45,11 @@ export interface CoverageInput {
   readonly sources: readonly SourceDescriptor[];
   /** The health of the sources. A source with no health is `unknown`. */
   readonly health: readonly SourceHealth[];
+  /**
+   * The sources that are late against another source, from `lateSources`. A late source does not
+   * count, also when its health state is up: its fetches pass, but it does not carry the reports.
+   */
+  readonly late?: readonly SourceId[];
   readonly places: readonly WatchedPlace[];
   /** The taxonomy codes or prefixes to examine at each place. */
   readonly kinds: readonly string[];
@@ -83,7 +88,8 @@ export function requiredFor(policy: CoveragePolicy, kind: string): number {
  */
 export function coverage(input: CoverageInput, policy: CoveragePolicy = DEFAULT_COVERAGE_POLICY): Coverage[] {
   const states = new Map<SourceId, HealthState>(input.health.map((entry) => [entry.source, entry.state]));
-  const up = input.sources.filter((source) => policy.up.includes(states.get(source.id) ?? "unknown"));
+  const late = new Set(input.late ?? []);
+  const up = input.sources.filter((source) => policy.up.includes(states.get(source.id) ?? "unknown") && !late.has(source.id));
   return input.places.flatMap((place) =>
     input.kinds.map((kind) => coverageOf(place.id, kind, up.filter((source) => sourceCovers(source, place, kind)), requiredFor(policy, kind), policy)),
   );
