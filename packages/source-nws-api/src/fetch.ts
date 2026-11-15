@@ -26,7 +26,7 @@ export interface NwsFetchOptions {
    * name of the application and a contact. The instance gives it from its private settings.
    */
   readonly userAgent: string;
-  /** The base URL. The default is `NWS_BASE_URL`. A test gives a different URL. */
+  /** The base URL. The default is `NWS_BASE_URL`. A test gives a different URL. The fetch removes the slashes at its end. */
   readonly baseUrl?: string;
   /** The shortest time between two requests to the host, in milliseconds. The default is 1000. */
   readonly minIntervalMs?: number;
@@ -176,7 +176,11 @@ type QueryResult = { readonly ok: true; readonly read: Read } | { readonly ok: f
  * answer of each query, and a 304 answer costs no body. Until then, each fetch reads the full list.
  */
 export function createNwsFetch(options: NwsFetchOptions): (input: NwsFetchInput, signal?: AbortSignal) => Promise<FetchOutcome> {
-  const baseUrl = (options.baseUrl ?? NWS_BASE_URL).replace(/\/+$/, "");
+  // A loop, not a pattern with `\/+$`: that pattern takes quadratic time on a text with many slashes (CodeQL js/polynomial-redos)
+  const given = options.baseUrl ?? NWS_BASE_URL;
+  let end = given.length;
+  while (end > 0 && given[end - 1] === "/") end -= 1;
+  const baseUrl = given.slice(0, end);
   const host = new URL(baseUrl).host;
   const timeoutMs = options.timeoutMs ?? 15_000;
   const now = options.pace.now;

@@ -59,7 +59,7 @@ const json = (body: unknown, status = 200, headers: Record<string, string> = {})
 const collection = (...names: string[]): unknown => ({ type: "FeatureCollection", features: names.map(read) });
 
 /** This function makes a fetch whose transport gives one reply for each path. */
-const fetchWith = (replies: Record<string, Reply | ((exchange: Exchange, signal: AbortSignal | undefined) => Promise<Reply>)>, timeoutMs = 1000) => {
+const fetchWith = (replies: Record<string, Reply | ((exchange: Exchange, signal: AbortSignal | undefined) => Promise<Reply>)>, timeoutMs = 1000, baseUrl = BASE) => {
   const sent: Exchange[] = [];
   const transport: Transport = async (exchange, signal) => {
     sent.push(exchange);
@@ -73,7 +73,7 @@ const fetchWith = (replies: Record<string, Reply | ((exchange: Exchange, signal:
     pace: { scheduler: new HostScheduler(clock, 1), now: clock.now },
     transport,
     userAgent: "alerts-tests",
-    baseUrl: BASE,
+    baseUrl,
     minIntervalMs: 0,
     timeoutMs,
   });
@@ -97,6 +97,12 @@ describe("createNwsFetch", () => {
     expect(outcome.observations[0]?.body).toBe(JSON.stringify(read("nws-flw.json")));
     expect(outcome.observations[0]?.transport).toMatchObject({ url: `${BASE}${MAIN}`, status: 200, etag: '"abc"' });
     expect(sent[0]?.headers).toEqual({ accept: "application/geo+json", "user-agent": "alerts-tests" });
+  });
+
+  it("removes the slashes at the end of the base URL", async () => {
+    const { fetch, sent } = fetchWith({ [MAIN]: json(collection()), [CANARY_PATH]: canary }, 1000, `${BASE}///`);
+    expect((await fetch({ watch })).ok).toBe(true);
+    expect(sent.map((exchange) => exchange.url)).toContain(`${BASE}${MAIN}`);
   });
 
   it("gives the same observation ids for the same answer", async () => {
