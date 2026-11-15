@@ -20,6 +20,12 @@ export const COW_PHENOMENA = ["TO", "SV", "FF", "MA", "SQ"] as const;
 /** One phenomenon of the verified shares. */
 export type CowPhenomenon = (typeof COW_PHENOMENA)[number];
 
+/** The phenomena that Cow does not verify, in a fixed order. `COW_UNVERIFIED` has the reason of each. */
+export const COW_UNVERIFIED_PHENOMENA = ["EW"] as const;
+
+/** One phenomenon that Cow does not verify. */
+export type CowUnverifiedPhenomenon = (typeof COW_UNVERIFIED_PHENOMENA)[number];
+
 /** The reason that a phenomenon is not in the verified shares, with its evidence. */
 export interface CowUnverified {
   /** The reason in plain words. */
@@ -35,7 +41,7 @@ export interface CowUnverified {
  * a measure. As a prior, it gives the probability 0 and the expected harm 0. Thus the file of the base
  * rates has no verified share for them. The measure keeps their counts as a note.
  */
-export const COW_UNVERIFIED = {
+export const COW_UNVERIFIED: Readonly<Record<CowUnverifiedPhenomenon, CowUnverified>> = {
   EW: {
     reason: "Cow links no storm report to an extreme wind warning. Each EW warning is unverified by construction, not by measure.",
     sources: [
@@ -45,13 +51,7 @@ export const COW_UNVERIFIED = {
     ],
     instead: "The CAP certainty of the alert.",
   },
-} as const satisfies Readonly<Record<string, CowUnverified>>;
-
-/** One phenomenon that Cow does not verify. */
-export type CowUnverifiedPhenomenon = keyof typeof COW_UNVERIFIED;
-
-/** The phenomena of `COW_UNVERIFIED`, in a fixed order. */
-export const COW_UNVERIFIED_PHENOMENA = Object.keys(COW_UNVERIFIED) as readonly CowUnverifiedPhenomenon[];
+};
 
 /** The phenomena of each request: the verified phenomena, and the unverified phenomena for their counts. */
 export const COW_QUERY_PHENOMENA: readonly CowQueryPhenomenon[] = [...COW_PHENOMENA, ...COW_UNVERIFIED_PHENOMENA];
