@@ -220,6 +220,9 @@ export type Transport = "poll" | "stream" | "push" | "radio";
  */
 export type CellResource = "internet" | "power" | "receiver";
 
+/** The resources of the cell, in their order in a report. */
+export const CELL_RESOURCES: readonly CellResource[] = ["internet", "power", "receiver"];
+
 /** The facts of a source. The core uses them for the schedule, the health and the coverage. */
 export interface SourceDescriptor {
   readonly id: SourceId;
@@ -264,7 +267,10 @@ export interface WatchedPlace {
   readonly id: PlaceId;
   /** The position of the place. Absent unless the owner lets this source get positions. */
   readonly at?: Position;
-  /** The codes of the regions that contain the place: NWS zones, the county, SAME. */
+  /**
+   * The codes of the regions that contain the place: the NWS zones and county, SAME, the state
+   * (`state`) and the country (`iso3166`). The coverage of a source can name a region at each level.
+   */
   readonly codes: readonly RegionCode[];
   /** The distance around the place that the system also watches. */
   readonly bufferKm: number;
@@ -388,13 +394,20 @@ export interface SourceHealth {
 export interface Coverage {
   readonly place: PlaceId;
   readonly kind: string;
-  /** The healthy sources that cover the kind at the place. */
+  /** The sources that are up and cover the kind at the place. */
   readonly sources: readonly SourceId[];
   /**
    * The smallest count of outside failure domains whose faults stop each of these sources. At 2
    * or more, no single outside fault stops the coverage.
    */
   readonly independent: number;
+  /**
+   * The search of the smallest count ended. When it is false, the search passed its budget. Then
+   * `independent` is the count of a set that the search found, and the true count can be smaller.
+   */
+  readonly proven: boolean;
+  /** The outside failure domains of the smallest set: one fault of each stops each of these sources. */
+  readonly faults: readonly string[];
   /**
    * The resources of the cell that each of these sources uses. One fault of one of them stops all
    * of these sources in this cell.

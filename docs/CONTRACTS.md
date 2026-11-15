@@ -112,9 +112,18 @@ The system uses two kinds of independence, and keeps them apart:
 
 The cell is the copy of the system on one machine. Its internet link, its power and its receivers are common to each of its sources. So a source names them in `uses`, not in `dependsOn`. Else each internet source falls into one group, and the coverage cannot tell two providers apart.
 
-The coverage of a kind at a place has two parts:
+`coverage(input, policy)` gives the coverage of each kind at each place. It is a pure calculation on the descriptors, the health of the sources and the places.
 
-- `independent`: the smallest count of outside failure domains whose faults stop each healthy source of the kind. At 2 or more, no single outside fault stops the coverage. The policy asks for 2 or more for each life-safety kind. A smaller count is a system report: `urgent` at one, `life-safety` at zero during a watch or a warning at the place.
+- A source counts when its health is in `policy.up`. The first policy counts `healthy` and `slow`. A source with no health is `unknown`.
+- A source covers a kind when one of its prefixes has the kind. A source of a part of the kind does not count.
+- A source covers a place when its coverage is `global`, or when a code of its coverage covers a code of the place. So a place lists its codes at each level: the NWS zone and county, SAME, the state (`state`) and the country (`iso3166`).
+- An area with only a shape covers no place until `@mark1russell7/geo` has the tests.
+
+The coverage has these parts:
+
+- `independent`: the smallest count of outside failure domains whose faults stop each source of the kind that is up. At 2 or more, no single outside fault stops the coverage. The policy asks for 2 or more for each life-safety kind, and 1 for each other kind. A smaller count is a system report: `urgent` at one, `life-safety` at zero during a watch or a warning at the place.
+- `faults`: the domains of that smallest set. The report names them. A source with no domain in `dependsOn` gets its own domain `source:<id>`.
+- `proven`: the search of the smallest set ended. The count is a minimum hitting set, and `minimumHittingSet` of `@mark1russell7/collections/graph` calculates it exactly. When the search passes its budget, `proven` is false, and `coverageShort` gives true. A count that the search did not prove is not a pass.
 - `commonResources`: the cell resources that each of these sources uses. One fault of one of them stops all of these sources in this cell. The radio input and a second cell remove these common faults. The blindness formula of the design study uses them as the shared fault `c`.
 
 ## The channel contract
