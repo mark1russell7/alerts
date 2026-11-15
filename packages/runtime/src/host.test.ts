@@ -3,7 +3,7 @@ import { valueIn } from "@mark1russell7/quantity";
 import { groupProblems, renderTaskXml, serviceProblems, superviseGroup } from "@mark1russell7/service/host";
 import { fakeHost } from "@mark1russell7/service/testing";
 import { describe, expect, it } from "vitest";
-import { declareSupervisor, HOST_PORTS, hostGroup, hostTask, RUNTIME_GRACE, RUNTIME_PROFILE, shutdownCap, supervisorDiscovery, supervisorHome } from "./host.ts";
+import { declareSupervisor, HOST_PORTS, hostGroup, hostTask, READY_WITHIN, readinessProbe, RUNTIME_GRACE, RUNTIME_PROFILE, shutdownCap, supervisorDiscovery, supervisorHome } from "./host.ts";
 import { STOP_MESSAGE } from "./index.ts";
 import { INSTANCE_TIMES } from "./instance.ts";
 
@@ -50,6 +50,13 @@ describe("the host of the instance", () => {
     expect(supervisorHome(HOME, base, user)).toBe(resolve(HOME));
     expect(() => supervisorHome("", base, user)).toThrow("The supervisor needs one argument: the folder of the private files.");
     expect(() => supervisorHome(undefined, base, user)).toThrow("The supervisor needs one argument: the folder of the private files.");
+  });
+
+  it("gives the install the readiness probe and the ready wait of the supervisor", () => {
+    const ready = hostGroup(OPTIONS).programs[0]?.ready;
+    expect(readinessProbe()).toEqual({ kind: "http", url: `${PROBES}/readiness` });
+    expect(ready?.probe).toEqual(readinessProbe());
+    expect(ready?.within).toEqual(READY_WITHIN);
   });
 
   it("gives a group and a boot task with no problems", () => {
