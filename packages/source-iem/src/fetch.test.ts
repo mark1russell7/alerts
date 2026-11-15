@@ -4,7 +4,7 @@ import fc from "fast-check";
 import type { Exchange, Reply, Transport } from "polite-crawler/api";
 import { HostScheduler } from "polite-crawler/politeness";
 import { describe, expect, it } from "vitest";
-import { createIemFetch, isListRow, keepsRow, LIST_PATH, readAnswer, rowBody } from "./fetch.ts";
+import { createIemFetch, isListRow, keepsRow, LIST_PATH, listTime, readAnswer, rowBody } from "./fetch.ts";
 import { ROW_FIELDS } from "./map.ts";
 
 const fixture = (path: string): string => readFileSync(new URL(path, import.meta.url), "utf8");
@@ -64,6 +64,15 @@ describe("rowBody and isListRow", () => {
   });
 });
 
+describe("listTime", () => {
+  it("gives the newest product time, and skips a row with no time that parses", () => {
+    const rows = [{ utc_product_issue: "2026-11-15T13:00:00Z" }, { utc_product_issue: "2026-11-15T13:05:00Z" }, { utc_product_issue: "later" }, null, 7];
+    expect(listTime(rows)).toBe(Date.parse("2026-11-15T13:05:00Z"));
+    expect(listTime([{ utc_product_issue: "later" }])).toBeUndefined();
+    expect(listTime([])).toBeUndefined();
+  });
+});
+
 describe("keepsRow", () => {
   it("keeps a row of a watched state, a row with no state, and a row with no UGC text", () => {
     const states = new Set(["KS"]);
@@ -92,6 +101,19 @@ describe("readAnswer", () => {
     const shifted = rowsOf(LIST).map((row, index) => ({ ...row, index: index + 500 }));
     const two = readAnswer(json(listOf(shifted)), URL_OF_LIST, START + 120_000, 55, undefined)?.observations ?? [];
     expect(two.map((observation) => observation.id)).toEqual(one.map((observation) => observation.id));
+  });
+
+  it("gives the time of the newest product of each row of the list, also when the states keep no row", () => {
+    const newest = Math.max(...rowsOf(LIST).map((row) => Date.parse(String(row["utc_product_issue"]))));
+    expect(newest).toBeLessThanOrEqual(START);
+    expect(readAnswer(json(LIST), URL_OF_LIST, START, 40, undefined)?.asOf).toBe(newest);
+    const none = readAnswer(json(LIST), URL_OF_LIST, START, 40, new Set(["WY"]));
+    expect(none).toMatchObject({ observations: [], complete: true, asOf: newest });
+  });
+
+  it("gives no time for a list that is not complete", () => {
+    const renamed = rowsOf(LIST).map(({ ugc, ...row }) => ({ ...row, ugc_code: ugc }));
+    expect(readAnswer(json(listOf(renamed)), URL_OF_LIST, START, 40, undefined)?.asOf).toBeUndefined();
   });
 
   it("gives no complete list for a list with no row, or with a row of a different structure", () => {

@@ -68,6 +68,8 @@ For each code, the latest reports that name it stay. So the rule loses no later 
 
 An end mark tells that a report of a snapshot source left the list of the source (`ended: true`), or is in the list again (`ended: false`). A report is ended at a time when its latest mark at or before that time is an end. When two marks of one report have the same time, the report stays live. This choice is on the safe side, and it is a function of the set, so the three laws hold. A mark changes no group. It changes only the field `live` and the levels of the live heads. An ended report still gives its known values to the fill of `unknown` values, as an expired report does.
 
+An end mark can also hold the time of the data of the list that ended the report (`asOf`). The runtime reads it to refuse an old list. The merge does not read it.
+
 The incident id is its anchor: its smallest report id. The anchor can change when two incidents merge. So an acknowledgment and a delivery point to a report of the incident, not to the anchor.
 
 A delivery is one accepted send. A failed send makes no delivery, so its step stays due and the runtime tries it again. The sent level of a person for an incident is the highest level of the deliveries to the person for its reports. This value only grows, so a merge does not send an alert again.
@@ -109,6 +111,10 @@ The rules of each adapter:
    - A failed fetch or an incomplete fetch counts nothing.
    - A report that ended and is in a complete list again gets a `back` event.
    - The counts are in memory only. A restart makes an end later, not sooner.
+   - A cache can give an old list that is complete. A complete fetch of a snapshot source gives the time of its data (`asOf`): the time of its newest product.
+   - An absent report counts a miss only when its `sent` time is not after `asOf`. A newer report keeps its count.
+   - The end mark keeps the `asOf` of the list that ended the report. A report comes back only in a list with a later `asOf`.
+   - A list with no `asOf` counts as current.
 8. **The kinds are codes of the taxonomy.** Each kind that `map` gives is a code of `TAXONOMY`. A kind that the tables do not know is `other.unknown`, with a problem. A gate test of the adapter holds this rule with `unknownKinds`.
 
 The testkit gives one conformance suite, and each adapter passes it. The suite examines the laws of `map` on the fixtures and on mutated fixtures. It examines the outcomes of `fetch` behind a fault proxy: cut, delay, reset, 429, 500 and a changed body. It also examines the descriptor.
@@ -273,13 +279,22 @@ A send that passes its time limit stays in flight, because the provider can acce
 Each send of a key has a new copy id: the run id, `-` and a count. It has only letters, digits, `_` and `-` (`COPY_ID`), because a stop puts it in the path of a URL. The channel can have a copy that the log does not keep:
 
 - a copy past its flight limit;
-- a copy whose send failed with no answer: a time-out, a network failure or a server failure.
+- a copy whose send failed with no answer: a time-out, a network failure or a server failure;
+- a copy of a key that the log already has, with another receipt.
 
 On a channel that repeats, the step stops such a copy by its copy id. The next copy goes in parallel. The step does not cancel by the delivery key here, because that cancel also stops the next copy. A failed stop goes again at a later step. A stale copy that the channel accepts later gets its stop again.
 
 The Pushover channel tags each emergency message with its delivery key and its copy id. A cancel of a receipt goes by the delivery key. Thus it also stops the repeats of a copy whose receipt the log does not have. A crash after a send and before its write is such a case. A stop of one copy goes by its copy id.
 
-The copies to stop are in memory only. Thus a restart loses the stop of a hung copy of the last run. The cancel by the delivery key at the end of its escalation stops that copy. AL-32 writes each attempt and its copy id to the log before the send, and a restart stops the copies with no delivery.
+The log keeps each copy on a channel that repeats, and its end. Thus a restart does not lose the stop of a hung copy (AL-32):
+
+- Before each send on a channel that repeats, the step writes an `attempt` event with the delivery key, the channel and the copy id.
+- The `delivery` event of an accepted send has the copy id. It ends the copy.
+- A `settled` event ends a copy that needs no stop: the channel refused its send, or a stop of the copy went after the end of its send.
+- The state has the open copies: each attempt with no end. The first step after a restart stops each of them by its copy id.
+- A stop of a copy whose send did not end does not end the copy. The channel can accept that copy later, and then its stop goes again.
+
+A write of the `attempt` event that fails throws, and the send does not go.
 
 A recipient has no problem from `recipientProblems` before it gets alerts:
 
@@ -396,7 +411,7 @@ The environment gives `PORT` (8080), `PROBE_PORT` (9090) and `SERVICE_PROFILE` (
 
 The module `host.ts` gives the host of the live instance as data. A boot task starts a supervisor, and the supervisor starts the runtime:
 
-- `node src/install.ts install` installs the boot task, and starts it. A boot task needs an elevated shell one time. `remove` stops the supervisor and removes the task. `status` gives the state of the task and the result of one readiness probe. It exits with 1 when the runtime is not ready.
+- `node src/install.ts install` installs the boot task, and starts it. A boot task needs an elevated shell one time. `remove` stops the supervisor and removes the task. `status` gives the state of the task, the result of one readiness probe and the times of the outside check. It exits with 1 when the runtime is not ready or the check is too short.
 - After each install, and after each change of `config.json` or `secrets.env`, start `status` when the ready wait passed. A runtime that is not ready sends no alert, and only its log tells it.
 - The boot task starts the supervisor at the start of the computer, before a logon. It starts the supervisor again 1 minute after a stop.
 - The supervisor starts the runtime with the profile `daemon` on the ports 4750 and 4751. The runtime is ready when `/readiness` passes, in its startup budget plus one readiness interval.
@@ -412,11 +427,14 @@ A lock keeps one runtime on the computer. The live instance runs from a checkout
 The runtime cannot tell the person that it stopped. A check of Healthchecks.io tells it. The module `heartbeat.ts` gives the hook `onPass` of the runtime:
 
 - After each pass with no error, the hook pings the check. A ping of the same kind goes once in each 60 seconds. When the pings stop, Healthchecks.io alerts the owner: the process stopped, the computer stopped, or its network is down.
-- A pass in which a channel gave `auth`, `refused` or `rate-limited` to a send pings `/fail`, because then the system cannot tell the person. The next pass with no such failure pings success at once.
+- A pass in which a channel gave `auth`, `refused` or `rate-limited` to a send pings `/fail`, because then the system cannot tell the person.
+- The fail of a channel holds until a send on the channel goes, or until the pass of the retry has no refusal on it. The delivery step sends a failed call again at the first pass at or after its `retryAt`. Thus the check does not go down and up at each retry.
 - The body of a success ping gives the state of each source. The body of a fail ping gives the channel and the kind. No body holds a place, a person or the text of a failure.
-- The hook starts the ping and ends at once. One ping is in flight at a time, for 10 seconds or less. A failed ping goes to the log, and its text holds no ping URL.
+- The hook starts the ping and ends at once. One ping is in flight at a time, for 10 seconds or less. A failed ping goes to the log, and its text holds no ping URL. The next pass pings again.
 - The key `HEALTHCHECKS_PING_URL` of `secrets.env` gives the ping URL, with `https`. The profile `daemon` does not start without it.
-- The period of the check is 1 minute. Its grace is the longest pass plus a margin. A new check alerts only after its first ping, thus the first install checks that the check is up.
+- `heartbeatGap` gives the longest time between two success pings: the period of the pings, two pass limits, the longest wait of the loop and the ping limit. Each failed pass adds a pass limit and a wait. The check lets one failed pass go.
+- The period plus the grace of the check must be this gap or more: 430 seconds for the instance. `install.ts status` reads the check with `HEALTHCHECKS_API_KEY`, and fails when it is shorter.
+- A new check alerts only after its first ping. Thus the first install checks that the check is up.
 
 ## People and places
 

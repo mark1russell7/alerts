@@ -2,9 +2,9 @@ import type { Message, PersonId, ReportId } from "@mark1russell7/alerts";
 import { createPushoverChannel } from "@mark1russell7/alerts-channel-pushover";
 import type { ScriptedRequest } from "@mark1russell7/rigor-testkit/http";
 import { startScriptedServer } from "@mark1russell7/rigor-testkit/http";
+import { pushoverApi, pushoverFetchTo, pushoverLedgerOf, pushoverReceiptOf } from "@procedures/notify/testing";
 import { describe, expect, it } from "vitest";
 import { ACCEPT_ARMS, type AcceptArm, type AcceptRecord, acceptGatesOf, acceptVerdictOf, CASE_4_SETTINGS, faultOf } from "./late-accept.ts";
-import { ledgerOf, pushoverApi, receiptOf } from "./pushover.ts";
 
 const KEY = "k".repeat(64);
 const OTHER = "o".repeat(64);
@@ -32,7 +32,7 @@ const send = (connection: number, reply: number, tag = KEY): ScriptedRequest => 
 const read = (connection: number, index: number): ScriptedRequest => ({
   connection,
   method: "GET",
-  target: `/1/receipts/${receiptOf(index)}.json?token=x`,
+  target: `/1/receipts/${pushoverReceiptOf(index)}.json?token=x`,
   fields: {},
   body: "",
   route: 1,
@@ -42,7 +42,7 @@ const read = (connection: number, index: number): ScriptedRequest => ({
 const cancel = (connection: number, index: number): ScriptedRequest => ({
   connection,
   method: "POST",
-  target: `/1/receipts/${receiptOf(index)}/cancel.json`,
+  target: `/1/receipts/${pushoverReceiptOf(index)}/cancel.json`,
   fields: {},
   body: "",
   route: 2,
@@ -61,7 +61,7 @@ const tagCancel = (connection: number, tag: string): ScriptedRequest => ({
 });
 
 const recordOf = (arm: AcceptArm, requests: readonly ScriptedRequest[], extra: Partial<AcceptRecord> = {}): AcceptRecord => {
-  const ledger = ledgerOf(requests);
+  const ledger = pushoverLedgerOf(requests);
   const last = ledger.messages.findLast((message) => message.readAt !== undefined);
   return {
     arm,
@@ -82,36 +82,28 @@ const LATE = [send(0, 0), send(1, 1), read(1, 1), cancel(1, 1)];
 
 describe("the scripted Pushover API", () => {
   it("accepts a send, a read and a cancel of the Pushover channel, and the ledger records each", async () => {
-    const server = await startScriptedServer(pushoverApi(3));
+    const server = await startScriptedServer(pushoverApi({ receipts: 3, tags: "any" }));
     try {
       const base = `http://${server.host}:${String(server.port)}`;
       const channel = createPushoverChannel({
         token: "a".repeat(30),
-        fetch: (url, init) => {
-          const target = new URL(url);
-          return fetch(`${base}${target.pathname}${target.search}`, init);
-        },
+        fetch: pushoverFetchTo(base),
       });
       const sent = await channel.send({ message: MESSAGE, address: { user: "b".repeat(30) } });
-      expect(sent).toMatchObject({ ok: true, receipt: { receipt: receiptOf(0) } });
-      const receipt = { request: "send-0", receipt: receiptOf(0) };
+      expect(sent).toMatchObject({ ok: true, receipt: { receipt: pushoverReceiptOf(0) } });
+      const receipt = { request: "send-0", receipt: pushoverReceiptOf(0) };
       expect(await channel.status({ receipt })).toMatchObject({ state: "acknowledged" });
       await channel.cancel({ receipt });
       const tagged = await fetch(`${base}/1/receipts/cancel_by_tag/${KEY}.json`, { method: "POST", body: "token=x" });
       expect(tagged.status).toBe(200);
-      const ledger = ledgerOf(server.requests);
-      expect(ledger.counts).toEqual({ sends: 1, reads: 1, cancels: 1, tagCancels: 1, other: 0 });
-      expect(ledger.messages).toEqual([{ receipt: receiptOf(0), tags: [KEY], position: 0, connection: 0, readAt: 1, cancelledAt: 2 }]);
+      const ledger = pushoverLedgerOf(server.requests);
+      expect(ledger.counts).toEqual({ sends: 1, reads: 1, cancels: 1, tagCancels: 1, validates: 0, limits: 0, other: 0 });
+      expect(ledger.messages).toEqual([{ receipt: pushoverReceiptOf(0), priority: 2, tags: [KEY], position: 0, connection: 0, readAt: 1, cancelledAt: 2 }]);
     } finally {
       await server.close();
     }
   });
 
-  it("gives receipts of 30 letters and digits", () => {
-    expect(receiptOf(0)).toMatch(/^[A-Za-z0-9]{30}$/);
-    expect(receiptOf(11)).toMatch(/^[A-Za-z0-9]{30}$/);
-    expect(receiptOf(11)).not.toBe(receiptOf(1));
-  });
 });
 
 describe("faultOf", () => {
@@ -131,7 +123,7 @@ describe("acceptGatesOf", () => {
   it("fails single and stopped for a lost receipt: the first message repeats after the acknowledgment", () => {
     const result = acceptGatesOf(recordOf("late-answer", LATE));
     expect(result.gates).toEqual({ delivered: true, single: false, stopped: false });
-    expect(result.problems.join("\n")).toContain(receiptOf(0));
+    expect(result.problems.join("\n")).toContain(pushoverReceiptOf(0));
   });
 
   it("passes when a cancel by tag reaches the first message before the acknowledgment", () => {
@@ -141,7 +133,7 @@ describe("acceptGatesOf", () => {
 
   it("keeps each tag of a message: a cancel by the copy tag stops only that copy, also after the next send", () => {
     const copies = [send(0, 0, `${KEY},copy-0`), send(1, 1, `${KEY},copy-1`), tagCancel(2, "copy-0"), read(1, 1), cancel(1, 1)];
-    const ledger = ledgerOf(copies);
+    const ledger = pushoverLedgerOf(copies);
     expect(ledger.messages.map((message) => message.tags)).toEqual([
       [KEY, "copy-0"],
       [KEY, "copy-1"],
@@ -152,7 +144,7 @@ describe("acceptGatesOf", () => {
 
   it("stops each copy with a cancel by the key tag", () => {
     const copies = [send(0, 0, `${KEY},copy-0`), send(1, 1, `${KEY},copy-1`), tagCancel(2, KEY)];
-    expect(ledgerOf(copies).messages.map((message) => message.cancelledAt)).toEqual([2, 2]);
+    expect(pushoverLedgerOf(copies).messages.map((message) => message.cancelledAt)).toEqual([2, 2]);
   });
 
   it("does not count a cancel by tag before the send, or a cancel of another tag", () => {
@@ -164,7 +156,7 @@ describe("acceptGatesOf", () => {
 
   it("fails delivered with no accepted message, and when the log names a receipt that the API did not give", () => {
     expect(acceptGatesOf(recordOf("hang-before-accept", [])).gates.delivered).toBe(false);
-    const record = recordOf("prompt", PROMPT, { log: { deliveries: [{ key: KEY, receipt: receiptOf(5) }], acknowledgments: 1, cancelled: [] } });
+    const record = recordOf("prompt", PROMPT, { log: { deliveries: [{ key: KEY, receipt: pushoverReceiptOf(5) }], acknowledgments: 1, cancelled: [] } });
     expect(acceptGatesOf(record).gates.delivered).toBe(false);
   });
 });

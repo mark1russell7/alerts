@@ -29,12 +29,12 @@ import {
   type SourceProcedures,
   type WatchedPlace,
 } from "@mark1russell7/alerts";
-import { createPushoverChannel, type PushoverChannelOptions } from "@mark1russell7/alerts-channel-pushover";
+import { createPushoverChannel } from "@mark1russell7/alerts-channel-pushover";
 import { openRuntime, openRuntimeLog, type RuntimeOptions } from "@mark1russell7/alerts-runtime";
 import { type Fault, faultPlanOf } from "@mark1russell7/rigor-chaos";
 import { startFaultProxy } from "@mark1russell7/rigor-proxy";
 import { startScriptedServer } from "@mark1russell7/rigor-testkit/http";
-import { type AcceptedMessage, ledgerOf, type PushoverLedger, pushoverApi } from "./pushover.ts";
+import { type PushoverLedger, type PushoverLedgerMessage, pushoverApi, pushoverFetchTo, pushoverLedgerOf } from "@procedures/notify/testing";
 
 /** The id of the case. */
 export const CASE_4_ID = "al-13-case-4";
@@ -219,16 +219,12 @@ const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout
 
 /** This function starts one arm: a scripted API, a proxy with the fault of the arm, and the passes of a new runtime. */
 export async function runArm(arm: AcceptArm, settings: AcceptSettings = CASE_4_SETTINGS): Promise<AcceptRecord> {
-  const server = await startScriptedServer(pushoverApi(settings.receipts));
+  const server = await startScriptedServer(pushoverApi({ receipts: settings.receipts, tags: "any" }));
   const fault = faultOf(arm, settings);
   const proxy = await startFaultProxy({ target: { host: server.host, port: server.port }, plan: faultPlanOf(fault === undefined ? [] : [fault]), protocol: "http" });
   const base = `http://${proxy.host}:${String(proxy.port)}`;
   // The channel calls the address of the Pushover API. This fetch sends each call to the proxy, with the same path and query.
-  const viaProxy: PushoverChannelOptions["fetch"] = (url, init) => {
-    const target = new URL(url);
-    return fetch(`${base}${target.pathname}${target.search}`, init);
-  };
-  const channel = createPushoverChannel({ token: TOKEN, fetch: viaProxy, timeoutMs: settings.channelLimitMs });
+  const channel = createPushoverChannel({ token: TOKEN, fetch: pushoverFetchTo(base), timeoutMs: settings.channelLimitMs });
   const log = openRuntimeLog(":memory:");
   const clock = EPOCH_CLOCK;
   const failures: CallFailure[] = [];
@@ -264,7 +260,7 @@ export async function runArm(arm: AcceptArm, settings: AcceptSettings = CASE_4_S
   } catch (thrown) {
     error = thrown instanceof Error ? thrown.message : String(thrown);
   }
-  const ledger = ledgerOf([...server.requests]);
+  const ledger = pushoverLedgerOf([...server.requests]);
   const events = [...log.read()];
   const summary: LogSummary = {
     deliveries: events.flatMap((event) => {
@@ -294,7 +290,7 @@ export async function runLateAccept(given: Partial<AcceptSettings> = {}): Promis
 }
 
 /** The first tag of a message, or a text for a message with no tag. A `life-safety` message has the delivery key as its first tag. */
-const tagOf = (message: AcceptedMessage): string => message.tags[0] ?? "(no tag)";
+const tagOf = (message: PushoverLedgerMessage): string => message.tags[0] ?? "(no tag)";
 
 /**
  * This function gives the gates of one record, and a problem for each gate that fails.

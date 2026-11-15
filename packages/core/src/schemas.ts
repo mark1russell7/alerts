@@ -380,6 +380,7 @@ export const fetchOutcomeSchema: z.ZodType<FetchOutcome, FetchOutcome> = schemaO
         observations: z.array(observationSchema).readonly(),
         cursor: cursorSchema.exactOptional(),
         complete: z.boolean(),
+        asOf: instantSchema.exactOptional(),
       }),
       z.strictObject({ ok: z.literal(false), failure: fetchFailureSchema }),
     ])
@@ -634,6 +635,7 @@ export const endMarkSchema: z.ZodType<EndMark, EndMark> = schemaOf<EndMark>()(
       report: reportIdSchema,
       at: instantSchema,
       ended: z.boolean(),
+      asOf: instantSchema.exactOptional(),
     })
     .readonly(),
 );
