@@ -1,6 +1,6 @@
 import { Problems, type Severity } from "@mark1russell7/alerts";
 import { describe, expect, it } from "vitest";
-import { CAP_SEVERITY, CAP_STATUS, capCertainty, capList, capTime, capValue } from "./values.ts";
+import { CAP_CERTAINTY, CAP_CERTAINTY_BANDS, CAP_CERTAINTY_SOURCE, CAP_SEVERITY, CAP_STATUS, capCertainty, capList, capTime, capValue } from "./values.ts";
 
 const sink = (): Problems => new Problems();
 
@@ -64,5 +64,36 @@ describe("the readers of the CAP values", () => {
     expect(capList("  a  b\tc ")).toEqual(["a", "b", "c"]);
     expect(capList('a "b c" d')).toEqual(["a", "b c", "d"]);
     expect(capList('a "" "open quote')).toEqual(["a", "open quote"]);
+  });
+});
+
+describe("the bands of the CAP certainty values", () => {
+  it("gives one band for each certainty value, from 0 to 1", () => {
+    expect(Object.keys(CAP_CERTAINTY_BANDS).sort()).toEqual([...CAP_CERTAINTY].sort());
+    for (const [value, band] of Object.entries(CAP_CERTAINTY_BANDS)) {
+      expect(band.low, value).toBeGreaterThanOrEqual(0);
+      expect(band.high, value).toBeLessThanOrEqual(1);
+      expect(band.low, value).toBeLessThanOrEqual(band.high);
+    }
+  });
+
+  it("keeps the texts of CAP 1.2, section 3.2.2", () => {
+    expect(Object.fromEntries(Object.entries(CAP_CERTAINTY_BANDS).map(([value, band]) => [value, band.text]))).toEqual({
+      observed: "Determined to have occurred or to be ongoing",
+      likely: "Likely (p > ~50%)",
+      possible: "Possible but not likely (p <= ~50%)",
+      unlikely: "Not expected to occur (p ~ 0)",
+      unknown: "Certainty unknown",
+    });
+    expect(CAP_CERTAINTY_SOURCE.section).toMatch(/^3\.2\.2/);
+  });
+
+  it("puts the forecast bands in order with no overlap: unlikely, possible, likely", () => {
+    const { unlikely, possible, likely, observed } = CAP_CERTAINTY_BANDS;
+    expect(unlikely.high).toBe(possible.low);
+    expect(possible.lowOpen).toBe(true);
+    expect(possible.high).toBe(likely.low);
+    expect(likely.lowOpen).toBe(true);
+    expect([observed.low, observed.high]).toEqual([1, 1]);
   });
 });

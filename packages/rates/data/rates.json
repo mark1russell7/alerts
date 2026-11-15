@@ -1,0 +1,5018 @@
+{
+  "format": "alerts-rates/2",
+  "fetched": "2026-11-15T19:20:28.924Z",
+  "level": 0.95,
+  "methods": {
+    "share": "The Wilson score interval of the verified warnings in all the warnings, at the level of the file.",
+    "overYears": "The percentile bootstrap interval over the years: 10000 draws of the years with replacement, with a fixed seed for each measure.",
+    "gate": "The hull of the intervals of a measure and its value. A new value out of the gate interval of the committed file stops the workflow. A measure that a file does not have is 0 with the gate interval 0 to 0.",
+    "noRead": "The gate reads a share only when each year has 10 or more verified and 10 or more unverified warnings. Otherwise the gate gives no read for the share: not a pass and not a break.",
+    "unverified": "Cow links no storm report to some phenomena. The file keeps their counts with the reason and the evidence, and it has no share for them.",
+    "cow": "One request for each month, with one day of margin before and after the month. A warning counts in the month of its start. The id of a warning counts one time.",
+    "ncei": "The rows of each file of details, by EVENT_TYPE. The deaths and injuries of a type are the sums of the direct and indirect counts."
+  },
+  "cow": {
+    "url": "https://mesonet.agron.iastate.edu/api/1/cow.json",
+    "years": {
+      "first": 2021,
+      "last": 2025
+    },
+    "params": {
+      "wfo": [],
+      "phenomena": [
+        "TO",
+        "SV",
+        "FF",
+        "MA",
+        "SQ",
+        "EW"
+      ],
+      "lsrtype": [
+        "TO",
+        "SV",
+        "FF",
+        "MA",
+        "DS",
+        "SQ"
+      ],
+      "hailsize": 1,
+      "lsrbuffer": 15,
+      "wind": 58,
+      "windhailtag": false,
+      "limitwarns": false,
+      "warningbuffer": 1,
+      "enable_shared_border": true
+    },
+    "queries": [
+      "?begints=2020-12-31T00:00:00Z&endts=2021-02-02T00:00:00Z&phenomena=TO&phenomena=SV&phenomena=FF&phenomena=MA&phenomena=SQ&phenomena=EW",
+      "?begints=2021-01-31T00:00:00Z&endts=2021-03-02T00:00:00Z&phenomena=TO&phenomena=SV&phenomena=FF&phenomena=MA&phenomena=SQ&phenomena=EW",
+      "?begints=2021-02-28T00:00:00Z&endts=2021-04-02T00:00:00Z&phenomena=TO&phenomena=SV&phenomena=FF&phenomena=MA&phenomena=SQ&phenomena=EW",
+      "?begints=2021-03-31T00:00:00Z&endts=2021-05-02T00:00:00Z&phenomena=TO&phenomena=SV&phenomena=FF&phenomena=MA&phenomena=SQ&phenomena=EW",
+      "?begints=2021-04-30T00:00:00Z&endts=2021-06-02T00:00:00Z&phenomena=TO&phenomena=SV&phenomena=FF&phenomena=MA&phenomena=SQ&phenomena=EW",
+      "?begints=2021-05-31T00:00:00Z&endts=2021-07-02T00:00:00Z&phenomena=TO&phenomena=SV&phenomena=FF&phenomena=MA&phenomena=SQ&phenomena=EW",
+      "?begints=2021-06-30T00:00:00Z&endts=2021-08-02T00:00:00Z&phenomena=TO&phenomena=SV&phenomena=FF&phenomena=MA&phenomena=SQ&phenomena=EW",
+      "?begints=2021-07-31T00:00:00Z&endts=2021-09-02T00:00:00Z&phenomena=TO&phenomena=SV&phenomena=FF&phenomena=MA&phenomena=SQ&phenomena=EW",
+      "?begints=2021-08-31T00:00:00Z&endts=2021-10-02T00:00:00Z&phenomena=TO&phenomena=SV&phenomena=FF&phenomena=MA&phenomena=SQ&phenomena=EW",
+      "?begints=2021-09-30T00:00:00Z&endts=2021-11-02T00:00:00Z&phenomena=TO&phenomena=SV&phenomena=FF&phenomena=MA&phenomena=SQ&phenomena=EW",
+      "?begints=2021-10-31T00:00:00Z&endts=2021-12-02T00:00:00Z&phenomena=TO&phenomena=SV&phenomena=FF&phenomena=MA&phenomena=SQ&phenomena=EW",
+      "?begints=2021-11-30T00:00:00Z&endts=2022-01-02T00:00:00Z&phenomena=TO&phenomena=SV&phenomena=FF&phenomena=MA&phenomena=SQ&phenomena=EW",
+      "?begints=2021-12-31T00:00:00Z&endts=2022-02-02T00:00:00Z&phenomena=TO&phenomena=SV&phenomena=FF&phenomena=MA&phenomena=SQ&phenomena=EW",
+      "?begints=2022-01-31T00:00:00Z&endts=2022-03-02T00:00:00Z&phenomena=TO&phenomena=SV&phenomena=FF&phenomena=MA&phenomena=SQ&phenomena=EW",
+      "?begints=2022-02-28T00:00:00Z&endts=2022-04-02T00:00:00Z&phenomena=TO&phenomena=SV&phenomena=FF&phenomena=MA&phenomena=SQ&phenomena=EW",
+      "?begints=2022-03-31T00:00:00Z&endts=2022-05-02T00:00:00Z&phenomena=TO&phenomena=SV&phenomena=FF&phenomena=MA&phenomena=SQ&phenomena=EW",
+      "?begints=2022-04-30T00:00:00Z&endts=2022-06-02T00:00:00Z&phenomena=TO&phenomena=SV&phenomena=FF&phenomena=MA&phenomena=SQ&phenomena=EW",
+      "?begints=2022-05-31T00:00:00Z&endts=2022-07-02T00:00:00Z&phenomena=TO&phenomena=SV&phenomena=FF&phenomena=MA&phenomena=SQ&phenomena=EW",
+      "?begints=2022-06-30T00:00:00Z&endts=2022-08-02T00:00:00Z&phenomena=TO&phenomena=SV&phenomena=FF&phenomena=MA&phenomena=SQ&phenomena=EW",
+      "?begints=2022-07-31T00:00:00Z&endts=2022-09-02T00:00:00Z&phenomena=TO&phenomena=SV&phenomena=FF&phenomena=MA&phenomena=SQ&phenomena=EW",
+      "?begints=2022-08-31T00:00:00Z&endts=2022-10-02T00:00:00Z&phenomena=TO&phenomena=SV&phenomena=FF&phenomena=MA&phenomena=SQ&phenomena=EW",
+      "?begints=2022-09-30T00:00:00Z&endts=2022-11-02T00:00:00Z&phenomena=TO&phenomena=SV&phenomena=FF&phenomena=MA&phenomena=SQ&phenomena=EW",
+      "?begints=2022-10-31T00:00:00Z&endts=2022-12-02T00:00:00Z&phenomena=TO&phenomena=SV&phenomena=FF&phenomena=MA&phenomena=SQ&phenomena=EW",
+      "?begints=2022-11-30T00:00:00Z&endts=2023-01-02T00:00:00Z&phenomena=TO&phenomena=SV&phenomena=FF&phenomena=MA&phenomena=SQ&phenomena=EW",
+      "?begints=2022-12-31T00:00:00Z&endts=2023-02-02T00:00:00Z&phenomena=TO&phenomena=SV&phenomena=FF&phenomena=MA&phenomena=SQ&phenomena=EW",
+      "?begints=2023-01-31T00:00:00Z&endts=2023-03-02T00:00:00Z&phenomena=TO&phenomena=SV&phenomena=FF&phenomena=MA&phenomena=SQ&phenomena=EW",
+      "?begints=2023-02-28T00:00:00Z&endts=2023-04-02T00:00:00Z&phenomena=TO&phenomena=SV&phenomena=FF&phenomena=MA&phenomena=SQ&phenomena=EW",
+      "?begints=2023-03-31T00:00:00Z&endts=2023-05-02T00:00:00Z&phenomena=TO&phenomena=SV&phenomena=FF&phenomena=MA&phenomena=SQ&phenomena=EW",
+      "?begints=2023-04-30T00:00:00Z&endts=2023-06-02T00:00:00Z&phenomena=TO&phenomena=SV&phenomena=FF&phenomena=MA&phenomena=SQ&phenomena=EW",
+      "?begints=2023-05-31T00:00:00Z&endts=2023-07-02T00:00:00Z&phenomena=TO&phenomena=SV&phenomena=FF&phenomena=MA&phenomena=SQ&phenomena=EW",
+      "?begints=2023-06-30T00:00:00Z&endts=2023-08-02T00:00:00Z&phenomena=TO&phenomena=SV&phenomena=FF&phenomena=MA&phenomena=SQ&phenomena=EW",
+      "?begints=2023-07-31T00:00:00Z&endts=2023-09-02T00:00:00Z&phenomena=TO&phenomena=SV&phenomena=FF&phenomena=MA&phenomena=SQ&phenomena=EW",
+      "?begints=2023-08-31T00:00:00Z&endts=2023-10-02T00:00:00Z&phenomena=TO&phenomena=SV&phenomena=FF&phenomena=MA&phenomena=SQ&phenomena=EW",
+      "?begints=2023-09-30T00:00:00Z&endts=2023-11-02T00:00:00Z&phenomena=TO&phenomena=SV&phenomena=FF&phenomena=MA&phenomena=SQ&phenomena=EW",
+      "?begints=2023-10-31T00:00:00Z&endts=2023-12-02T00:00:00Z&phenomena=TO&phenomena=SV&phenomena=FF&phenomena=MA&phenomena=SQ&phenomena=EW",
+      "?begints=2023-11-30T00:00:00Z&endts=2024-01-02T00:00:00Z&phenomena=TO&phenomena=SV&phenomena=FF&phenomena=MA&phenomena=SQ&phenomena=EW",
+      "?begints=2023-12-31T00:00:00Z&endts=2024-02-02T00:00:00Z&phenomena=TO&phenomena=SV&phenomena=FF&phenomena=MA&phenomena=SQ&phenomena=EW",
+      "?begints=2024-01-31T00:00:00Z&endts=2024-03-02T00:00:00Z&phenomena=TO&phenomena=SV&phenomena=FF&phenomena=MA&phenomena=SQ&phenomena=EW",
+      "?begints=2024-02-29T00:00:00Z&endts=2024-04-02T00:00:00Z&phenomena=TO&phenomena=SV&phenomena=FF&phenomena=MA&phenomena=SQ&phenomena=EW",
+      "?begints=2024-03-31T00:00:00Z&endts=2024-05-02T00:00:00Z&phenomena=TO&phenomena=SV&phenomena=FF&phenomena=MA&phenomena=SQ&phenomena=EW",
+      "?begints=2024-04-30T00:00:00Z&endts=2024-06-02T00:00:00Z&phenomena=TO&phenomena=SV&phenomena=FF&phenomena=MA&phenomena=SQ&phenomena=EW",
+      "?begints=2024-05-31T00:00:00Z&endts=2024-07-02T00:00:00Z&phenomena=TO&phenomena=SV&phenomena=FF&phenomena=MA&phenomena=SQ&phenomena=EW",
+      "?begints=2024-06-30T00:00:00Z&endts=2024-08-02T00:00:00Z&phenomena=TO&phenomena=SV&phenomena=FF&phenomena=MA&phenomena=SQ&phenomena=EW",
+      "?begints=2024-07-31T00:00:00Z&endts=2024-09-02T00:00:00Z&phenomena=TO&phenomena=SV&phenomena=FF&phenomena=MA&phenomena=SQ&phenomena=EW",
+      "?begints=2024-08-31T00:00:00Z&endts=2024-10-02T00:00:00Z&phenomena=TO&phenomena=SV&phenomena=FF&phenomena=MA&phenomena=SQ&phenomena=EW",
+      "?begints=2024-09-30T00:00:00Z&endts=2024-11-02T00:00:00Z&phenomena=TO&phenomena=SV&phenomena=FF&phenomena=MA&phenomena=SQ&phenomena=EW",
+      "?begints=2024-10-31T00:00:00Z&endts=2024-12-02T00:00:00Z&phenomena=TO&phenomena=SV&phenomena=FF&phenomena=MA&phenomena=SQ&phenomena=EW",
+      "?begints=2024-11-30T00:00:00Z&endts=2025-01-02T00:00:00Z&phenomena=TO&phenomena=SV&phenomena=FF&phenomena=MA&phenomena=SQ&phenomena=EW",
+      "?begints=2024-12-31T00:00:00Z&endts=2025-02-02T00:00:00Z&phenomena=TO&phenomena=SV&phenomena=FF&phenomena=MA&phenomena=SQ&phenomena=EW",
+      "?begints=2025-01-31T00:00:00Z&endts=2025-03-02T00:00:00Z&phenomena=TO&phenomena=SV&phenomena=FF&phenomena=MA&phenomena=SQ&phenomena=EW",
+      "?begints=2025-02-28T00:00:00Z&endts=2025-04-02T00:00:00Z&phenomena=TO&phenomena=SV&phenomena=FF&phenomena=MA&phenomena=SQ&phenomena=EW",
+      "?begints=2025-03-31T00:00:00Z&endts=2025-05-02T00:00:00Z&phenomena=TO&phenomena=SV&phenomena=FF&phenomena=MA&phenomena=SQ&phenomena=EW",
+      "?begints=2025-04-30T00:00:00Z&endts=2025-06-02T00:00:00Z&phenomena=TO&phenomena=SV&phenomena=FF&phenomena=MA&phenomena=SQ&phenomena=EW",
+      "?begints=2025-05-31T00:00:00Z&endts=2025-07-02T00:00:00Z&phenomena=TO&phenomena=SV&phenomena=FF&phenomena=MA&phenomena=SQ&phenomena=EW",
+      "?begints=2025-06-30T00:00:00Z&endts=2025-08-02T00:00:00Z&phenomena=TO&phenomena=SV&phenomena=FF&phenomena=MA&phenomena=SQ&phenomena=EW",
+      "?begints=2025-07-31T00:00:00Z&endts=2025-09-02T00:00:00Z&phenomena=TO&phenomena=SV&phenomena=FF&phenomena=MA&phenomena=SQ&phenomena=EW",
+      "?begints=2025-08-31T00:00:00Z&endts=2025-10-02T00:00:00Z&phenomena=TO&phenomena=SV&phenomena=FF&phenomena=MA&phenomena=SQ&phenomena=EW",
+      "?begints=2025-09-30T00:00:00Z&endts=2025-11-02T00:00:00Z&phenomena=TO&phenomena=SV&phenomena=FF&phenomena=MA&phenomena=SQ&phenomena=EW",
+      "?begints=2025-10-31T00:00:00Z&endts=2025-12-02T00:00:00Z&phenomena=TO&phenomena=SV&phenomena=FF&phenomena=MA&phenomena=SQ&phenomena=EW",
+      "?begints=2025-11-30T00:00:00Z&endts=2026-01-02T00:00:00Z&phenomena=TO&phenomena=SV&phenomena=FF&phenomena=MA&phenomena=SQ&phenomena=EW"
+    ],
+    "phenomena": {
+      "TO": {
+        "kind": "met.tornado",
+        "label": "Tornado",
+        "warnings": 13947,
+        "verified": 3705,
+        "verifiedOwn": 3705,
+        "share": {
+          "value": 0.26564852656485266,
+          "wilson": [
+            0.2583836232588687,
+            0.27304249040635026
+          ],
+          "overYears": [
+            0.26185764007370504,
+            0.2700693401958682
+          ],
+          "gate": [
+            0.2583836232588687,
+            0.27304249040635026
+          ],
+          "noRead": null
+        },
+        "ownShare": {
+          "value": 0.26564852656485266,
+          "wilson": [
+            0.2583836232588687,
+            0.27304249040635026
+          ],
+          "overYears": [
+            0.26185764007370504,
+            0.2700693401958682
+          ],
+          "gate": [
+            0.2583836232588687,
+            0.27304249040635026
+          ],
+          "noRead": null
+        },
+        "byYear": {
+          "2021": {
+            "warnings": 2446,
+            "verified": 672,
+            "verifiedOwn": 672
+          },
+          "2022": {
+            "warnings": 2319,
+            "verified": 615,
+            "verifiedOwn": 615
+          },
+          "2023": {
+            "warnings": 2531,
+            "verified": 656,
+            "verifiedOwn": 656
+          },
+          "2024": {
+            "warnings": 3636,
+            "verified": 955,
+            "verifiedOwn": 955
+          },
+          "2025": {
+            "warnings": 3015,
+            "verified": 807,
+            "verifiedOwn": 807
+          }
+        }
+      },
+      "SV": {
+        "kind": "met.thunderstorm.severe",
+        "label": "Severe Thunderstorm",
+        "warnings": 103101,
+        "verified": 50463,
+        "verifiedOwn": 50463,
+        "share": {
+          "value": 0.48945209066837375,
+          "wilson": [
+            0.4864012047292142,
+            0.49250376259117423
+          ],
+          "overYears": [
+            0.47195412584347635,
+            0.504045956519586
+          ],
+          "gate": [
+            0.47195412584347635,
+            0.504045956519586
+          ],
+          "noRead": null
+        },
+        "ownShare": {
+          "value": 0.48945209066837375,
+          "wilson": [
+            0.4864012047292142,
+            0.49250376259117423
+          ],
+          "overYears": [
+            0.47195412584347635,
+            0.504045956519586
+          ],
+          "gate": [
+            0.47195412584347635,
+            0.504045956519586
+          ],
+          "noRead": null
+        },
+        "byYear": {
+          "2021": {
+            "warnings": 16163,
+            "verified": 8027,
+            "verifiedOwn": 8027
+          },
+          "2022": {
+            "warnings": 18106,
+            "verified": 9191,
+            "verifiedOwn": 9191
+          },
+          "2023": {
+            "warnings": 24295,
+            "verified": 12241,
+            "verifiedOwn": 12241
+          },
+          "2024": {
+            "warnings": 21100,
+            "verified": 10258,
+            "verifiedOwn": 10258
+          },
+          "2025": {
+            "warnings": 23437,
+            "verified": 10746,
+            "verifiedOwn": 10746
+          }
+        }
+      },
+      "FF": {
+        "kind": "met.flood.flash",
+        "label": "Flash Flood",
+        "warnings": 22432,
+        "verified": 9584,
+        "verifiedOwn": 9584,
+        "share": {
+          "value": 0.427246790299572,
+          "wilson": [
+            0.42078631747622436,
+            0.43373217669343594
+          ],
+          "overYears": [
+            0.3930845794612953,
+            0.4521072796934866
+          ],
+          "gate": [
+            0.3930845794612953,
+            0.4521072796934866
+          ],
+          "noRead": null
+        },
+        "ownShare": {
+          "value": 0.427246790299572,
+          "wilson": [
+            0.42078631747622436,
+            0.43373217669343594
+          ],
+          "overYears": [
+            0.3930845794612953,
+            0.4521072796934866
+          ],
+          "gate": [
+            0.3930845794612953,
+            0.4521072796934866
+          ],
+          "noRead": null
+        },
+        "byYear": {
+          "2021": {
+            "warnings": 4730,
+            "verified": 2054,
+            "verifiedOwn": 2054
+          },
+          "2022": {
+            "warnings": 4368,
+            "verified": 1586,
+            "verifiedOwn": 1586
+          },
+          "2023": {
+            "warnings": 3693,
+            "verified": 1543,
+            "verifiedOwn": 1543
+          },
+          "2024": {
+            "warnings": 4402,
+            "verified": 2032,
+            "verifiedOwn": 2032
+          },
+          "2025": {
+            "warnings": 5239,
+            "verified": 2369,
+            "verifiedOwn": 2369
+          }
+        }
+      },
+      "MA": {
+        "kind": "met.marine.special",
+        "label": "Special Marine",
+        "warnings": 28329,
+        "verified": 5479,
+        "verifiedOwn": 5363,
+        "share": {
+          "value": 0.1934060503371104,
+          "wilson": [
+            0.18884840899251143,
+            0.19804682969199444
+          ],
+          "overYears": [
+            0.1869310563827535,
+            0.20157734360996593
+          ],
+          "gate": [
+            0.1869310563827535,
+            0.20157734360996593
+          ],
+          "noRead": null
+        },
+        "ownShare": {
+          "value": 0.18931130643510183,
+          "wilson": [
+            0.18479162394498147,
+            0.19391523729290674
+          ],
+          "overYears": [
+            0.18194195628806878,
+            0.19786775867546863
+          ],
+          "gate": [
+            0.18194195628806878,
+            0.19786775867546863
+          ],
+          "noRead": null
+        },
+        "byYear": {
+          "2021": {
+            "warnings": 5726,
+            "verified": 1094,
+            "verifiedOwn": 1076
+          },
+          "2022": {
+            "warnings": 5481,
+            "verified": 1145,
+            "verifiedOwn": 1126
+          },
+          "2023": {
+            "warnings": 6158,
+            "verified": 1176,
+            "verifiedOwn": 1151
+          },
+          "2024": {
+            "warnings": 5610,
+            "verified": 1029,
+            "verifiedOwn": 996
+          },
+          "2025": {
+            "warnings": 5354,
+            "verified": 1035,
+            "verifiedOwn": 1014
+          }
+        }
+      },
+      "SQ": {
+        "kind": "met.winter.snow-squall",
+        "label": "Snow Squall",
+        "warnings": 1296,
+        "verified": 232,
+        "verifiedOwn": 232,
+        "share": {
+          "value": 0.17901234567901234,
+          "wilson": [
+            0.15909867197554842,
+            0.20082326746247517
+          ],
+          "overYears": [
+            0.010576923076923078,
+            0.3019559902200489
+          ],
+          "gate": [
+            0.010576923076923078,
+            0.3019559902200489
+          ],
+          "noRead": "too few verified or unverified warnings in a year (2021: 0 verified of 126, 2022: 0 verified of 306)"
+        },
+        "ownShare": {
+          "value": 0.17901234567901234,
+          "wilson": [
+            0.15909867197554842,
+            0.20082326746247517
+          ],
+          "overYears": [
+            0.010576923076923078,
+            0.3019559902200489
+          ],
+          "gate": [
+            0.010576923076923078,
+            0.3019559902200489
+          ],
+          "noRead": "too few verified or unverified warnings in a year (2021: 0 verified of 126, 2022: 0 verified of 306)"
+        },
+        "byYear": {
+          "2021": {
+            "warnings": 126,
+            "verified": 0,
+            "verifiedOwn": 0
+          },
+          "2022": {
+            "warnings": 306,
+            "verified": 0,
+            "verifiedOwn": 0
+          },
+          "2023": {
+            "warnings": 176,
+            "verified": 11,
+            "verifiedOwn": 11
+          },
+          "2024": {
+            "warnings": 372,
+            "verified": 130,
+            "verifiedOwn": 130
+          },
+          "2025": {
+            "warnings": 316,
+            "verified": 91,
+            "verifiedOwn": 91
+          }
+        }
+      }
+    },
+    "unverified": {
+      "EW": {
+        "kind": "met.wind.extreme",
+        "label": "Extreme Wind",
+        "reason": "Cow links no storm report to an extreme wind warning. Each EW warning is unverified by construction, not by measure.",
+        "sources": [
+          "The Cow request ?begints=2024-09-26T00:00:00Z&endts=2024-09-28T00:00:00Z&phenomena=EW (sent on 2026-11-15): 6 EW warnings and 482 storm reports (SV 104, TO 61, FF 304, MA 11, DS 2). The stats have warned_reports 0 and events_verified 0. Each EW warning has an empty stormreports_all.",
+          "The measure of 2021 to 2025 (rates.yml, run 43751844753): 24 EW warnings, 0 verified.",
+          "The Cow page https://mesonet.agron.iastate.edu/cow/ (read on 2026-11-15), the parameter phenomena: \"the currently supported Storm Based Warning types are Tornado (TO), Severe Thunderstorm (SV), Flash Flood (FF), Marine (MA), and Dust Storm (DS).\" The list has no EW."
+        ],
+        "instead": "The CAP certainty of the alert.",
+        "warnings": 24,
+        "verified": 0,
+        "verifiedOwn": 0,
+        "byYear": {
+          "2021": {
+            "warnings": 4,
+            "verified": 0,
+            "verifiedOwn": 0
+          },
+          "2022": {
+            "warnings": 5,
+            "verified": 0,
+            "verifiedOwn": 0
+          },
+          "2023": {
+            "warnings": 8,
+            "verified": 0,
+            "verifiedOwn": 0
+          },
+          "2024": {
+            "warnings": 7,
+            "verified": 0,
+            "verifiedOwn": 0
+          },
+          "2025": {
+            "warnings": 0,
+            "verified": 0,
+            "verifiedOwn": 0
+          }
+        }
+      }
+    }
+  },
+  "ncei": {
+    "folder": "https://www.ncei.noaa.gov/pub/data/swdi/stormevents/csvfiles/",
+    "years": {
+      "first": 2016,
+      "last": 2025
+    },
+    "files": [
+      {
+        "year": 2016,
+        "created": "20260323",
+        "name": "StormEvents_details-ftp_v1.0_d2016_c20260323.csv.gz"
+      },
+      {
+        "year": 2017,
+        "created": "20260519",
+        "name": "StormEvents_details-ftp_v1.0_d2017_c20260519.csv.gz"
+      },
+      {
+        "year": 2018,
+        "created": "20260323",
+        "name": "StormEvents_details-ftp_v1.0_d2018_c20260323.csv.gz"
+      },
+      {
+        "year": 2019,
+        "created": "20260323",
+        "name": "StormEvents_details-ftp_v1.0_d2019_c20260323.csv.gz"
+      },
+      {
+        "year": 2020,
+        "created": "20260323",
+        "name": "StormEvents_details-ftp_v1.0_d2020_c20260323.csv.gz"
+      },
+      {
+        "year": 2021,
+        "created": "20260323",
+        "name": "StormEvents_details-ftp_v1.0_d2021_c20260323.csv.gz"
+      },
+      {
+        "year": 2022,
+        "created": "20260625",
+        "name": "StormEvents_details-ftp_v1.0_d2022_c20260625.csv.gz"
+      },
+      {
+        "year": 2023,
+        "created": "20260323",
+        "name": "StormEvents_details-ftp_v1.0_d2023_c20260323.csv.gz"
+      },
+      {
+        "year": 2024,
+        "created": "20260728",
+        "name": "StormEvents_details-ftp_v1.0_d2024_c20260728.csv.gz"
+      },
+      {
+        "year": 2025,
+        "created": "20260819",
+        "name": "StormEvents_details-ftp_v1.0_d2025_c20260819.csv.gz"
+      }
+    ],
+    "newTypes": [],
+    "types": {
+      "Astronomical Low Tide": {
+        "kind": "met.marine.low-water",
+        "events": 271,
+        "deathsDirect": 1,
+        "deathsIndirect": 0,
+        "injuriesDirect": 1,
+        "injuriesIndirect": 0,
+        "deaths": {
+          "value": 0.1,
+          "overYears": [
+            0,
+            0.3
+          ],
+          "gate": [
+            0,
+            0.3
+          ]
+        },
+        "injuries": {
+          "value": 0.1,
+          "overYears": [
+            0,
+            0.3
+          ],
+          "gate": [
+            0,
+            0.3
+          ]
+        },
+        "byYear": {
+          "2016": {
+            "events": 46,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2017": {
+            "events": 13,
+            "deaths": 0,
+            "injuries": 1
+          },
+          "2018": {
+            "events": 33,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2019": {
+            "events": 15,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2020": {
+            "events": 19,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2021": {
+            "events": 21,
+            "deaths": 1,
+            "injuries": 0
+          },
+          "2022": {
+            "events": 43,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2023": {
+            "events": 13,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2024": {
+            "events": 17,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2025": {
+            "events": 51,
+            "deaths": 0,
+            "injuries": 0
+          }
+        }
+      },
+      "Avalanche": {
+        "kind": "geo.avalanche",
+        "events": 317,
+        "deathsDirect": 138,
+        "deathsIndirect": 4,
+        "injuriesDirect": 80,
+        "injuriesIndirect": 7,
+        "deaths": {
+          "value": 14.2,
+          "overYears": [
+            9.9,
+            18.6
+          ],
+          "gate": [
+            9.9,
+            18.6
+          ]
+        },
+        "injuries": {
+          "value": 8.7,
+          "overYears": [
+            5.7,
+            11.8
+          ],
+          "gate": [
+            5.7,
+            11.8
+          ]
+        },
+        "byYear": {
+          "2016": {
+            "events": 30,
+            "deaths": 18,
+            "injuries": 3
+          },
+          "2017": {
+            "events": 27,
+            "deaths": 3,
+            "injuries": 4
+          },
+          "2018": {
+            "events": 16,
+            "deaths": 6,
+            "injuries": 13
+          },
+          "2019": {
+            "events": 44,
+            "deaths": 14,
+            "injuries": 2
+          },
+          "2020": {
+            "events": 25,
+            "deaths": 23,
+            "injuries": 6
+          },
+          "2021": {
+            "events": 32,
+            "deaths": 27,
+            "injuries": 14
+          },
+          "2022": {
+            "events": 29,
+            "deaths": 11,
+            "injuries": 7
+          },
+          "2023": {
+            "events": 54,
+            "deaths": 19,
+            "injuries": 17
+          },
+          "2024": {
+            "events": 26,
+            "deaths": 11,
+            "injuries": 14
+          },
+          "2025": {
+            "events": 34,
+            "deaths": 10,
+            "injuries": 7
+          }
+        }
+      },
+      "Blizzard": {
+        "kind": "met.winter.blizzard",
+        "events": 5468,
+        "deathsDirect": 42,
+        "deathsIndirect": 47,
+        "injuriesDirect": 13,
+        "injuriesIndirect": 132,
+        "deaths": {
+          "value": 8.9,
+          "overYears": [
+            2.2,
+            20.2
+          ],
+          "gate": [
+            2.2,
+            20.2
+          ]
+        },
+        "injuries": {
+          "value": 14.5,
+          "overYears": [
+            5.3,
+            29
+          ],
+          "gate": [
+            5.3,
+            29
+          ]
+        },
+        "byYear": {
+          "2016": {
+            "events": 544,
+            "deaths": 10,
+            "injuries": 2
+          },
+          "2017": {
+            "events": 356,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2018": {
+            "events": 761,
+            "deaths": 7,
+            "injuries": 13
+          },
+          "2019": {
+            "events": 852,
+            "deaths": 7,
+            "injuries": 9
+          },
+          "2020": {
+            "events": 515,
+            "deaths": 2,
+            "injuries": 17
+          },
+          "2021": {
+            "events": 253,
+            "deaths": 3,
+            "injuries": 3
+          },
+          "2022": {
+            "events": 854,
+            "deaths": 56,
+            "injuries": 74
+          },
+          "2023": {
+            "events": 433,
+            "deaths": 0,
+            "injuries": 11
+          },
+          "2024": {
+            "events": 332,
+            "deaths": 2,
+            "injuries": 3
+          },
+          "2025": {
+            "events": 568,
+            "deaths": 2,
+            "injuries": 13
+          }
+        }
+      },
+      "Coastal Flood": {
+        "kind": "met.flood.coastal",
+        "events": 2428,
+        "deathsDirect": 4,
+        "deathsIndirect": 0,
+        "injuriesDirect": 5,
+        "injuriesIndirect": 0,
+        "deaths": {
+          "value": 0.4,
+          "overYears": [
+            0.1,
+            0.7
+          ],
+          "gate": [
+            0.1,
+            0.7
+          ]
+        },
+        "injuries": {
+          "value": 0.5,
+          "overYears": [
+            0.1,
+            0.9
+          ],
+          "gate": [
+            0.1,
+            0.9
+          ]
+        },
+        "byYear": {
+          "2016": {
+            "events": 223,
+            "deaths": 1,
+            "injuries": 0
+          },
+          "2017": {
+            "events": 175,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2018": {
+            "events": 321,
+            "deaths": 1,
+            "injuries": 0
+          },
+          "2019": {
+            "events": 240,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2020": {
+            "events": 190,
+            "deaths": 0,
+            "injuries": 2
+          },
+          "2021": {
+            "events": 214,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2022": {
+            "events": 205,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2023": {
+            "events": 210,
+            "deaths": 1,
+            "injuries": 1
+          },
+          "2024": {
+            "events": 382,
+            "deaths": 0,
+            "injuries": 1
+          },
+          "2025": {
+            "events": 268,
+            "deaths": 1,
+            "injuries": 1
+          }
+        }
+      },
+      "Cold/Wind Chill": {
+        "kind": "met.cold.wind-chill",
+        "events": 5312,
+        "deathsDirect": 253,
+        "deathsIndirect": 53,
+        "injuriesDirect": 15,
+        "injuriesIndirect": 21,
+        "deaths": {
+          "value": 30.6,
+          "overYears": [
+            21.5,
+            43.6
+          ],
+          "gate": [
+            21.5,
+            43.6
+          ]
+        },
+        "injuries": {
+          "value": 3.6,
+          "overYears": [
+            1.1,
+            6.9
+          ],
+          "gate": [
+            1.1,
+            6.9
+          ]
+        },
+        "byYear": {
+          "2016": {
+            "events": 181,
+            "deaths": 27,
+            "injuries": 3
+          },
+          "2017": {
+            "events": 285,
+            "deaths": 23,
+            "injuries": 16
+          },
+          "2018": {
+            "events": 582,
+            "deaths": 27,
+            "injuries": 0
+          },
+          "2019": {
+            "events": 470,
+            "deaths": 33,
+            "injuries": 2
+          },
+          "2020": {
+            "events": 147,
+            "deaths": 18,
+            "injuries": 2
+          },
+          "2021": {
+            "events": 728,
+            "deaths": 83,
+            "injuries": 4
+          },
+          "2022": {
+            "events": 992,
+            "deaths": 22,
+            "injuries": 0
+          },
+          "2023": {
+            "events": 121,
+            "deaths": 12,
+            "injuries": 8
+          },
+          "2024": {
+            "events": 741,
+            "deaths": 39,
+            "injuries": 0
+          },
+          "2025": {
+            "events": 1065,
+            "deaths": 22,
+            "injuries": 1
+          }
+        }
+      },
+      "Debris Flow": {
+        "kind": "geo.debris-flow",
+        "events": 1546,
+        "deathsDirect": 55,
+        "deathsIndirect": 3,
+        "injuriesDirect": 182,
+        "injuriesIndirect": 3,
+        "deaths": {
+          "value": 5.8,
+          "overYears": [
+            1.8,
+            11
+          ],
+          "gate": [
+            1.8,
+            11
+          ]
+        },
+        "injuries": {
+          "value": 18.5,
+          "overYears": [
+            1.3,
+            52
+          ],
+          "gate": [
+            1.3,
+            52
+          ]
+        },
+        "byYear": {
+          "2016": {
+            "events": 52,
+            "deaths": 0,
+            "injuries": 3
+          },
+          "2017": {
+            "events": 191,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2018": {
+            "events": 136,
+            "deaths": 24,
+            "injuries": 168
+          },
+          "2019": {
+            "events": 185,
+            "deaths": 2,
+            "injuries": 1
+          },
+          "2020": {
+            "events": 92,
+            "deaths": 2,
+            "injuries": 2
+          },
+          "2021": {
+            "events": 212,
+            "deaths": 2,
+            "injuries": 2
+          },
+          "2022": {
+            "events": 179,
+            "deaths": 3,
+            "injuries": 0
+          },
+          "2023": {
+            "events": 165,
+            "deaths": 6,
+            "injuries": 4
+          },
+          "2024": {
+            "events": 171,
+            "deaths": 16,
+            "injuries": 3
+          },
+          "2025": {
+            "events": 163,
+            "deaths": 3,
+            "injuries": 2
+          }
+        }
+      },
+      "Dense Fog": {
+        "kind": "met.fog",
+        "events": 6845,
+        "deathsDirect": 0,
+        "deathsIndirect": 116,
+        "injuriesDirect": 0,
+        "injuriesIndirect": 404,
+        "deaths": {
+          "value": 11.6,
+          "overYears": [
+            8.7,
+            14.7
+          ],
+          "gate": [
+            8.7,
+            14.7
+          ]
+        },
+        "injuries": {
+          "value": 40.4,
+          "overYears": [
+            23.7,
+            57.7
+          ],
+          "gate": [
+            23.7,
+            57.7
+          ]
+        },
+        "byYear": {
+          "2016": {
+            "events": 829,
+            "deaths": 8,
+            "injuries": 21
+          },
+          "2017": {
+            "events": 505,
+            "deaths": 5,
+            "injuries": 21
+          },
+          "2018": {
+            "events": 754,
+            "deaths": 8,
+            "injuries": 36
+          },
+          "2019": {
+            "events": 652,
+            "deaths": 9,
+            "injuries": 56
+          },
+          "2020": {
+            "events": 1002,
+            "deaths": 10,
+            "injuries": 4
+          },
+          "2021": {
+            "events": 617,
+            "deaths": 13,
+            "injuries": 27
+          },
+          "2022": {
+            "events": 571,
+            "deaths": 21,
+            "injuries": 83
+          },
+          "2023": {
+            "events": 444,
+            "deaths": 16,
+            "injuries": 82
+          },
+          "2024": {
+            "events": 839,
+            "deaths": 18,
+            "injuries": 65
+          },
+          "2025": {
+            "events": 632,
+            "deaths": 8,
+            "injuries": 9
+          }
+        }
+      },
+      "Dense Smoke": {
+        "kind": "env.smoke",
+        "events": 126,
+        "deathsDirect": 0,
+        "deathsIndirect": 0,
+        "injuriesDirect": 0,
+        "injuriesIndirect": 0,
+        "deaths": {
+          "value": 0,
+          "overYears": [
+            0,
+            0
+          ],
+          "gate": [
+            0,
+            0
+          ]
+        },
+        "injuries": {
+          "value": 0,
+          "overYears": [
+            0,
+            0
+          ],
+          "gate": [
+            0,
+            0
+          ]
+        },
+        "byYear": {
+          "2016": {
+            "events": 0,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2017": {
+            "events": 16,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2018": {
+            "events": 45,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2019": {
+            "events": 2,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2020": {
+            "events": 14,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2021": {
+            "events": 0,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2022": {
+            "events": 3,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2023": {
+            "events": 46,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2024": {
+            "events": 0,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2025": {
+            "events": 0,
+            "deaths": 0,
+            "injuries": 0
+          }
+        }
+      },
+      "Drought": {
+        "kind": null,
+        "events": 32686,
+        "deathsDirect": 0,
+        "deathsIndirect": 0,
+        "injuriesDirect": 350,
+        "injuriesIndirect": 0,
+        "deaths": {
+          "value": 0,
+          "overYears": [
+            0,
+            0
+          ],
+          "gate": [
+            0,
+            0
+          ]
+        },
+        "injuries": {
+          "value": 35,
+          "overYears": [
+            0,
+            105
+          ],
+          "gate": [
+            0,
+            105
+          ]
+        },
+        "byYear": {
+          "2016": {
+            "events": 2271,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2017": {
+            "events": 1220,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2018": {
+            "events": 2417,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2019": {
+            "events": 1007,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2020": {
+            "events": 2244,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2021": {
+            "events": 4083,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2022": {
+            "events": 6873,
+            "deaths": 0,
+            "injuries": 350
+          },
+          "2023": {
+            "events": 5815,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2024": {
+            "events": 3473,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2025": {
+            "events": 3283,
+            "deaths": 0,
+            "injuries": 0
+          }
+        }
+      },
+      "Dust Devil": {
+        "kind": null,
+        "events": 62,
+        "deathsDirect": 2,
+        "deathsIndirect": 0,
+        "injuriesDirect": 16,
+        "injuriesIndirect": 20,
+        "deaths": {
+          "value": 0.2,
+          "overYears": [
+            0,
+            0.6
+          ],
+          "gate": [
+            0,
+            0.6
+          ]
+        },
+        "injuries": {
+          "value": 3.6,
+          "overYears": [
+            0.4,
+            8.8
+          ],
+          "gate": [
+            0.4,
+            8.8
+          ]
+        },
+        "byYear": {
+          "2016": {
+            "events": 13,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2017": {
+            "events": 6,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2018": {
+            "events": 8,
+            "deaths": 0,
+            "injuries": 1
+          },
+          "2019": {
+            "events": 8,
+            "deaths": 0,
+            "injuries": 25
+          },
+          "2020": {
+            "events": 5,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2021": {
+            "events": 0,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2022": {
+            "events": 10,
+            "deaths": 0,
+            "injuries": 6
+          },
+          "2023": {
+            "events": 2,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2024": {
+            "events": 7,
+            "deaths": 2,
+            "injuries": 3
+          },
+          "2025": {
+            "events": 3,
+            "deaths": 0,
+            "injuries": 1
+          }
+        }
+      },
+      "Dust Storm": {
+        "kind": "met.dust-storm",
+        "events": 1187,
+        "deathsDirect": 24,
+        "deathsIndirect": 29,
+        "injuriesDirect": 64,
+        "injuriesIndirect": 242,
+        "deaths": {
+          "value": 5.3,
+          "overYears": [
+            2.3,
+            8.7
+          ],
+          "gate": [
+            2.3,
+            8.7
+          ]
+        },
+        "injuries": {
+          "value": 30.6,
+          "overYears": [
+            16.1,
+            47
+          ],
+          "gate": [
+            16.1,
+            47
+          ]
+        },
+        "byYear": {
+          "2016": {
+            "events": 68,
+            "deaths": 4,
+            "injuries": 18
+          },
+          "2017": {
+            "events": 39,
+            "deaths": 3,
+            "injuries": 9
+          },
+          "2018": {
+            "events": 114,
+            "deaths": 3,
+            "injuries": 8
+          },
+          "2019": {
+            "events": 40,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2020": {
+            "events": 85,
+            "deaths": 3,
+            "injuries": 24
+          },
+          "2021": {
+            "events": 111,
+            "deaths": 10,
+            "injuries": 37
+          },
+          "2022": {
+            "events": 238,
+            "deaths": 1,
+            "injuries": 21
+          },
+          "2023": {
+            "events": 84,
+            "deaths": 11,
+            "injuries": 37
+          },
+          "2024": {
+            "events": 88,
+            "deaths": 1,
+            "injuries": 74
+          },
+          "2025": {
+            "events": 320,
+            "deaths": 17,
+            "injuries": 78
+          }
+        }
+      },
+      "Excessive Heat": {
+        "kind": "met.heat.extreme",
+        "events": 14967,
+        "deathsDirect": 1588,
+        "deathsIndirect": 602,
+        "injuriesDirect": 2756,
+        "injuriesIndirect": 28,
+        "deaths": {
+          "value": 219,
+          "overYears": [
+            133.89750000000004,
+            334
+          ],
+          "gate": [
+            133.89750000000004,
+            334
+          ]
+        },
+        "injuries": {
+          "value": 278.4,
+          "overYears": [
+            90.89750000000002,
+            594.4024999999999
+          ],
+          "gate": [
+            90.89750000000002,
+            594.4024999999999
+          ]
+        },
+        "byYear": {
+          "2016": {
+            "events": 555,
+            "deaths": 82,
+            "injuries": 173
+          },
+          "2017": {
+            "events": 260,
+            "deaths": 74,
+            "injuries": 73
+          },
+          "2018": {
+            "events": 668,
+            "deaths": 200,
+            "injuries": 198
+          },
+          "2019": {
+            "events": 1114,
+            "deaths": 103,
+            "injuries": 35
+          },
+          "2020": {
+            "events": 961,
+            "deaths": 230,
+            "injuries": 79
+          },
+          "2021": {
+            "events": 870,
+            "deaths": 294,
+            "injuries": 67
+          },
+          "2022": {
+            "events": 1416,
+            "deaths": 200,
+            "injuries": 105
+          },
+          "2023": {
+            "events": 5024,
+            "deaths": 664,
+            "injuries": 1628
+          },
+          "2024": {
+            "events": 2660,
+            "deaths": 253,
+            "injuries": 100
+          },
+          "2025": {
+            "events": 1439,
+            "deaths": 90,
+            "injuries": 326
+          }
+        }
+      },
+      "Extreme Cold/Wind Chill": {
+        "kind": "met.cold.extreme",
+        "events": 8573,
+        "deathsDirect": 97,
+        "deathsIndirect": 32,
+        "injuriesDirect": 32,
+        "injuriesIndirect": 8,
+        "deaths": {
+          "value": 12.9,
+          "overYears": [
+            5.5,
+            24.1
+          ],
+          "gate": [
+            5.5,
+            24.1
+          ]
+        },
+        "injuries": {
+          "value": 4,
+          "overYears": [
+            0.7,
+            9.2
+          ],
+          "gate": [
+            0.7,
+            9.2
+          ]
+        },
+        "byYear": {
+          "2016": {
+            "events": 570,
+            "deaths": 4,
+            "injuries": 3
+          },
+          "2017": {
+            "events": 456,
+            "deaths": 8,
+            "injuries": 1
+          },
+          "2018": {
+            "events": 590,
+            "deaths": 15,
+            "injuries": 3
+          },
+          "2019": {
+            "events": 1065,
+            "deaths": 15,
+            "injuries": 1
+          },
+          "2020": {
+            "events": 215,
+            "deaths": 2,
+            "injuries": 0
+          },
+          "2021": {
+            "events": 978,
+            "deaths": 58,
+            "injuries": 0
+          },
+          "2022": {
+            "events": 1855,
+            "deaths": 13,
+            "injuries": 7
+          },
+          "2023": {
+            "events": 408,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2024": {
+            "events": 705,
+            "deaths": 9,
+            "injuries": 25
+          },
+          "2025": {
+            "events": 1731,
+            "deaths": 5,
+            "injuries": 0
+          }
+        }
+      },
+      "Flash Flood": {
+        "kind": "met.flood.flash",
+        "events": 40852,
+        "deathsDirect": 907,
+        "deathsIndirect": 30,
+        "injuriesDirect": 199,
+        "injuriesIndirect": 35,
+        "deaths": {
+          "value": 93.7,
+          "overYears": [
+            63.6,
+            127.30249999999997
+          ],
+          "gate": [
+            63.6,
+            127.30249999999997
+          ]
+        },
+        "injuries": {
+          "value": 23.4,
+          "overYears": [
+            15.8,
+            33.8
+          ],
+          "gate": [
+            15.8,
+            33.8
+          ]
+        },
+        "byYear": {
+          "2016": {
+            "events": 3586,
+            "deaths": 94,
+            "injuries": 25
+          },
+          "2017": {
+            "events": 3662,
+            "deaths": 131,
+            "injuries": 13
+          },
+          "2018": {
+            "events": 4378,
+            "deaths": 55,
+            "injuries": 21
+          },
+          "2019": {
+            "events": 4084,
+            "deaths": 42,
+            "injuries": 35
+          },
+          "2020": {
+            "events": 3569,
+            "deaths": 40,
+            "injuries": 8
+          },
+          "2021": {
+            "events": 4797,
+            "deaths": 138,
+            "injuries": 63
+          },
+          "2022": {
+            "events": 3097,
+            "deaths": 74,
+            "injuries": 14
+          },
+          "2023": {
+            "events": 3625,
+            "deaths": 37,
+            "injuries": 16
+          },
+          "2024": {
+            "events": 4661,
+            "deaths": 117,
+            "injuries": 19
+          },
+          "2025": {
+            "events": 5393,
+            "deaths": 209,
+            "injuries": 20
+          }
+        }
+      },
+      "Flood": {
+        "kind": "met.flood",
+        "events": 28223,
+        "deathsDirect": 257,
+        "deathsIndirect": 27,
+        "injuriesDirect": 50,
+        "injuriesIndirect": 21,
+        "deaths": {
+          "value": 28.4,
+          "overYears": [
+            21.3,
+            36
+          ],
+          "gate": [
+            21.3,
+            36
+          ]
+        },
+        "injuries": {
+          "value": 7.1,
+          "overYears": [
+            3.6,
+            11
+          ],
+          "gate": [
+            3.6,
+            11
+          ]
+        },
+        "byYear": {
+          "2016": {
+            "events": 1703,
+            "deaths": 44,
+            "injuries": 7
+          },
+          "2017": {
+            "events": 2472,
+            "deaths": 18,
+            "injuries": 13
+          },
+          "2018": {
+            "events": 4824,
+            "deaths": 28,
+            "injuries": 1
+          },
+          "2019": {
+            "events": 4949,
+            "deaths": 50,
+            "injuries": 21
+          },
+          "2020": {
+            "events": 2704,
+            "deaths": 21,
+            "injuries": 2
+          },
+          "2021": {
+            "events": 2031,
+            "deaths": 12,
+            "injuries": 7
+          },
+          "2022": {
+            "events": 1961,
+            "deaths": 21,
+            "injuries": 3
+          },
+          "2023": {
+            "events": 2846,
+            "deaths": 38,
+            "injuries": 9
+          },
+          "2024": {
+            "events": 2472,
+            "deaths": 35,
+            "injuries": 0
+          },
+          "2025": {
+            "events": 2261,
+            "deaths": 17,
+            "injuries": 8
+          }
+        }
+      },
+      "Freezing Fog": {
+        "kind": "met.fog.freezing",
+        "events": 109,
+        "deathsDirect": 1,
+        "deathsIndirect": 9,
+        "injuriesDirect": 5,
+        "injuriesIndirect": 17,
+        "deaths": {
+          "value": 1,
+          "overYears": [
+            0.2975000000000222,
+            2
+          ],
+          "gate": [
+            0.2975000000000222,
+            2
+          ]
+        },
+        "injuries": {
+          "value": 2.2,
+          "overYears": [
+            0.5,
+            4.7
+          ],
+          "gate": [
+            0.5,
+            4.7
+          ]
+        },
+        "byYear": {
+          "2016": {
+            "events": 4,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2017": {
+            "events": 5,
+            "deaths": 1,
+            "injuries": 4
+          },
+          "2018": {
+            "events": 18,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2019": {
+            "events": 6,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2020": {
+            "events": 13,
+            "deaths": 1,
+            "injuries": 2
+          },
+          "2021": {
+            "events": 11,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2022": {
+            "events": 3,
+            "deaths": 1,
+            "injuries": 0
+          },
+          "2023": {
+            "events": 33,
+            "deaths": 5,
+            "injuries": 12
+          },
+          "2024": {
+            "events": 5,
+            "deaths": 2,
+            "injuries": 1
+          },
+          "2025": {
+            "events": 11,
+            "deaths": 0,
+            "injuries": 3
+          }
+        }
+      },
+      "Frost/Freeze": {
+        "kind": "met.freeze",
+        "events": 5689,
+        "deathsDirect": 2,
+        "deathsIndirect": 0,
+        "injuriesDirect": 1,
+        "injuriesIndirect": 5,
+        "deaths": {
+          "value": 0.2,
+          "overYears": [
+            0,
+            0.6
+          ],
+          "gate": [
+            0,
+            0.6
+          ]
+        },
+        "injuries": {
+          "value": 0.6,
+          "overYears": [
+            0,
+            1.6
+          ],
+          "gate": [
+            0,
+            1.6
+          ]
+        },
+        "byYear": {
+          "2016": {
+            "events": 832,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2017": {
+            "events": 409,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2018": {
+            "events": 710,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2019": {
+            "events": 654,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2020": {
+            "events": 878,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2021": {
+            "events": 581,
+            "deaths": 2,
+            "injuries": 1
+          },
+          "2022": {
+            "events": 423,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2023": {
+            "events": 533,
+            "deaths": 0,
+            "injuries": 5
+          },
+          "2024": {
+            "events": 393,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2025": {
+            "events": 276,
+            "deaths": 0,
+            "injuries": 0
+          }
+        }
+      },
+      "Funnel Cloud": {
+        "kind": null,
+        "events": 2568,
+        "deathsDirect": 0,
+        "deathsIndirect": 0,
+        "injuriesDirect": 0,
+        "injuriesIndirect": 0,
+        "deaths": {
+          "value": 0,
+          "overYears": [
+            0,
+            0
+          ],
+          "gate": [
+            0,
+            0
+          ]
+        },
+        "injuries": {
+          "value": 0,
+          "overYears": [
+            0,
+            0
+          ],
+          "gate": [
+            0,
+            0
+          ]
+        },
+        "byYear": {
+          "2016": {
+            "events": 289,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2017": {
+            "events": 255,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2018": {
+            "events": 349,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2019": {
+            "events": 348,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2020": {
+            "events": 264,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2021": {
+            "events": 183,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2022": {
+            "events": 204,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2023": {
+            "events": 212,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2024": {
+            "events": 279,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2025": {
+            "events": 185,
+            "deaths": 0,
+            "injuries": 0
+          }
+        }
+      },
+      "Hail": {
+        "kind": "met.thunderstorm.severe",
+        "events": 87696,
+        "deathsDirect": 1,
+        "deathsIndirect": 8,
+        "injuriesDirect": 182,
+        "injuriesIndirect": 29,
+        "deaths": {
+          "value": 0.9,
+          "overYears": [
+            0.4,
+            1.4
+          ],
+          "gate": [
+            0.4,
+            1.4
+          ]
+        },
+        "injuries": {
+          "value": 21.1,
+          "overYears": [
+            9.2,
+            39.202499999999965
+          ],
+          "gate": [
+            9.2,
+            39.202499999999965
+          ]
+        },
+        "byYear": {
+          "2016": {
+            "events": 9407,
+            "deaths": 0,
+            "injuries": 24
+          },
+          "2017": {
+            "events": 10398,
+            "deaths": 2,
+            "injuries": 15
+          },
+          "2018": {
+            "events": 7863,
+            "deaths": 0,
+            "injuries": 30
+          },
+          "2019": {
+            "events": 8992,
+            "deaths": 1,
+            "injuries": 4
+          },
+          "2020": {
+            "events": 7677,
+            "deaths": 1,
+            "injuries": 7
+          },
+          "2021": {
+            "events": 6272,
+            "deaths": 1,
+            "injuries": 6
+          },
+          "2022": {
+            "events": 7180,
+            "deaths": 2,
+            "injuries": 9
+          },
+          "2023": {
+            "events": 11761,
+            "deaths": 2,
+            "injuries": 94
+          },
+          "2024": {
+            "events": 8941,
+            "deaths": 0,
+            "injuries": 15
+          },
+          "2025": {
+            "events": 9205,
+            "deaths": 0,
+            "injuries": 7
+          }
+        }
+      },
+      "Heat": {
+        "kind": "met.heat",
+        "events": 17793,
+        "deathsDirect": 1107,
+        "deathsIndirect": 690,
+        "injuriesDirect": 1319,
+        "injuriesIndirect": 99,
+        "deaths": {
+          "value": 179.7,
+          "overYears": [
+            131.3,
+            236
+          ],
+          "gate": [
+            131.3,
+            236
+          ]
+        },
+        "injuries": {
+          "value": 141.8,
+          "overYears": [
+            80.9,
+            203
+          ],
+          "gate": [
+            80.9,
+            203
+          ]
+        },
+        "byYear": {
+          "2016": {
+            "events": 811,
+            "deaths": 61,
+            "injuries": 251
+          },
+          "2017": {
+            "events": 500,
+            "deaths": 87,
+            "injuries": 133
+          },
+          "2018": {
+            "events": 1374,
+            "deaths": 213,
+            "injuries": 312
+          },
+          "2019": {
+            "events": 1364,
+            "deaths": 140,
+            "injuries": 130
+          },
+          "2020": {
+            "events": 1106,
+            "deaths": 125,
+            "injuries": 0
+          },
+          "2021": {
+            "events": 1333,
+            "deaths": 193,
+            "injuries": 0
+          },
+          "2022": {
+            "events": 1947,
+            "deaths": 381,
+            "injuries": 134
+          },
+          "2023": {
+            "events": 3323,
+            "deaths": 215,
+            "injuries": 234
+          },
+          "2024": {
+            "events": 3171,
+            "deaths": 219,
+            "injuries": 173
+          },
+          "2025": {
+            "events": 2864,
+            "deaths": 163,
+            "injuries": 51
+          }
+        }
+      },
+      "Heavy Rain": {
+        "kind": null,
+        "events": 12913,
+        "deathsDirect": 11,
+        "deathsIndirect": 45,
+        "injuriesDirect": 18,
+        "injuriesIndirect": 53,
+        "deaths": {
+          "value": 5.6,
+          "overYears": [
+            4,
+            7.4
+          ],
+          "gate": [
+            4,
+            7.4
+          ]
+        },
+        "injuries": {
+          "value": 7.1,
+          "overYears": [
+            2.5,
+            12.9
+          ],
+          "gate": [
+            2.5,
+            12.9
+          ]
+        },
+        "byYear": {
+          "2016": {
+            "events": 1795,
+            "deaths": 8,
+            "injuries": 9
+          },
+          "2017": {
+            "events": 1469,
+            "deaths": 5,
+            "injuries": 1
+          },
+          "2018": {
+            "events": 1924,
+            "deaths": 11,
+            "injuries": 19
+          },
+          "2019": {
+            "events": 1441,
+            "deaths": 6,
+            "injuries": 1
+          },
+          "2020": {
+            "events": 1450,
+            "deaths": 2,
+            "injuries": 2
+          },
+          "2021": {
+            "events": 1362,
+            "deaths": 9,
+            "injuries": 7
+          },
+          "2022": {
+            "events": 1047,
+            "deaths": 3,
+            "injuries": 2
+          },
+          "2023": {
+            "events": 875,
+            "deaths": 3,
+            "injuries": 1
+          },
+          "2024": {
+            "events": 918,
+            "deaths": 3,
+            "injuries": 2
+          },
+          "2025": {
+            "events": 632,
+            "deaths": 6,
+            "injuries": 27
+          }
+        }
+      },
+      "Heavy Snow": {
+        "kind": "met.winter.storm",
+        "events": 21298,
+        "deathsDirect": 20,
+        "deathsIndirect": 52,
+        "injuriesDirect": 34,
+        "injuriesIndirect": 207,
+        "deaths": {
+          "value": 7.2,
+          "overYears": [
+            5.5,
+            9
+          ],
+          "gate": [
+            5.5,
+            9
+          ]
+        },
+        "injuries": {
+          "value": 24.1,
+          "overYears": [
+            10.297500000000023,
+            46.4
+          ],
+          "gate": [
+            10.297500000000023,
+            46.4
+          ]
+        },
+        "byYear": {
+          "2016": {
+            "events": 1518,
+            "deaths": 5,
+            "injuries": 17
+          },
+          "2017": {
+            "events": 1705,
+            "deaths": 5,
+            "injuries": 6
+          },
+          "2018": {
+            "events": 2294,
+            "deaths": 6,
+            "injuries": 18
+          },
+          "2019": {
+            "events": 2881,
+            "deaths": 10,
+            "injuries": 116
+          },
+          "2020": {
+            "events": 1792,
+            "deaths": 4,
+            "injuries": 5
+          },
+          "2021": {
+            "events": 2236,
+            "deaths": 9,
+            "injuries": 17
+          },
+          "2022": {
+            "events": 2318,
+            "deaths": 5,
+            "injuries": 7
+          },
+          "2023": {
+            "events": 2540,
+            "deaths": 5,
+            "injuries": 33
+          },
+          "2024": {
+            "events": 2210,
+            "deaths": 12,
+            "injuries": 15
+          },
+          "2025": {
+            "events": 1804,
+            "deaths": 11,
+            "injuries": 7
+          }
+        }
+      },
+      "High Surf": {
+        "kind": "met.surf",
+        "events": 3434,
+        "deathsDirect": 100,
+        "deathsIndirect": 16,
+        "injuriesDirect": 86,
+        "injuriesIndirect": 4,
+        "deaths": {
+          "value": 11.6,
+          "overYears": [
+            9,
+            14.3
+          ],
+          "gate": [
+            9,
+            14.3
+          ]
+        },
+        "injuries": {
+          "value": 9,
+          "overYears": [
+            5.6,
+            12.2
+          ],
+          "gate": [
+            5.6,
+            12.2
+          ]
+        },
+        "byYear": {
+          "2016": {
+            "events": 568,
+            "deaths": 15,
+            "injuries": 9
+          },
+          "2017": {
+            "events": 436,
+            "deaths": 8,
+            "injuries": 6
+          },
+          "2018": {
+            "events": 540,
+            "deaths": 13,
+            "injuries": 7
+          },
+          "2019": {
+            "events": 468,
+            "deaths": 19,
+            "injuries": 0
+          },
+          "2020": {
+            "events": 415,
+            "deaths": 8,
+            "injuries": 9
+          },
+          "2021": {
+            "events": 355,
+            "deaths": 14,
+            "injuries": 1
+          },
+          "2022": {
+            "events": 341,
+            "deaths": 6,
+            "injuries": 14
+          },
+          "2023": {
+            "events": 147,
+            "deaths": 8,
+            "injuries": 15
+          },
+          "2024": {
+            "events": 109,
+            "deaths": 8,
+            "injuries": 16
+          },
+          "2025": {
+            "events": 55,
+            "deaths": 17,
+            "injuries": 13
+          }
+        }
+      },
+      "High Wind": {
+        "kind": "met.wind.high",
+        "events": 38968,
+        "deathsDirect": 85,
+        "deathsIndirect": 15,
+        "injuriesDirect": 244,
+        "injuriesIndirect": 45,
+        "deaths": {
+          "value": 10,
+          "overYears": [
+            7.2,
+            12.6
+          ],
+          "gate": [
+            7.2,
+            12.6
+          ]
+        },
+        "injuries": {
+          "value": 28.9,
+          "overYears": [
+            17.1,
+            42.9
+          ],
+          "gate": [
+            17.1,
+            42.9
+          ]
+        },
+        "byYear": {
+          "2016": {
+            "events": 3120,
+            "deaths": 7,
+            "injuries": 75
+          },
+          "2017": {
+            "events": 3536,
+            "deaths": 11,
+            "injuries": 29
+          },
+          "2018": {
+            "events": 2977,
+            "deaths": 16,
+            "injuries": 31
+          },
+          "2019": {
+            "events": 3787,
+            "deaths": 1,
+            "injuries": 8
+          },
+          "2020": {
+            "events": 3682,
+            "deaths": 8,
+            "injuries": 56
+          },
+          "2021": {
+            "events": 4599,
+            "deaths": 11,
+            "injuries": 29
+          },
+          "2022": {
+            "events": 5179,
+            "deaths": 10,
+            "injuries": 7
+          },
+          "2023": {
+            "events": 3491,
+            "deaths": 16,
+            "injuries": 22
+          },
+          "2024": {
+            "events": 3994,
+            "deaths": 13,
+            "injuries": 23
+          },
+          "2025": {
+            "events": 4603,
+            "deaths": 7,
+            "injuries": 9
+          }
+        }
+      },
+      "Hurricane (Typhoon)": {
+        "kind": "met.tropical.hurricane",
+        "events": 372,
+        "deathsDirect": 121,
+        "deathsIndirect": 141,
+        "injuriesDirect": 390,
+        "injuriesIndirect": 72,
+        "deaths": {
+          "value": 26.2,
+          "overYears": [
+            11.1,
+            45.00249999999996
+          ],
+          "gate": [
+            11.1,
+            45.00249999999996
+          ]
+        },
+        "injuries": {
+          "value": 46.2,
+          "overYears": [
+            7.295000000000044,
+            95.90249999999997
+          ],
+          "gate": [
+            7.295000000000044,
+            95.90249999999997
+          ]
+        },
+        "byYear": {
+          "2016": {
+            "events": 33,
+            "deaths": 6,
+            "injuries": 3
+          },
+          "2017": {
+            "events": 45,
+            "deaths": 28,
+            "injuries": 104
+          },
+          "2018": {
+            "events": 67,
+            "deaths": 51,
+            "injuries": 243
+          },
+          "2019": {
+            "events": 10,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2020": {
+            "events": 63,
+            "deaths": 36,
+            "injuries": 19
+          },
+          "2021": {
+            "events": 39,
+            "deaths": 28,
+            "injuries": 0
+          },
+          "2022": {
+            "events": 23,
+            "deaths": 93,
+            "injuries": 0
+          },
+          "2023": {
+            "events": 16,
+            "deaths": 3,
+            "injuries": 8
+          },
+          "2024": {
+            "events": 76,
+            "deaths": 17,
+            "injuries": 85
+          },
+          "2025": {
+            "events": 0,
+            "deaths": 0,
+            "injuries": 0
+          }
+        }
+      },
+      "Ice Storm": {
+        "kind": "met.winter.ice-storm",
+        "events": 2156,
+        "deathsDirect": 12,
+        "deathsIndirect": 10,
+        "injuriesDirect": 18,
+        "injuriesIndirect": 571,
+        "deaths": {
+          "value": 2.2,
+          "overYears": [
+            1,
+            3.6
+          ],
+          "gate": [
+            1,
+            3.6
+          ]
+        },
+        "injuries": {
+          "value": 58.9,
+          "overYears": [
+            0.3,
+            161.4
+          ],
+          "gate": [
+            0.3,
+            161.4
+          ]
+        },
+        "byYear": {
+          "2016": {
+            "events": 101,
+            "deaths": 1,
+            "injuries": 0
+          },
+          "2017": {
+            "events": 339,
+            "deaths": 2,
+            "injuries": 512
+          },
+          "2018": {
+            "events": 172,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2019": {
+            "events": 200,
+            "deaths": 0,
+            "injuries": 18
+          },
+          "2020": {
+            "events": 156,
+            "deaths": 4,
+            "injuries": 0
+          },
+          "2021": {
+            "events": 378,
+            "deaths": 4,
+            "injuries": 1
+          },
+          "2022": {
+            "events": 261,
+            "deaths": 2,
+            "injuries": 0
+          },
+          "2023": {
+            "events": 283,
+            "deaths": 1,
+            "injuries": 0
+          },
+          "2024": {
+            "events": 113,
+            "deaths": 7,
+            "injuries": 58
+          },
+          "2025": {
+            "events": 153,
+            "deaths": 1,
+            "injuries": 0
+          }
+        }
+      },
+      "Lake-Effect Snow": {
+        "kind": "met.winter.lake-effect-snow",
+        "events": 1073,
+        "deathsDirect": 1,
+        "deathsIndirect": 9,
+        "injuriesDirect": 1,
+        "injuriesIndirect": 20,
+        "deaths": {
+          "value": 1,
+          "overYears": [
+            0,
+            2.3
+          ],
+          "gate": [
+            0,
+            2.3
+          ]
+        },
+        "injuries": {
+          "value": 2.1,
+          "overYears": [
+            0.4,
+            4.3
+          ],
+          "gate": [
+            0.4,
+            4.3
+          ]
+        },
+        "byYear": {
+          "2016": {
+            "events": 251,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2017": {
+            "events": 169,
+            "deaths": 6,
+            "injuries": 10
+          },
+          "2018": {
+            "events": 56,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2019": {
+            "events": 78,
+            "deaths": 1,
+            "injuries": 5
+          },
+          "2020": {
+            "events": 67,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2021": {
+            "events": 49,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2022": {
+            "events": 88,
+            "deaths": 3,
+            "injuries": 0
+          },
+          "2023": {
+            "events": 28,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2024": {
+            "events": 124,
+            "deaths": 0,
+            "injuries": 1
+          },
+          "2025": {
+            "events": 163,
+            "deaths": 0,
+            "injuries": 5
+          }
+        }
+      },
+      "Lakeshore Flood": {
+        "kind": "met.flood.lakeshore",
+        "events": 311,
+        "deathsDirect": 2,
+        "deathsIndirect": 0,
+        "injuriesDirect": 0,
+        "injuriesIndirect": 2,
+        "deaths": {
+          "value": 0.2,
+          "overYears": [
+            0,
+            0.6
+          ],
+          "gate": [
+            0,
+            0.6
+          ]
+        },
+        "injuries": {
+          "value": 0.2,
+          "overYears": [
+            0,
+            0.6
+          ],
+          "gate": [
+            0,
+            0.6
+          ]
+        },
+        "byYear": {
+          "2016": {
+            "events": 1,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2017": {
+            "events": 10,
+            "deaths": 2,
+            "injuries": 0
+          },
+          "2018": {
+            "events": 10,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2019": {
+            "events": 125,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2020": {
+            "events": 139,
+            "deaths": 0,
+            "injuries": 2
+          },
+          "2021": {
+            "events": 17,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2022": {
+            "events": 4,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2023": {
+            "events": 3,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2024": {
+            "events": 1,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2025": {
+            "events": 1,
+            "deaths": 0,
+            "injuries": 0
+          }
+        }
+      },
+      "Lightning": {
+        "kind": "met.thunderstorm",
+        "events": 3004,
+        "deathsDirect": 193,
+        "deathsIndirect": 20,
+        "injuriesDirect": 756,
+        "injuriesIndirect": 96,
+        "deaths": {
+          "value": 21.3,
+          "overYears": [
+            17.6,
+            26.6
+          ],
+          "gate": [
+            17.6,
+            26.6
+          ]
+        },
+        "injuries": {
+          "value": 85.2,
+          "overYears": [
+            69.5,
+            102.3
+          ],
+          "gate": [
+            69.5,
+            102.3
+          ]
+        },
+        "byYear": {
+          "2016": {
+            "events": 409,
+            "deaths": 42,
+            "injuries": 136
+          },
+          "2017": {
+            "events": 365,
+            "deaths": 22,
+            "injuries": 100
+          },
+          "2018": {
+            "events": 396,
+            "deaths": 21,
+            "injuries": 89
+          },
+          "2019": {
+            "events": 341,
+            "deaths": 22,
+            "injuries": 119
+          },
+          "2020": {
+            "events": 247,
+            "deaths": 19,
+            "injuries": 60
+          },
+          "2021": {
+            "events": 242,
+            "deaths": 13,
+            "injuries": 74
+          },
+          "2022": {
+            "events": 261,
+            "deaths": 20,
+            "injuries": 60
+          },
+          "2023": {
+            "events": 264,
+            "deaths": 15,
+            "injuries": 66
+          },
+          "2024": {
+            "events": 191,
+            "deaths": 18,
+            "injuries": 50
+          },
+          "2025": {
+            "events": 288,
+            "deaths": 21,
+            "injuries": 98
+          }
+        }
+      },
+      "Marine Dense Fog": {
+        "kind": "met.marine.fog",
+        "events": 18,
+        "deathsDirect": 0,
+        "deathsIndirect": 9,
+        "injuriesDirect": 0,
+        "injuriesIndirect": 2,
+        "deaths": {
+          "value": 0.9,
+          "overYears": [
+            0,
+            2
+          ],
+          "gate": [
+            0,
+            2
+          ]
+        },
+        "injuries": {
+          "value": 0.2,
+          "overYears": [
+            0,
+            0.6
+          ],
+          "gate": [
+            0,
+            0.6
+          ]
+        },
+        "byYear": {
+          "2016": {
+            "events": 4,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2017": {
+            "events": 0,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2018": {
+            "events": 0,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2019": {
+            "events": 0,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2020": {
+            "events": 2,
+            "deaths": 5,
+            "injuries": 2
+          },
+          "2021": {
+            "events": 3,
+            "deaths": 2,
+            "injuries": 0
+          },
+          "2022": {
+            "events": 4,
+            "deaths": 2,
+            "injuries": 0
+          },
+          "2023": {
+            "events": 0,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2024": {
+            "events": 2,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2025": {
+            "events": 3,
+            "deaths": 0,
+            "injuries": 0
+          }
+        }
+      },
+      "Marine Hail": {
+        "kind": "met.marine.special",
+        "events": 266,
+        "deathsDirect": 0,
+        "deathsIndirect": 0,
+        "injuriesDirect": 0,
+        "injuriesIndirect": 0,
+        "deaths": {
+          "value": 0,
+          "overYears": [
+            0,
+            0
+          ],
+          "gate": [
+            0,
+            0
+          ]
+        },
+        "injuries": {
+          "value": 0,
+          "overYears": [
+            0,
+            0
+          ],
+          "gate": [
+            0,
+            0
+          ]
+        },
+        "byYear": {
+          "2016": {
+            "events": 23,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2017": {
+            "events": 40,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2018": {
+            "events": 24,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2019": {
+            "events": 32,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2020": {
+            "events": 18,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2021": {
+            "events": 25,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2022": {
+            "events": 29,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2023": {
+            "events": 28,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2024": {
+            "events": 22,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2025": {
+            "events": 25,
+            "deaths": 0,
+            "injuries": 0
+          }
+        }
+      },
+      "Marine High Wind": {
+        "kind": "met.marine.storm",
+        "events": 676,
+        "deathsDirect": 0,
+        "deathsIndirect": 0,
+        "injuriesDirect": 0,
+        "injuriesIndirect": 0,
+        "deaths": {
+          "value": 0,
+          "overYears": [
+            0,
+            0
+          ],
+          "gate": [
+            0,
+            0
+          ]
+        },
+        "injuries": {
+          "value": 0,
+          "overYears": [
+            0,
+            0
+          ],
+          "gate": [
+            0,
+            0
+          ]
+        },
+        "byYear": {
+          "2016": {
+            "events": 51,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2017": {
+            "events": 59,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2018": {
+            "events": 26,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2019": {
+            "events": 77,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2020": {
+            "events": 82,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2021": {
+            "events": 77,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2022": {
+            "events": 105,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2023": {
+            "events": 52,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2024": {
+            "events": 64,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2025": {
+            "events": 83,
+            "deaths": 0,
+            "injuries": 0
+          }
+        }
+      },
+      "Marine Hurricane/Typhoon": {
+        "kind": "met.tropical.hurricane",
+        "events": 96,
+        "deathsDirect": 0,
+        "deathsIndirect": 0,
+        "injuriesDirect": 0,
+        "injuriesIndirect": 0,
+        "deaths": {
+          "value": 0,
+          "overYears": [
+            0,
+            0
+          ],
+          "gate": [
+            0,
+            0
+          ]
+        },
+        "injuries": {
+          "value": 0,
+          "overYears": [
+            0,
+            0
+          ],
+          "gate": [
+            0,
+            0
+          ]
+        },
+        "byYear": {
+          "2016": {
+            "events": 10,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2017": {
+            "events": 15,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2018": {
+            "events": 6,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2019": {
+            "events": 6,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2020": {
+            "events": 27,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2021": {
+            "events": 12,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2022": {
+            "events": 4,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2023": {
+            "events": 5,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2024": {
+            "events": 11,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2025": {
+            "events": 0,
+            "deaths": 0,
+            "injuries": 0
+          }
+        }
+      },
+      "Marine Lightning": {
+        "kind": "met.marine",
+        "events": 1,
+        "deathsDirect": 1,
+        "deathsIndirect": 0,
+        "injuriesDirect": 0,
+        "injuriesIndirect": 0,
+        "deaths": {
+          "value": 0.1,
+          "overYears": [
+            0,
+            0.3
+          ],
+          "gate": [
+            0,
+            0.3
+          ]
+        },
+        "injuries": {
+          "value": 0,
+          "overYears": [
+            0,
+            0
+          ],
+          "gate": [
+            0,
+            0
+          ]
+        },
+        "byYear": {
+          "2016": {
+            "events": 0,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2017": {
+            "events": 0,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2018": {
+            "events": 0,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2019": {
+            "events": 0,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2020": {
+            "events": 0,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2021": {
+            "events": 0,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2022": {
+            "events": 0,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2023": {
+            "events": 1,
+            "deaths": 1,
+            "injuries": 0
+          },
+          "2024": {
+            "events": 0,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2025": {
+            "events": 0,
+            "deaths": 0,
+            "injuries": 0
+          }
+        }
+      },
+      "Marine Strong Wind": {
+        "kind": "met.marine.gale",
+        "events": 70,
+        "deathsDirect": 31,
+        "deathsIndirect": 9,
+        "injuriesDirect": 16,
+        "injuriesIndirect": 3,
+        "deaths": {
+          "value": 4,
+          "overYears": [
+            1.6,
+            6.8
+          ],
+          "gate": [
+            1.6,
+            6.8
+          ]
+        },
+        "injuries": {
+          "value": 1.9,
+          "overYears": [
+            0.8,
+            3.1
+          ],
+          "gate": [
+            0.8,
+            3.1
+          ]
+        },
+        "byYear": {
+          "2016": {
+            "events": 9,
+            "deaths": 13,
+            "injuries": 4
+          },
+          "2017": {
+            "events": 10,
+            "deaths": 1,
+            "injuries": 0
+          },
+          "2018": {
+            "events": 9,
+            "deaths": 8,
+            "injuries": 5
+          },
+          "2019": {
+            "events": 17,
+            "deaths": 1,
+            "injuries": 0
+          },
+          "2020": {
+            "events": 7,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2021": {
+            "events": 3,
+            "deaths": 1,
+            "injuries": 4
+          },
+          "2022": {
+            "events": 5,
+            "deaths": 7,
+            "injuries": 0
+          },
+          "2023": {
+            "events": 1,
+            "deaths": 0,
+            "injuries": 2
+          },
+          "2024": {
+            "events": 3,
+            "deaths": 6,
+            "injuries": 3
+          },
+          "2025": {
+            "events": 6,
+            "deaths": 3,
+            "injuries": 1
+          }
+        }
+      },
+      "Marine Thunderstorm Wind": {
+        "kind": "met.marine.special",
+        "events": 23964,
+        "deathsDirect": 23,
+        "deathsIndirect": 1,
+        "injuriesDirect": 26,
+        "injuriesIndirect": 0,
+        "deaths": {
+          "value": 2.4,
+          "overYears": [
+            0.6,
+            5.4
+          ],
+          "gate": [
+            0.6,
+            5.4
+          ]
+        },
+        "injuries": {
+          "value": 2.6,
+          "overYears": [
+            0,
+            6.7
+          ],
+          "gate": [
+            0,
+            6.7
+          ]
+        },
+        "byYear": {
+          "2016": {
+            "events": 2173,
+            "deaths": 1,
+            "injuries": 0
+          },
+          "2017": {
+            "events": 2088,
+            "deaths": 1,
+            "injuries": 0
+          },
+          "2018": {
+            "events": 2090,
+            "deaths": 1,
+            "injuries": 5
+          },
+          "2019": {
+            "events": 2502,
+            "deaths": 3,
+            "injuries": 20
+          },
+          "2020": {
+            "events": 2887,
+            "deaths": 1,
+            "injuries": 0
+          },
+          "2021": {
+            "events": 2684,
+            "deaths": 15,
+            "injuries": 0
+          },
+          "2022": {
+            "events": 2579,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2023": {
+            "events": 2643,
+            "deaths": 2,
+            "injuries": 0
+          },
+          "2024": {
+            "events": 2192,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2025": {
+            "events": 2126,
+            "deaths": 0,
+            "injuries": 1
+          }
+        }
+      },
+      "Marine Tropical Depression": {
+        "kind": "met.tropical",
+        "events": 31,
+        "deathsDirect": 0,
+        "deathsIndirect": 0,
+        "injuriesDirect": 0,
+        "injuriesIndirect": 0,
+        "deaths": {
+          "value": 0,
+          "overYears": [
+            0,
+            0
+          ],
+          "gate": [
+            0,
+            0
+          ]
+        },
+        "injuries": {
+          "value": 0,
+          "overYears": [
+            0,
+            0
+          ],
+          "gate": [
+            0,
+            0
+          ]
+        },
+        "byYear": {
+          "2016": {
+            "events": 1,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2017": {
+            "events": 1,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2018": {
+            "events": 5,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2019": {
+            "events": 4,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2020": {
+            "events": 4,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2021": {
+            "events": 6,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2022": {
+            "events": 3,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2023": {
+            "events": 6,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2024": {
+            "events": 1,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2025": {
+            "events": 0,
+            "deaths": 0,
+            "injuries": 0
+          }
+        }
+      },
+      "Marine Tropical Storm": {
+        "kind": "met.tropical.storm",
+        "events": 587,
+        "deathsDirect": 29,
+        "deathsIndirect": 0,
+        "injuriesDirect": 0,
+        "injuriesIndirect": 0,
+        "deaths": {
+          "value": 2.9,
+          "overYears": [
+            0,
+            7.6
+          ],
+          "gate": [
+            0,
+            7.6
+          ]
+        },
+        "injuries": {
+          "value": 0,
+          "overYears": [
+            0,
+            0
+          ],
+          "gate": [
+            0,
+            0
+          ]
+        },
+        "byYear": {
+          "2016": {
+            "events": 13,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2017": {
+            "events": 62,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2018": {
+            "events": 42,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2019": {
+            "events": 37,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2020": {
+            "events": 153,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2021": {
+            "events": 101,
+            "deaths": 9,
+            "injuries": 0
+          },
+          "2022": {
+            "events": 45,
+            "deaths": 20,
+            "injuries": 0
+          },
+          "2023": {
+            "events": 42,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2024": {
+            "events": 74,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2025": {
+            "events": 18,
+            "deaths": 0,
+            "injuries": 0
+          }
+        }
+      },
+      "Rip Current": {
+        "kind": "met.rip-current",
+        "events": 854,
+        "deathsDirect": 650,
+        "deathsIndirect": 8,
+        "injuriesDirect": 339,
+        "injuriesIndirect": 17,
+        "deaths": {
+          "value": 65.8,
+          "overYears": [
+            56.497500000000024,
+            76.00249999999997
+          ],
+          "gate": [
+            56.497500000000024,
+            76.00249999999997
+          ]
+        },
+        "injuries": {
+          "value": 35.6,
+          "overYears": [
+            28.2,
+            43
+          ],
+          "gate": [
+            28.2,
+            43
+          ]
+        },
+        "byYear": {
+          "2016": {
+            "events": 69,
+            "deaths": 51,
+            "injuries": 26
+          },
+          "2017": {
+            "events": 80,
+            "deaths": 63,
+            "injuries": 50
+          },
+          "2018": {
+            "events": 84,
+            "deaths": 62,
+            "injuries": 27
+          },
+          "2019": {
+            "events": 76,
+            "deaths": 60,
+            "injuries": 19
+          },
+          "2020": {
+            "events": 88,
+            "deaths": 75,
+            "injuries": 22
+          },
+          "2021": {
+            "events": 120,
+            "deaths": 98,
+            "injuries": 26
+          },
+          "2022": {
+            "events": 82,
+            "deaths": 63,
+            "injuries": 46
+          },
+          "2023": {
+            "events": 110,
+            "deaths": 82,
+            "injuries": 49
+          },
+          "2024": {
+            "events": 73,
+            "deaths": 65,
+            "injuries": 42
+          },
+          "2025": {
+            "events": 72,
+            "deaths": 39,
+            "injuries": 49
+          }
+        }
+      },
+      "Seiche": {
+        "kind": "met.flood.lakeshore",
+        "events": 19,
+        "deathsDirect": 0,
+        "deathsIndirect": 0,
+        "injuriesDirect": 0,
+        "injuriesIndirect": 0,
+        "deaths": {
+          "value": 0,
+          "overYears": [
+            0,
+            0
+          ],
+          "gate": [
+            0,
+            0
+          ]
+        },
+        "injuries": {
+          "value": 0,
+          "overYears": [
+            0,
+            0
+          ],
+          "gate": [
+            0,
+            0
+          ]
+        },
+        "byYear": {
+          "2016": {
+            "events": 2,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2017": {
+            "events": 0,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2018": {
+            "events": 2,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2019": {
+            "events": 4,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2020": {
+            "events": 4,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2021": {
+            "events": 0,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2022": {
+            "events": 2,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2023": {
+            "events": 0,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2024": {
+            "events": 3,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2025": {
+            "events": 2,
+            "deaths": 0,
+            "injuries": 0
+          }
+        }
+      },
+      "Sleet": {
+        "kind": "met.winter.weather",
+        "events": 182,
+        "deathsDirect": 0,
+        "deathsIndirect": 2,
+        "injuriesDirect": 0,
+        "injuriesIndirect": 9,
+        "deaths": {
+          "value": 0.2,
+          "overYears": [
+            0,
+            0.5
+          ],
+          "gate": [
+            0,
+            0.5
+          ]
+        },
+        "injuries": {
+          "value": 0.9,
+          "overYears": [
+            0,
+            2.1
+          ],
+          "gate": [
+            0,
+            2.1
+          ]
+        },
+        "byYear": {
+          "2016": {
+            "events": 3,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2017": {
+            "events": 39,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2018": {
+            "events": 8,
+            "deaths": 1,
+            "injuries": 0
+          },
+          "2019": {
+            "events": 1,
+            "deaths": 0,
+            "injuries": 3
+          },
+          "2020": {
+            "events": 7,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2021": {
+            "events": 55,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2022": {
+            "events": 42,
+            "deaths": 1,
+            "injuries": 6
+          },
+          "2023": {
+            "events": 8,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2024": {
+            "events": 6,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2025": {
+            "events": 13,
+            "deaths": 0,
+            "injuries": 0
+          }
+        }
+      },
+      "Sneakerwave": {
+        "kind": "met.beach-hazards",
+        "events": 53,
+        "deathsDirect": 19,
+        "deathsIndirect": 0,
+        "injuriesDirect": 9,
+        "injuriesIndirect": 1,
+        "deaths": {
+          "value": 1.9,
+          "overYears": [
+            1.1,
+            2.7
+          ],
+          "gate": [
+            1.1,
+            2.7
+          ]
+        },
+        "injuries": {
+          "value": 1,
+          "overYears": [
+            0.4,
+            1.8
+          ],
+          "gate": [
+            0.4,
+            1.8
+          ]
+        },
+        "byYear": {
+          "2016": {
+            "events": 1,
+            "deaths": 1,
+            "injuries": 4
+          },
+          "2017": {
+            "events": 3,
+            "deaths": 3,
+            "injuries": 1
+          },
+          "2018": {
+            "events": 2,
+            "deaths": 3,
+            "injuries": 0
+          },
+          "2019": {
+            "events": 3,
+            "deaths": 2,
+            "injuries": 0
+          },
+          "2020": {
+            "events": 1,
+            "deaths": 0,
+            "injuries": 1
+          },
+          "2021": {
+            "events": 2,
+            "deaths": 2,
+            "injuries": 0
+          },
+          "2022": {
+            "events": 1,
+            "deaths": 1,
+            "injuries": 1
+          },
+          "2023": {
+            "events": 10,
+            "deaths": 0,
+            "injuries": 1
+          },
+          "2024": {
+            "events": 15,
+            "deaths": 3,
+            "injuries": 1
+          },
+          "2025": {
+            "events": 15,
+            "deaths": 4,
+            "injuries": 1
+          }
+        }
+      },
+      "Storm Surge/Tide": {
+        "kind": "met.surge",
+        "events": 488,
+        "deathsDirect": 16,
+        "deathsIndirect": 7,
+        "injuriesDirect": 1,
+        "injuriesIndirect": 0,
+        "deaths": {
+          "value": 2.3,
+          "overYears": [
+            0.5,
+            4.4
+          ],
+          "gate": [
+            0.5,
+            4.4
+          ]
+        },
+        "injuries": {
+          "value": 0.1,
+          "overYears": [
+            0,
+            0.3
+          ],
+          "gate": [
+            0,
+            0.3
+          ]
+        },
+        "byYear": {
+          "2016": {
+            "events": 34,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2017": {
+            "events": 74,
+            "deaths": 1,
+            "injuries": 0
+          },
+          "2018": {
+            "events": 26,
+            "deaths": 6,
+            "injuries": 0
+          },
+          "2019": {
+            "events": 25,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2020": {
+            "events": 133,
+            "deaths": 6,
+            "injuries": 0
+          },
+          "2021": {
+            "events": 59,
+            "deaths": 1,
+            "injuries": 0
+          },
+          "2022": {
+            "events": 32,
+            "deaths": 9,
+            "injuries": 1
+          },
+          "2023": {
+            "events": 30,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2024": {
+            "events": 71,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2025": {
+            "events": 4,
+            "deaths": 0,
+            "injuries": 0
+          }
+        }
+      },
+      "Strong Wind": {
+        "kind": "met.wind",
+        "events": 11263,
+        "deathsDirect": 109,
+        "deathsIndirect": 46,
+        "injuriesDirect": 182,
+        "injuriesIndirect": 34,
+        "deaths": {
+          "value": 15.5,
+          "overYears": [
+            13,
+            18.4
+          ],
+          "gate": [
+            13,
+            18.4
+          ]
+        },
+        "injuries": {
+          "value": 21.6,
+          "overYears": [
+            15.7,
+            28.4
+          ],
+          "gate": [
+            15.7,
+            28.4
+          ]
+        },
+        "byYear": {
+          "2016": {
+            "events": 902,
+            "deaths": 15,
+            "injuries": 15
+          },
+          "2017": {
+            "events": 1096,
+            "deaths": 15,
+            "injuries": 45
+          },
+          "2018": {
+            "events": 1025,
+            "deaths": 14,
+            "injuries": 20
+          },
+          "2019": {
+            "events": 1590,
+            "deaths": 18,
+            "injuries": 26
+          },
+          "2020": {
+            "events": 1193,
+            "deaths": 13,
+            "injuries": 16
+          },
+          "2021": {
+            "events": 863,
+            "deaths": 10,
+            "injuries": 16
+          },
+          "2022": {
+            "events": 1066,
+            "deaths": 13,
+            "injuries": 9
+          },
+          "2023": {
+            "events": 1101,
+            "deaths": 24,
+            "injuries": 28
+          },
+          "2024": {
+            "events": 1311,
+            "deaths": 22,
+            "injuries": 31
+          },
+          "2025": {
+            "events": 1116,
+            "deaths": 11,
+            "injuries": 10
+          }
+        }
+      },
+      "Thunderstorm Wind": {
+        "kind": "met.thunderstorm.severe",
+        "events": 180798,
+        "deathsDirect": 324,
+        "deathsIndirect": 53,
+        "injuriesDirect": 1462,
+        "injuriesIndirect": 200,
+        "deaths": {
+          "value": 37.7,
+          "overYears": [
+            33.3,
+            42.102499999999964
+          ],
+          "gate": [
+            33.3,
+            42.102499999999964
+          ]
+        },
+        "injuries": {
+          "value": 166.2,
+          "overYears": [
+            132.59750000000003,
+            213.4
+          ],
+          "gate": [
+            132.59750000000003,
+            213.4
+          ]
+        },
+        "byYear": {
+          "2016": {
+            "events": 15659,
+            "deaths": 24,
+            "injuries": 120
+          },
+          "2017": {
+            "events": 16472,
+            "deaths": 37,
+            "injuries": 157
+          },
+          "2018": {
+            "events": 14620,
+            "deaths": 42,
+            "injuries": 153
+          },
+          "2019": {
+            "events": 18620,
+            "deaths": 39,
+            "injuries": 185
+          },
+          "2020": {
+            "events": 19315,
+            "deaths": 37,
+            "injuries": 357
+          },
+          "2021": {
+            "events": 15533,
+            "deaths": 30,
+            "injuries": 105
+          },
+          "2022": {
+            "events": 17595,
+            "deaths": 37,
+            "injuries": 109
+          },
+          "2023": {
+            "events": 21237,
+            "deaths": 37,
+            "injuries": 174
+          },
+          "2024": {
+            "events": 19940,
+            "deaths": 53,
+            "injuries": 161
+          },
+          "2025": {
+            "events": 21807,
+            "deaths": 41,
+            "injuries": 141
+          }
+        }
+      },
+      "Tornado": {
+        "kind": "met.tornado",
+        "events": 15169,
+        "deathsDirect": 508,
+        "deathsIndirect": 19,
+        "injuriesDirect": 5360,
+        "injuriesIndirect": 52,
+        "deaths": {
+          "value": 52.7,
+          "overYears": [
+            34.9,
+            71.7
+          ],
+          "gate": [
+            34.9,
+            71.7
+          ]
+        },
+        "injuries": {
+          "value": 541.2,
+          "overYears": [
+            389.6,
+            693.5
+          ],
+          "gate": [
+            389.6,
+            693.5
+          ]
+        },
+        "byYear": {
+          "2016": {
+            "events": 1081,
+            "deaths": 18,
+            "injuries": 326
+          },
+          "2017": {
+            "events": 1663,
+            "deaths": 37,
+            "injuries": 524
+          },
+          "2018": {
+            "events": 1256,
+            "deaths": 12,
+            "injuries": 207
+          },
+          "2019": {
+            "events": 1737,
+            "deaths": 44,
+            "injuries": 546
+          },
+          "2020": {
+            "events": 1253,
+            "deaths": 77,
+            "injuries": 741
+          },
+          "2021": {
+            "events": 1545,
+            "deaths": 107,
+            "injuries": 881
+          },
+          "2022": {
+            "events": 1384,
+            "deaths": 24,
+            "injuries": 317
+          },
+          "2023": {
+            "events": 1522,
+            "deaths": 91,
+            "injuries": 955
+          },
+          "2024": {
+            "events": 2137,
+            "deaths": 53,
+            "injuries": 658
+          },
+          "2025": {
+            "events": 1591,
+            "deaths": 64,
+            "injuries": 257
+          }
+        }
+      },
+      "Tropical Depression": {
+        "kind": "met.tropical",
+        "events": 235,
+        "deathsDirect": 1,
+        "deathsIndirect": 6,
+        "injuriesDirect": 2,
+        "injuriesIndirect": 0,
+        "deaths": {
+          "value": 0.7,
+          "overYears": [
+            0,
+            1.6
+          ],
+          "gate": [
+            0,
+            1.6
+          ]
+        },
+        "injuries": {
+          "value": 0.2,
+          "overYears": [
+            0,
+            0.5
+          ],
+          "gate": [
+            0,
+            0.5
+          ]
+        },
+        "byYear": {
+          "2016": {
+            "events": 12,
+            "deaths": 2,
+            "injuries": 0
+          },
+          "2017": {
+            "events": 17,
+            "deaths": 1,
+            "injuries": 1
+          },
+          "2018": {
+            "events": 37,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2019": {
+            "events": 26,
+            "deaths": 4,
+            "injuries": 0
+          },
+          "2020": {
+            "events": 38,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2021": {
+            "events": 31,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2022": {
+            "events": 22,
+            "deaths": 0,
+            "injuries": 1
+          },
+          "2023": {
+            "events": 13,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2024": {
+            "events": 36,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2025": {
+            "events": 3,
+            "deaths": 0,
+            "injuries": 0
+          }
+        }
+      },
+      "Tropical Storm": {
+        "kind": "met.tropical.storm",
+        "events": 3136,
+        "deathsDirect": 88,
+        "deathsIndirect": 113,
+        "injuriesDirect": 53,
+        "injuriesIndirect": 18,
+        "deaths": {
+          "value": 20.1,
+          "overYears": [
+            6.9,
+            36.80249999999996
+          ],
+          "gate": [
+            6.9,
+            36.80249999999996
+          ]
+        },
+        "injuries": {
+          "value": 7.1,
+          "overYears": [
+            2.9,
+            13
+          ],
+          "gate": [
+            2.9,
+            13
+          ]
+        },
+        "byYear": {
+          "2016": {
+            "events": 319,
+            "deaths": 15,
+            "injuries": 7
+          },
+          "2017": {
+            "events": 357,
+            "deaths": 52,
+            "injuries": 10
+          },
+          "2018": {
+            "events": 317,
+            "deaths": 11,
+            "injuries": 2
+          },
+          "2019": {
+            "events": 143,
+            "deaths": 1,
+            "injuries": 4
+          },
+          "2020": {
+            "events": 714,
+            "deaths": 21,
+            "injuries": 29
+          },
+          "2021": {
+            "events": 276,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2022": {
+            "events": 230,
+            "deaths": 19,
+            "injuries": 4
+          },
+          "2023": {
+            "events": 226,
+            "deaths": 4,
+            "injuries": 3
+          },
+          "2024": {
+            "events": 544,
+            "deaths": 78,
+            "injuries": 12
+          },
+          "2025": {
+            "events": 10,
+            "deaths": 0,
+            "injuries": 0
+          }
+        }
+      },
+      "Tsunami": {
+        "kind": "geo.tsunami",
+        "events": 19,
+        "deathsDirect": 0,
+        "deathsIndirect": 0,
+        "injuriesDirect": 0,
+        "injuriesIndirect": 0,
+        "deaths": {
+          "value": 0,
+          "overYears": [
+            0,
+            0
+          ],
+          "gate": [
+            0,
+            0
+          ]
+        },
+        "injuries": {
+          "value": 0,
+          "overYears": [
+            0,
+            0
+          ],
+          "gate": [
+            0,
+            0
+          ]
+        },
+        "byYear": {
+          "2016": {
+            "events": 0,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2017": {
+            "events": 0,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2018": {
+            "events": 0,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2019": {
+            "events": 0,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2020": {
+            "events": 0,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2021": {
+            "events": 0,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2022": {
+            "events": 9,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2023": {
+            "events": 0,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2024": {
+            "events": 0,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2025": {
+            "events": 10,
+            "deaths": 0,
+            "injuries": 0
+          }
+        }
+      },
+      "Volcanic Ashfall": {
+        "kind": "geo.volcano.ashfall",
+        "events": 73,
+        "deathsDirect": 0,
+        "deathsIndirect": 0,
+        "injuriesDirect": 0,
+        "injuriesIndirect": 0,
+        "deaths": {
+          "value": 0,
+          "overYears": [
+            0,
+            0
+          ],
+          "gate": [
+            0,
+            0
+          ]
+        },
+        "injuries": {
+          "value": 0,
+          "overYears": [
+            0,
+            0
+          ],
+          "gate": [
+            0,
+            0
+          ]
+        },
+        "byYear": {
+          "2016": {
+            "events": 0,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2017": {
+            "events": 0,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2018": {
+            "events": 65,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2019": {
+            "events": 0,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2020": {
+            "events": 0,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2021": {
+            "events": 0,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2022": {
+            "events": 1,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2023": {
+            "events": 7,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2024": {
+            "events": 0,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2025": {
+            "events": 0,
+            "deaths": 0,
+            "injuries": 0
+          }
+        }
+      },
+      "Waterspout": {
+        "kind": "met.marine.special",
+        "events": 1962,
+        "deathsDirect": 3,
+        "deathsIndirect": 0,
+        "injuriesDirect": 2,
+        "injuriesIndirect": 0,
+        "deaths": {
+          "value": 0.3,
+          "overYears": [
+            0,
+            0.9
+          ],
+          "gate": [
+            0,
+            0.9
+          ]
+        },
+        "injuries": {
+          "value": 0.2,
+          "overYears": [
+            0,
+            0.6
+          ],
+          "gate": [
+            0,
+            0.6
+          ]
+        },
+        "byYear": {
+          "2016": {
+            "events": 199,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2017": {
+            "events": 232,
+            "deaths": 3,
+            "injuries": 0
+          },
+          "2018": {
+            "events": 203,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2019": {
+            "events": 183,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2020": {
+            "events": 194,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2021": {
+            "events": 179,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2022": {
+            "events": 215,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2023": {
+            "events": 216,
+            "deaths": 0,
+            "injuries": 2
+          },
+          "2024": {
+            "events": 192,
+            "deaths": 0,
+            "injuries": 0
+          },
+          "2025": {
+            "events": 149,
+            "deaths": 0,
+            "injuries": 0
+          }
+        }
+      },
+      "Wildfire": {
+        "kind": "fire.wildfire",
+        "events": 3488,
+        "deathsDirect": 383,
+        "deathsIndirect": 26,
+        "injuriesDirect": 638,
+        "injuriesIndirect": 173,
+        "deaths": {
+          "value": 40.9,
+          "overYears": [
+            18.3,
+            66.8
+          ],
+          "gate": [
+            18.3,
+            66.8
+          ]
+        },
+        "injuries": {
+          "value": 81.1,
+          "overYears": [
+            52.4,
+            120.3
+          ],
+          "gate": [
+            52.4,
+            120.3
+          ]
+        },
+        "byYear": {
+          "2016": {
+            "events": 347,
+            "deaths": 6,
+            "injuries": 42
+          },
+          "2017": {
+            "events": 358,
+            "deaths": 25,
+            "injuries": 54
+          },
+          "2018": {
+            "events": 417,
+            "deaths": 116,
+            "injuries": 153
+          },
+          "2019": {
+            "events": 197,
+            "deaths": 6,
+            "injuries": 66
+          },
+          "2020": {
+            "events": 413,
+            "deaths": 48,
+            "injuries": 223
+          },
+          "2021": {
+            "events": 352,
+            "deaths": 10,
+            "injuries": 46
+          },
+          "2022": {
+            "events": 421,
+            "deaths": 18,
+            "injuries": 60
+          },
+          "2023": {
+            "events": 297,
+            "deaths": 107,
+            "injuries": 67
+          },
+          "2024": {
+            "events": 336,
+            "deaths": 10,
+            "injuries": 57
+          },
+          "2025": {
+            "events": 350,
+            "deaths": 63,
+            "injuries": 43
+          }
+        }
+      },
+      "Winter Storm": {
+        "kind": "met.winter.storm",
+        "events": 27655,
+        "deathsDirect": 30,
+        "deathsIndirect": 142,
+        "injuriesDirect": 82,
+        "injuriesIndirect": 382,
+        "deaths": {
+          "value": 17.2,
+          "overYears": [
+            12.4,
+            22.3
+          ],
+          "gate": [
+            12.4,
+            22.3
+          ]
+        },
+        "injuries": {
+          "value": 46.4,
+          "overYears": [
+            21.597500000000025,
+            75.2
+          ],
+          "gate": [
+            21.597500000000025,
+            75.2
+          ]
+        },
+        "byYear": {
+          "2016": {
+            "events": 2367,
+            "deaths": 34,
+            "injuries": 17
+          },
+          "2017": {
+            "events": 2245,
+            "deaths": 7,
+            "injuries": 7
+          },
+          "2018": {
+            "events": 3468,
+            "deaths": 11,
+            "injuries": 15
+          },
+          "2019": {
+            "events": 3354,
+            "deaths": 20,
+            "injuries": 120
+          },
+          "2020": {
+            "events": 2102,
+            "deaths": 13,
+            "injuries": 7
+          },
+          "2021": {
+            "events": 2945,
+            "deaths": 17,
+            "injuries": 30
+          },
+          "2022": {
+            "events": 3644,
+            "deaths": 19,
+            "injuries": 89
+          },
+          "2023": {
+            "events": 2348,
+            "deaths": 5,
+            "injuries": 118
+          },
+          "2024": {
+            "events": 2112,
+            "deaths": 23,
+            "injuries": 42
+          },
+          "2025": {
+            "events": 3070,
+            "deaths": 23,
+            "injuries": 19
+          }
+        }
+      },
+      "Winter Weather": {
+        "kind": "met.winter.weather",
+        "events": 36570,
+        "deathsDirect": 54,
+        "deathsIndirect": 354,
+        "injuriesDirect": 306,
+        "injuriesIndirect": 1210,
+        "deaths": {
+          "value": 40.8,
+          "overYears": [
+            33.3,
+            49
+          ],
+          "gate": [
+            33.3,
+            49
+          ]
+        },
+        "injuries": {
+          "value": 151.6,
+          "overYears": [
+            113.9,
+            188.3
+          ],
+          "gate": [
+            113.9,
+            188.3
+          ]
+        },
+        "byYear": {
+          "2016": {
+            "events": 2916,
+            "deaths": 50,
+            "injuries": 219
+          },
+          "2017": {
+            "events": 2806,
+            "deaths": 31,
+            "injuries": 50
+          },
+          "2018": {
+            "events": 4570,
+            "deaths": 66,
+            "injuries": 248
+          },
+          "2019": {
+            "events": 3808,
+            "deaths": 58,
+            "injuries": 170
+          },
+          "2020": {
+            "events": 2910,
+            "deaths": 42,
+            "injuries": 92
+          },
+          "2021": {
+            "events": 3914,
+            "deaths": 33,
+            "injuries": 198
+          },
+          "2022": {
+            "events": 4762,
+            "deaths": 39,
+            "injuries": 174
+          },
+          "2023": {
+            "events": 2891,
+            "deaths": 33,
+            "injuries": 155
+          },
+          "2024": {
+            "events": 3557,
+            "deaths": 25,
+            "injuries": 87
+          },
+          "2025": {
+            "events": 4436,
+            "deaths": 31,
+            "injuries": 123
+          }
+        }
+      }
+    }
+  },
+  "cap": {
+    "source": {
+      "document": "OASIS Common Alerting Protocol Version 1.2, OASIS Standard, 1 July 2010",
+      "section": "3.2.2, the element certainty of the info element",
+      "url": "https://docs.oasis-open.org/emergency/cap/v1.2/CAP-v1.2-os.html"
+    },
+    "bands": {
+      "observed": {
+        "text": "Determined to have occurred or to be ongoing",
+        "low": 1,
+        "lowOpen": false,
+        "high": 1,
+        "approximate": false
+      },
+      "likely": {
+        "text": "Likely (p > ~50%)",
+        "low": 0.5,
+        "lowOpen": true,
+        "high": 1,
+        "approximate": true
+      },
+      "possible": {
+        "text": "Possible but not likely (p <= ~50%)",
+        "low": 0,
+        "lowOpen": true,
+        "high": 0.5,
+        "approximate": true
+      },
+      "unlikely": {
+        "text": "Not expected to occur (p ~ 0)",
+        "low": 0,
+        "lowOpen": false,
+        "high": 0,
+        "approximate": true
+      },
+      "unknown": {
+        "text": "Certainty unknown",
+        "low": 0,
+        "lowOpen": false,
+        "high": 1,
+        "approximate": false
+      }
+    }
+  }
+}

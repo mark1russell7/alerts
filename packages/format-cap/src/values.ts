@@ -31,6 +31,41 @@ export const CAP_CERTAINTY: ReadonlySet<string> = new Set<Certainty>(["observed"
  */
 export const CAP_CERTAINTY_ALIASES: ReadonlyMap<string, Certainty> = new Map<string, Certainty>([["very likely", "likely"]]);
 
+/** The band of the probability of one CAP certainty value. */
+export interface CertaintyBand {
+  /** The definition of the value in CAP 1.2, word for word. */
+  readonly text: string;
+  /** The lowest probability of the band, from 0 to 1. */
+  readonly low: number;
+  /** True when the band does not include `low`. */
+  readonly lowOpen: boolean;
+  /** The highest probability of the band, from 0 to 1. The band includes it. */
+  readonly high: number;
+  /** True when CAP gives the edges with `~`. Then each edge is approximate. */
+  readonly approximate: boolean;
+}
+
+/** The document and the section of `CAP_CERTAINTY_BANDS`. */
+export const CAP_CERTAINTY_SOURCE = {
+  document: "OASIS Common Alerting Protocol Version 1.2, OASIS Standard, 1 July 2010",
+  section: "3.2.2, the element certainty of the info element",
+  url: "https://docs.oasis-open.org/emergency/cap/v1.2/CAP-v1.2-os.html",
+} as const;
+
+/**
+ * The band of the probability of each CAP certainty value (`CAP_CERTAINTY_SOURCE`). The texts are the
+ * code values of CAP 1.2. "Observed" occurred or continues, so its band is 1. "Possible" is not
+ * "Unlikely" (approximately 0), so its band does not include 0. "Unknown" gives no information, so its band
+ * is 0 to 1. `CAP_CERTAINTY_ALIASES` reads the value "Very Likely" of CAP 1.0 as "Likely".
+ */
+export const CAP_CERTAINTY_BANDS: Readonly<Record<Certainty, CertaintyBand>> = {
+  observed: { text: "Determined to have occurred or to be ongoing", low: 1, lowOpen: false, high: 1, approximate: false },
+  likely: { text: "Likely (p > ~50%)", low: 0.5, lowOpen: true, high: 1, approximate: true },
+  possible: { text: "Possible but not likely (p <= ~50%)", low: 0, lowOpen: true, high: 0.5, approximate: true },
+  unlikely: { text: "Not expected to occur (p ~ 0)", low: 0, lowOpen: false, high: 0, approximate: true },
+  unknown: { text: "Certainty unknown", low: 0, lowOpen: false, high: 1, approximate: false },
+};
+
 /** The CAP response types, in lower case. */
 export const CAP_RESPONSES: ReadonlySet<string> = new Set<ResponseType>([
   "shelter",

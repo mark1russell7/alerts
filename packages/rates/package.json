@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json.schemastore.org/package",
+  "name": "@mark1russell7/alerts-rates",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The base rates of the alert system from public data: the verified share of the NWS warnings (IEM Cow), the deaths and injuries of each event type (NCEI) and the CAP certainty bands.",
+  "type": "module",
+  "main": "./src/index.ts",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.test.json"
+  },
+  "dependencies": {
+    "@mark1russell7/alerts-format-cap": "workspace:*",
+    "@mark1russell7/alerts-format-nws": "workspace:*",
+    "@mark1russell7/rigor-statistics": "^0.2.1",
+    "@mark1russell7/text": "^0.0.6",
+    "@procedures/json": "^0.57.0"
+  },
+  "devDependencies": {
+    "@mark1russell7/alerts": "workspace:*",
+    "@mark1russell7/alerts-fetch": "workspace:*",
+    "@mark1russell7/cue": "^2.0.0",
+    "@types/node": "^26.6.5",
+    "@vitest/coverage-v8": "^5.0.3",
+    "polite-crawler": "^0.7.3",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.3"
+  }
+}

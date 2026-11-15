@@ -1,0 +1,50 @@
+# The measure of the base rates (AL-31). Each run fetches public data of the whole country:
+# the verified share of the NWS warnings (IEM Cow) and the deaths and injuries of each event type (NCEI Storm Events).
+# The requests name no state and no office. The script compares each value with packages/rates/data/rates.json.
+# A value out of its gate interval stops the job. Then a person examines the change and commits the new file from the artifact.
+# The job calls outside servers for a long time, so it runs in CI only.
+name: Rates
+
+on:
+  schedule:
+    - cron: "39 6 3 * *"
+  # A person starts a run with gh workflow run rates.yml.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rates-${{ github.ref }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  rates:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 26
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Measure the base rates
+        working-directory: packages/rates
+        run: node scripts/measure.ts --check=data/rates.json --out="$GITHUB_WORKSPACE/rates"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: rates-${{ github.run_id }}-${{ github.run_attempt }}
+          path: rates/
+          if-no-files-found: warn
+          retention-days: 90
