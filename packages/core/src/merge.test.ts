@@ -2,6 +2,7 @@ import { canonicalJson, random, seedsFrom, type Random } from "@mark1russell7/ri
 import { describe, expect, it } from "vitest";
 import type { Acknowledgment, ChannelId, Delivery, EndMark, Incident, MergeState, ObservationId, PersonId, Report, SourceId, Status } from "./contracts.ts";
 import { reportId } from "./ids.ts";
+import { areasWithoutBlocks } from "./shapes.ts";
 import { EMPTY_STATE, acknowledgedLevel, add, endedReports, incidents, join, normalize, sentLevel, type LinkRule } from "./merge.ts";
 
 const SEEDS = seedsFrom(process.env["SEED"], [1, 2, 3, 4, 5, 6, 7, 8]);
@@ -57,6 +58,7 @@ function randomState(r: Random): MergeState {
   for (let i = r.int(0, 8); i > 0; i -= 1) {
     const event = r.below(4);
     const key = `k${event}.${r.below(3)}`;
+    const blocked = r.chance(0.5);
     reports.push(
       report({
         key,
@@ -65,8 +67,9 @@ function randomState(r: Random): MergeState {
         sent: T0 + r.below(3) * 60_000,
         references: r.chance(0.4) ? [`k${event}.${r.below(3)}`] : [],
         correlation: r.chance(0.5) ? [{ system: "vtec", id: `KTOP.TO.W.${event}` }] : [],
-        // Two sizes of area, so that the rule of the copies replaces some reports and keeps others.
-        areas: r.chance(0.5) ? [{ type: "code", system: "ugc", code: "KSZ083" }] : [{ type: "code", system: "ugc", code: "KSZ083" }, { type: "code", system: "ugc", code: "KSZ084" }],
+        // Two sizes of area, so that the rule of the copies replaces some reports and keeps others. Some areas have
+        // a block key, so that the laws also hold when the merge puts the report id before the key.
+        areas: (r.chance(0.5) ? ["KSZ083"] : ["KSZ083", "KSZ084"]).map((code) => ({ type: "code" as const, system: "ugc", code, ...(blocked ? { block: "info[0].area[0]" } : {}) })),
         // An unknown value takes a value of its event, so the laws also hold for the fill.
         severity: r.pick(["unknown", "moderate", "severe", "extreme"] as const),
         urgency: r.pick(["unknown", "expected", "immediate"] as const),
@@ -316,6 +319,17 @@ describe("the copies of one event", () => {
     expect(liveOf(alert, other, cancel({}))).toBe(false);
     const shapeOnly = report({ key: "ipaws-1", source: "ipaws", correlation: vtec, areas: [{ type: "polygon", rings: [[[-95.8, 39.0], [-95.6, 39.0], [-95.6, 39.1], [-95.8, 39.0]]] }] });
     expect(liveOf(alert, shapeOnly, cancel({}))).toBe(true);
+  });
+
+  it("puts the report id before each block key, so the blocks of two copies stay apart", () => {
+    const polygon = { type: "polygon", rings: [[[-95.8, 39.0], [-95.6, 39.0], [-95.6, 39.1], [-95.8, 39.0]]] } as const;
+    const api = report({ key: "api-1", correlation: vtec, areas: [{ ...polygon, block: "feature" }, { type: "code", system: "ugc", code: "KSC177", block: "feature" }, ...codes("KSC045")] });
+    const ipaws = report({ key: "ipaws-1", source: "ipaws", correlation: vtec, areas: [{ type: "code", system: "ugc", code: "KSC177", block: "feature" }] });
+    const [incident] = incidents(normalize({ reports: [api, ipaws] }), at);
+    const blocks = (incident?.areas ?? []).map((area) => (area.type === "place" ? "place" : (area.block ?? "none")));
+    expect(blocks.sort()).toEqual([`${api.id}/feature`, `${api.id}/feature`, `${ipaws.id}/feature`, "none"].sort());
+    // The map and the views draw each area one time.
+    expect(areasWithoutBlocks(incident?.areas ?? [])).toHaveLength(3);
   });
 
   it("ends a report when the later reports together name each of its codes", () => {

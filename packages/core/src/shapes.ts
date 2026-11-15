@@ -4,12 +4,34 @@
  * straight line in longitude and latitude, as in GeoJSON (RFC 7946).
  */
 import { distanceKm, distanceToGeometryKm, GeoError } from "@mark1russell7/geo";
+import { canonicalJson } from "@mark1russell7/rigor-generators";
 import type { Area, Position } from "./contracts.ts";
 import type { MapRegion, MapShape } from "./map.ts";
 
 /** This function tells if an area is a shape: a polygon or a circle. */
 export function isShape(area: Area): area is MapShape {
   return area.type === "polygon" || area.type === "circle";
+}
+
+/**
+ * This function gives each area one time, with no block key, in the order of the areas. The NWS and IPAWS
+ * copies of one warning give equal areas in two blocks. The map and the views draw each area one time.
+ */
+export function areasWithoutBlocks(areas: readonly Area[]): Area[] {
+  const byText = new Map<string, Area>();
+  for (const area of areas) {
+    const plain = withoutBlock(area);
+    const text = canonicalJson(plain, { form: "json" });
+    if (!byText.has(text)) byText.set(text, plain);
+  }
+  return [...byText.values()];
+}
+
+function withoutBlock(area: Area): Area {
+  if (area.type === "place" || area.block === undefined) return area;
+  if (area.type === "polygon") return { type: "polygon", rings: area.rings };
+  if (area.type === "circle") return { type: "circle", center: area.center, radiusKm: area.radiusKm };
+  return { type: "code", system: area.system, code: area.code };
 }
 
 /**

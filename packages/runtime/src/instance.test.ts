@@ -241,19 +241,22 @@ describe("openInstance", () => {
     expect(notices.state().used).toBe(1);
   });
 
-  it("sends the warning by the county code to a place in the county but out of the polygon", async () => {
-    // A public point in McMullen County TX, 8.9 km north of the polygon. The buffer of the place is 5 km. A shape adds
-    // a place and does not remove a match by codes, so the county code matches the place.
+  it("lets the polygon of the warning decide for a place in the county but out of the polygon", async () => {
+    // A public point in McMullen County TX, 8.9 km north of the polygon. The buffer of the place is 5 km. The NWS API copy
+    // and the IPAWS copy each give the polygon and the county code in one area block, so the polygon decides.
     const outside = { ...CONFIG.places[0]!, at: [LONGITUDE, 28.46] as const };
     const { instance, clock, server } = open(store(SECRETS), { ...CONFIG, places: [outside] });
     const pass = await finish(clock, instance.runtime.pass());
     expect(pass.fetched).toEqual(["nws-api", "ipaws"]);
-    expect(server.calls).toHaveLength(1);
-    expect(pass.delivery?.sent).toHaveLength(1);
+    expect(server.calls).toHaveLength(0);
     const [incident] = pass.view.incidents;
-    const [match] = matchPlaces(incident!, [outside]);
-    expect(match?.codes.map((code) => code.code)).toEqual(["TXC311", "048311"]);
-    expect(match?.distanceKm).toBeUndefined();
+    expect(incident?.areas.some((area) => area.type === "polygon")).toBe(true);
+    expect(matchPlaces(incident!, [outside])).toEqual([]);
+    // With a buffer of 10 km, the polygon is in the buffer of the place, and the distance decides the match.
+    const [near] = matchPlaces(incident!, [{ ...outside, bufferKm: 10 }]);
+    expect(near?.codes).toEqual([]);
+    expect(near?.distanceKm).toBeGreaterThan(8);
+    expect(near?.distanceKm).toBeLessThan(10);
   });
 
   it("sends the warning when each exchange takes real time, as on a busy runner", async () => {

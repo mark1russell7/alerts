@@ -217,9 +217,13 @@ export const regionCodeSchema: z.ZodType<RegionCode, RegionCode> = schemaOf<Regi
 export const areaSchema: z.ZodType<Area, Area> = schemaOf<Area>()(
   z
     .discriminatedUnion("type", [
-      z.strictObject({ type: z.literal("polygon"), rings: z.array(z.array(positionSchema).readonly()).readonly() }),
-      z.strictObject({ type: z.literal("circle"), center: positionSchema, radiusKm: z.number() }),
-      z.strictObject({ type: z.literal("code"), system: z.string(), code: z.string() }),
+      z.strictObject({
+        type: z.literal("polygon"),
+        rings: z.array(z.array(positionSchema).readonly()).readonly(),
+        block: z.string().exactOptional(),
+      }),
+      z.strictObject({ type: z.literal("circle"), center: positionSchema, radiusKm: z.number(), block: z.string().exactOptional() }),
+      z.strictObject({ type: z.literal("code"), system: z.string(), code: z.string(), block: z.string().exactOptional() }),
       z.strictObject({ type: z.literal("place"), place: placeIdSchema }),
     ])
     .readonly(),
@@ -737,6 +741,7 @@ export const assessReasonSchema: z.ZodType<AssessReason, AssessReason> = schemaO
         place: placeIdSchema,
         codes: z.array(regionCodeSchema).readonly(),
         distanceKm: z.number().min(0).exactOptional(),
+        shapeRefused: z.literal(true).exactOptional(),
       }),
       z.strictObject({ kind: z.literal("subject"), subject: subjectWatchSchema }),
       z.strictObject({

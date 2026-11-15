@@ -277,6 +277,14 @@ describe("the words of the page", () => {
     );
   });
 
+  it("tells when the codes of an area decided because its shape is not valid", () => {
+    const [incident] = frames[1]!.incidents;
+    const place = "home-a" as PlaceId;
+    expect(reasonText({ kind: "place", place, codes: [{ system: "ugc", code: "KSC173" }], shapeRefused: true }, incident!)).toBe(
+      "The incident covers the home of A, in the Valley: KSC173. The shape of an area of the incident is not valid, so its region codes decided.",
+    );
+  });
+
   it("counts the steps from 1 in the labels, and the last label names the count of the steps", () => {
     expect(stepLabel(0, frames.length)).toBe(`Step 1 of ${String(frames.length)}`);
     expect(stepLabel(4, frames.length)).toBe("Step 5 of 10");

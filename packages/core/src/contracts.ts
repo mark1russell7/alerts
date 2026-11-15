@@ -108,14 +108,24 @@ export interface RegionCode {
   readonly code: string;
 }
 
+/**
+ * The key of the area block of a message, for example the path `info[0].area[1]` of a CAP `area` element. The
+ * areas of one block tell one area together: the shapes of a block decide for that block. In a report,
+ * the adapter writes a key that is unique in the report. In an incident, the merge puts the report id
+ * before the key, so the blocks of two reports stay apart. An area with no key is in no block.
+ */
+export interface AreaBlock {
+  readonly block?: string;
+}
+
 /** One area of an event. */
 export type Area =
   /** A polygon. The first ring is the outside. Each ring closes on its first position. */
-  | { readonly type: "polygon"; readonly rings: readonly (readonly Position[])[] }
+  | ({ readonly type: "polygon"; readonly rings: readonly (readonly Position[])[] } & AreaBlock)
   /** A circle on the ground. */
-  | { readonly type: "circle"; readonly center: Position; readonly radiusKm: number }
+  | ({ readonly type: "circle"; readonly center: Position; readonly radiusKm: number } & AreaBlock)
   /** A region by its code. */
-  | ({ readonly type: "code" } & RegionCode)
+  | ({ readonly type: "code" } & RegionCode & AreaBlock)
   /**
    * A watched place of the configuration. Only the reports of the core use it, for example a gap of
    * the coverage at that place. An adapter does not know the places.
@@ -823,11 +833,19 @@ export type AssessReason =
   /** The configuration has no watched place for this id of the person. */
   | { readonly kind: "unknown-place"; readonly place: PlaceId }
   /**
-   * An area of the incident covers this place. The codes are the codes of the place that the areas have.
-   * `distanceKm` is the distance from the place to the nearest shape, and it is 0 in a shape. It is
-   * present when that distance is in the buffer of the place. For a match by a shape only, the codes are empty.
+   * An area of the incident covers this place. The codes are the codes of the place that decided the match.
+   * `distanceKm` is the distance from the place to the nearest shape that decided, and it is 0 in a shape.
+   * It is present when that distance is in the buffer of the place. For a match by a shape only, the codes
+   * are empty. `shapeRefused` is true when the codes of a block decided because `@mark1russell7/geo`
+   * refuses each shape of that block.
    */
-  | { readonly kind: "place"; readonly place: PlaceId; readonly codes: readonly RegionCode[]; readonly distanceKm?: number }
+  | {
+      readonly kind: "place";
+      readonly place: PlaceId;
+      readonly codes: readonly RegionCode[];
+      readonly distanceKm?: number;
+      readonly shapeRefused?: true;
+    }
   /** The person watches a subject of the incident. */
   | { readonly kind: "subject"; readonly subject: SubjectWatch }
   /** The table gave this level. The class is absent for the table `otherwise`. */
