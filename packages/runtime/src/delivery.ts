@@ -27,7 +27,7 @@ import {
   type WatchedPlace,
 } from "@mark1russell7/alerts";
 import { errorMessage } from "@mark1russell7/text";
-import { envelope, type RefusalKind, type RuntimeEvent, type SendFailureKind } from "./events.ts";
+import { envelope, type ChannelFailureKind, type RefusalKind, type RuntimeEvent } from "./events.ts";
 import { limited } from "./limit.ts";
 import type { RuntimeState } from "./state.ts";
 import { earliest } from "./view.ts";
@@ -143,7 +143,7 @@ interface Landed {
 const UNSURE: ReadonlySet<string> = new Set(["network", "timeout", "server"]);
 
 // This function tells if the channel refused a send. Then the channel has no message.
-const refusal = (kind: SendFailureKind): kind is RefusalKind => !UNSURE.has(kind);
+const refusal = (kind: ChannelFailureKind): kind is RefusalKind => !UNSURE.has(kind);
 
 /** The kind and the text of a failed cancel or stop. */
 interface CallFailure {

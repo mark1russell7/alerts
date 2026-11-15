@@ -24,7 +24,7 @@ import { errorMessage } from "@mark1russell7/text";
 import { redactSecrets } from "@mark1russell7/text/redact";
 import { fetchTransport } from "polite-crawler/api";
 import { alertsHome, configPath, envSecrets, fileSource, readSecrets, requireConfig } from "./config.ts";
-import { heartbeat } from "./heartbeat.ts";
+import { heartbeat, heldOf } from "./heartbeat.ts";
 import { PROFILES, declare } from "./index.ts";
 import { INSTANCE_CHANNELS, openInstance, userAgent } from "./instance.ts";
 import { openRuntimeLog } from "./log.ts";
@@ -66,7 +66,7 @@ async function runtime(): Promise<ServiceBuilder> {
     if (name === "daemon") throw new Error("The file secrets.env has no HEALTHCHECKS_PING_URL. The live instance needs its outside heartbeat.");
     console.warn("The file secrets.env has no HEALTHCHECKS_PING_URL. This runtime has no outside heartbeat.");
   }
-  const onPass = pingUrl === "" ? undefined : heartbeat({ url: pingUrl, fetch, clock: wall, userAgent: agent, onError: (message) => console.error(redactSecrets(message, values)) });
+  const onPass = pingUrl === "" ? undefined : heartbeat({ url: pingUrl, fetch, clock: wall, userAgent: agent, held: (at) => heldOf(instance.runtime.state(), at), onError: (message) => console.error(redactSecrets(message, values)) });
 
   const log = openRuntimeLog(join(home, "runtime.sqlite"));
   const instance = openInstance({

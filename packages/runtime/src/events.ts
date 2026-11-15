@@ -5,11 +5,11 @@
  */
 import type { Acknowledgment, ChannelId, Cursor, Delivery, EscalationStart, FetchRecord, Instant, MapProblem, Observation, Report, ReportId, SendOutcome, SourceId } from "@mark1russell7/alerts";
 
-/** The kinds of a failed send. */
-export type SendFailureKind = Extract<SendOutcome, { readonly ok: false }>["kind"];
+/** The kind of a failed call of a channel. */
+export type ChannelFailureKind = Extract<SendOutcome, { readonly ok: false }>["kind"];
 
 /** The kinds of a send that the channel refused. After such a send, the channel has no message. */
-export type RefusalKind = Exclude<SendFailureKind, "network" | "timeout" | "server">;
+export type RefusalKind = Exclude<ChannelFailureKind, "network" | "timeout" | "server">;
 
 /** The fields of each event. The log of `@mark1russell7/sqlite` reads `id`, `at` and `type`. */
 interface Envelope<T extends string> {
