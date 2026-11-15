@@ -18,11 +18,14 @@ import { openRuntime, type Pass, type Runtime, type RuntimeOptions } from "./run
 /** The name of the secret that holds the API token of the Pushover application. */
 export const PUSHOVER_TOKEN = "PUSHOVER_APP_TOKEN";
 
+/** The name of the application in the User-Agent of each request. The NWS asks for a name and a contact. */
+export const USER_AGENT_NAME = "alerts-runtime";
+
 /**
- * The User-Agent of each request to a source. The NWS asks for the name of the application and a
- * contact. The contact is the page of the project, thus no request names a person.
+ * This function gives the User-Agent of each request of the instance: the name, and the contact of the
+ * operator when the configuration has one. Without a contact, no request names a person or an account.
  */
-export const USER_AGENT = "alerts-runtime (+https://github.com/mark1russell7/alerts)";
+export const userAgent = (contact: string | undefined): string => (contact === undefined ? USER_AGENT_NAME : `${USER_AGENT_NAME} (+${contact})`);
 
 /**
  * The quantile and the level of the two limits of each expectation. In normal work, 1 copy in 100 or
@@ -113,7 +116,7 @@ export function openInstance(options: InstanceOptions): Instance {
   const { clock, wall } = options;
   const factories = [createNwsSource, createIpawsSource] as const;
   const pace = sourcePace(clock, wall, factories.length);
-  const sources = factories.map((make) => make({ pace, transport: options.transport, userAgent: USER_AGENT }));
+  const sources = factories.map((make) => make({ pace, transport: options.transport, userAgent: userAgent(options.config.config.contact) }));
 
   const descriptors = sources.map((source) => source.describe());
   const kinds = [...new Set(descriptors.flatMap((descriptor) => descriptor.kinds))];
