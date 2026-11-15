@@ -147,15 +147,41 @@ For `life-safety`, the system prefers a duplicate to a miss.
 | `notice` | A push in the day, else the digest. |
 | `digest` | The next digest. |
 
-The first assessment is a table. An incident is `life-safety` when each of these conditions is true:
+The first assessment is a table of data: `DEFAULT_ASSESS_POLICY`. The policy puts each kind in a class. Each class has two lookups: the highest level for the severity and the highest level for the urgency. The level of the table is the lower of the two.
+
+| Severity | Life-safety class | Other kinds |
+| --- | --- | --- |
+| `extreme` | `life-safety` | `urgent` |
+| `severe` | `life-safety` | `urgent` |
+| `moderate` | `urgent` | `notice` |
+| `minor` | `notice` | `digest` |
+| `unknown` | `life-safety` | `digest` |
+
+| Urgency | Life-safety class | Other kinds |
+| --- | --- | --- |
+| `immediate` | `life-safety` | `urgent` |
+| `expected` | `life-safety` | `urgent` |
+| `future` | `urgent` | `notice` |
+| `past` | `digest` | `digest` |
+| `unknown` | `life-safety` | `notice` |
+
+So an incident is `life-safety` when each of these conditions is true:
 
 - The status is `actual`.
-- The kind is in the life-safety list: tornado, flash flood, extreme wind, fire, evacuation, shelter in place, tsunami, earthquake shaking.
-- The area contains a watched place, or comes within its buffer.
-- The severity is `severe` or `extreme`.
-- The urgency is `immediate` or `expected`.
+- The kind is in the life-safety class. `LIFE_SAFETY_KINDS` has its codes.
+- An area of the incident contains a watched place.
+- The severity is `severe`, `extreme` or `unknown`.
+- The urgency is `immediate`, `expected` or `unknown`.
 
-The table becomes the calculation of the design study (AL-1 and AL-7). The calculation multiplies the probability that the event is real, the impact on the person and the urgency. It compares the result with the cost to interrupt the person at that time.
+The life-safety class holds tornado, flash flood, extreme wind, hurricane, storm surge, fire, tsunami and earthquake shaking. It also holds evacuation, shelter in place, civil danger, civil emergency, and chemical, biological, radiological and nuclear hazards. For these kinds, an unknown value counts as high, because a miss costs more than a false alarm. A tornado watch has the urgency `future`, so it is `urgent`: a push at once that does not wake the person.
+
+Each lookup only grows with the severity and with the urgency. So a more severe or more urgent incident does not get a lower level. Tests hold this order and the rule above for each value.
+
+The level for a person is the highest level at the places of the person. A rule of the person can lower the level of some kinds at some places. For example, warnings at the places of other people can come as `urgent`. At each place, the first rule that matches applies, and a rule does not raise the level.
+
+The assessment reads no clock. At night, only `life-safety` breaks through Do Not Disturb, so the levels hold the night rule. Each assessment has its reasons: the gate that stopped it, the class, the two lookups, the places and the rules. The UI shows them.
+
+The table becomes the calculation of AL-30. The calculation multiplies the probability that the event is real, the impact on the person and the urgency. It compares the result with the cost to interrupt the person at that time. The probabilities come from base rates that the event log measures, not from values that a person sets.
 
 ## People and places
 
@@ -165,9 +191,12 @@ The positions of the places do not go to a source. A source fetches by area, for
 
 The core matches the area of a report to a place with one rule for each source. A polygon or a circle comes first, with the buffer of the place. Else the region codes decide. Polygon math waits for its home, `@mark1russell7/geo`. Until then, the core matches by codes only.
 
+Two codes match when their systems and their values are equal. The first digit of a SAME code is a part of the county, and `0` is the full county. So a part also matches the full county, and the match errs on the safe side. An area with only shapes matches no place until `@mark1russell7/geo` has the tests. The assessment then gives the reason `no-codes`. The first sources, the NWS and IPAWS, give codes with each area.
+
 ## Open points
 
 - The procedure schemas: Standard Schema validators (zod 4) for each input and output, in the core package.
 - The link rule of each family of kind, for rule 3 of the merge.
+- The calculation of the level from probabilities and costs (AL-30), with the base rates from the event log.
 - The merge state grows with each report. A compaction of the incidents that ended before a horizon keeps it small. It must keep the three laws.
 - The taxonomy: the list of codes, from the CAP and NWS event names first (AL-5).
