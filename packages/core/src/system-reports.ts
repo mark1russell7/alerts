@@ -1,6 +1,6 @@
 /**
- * The reports of the system itself. Each source that is down and each gap of the coverage becomes a
- * line of reports with the status `system`. So the merge, the assessment and the escalation carry
+ * The reports of the system itself. Each source that is down or late and each gap of the coverage
+ * becomes a line of reports with the status `system`. So the merge, the assessment and the escalation carry
  * them as they carry the reports of a source.
  *
  * The function is a fold over snapshots of the health and the coverage. A condition that starts
@@ -32,6 +32,7 @@ import type {
 } from "./contracts.ts";
 import { coverageShort } from "./coverage.ts";
 import { observationId, reportId } from "./ids.ts";
+import type { Lateness } from "./lateness.ts";
 
 /** The source of each report of the core. No adapter has this id. */
 export const SYSTEM_SOURCE = "system" as SourceId;
@@ -82,6 +83,8 @@ export interface SystemSnapshot {
   readonly coverage: readonly Coverage[];
   /** The places and the kinds with a live watch or warning. The function `threats` gives them. */
   readonly threats: readonly Threat[];
+  /** The lateness of the sources that carry the reports of other sources. Each `late` entry is a condition. */
+  readonly lateness?: readonly Lateness[];
 }
 
 /** The result of one step of the fold. */
@@ -120,8 +123,8 @@ export function gapGrade(entry: Coverage, threatened: boolean): { readonly sever
 }
 
 /**
- * This function adds one snapshot to the fold at the time `at`. Each source in `DOWN_STATES` and
- * each coverage that is short is a condition. An open line with no condition in the snapshot ends
+ * This function adds one snapshot to the fold at the time `at`. Each source in `DOWN_STATES`, each
+ * late expectation and each coverage that is short is a condition. An open line with no condition in the snapshot ends
  * with a cancel. Equal snapshots give no new report.
  */
 export function systemReports(lines: SystemLines, snapshot: SystemSnapshot, at: Instant): SystemStep {
@@ -129,6 +132,9 @@ export function systemReports(lines: SystemLines, snapshot: SystemSnapshot, at: 
   const titles = new Map(snapshot.sources.map((source) => [source.id, source.title]));
   for (const health of snapshot.health) {
     if (DOWN_STATES.includes(health.state)) conditions.set(healthName(health.source), healthCondition(health, titles.get(health.source) ?? health.source));
+  }
+  for (const entry of snapshot.lateness ?? []) {
+    if (entry.state === "late") conditions.set(lateName(entry.expectation), lateCondition(entry, titles));
   }
   for (const entry of snapshot.coverage) {
     if (!coverageShort(entry)) continue;
@@ -186,6 +192,10 @@ function healthName(source: SourceId): string {
   return `health/${encodeURIComponent(source)}`;
 }
 
+function lateName(expectation: string): string {
+  return `late/${encodeURIComponent(expectation)}`;
+}
+
 function coverageName(place: PlaceId, kind: string): string {
   return `coverage/${encodeURIComponent(place)}/${encodeURIComponent(kind)}`;
 }
@@ -204,6 +214,26 @@ function healthCondition(health: SourceHealth, title: string): Condition {
     headline: `${title}: ${HEADLINES[health.state] ?? health.state}.`,
     ...(health.reason === "" ? {} : { description: health.reason }),
     parameters: { state: [health.state] },
+  };
+}
+
+function lateCondition(entry: Lateness, titles: ReadonlyMap<SourceId, string>): Condition {
+  const to = titles.get(entry.to) ?? entry.to;
+  const from = titles.get(entry.from) ?? entry.from;
+  const limit = entry.limit ?? 0;
+  return {
+    // Each new miss is a new fact, so it gives an update.
+    facts: { expectation: entry.expectation, from: entry.from, to: entry.to, missed: entry.missed },
+    kind: { code: `${HEALTH_KIND}.late`, label: "Source late" },
+    severity: "moderate",
+    urgency: "expected",
+    response: ["assess"],
+    ...(entry.since === undefined ? {} : { onset: entry.since }),
+    areas: [],
+    about: [{ system: SOURCE_SUBJECT, id: entry.to, label: to }],
+    headline: `${to} is late: it did not carry the reports of ${from} in time.`,
+    description: `Reports with no copy: ${entry.missed.length}. The limit of the delay is ${Math.round(limit / 1000)} seconds, from the measured delays.`,
+    parameters: { expectation: [entry.expectation], missed: entry.missed, limit: [String(limit)] },
   };
 }
 
