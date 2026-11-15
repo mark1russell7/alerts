@@ -12,6 +12,7 @@ import {
   extractPushoverSent,
   PUSHOVER_KEY,
   PUSHOVER_LIMITS,
+  PUSHOVER_RETRY_MIN_MS,
   pushoverCancelByTagRequest,
   pushoverCancelRequest,
   pushoverReceiptRequest,
@@ -26,8 +27,23 @@ import { type PushoverMapOptions, pushoverMessageOf, sendFailureOf, statusOf } f
 export { cut, priorityOf, pushoverMessageOf, sendFailureOf, statusOf } from "./map.ts";
 export type { PushoverMapOptions, Refusal } from "./map.ts";
 
+/** The time limit of one call when the options give none, in milliseconds. */
+export const PUSHOVER_TIMEOUT_MS = 10_000;
+
+/** The time between two repeats of a `life-safety` message when the options give none, in milliseconds. It is also the minimum. */
+export const PUSHOVER_REPEAT_MS: number = PUSHOVER_RETRY_MIN_MS;
+
 /** The id of the channel. */
 export const CHANNEL_ID = "pushover" as ChannelId;
+
+/**
+ * This function tells if a value has the form of a key of Pushover: 30 letters and digits. The API token of an
+ * application, a user key and a group key have this form. A start of the system examines each key with it, thus a
+ * bad key stops the start, before the first alert.
+ */
+export function isPushoverKey(value: unknown): value is string {
+  return typeof value === "string" && PUSHOVER_KEY.test(value);
+}
 
 /** The options of the Pushover channel. */
 export interface PushoverChannelOptions extends PushoverMapOptions {
@@ -96,7 +112,7 @@ export function pushoverDescriptor(platform?: "ios" | "android"): ChannelDescrip
  */
 export function createPushoverChannel(options: PushoverChannelOptions): ChannelProcedures {
   const now = options.now ?? Date.now;
-  const timeoutMs = options.timeoutMs ?? 10_000;
+  const timeoutMs = options.timeoutMs ?? PUSHOVER_TIMEOUT_MS;
   const descriptor = pushoverDescriptor(options.platform);
 
   /** One call. A refusal of the quota stops the call before Pushover counts it. */
@@ -119,7 +135,7 @@ export function createPushoverChannel(options: PushoverChannelOptions): ChannelP
 
     async send({ message, address }): Promise<SendOutcome> {
       const at = now();
-      if (!PUSHOVER_KEY.test(options.token)) return { ok: false, kind: "auth", message: "The API token is not 30 letters and digits." };
+      if (!isPushoverKey(options.token)) return { ok: false, kind: "auth", message: "The API token is not 30 letters and digits." };
       const mapped = pushoverMessageOf(message, address, at, options);
       if ("refused" in mapped) return { ok: false, kind: "refused", message: mapped.refused };
       let request: PushoverRequest;
