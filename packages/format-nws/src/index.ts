@@ -2,8 +2,10 @@
  * This package holds four formats of the US warning system. The first is the Valid Time Event Code
  * (P-VTEC) of the NWS. The second is the kinds of the NWS and SAME event codes in the taxonomy of the
  * alert system. The third is the UGC and SAME region codes and the state codes. The fourth is the
- * event codes of the WEA messages. The NWS API source, the CAP sources and the weather radio source
- * use these functions.
+ * event codes of the WEA messages.
+ *
+ * The package also holds the origin and the office ids of the NWS. The NWS API source, the CAP sources,
+ * the IEM source and the weather radio source use these functions.
  */
 
 export {
@@ -23,17 +25,21 @@ export {
   type Hazard,
   type KindFacts,
   type ResolvedKind,
+  VTEC_KIND_PREFIXES,
 } from "./kinds.ts";
 export {
   isSameCode,
   isUgcCode,
   parseSameLocation,
+  sameOfCountyUgc,
   STATE_FIPS,
   STATE_POSTAL,
   stateOfSame,
   stateOfUgc,
   type SameLocation,
 } from "./codes.ts";
+export { NWS_ORIGIN, vtecOffice } from "./nws.ts";
+export { statesOf } from "./watch.ts";
 export { WEA_EVENT_CODES, WEA_PARAMETER } from "./wea.ts";
 export {
   CLOSING_ACTIONS,
@@ -42,8 +48,10 @@ export {
   mainVtec,
   NO_TIME,
   parseVtec,
+  vtecEventKey,
   vtecKey,
   vtecTime,
   type Vtec,
   type VtecClass,
+  type VtecEvent,
 } from "./vtec.ts";

@@ -40,7 +40,7 @@ import {
   type CapInfo,
   type CapPair,
 } from "@mark1russell7/alerts-format-cap";
-import { parseVtec, resolveKind, vtecKey, type Vtec } from "@mark1russell7/alerts-format-nws";
+import { NWS_ORIGIN, parseVtec, resolveKind, vtecKey, type Vtec } from "@mark1russell7/alerts-format-nws";
 import { errorMessage } from "@mark1russell7/text";
 
 /** The id of this source. */
@@ -51,7 +51,7 @@ export const SOURCE_ID = "ipaws" as SourceId;
  * Alerts (WEA) to IPAWS. Each other message comes from an alerting authority of IPAWS: a state, a
  * county, a city or a federal agency. The descriptor lists both in `origins`.
  */
-export const ORIGINS = { nws: "nws", authority: "ipaws-authority" } as const;
+export const ORIGINS: { readonly nws: typeof NWS_ORIGIN; readonly authority: "ipaws-authority" } = { nws: NWS_ORIGIN, authority: "ipaws-authority" };
 
 /** The sender of each message of the NWS in IPAWS. */
 export const NWS_SENDER = "w-nws.webmaster@noaa.gov";

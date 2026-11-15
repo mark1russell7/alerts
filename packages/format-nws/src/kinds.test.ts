@@ -8,10 +8,12 @@ import {
   fromEventName,
   fromPhenomenon,
   hasVtec,
+  KIND_PREFIXES,
   NAME_ALIASES,
   PHENOMENA,
   resolveKind,
   SIGNIFICANCE,
+  VTEC_KIND_PREFIXES,
 } from "./kinds.ts";
 import { parseVtec, type Vtec } from "./vtec.ts";
 
@@ -118,5 +120,14 @@ describe("hasVtec", () => {
         expect(hasVtec(code)).toBe(code.length === 3);
       }
     }
+  });
+});
+
+describe("the kind prefixes", () => {
+  it("gives the first part of each code of the VTEC phenomena, in the prefixes of all kinds", () => {
+    const first = (code: string): string => code.split(".", 1)[0] ?? "";
+    expect(new Set(VTEC_KIND_PREFIXES)).toEqual(new Set(Object.values(PHENOMENA).map((hazard) => first(hazard.code))));
+    for (const prefix of VTEC_KIND_PREFIXES) expect(KIND_PREFIXES).toContain(prefix);
+    expect([...VTEC_KIND_PREFIXES].sort()).toEqual(VTEC_KIND_PREFIXES);
   });
 });

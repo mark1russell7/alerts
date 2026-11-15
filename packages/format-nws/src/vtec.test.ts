@@ -1,7 +1,7 @@
 import { random, seedsFrom, type Random } from "@mark1russell7/rigor-generators";
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
-import { formatVtec, formatVtecTime, mainVtec, NO_TIME, parseVtec, vtecKey, vtecTime, type Vtec, type VtecClass } from "./vtec.ts";
+import { formatVtec, formatVtecTime, mainVtec, NO_TIME, parseVtec, vtecEventKey, vtecKey, vtecTime, type Vtec, type VtecClass } from "./vtec.ts";
 
 /** The seeds of the property tests. `SEED=17` or `SEED=1-50` replays or widens a run. */
 const SEEDS = seedsFrom(process.env["SEED"], [1, 2, 3, 4, 5]);
@@ -138,6 +138,15 @@ describe("vtecKey", () => {
   it("takes the year from the sent time when the event already started", () => {
     const vtec = parseVtec("/O.CON.KBOU.WS.W.0003.000000T0000Z-270102T0000Z/") as Vtec;
     expect(vtecKey(vtec, sent)).toEqual({ system: "vtec", id: "KBOU.WS.W.0003.2026" });
+  });
+});
+
+describe("vtecEventKey", () => {
+  it("gives the key of vtecKey from the parts of the event", () => {
+    const vtec = parseVtec("/O.NEW.KEWX.FF.W.0108.261108T1923Z-261108T2315Z/") as Vtec;
+    const key = vtecEventKey({ office: "KEWX", phenomenon: "FF", significance: "W", eventNumber: 108, year: 2026 });
+    expect(key).toEqual({ system: "vtec", id: "KEWX.FF.W.0108.2026" });
+    expect(vtecKey(vtec, Date.UTC(2026, 10, 8, 19, 23))).toEqual(key);
   });
 });
 

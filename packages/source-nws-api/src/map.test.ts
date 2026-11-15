@@ -3,8 +3,8 @@ import type { MapProblem, Observation, ObservationId, Report } from "@mark1russe
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import { NWS_DESCRIPTOR } from "./descriptor.ts";
-import { mapObservation, ORIGIN, SOURCE_ID } from "./map.ts";
-import { isSameCode, isUgcCode, mainVtec, parseVtec, PHENOMENA, vtecKey, type Vtec } from "@mark1russell7/alerts-format-nws";
+import { mapObservation, SOURCE_ID } from "./map.ts";
+import { isSameCode, isUgcCode, mainVtec, NWS_ORIGIN, parseVtec, PHENOMENA, vtecKey, type Vtec } from "@mark1russell7/alerts-format-nws";
 import { CAP_CATEGORIES, CAP_CERTAINTY, CAP_NOT_ALERTS, CAP_OPERATIONS, CAP_RESPONSES, CAP_SEVERITY, CAP_STATUS, CAP_URGENCY } from "@mark1russell7/alerts-format-cap";
 
 const FIXTURES = new URL("../fixtures/", import.meta.url);
@@ -62,7 +62,7 @@ describe("the map of the recorded alerts", () => {
     expect(report.kind.label).toBe(properties.event);
     expect(report.key).toBe(properties.id);
     expect(report.source).toBe(SOURCE_ID);
-    expect(report.origin).toBe(ORIGIN);
+    expect(report.origin).toBe(NWS_ORIGIN);
     expect(NWS_DESCRIPTOR.origins).toContain(report.origin);
     expect(report.op).toBe(properties.messageType.toLowerCase());
     expect(report.status).toBe(properties.status.toLowerCase());

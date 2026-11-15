@@ -9,7 +9,7 @@
 import { observationId, type Cursor, type FetchOutcome, type Instant, type Observation, type Watch } from "@mark1russell7/alerts";
 import { createRequester } from "@mark1russell7/alerts-fetch";
 import { readCap, splitFeed } from "@mark1russell7/alerts-format-cap";
-import { stateOfSame, stateOfUgc } from "@mark1russell7/alerts-format-nws";
+import { stateOfSame, stateOfUgc, statesOf } from "@mark1russell7/alerts-format-nws";
 import type { Pace, Reply, Transport } from "polite-crawler/api";
 
 import { NWS_SENDER, SOURCE_ID } from "./map.ts";
@@ -85,21 +85,6 @@ export function sinceOf(cursor: Cursor | undefined, now: Instant): Since {
   const asked = Date.parse(text);
   if (Number.isNaN(asked) || asked < floor) return { since: floor, complete: false };
   return { since: Math.min(asked, now), complete: true };
-}
-
-/** The states of a watch, as postal codes. `undefined` means all states: a place has no code of a state. */
-export function statesOf(watch: Watch): ReadonlySet<string> | undefined {
-  const states = new Set<string>();
-  for (const place of watch.places) {
-    const own = new Set<string>();
-    for (const { system, code } of place.codes) {
-      const state = system === "state" ? code.trim().toUpperCase() : system === "ugc" ? stateOfUgc(code) : system === "same" ? stateOfSame(code) : undefined;
-      if (state !== undefined && /^[A-Z]{2}$/.test(state)) own.add(state);
-    }
-    if (own.size === 0) return undefined;
-    for (const state of own) states.add(state);
-  }
-  return states;
 }
 
 /**
