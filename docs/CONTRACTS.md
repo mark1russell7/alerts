@@ -27,6 +27,7 @@ fetch ──► Observation ──► map ──► Report ──► merge state
 | `@mark1russell7/alerts-format-<name>` | `packages/format-<name>` | The reader of one message format that two or more sources use: `format-cap` for CAP 1.2, `format-nws` for VTEC and the NWS kinds. |
 | `@mark1russell7/alerts-fetch` | `packages/fetch` | The fetch parts that the sources share: the request through polite-crawler, and the map from an answer to a failure. |
 | `@mark1russell7/alerts-source-<id>` | `packages/source-<id>` | One source adapter as procedures. |
+| `@mark1russell7/alerts-atlas` | `packages/atlas` | The source atlas: each signal class, the candidate sources of each class with a decision and its reason, and the records of the research rounds. Its gate needs 2 or more sources with no risk for each class, or a reason. |
 | `@mark1russell7/alerts-channel-<id>` | `packages/channel-<id>` | One delivery channel as procedures. |
 | `@mark1russell7/alerts-runtime` | `packages/runtime` | The service: the loops, the event log, the delivery ledger and the heartbeat, on `@mark1russell7/service` and the SQLite home. |
 | `@mark1russell7/alerts-testkit` | `packages/testkit` | The conformance tests of the adapters, the fixtures and the fault plans. |
@@ -242,6 +243,7 @@ The channel does not escalate. The core does:
 - Only an acknowledgment proves that the person got a message. The Pushover receipt field `last_delivered_at` is the time of a retry of the server, not a proof.
 - The core decides the silent mode. `escalate` sets `quiet` on each send, and `Message.quiet` takes it. Each channel maps it to its silent mode: Pushover priority `-1`, or a text and no call on Twilio. No channel keeps its own rule about the time of day.
 - On an iPhone, an Emergency message of Pushover sounds through silent mode only when the Pushover app has Critical Alerts on for Emergency. A reset of the iOS permission of Pushover turns that setting off.
+- A channel with `why` in its descriptor gets a why line in `Message.why`: why the message reaches the person, in the limit of the channel. `WHY_LIMITS` in `why.ts` holds the limit of each kind of channel. Pushover takes the push limit, and puts the line first in the body.
 
 ## The delivery promise
 
@@ -604,6 +606,13 @@ The view holds labels and positions. Only a route on the loopback address gives 
 The relevance of an incident for one person is a calculation over the interest graph of the person (AL-35). The types are in the section "Relevance" of `contracts.ts`.
 
 `RELEVANCE.md` describes the model, the defaults, the three kinds of opt-out, the why record and the gates.
+
+The why line is live for the match by places:
+
+- `route` gives each route of a live incident the `WhyRecord` of the matched place with the first id (`placeWhy`). Thus the order of the configuration does not change it. A match by subjects alone gives no why at this time.
+- The runtime makes the line of each channel with `whyLine`, from the record and the labels of `placeLabels`. The labels stay in the runtime. No record and no event of the log holds them.
+- A label goes into a line only when it is plain words. A line holds no digit, no code in capitals and no colon after its prefix. Thus it holds no address, point or region code.
+- The gate test "The why fits each channel" holds each limit of `WHY_LIMITS` over seeded records and labels.
 
 ## The schemas
 

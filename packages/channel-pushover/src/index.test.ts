@@ -1,4 +1,4 @@
-import type { Level, Message, PersonId, ReportId } from "@mark1russell7/alerts";
+import { WHY_LIMITS, type Level, type Message, type PersonId, type ReportId } from "@mark1russell7/alerts";
 import type { PushoverFetch } from "@procedures/notify/pushover";
 import { quotaGate, type QuotaGate } from "polite-crawler/api";
 import { describe, expect, it } from "vitest";
@@ -110,6 +110,16 @@ describe("pushoverMessageOf", () => {
     expect(pushoverMessageOf(message("notice", { body: "  ", url: "https://example.com/a" }), ADDRESS, AT)).toMatchObject({ message: "Tornado warning", url: "https://example.com/a" });
   });
 
+  it("puts the why line first in the body, thus the cut of a long body keeps it", () => {
+    const why = "Why: Lake cabin is in the area";
+    expect(pushoverMessageOf(message("notice", { body: "Take cover.", why }), ADDRESS, AT)).toMatchObject({ message: `${why}\n\nTake cover.` });
+    expect(pushoverMessageOf(message("notice", { body: "  ", why }), ADDRESS, AT)).toMatchObject({ title: "Tornado warning", message: why });
+    const long = pushoverMessageOf(message("notice", { body: "b".repeat(2000), why }), ADDRESS, AT);
+    if ("refused" in long) throw new Error("refused");
+    expect(long.message.startsWith(`${why}\n\nbbb`)).toBe(true);
+    expect([...long.message].length).toBe(1024);
+  });
+
   it("refuses an address with no user key and a message that expired", () => {
     expect(pushoverMessageOf(message("notice"), {}, AT)).toEqual({ refused: "The address has no user key." });
     expect(pushoverMessageOf(message("notice", { expires: AT }), ADDRESS, AT)).toEqual({ refused: "The message expired before the send." });
@@ -128,6 +138,8 @@ describe("the descriptor", () => {
     expect(pushoverDescriptor("ios").dependsOn).toEqual(["provider:pushover", "provider:apns"]);
     expect(pushoverDescriptor("android").dependsOn).toEqual(["provider:pushover", "provider:fcm"]);
     expect(pushoverDescriptor()).toMatchObject({ id: "pushover", uses: ["internet", "power"], breaksThrough: true, repeats: true, ack: "poll", maxTitle: 250, maxBody: 1024 });
+    // A push takes the why line of the push limit.
+    expect(pushoverDescriptor().why).toEqual(WHY_LIMITS.push);
     const fake = server();
     expect(createPushoverChannel({ token: TOKEN, fetch: fake.fetch, platform: "ios" }).describe().dependsOn).toContain("provider:apns");
   });

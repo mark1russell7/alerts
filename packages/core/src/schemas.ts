@@ -98,6 +98,7 @@ import {
   type RelevancePolicy,
   type SubjectEntry,
   type SubjectKind,
+  type WhyLimit,
   type WhyRecord,
   type WatchedPlace,
 } from "./contracts.ts";
@@ -536,6 +537,16 @@ export const incidentSchema: z.ZodType<Incident, Incident> = schemaOf<Incident>(
 /** This schema checks the level of an alert. The values come from `LEVELS`. */
 export const levelSchema: z.ZodType<Level, Level> = schemaOf<Level>()(z.enum(LEVELS));
 
+/** This schema checks the limit of a why line: each limit is an integer of 1 or more. */
+export const whyLimitSchema: z.ZodType<WhyLimit, WhyLimit> = schemaOf<WhyLimit>()(
+  z
+    .strictObject({
+      chars: z.number().int().min(1).exactOptional(),
+      words: z.number().int().min(1).exactOptional(),
+    })
+    .readonly(),
+);
+
 /** This schema checks the facts of a channel. Its `dependsOn` holds no resource of the cell. */
 export const channelDescriptorSchema: z.ZodType<ChannelDescriptor, ChannelDescriptor> = schemaOf<ChannelDescriptor>()(
   z
@@ -551,6 +562,7 @@ export const channelDescriptorSchema: z.ZodType<ChannelDescriptor, ChannelDescri
       maxBody: z.number(),
       costUsd: z.number().exactOptional(),
       maxInFlight: z.number().int().min(1).exactOptional(),
+      why: whyLimitSchema.exactOptional(),
     })
     .readonly(),
 );
@@ -569,6 +581,7 @@ export const messageSchema: z.ZodType<Message, Message> = schemaOf<Message>()(
       expires: instantSchema.exactOptional(),
       quiet: z.boolean(),
       useReserve: z.boolean().exactOptional(),
+      why: z.string().min(1).exactOptional(),
     })
     .readonly()
     .refine((message) => !(message.level === "life-safety" && message.quiet), {
