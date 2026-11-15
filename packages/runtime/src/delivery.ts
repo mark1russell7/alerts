@@ -27,7 +27,7 @@ import {
   type WatchedPlace,
 } from "@mark1russell7/alerts";
 import { errorMessage } from "@mark1russell7/text";
-import { envelope, type RuntimeEvent } from "./events.ts";
+import { envelope, type ChannelFailureKind, type RefusalKind, type RuntimeEvent } from "./events.ts";
 import { limited } from "./limit.ts";
 import type { RuntimeState } from "./state.ts";
 import { earliest } from "./view.ts";
@@ -142,6 +142,9 @@ interface Landed {
  */
 const UNSURE: ReadonlySet<string> = new Set(["network", "timeout", "server"]);
 
+// This function tells if the channel refused a send. Then the channel has no message.
+const refusal = (kind: ChannelFailureKind): kind is RefusalKind => !UNSURE.has(kind);
+
 /** The kind and the text of a failed cancel or stop. */
 interface CallFailure {
   readonly kind: "timeout" | "network";
@@ -162,8 +165,8 @@ const thrownFailure = (thrown: unknown, otherwise: string): CallFailure => ({ ki
  * - A failed stop goes again at a later step. A stale copy that the channel accepts writes no delivery,
  *   and its stop goes again.
  *
- * The times of the polls, the waits and the flights are in memory only. After a restart, each receipt
- * gets a poll at once. Before each send on a channel that repeats, the log keeps its copy. The log also
+ * The times of the polls and the flights are in memory only. After a restart, each receipt gets a poll
+ * at once. The log keeps each refused send, thus the wait of its retry holds after a restart. Before each send on a channel that repeats, the log keeps its copy. The log also
  * keeps the end of the copy: its delivery, a refusal or a stop. Thus the first step after a restart stops each copy of an
  * earlier run with no end.
  */
@@ -210,6 +213,8 @@ export function createDispatcher(options: DeliveryOptions, context: DeliveryCont
       if (restarted) {
         restarted = false;
         for (const [copy, target] of Object.entries(context.state().copies)) stopping.set(copy, target);
+        // The wait of each refused send of the log holds, thus a quota of the channel holds across a restart.
+        for (const [key, refused] of Object.entries(context.state().refusals)) if (refused.retryAt > at) waits.set(later("send", key), refused.retryAt);
       }
       // A wait that is over keeps nothing. Thus the map holds only the waits of the last retry time.
       for (const [call, until] of waits) if (until <= at) waits.delete(call);
@@ -235,10 +240,15 @@ export function createDispatcher(options: DeliveryOptions, context: DeliveryCont
       const write = (events: readonly RuntimeEvent[]): void => {
         if (events.length > 0) conflicts.push(...context.append(events));
       };
-      const fail = (call: DeliveryFailure["call"], target: { readonly key: string; readonly channel: ChannelId; readonly copy?: string }, kind: string, message: string, after?: Duration): void => {
+      const fail = (call: DeliveryFailure["call"], target: { readonly key: string; readonly channel: ChannelId; readonly copy?: string }, kind: string, message: string, after?: Duration): Instant => {
         const retryAt = at + Math.max(options.retry, after ?? 0);
         waits.set(later(call, target.copy ?? target.key), retryAt);
         failures.push({ call, key: target.key, ...(target.copy === undefined ? {} : { copy: target.copy }), channel: target.channel, kind, message, retryAt });
+        return retryAt;
+      };
+      // The log keeps each refused send and its retry time. A refusal on a channel that repeats ends its copy.
+      const refuse = (target: { readonly key: string; readonly channel: ChannelId }, kind: RefusalKind, retryAt: Instant, copy?: string): void => {
+        write([{ ...envelope("refused", `refused:${target.key}@${at}`, clock.now()), key: target.key, channel: target.channel, kind, retryAt, ...(copy === undefined ? {} : { copy }) }]);
       };
       // The end of each wait that keeps a call from this step. The next pass comes at the earliest one.
       const waiting: Instant[] = [];
@@ -328,7 +338,8 @@ export function createDispatcher(options: DeliveryOptions, context: DeliveryCont
               const channel = byId.get(send.channel);
               const address = recipients.get(send.person)?.addresses[send.channel];
               if (channel === undefined || address === undefined) {
-                fail("send", target, "refused", channel === undefined ? `The system has no channel ${send.channel}.` : `The person has no address on the channel ${send.channel}.`);
+                const retryAt = fail("send", target, "refused", channel === undefined ? `The system has no channel ${send.channel}.` : `The person has no address on the channel ${send.channel}.`);
+                refuse(target, "refused", retryAt);
                 return;
               }
               const message = messageOf(entry.incident, context.state().merge.reports, send);
@@ -358,8 +369,9 @@ export function createDispatcher(options: DeliveryOptions, context: DeliveryCont
                   if (unkept) {
                     stopping.set(copy, { key, channel: send.channel });
                     if (late) context.wake?.();
-                  } else if (!result.ok) {
-                    // The channel refused the send, thus it has no copy to stop.
+                  } else if (!result.ok && late) {
+                    // The channel refused the send after its time limit, thus it has no copy to stop. The step writes an
+                    // on-time refusal with its copy id.
                     closed.add(copy);
                   }
                 }
@@ -378,7 +390,8 @@ export function createDispatcher(options: DeliveryOptions, context: DeliveryCont
                 (error) => ({ ok: false, kind: "network", message: `The send threw: ${errorMessage(error)}` }),
               );
               if (!outcome.ok) {
-                fail("send", target, outcome.kind, outcome.message, outcome.retryAfter);
+                const retryAt = fail("send", target, outcome.kind, outcome.message, outcome.retryAfter);
+                if (refusal(outcome.kind)) refuse(target, outcome.kind, retryAt, repeating.has(send.channel) ? copy : undefined);
                 return;
               }
               const delivery = deliveryOf(outcome);
