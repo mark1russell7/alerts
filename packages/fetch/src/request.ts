@@ -1,0 +1,125 @@
+/**
+ * The request of a source: one GET to the API of the source through polite-crawler, at the pace of
+ * its host, with a time limit. The result is an answer, or a failure of the fetch. Only the abort of
+ * the caller throws.
+ */
+
+import type { FetchFailure, SourceId } from "@mark1russell7/alerts";
+import { errorMessage } from "@mark1russell7/text";
+import { ApiError, poll, send, type Answer, type Conditions, type Pace, type Send, type Transport } from "polite-crawler/api";
+
+import { failureOf, type Detail } from "./failure.ts";
+
+/** The time limit of one request when the source gives none, in milliseconds. */
+export const DEFAULT_TIMEOUT_MS = 15_000;
+
+/** The shortest time between two requests to one host when the source gives none, in milliseconds. */
+export const DEFAULT_MIN_INTERVAL_MS = 1000;
+
+/** The options of the requests of one source. */
+export interface RequesterOptions {
+  /** The source of the requests. Its id is the name of the API in each message of polite-crawler. */
+  readonly source: SourceId;
+  /** The pace of polite-crawler: the host scheduler and the clock. */
+  readonly pace: Pace;
+  /** The transport that sends each request. It does not follow redirects. */
+  readonly transport: Transport;
+  /** The base URL of the API. The requester removes the slashes at its end. */
+  readonly baseUrl: string;
+  /** The headers of each request, with each name in lowercase, for example `accept` and `user-agent`. */
+  readonly headers: Readonly<Record<string, string>>;
+  /** The shortest time between two requests to the host, in milliseconds. The default is `DEFAULT_MIN_INTERVAL_MS`. */
+  readonly minIntervalMs?: number;
+  /** The longest time of one request, in milliseconds. The default is `DEFAULT_TIMEOUT_MS`. */
+  readonly timeoutMs?: number;
+  /** The reader of the problem text of an answer that is not a success. The default reads no text. */
+  readonly detail?: Detail;
+}
+
+/** One request of a source. */
+export interface Request {
+  /** The path after the base URL, with its query. */
+  readonly path: string;
+  /** The words that tell what the request asks for, in a message of polite-crawler, for example `the recent alerts`. */
+  readonly what: string;
+  /**
+   * The store of the validators of a conditional GET. With a store, the request is a `poll` of
+   * polite-crawler, and a 304 answer is a success. With no store, a 304 answer is a failure.
+   */
+  readonly conditions?: Conditions;
+}
+
+/** The result of one request. The latency is the time of the transport only, not the wait of the scheduler. */
+export type Requested =
+  | { readonly ok: true; readonly url: string; readonly answer: Answer; readonly latency: number }
+  | { readonly ok: false; readonly url: string; readonly failure: FetchFailure };
+
+/** The requests of one source, on one base URL. */
+export interface Requester {
+  /** The base URL, with no slash at its end. */
+  readonly baseUrl: string;
+  /** The host of the base URL. The scheduler of polite-crawler keeps one pace for each host. */
+  readonly host: string;
+  /** The time limit of one request, in milliseconds. */
+  readonly timeoutMs: number;
+  /** This function sends one request. It throws only when the signal of the caller aborts. */
+  get(request: Request, signal?: AbortSignal): Promise<Requested>;
+}
+
+/** This function removes the slashes at the end of a URL. */
+function withoutEndSlashes(url: string): string {
+  // A loop, not a pattern with `\/+$`: that pattern takes quadratic time on a text with many slashes (CodeQL js/polynomial-redos)
+  let end = url.length;
+  while (end > 0 && url[end - 1] === "/") end -= 1;
+  return url.slice(0, end);
+}
+
+/**
+ * This function makes the requester of one source. The requester maps each result to the contract
+ * of the core:
+ *
+ * - The end of the time limit gives the failure `timeout`.
+ * - An exchange with no answer gives the failure `network`, with the error of polite-crawler.
+ * - An answer that is not a success gives the failure of `failureOf`.
+ * - The abort of the signal of the caller throws its reason. It is not a failure of the source.
+ */
+export function createRequester(options: RequesterOptions): Requester {
+  const baseUrl = withoutEndSlashes(options.baseUrl);
+  const host = new URL(baseUrl).host;
+  const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const minIntervalMs = options.minIntervalMs ?? DEFAULT_MIN_INTERVAL_MS;
+  const { pace, transport, source, headers, detail } = options;
+  const now = pace.now;
+
+  async function get({ path, what, conditions }: Request, signal?: AbortSignal): Promise<Requested> {
+    const url = `${baseUrl}${path}`;
+    let timedOut = false;
+    let latency = 0;
+    // The latency is the time of the transport only. The wait of the scheduler is not part of it.
+    const timed: Transport = async (exchange, outer) => {
+      const own = AbortSignal.timeout(timeoutMs);
+      own.addEventListener("abort", () => (timedOut = true), { once: true });
+      const started = now();
+      try {
+        return await transport(exchange, outer === undefined ? own : AbortSignal.any([outer, own]));
+      } finally {
+        latency = now() - started;
+      }
+    };
+    const input: Send = { source, host, minIntervalMs, what, exchange: { method: "GET", url, headers, body: null } };
+    let answer: Answer;
+    try {
+      answer = conditions === undefined ? await send(pace, timed, input, signal) : await poll(pace, timed, conditions, input, signal);
+    } catch (error) {
+      if (signal?.aborted === true) throw error;
+      if (timedOut) return { ok: false, url, failure: { kind: "timeout", message: `no answer in ${String(timeoutMs)} ms: ${url}` } };
+      const message = error instanceof ApiError ? error.message : errorMessage(error);
+      return { ok: false, url, failure: { kind: "network", message } };
+    }
+    const { outcome } = answer.classified;
+    if (outcome === "ok" || (outcome === "not-modified" && conditions !== undefined)) return { ok: true, url, answer, latency };
+    return { ok: false, url, failure: failureOf(answer, detail) };
+  }
+
+  return { baseUrl, host, timeoutMs, get };
+}

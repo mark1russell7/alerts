@@ -14,7 +14,6 @@ export { NWS_API_SOURCE, WEA_EXPECTATION } from "./expectation.ts";
 export {
   createIpawsFetch,
   CURSOR_SINCE,
-  failureOf,
   FEED_NAMESPACE,
   FEED_PATH,
   feedTime,
