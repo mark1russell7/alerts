@@ -3,18 +3,33 @@
  * between a source and a scripted server. The gate of the case examines the outcome of each fault.
  */
 export {
-  CASE_1_DRAWS,
-  CASE_1_ID,
-  CASE_1_PARTS,
-  CASE_1_WATCH,
+  BODY_PARTS,
   MAIN_PATH,
+  NWS_WATCH,
+  baselineOf,
   caseBodies,
-  runCutInBody,
-  verdictOf,
+  fetchOnce,
+  mainAfter,
+  sameHead,
+  startNwsServer,
   type Baseline,
-  type CaseOptions,
-  type CaseRun,
-  type CutRecord,
+  type CaseBodies,
+  type FetchLimits,
   type OutcomeSummary,
-  type Verdict,
-} from "./cut-in-body.ts";
+} from "./nws.ts";
+export { CASE_1_DRAWS, CASE_1_ID, CASE_1_LIMITS, runCutInBody, verdictOf, type CaseOptions, type CaseRun, type CutRecord, type Verdict } from "./cut-in-body.ts";
+export {
+  CASE_2_ID,
+  CASE_2_SETTINGS,
+  SLOW_ARMS,
+  runSlowSource,
+  slowVerdictOf,
+  stallPoints,
+  trickleMs,
+  type SlowArm,
+  type SlowOptions,
+  type SlowRecord,
+  type SlowRun,
+  type SlowSettings,
+  type SlowVerdict,
+} from "./slow-source.ts";

@@ -13,7 +13,7 @@ The repo is public. It holds the general framework only. People, places, keys an
 | AL-28 | Contracts: the event, the source and the channel | done | The TypeScript types and [`CONTRACTS.md`](CONTRACTS.md). The sources and delivery efforts start from them. |
 | AL-1 | Design study | in progress | The scope, the pipeline, the formulas of the priority, the fault model, a catalog of sources by kind and the test plan. |
 | AL-2 | First commit and the public repo | done | The template stamp, the public repo and the first CI runs. |
-| AL-3 | The home of each part | in progress | The sending clients go to `@procedures/notify`. Geography goes to `@mark1russell7/geo`. The fetches go through `polite-crawler`. |
+| AL-3 | The home of each part | done | One public repo holds the packages: the core, the formats, the sources, the channels, the runtime, the testkit and the site. `docs/CONTRACTS.md` has the table. The sending clients go to `@procedures/notify`. Geography goes to `@mark1russell7/geo`. The fetches go through `polite-crawler`. |
 | AL-4 | The push and heartbeat accounts | done | The owner makes a Pushover account and a Healthchecks.io account. The keys stay outside the repo. |
 | AL-5 | Event model and taxonomy | in progress | The core package: the types, the schemas, the id functions and the first taxonomy, from the SAME event codes and the NWS event names. The id functions are done. |
 | AL-6 | Merge reports into incidents | done | Grow-only sets with a union join. Property tests hold the three laws: idempotent, commutative and associative. |

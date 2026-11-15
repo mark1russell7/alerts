@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { type Baseline, type CutRecord, caseBodies, runCutInBody, verdictOf } from "./cut-in-body.ts";
+import { type CutRecord, runCutInBody, verdictOf } from "./cut-in-body.ts";
+import { type Baseline, caseBodies } from "./nws.ts";
 
 describe("caseBodies", () => {
   it("gives one feature collection of each fixture, and a canary with the keepalive message", () => {
@@ -26,6 +27,7 @@ describe("verdictOf", () => {
     body: 5000,
     whole: true,
     outcome: { ok: true, complete: true, observations: FEATURES },
+    ms: 5,
   });
   const network = { ok: false, kind: "network", message: "terminated" } as const;
   const record = (framing: CutRecord["framing"], offset: number, outcome: CutRecord["outcome"] = network): CutRecord => ({
