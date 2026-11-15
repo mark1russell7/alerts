@@ -272,13 +272,22 @@ A send that passes its time limit stays in flight, because the provider can acce
 Each send of a key has a new copy id: the run id, `-` and a count. It has only letters, digits, `_` and `-` (`COPY_ID`), because a stop puts it in the path of a URL. The channel can have a copy that the log does not keep:
 
 - a copy past its flight limit;
-- a copy whose send failed with no answer: a time-out, a network failure or a server failure.
+- a copy whose send failed with no answer: a time-out, a network failure or a server failure;
+- a copy of a key that the log already has, with another receipt.
 
 On a channel that repeats, the step stops such a copy by its copy id. The next copy goes in parallel. The step does not cancel by the delivery key here, because that cancel also stops the next copy. A failed stop goes again at a later step. A stale copy that the channel accepts later gets its stop again.
 
 The Pushover channel tags each emergency message with its delivery key and its copy id. A cancel of a receipt goes by the delivery key. Thus it also stops the repeats of a copy whose receipt the log does not have. A crash after a send and before its write is such a case. A stop of one copy goes by its copy id.
 
-The copies to stop are in memory only. Thus a restart loses the stop of a hung copy of the last run. The cancel by the delivery key at the end of its escalation stops that copy. AL-32 writes each attempt and its copy id to the log before the send, and a restart stops the copies with no delivery.
+The log keeps each copy on a channel that repeats, and its end. Thus a restart does not lose the stop of a hung copy (AL-32):
+
+- Before each send on a channel that repeats, the step writes an `attempt` event with the delivery key, the channel and the copy id.
+- The `delivery` event of an accepted send has the copy id. It ends the copy.
+- A `settled` event ends a copy that needs no stop: the channel refused its send, or a stop of the copy went after the end of its send.
+- The state has the open copies: each attempt with no end. The first step after a restart stops each of them by its copy id.
+- A stop of a copy whose send did not end does not end the copy. The channel can accept that copy later, and then its stop goes again.
+
+A write of the `attempt` event that fails throws, and the send does not go.
 
 A recipient has no problem from `recipientProblems` before it gets alerts:
 
