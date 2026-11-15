@@ -10,9 +10,6 @@ on:
     - cron: "17 6 3 * *"
   # A person starts a run: node fleet.mjs dispatch, or gh workflow run rates.yml
   workflow_dispatch:
-  # TEMPORARY: a push to the branch of AL-31 registers the workflow, so a dispatch on the branch can start it. The job skips the push run.
-  push:
-    branches: [sources/al31-rates]
 
 permissions:
   contents: read
@@ -27,7 +24,6 @@ defaults:
 
 jobs:
   rates:
-    if: github.event_name != 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 240
     permissions:
