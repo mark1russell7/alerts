@@ -56,7 +56,13 @@ The links are transitive: when A links to B and B links to C, the three reports 
 
 A line is a report and the reports of its source that update or cancel it. The head of a line is its last report: no report of the same source references it. An incident is live at a time when one or more heads are not cancelled and not expired at that time. Its severity, urgency and certainty are the highest of its live heads. Its corroboration is the count of the different origins of its reports.
 
-A cancel ends only its own line. A copy from another source can miss the cancel. Then the incident stays live until that copy expires. This error is on the safe side.
+A copy of a message from another source does not get the references of the line. The rule of the copies closes this gap:
+
+- Two reports of one origin with a shared correlation key tell of one event.
+- The later report replaces the earlier report, from any source, when it names each region code of the earlier report.
+- A replaced report is not a head. Thus a cancel of the NWS also ends the copy of that alert from IPAWS.
+
+A later report that names only a part of the codes replaces nothing. A report with no region code is not replaced. Then the copy stays live until it expires or its source ends it. This error is on the safe side. The rule reads only the reports of the group, so it keeps the three laws.
 
 The incident id is its anchor: its smallest report id. The anchor can change when two incidents merge. So an acknowledgment and a delivery point to a report of the incident, not to the anchor.
 
