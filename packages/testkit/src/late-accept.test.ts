@@ -69,6 +69,7 @@ const recordOf = (arm: AcceptArm, requests: readonly ScriptedRequest[], extra: P
     ledger,
     log: { deliveries: last === undefined ? [] : [{ key: KEY, receipt: last.receipt }], acknowledgments: last === undefined ? 0 : 1, cancelled: [] },
     failures: [],
+    duplicates: 0,
     passes: 20,
     ...extra,
   };
@@ -188,6 +189,9 @@ describe("acceptVerdictOf", () => {
   it("cannot read with a missing arm or with settings that do not separate the limits", () => {
     expect(acceptVerdictOf(records().slice(1)).read).toBe(false);
     expect(acceptVerdictOf(records(), { ...CASE_4_SETTINGS, lateMs: 500 }).read).toBe(false);
+    expect(acceptVerdictOf(records(), { ...CASE_4_SETTINGS, flightLimitMs: 2000 }).read).toBe(false);
+    // 7000 ms of flight, a retry and two reads need 10500 ms, and the arm has 10000 ms.
+    expect(acceptVerdictOf(records(), { ...CASE_4_SETTINGS, flightLimitMs: 7000 }).read).toBe(false);
     expect(acceptVerdictOf(records(), { ...CASE_4_SETTINGS, hangMs: 5000 }).read).toBe(false);
     expect(acceptVerdictOf(records(), { ...CASE_4_SETTINGS, armMs: 5000, hangMs: 15_000 }).read).toBe(false);
   });

@@ -55,13 +55,15 @@ export const ACCEPT_GATES: readonly AcceptGate[] = ["delivered", "single", "stop
 export interface AcceptSettings {
   /** The longest time of one call of a channel in the delivery step (`DeliveryOptions.callLimit`). */
   readonly callLimitMs: number;
+  /** The longest time of a send in flight (`DeliveryOptions.flightLimit`). No second send of its key goes before it ends. */
+  readonly flightLimitMs: number;
   /** The wait before a failed call goes again (`DeliveryOptions.retry`). */
   readonly retryMs: number;
   /** The time between two reads of one receipt (`DeliveryOptions.pollEvery`). */
   readonly pollEveryMs: number;
   /** The time limit of the Pushover channel on one request (`timeoutMs` of the channel). */
   readonly channelLimitMs: number;
-  /** The stall of the answer in the arm `late-answer`. It is longer than the call limit and shorter than the channel limit. */
+  /** The stall of the answer in the arm `late-answer`. It is longer than the call limit, and shorter than the flight limit and the channel limit. */
   readonly lateMs: number;
   /** The stall of the two arms with a hang. It is longer than the arm. */
   readonly hangMs: number;
@@ -76,6 +78,7 @@ export interface AcceptSettings {
 /** The settings of the case in CI, as the prediction states. */
 export const CASE_4_SETTINGS: AcceptSettings = {
   callLimitMs: 1000,
+  flightLimitMs: 3000,
   retryMs: 1500,
   pollEveryMs: 1000,
   channelLimitMs: 4000,
@@ -110,6 +113,8 @@ export interface AcceptRecord {
   readonly ledger: PushoverLedger;
   readonly log: LogSummary;
   readonly failures: readonly CallFailure[];
+  /** The count of late deliveries that the delivery step found in the log already (`DeliveryStep.duplicates`). */
+  readonly duplicates: number;
   readonly passes: number;
   /** The text of the error of a pass that threw. */
   readonly error?: string;
@@ -146,9 +151,10 @@ const RECIPIENT: Recipient = { watch: { person: PERSON, places: [PLACE.id], rule
 const VIEW: RuntimeOptions["view"] = { places: [PLACE], kinds: ["met"], expectations: [], delay: { quantile: 0.9, level: 0.9 } };
 
 /**
- * The clock of the case. The runtime reads the time of the epoch, and the clocks of `@mark1russell7/algebra/clock`
- * read `performance.now()`. Thus this clock reads `Date.now()` and uses the timers of `realClock`. It is local until
- * algebra has a clock of the epoch. The alerts lead has the question since 2026-11-15.
+ * The clock of the case. The runtime reads the time of the epoch through a `Clock`. A `Clock` of
+ * `@mark1russell7/algebra/clock` reads the monotonic time, and a `WallClock` of algebra 0.8.9 is not a `Clock`. Thus
+ * this clock reads `Date.now()` and uses the timers of `realClock`. It is local until the runtime takes a `WallClock`.
+ * The alerts lead has that change since 2026-11-15.
  */
 const EPOCH_CLOCK: Clock = { now: () => Date.now(), after: (ms, run) => realClock.after(ms, run) };
 
@@ -231,6 +237,7 @@ export async function runArm(arm: AcceptArm, settings: AcceptSettings = CASE_4_S
   const log = openRuntimeLog(":memory:");
   const clock = EPOCH_CLOCK;
   const failures: CallFailure[] = [];
+  let duplicates = 0;
   let passes = 0;
   let error: string | undefined;
   try {
@@ -241,13 +248,21 @@ export async function runArm(arm: AcceptArm, settings: AcceptSettings = CASE_4_S
       watch: { places: [PLACE], kinds: ["met"] },
       view: VIEW,
       run: `${CASE_4_ID}-${arm}`,
-      delivery: { recipients: [RECIPIENT], channels: [channel], pollEvery: settings.pollEveryMs, retry: settings.retryMs, callLimit: settings.callLimitMs },
+      delivery: {
+        recipients: [RECIPIENT],
+        channels: [channel],
+        pollEvery: settings.pollEveryMs,
+        retry: settings.retryMs,
+        callLimit: settings.callLimitMs,
+        flightLimit: settings.flightLimitMs,
+      },
     });
     const end = clock.now() + settings.armMs;
     while (clock.now() < end) {
       const pass = await runtime.pass();
       passes += 1;
       for (const failure of pass.delivery?.failures ?? []) failures.push({ call: failure.call, kind: failure.kind, message: failure.message });
+      duplicates += pass.delivery?.duplicates.length ?? 0;
       const next = Math.min(pass.wakeAt ?? Number.POSITIVE_INFINITY, clock.now() + settings.tickMs, end);
       await sleep(Math.max(0, next - clock.now()));
     }
@@ -272,7 +287,7 @@ export async function runArm(arm: AcceptArm, settings: AcceptSettings = CASE_4_S
     fault === undefined
       ? proxy.records.length === 0
       : proxy.records.some((r) => r.kind === "stall" && r.connection === 0 && r.direction === fault.direction && r.byte === 0);
-  return { arm, faulted, ledger, log: summary, failures, passes, ...(error === undefined ? {} : { error }) };
+  return { arm, faulted, ledger, log: summary, failures, duplicates, passes, ...(error === undefined ? {} : { error }) };
 }
 
 /** This function starts the case: each arm, in order. It gives the records and the verdict. */
@@ -328,12 +343,15 @@ export function acceptGatesOf(record: AcceptRecord): { readonly gates: Readonly<
 /** This function gives the verdict of the records of a run. */
 export function acceptVerdictOf(records: readonly AcceptRecord[], settings: AcceptSettings = CASE_4_SETTINGS): AcceptVerdict {
   const problems: string[] = [];
-  if (!(settings.callLimitMs < settings.lateMs && settings.lateMs < settings.channelLimitMs)) {
-    problems.push(`The late answer (${String(settings.lateMs)} ms) is not between the call limit (${String(settings.callLimitMs)} ms) and the channel limit (${String(settings.channelLimitMs)} ms).`);
+  const shortest = Math.min(settings.flightLimitMs, settings.channelLimitMs);
+  if (!(settings.callLimitMs < settings.lateMs && settings.lateMs < shortest)) {
+    problems.push(
+      `The late answer (${String(settings.lateMs)} ms) is not between the call limit (${String(settings.callLimitMs)} ms) and the shorter of the flight limit and the channel limit (${String(shortest)} ms).`,
+    );
   }
   if (settings.hangMs <= settings.armMs) problems.push(`The hang (${String(settings.hangMs)} ms) is not longer than the arm (${String(settings.armMs)} ms).`);
-  const need = settings.channelLimitMs + settings.retryMs + 2 * settings.pollEveryMs;
-  if (settings.armMs < need) problems.push(`The arm (${String(settings.armMs)} ms) is shorter than the channel limit, a retry and two reads (${String(need)} ms).`);
+  const need = Math.max(settings.flightLimitMs, settings.channelLimitMs) + settings.retryMs + 2 * settings.pollEveryMs;
+  if (settings.armMs < need) problems.push(`The arm (${String(settings.armMs)} ms) is shorter than the longer limit, a retry and two reads (${String(need)} ms).`);
   const gates = {} as Record<AcceptArm, Readonly<Record<AcceptGate, boolean>>>;
   const failed: string[] = [];
   for (const arm of ACCEPT_ARMS) {
