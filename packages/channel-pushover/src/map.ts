@@ -4,6 +4,7 @@
  */
 
 import type { Address, DeliveryStatus, Instant, Level, Message, SendOutcome } from "@mark1russell7/alerts";
+import { truncate } from "@mark1russell7/text/length";
 import {
   PUSHOVER_EXPIRE_MAX_MS,
   PUSHOVER_LIMITS,
@@ -38,17 +39,8 @@ export function priorityOf(level: Level, quiet: boolean): PushoverPriority {
   return level === "urgent" ? 1 : 0;
 }
 
-/**
- * This function cuts a text to `max` code points, as Pushover counts them. A cut text ends with an
- * ellipsis.
- *
- * The home of truncation is `@mark1russell7/text`, in its roadmap item X5. This function moves to
- * it after the npm release of X5. Until then, the channel keeps it.
- */
-export function cut(text: string, max: number): string {
-  const points = [...text];
-  return points.length <= max ? text : `${points.slice(0, Math.max(0, max - 1)).join("")}…`;
-}
+/** Pushover counts the length of a title and a body in code points. The cut keeps each grapheme whole, and ends with an ellipsis. */
+const CODE_POINTS = { unit: "code-point" } as const;
 
 /** A message that the channel does not send, with the reason. */
 export interface Refusal {
@@ -69,8 +61,8 @@ export function pushoverMessageOf(message: Message, address: Address, at: Instan
   if (user === undefined || user === "") return { refused: "The address has no user key." };
   if (message.expires !== undefined && message.expires <= at) return { refused: "The message expired before the send." };
   const priority = priorityOf(message.level, message.quiet);
-  const title = cut(message.title, PUSHOVER_LIMITS.title);
-  const body = message.body.trim() === "" ? title : cut(message.body, PUSHOVER_LIMITS.message);
+  const title = truncate(message.title, PUSHOVER_LIMITS.title, CODE_POINTS);
+  const body = message.body.trim() === "" ? title : truncate(message.body, PUSHOVER_LIMITS.message, CODE_POINTS);
   const left = message.expires === undefined ? Number.POSITIVE_INFINITY : message.expires - at;
   const device = address["device"];
   const sound = options.sounds?.[message.level];

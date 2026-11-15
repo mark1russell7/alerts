@@ -12,12 +12,15 @@ import {
   HEARTBEAT_START,
   heartbeatGap,
   heartbeatStep,
+  heldOf,
   holdStep,
   pingOf,
   pingUrl,
+  UNREACHABLE,
   type HeartbeatFetch,
   type HeartbeatState,
   type PassSummary,
+  type RefusalView,
 } from "./heartbeat.ts";
 import { INSTANCE_TIMES } from "./instance.ts";
 
@@ -70,7 +73,7 @@ function pings(answer: () => Promise<number> = async () => 200) {
   return { calls, fetch };
 }
 
-function open(answer?: () => Promise<number>, onError: (message: string) => void = () => undefined) {
+function open(answer?: () => Promise<number>, onError: (message: string) => void = () => undefined, held?: (at: number) => HeartbeatState["held"]) {
   const clock = fakeWallClock(T0);
   const server = pings(answer);
   const errors: string[] = [];
@@ -79,6 +82,7 @@ function open(answer?: () => Promise<number>, onError: (message: string) => void
     fetch: server.fetch,
     clock,
     userAgent: AGENT,
+    ...(held === undefined ? {} : { held }),
     onError: (message) => {
       errors.push(message);
       onError(message);
@@ -158,6 +162,79 @@ describe("the steps of the heartbeat", () => {
     expect(pingUrl(URL_OF_CHECK, "success")).toBe(URL_OF_CHECK);
     expect(pingUrl(URL_OF_CHECK, "fail")).toBe(`${URL_OF_CHECK}/fail`);
     expect(pingUrl("https://hc-ping.com/key/alerts-runtime/?create=1", "fail")).toBe("https://hc-ping.com/key/alerts-runtime/fail?create=1");
+  });
+});
+
+describe("the refused channels of the log", () => {
+  const view = (refusals: RefusalView["refusals"], deliveries: RefusalView["merge"]["deliveries"] = []): RefusalView => ({ refusals, merge: { deliveries } });
+
+  it("holds each channel with a waiting refusal after its last delivery, with the sorted kinds and the latest retry", () => {
+    const state = view(
+      {
+        a: { channel: "pushover", kind: "rate-limited", at: T0 + SECOND, retryAt: T0 + 120 * SECOND },
+        b: { channel: "pushover", kind: "auth", at: T0, retryAt: T0 + 60 * SECOND },
+        // The retry of this refusal is before the time of the first pass, thus its kind is old.
+        c: { channel: "pushover", kind: "refused", at: T0 - 60 * SECOND, retryAt: T0 + 2 * SECOND },
+        // A delivery on the channel came after this refusal, thus the channel works.
+        d: { channel: "twilio", kind: "refused", at: T0 - 10 * SECOND, retryAt: T0 + 30 * SECOND },
+      },
+      [
+        { channel: "twilio", at: T0 },
+        { channel: "pushover", at: T0 - 90 * SECOND },
+      ],
+    );
+    expect(heldOf(state, T0 + 2 * SECOND)).toEqual({ pushover: { kinds: ["auth", "rate-limited"], until: T0 + 120 * SECOND } });
+  });
+
+  it("holds nothing with no refusal, and keeps a refusal at the time of a delivery on its channel", () => {
+    expect(heldOf(view({}), T0)).toEqual({});
+    const same = view({ a: { channel: "pushover", kind: "auth", at: T0, retryAt: T0 + 60 * SECOND } }, [{ channel: "pushover", at: T0 }]);
+    expect(heldOf(same, T0 + SECOND)).toEqual({ pushover: { kinds: ["auth"], until: T0 + 60 * SECOND } });
+  });
+
+  it("keeps the hold of each channel across a restart at each pass: the same channels and the same retry", () => {
+    const CHANNELS = ["pushover", "twilio"];
+    for (const seed of SEEDS) {
+      const r = random(seed).fork("restart");
+      // Each pass can refuse and send on each channel. The log keeps each refusal and each delivery of the passes.
+      const passes: PassSummary[] = [];
+      for (let index = 0; index < 40; index++) {
+        const at = T0 + index * 30 * SECOND;
+        const sent = CHANNELS.filter(() => r.chance(0.25)).map((channel) => ({ channel }));
+        const failures = CHANNELS.filter(() => r.chance(0.3)).map((channel) => ({
+          call: "send",
+          channel,
+          kind: UNREACHABLE[r.int(0, UNREACHABLE.length - 1)]!,
+          retryAt: at + r.int(0, 200) * SECOND,
+        }));
+        passes.push({ ...healthy(at), delivery: { sent, failures } });
+      }
+      const straight: HeartbeatState["held"][] = [];
+      passes.reduce<HeartbeatState["held"]>((held, pass) => {
+        const next = holdStep(held, pass);
+        straight.push(next);
+        return next;
+      }, {});
+      for (let stop = 0; stop < passes.length - 1; stop++) {
+        const before = passes.slice(0, stop + 1);
+        const refusals = Object.fromEntries(
+          before.flatMap((pass, index) =>
+            (pass.delivery?.failures ?? []).map((failure) => [`${index}-${failure.channel}`, { channel: failure.channel, kind: failure.kind as (typeof UNREACHABLE)[number], at: pass.at, retryAt: failure.retryAt }]),
+          ),
+        );
+        const deliveries = before.flatMap((pass) => (pass.delivery?.sent ?? []).map((delivery) => ({ channel: delivery.channel, at: pass.at })));
+        let held = heldOf(view(refusals, deliveries), passes[stop + 1]!.at);
+        for (let index = stop + 1; index < passes.length; index++) {
+          held = holdStep(held, passes[index]!);
+          const expected = straight[index]!;
+          const label = `seed ${seed}, a restart after pass ${stop}, pass ${index}`;
+          expect(Object.fromEntries(Object.entries(held).map(([channel, hold]) => [channel, hold.until])), label).toEqual(
+            Object.fromEntries(Object.entries(expected).map(([channel, hold]) => [channel, hold.until])),
+          );
+          for (const [channel, hold] of Object.entries(held)) expect(expected[channel]!.kinds, label).toEqual(expect.arrayContaining([...hold.kinds]));
+        }
+      }
+    }
   });
 });
 
@@ -271,6 +348,29 @@ describe("the hook of the heartbeat", () => {
     hook(refused(T0));
     await settle();
     expect(server.calls.map((call) => [call.url, call.body])).toEqual([[`${URL_OF_CHECK}/fail`, "The channel pushover gave the kind auth to a send."]]);
+  });
+
+  it("starts from the refused channels of the log at its first pass, and reads them one time", async () => {
+    const reads: number[] = [];
+    const held = (at: number): HeartbeatState["held"] => {
+      reads.push(at);
+      return { pushover: { kinds: ["auth"], until: T0 + 90 * SECOND } };
+    };
+    const { server, hook } = open(undefined, undefined, held);
+    // A restart: the first pass has no refusal, but the retry of the refused send is later.
+    hook(healthy(T0));
+    await settle();
+    hook(healthy(T0 + 60 * SECOND));
+    await settle();
+    // The pass at the retry has no refusal, thus the fail ends.
+    hook(healthy(T0 + 90 * SECOND));
+    await settle();
+    expect(reads).toEqual([T0]);
+    expect(server.calls.map((call) => [call.url, call.body])).toEqual([
+      [`${URL_OF_CHECK}/fail`, "The channel pushover gave the kind auth to a send."],
+      [`${URL_OF_CHECK}/fail`, "The channel pushover gave the kind auth to a send."],
+      [URL_OF_CHECK, "nws-api: healthy\nipaws: failing"],
+    ]);
   });
 
   it("stops a ping at its limit, keeps one ping in flight, and gives no URL in the error", async () => {

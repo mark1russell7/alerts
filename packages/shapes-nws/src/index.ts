@@ -8,4 +8,4 @@
 export { memoryCache, openShapeCache, SHAPES_FILE, type FileShapeCache, type ShapeCache, type ShapeRecords } from "./cache.ts";
 export { dropsOf, listKey, plan, taskId, zoneKey, type CachedList, type CachedZone, type Plan, type PlanInput, type ShapeState, type Task, type Wanted } from "./plan.ts";
 export { createShapeStore, HOST_RETRY_MS, REFRESH_MS, RETRY_MS, type RefreshInput, type Refreshed, type ShapeStore, type ShapeStoreOptions, type TaskFailure } from "./store.ts";
-export { compareCodes, listPath, readList, readZone, stateCode, ZONE_KINDS, zoneKindOf, zoneOfCode, zonePath, type ReadList, type ReadZone, type ZoneKey, type ZoneKind } from "./zones.ts";
+export { compareCodes, listPath, readList, readZone, ZONE_KINDS, zoneKindOf, zoneOfCode, zonePath, type ReadList, type ReadZone, type ZoneKey, type ZoneKind } from "./zones.ts";

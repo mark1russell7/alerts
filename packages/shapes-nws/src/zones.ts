@@ -3,7 +3,7 @@
  * outline of a zone. The functions are pure. Each problem of an answer is a text.
  */
 import type { MapShape, Position, RegionCode } from "@mark1russell7/alerts";
-import { countyUgcOfSame, stateOfUgc, STATE_FIPS } from "@mark1russell7/alerts-format-nws";
+import { countyUgcOfSame, stateOfUgc } from "@mark1russell7/alerts-format-nws";
 import { parseGeometry, type Geometry } from "@mark1russell7/geo";
 
 /**
@@ -53,11 +53,6 @@ export function compareCodes(a: string, b: string): number {
   return a < b ? -1 : a > b ? 1 : 0;
 }
 
-/** This function gives the postal code of a state in capital letters, or `undefined` for a text that is not a state. */
-export function stateCode(state: string): string | undefined {
-  const code = state.trim().toUpperCase();
-  return Object.hasOwn(STATE_FIPS, code) ? code : undefined;
-}
 
 /** This function gives the path of the list of the zones of one kind of a state, for example `/zones?area=KS&type=county`. */
 export function listPath(state: string, kind: ZoneKind): string {

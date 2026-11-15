@@ -37,14 +37,20 @@ export interface Expectation {
   readonly when: ReportFilter;
 }
 
-/** One check of an expectation in one incident. */
+/**
+ * One check of an expectation for one message of the source `from`. A message is the reports of `from`
+ * in one incident with one sent time that pass the filter.
+ */
 export interface Carriage {
   readonly expectation: string;
-  /** The first report of the source `from` in the incident that passes the filter. Its id is the key of the check. */
+  /** The first report of the message. Its id is the key of the check. */
   readonly report: ReportId;
   /** The time when that report came. */
   readonly started: Instant;
-  /** The time when the first report of the source `to` in the incident came. It is absent when no copy came. */
+  /**
+   * The time when the copy came: the first report of the source `to` in the incident with the same sent
+   * time. It is absent when no copy came.
+   */
   readonly arrived?: Instant;
 }
 
@@ -112,9 +118,13 @@ export function reportPasses(filter: ReportFilter, report: Report): boolean {
 }
 
 /**
- * This function gives one check for each expectation and each incident with a report of `from` that
- * passes the filter. The result is a function of the set of reports, so the order of the reports does
- * not change it. A copy that came first gives a check with `arrived` before `started`.
+ * This function gives one check for each expectation and each message of `from`. The copy of a message
+ * is the first report of `to` in the incident with the same sent time. Thus each message of an event,
+ * for example an extension, has its own check, and a copy of a different message is not its copy.
+ *
+ * Two reports of `from` with one sent time in one incident are one message, and they give one check.
+ * The result is a function of the set of reports, so the order of the reports does not change it. A
+ * copy that came first gives a check with `arrived` before `started`.
  */
 export function carriages(state: MergeState, found: readonly Incident[], expectations: readonly Expectation[]): Carriage[] {
   const byId = new Map(state.reports.map((report) => [report.id, report]));
@@ -122,10 +132,13 @@ export function carriages(state: MergeState, found: readonly Incident[], expecta
   for (const incident of found) {
     const reports = incident.reports.flatMap((id) => byId.get(id) ?? []);
     for (const expectation of expectations) {
-      const first = firstOf(reports.filter((report) => report.source === expectation.from && reportPasses(expectation.when, report)));
-      if (first === undefined) continue;
-      const copy = firstOf(reports.filter((report) => report.source === expectation.to));
-      checks.push({ expectation: expectation.id, report: first.id, started: first.received, ...(copy === undefined ? {} : { arrived: copy.received }) });
+      const copies = bySent(reports.filter((report) => report.source === expectation.to));
+      for (const [sent, message] of bySent(reports.filter((report) => report.source === expectation.from && reportPasses(expectation.when, report)))) {
+        const first = firstOf(message);
+        if (first === undefined) continue;
+        const copy = firstOf(copies.get(sent) ?? []);
+        checks.push({ expectation: expectation.id, report: first.id, started: first.received, ...(copy === undefined ? {} : { arrived: copy.received }) });
+      }
     }
   }
   return checks.sort((a, b) => compare(a.expectation, b.expectation) || a.started - b.started || compare(a.report, b.report));
@@ -251,6 +264,13 @@ export function lateness(checks: readonly Carriage[], expectations: readonly Exp
 /** This function gives the sources that are late, sorted. The coverage does not count them. */
 export function lateSources(states: readonly Lateness[]): SourceId[] {
   return [...new Set(states.filter((entry) => entry.state === "late").map((entry) => entry.to))].sort(compare);
+}
+
+// The reports by their sent time.
+function bySent(reports: readonly Report[]): Map<Instant, Report[]> {
+  const groups = new Map<Instant, Report[]>();
+  for (const report of reports) groups.set(report.sent, [...(groups.get(report.sent) ?? []), report]);
+  return groups;
 }
 
 // The first report: the earlier time first, then the smaller id.

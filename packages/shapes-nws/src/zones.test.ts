@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
-import { compareCodes, listPath, readList, readZone, stateCode, zoneKindOf, zoneOfCode, zonePath, type ZoneKey } from "./zones.ts";
+import { compareCodes, listPath, readList, readZone, zoneKindOf, zoneOfCode, zonePath, type ZoneKey } from "./zones.ts";
 
 const fixture = (name: string): string => readFileSync(new URL(`../fixtures/${name}`, import.meta.url), "utf8");
 const SEDGWICK: ZoneKey = { kind: "county", id: "KSC173" };
@@ -38,11 +38,6 @@ describe("the codes", () => {
     expect(zoneOfCode(code)).toBeUndefined();
   });
 
-  it("gives the postal code of a state", () => {
-    expect(stateCode(" ks ")).toBe("KS");
-    expect(stateCode("XX")).toBeUndefined();
-    expect(stateCode("toString")).toBeUndefined();
-  });
 
   it("gives the paths of the zone service", () => {
     expect(listPath("KS", "county")).toBe("/zones?area=KS&type=county");
