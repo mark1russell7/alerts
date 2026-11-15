@@ -21,7 +21,7 @@ import type {
   Status,
   Urgency,
 } from "@mark1russell7/alerts";
-import { reportId } from "@mark1russell7/alerts";
+import { Problems, reportId } from "@mark1russell7/alerts";
 import { errorMessage } from "@mark1russell7/text";
 
 import { categoryOf, resolveKind } from "./kinds.ts";
@@ -111,18 +111,6 @@ const textOf = (value: unknown): string | undefined => (typeof value === "string
 /** This function gives a list of the texts of a value: a text, or a list of texts. */
 const textsOf = (value: unknown): string[] =>
   typeof value === "string" ? [value] : Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
-
-/** The problems of one message, with the path of the message before each path. */
-class Problems {
-  readonly list: MapProblem[] = [];
-  private readonly prefix: string;
-  constructor(prefix: string) {
-    this.prefix = prefix;
-  }
-  add(path: string, message: string, fatal = false): void {
-    this.list.push({ path: path === "" ? this.prefix : `${this.prefix}.${path}`, message, fatal });
-  }
-}
 
 /** This function reads a time of the message. An absent time gives `undefined`, and a bad time is a problem. */
 function timeOf(value: unknown, path: string, problems: Problems): Instant | undefined {
@@ -382,7 +370,7 @@ function mapOrThrow(observation: Observation): MapResult {
     const own = new Problems(message.path);
     const report = mapFeature(message.feature, observation, own);
     if (report !== undefined) reports.push(report);
-    problems.push(...own.list.map((problem) => ({ ...problem, path: problem.path.replace(/^\./, "") })));
+    problems.push(...own.list);
   }
   return { reports, problems };
 }
