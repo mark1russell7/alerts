@@ -137,9 +137,12 @@ function channel(id: ChannelId, ack: ChannelDescriptor["ack"], now: () => number
   return { procedures, calls };
 }
 
-const DELIVERY = { recipients: [RECIPIENT], pollEvery: 30 * SECOND, retry: 15 * SECOND, callLimit: 10 * SECOND } as const;
+const DELIVERY = { recipients: [RECIPIENT], pollEvery: 30 * SECOND, retry: 15 * SECOND, callLimit: 10 * SECOND, flightLimit: 40 * SECOND } as const;
 
-function open(scripts: { readonly pushover?: Script; readonly sms?: Script } = {}, log: RuntimeLog = openRuntimeLog(":memory:"), clock = fakeClock(T0), extra: Partial<DeliveryOptions> = {}) {
+// The microtasks and the callbacks of the promises end before this promise resolves.
+const settle = (): Promise<void> => new Promise((resolve) => setImmediate(resolve));
+
+function open(scripts: { readonly pushover?: Script; readonly sms?: Script } = {}, log: RuntimeLog = openRuntimeLog(":memory:"), clock = fakeClock(T0), extra: Partial<DeliveryOptions> = {}, wake?: () => void) {
   const pushover = channel(PUSHOVER, "poll", () => clock.now(), scripts.pushover);
   const sms = channel(SMS, "none", () => clock.now(), scripts.sms);
   const runtime = openRuntime({
@@ -150,6 +153,7 @@ function open(scripts: { readonly pushover?: Script; readonly sms?: Script } = {
     view: VIEW,
     run: `run-${clock.now()}`,
     delivery: { ...DELIVERY, channels: [pushover.procedures, sms.procedures], ...extra },
+    ...(wake === undefined ? {} : { wake }),
   });
   return { clock, log, runtime, pushover: pushover.calls, sms: sms.calls };
 }
@@ -178,6 +182,7 @@ describe("the delivery step of a pass", () => {
     expect(pushover.status).toEqual([{ receipt: "pushover-1" }]);
     expect(pass.delivery?.acknowledged).toEqual([{ incident: runtime.state().merge.deliveries[0]!.incident, level: "life-safety", person: PERSON, at: T0 + 20 * SECOND, via: PUSHOVER }]);
     expect(pushover.cancel).toEqual([{ receipt: "pushover-1" }]);
+    expect(pass.delivery?.duplicates).toEqual([]);
     expect(types(log)).toEqual(["started", "escalation", "delivery", "acknowledgment", "cancelled"]);
     await clock.advance(10 * MINUTE);
     await runtime.pass();
@@ -232,13 +237,63 @@ describe("the delivery step of a pass", () => {
     log.close();
   });
 
-  it("records a send that takes longer than its limit as a failure, and ends the pass", async () => {
-    const { clock, runtime, log } = open({ pushover: { send: () => new Promise<SendOutcome>(() => undefined) } });
+  it("keeps a send that hangs in flight until its flight limit, and then sends again", async () => {
+    const { clock, runtime, log, pushover } = open({ pushover: { send: (_, count) => (count === 1 ? new Promise<SendOutcome>(() => undefined) : undefined) } });
     const running = runtime.pass();
     await clock.advance(10 * SECOND);
-    const pass = await running;
-    expect(pass.delivery?.failures.map((failure) => [failure.kind, failure.message])).toEqual([["timeout", "The send took longer than 10000 ms."]]);
+    const first = await running;
+    expect(first.delivery?.failures.map((failure) => [failure.kind, failure.message])).toEqual([["timeout", "The send took longer than 10000 ms. It stays in flight for up to 40000 ms."]]);
     expect(types(log)).toEqual(["started", "escalation"]);
+    // The wait of the retry is over, but the first send is in flight. The next pass comes at the end of the flight.
+    await clock.advance(5 * SECOND);
+    const second = await runtime.pass();
+    expect(pushover.send).toHaveLength(1);
+    expect(second.wakeAt).toBe(T0 + 40 * SECOND);
+    await clock.advance(25 * SECOND);
+    const third = await runtime.pass();
+    expect(pushover.send).toHaveLength(2);
+    expect(third.delivery?.sent.map((delivery) => delivery.receipt)).toEqual([{ receipt: "pushover-2" }]);
+    log.close();
+  });
+
+  it("writes a send that the channel accepts after the time limit, and sends no second copy", async () => {
+    const clock = fakeClock(T0);
+    let woken = 0;
+    const late = (): Promise<SendOutcome> => new Promise((resolve) => clock.after(15 * SECOND, () => resolve({ ok: true, receipt: { receipt: "late-1" }, accepted: clock.now() })));
+    const { runtime, log, pushover } = open({ pushover: { send: (_, count) => (count === 1 ? late() : undefined) } }, openRuntimeLog(":memory:"), clock, {}, () => (woken += 1));
+    const running = runtime.pass();
+    await clock.advance(10 * SECOND);
+    expect((await running).delivery?.failures.map((failure) => failure.kind)).toEqual(["timeout"]);
+    await clock.advance(5 * SECOND);
+    await settle();
+    expect(woken).toBe(1);
+    const second = await runtime.pass();
+    expect(second.delivery?.sent.map((delivery) => [delivery.receipt, delivery.at])).toEqual([[{ receipt: "late-1" }, T0 + 15 * SECOND]]);
+    expect(pushover.send).toHaveLength(1);
+    expect(types(log)).toEqual(["started", "escalation", "delivery"]);
+    // The late delivery gets its polls, thus an acknowledgment and a cancel can reach it.
+    await clock.advance(30 * SECOND);
+    await runtime.pass();
+    expect(pushover.status).toEqual([{ receipt: "late-1" }]);
+    log.close();
+  });
+
+  it("tells a late send that lands after a second send of its key as a duplicate, and keeps the first delivery of the log", async () => {
+    const clock = fakeClock(T0);
+    const late = (): Promise<SendOutcome> => new Promise((resolve) => clock.after(50 * SECOND, () => resolve({ ok: true, receipt: { receipt: "late-1" }, accepted: clock.now() })));
+    const { runtime, log, pushover } = open({ pushover: { send: (_, count) => (count === 1 ? late() : undefined) } }, openRuntimeLog(":memory:"), clock);
+    const running = runtime.pass();
+    await clock.advance(10 * SECOND);
+    await running;
+    await clock.advance(30 * SECOND);
+    await runtime.pass();
+    expect(pushover.send).toHaveLength(2);
+    await clock.advance(10 * SECOND);
+    await settle();
+    const last = await runtime.pass();
+    expect(last.delivery?.duplicates).toEqual([pushover.send[0]!.key]);
+    expect(last.delivery?.sent).toEqual([]);
+    expect(runtime.state().merge.deliveries.map((delivery) => delivery.receipt)).toEqual([{ receipt: "pushover-2" }]);
     log.close();
   });
 
@@ -310,6 +365,57 @@ describe("the delivery step of a pass", () => {
     expect(pushover.cancel).toHaveLength(2);
     expect(types(log)).toEqual(["started", "escalation", "delivery", "acknowledgment", "cancelled"]);
     log.close();
+  });
+
+  it("keeps the later flight of a key when an earlier flight fails after it started", async () => {
+    const clock = fakeClock(T0);
+    // The first send fails at 50 s. The second send starts at 40 s and hangs.
+    const refused = (): Promise<SendOutcome> => new Promise((resolve) => clock.after(50 * SECOND, () => resolve({ ok: false, kind: "network", message: "The connection reset." })));
+    const { runtime, log, pushover } = open({ pushover: { send: (_, count) => (count === 1 ? refused() : new Promise<SendOutcome>(() => undefined)) } }, openRuntimeLog(":memory:"), clock);
+    const running = runtime.pass();
+    await clock.advance(10 * SECOND);
+    await running;
+    await clock.advance(30 * SECOND);
+    const second = runtime.pass();
+    await clock.advance(10 * SECOND);
+    await second;
+    await settle();
+    await clock.advance(5 * SECOND);
+    await runtime.pass();
+    expect(pushover.send).toHaveLength(2);
+    log.close();
+  });
+
+  it("keeps a late delivery for the next pass when its write fails", async () => {
+    const clock = fakeClock(T0);
+    const inner = openRuntimeLog(":memory:");
+    let fail = true;
+    const flaky: RuntimeLog = {
+      ...inner,
+      appendAll: (events, accept) => {
+        if (fail && events.some((event) => event.type === "delivery")) {
+          fail = false;
+          throw new Error("The disk is full.");
+        }
+        return inner.appendAll(events, accept);
+      },
+    };
+    const late = (): Promise<SendOutcome> => new Promise((resolve) => clock.after(15 * SECOND, () => resolve({ ok: true, receipt: { receipt: "late-1" }, accepted: clock.now() })));
+    const { runtime, pushover } = open({ pushover: { send: (_, count) => (count === 1 ? late() : undefined) } }, flaky, clock);
+    const running = runtime.pass();
+    await clock.advance(10 * SECOND);
+    await running;
+    await clock.advance(5 * SECOND);
+    await settle();
+    await expect(runtime.pass()).rejects.toThrow("The disk is full.");
+    const pass = await runtime.pass();
+    expect(pass.delivery?.sent.map((delivery) => delivery.receipt)).toEqual([{ receipt: "late-1" }]);
+    expect(pushover.send).toHaveLength(1);
+    inner.close();
+  });
+
+  it("refuses a flight limit that is shorter than the call limit", () => {
+    expect(() => open({}, openRuntimeLog(":memory:"), fakeClock(T0), { flightLimit: 5 * SECOND })).toThrow("The flight limit (5000 ms) is shorter than the call limit (10000 ms).");
   });
 
   it("refuses two channels with the same id", () => {

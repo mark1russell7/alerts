@@ -3,7 +3,7 @@
  * send and the acknowledgment of a status. It is pure. The runtime gives the time, and
  * the runtime does each call of a channel.
  */
-import { assess, DEFAULT_ASSESS_POLICY } from "./assess.ts";
+import { assess, COVERAGE_KIND, DEFAULT_ASSESS_POLICY, hasKind, LIFE_SAFETY_KINDS } from "./assess.ts";
 import {
   LEVELS,
   type Acknowledgment,
@@ -25,7 +25,7 @@ import {
   type ReportId,
   type WatchedPlace,
 } from "./contracts.ts";
-import { escalate, escalationProblems, type EscalationPlan, type EscalationSend } from "./escalation.ts";
+import { escalate, escalationProblems, quietWindowProblems, type EscalationPlan, type EscalationSend } from "./escalation.ts";
 import { messageKey } from "./ids.ts";
 import { unknownKinds } from "./taxonomy.ts";
 
@@ -160,9 +160,18 @@ export function route(input: RouteInput): Route[] {
   return routes.sort((a, b) => compare(a.incident.anchor, b.incident.anchor) || compare(a.person, b.person) || LEVELS.indexOf(a.policy.level) - LEVELS.indexOf(b.policy.level));
 }
 
+/** The codes that can reach `life-safety`: the life-safety kinds, and the coverage of each of them. */
+const LIFE_SAFETY_CODES: readonly string[] = [...LIFE_SAFETY_KINDS, ...LIFE_SAFETY_KINDS.map((kind) => `${COVERAGE_KIND}.${kind}`)];
+
+/** This function tells if two prefixes of the taxonomy share a kind: one of them has the other. */
+const overlap = (a: string, b: string): boolean => hasKind([a], b) || hasKind([b], a);
+
 /**
  * This function gives the problems of a recipient. `route` accepts each recipient, but a recipient with
  * a problem does not get what its author meant. A kind with a typo matches no alert, so it can stop a wake.
+ *
+ * A life-safety alert always gets its escalation. Thus a person who watches a place or a subject has a
+ * `life-safety` policy, and no rule keeps a life-safety kind below `life-safety`.
  */
 export function recipientProblems(recipient: Recipient, channels: readonly ChannelDescriptor[]): string[] {
   const problems: string[] = [];
@@ -177,9 +186,16 @@ export function recipientProblems(recipient: Recipient, channels: readonly Chann
       if (recipient.addresses[step.channel] === undefined) problems.push(`Step ${index} of ${policy.level} uses the channel ${step.channel}, and the person has no address on it.`);
     });
   }
+  const watches = recipient.watch.places.length > 0 || (recipient.watch.subjects ?? []).length > 0;
+  if (watches && !seen.has("life-safety")) problems.push("The person watches a place or a subject, and has no policy of the level life-safety. A life-safety alert sends nothing to the person.");
   recipient.watch.rules.forEach((rule, index) => {
     for (const code of unknownKinds(rule.kinds ?? [])) problems.push(`Rule ${index} names the kind ${code}, and the taxonomy has no such code. The rule matches no alert of it.`);
+    // A rule with an empty list of places or kinds matches no alert.
+    if (rule.max === "life-safety" || rule.places?.length === 0) return;
+    const capped = rule.kinds === undefined ? ["each kind"] : rule.kinds.filter((kind) => LIFE_SAFETY_CODES.some((code) => overlap(kind, code)));
+    if (capped.length > 0) problems.push(`Rule ${index} keeps ${capped.join(", ")} at ${rule.max} or lower. A life-safety kind is in it, and a rule does not keep a life-safety kind below life-safety.`);
   });
+  if (recipient.watch.quiet !== undefined) for (const problem of quietWindowProblems(recipient.watch.quiet)) problems.push(`The quiet window: ${problem}`);
   return problems;
 }
 

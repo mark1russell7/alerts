@@ -256,6 +256,39 @@ describe("recipientProblems", () => {
     const typo: Recipient = { ...base, watch: { ...base.watch, rules: [{ kinds: ["met", "met.tornado"], max: "life-safety" }, { kinds: ["met.tornadoo"], max: "urgent" }] } };
     expect(recipientProblems(typo, CHANNELS)).toEqual(["Rule 1 names the kind met.tornadoo, and the taxonomy has no such code. The rule matches no alert of it."]);
   });
+
+  it("finds a person who watches a place or a subject and has no life-safety policy", () => {
+    const missing = "The person watches a place or a subject, and has no policy of the level life-safety. A life-safety alert sends nothing to the person.";
+    expect(recipientProblems(recipient("person-1", [URGENT]), CHANNELS)).toEqual([missing]);
+    const operator = recipient("person-1", [URGENT], []);
+    expect(recipientProblems({ ...operator, watch: { ...operator.watch, subjects: [{ system: "alerts.source" }] } }, CHANNELS)).toEqual([missing]);
+    // A person who watches nothing gets no alert, thus no level is missing.
+    expect(recipientProblems(recipient("person-1", [URGENT], []), CHANNELS)).toEqual([]);
+  });
+
+  it("finds a rule that keeps a life-safety kind below life-safety", () => {
+    const base = recipient();
+    const rules = (...list: Recipient["watch"]["rules"]): Recipient => ({ ...base, watch: { ...base.watch, rules: list } });
+    const keeps = (index: number, kinds: string, max: string): string => `Rule ${index} keeps ${kinds} at ${max} or lower. A life-safety kind is in it, and a rule does not keep a life-safety kind below life-safety.`;
+    expect(recipientProblems(rules({ max: "urgent" }), CHANNELS)).toEqual([keeps(0, "each kind", "urgent")]);
+    // A prefix above a life-safety kind, a code below one, and the coverage of one overlap it.
+    expect(recipientProblems(rules({ kinds: ["met.wind", "met.heat"], max: "notice" }, { kinds: ["cbrne.radiological"], max: "urgent" }, { kinds: ["system.coverage"], max: "digest" }), CHANNELS)).toEqual([
+      keeps(0, "met.wind", "notice"),
+      keeps(1, "cbrne.radiological", "urgent"),
+      keeps(2, "system.coverage", "digest"),
+    ]);
+    // A rule at life-safety, a rule of other kinds, and a rule with no place or no kind keep nothing.
+    expect(recipientProblems(rules({ max: "life-safety" }, { kinds: ["met.heat", "system.health"], max: "notice" }, { places: [], max: "digest" }, { kinds: [], max: "digest" }), CHANNELS)).toEqual([]);
+  });
+
+  it("finds a bad quiet window", () => {
+    const base = recipient();
+    const quiet = (zone: string, start: string, end: string): Recipient => ({ ...base, watch: { ...base.watch, quiet: { zone, start, end } } });
+    expect(recipientProblems(quiet("America/Chicago", "22:00", "07:00"), CHANNELS)).toEqual([]);
+    const problems = recipientProblems(quiet("America/Chicagoo", "22:00", "7:00"), CHANNELS);
+    expect(problems.length).toBeGreaterThanOrEqual(2);
+    for (const problem of problems) expect(problem).toMatch(/^The quiet window: /);
+  });
 });
 
 function report(id: ReportId, fields: Partial<Report> = {}): Report {
