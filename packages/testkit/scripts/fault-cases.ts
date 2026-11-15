@@ -11,6 +11,7 @@ import { FRAMINGS } from "@mark1russell7/rigor-testkit/http";
 import { runCutInBody } from "../src/cut-in-body.ts";
 import { changesOf, runChangedFormat } from "../src/changed-format.ts";
 import { runSlowSource, SLOW_ARMS, trickleMs } from "../src/slow-source.ts";
+import { DOWN_ARMS, runSourceDown } from "../src/source-down.ts";
 
 const at = process.argv.indexOf("--out");
 const out = at === -1 ? "fault-records" : (process.argv[at + 1] ?? "fault-records");
@@ -94,4 +95,28 @@ report(format.id, format.verdict, [
   ),
   "",
   `Read: ${yes(format.verdict.read)}. Pass: **${yes(format.verdict.pass)}**.`,
+]);
+
+const down = await runSourceDown();
+write("case-5.json", down);
+const min = (ms: number | undefined): string => (ms === undefined ? "never" : (ms / 60_000).toFixed(1));
+const gate = (value: boolean | undefined): string => (value === undefined ? "-" : yes(value));
+report(down.id, down.verdict, [
+  `## ${down.id}: a source down`,
+  "",
+  `The case clock moves ${String(down.settings.speed)} times faster than real time. Each arm has ${min(down.settings.armMs)} min, and each outage starts at ${min(down.settings.outageAtMs)} min.`,
+  `The health goes down in ${min(down.limits.detectMs)} min and comes up in ${min(down.limits.recoverMs)} min. The seed is \`${down.seed}\`.`,
+  "",
+  "| Arm | Outage (min) | Requests to the proxy | Faults | Failed fetches | Down after (min) | Up after (min) | Detected | Recovers |",
+  "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+  ...DOWN_ARMS.map((arm) => {
+    const record = down.records.find((one) => one.arm === arm);
+    const result = down.verdict.results[arm];
+    const outage = record?.outage === undefined ? "none" : `${min(record.outage.from)} to ${min(record.outage.to)}`;
+    const failed = record?.passes.filter((pass) => pass.failure !== undefined).length ?? 0;
+    const after = (ms: number | undefined): string => (result === undefined ? "-" : min(ms));
+    return `| ${arm} | ${outage} | ${String(record?.requests.faulty ?? 0)} | ${String(record?.faults ?? 0)} | ${String(failed)} | ${after(result?.detectedAfterMs)} | ${after(result?.recoveredAfterMs)} | ${gate(result?.gates.detected)} | ${gate(result?.gates.recovers)} |`;
+  }),
+  "",
+  `Read: ${yes(down.verdict.read)}. Pass: **${yes(down.verdict.pass)}**.`,
 ]);
