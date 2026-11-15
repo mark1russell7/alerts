@@ -19,7 +19,7 @@
 import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { Cursor, FetchOutcome, Instant, PlaceId, Report, SourceProcedures, Watch } from "@mark1russell7/alerts";
-import { flapCounts, listRuns, type FlapCount, type ListFetch, type ListRuns } from "@mark1russell7/alerts-runtime";
+import { DELAY_LIMITS, flapCounts, listRuns, missesDecision, type FlapCount, type ListFetch, type ListRuns } from "@mark1russell7/alerts-runtime";
 import { createNwsSource, NWS_DESCRIPTOR } from "@mark1russell7/alerts-source-nws-api";
 import { clopperPearson, quantile } from "@mark1russell7/rigor-statistics";
 import { fetchTransport } from "polite-crawler/api";
@@ -30,8 +30,13 @@ import { createIemSource, IEM_DESCRIPTOR } from "../src/index.ts";
 const USER_AGENT = "alerts-measure";
 /** The largest count of misses in the results. */
 const MOST_MISSES = 6;
-/** The level of the upper bounds. */
-const LEVEL = 0.95;
+/** The level of the upper bounds: the level of the limits of the delays. */
+const LEVEL = DELAY_LIMITS.level;
+/**
+ * The largest share of the false ends in the true ends: the share of the copies after the limit of the delay. The rounding
+ * removes the error of the subtraction of floats: 1 - 0.99 is not 0.01.
+ */
+const SHARE = Number((1 - DELAY_LIMITS.quantile).toPrecision(6));
 const HOUR = 3_600_000;
 
 /** One line of `records.jsonl`: one fetch of one source. */
@@ -294,6 +299,7 @@ const summary = {
   iem: fetches("iem"),
   nws: fetches("nws"),
   rows: { flaps: flapResults(rowRuns, hours), ends: endsOf(rowRuns), censored: censoredOf(rowRuns) },
+  share: SHARE,
   pairs: { flaps: flapResults(pairRuns, hours), ends: endsOf(pairRuns), censored: censoredOf(pairRuns) },
   start: { delay: minutesOf(comparisons.flatMap((comparison) => comparison.delays)), onlyIem: sum((c) => c.onlyIem), onlyNws: sum((c) => c.onlyNws) },
   end: { lag: minutesOf(comparisons.flatMap((comparison) => comparison.endLags)), notInNws: sum((c) => c.endsNotInNws), stillInNws: sum((c) => c.endsStillInNws) },
@@ -304,6 +310,11 @@ const summary = {
     notInNws: sum((c) => c.productsNotInNws),
   },
 };
+
+const decision = missesDecision(summary.rows.flaps, summary.rows.ends, SHARE);
+const decisionText = decision.decided
+  ? `The count of misses is ${String(decision.misses)}. Its false ends are ${decision.share.toExponential(2)} or less of the true ends of the rows, at ${String(LEVEL)}.`
+  : `No decision. ${decision.reason}`;
 
 const table = (results: readonly FlapResult[]): string =>
   [
@@ -317,6 +328,12 @@ const markdown = [
   `${String(summary.windows)} window(s), ${String(summary.hours)} hours. IEM: ${String(summary.iem.complete)} complete lists of ${String(summary.iem.fetches)} fetches. NWS API: ${String(summary.nws.complete)} complete lists of ${String(summary.nws.fetches)} fetches.`,
   "",
   `A false end is a key that leaves the complete lists for the count of misses or more, and comes back. An absence counts only when ${String(summary.horizon)} complete lists follow its start. The bounds are Clopper-Pearson bounds at ${String(LEVEL)}. One bad list can end many keys at once, so the decision reads the bound by list.`,
+  "",
+  `## The decision of \`SNAPSHOT_MISSES\``,
+  "",
+  `The decision is the smallest count of misses whose false ends are ${String(SHARE)} or less of the true ends of the rows.`,
+  "",
+  decisionText,
   "",
   `## The rows (the keys of \`snapshotStep\`)`,
   "",
@@ -343,7 +360,7 @@ const markdown = [
   `- Events that the NWS API did not list in the window: ${String(summary.tie.notInNws)}.`,
   "",
 ].join("\n");
-await writeFile(join(out, "summary.json"), `${JSON.stringify(summary, null, 2)}\n`);
+await writeFile(join(out, "summary.json"), `${JSON.stringify({ ...summary, decision }, null, 2)}\n`);
 await writeFile(join(out, "summary.md"), markdown);
 if (process.env["GITHUB_STEP_SUMMARY"] !== undefined) await appendFile(process.env["GITHUB_STEP_SUMMARY"], markdown);
 console.log(markdown);

@@ -12,7 +12,7 @@ import { envelope, type BackEvent, type EndedEvent } from "./events.ts";
 
 /**
  * The count of complete fetches in a row that miss a report before its end. The value 2 is a shortcut
- * with no measure. It ends when a measure of the flap rate of the IEM list gives the limit (AL-8).
+ * with no measure. It ends when `missesDecision` of the measure of the IEM list gives the count (AL-8).
  */
 export const SNAPSHOT_MISSES = 2;
 

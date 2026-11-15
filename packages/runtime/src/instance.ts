@@ -4,7 +4,7 @@
  * clocks and the transports. This module reads no file, no environment variable and no clock.
  */
 import { delay, type Clock, type WallClock } from "@mark1russell7/algebra/clock";
-import { localPlaces, sourceCovers, sourcePlaces, type ChannelDescriptor, type DelayLimitOptions, type ParsedConfig, type SecretLookup } from "@mark1russell7/alerts";
+import { localPlaces, sourceCovers, sourcePlaces, type ChannelDescriptor, type ParsedConfig, type SecretLookup } from "@mark1russell7/alerts";
 import { CHANNEL_ID, createPushoverChannel, isPushoverKey, pushoverDescriptor, PUSHOVER_REPEAT_MS, PUSHOVER_TIMEOUT_MS, type PushoverChannelOptions } from "@mark1russell7/alerts-channel-pushover";
 import { createIpawsSource, IPAWS_DESCRIPTOR, WEA_EXPECTATION } from "@mark1russell7/alerts-source-ipaws";
 import { createNwsSource, NWS_DESCRIPTOR } from "@mark1russell7/alerts-source-nws-api";
@@ -14,6 +14,7 @@ import type { DeliveryOptions } from "./delivery.ts";
 import type { RuntimeLog } from "./log.ts";
 import { createLoop, loopTimes, type LoopTimes, type RuntimeLoop } from "./loop.ts";
 import { openRuntime, type Pass, type Runtime, type RuntimeOptions } from "./runtime.ts";
+import { DELAY_LIMITS } from "./view.ts";
 
 /** The name of the secret that holds the API token of the Pushover application. */
 export const PUSHOVER_TOKEN = "PUSHOVER_APP_TOKEN";
@@ -27,12 +28,8 @@ export const USER_AGENT_NAME = "alerts-runtime";
  */
 export const userAgent = (contact: string | undefined): string => (contact === undefined ? USER_AGENT_NAME : `${USER_AGENT_NAME} (+${contact})`);
 
-/**
- * The quantile and the level of the two limits of each expectation. In normal work, 1 copy in 100 or
- * fewer comes after the limit of the delay. A run of misses makes a source late by chance in 1 case
- * in 20 or fewer.
- */
-export const DELAY_LIMITS: DelayLimitOptions = { quantile: 0.99, level: 0.95 };
+// The limits of the delays are in `view.ts`, because the measure of the IEM list reads them too.
+export { DELAY_LIMITS };
 
 /**
  * The descriptors of the channels of the instance. The loader of the configuration checks each
