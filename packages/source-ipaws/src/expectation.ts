@@ -17,6 +17,9 @@ export const NWS_API_SOURCE = "nws-api" as SourceId;
  * The expectation: each actual report of the NWS API source with the parameter `WEAHandling` has a
  * copy in IPAWS. The copies join one incident by the VTEC key. The core calculates the limit of the
  * delay from the measured delays.
+ *
+ * The core checks only the first such report of each incident and the first copy of that incident (`carriages`).
+ * Thus a lost copy of a later message of the same event, for example an extension, does not make IPAWS late.
  */
 export const WEA_EXPECTATION: Expectation = {
   id: "nws-api.ipaws",

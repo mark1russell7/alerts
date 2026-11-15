@@ -34,6 +34,8 @@ export {
   sameOfCountyUgc,
   STATE_FIPS,
   STATE_POSTAL,
+  stateCode,
+  stateOfCode,
   stateOfSame,
   stateOfUgc,
   type SameLocation,

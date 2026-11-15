@@ -303,7 +303,7 @@ describe("the map function", () => {
   const HELD = [
     "@id", "id", "areaDesc", "geocode", "references", "sent", "effective", "onset", "expires", "ends", "status", "messageType",
     "category", "severity", "certainty", "urgency", "event", "sender", "senderName", "headline", "description", "instruction",
-    "response", "note", "parameters", "scope", "code", "language", "web", "eventCode",
+    "response", "note", "parameters", "scope", "code", "language", "web", "eventCode", "replacedBy", "replacedAt",
   ];
   const OBJECTS = new Set(["geocode", "parameters", "eventCode"]);
   const loses = (problems: readonly MapProblem[], field: string): boolean =>
@@ -393,5 +393,19 @@ describe("the VTEC key at the new year", () => {
     expect(one?.correlation).toEqual([{ system: "vtec", id: "PAFG.BZ.W.0099.2026" }]);
     expect(two?.correlation).toEqual([{ system: "vtec", id: "PAFG.BZ.W.0099.2027" }]);
     expect(two?.references).toContain(one?.key);
+  });
+});
+
+describe("a message that a later message replaced", () => {
+  // The real first message of a Texas flash flood warning (KEWX 0108), fetched after a later message replaced it.
+  // Its one home is the package `format-cap`.
+  const replaced = readFileSync(new URL("../../format-cap/fixtures/pairs/kewx-ff-w-0108-new.nws-api.json", import.meta.url), "utf8");
+
+  it("keeps the link to the later message as parameters, with no problem", () => {
+    const { report, problems } = mapOne(replaced);
+    expect(problems).toEqual([]);
+    expect(report?.parameters["replacedBy"]).toEqual(["https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.c20308989378c74bdd6d3b88ef94d5a3b9891350.001.1"]);
+    expect(report?.parameters["replacedAt"]).toEqual(["2026-11-08T23:54:00-06:00"]);
+    expect(report?.parameters["WEAHandling"]).toEqual(["Imminent Threat"]);
   });
 });

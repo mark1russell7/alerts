@@ -20,5 +20,6 @@ export * from "./lateness.ts";
 export * from "./map.ts";
 export * from "./problems.ts";
 export * from "./schemas.ts";
+export * from "./shapes.ts";
 export * from "./system-reports.ts";
 export * from "./taxonomy.ts";

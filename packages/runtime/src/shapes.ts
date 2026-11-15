@@ -4,7 +4,8 @@
  * next fetch of the alerts. Thus the alerts come first. The match by shape and the map route read the outlines here.
  */
 import type { Incident, Instant, MapRegion, RegionCode, ShapeLookup, WatchedPlace } from "@mark1russell7/alerts";
-import { compareCodes, stateOfCode, type Refreshed, type ShapeStore, type Wanted } from "@mark1russell7/alerts-shapes-nws";
+import { stateOfCode } from "@mark1russell7/alerts-format-nws";
+import { compareCodes, type Refreshed, type ShapeStore, type Wanted } from "@mark1russell7/alerts-shapes-nws";
 import { errorMessage } from "@mark1russell7/text";
 
 /** The outcome of one refresh of the outlines: its result, or the error that it threw. */

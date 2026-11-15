@@ -69,9 +69,22 @@ describe("sourceCovers", () => {
     expect(sourceCovers(source("world", { coverage: "global" }), TEXAS, TORNADO)).toBe(true);
   });
 
-  it("does not match an area with only a shape", () => {
-    const circle = source("circle", { coverage: [{ type: "circle", center: [-97.3, 37.7], radiusKm: 500 }] });
+  // Made-up positions in the ocean near 0, 0. No position is a real place.
+  it("matches a shape of the coverage only to a place with a position in the shape", () => {
+    const circle = source("circle", { coverage: [{ type: "circle", center: [0, 0], radiusKm: 500 }] });
     expect(sourceCovers(circle, KANSAS, TORNADO)).toBe(false);
+    expect(sourceCovers(circle, { ...KANSAS, at: [1, 1] }, TORNADO)).toBe(true);
+    expect(sourceCovers(circle, { ...KANSAS, at: [10, 10] }, TORNADO)).toBe(false);
+    const square = source("square", { coverage: [{ type: "polygon", rings: [[[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]]] }] });
+    expect(sourceCovers(square, { ...KANSAS, at: [0.5, 0.5] }, TORNADO)).toBe(true);
+    expect(sourceCovers(square, { ...KANSAS, at: [1, 0.5] }, TORNADO)).toBe(true);
+    // The buffer of the place does not count, as for the codes.
+    expect(sourceCovers(square, { ...KANSAS, at: [1.5, 0.5], bufferKm: 100 }, TORNADO)).toBe(false);
+  });
+
+  it("shows a gap for a shape that geo refuses", () => {
+    const broken = source("broken", { coverage: [{ type: "polygon", rings: [[[0, 0], [1, 0], [0, 0]]] }] });
+    expect(sourceCovers(broken, { ...KANSAS, at: [0.5, 0] }, TORNADO)).toBe(false);
   });
 });
 

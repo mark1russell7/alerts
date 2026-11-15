@@ -245,6 +245,9 @@ importers:
       '@mark1russell7/collections':
         specifier: ^0.10.2
         version: 0.10.2(zod@4.6.7)
+      '@mark1russell7/geo':
+        specifier: ^0.2.1
+        version: 0.2.1
       '@mark1russell7/optional':
         specifier: ^1.2.0
         version: 1.2.0
@@ -372,6 +375,9 @@ importers:
       '@mark1russell7/alerts-channel-pushover':
         specifier: workspace:*
         version: link:../channel-pushover
+      '@mark1russell7/alerts-format-nws':
+        specifier: workspace:*
+        version: link:../format-nws
       '@mark1russell7/alerts-shapes-nws':
         specifier: workspace:*
         version: link:../shapes-nws
@@ -440,8 +446,8 @@ importers:
         specifier: workspace:*
         version: link:../source-nws-api
       '@mark1russell7/geo':
-        specifier: ^0.1.0
-        version: 0.1.0
+        specifier: ^0.2.1
+        version: 0.2.1
       '@mark1russell7/sqlite':
         specifier: ^0.2.6
         version: 0.2.6
@@ -942,8 +948,8 @@ packages:
     resolution: {integrity: sha512-FiiKK/sAbp39ypGv+2XzYRc+s911pdCtu97UQ4LiKmQKHjqPiyocGO48r2YObucxUkQhnm9mCdkiQxW6rFjiAg==}
     engines: {node: '>=22'}
 
-  '@mark1russell7/geo@0.1.0':
-    resolution: {integrity: sha512-wdIfFArGYEWNuO3+w6/QOv5UT/NMKYgjS5l+LR9/lZaoLscf3gEK8nYFpvKdaRwqZNRnbvDBvkAftUqyHv9FYg==}
+  '@mark1russell7/geo@0.2.1':
+    resolution: {integrity: sha512-T/DB8810mppYuWHAQ43Sy0sE/dQWse9vlr8bHGt+8QXk6ZMJS4eZ+t5qUGC4Wf0PcFKulhg43VLcQKZcRVtNvg==}
     engines: {node: '>=22.12'}
 
   '@mark1russell7/optional@1.2.0':
@@ -2302,7 +2308,7 @@ snapshots:
 
   '@mark1russell7/files@0.0.3': {}
 
-  '@mark1russell7/geo@0.1.0':
+  '@mark1russell7/geo@0.2.1':
     dependencies:
       '@mark1russell7/optional': 1.2.0
       '@mark1russell7/predicates': 0.1.2

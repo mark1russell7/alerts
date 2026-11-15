@@ -9,6 +9,8 @@
  * A measure ends at a time, and an absence that is open at that time can come back later. So an absence
  * and its trials count only when a horizon of complete lists follows the start of the absence. Without
  * the horizon, the count of flaps is low, and a low count is on the unsafe side.
+ *
+ * The function `missesDecision` gives the count of misses from the bounds of the measure.
  */
 import type { Instant } from "@mark1russell7/alerts";
 
@@ -117,4 +119,55 @@ export function flapCounts(runs: ListRuns, most: number): FlapCount[] {
     counts.push({ misses, flaps, trials: runs.trials, starts: byStart.size, lists: runs.observed, largest: Math.max(0, ...byStart.values()) });
   }
   return counts;
+}
+
+/** The false ends at one count of misses, summed over the windows of a measure. */
+export interface FlapBound {
+  /** The count of misses that ends a report. */
+  readonly misses: number;
+  /** The upper bound of the rate of the observed lists where false ends start. */
+  readonly highByList: number;
+  /** The count of observed lists. */
+  readonly lists: number;
+  /** The largest count of false ends that start at one list. */
+  readonly largest: number;
+}
+
+/** The decision of the count of misses. */
+export type MissesDecision =
+  | {
+      readonly decided: true;
+      readonly misses: number;
+      /** The upper bound of the false ends, as a share of the true ends. */
+      readonly share: number;
+    }
+  | {
+      readonly decided: false;
+      /** The cause, and the count of true ends that a decision needs. */
+      readonly reason: string;
+    };
+
+/**
+ * This function gives the smallest count of misses whose false ends are `share` or less of the true ends. The true ends
+ * are the absences of observed lists that did not come back.
+ *
+ * - The bound of the false ends is the bound of the lists with a start, times the lists, times the largest start.
+ * - The bound reads the lists, not the keys, because one bad list can end many keys.
+ * - With no true end, or with no count of misses under the share, the function gives no decision.
+ */
+export function missesDecision(bounds: readonly FlapBound[], ends: number, share: number): MissesDecision {
+  if (!(share > 0 && share < 1)) throw new RangeError(`The share is ${String(share)}, not a number above 0 and below 1.`);
+  if (!Number.isInteger(ends) || ends < 0) throw new RangeError(`The count of true ends is ${String(ends)}, not an integer of 0 or more.`);
+  if (bounds.length === 0) return { decided: false, reason: "The measure has no count of misses." };
+  const falseEnds = (bound: FlapBound): number => bound.highByList * bound.lists * Math.max(1, bound.largest);
+  const ordered = [...bounds].sort((a, b) => a.misses - b.misses);
+  const best = ordered.reduce((low, bound) => (falseEnds(bound) < falseEnds(low) ? bound : low));
+  const needed = Math.ceil(falseEnds(best) / share);
+  if (ends === 0) return { decided: false, reason: `The measure has no true end. A decision needs about ${String(needed)} true ends with no new false end.` };
+  const found = ordered.find((bound) => falseEnds(bound) / ends <= share);
+  if (found !== undefined) return { decided: true, misses: found.misses, share: falseEnds(found) / ends };
+  return {
+    decided: false,
+    reason: `At ${String(best.misses)} misses, the bound of the false ends is ${falseEnds(best).toFixed(1)}, more than ${String(share)} of ${String(ends)} true ends. A decision needs about ${String(needed)} true ends with no new false end.`,
+  };
 }

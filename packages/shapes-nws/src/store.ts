@@ -5,12 +5,12 @@
  */
 import type { Duration, FetchFailure, Instant, MapRegion, RegionCode, ShapeLookup, SourceId } from "@mark1russell7/alerts";
 import { createRequester, problemDetail } from "@mark1russell7/alerts-fetch";
-import { stateOfUgc } from "@mark1russell7/alerts-format-nws";
+import { stateCode, stateOfUgc } from "@mark1russell7/alerts-format-nws";
 import { NWS_BASE_URL } from "@mark1russell7/alerts-source-nws-api";
 import type { Answer, Condition, Conditions, Pace, Transport } from "polite-crawler/api";
 import type { ShapeCache } from "./cache.ts";
 import { dropsOf, listKey, plan, taskId, zoneKey, type CachedList, type CachedZone, type Plan, type ShapeState, type Task, type Wanted } from "./plan.ts";
-import { compareCodes, listPath, readList, readZone, stateCode, ZONE_KINDS, zoneOfCode, zonePath } from "./zones.ts";
+import { compareCodes, listPath, readList, readZone, ZONE_KINDS, zoneOfCode, zonePath } from "./zones.ts";
 
 /**
  * The age of a record when the store asks for it again: 7 days. Each request is conditional, thus a

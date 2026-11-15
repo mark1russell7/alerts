@@ -729,7 +729,12 @@ export const assessReasonSchema: z.ZodType<AssessReason, AssessReason> = schemaO
       z.strictObject({ kind: z.literal("no-subject") }),
       z.strictObject({ kind: z.literal("no-codes") }),
       z.strictObject({ kind: z.literal("unknown-place"), place: placeIdSchema }),
-      z.strictObject({ kind: z.literal("place"), place: placeIdSchema, codes: z.array(regionCodeSchema).readonly() }),
+      z.strictObject({
+        kind: z.literal("place"),
+        place: placeIdSchema,
+        codes: z.array(regionCodeSchema).readonly(),
+        distanceKm: z.number().min(0).exactOptional(),
+      }),
       z.strictObject({ kind: z.literal("subject"), subject: subjectWatchSchema }),
       z.strictObject({
         kind: z.literal("table"),
@@ -810,6 +815,24 @@ export const placeConfigSchema: z.ZodType<PlaceConfig, PlaceConfig> = schemaOf<P
     .readonly(),
 );
 
+// The printable ASCII characters, with no space, no parenthesis and no backslash.
+const CONTACT_CHARACTERS = /^[\x21-\x27\x2a-\x5b\x5d-\x7e]+$/;
+// An `https` URL with a host of two labels or more, or a `mailto` URL with one address.
+const CONTACT_FORMS = [
+  /^https:\/\/[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+(?::[0-9]{1,5})?(?:[/?#].*)?$/i,
+  /^mailto:[^@/?#]+@[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+(?:\?.*)?$/i,
+];
+
+/**
+ * This function tells if a text is a contact of an operator: an `https` URL with a host, or a `mailto` URL
+ * with an address. The contact goes into the comment of the User-Agent. Thus it has only
+ * printable ASCII characters, with no space, no parenthesis and no backslash. A header with other
+ * characters stops the fetch. A parenthesis ends the comment, and a backslash escapes the next character.
+ */
+export function isContactUrl(text: string): boolean {
+  return CONTACT_CHARACTERS.test(text) && CONTACT_FORMS.some((form) => form.test(text));
+}
+
 /** This schema checks a person of the configuration: the watch, and the policies of the person when they are not the default. */
 export const personConfigSchema: z.ZodType<PersonConfig, PersonConfig> = schemaOf<PersonConfig>()(
   z
@@ -839,6 +862,7 @@ export const alertConfigSchema: z.ZodType<AlertConfig, AlertConfig> = schemaOf<A
       people: z.array(personConfigSchema).readonly(),
       contacts: z.array(contactConfigSchema).readonly(),
       policies: z.array(escalationPolicySchema).readonly(),
+      contact: z.string().refine(isContactUrl, "The contact is not an https URL or a mailto URL.").exactOptional(),
     })
     .readonly(),
 );

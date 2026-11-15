@@ -4,7 +4,7 @@
  * clocks and the transports. This module reads no file, no environment variable and no clock.
  */
 import { delay, type Clock, type WallClock } from "@mark1russell7/algebra/clock";
-import { localPlaces, sourceCovers, sourcePlaces, type ChannelDescriptor, type DelayLimitOptions, type ParsedConfig, type SecretLookup } from "@mark1russell7/alerts";
+import { localPlaces, sourceCovers, sourcePlaces, type ChannelDescriptor, type ParsedConfig, type SecretLookup } from "@mark1russell7/alerts";
 import { CHANNEL_ID, createPushoverChannel, isPushoverKey, pushoverDescriptor, PUSHOVER_REPEAT_MS, PUSHOVER_TIMEOUT_MS, type PushoverChannelOptions } from "@mark1russell7/alerts-channel-pushover";
 import { createIpawsSource, IPAWS_DESCRIPTOR, WEA_EXPECTATION } from "@mark1russell7/alerts-source-ipaws";
 import { createShapeStore, type ShapeCache } from "@mark1russell7/alerts-shapes-nws";
@@ -16,23 +16,22 @@ import type { RuntimeLog } from "./log.ts";
 import { createLoop, loopTimes, type LoopTimes, type RuntimeLoop } from "./loop.ts";
 import { openRuntime, type Pass, type Runtime, type RuntimeOptions } from "./runtime.ts";
 import { keepShapes, type InstanceShapes, type ShapeOutcome } from "./shapes.ts";
-import { earliest, nextFetch } from "./view.ts";
+import { DELAY_LIMITS, earliest, nextFetch } from "./view.ts";
 
 /** The name of the secret that holds the API token of the Pushover application. */
 export const PUSHOVER_TOKEN = "PUSHOVER_APP_TOKEN";
 
-/**
- * The User-Agent of each request to a source. The NWS asks for the name of the application and a
- * contact. The contact is the page of the project, thus no request names a person.
- */
-export const USER_AGENT = "alerts-runtime (+https://github.com/mark1russell7/alerts)";
+/** The name of the application in the User-Agent of each request. The NWS asks for a name and a contact. */
+export const USER_AGENT_NAME = "alerts-runtime";
 
 /**
- * The quantile and the level of the two limits of each expectation. In normal work, 1 copy in 100 or
- * fewer comes after the limit of the delay. A run of misses makes a source late by chance in 1 case
- * in 20 or fewer.
+ * This function gives the User-Agent of each request of the instance: the name, and the contact of the
+ * operator when the configuration has one. Without a contact, no request names a person or an account.
  */
-export const DELAY_LIMITS: DelayLimitOptions = { quantile: 0.99, level: 0.95 };
+export const userAgent = (contact: string | undefined): string => (contact === undefined ? USER_AGENT_NAME : `${USER_AGENT_NAME} (+${contact})`);
+
+// The limits of the delays are in `view.ts`, because the measure of the IEM list reads them too.
+export { DELAY_LIMITS };
 
 /**
  * The descriptors of the channels of the instance. The loader of the configuration checks each
@@ -125,7 +124,9 @@ export function openInstance(options: InstanceOptions): Instance {
   const { clock, wall } = options;
   const factories = [createNwsSource, createIpawsSource] as const;
   const pace = sourcePace(clock, wall, factories.length);
-  const sources = factories.map((make) => make({ pace, transport: options.transport, userAgent: USER_AGENT }));
+  // One User-Agent for each request of the instance: the sources and the store of shapes.
+  const agent = userAgent(options.config.config.contact);
+  const sources = factories.map((make) => make({ pace, transport: options.transport, userAgent: agent }));
 
   const descriptors = sources.map((source) => source.describe());
   const kinds = [...new Set(descriptors.flatMap((descriptor) => descriptor.kinds))];
@@ -154,7 +155,7 @@ export function openInstance(options: InstanceOptions): Instance {
   if (problems.length > 0) throw new Error(`The instance does not start. The configuration has these problems:\n- ${problems.join("\n- ")}`);
 
   // The store of shapes shares the pace of the sources. Thus its requests to the NWS API keep the rests of that host.
-  const store = options.shapes === undefined ? undefined : createShapeStore({ pace, transport: options.transport, userAgent: USER_AGENT, cache: options.shapes });
+  const store = options.shapes === undefined ? undefined : createShapeStore({ pace, transport: options.transport, userAgent: agent, cache: options.shapes });
   const cache = options.shapes;
   const shapes = keepShapes({ store, places, onShapes: options.onShapes, close: () => cache?.close() });
 
