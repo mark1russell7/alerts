@@ -11,13 +11,14 @@
  * `ALERTS_HOME` (the folder `.alerts` in the home folder). The value in parentheses is the value
  * without the variable. An empty value counts as no value, and a relative path starts at the working
  * folder. The folder holds the private files of the instance: `config.json`,
- * `secrets.env` and the log `runtime.sqlite`. No repository holds them.
+ * `secrets.env`, the log `runtime.sqlite` and the outlines `shapes.sqlite`. No repository holds them.
  *
  * The key `HEALTHCHECKS_PING_URL` of `secrets.env` gives the outside heartbeat (`heartbeat.ts`). The
  * profile `daemon` of the live instance does not start without it. Another profile starts with a warning.
  */
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
+import { openShapeCache, SHAPES_FILE } from "@mark1russell7/alerts-shapes-nws";
 import { realClock, wallClock } from "@mark1russell7/algebra/clock";
 import type { ServiceBuilder } from "@mark1russell7/service";
 import { errorMessage } from "@mark1russell7/text";
@@ -28,6 +29,7 @@ import { heartbeat } from "./heartbeat.ts";
 import { PROFILES, declare } from "./index.ts";
 import { INSTANCE_CHANNELS, openInstance, userAgent } from "./instance.ts";
 import { openRuntimeLog } from "./log.ts";
+import { shapeReport } from "./shapes.ts";
 import { supervisor } from "./supervise.ts";
 
 /** This function gives a port from the environment, or the fallback when the variable is not set. */
@@ -69,6 +71,9 @@ async function runtime(): Promise<ServiceBuilder> {
   const onPass = pingUrl === "" ? undefined : heartbeat({ url: pingUrl, fetch, clock: wall, userAgent: agent, onError: (message) => console.error(redactSecrets(message, values)) });
 
   const log = openRuntimeLog(join(home, "runtime.sqlite"));
+  // A broken file of shapes goes into quarantine, and the store starts empty. Then the outlines come again from the NWS API.
+  const shapes = openShapeCache(join(home, SHAPES_FILE));
+  if (shapes.quarantined !== undefined) console.error(`The file ${SHAPES_FILE} was broken. It is in quarantine, and the store of shapes starts empty.`);
   const instance = openInstance({
     config,
     secret,
@@ -81,10 +86,15 @@ async function runtime(): Promise<ServiceBuilder> {
     ...(onPass === undefined ? {} : { onPass }),
     // The output gets no secret, also when an error quotes a request.
     onError: (error, failures) => console.error(`A pass failed (${failures} in sequence): ${redactSecrets(errorMessage(error), values)}`),
+    shapes,
+    onShapes: (outcome) => {
+      const report = shapeReport(outcome);
+      if (report !== undefined) console.error(redactSecrets(report, values));
+    },
   });
 
-  // The service closes the log in its shutdown.
-  return declare({ port: port("PORT", 8080), probePort: port("PROBE_PORT", 9090), profile, loop: instance.loop, log });
+  // The service closes the log and the store of shapes in its shutdown.
+  return declare({ port: port("PORT", 8080), probePort: port("PROBE_PORT", 9090), profile, loop: instance.loop, log, shapes: instance.shapes });
 }
 
 const MODES = ["supervise"];
