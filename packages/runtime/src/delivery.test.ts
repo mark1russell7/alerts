@@ -22,6 +22,7 @@ import {
 } from "@mark1russell7/alerts";
 import { describe, expect, it } from "vitest";
 import type { DeliveryOptions } from "./delivery.ts";
+import { heldOf, holdStep } from "./heartbeat.ts";
 import { openRuntimeLog, type RuntimeLog } from "./log.ts";
 import { openRuntime, type RuntimeOptions } from "./runtime.ts";
 import { rebuild } from "./state.ts";
@@ -262,7 +263,7 @@ describe("the delivery step of a pass", () => {
     const before = open({ pushover: { send: () => ({ ok: false, kind: "rate-limited", message: "The quota is used.", retryAfter: 90 * SECOND }) } }, log, clock);
     await before.runtime.pass();
     const key = before.pushover.send[0]!.key;
-    expect(before.runtime.state().refusals).toEqual({ [key]: { channel: PUSHOVER, kind: "rate-limited", at: T0, retryAt: T0 + 90 * SECOND } });
+    expect(before.runtime.state().refusals).toEqual({ [key]: { channel: PUSHOVER, kind: "rate-limited", at: T0, retryAt: T0 + 90 * SECOND, deliveries: 0 } });
     // The refusal ends the copy, thus the restart does not stop it.
     expect(before.runtime.state().copies).toEqual({});
 
@@ -282,6 +283,29 @@ describe("the delivery step of a pass", () => {
     expect(after.pushover.send.map((message) => message.key)).toEqual([key]);
     expect(late.delivery?.sent).toHaveLength(1);
     expect(after.runtime.state().refusals).toEqual({});
+    log.close();
+  });
+
+  it("writes the refusals of a step after its deliveries, thus the log keeps the hold of the pass also when the accept is later", async () => {
+    const OTHER: Recipient = { ...RECIPIENT, watch: { ...RECIPIENT.watch, person: "person-2" as PersonId } };
+    // The channel refuses the key of person-2 at once. It accepts the key of person-1 after the refusal, with a time after
+    // the time of the refusal.
+    const later: Script = {
+      send: (message) =>
+        message.person === OTHER.watch.person
+          ? { ok: false, kind: "auth", message: "The user key is not valid.", retryAfter: 90 * SECOND }
+          : settle().then(() => ({ ok: true, receipt: { receipt: "pushover-1" }, accepted: T0 + 5 * SECOND })),
+    };
+    const { runtime, log } = open({ pushover: later }, openRuntimeLog(":memory:"), fakeWallClock(T0), { recipients: [RECIPIENT, OTHER] });
+    const pass = await runtime.pass();
+    expect(pass.delivery?.sent.map((delivery) => delivery.person)).toEqual([PERSON]);
+    expect(pass.delivery?.failures.map((failure) => failure.kind)).toEqual(["auth"]);
+    const order = types(log);
+    expect(order.lastIndexOf("delivery")).toBeLessThan(order.indexOf("refused"));
+    // The state after a restart holds the channel as the pass does.
+    const held = holdStep({}, pass);
+    expect(held).toEqual({ pushover: { kinds: ["auth"], until: T0 + 90 * SECOND } });
+    expect(heldOf(rebuild(log.read(), runtime.config), T0 + 30 * SECOND)).toEqual(held);
     log.close();
   });
 

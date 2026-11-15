@@ -301,6 +301,8 @@ The log also keeps each refused send. A refused send is a refusal, a bad key or 
 
 - The `refused` event has the delivery key, the channel, the kind and the retry time.
 - The state keeps the last refusal of each key. A delivery of the key removes it.
+- A start of a run and a refusal drop each refusal whose retry is at or before their time. Thus the state keeps only the refusals that wait.
+- A step writes its refusals after all of its deliveries. Each refusal keeps the count of the deliveries of its channel before it.
 - After a restart, the first step keeps the wait of each refusal. Thus the quota of a channel holds across a restart.
 - The heartbeat reads the refusals of the state at the start. Thus a restart does not end the fail of a refused channel.
 
@@ -439,7 +441,7 @@ The runtime cannot tell the person that it stopped. A check of Healthchecks.io t
 - After each pass with no error, the hook pings the check. A ping of the same kind goes once in each 60 seconds. When the pings stop, Healthchecks.io alerts the owner: the process stopped, the computer stopped, or its network is down.
 - A pass in which a channel gave `auth`, `refused` or `rate-limited` to a send pings `/fail`, because then the system cannot tell the person.
 - The fail of a channel holds until a send on the channel goes, or until the pass of the retry has no refusal on it. The delivery step sends a failed call again at the first pass at or after its `retryAt`. Thus the check does not go down and up at each retry.
-- The fail of a channel holds across a restart. At its first pass, the hook starts from `heldOf` of the log: each refusal after the last delivery on its channel, with a retry after that pass. Thus a restart does not ping `success` while the channel refuses.
+- The fail of a channel holds across a restart. At its first pass, the hook starts from `heldOf` of the log: each refusal with no later delivery on its channel in the log, with a retry after that pass. The order of the log decides, not the times. Thus a restart does not ping `success` while the channel refuses.
 - The body of a success ping gives the state of each source. The body of a fail ping gives the channel and the kind. No body holds a place, a person or the text of a failure.
 - The hook starts the ping and ends at once. One ping is in flight at a time, for 10 seconds or less. A failed ping goes to the log, and its text holds no ping URL. The next pass pings again.
 - The key `HEALTHCHECKS_PING_URL` of `secrets.env` gives the ping URL, with `https`. The profile `daemon` does not start without it.
