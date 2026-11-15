@@ -12,7 +12,19 @@
 
 import type { Machine, Transition } from "@mark1russell7/algebra";
 import { LEVELS } from "./contracts.ts";
-import type { Acknowledgment, ChannelId, Delivery, Duration, EscalationPolicy, Incident, Instant, Level, PersonId, ReportId } from "./contracts.ts";
+import type {
+  Acknowledgment,
+  ChannelId,
+  Delivery,
+  Duration,
+  EscalationPolicy,
+  Incident,
+  Instant,
+  Level,
+  PersonId,
+  QuietWindow,
+  ReportId,
+} from "./contracts.ts";
 import type { MessageKeyInput } from "./ids.ts";
 
 /**
@@ -118,6 +130,8 @@ export interface EscalationInput {
   /** The rank of this copy of the system, from 0. A copy waits `rank × rankDelay` before each send. */
   readonly rank?: number | undefined;
   readonly rankDelay?: Duration | undefined;
+  /** The quiet window of the person, from `PersonWatch.quiet`. A send below `life-safety` in the window is quiet. */
+  readonly quiet?: QuietWindow | undefined;
   readonly now: Instant;
 }
 
@@ -126,6 +140,8 @@ export interface EscalationSend extends MessageKeyInput {
   readonly channel: ChannelId;
   /** The time at which the step became due. */
   readonly due: Instant;
+  /** True: the channel sends in its silent mode. The value is for a send at `now`. `Message.quiet` takes it. */
+  readonly quiet: boolean;
 }
 
 /** The output of `escalate`. */
@@ -172,6 +188,8 @@ const ACTIVE: ReadonlySet<EscalationState> = new Set(["sent", "last", "exhausted
  * - A failed send makes no delivery, so its step stays due and the next plan sends it again.
  * - The delivery is at least once, not exactly once. A crash after a send and before its record
  *   gives a second send with the same `messageKey`. A channel that drops a repeated key drops it.
+ * - A send below `life-safety` at `now` in the quiet window of the person is quiet. A send of
+ *   `life-safety` is not quiet at any time.
  */
 export function escalate(input: EscalationInput): EscalationPlan {
   const { policy, person, incident, now } = input;
@@ -185,6 +203,7 @@ export function escalate(input: EscalationInput): EscalationPlan {
   const acknowledgment = input.acknowledgments.filter(covers).sort(byTimeThenVia)[0];
   const steps = policy.steps;
   const wait = nonNegative(input.rank) * nonNegative(input.rankDelay);
+  const quiet = level !== "life-safety" && inQuietWindow(input.quiet, now);
 
   // A step time that is not a number of 0 or more counts as 0: escalationProblems reports it, and a send comes early, not late.
   const offsets = steps.map((step) => nonNegative(step.at));
@@ -241,7 +260,7 @@ export function escalate(input: EscalationInput): EscalationPlan {
         const offset = offsets[index] ?? 0;
         return step === undefined || delivered.has(index)
           ? []
-          : [{ incident: incident.anchor, level, person, step: index, channel: step.channel, due: start + offset + wait }];
+          : [{ incident: incident.anchor, level, person, step: index, channel: step.channel, due: start + offset + wait, quiet }];
       })
     : [];
 
@@ -282,6 +301,84 @@ export function escalationProblems(policy: EscalationPolicy): string[] {
   });
   if (!Number.isFinite(policy.exhaustedAfter) || policy.exhaustedAfter < 0) problems.push(`exhaustedAfter is ${policy.exhaustedAfter}. It is 0 or more.`);
   return problems;
+}
+
+/**
+ * This function tells if the time `at` is in the quiet window. It uses the local time of the time
+ * zone of the window. Thus a change to or from daylight saving time moves the window with the clock
+ * of the person. The start is in the window, and the end is not. An end before the start crosses
+ * midnight, and an end equal to the start gives the full day.
+ *
+ * The function does not throw. An absent window, a bad time zone, a bad local time or a bad `at`
+ * gives `false`. A message that is not quiet is louder than the person wants, but it is not a miss.
+ * `quietWindowProblems` finds a bad window.
+ *
+ * The home of civil time is `@mark1russell7/algebra/clock`. This
+ * function and its helpers move to `localTime` and `inWindow` of that entry after its next npm
+ * release. Until then, the core keeps them.
+ */
+export function inQuietWindow(window: QuietWindow | undefined, at: Instant): boolean {
+  if (window === undefined) return false;
+  const start = minutesOf(window.start);
+  const end = minutesOf(window.end);
+  const local = localMinutes(window.zone, at);
+  if (start === undefined || end === undefined || local === undefined) return false;
+  return start < end ? start <= local && local < end : local >= start || local < end;
+}
+
+/** This function gives the problems of a quiet window: a bad time zone or a bad local time. With a problem, `inQuietWindow` gives `false`. */
+export function quietWindowProblems(window: QuietWindow): string[] {
+  const problems: string[] = [];
+  if (formatOf(window.zone) === undefined) problems.push(`"${window.zone}" is not the IANA name of a time zone.`);
+  const start = minutesOf(window.start);
+  const end = minutesOf(window.end);
+  if (start === undefined) problems.push(`The start "${window.start}" is not a local time HH:MM from 00:00 to 23:59.`);
+  if (end === undefined) problems.push(`The end "${window.end}" is not a local time HH:MM from 00:00 to 23:59.`);
+  return problems;
+}
+
+const LOCAL_TIME = /^([01]\d|2[0-3]):([0-5]\d)$/;
+
+/** The minutes from the local midnight of a time `HH:MM`. */
+function minutesOf(time: string): number | undefined {
+  const match = LOCAL_TIME.exec(time);
+  return match === null ? undefined : Number(match[1]) * 60 + Number(match[2]);
+}
+
+/** One format for each time zone. The cache holds `null` for a name that is not a time zone. */
+const FORMATS = new Map<string, Intl.DateTimeFormat | null>();
+
+function formatOf(timeZone: string): Intl.DateTimeFormat | undefined {
+  let format = FORMATS.get(timeZone);
+  if (format === undefined) {
+    try {
+      format = new Intl.DateTimeFormat("en-US", { timeZone, hourCycle: "h23", hour: "2-digit", minute: "2-digit" });
+    } catch {
+      format = null;
+    }
+    FORMATS.set(timeZone, format);
+  }
+  return format ?? undefined;
+}
+
+/** The minutes from the local midnight of the time `at` in the time zone. */
+function localMinutes(timeZone: string, at: Instant): number | undefined {
+  const format = formatOf(timeZone);
+  if (format === undefined) return undefined;
+  let parts: Intl.DateTimeFormatPart[];
+  try {
+    parts = format.formatToParts(at);
+  } catch {
+    // A time out of the range of a date
+    return undefined;
+  }
+  let hour = 0;
+  let minute = 0;
+  for (const part of parts) {
+    if (part.type === "hour") hour = Number(part.value) % 24;
+    else if (part.type === "minute") minute = Number(part.value);
+  }
+  return hour * 60 + minute;
 }
 
 const nonNegative = (value: number | undefined): number => (value !== undefined && Number.isFinite(value) && value > 0 ? value : 0);

@@ -133,7 +133,7 @@ Each channel package registers four procedures under `alerts.channel.<id>`:
 | Procedure | Effects | Rule |
 | --- | --- | --- |
 | `describe` | none | It gives the `ChannelDescriptor`: the failure domains, the break through Do Not Disturb, the repeats, the kind of acknowledgment and the cost. |
-| `send` | writes `network` | It sends one `Message` to one `Address`. A failure is `{ ok: false }`. It does not throw. |
+| `send` | writes `network` | It sends one `Message` to one `Address`. When `message.quiet` is true, it uses its silent mode. A failure is `{ ok: false }`. It does not throw. |
 | `status` | reads `network` | It gives the state of a receipt: accepted, delivered, acknowledged, expired or failed. |
 | `cancel` | writes `network` | It stops the repeats of a message. It is idempotent. |
 
@@ -142,6 +142,9 @@ The channel does not escalate. The core does:
 - An `EscalationPolicy` gives the steps of a level: a channel and a time for each step. The first step of `life-safety` is Pushover at emergency priority. It repeats until acknowledged, and sounds through silent mode with iOS Critical Alerts.
 - The escalation is a state machine on the clock of algebra: sent, then acknowledged, or the next step at its time, or exhausted. Exhausted is a system alert to the next person in the policy.
 - An acknowledgment comes from any channel or from the UI. It stops the escalation of that level of that incident, and the core cancels the repeats on the other channels.
+- Only an acknowledgment proves that the person got a message. The Pushover receipt field `last_delivered_at` is the time of a retry of the server, not a proof.
+- The core decides the silent mode. `escalate` sets `quiet` on each send, and `Message.quiet` takes it. Each channel maps it to its silent mode: Pushover priority `-1`, or a text and no call on Twilio. No channel keeps its own rule about the time of day.
+- On an iPhone, an Emergency message of Pushover sounds through silent mode only when the Pushover app has Critical Alerts on for Emergency. A reset of the iOS permission of Pushover turns that setting off.
 
 ## The delivery promise
 
@@ -192,7 +195,18 @@ Each lookup only grows with the severity and with the urgency. So a more severe 
 
 The level for a person is the highest level at the places of the person. A rule of the person can lower the level of some kinds at some places. For example, warnings at the places of other people can come as `urgent`. At each place, the first rule that matches applies, and a rule does not raise the level.
 
-The assessment reads no clock. At night, only `life-safety` breaks through Do Not Disturb, so the levels hold the night rule. Each assessment has its reasons: the gate that stopped it, the class, the two lookups, the places and the rules. The UI shows them.
+The assessment reads no clock, because the level is about the incident. The escalation reads `now`, so it holds the night rule:
+
+- Each person can have a quiet window (`PersonWatch.quiet`): a time zone, and a start and an end in local times, for example `22:00` to `07:00`. An equal start and end give the full day.
+- In the window, each send below `life-safety` is quiet. A `life-safety` send ignores the window. It wakes the person.
+- The quiet value is for the time of the send. A step that became due before the end of the window and goes out after it is not quiet.
+- `inQuietWindow` calculates the local time with `Intl.DateTimeFormat` and the time zone. So the window follows the change to and from daylight saving time.
+- Tests hold a window across midnight, the two days of the change, an hour that occurs two times and an hour that does not occur.
+- A bad window gives no quiet send. A message that is too loud is not a miss. `quietWindowProblems` finds the bad window.
+- The system does not use the Quiet Hours of Pushover. The core holds the one rule, so each channel follows the same rule.
+
+
+Each assessment has its reasons: the gate that stopped it, the class, the two lookups, the places and the rules. The UI shows them.
 
 The table becomes the calculation of AL-31. The calculation multiplies the probability that the event is real, the impact on the person and the urgency. It compares the result with the cost to interrupt the person at that time. The probabilities come from base rates that the event log measures, not from values that a person sets.
 

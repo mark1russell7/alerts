@@ -496,6 +496,12 @@ export interface Message {
   readonly incident: ReportId;
   /** The time after which the message has no use. */
   readonly expires?: Instant;
+  /**
+   * True: the channel sends the message in its silent mode, for example Pushover priority `-1`, or a
+   * text and no call. The escalation sets it in the quiet window of the person. A `life-safety`
+   * message is not quiet at any time. The channel keeps no rule of its own about the time of day.
+   */
+  readonly quiet: boolean;
 }
 
 /** The address of a person on a channel, from the private configuration. The repo does not hold an address. */
@@ -653,6 +659,20 @@ export interface LevelRule {
   readonly max: AssessedLevel;
 }
 
+/**
+ * The quiet window of a person: a part of each day, in local times of a time zone. In the window,
+ * each message below `life-safety` is quiet. A `life-safety` message ignores the window. The shape
+ * is that of `TimeWindow` of `@mark1russell7/algebra/clock`, without the days of the week.
+ */
+export interface QuietWindow {
+  /** The IANA name of the time zone, for example `Europe/Berlin`. */
+  readonly zone: string;
+  /** The start of the window, a local time `HH:MM` from `00:00` to `23:59`. The start is in the window. */
+  readonly start: string;
+  /** The end of the window, a local time `HH:MM`. The end is not in the window. An end before the start crosses midnight. An end equal to the start gives the full day. */
+  readonly end: string;
+}
+
 /** The places and the rules of one person. The private configuration gives them. */
 export interface PersonWatch {
   readonly person: PersonId;
@@ -660,6 +680,8 @@ export interface PersonWatch {
   readonly places: readonly PlaceId[];
   /** The rules of the person, in order. */
   readonly rules: readonly LevelRule[];
+  /** The quiet window of the person. When it is absent, no message is quiet. */
+  readonly quiet?: QuietWindow;
 }
 
 /** A reason of an assessment. The UI shows the reasons, so each level tells why. */
