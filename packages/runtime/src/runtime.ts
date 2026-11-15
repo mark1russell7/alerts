@@ -106,7 +106,7 @@ export function openRuntime(options: RuntimeOptions): Runtime {
 
   append([{ ...envelope("started", `started:${options.run}`, clock.now()), run: options.run }]);
 
-  const dispatcher = options.delivery === undefined ? undefined : createDispatcher(options.delivery, { clock, places: config.places, state: () => state, append, wake: options.wake });
+  const dispatcher = options.delivery === undefined ? undefined : createDispatcher(options.delivery, { clock, run: options.run, places: config.places, state: () => state, append, wake: options.wake });
 
   // The misses of the reports of each snapshot source, in memory only. A restart starts them at 0.
   const misses = new Map<SourceId, ReadonlyMap<ReportId, number>>();

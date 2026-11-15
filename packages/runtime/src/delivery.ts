@@ -6,6 +6,7 @@
  */
 import type { WallClock } from "@mark1russell7/algebra/clock";
 import {
+  COPY_ID,
   acknowledgmentOf,
   incidents,
   messageKey,
@@ -47,8 +48,8 @@ export interface DeliveryOptions {
   /**
    * The longest time that a send stays in flight. A send that passes `callLimit` goes on, and no second
    * send of its key starts until it ends or this time ends. A late send that the channel accepts gets
-   * its delivery in the log. After this time, a second send goes, and the cancel by tag of the channel
-   * stops a duplicate. It is not shorter than `callLimit`.
+   * its delivery in the log. After this time, the step stops the copy of the send by its copy id, and a
+   * new copy goes. It is not shorter than `callLimit`.
    */
   readonly flightLimit: Duration;
   /** The rank of this copy of the system, and the wait of each rank. */
@@ -58,9 +59,12 @@ export interface DeliveryOptions {
 
 /** A call of a channel that failed. The decision stays, thus the call goes again at `retryAt` or later. */
 export interface DeliveryFailure {
-  readonly call: "send" | "status" | "cancel";
+  /** The call. `copy` is the stop of one copy by its copy id. */
+  readonly call: "send" | "status" | "cancel" | "copy";
   /** The delivery key of the call. */
   readonly key: string;
+  /** The copy id of a `copy` call. */
+  readonly copy?: string;
   readonly channel: ChannelId;
   readonly kind: string;
   readonly message: string;
@@ -74,11 +78,14 @@ export interface DeliveryStep {
   /** The deliveries that the step wrote: the sends of the step, and the late sends of earlier steps. */
   readonly sent: readonly Delivery[];
   /**
-   * The keys of the sends that the channel accepted when the log already had a delivery of the key. A
-   * late send after a second send of the same key is one. The log keeps the first delivery. The cancel
-   * by tag of the channel stops the repeats of each copy.
+   * The keys of the sends that the channel accepted when the log already had a delivery of the key.
+   * A late send on a channel that does not repeat can cause this, after a second send. Another copy
+   * of the system can also cause it. The log keeps the first delivery. The cancel by tag of the
+   * channel stops the repeats of each copy.
    */
   readonly duplicates: readonly string[];
+  /** The copy ids that the step stopped: a copy past its flight limit, or a copy whose send failed with no answer. */
+  readonly stopped: readonly string[];
   readonly acknowledged: readonly Acknowledgment[];
   /** The delivery keys that the step cancelled. */
   readonly cancelled: readonly string[];
@@ -92,6 +99,8 @@ export interface DeliveryStep {
 /** What the delivery reads and writes in the runtime. */
 export interface DeliveryContext {
   readonly clock: WallClock;
+  /** The id of the run. Its characters match `COPY_ID`. Each copy id starts with it, thus two runs do not give the same copy id. */
+  readonly run: string;
   readonly places: readonly WatchedPlace[];
   state(): RuntimeState;
   /**
@@ -108,11 +117,42 @@ export interface Dispatcher {
   step(at: Instant): Promise<DeliveryStep>;
 }
 
+/** A send in flight. A stale flight passed its flight limit on a channel that repeats. The log does not keep its copy. */
+interface Flight {
+  readonly since: Instant;
+  readonly copy: string;
+  stale: boolean;
+}
+
+/**
+ * The kinds of a failed send after which the channel can have the message: the answer did not come,
+ * or the server failed. A refusal, a bad key and a full quota tell that the channel has no message.
+ */
+const UNSURE: ReadonlySet<string> = new Set(["network", "timeout", "server"]);
+
+/** The kind and the text of a failed cancel or stop. */
+interface CallFailure {
+  readonly kind: "timeout" | "network";
+  readonly message: string;
+}
+
+/** A cancel or a stop that threw is a failure of the kind `network`. */
+const thrownFailure = (thrown: unknown, otherwise: string): CallFailure => ({ kind: "network", message: thrown === undefined ? otherwise : errorMessage(thrown) });
+
 /**
  * This function makes the dispatcher. Each call of a channel goes through a time limit. A failed call
- * changes nothing in the log, thus the next step decides it again. A send that passes its time limit
- * stays in flight, thus it does not get a second send. The times of the polls, the waits and the
- * flights are in memory only. After a restart, each receipt gets a poll at once.
+ * changes nothing in the log, thus the next step decides it again.
+ *
+ * - A send that passes its time limit stays in flight, thus it does not get a second send.
+ * - The channel can have a copy that the log does not keep. This is a copy past its flight limit, or a
+ *   copy whose send failed with no answer. On a channel that repeats, the step stops that copy by its copy id, and
+ *   the new copy goes in parallel. A stop by the delivery key here can also stop the new copy.
+ * - A failed stop goes again at a later step. A stale copy that the channel accepts writes no delivery,
+ *   and its stop goes again.
+ *
+ * The times of the polls, the waits, the flights and the copies to stop are in memory only. After a
+ * restart, each receipt gets a poll at once. A known limit (AL-32): a hung copy of the last run gets no
+ * stop by its copy id. The cancel by the delivery key at the end of its escalation stops it.
  */
 export function createDispatcher(options: DeliveryOptions, context: DeliveryContext): Dispatcher {
   const { clock } = context;
@@ -125,12 +165,19 @@ export function createDispatcher(options: DeliveryOptions, context: DeliveryCont
     descriptors.push(descriptor);
   }
   const polling = new Set(descriptors.filter((descriptor) => descriptor.ack === "poll").map((descriptor) => descriptor.id as string));
+  // Only a copy that the channel repeats needs a stop.
+  const repeating = new Set(descriptors.filter((descriptor) => descriptor.repeats).map((descriptor) => descriptor.id as string));
   const recipients = new Map(options.recipients.map((recipient) => [recipient.watch.person as string, recipient]));
   if (!(options.flightLimit >= options.callLimit)) throw new Error(`The flight limit (${options.flightLimit} ms) is shorter than the call limit (${options.callLimit} ms).`);
+  // Each copy id starts with the run id. A channel can put it in the path of a URL.
+  if (!COPY_ID.test(context.run)) throw new Error(`The run id "${context.run}" has a character that a copy id cannot have. Use letters, digits, _ and -.`);
   const polled = new Map<string, Instant>();
   const waits = new Map<string, Instant>();
   // The send in flight of each key. Each flight is an object, thus a late end does not remove a later flight of the same key.
-  const flying = new Map<string, { readonly since: Instant }>();
+  const flying = new Map<string, Flight>();
+  // The stale copies that the channel can repeat, by copy id. Each step stops them.
+  const stopping = new Map<string, { readonly key: string; readonly channel: ChannelId }>();
+  let copies = 0;
   // The deliveries of the sends that ended after their step. The next step writes them.
   const landed: Delivery[] = [];
   const later = (call: string, key: string): string => `${call} ${key}`;
@@ -161,10 +208,10 @@ export function createDispatcher(options: DeliveryOptions, context: DeliveryCont
       const write = (events: readonly RuntimeEvent[]): void => {
         if (events.length > 0) conflicts.push(...context.append(events));
       };
-      const fail = (call: DeliveryFailure["call"], delivery: { readonly key: string; readonly channel: ChannelId }, kind: string, message: string, after?: Duration): void => {
+      const fail = (call: DeliveryFailure["call"], target: { readonly key: string; readonly channel: ChannelId; readonly copy?: string }, kind: string, message: string, after?: Duration): void => {
         const retryAt = at + Math.max(options.retry, after ?? 0);
-        waits.set(later(call, delivery.key), retryAt);
-        failures.push({ call, key: delivery.key, channel: delivery.channel, kind, message, retryAt });
+        waits.set(later(call, target.copy ?? target.key), retryAt);
+        failures.push({ call, key: target.key, ...(target.copy === undefined ? {} : { copy: target.copy }), channel: target.channel, kind, message, retryAt });
       };
       // The end of each wait that keeps a call from this step. The next pass comes at the earliest one.
       const waiting: Instant[] = [];
@@ -238,8 +285,13 @@ export function createDispatcher(options: DeliveryOptions, context: DeliveryCont
               waiting.push(ends);
               continue;
             }
-            // The send hangs past its flight limit. A second send goes, and the cancel by tag stops a duplicate.
+            // The send hangs past its flight limit, and the channel can have its copy. The step stops that copy by its
+            // copy id, and a new copy goes in parallel. A cancel by the delivery key here can also stop the new copy.
             flying.delete(key);
+            if (repeating.has(send.channel)) {
+              flight.stale = true;
+              stopping.set(flight.copy, { key, channel: send.channel });
+            }
           }
           if (!ready("send", key)) continue;
           work.push(
@@ -254,18 +306,26 @@ export function createDispatcher(options: DeliveryOptions, context: DeliveryCont
               const message = messageOf(entry.incident, context.state().merge.reports, send);
               const deliveryOf = (accepted: Extract<SendOutcome, { ok: true }>): Delivery => ({ key: message.key, incident: send.incident, level: send.level, person: send.person, channel: send.channel, step: send.step, at: accepted.accepted, receipt: accepted.receipt });
               // The send stays in flight until it ends, also after the time limit of the step.
-              const flight = { since: at };
+              copies += 1;
+              const flight: Flight = { since: at, copy: `${context.run}-${copies}`, stale: false };
               flying.set(key, flight);
               let late = false;
               const call = Promise.resolve()
-                .then(() => channel.send({ message, address }))
+                .then(() => channel.send({ message, address, copy: flight.copy }))
                 .then(
                   (result) => result,
                   (error): SendOutcome => ({ ok: false, kind: "network", message: `The send threw: ${errorMessage(error)}` }),
                 );
               void call.then((result) => {
                 if (flying.get(key) === flight) flying.delete(key);
-                if (!late || !result.ok) return;
+                // The channel can have this copy, and the log does not keep it: a stale copy, or a send with no answer. A stop
+                // before the accept does not reach the copy, thus the stop of a stale copy goes again.
+                const unkept = result.ok ? flight.stale : UNSURE.has(result.kind);
+                if (unkept && repeating.has(send.channel)) {
+                  stopping.set(flight.copy, { key, channel: send.channel });
+                  if (late) context.wake?.();
+                }
+                if (flight.stale || !late || !result.ok) return;
                 landed.push(deliveryOf(result));
                 context.wake?.();
               });
@@ -315,15 +375,15 @@ export function createDispatcher(options: DeliveryOptions, context: DeliveryCont
                   return;
                 }
                 const receipt = delivery.receipt;
-                const error = await limited<unknown>(
+                const failure = await limited<CallFailure | undefined>(
                   Promise.resolve().then(() => channel.cancel({ receipt })).then(() => undefined),
                   options.callLimit,
                   clock,
-                  () => new Error(`The cancel took longer than ${options.callLimit} ms.`),
-                  (thrown) => thrown ?? new Error("The cancel failed."),
+                  () => ({ kind: "timeout", message: `The cancel took longer than ${options.callLimit} ms.` }),
+                  (thrown) => thrownFailure(thrown, "The cancel failed."),
                 );
-                if (error !== undefined) {
-                  fail("cancel", delivery, "network", errorMessage(error));
+                if (failure !== undefined) {
+                  fail("cancel", delivery, failure.kind, failure.message);
                   return;
                 }
               }
@@ -333,6 +393,37 @@ export function createDispatcher(options: DeliveryOptions, context: DeliveryCont
           );
         }
       }
+      // 4. The stops of the stale copies, in parallel with the sends. A failed stop goes again at a later step.
+      const stopped: string[] = [];
+      for (const [copy, target] of stopping) {
+        if (!ready("copy", copy)) continue;
+        const channel = byId.get(target.channel);
+        if (channel === undefined) {
+          stopping.delete(copy);
+          continue;
+        }
+        work.push(
+          (async () => {
+            const failure = await limited<CallFailure | undefined>(
+              Promise.resolve()
+                .then(() => channel.cancel({ copy }))
+                .then(() => undefined),
+              options.callLimit,
+              clock,
+              () => ({ kind: "timeout", message: `The stop of the copy took longer than ${options.callLimit} ms.` }),
+              (thrown) => thrownFailure(thrown, "The stop of the copy failed."),
+            );
+            if (failure !== undefined) {
+              fail("copy", { ...target, copy }, failure.kind, failure.message);
+              return;
+            }
+            // A late accept during the stop puts a new entry, thus its stop goes again.
+            if (stopping.get(copy) === target) stopping.delete(copy);
+            stopped.push(copy);
+          })(),
+        );
+      }
+
       // Each call ends before the step ends. A write that failed throws after all of them.
       const settled = await Promise.allSettled(work);
       const broken = settled.find((result) => result.status === "rejected");
@@ -345,7 +436,7 @@ export function createDispatcher(options: DeliveryOptions, context: DeliveryCont
       for (const key of polled.keys()) if (!keep.has(key)) polled.delete(key);
       const polls = open.map((delivery) => (polled.get(delivery.key) ?? at) + options.pollEvery);
       const wakeAt = earliest([...after.map((entry) => entry.plan.wakeAt), ...polls, ...failures.map((failure) => failure.retryAt), ...waiting]);
-      return { routes: after, sent, duplicates, acknowledged, cancelled, failures, conflicts, ...(wakeAt === undefined ? {} : { wakeAt }) };
+      return { routes: after, sent, duplicates, stopped, acknowledged, cancelled, failures, conflicts, ...(wakeAt === undefined ? {} : { wakeAt }) };
     },
   };
 
