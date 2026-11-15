@@ -85,6 +85,20 @@ import {
   type Transport,
   type Urgency,
   type Watch,
+  SUBJECT_SYSTEMS,
+  type EdgeKind,
+  type EdgeOrigin,
+  type InterestEdge,
+  type InterestGraph,
+  type Mute,
+  type MuteEffect,
+  type NodeKey,
+  type Relevance,
+  type RelevancePath,
+  type RelevancePolicy,
+  type SubjectEntry,
+  type SubjectKind,
+  type WhyRecord,
   type WatchedPlace,
 } from "./contracts.ts";
 import { err, ok, tryCatch, type Result } from "@mark1russell7/optional";
@@ -817,6 +831,159 @@ export const shadowScoreSchema: z.ZodType<ShadowScore, ShadowScore> = schemaOf<S
           .readonly(),
       }),
     ])
+    .readonly(),
+);
+
+// =============================================================================
+// Relevance (AL-35, `docs/RELEVANCE.md`)
+// =============================================================================
+
+/** This schema checks the kind of a subject. */
+export const subjectKindSchema: z.ZodType<SubjectKind, SubjectKind> = schemaOf<SubjectKind>()(z.enum(["place", "topic", "entity"]));
+
+// The key `person`, or `<system>:<id>` with a system of SUBJECT_SYSTEMS and an id that is not empty.
+const NODE_KEY = new RegExp(`^(?:person|(?:${Object.keys(SUBJECT_SYSTEMS).join("|")}):.+)$`);
+const nodeKeyText = z.string().regex(NODE_KEY, "A node key is `person`, or `<system>:<id>` with a system of SUBJECT_SYSTEMS and an id that is not empty.");
+
+/** This schema checks the key of a node of an interest graph (`contracts.ts`, `NodeKey`). */
+export const nodeKeySchema: z.ZodType<NodeKey, NodeKey> = schemaOf<NodeKey>()(nodeKeyText);
+
+// A day, `YYYY-MM-DD`.
+const dayText = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "A day is `YYYY-MM-DD`.");
+
+// A number from 0 to 1.
+const unit = z.number().min(0).max(1);
+
+/** This schema checks the kind of an edge. */
+export const edgeKindSchema: z.ZodType<EdgeKind, EdgeKind> = schemaOf<EdgeKind>()(z.enum(["physical", "cyber", "geographic", "logical", "interest"]));
+
+/** This schema checks the origin of the weight of an edge. */
+export const edgeOriginSchema: z.ZodType<EdgeOrigin, EdgeOrigin> = schemaOf<EdgeOrigin>()(
+  z.enum(["base", "places", "services", "work", "data", "measured", "person"]),
+);
+
+/**
+ * This schema checks one edge of an interest graph. An edge does not start at the person, and it joins two
+ * different nodes. An edge goes into the person when its kind is `interest`, and only then.
+ */
+export const interestEdgeSchema: z.ZodType<InterestEdge, InterestEdge> = schemaOf<InterestEdge>()(
+  z
+    .strictObject({
+      id: z.string().min(1, "The id of an edge is a non-empty string."),
+      from: nodeKeySchema,
+      to: nodeKeySchema,
+      kind: edgeKindSchema,
+      weight: probabilitySchema,
+      origin: edgeOriginSchema,
+      source: z.string().min(1, "The source of a weight is a non-empty string.").exactOptional(),
+      date: dayText.exactOptional(),
+      on: z.boolean(),
+    })
+    .refine((edge) => edge.from !== "person", "An edge does not start at the person.")
+    .refine((edge) => edge.from !== edge.to, "An edge joins two different nodes.")
+    .refine((edge) => (edge.kind === "interest") === (edge.to === "person"), "An edge goes into the person when its kind is interest, and only then.")
+    .readonly(),
+);
+
+/** This schema checks a mute. A mute has a list of kinds, a list of subjects or both, and each list has one item or more. */
+export const muteSchema: z.ZodType<Mute, Mute> = schemaOf<Mute>()(
+  z
+    .strictObject({
+      id: z.string().min(1, "The id of a mute is a non-empty string."),
+      kinds: z
+        .array(z.string().min(1, "A prefix of a kind is a non-empty string."))
+        .min(1, "A list of a mute has one item or more.")
+        .readonly()
+        .exactOptional(),
+      subjects: z.array(nodeKeySchema).min(1, "A list of a mute has one item or more.").readonly().exactOptional(),
+      until: instantSchema.exactOptional(),
+      date: dayText,
+    })
+    .refine((mute) => mute.kinds !== undefined || mute.subjects !== undefined, "A mute has a list of kinds, a list of subjects or both.")
+    .readonly(),
+);
+
+/** This schema checks the interest graph of a person, `alerts-interest/1`. The ids of the edges are unique, and so are the ids of the mutes. */
+export const interestGraphSchema: z.ZodType<InterestGraph, InterestGraph> = schemaOf<InterestGraph>()(
+  z
+    .strictObject({
+      format: z.literal("alerts-interest/1"),
+      person: personIdSchema,
+      edges: z.array(interestEdgeSchema).readonly(),
+      mutes: z.array(muteSchema).readonly(),
+      labels: z.record(nodeKeyText, z.string().min(1, "A label is a non-empty string.")).readonly().exactOptional(),
+    })
+    .refine((graph) => new Set(graph.edges.map((edge) => edge.id)).size === graph.edges.length, "The ids of the edges of a graph are unique.")
+    .refine((graph) => new Set(graph.mutes.map((mute) => mute.id)).size === graph.mutes.length, "The ids of the mutes of a graph are unique.")
+    .readonly(),
+);
+
+/** This schema checks a subject of an incident that is a node of the graph of a person. */
+export const subjectEntrySchema: z.ZodType<SubjectEntry, SubjectEntry> = schemaOf<SubjectEntry>()(
+  z.strictObject({ node: nodeKeySchema, kind: subjectKindSchema, hit: probabilitySchema }).readonly(),
+);
+
+/** This schema checks one path of a relevance. A path has one edge or more. */
+export const relevancePathSchema: z.ZodType<RelevancePath, RelevancePath> = schemaOf<RelevancePath>()(
+  z
+    .strictObject({
+      subject: nodeKeySchema,
+      edges: z.array(z.string().min(1, "The id of an edge is a non-empty string.")).min(1, "A path has one edge or more.").readonly(),
+      chance: unit,
+    })
+    .readonly(),
+);
+
+/** This schema checks the why record of a relevance. */
+export const whyRecordSchema: z.ZodType<WhyRecord, WhyRecord> = schemaOf<WhyRecord>()(
+  z
+    .strictObject({
+      rule: z.string().min(1, "The rule of a why record is a non-empty string."),
+      subject: nodeKeySchema,
+      kind: subjectKindSchema,
+      via: nodeKeySchema.exactOptional(),
+      anchor: nodeKeySchema,
+      origin: edgeOriginSchema,
+      coverage: unit,
+    })
+    .readonly(),
+);
+
+/** This schema checks the effect of a mute. */
+export const muteEffectSchema: z.ZodType<MuteEffect, MuteEffect> = schemaOf<MuteEffect>()(z.enum(["absent", "silent"]));
+
+/** This schema checks the policy of the relevance. The hop cap and the count of paths are whole numbers, 1 or more. */
+export const relevancePolicySchema: z.ZodType<RelevancePolicy, RelevancePolicy> = schemaOf<RelevancePolicy>()(
+  z
+    .strictObject({
+      hopCap: z.number().int().min(1, "The hop cap is 1 or more."),
+      topPaths: z.number().int().min(1, "The count of paths is 1 or more."),
+      mandatory: muteEffectSchema,
+    })
+    .readonly(),
+);
+
+/**
+ * This schema checks a relevance. A relevance has a why when it has a path, and only then. A mute with the
+ * effect `absent` gives a reach of 0 and no path.
+ */
+export const relevanceSchema: z.ZodType<Relevance, Relevance> = schemaOf<Relevance>()(
+  z
+    .strictObject({
+      reach: probabilitySchema,
+      best: unit,
+      noisyOr: unit,
+      paths: z.array(relevancePathSchema).readonly(),
+      why: whyRecordSchema.exactOptional(),
+      weakest: z.strictObject({ edge: z.string().min(1, "The id of an edge is a non-empty string."), importance: unit }).readonly().exactOptional(),
+      next: z.strictObject({ edge: z.string().min(1, "The id of an edge is a non-empty string."), gain: unit }).readonly().exactOptional(),
+      muted: z.strictObject({ mute: z.string().min(1, "The id of a mute is a non-empty string."), effect: muteEffectSchema }).readonly().exactOptional(),
+    })
+    .refine((relevance) => (relevance.why === undefined) === (relevance.paths.length === 0), "A relevance has a why when it has a path, and only then.")
+    .refine(
+      (relevance) => relevance.muted?.effect !== "absent" || (relevance.reach.high === 0 && relevance.paths.length === 0),
+      "A mute with the effect absent gives a reach of 0 and no path.",
+    )
     .readonly(),
 );
 

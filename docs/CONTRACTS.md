@@ -599,6 +599,12 @@ The store of shapes fetches each zone and county of a state, not one code. A fet
 
 The view holds labels and positions. Only a route on the loopback address gives it, and `GET /status` does not hold it.
 
+## Relevance
+
+The relevance of an incident for one person is a calculation over the interest graph of the person (AL-35). The types are in the section "Relevance" of `contracts.ts`.
+
+`RELEVANCE.md` describes the model, the defaults, the three kinds of opt-out, the why record and the gates.
+
 ## The schemas
 
 The file `schemas.ts` of the core has one zod 4 schema for each data type of the contracts and of the configuration. A schema checks data at a trust boundary. The boundaries are the output of a map function, the event log, the private configuration and the procedure tools.
