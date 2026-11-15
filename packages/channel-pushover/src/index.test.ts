@@ -130,7 +130,7 @@ describe("send", () => {
   it("sends a life-safety message at priority 2 and keeps its receipt", async () => {
     const fake = server({ status: 200, body: { status: 1, request: "req-1", receipt: RECEIPT } });
     const channel = createPushoverChannel({ token: TOKEN, fetch: fake.fetch, now: () => AT });
-    expect(await channel.send({ message: message("life-safety"), address: ADDRESS })).toEqual({ ok: true, receipt: { request: "req-1", receipt: RECEIPT }, accepted: AT });
+    expect(await channel.send({ message: message("life-safety"), address: ADDRESS })).toEqual({ ok: true, receipt: { request: "req-1", receipt: RECEIPT, tag: "k".repeat(64) }, accepted: AT });
     expect(fake.calls[0]?.url).toBe("https://api.pushover.net/1/messages.json");
     expect(fields(fake.calls[0]?.body)).toMatchObject({ token: TOKEN, user: USER, priority: "2", retry: "30", expire: "10800", tags: "k".repeat(64) });
   });
@@ -202,6 +202,14 @@ describe("cancel", () => {
     await channel.cancel({ receipt: { receipt: RECEIPT } });
     expect(fake.calls[0]?.url).toContain(`/receipts/${RECEIPT}/cancel.json`);
     await expect(channel.cancel({ receipt: { receipt: RECEIPT } })).rejects.toThrow(/Pushover did not stop the repeats \(server\)/);
+  });
+
+  it("stops the repeats by the tag of the receipt, thus also a copy whose receipt the log does not have", async () => {
+    const fake = server({ status: 200, body: { status: 1, request: "req", canceled: 2 } });
+    const channel = createPushoverChannel({ token: TOKEN, fetch: fake.fetch });
+    await channel.cancel({ receipt: { request: "req", receipt: RECEIPT, tag: "k".repeat(64) } });
+    expect(fake.calls.map((call) => call.url)).toEqual([`https://api.pushover.net/1/receipts/cancel_by_tag/${"k".repeat(64)}.json`]);
+    expect(fields(fake.calls[0]?.body)).toEqual({ token: TOKEN });
   });
 
   it("is idempotent: a cancel of a receipt that Pushover does not know returns after one call", async () => {

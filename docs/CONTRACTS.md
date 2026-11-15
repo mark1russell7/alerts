@@ -247,11 +247,25 @@ The runtime does one delivery step in each pass, after the system reports:
 
 Each call of a channel has a time limit. A failed call writes nothing, so the next step decides it again. Before it goes again, a call waits for the time that the channel tells, or for the retry time of the configuration.
 
+A send that passes its time limit stays in flight, because the provider can accept it later:
+
+- No second send of its key starts until the first send ends, or until the flight limit `flightLimit` ends. The flight limit is not shorter than the time limit.
+- A late send that the provider accepts gets its delivery in the log at the next step. Thus its acknowledgment and its cancel work.
+- After the flight limit, a second send goes. A late first send that lands after it is a duplicate, and the log keeps one delivery of the key.
+- A send that the channel accepts in time, and whose write to the log fails, also gets its delivery at the next step. Thus no second send goes.
+
+The Pushover channel tags each emergency message with its delivery key, and it cancels by the tag. Thus a cancel also stops the repeats of a copy whose receipt the log does not have. A crash after a send and before its write is such a case.
+
+A recipient has no problem from `recipientProblems` before it gets alerts:
+
+- A person who watches a place or a subject has a policy of the level `life-safety`.
+- No rule keeps a life-safety kind, or the coverage of one, below `life-safety`. A rule with no kinds applies to each kind.
+- Each rule names kinds of the taxonomy, and the quiet window has a good time zone and good local times.
+
 The message of a send takes its text from one report of the incident. That report is the latest one with the severity and the urgency of the incident. The body has the instruction first, then the area and the description. The channel cuts the text to its limits.
 
-Two parts wait:
+One part waits:
 
-- A crash after a send and before its write loses the receipt. Then a cancel cannot stop the repeats of that message, and the person acknowledges it in the app. Next, the Pushover channel tags each message with its key and cancels by the tag.
 - The exhaustion alert to the next person waits for a second person (AL-21). Until then, the repeats continue after the exhaustion, and the routes of each pass show it.
 
 ## Levels and the first night rule
