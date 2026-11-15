@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { CONFIG_FORMAT, type AlertConfig, type ChannelDescriptor, type ChannelId, type PersonId, type PlaceId } from "@mark1russell7/alerts";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { ConfigRefused, configPath, DEFAULT_CONFIG_PATH, envSecrets, fileSource, readConfig, requireConfig, type ConfigSource } from "./config.ts";
+import { alertsHome, ConfigRefused, configPath, DEFAULT_ALERTS_HOME, envSecrets, fileSource, readConfig, requireConfig, type ConfigSource } from "./config.ts";
 
 const PUSHOVER = "pushover" as ChannelId;
 const PERSON = "person:a" as PersonId;
@@ -34,25 +34,31 @@ const PRIVATE = "PRIVATE";
 const SECRETS = envSecrets({ PUSHOVER_USER: `${PRIVATE}-user` });
 const textSource = (text: string): ConfigSource => ({ name: "The test source", read: async () => text });
 
-describe("configPath", () => {
+describe("alertsHome and configPath", () => {
   // Absolute paths on each system: on Windows, resolve adds the drive.
   const home = resolve("/home/a");
   const base = resolve("/work/b");
 
-  it("gives the default path in the home folder when the variable is not set or empty", () => {
-    expect(DEFAULT_CONFIG_PATH).toBe("~/.alerts/config.json");
+  it("give the folder .alerts in the home folder when the variable is not set or empty", () => {
+    expect(DEFAULT_ALERTS_HOME).toBe("~/.alerts");
+    expect(alertsHome({}, base, home)).toBe(join(home, ".alerts"));
+    expect(alertsHome({ ALERTS_HOME: "" }, base, home)).toBe(join(home, ".alerts"));
     expect(configPath({}, base, home)).toBe(join(home, ".alerts", "config.json"));
-    expect(configPath({ ALERTS_CONFIG: "" }, base, home)).toBe(join(home, ".alerts", "config.json"));
   });
 
-  it("expands a leading ~, and resolves a relative path against the base", () => {
-    expect(configPath({ ALERTS_CONFIG: "~/private/alerts.json" }, base, home)).toBe(join(home, "private", "alerts.json"));
-    expect(configPath({ ALERTS_CONFIG: "alerts.json" }, base, home)).toBe(join(base, "alerts.json"));
+  it("expand a leading ~, and resolve a relative path against the base", () => {
+    expect(alertsHome({ ALERTS_HOME: "~/private" }, base, home)).toBe(join(home, "private"));
+    expect(configPath({ ALERTS_HOME: "test-home" }, base, home)).toBe(join(base, "test-home", "config.json"));
+  });
+
+  it("read only ALERTS_HOME, so a test folder holds each private file", () => {
+    const test = resolve("/tmp/alerts-test");
+    expect(configPath({ ALERTS_HOME: test, ALERTS_CONFIG: join(home, "real.json") }, base, home)).toBe(join(test, "config.json"));
   });
 });
 
 describe("envSecrets", () => {
-  it("gives the value of a variable, and no value for an empty or absent variable", () => {
+  it("gives the value of a key, and no value for an empty or absent key", () => {
     const secret = envSecrets({ A: "a", EMPTY: "" });
     expect(secret("A")).toBe("a");
     expect(secret("EMPTY")).toBeUndefined();

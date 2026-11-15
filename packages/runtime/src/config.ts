@@ -6,6 +6,7 @@
  */
 import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
+import { join } from "node:path";
 import { parseConfig, type ChannelDescriptor, type ParsedConfig, type SecretLookup } from "@mark1russell7/alerts";
 import { resolvePath } from "@mark1russell7/files";
 import { err, tryCatchAsync, type Result } from "@mark1russell7/optional";
@@ -22,19 +23,31 @@ export interface ConfigSource {
   read(): Promise<string>;
 }
 
-/** This variable of the environment gives the path of the configuration file. */
-export const CONFIG_PATH_VARIABLE = "ALERTS_CONFIG";
+/**
+ * This variable of the environment gives the private folder of an instance. The folder holds each
+ * private file: the configuration, the file of keys and the event log. One variable for all the files
+ * keeps a test start with a temporary folder away from the real configuration.
+ */
+export const HOME_VARIABLE = "ALERTS_HOME";
 
-/** This path is the path of the configuration file when the variable `ALERTS_CONFIG` is not set. */
-export const DEFAULT_CONFIG_PATH = "~/.alerts/config.json";
+/** This path is the private folder when the variable `ALERTS_HOME` is not set. */
+export const DEFAULT_ALERTS_HOME = "~/.alerts";
+
+/** This name is the name of the configuration file in the private folder. */
+export const CONFIG_FILE = "config.json";
 
 /**
- * This function gives the path of the configuration file from the environment. The path can start
- * with `~`. A relative path is relative to `base`. An empty variable counts as no variable.
+ * This function gives the private folder from the environment. The path can start with `~`. A relative
+ * path is relative to `base`. An empty variable counts as no variable.
  */
+export function alertsHome(env: Readonly<Record<string, string | undefined>>, base: string, home: string = homedir()): string {
+  const text = env[HOME_VARIABLE];
+  return resolvePath(text === undefined || text === "" ? DEFAULT_ALERTS_HOME : text, base, home);
+}
+
+/** This function gives the path of the configuration file: `config.json` in the private folder. */
 export function configPath(env: Readonly<Record<string, string | undefined>>, base: string, home: string = homedir()): string {
-  const text = env[CONFIG_PATH_VARIABLE];
-  return resolvePath(text === undefined || text === "" ? DEFAULT_CONFIG_PATH : text, base, home);
+  return join(alertsHome(env, base, home), CONFIG_FILE);
 }
 
 /** This function gives a source that reads the file at `path` as UTF-8 text. */
@@ -43,8 +56,9 @@ export function fileSource(path: string): ConfigSource {
 }
 
 /**
- * This function gives a secret store that reads the environment. An empty value counts as no value.
- * To put a private file of keys into the environment, start Node.js with `--env-file=<file>`.
+ * This function gives a secret store that reads a record of keys. An empty value counts as no value.
+ * The entry reads the file of keys with `parseEnvFile` of `@mark1russell7/service/host`. Do not put the
+ * keys into `process.env`, because each child process gets that environment.
  */
 export function envSecrets(env: Readonly<Record<string, string | undefined>>): SecretLookup {
   return (name) => {
