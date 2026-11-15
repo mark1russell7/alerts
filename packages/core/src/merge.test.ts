@@ -66,7 +66,9 @@ function randomState(r: Random): MergeState {
         correlation: r.chance(0.5) ? [{ system: "vtec", id: `KTOP.TO.W.${event}` }] : [],
         // Two sizes of area, so that the rule of the copies replaces some reports and keeps others.
         areas: r.chance(0.5) ? [{ type: "code", system: "ugc", code: "KSZ083" }] : [{ type: "code", system: "ugc", code: "KSZ083" }, { type: "code", system: "ugc", code: "KSZ084" }],
-        severity: r.pick(["moderate", "severe", "extreme"] as const),
+        // An unknown value takes a value of its event, so the laws also hold for the fill.
+        severity: r.pick(["unknown", "moderate", "severe", "extreme"] as const),
+        urgency: r.pick(["unknown", "expected", "immediate"] as const),
         op: r.pick(["alert", "update", "cancel"] as const),
         status: r.chance(0.9) ? "actual" : "test",
         // Two contents for one id: the merge keeps the smaller canonical JSON.
@@ -242,7 +244,7 @@ describe("the copies of one event", () => {
     expect(incidents(normalize({ reports: [alert, copy, update] }), at)[0]?.severity).toBe("severe");
   });
 
-  it("keeps the copy live when the later report names only a part of its codes", () => {
+  it("keeps the copy live when the later reports name only a part of its codes", () => {
     // The NWS cancels the warning for one county. The update for the other county is missing.
     const partial = report({ key: "api-2", op: "cancel", sent: later, references: ["api-1"], correlation: vtec, areas: codes("KSC045") });
     const [incident] = incidents(normalize({ reports: [alert, copy, partial] }), at);
@@ -261,7 +263,41 @@ describe("the copies of one event", () => {
     expect(liveOf(alert, shapeOnly, cancel({}))).toBe(true);
   });
 
-  it.each(SEEDS)("ends no code that no later report of the origin and event names (seed %i)", (seed) => {
+  it("ends a report when the later reports together name each of its codes", () => {
+    // IEM gives one row for each county. Each row is a report of its own.
+    const row = (code: string, op: Report["op"], sent = later): Report => report({ key: `iem-${code}-${sent}`, source: "iem", op, sent, correlation: vtec, areas: codes(code) });
+    expect(liveOf(alert, row("KSC177", "cancel"), row("KSC045", "cancel"))).toBe(false);
+    // The authority ends one county and keeps the other: the incident keeps only the other county.
+    const [incident] = incidents(normalize({ reports: [alert, row("KSC177", "cancel"), row("KSC045", "update")] }), at);
+    expect(incident?.live).toBe(true);
+    expect(incident?.areas).toEqual(codes("KSC045"));
+    // The rows of the first message end when the NWS API cancels the two counties.
+    const cancel = report({ key: "api-2", op: "cancel", sent: later, references: ["api-1"], correlation: vtec, areas: codes("KSC177", "KSC045") });
+    expect(liveOf(alert, row("KSC177", "alert", T0), row("KSC045", "alert", T0), cancel)).toBe(false);
+  });
+
+  it("fills an unknown value from the latest earlier report of the event that is not a cancel", () => {
+    // IEM gives no severity, urgency or certainty.
+    const blank = { severity: "unknown", urgency: "unknown", certainty: "unknown" } as const;
+    const row = (code: string, sent: number): Report => report({ key: `iem-${code}-${sent}`, source: "iem", sent, correlation: vtec, areas: codes(code), ...blank });
+    const api = report({ key: "api-1", correlation: vtec, areas: codes("KSC177", "KSC045"), severity: "moderate", urgency: "expected", certainty: "likely" });
+    const values = (...reports: Report[]): unknown => {
+      const [incident] = incidents(normalize({ reports }), at);
+      return { live: incident?.live, severity: incident?.severity, urgency: incident?.urgency, certainty: incident?.certainty };
+    };
+    // The rows of a later product replace the message of the NWS API, and keep its values.
+    expect(values(api, row("KSC177", later), row("KSC045", later))).toEqual({ live: true, severity: "moderate", urgency: "expected", certainty: "likely" });
+    // With no known value, the value stays unknown.
+    expect(values(row("KSC177", later))).toEqual({ live: true, ...blank });
+    // A cancel gives the values of an end, so a row after the cancel takes the values of the alert.
+    const cancel = report({ key: "api-2", op: "cancel", sent: later, references: ["api-1"], correlation: vtec, areas: codes("KSC177", "KSC045"), severity: "minor", urgency: "past", certainty: "observed" });
+    expect(values(api, cancel, row("KSC177", later + 60_000))).toEqual({ live: true, severity: "moderate", urgency: "expected", certainty: "likely" });
+    // A known value of a later report does not fill an earlier report. This later report has expired, so it is not live.
+    const late = report({ key: "api-9", sent: at, expires: at, correlation: vtec, areas: codes("KSC139"), severity: "extreme", urgency: "immediate", certainty: "observed" });
+    expect(values(row("KSC177", later), late)).toEqual({ live: true, ...blank });
+  });
+
+  it.each(SEEDS)("is live exactly when the latest report of some code is not a cancel (seed %i)", (seed) => {
     const r = random(seed);
     const pool = ["KSC177", "KSC045", "KSC139", "KSC197"];
     for (let round = 0; round < 50; round += 1) {
@@ -272,18 +308,42 @@ describe("the copies of one event", () => {
           sent: T0 + r.below(4) * 60_000,
           op: r.pick(["alert", "update", "cancel"] as const),
           correlation: vtec,
-          areas: codes(...r.sample(pool, r.int(1, pool.length))),
+          // Half of the reports name one code, as the rows of IEM do.
+          areas: codes(...r.sample(pool, r.chance(0.5) ? 1 : r.int(1, pool.length))),
+          severity: r.pick(["unknown", "minor", "moderate", "severe", "extreme"] as const),
+          urgency: r.pick(["unknown", "future", "expected", "immediate"] as const),
         }),
       );
       const [incident] = incidents(normalize({ reports }), at);
-      // Each live report that no later report covers keeps its codes in the incident.
-      for (const held of reports) {
-        if (held.op === "cancel") continue;
-        const covered = reports.some((other) => other.sent > held.sent && held.areas.every((area) => other.areas.some((x) => JSON.stringify(x) === JSON.stringify(area))));
-        if (covered) continue;
-        expect(incident?.live, `seed ${seed} round ${round}`).toBe(true);
-        for (const area of held.areas) expect(incident?.areas).toContainEqual(area);
+      // The latest statements of each code: the reports with the latest sent time that name the code.
+      let live = false;
+      for (const code of pool) {
+        const naming = reports.filter((held) => held.areas.some((area) => area.type === "code" && area.code === code));
+        const last = Math.max(...naming.map((held) => held.sent));
+        if (!naming.some((held) => held.sent === last && held.op !== "cancel")) continue;
+        // No later report names this code, so the incident keeps it.
+        live = true;
+        expect(incident?.areas, `seed ${seed} round ${round}`).toContainEqual({ type: "code", system: "ugc", code });
       }
+      expect(incident?.live, `seed ${seed} round ${round}`).toBe(live);
+      // The oracle: the rule in its direct form. A report stays a head when a code of it has no later report.
+      const named = (held: Report, code: string): boolean => held.areas.some((area) => area.type === "code" && area.code === code);
+      const heads = reports.filter((held) => pool.some((code) => named(held, code) && !reports.some((other) => other.sent > held.sent && named(other, code))));
+      const liveHeads = heads.filter((held) => held.op !== "cancel");
+      const basis = liveHeads.length > 0 ? liveHeads : heads;
+      const expected = [...new Set(basis.flatMap((held) => held.areas.map((area) => (area.type === "code" ? area.code : ""))))].sort();
+      expect(incident?.areas.map((area) => (area.type === "code" ? area.code : "")).sort(), `seed ${seed} round ${round}`).toEqual(expected);
+      // The oracle of the values: an unknown value takes the highest value of the latest earlier known reports that are not cancels.
+      const fill = <F extends "severity" | "urgency">(held: Report, field: F, order: readonly Report[F][]): number => {
+        if (held[field] !== "unknown") return order.indexOf(held[field]);
+        const known = reports.filter((other) => other.op !== "cancel" && other[field] !== "unknown" && other.sent <= held.sent);
+        const last = Math.max(...known.map((other) => other.sent));
+        return Math.max(0, ...known.filter((other) => other.sent === last).map((other) => order.indexOf(other[field])));
+      };
+      const severities = ["unknown", "minor", "moderate", "severe", "extreme"] as const;
+      const urgencies = ["unknown", "past", "future", "expected", "immediate"] as const;
+      expect(incident?.severity, `seed ${seed} round ${round}`).toBe(severities[Math.max(...basis.map((held) => fill(held, "severity", severities)))]);
+      expect(incident?.urgency, `seed ${seed} round ${round}`).toBe(urgencies[Math.max(...basis.map((held) => fill(held, "urgency", urgencies)))]);
     }
   });
 });
