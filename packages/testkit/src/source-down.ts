@@ -121,6 +121,8 @@ export function fastClock(start: number, speed: number): CaseClock {
   const origin = performance.now();
   const realMs = (ms: number): number => Math.max(0, ms) / speed;
   return {
+    // The time starts at an instant (`Date.now()` in the case), thus this clock is a wall clock.
+    time: "wall",
     now: () => start + Math.floor((performance.now() - origin) * speed),
     after: (ms, run) => {
       const timer = setTimeout(run, realMs(ms));
@@ -261,7 +263,7 @@ export async function runDownArm(arm: DownArm, settings: DownSettings = CASE_5_S
   const passes: DownPass[] = [];
   let error: string | undefined;
   try {
-    const runtime = openRuntime({ log, clock, sources: [source], watch: NWS_WATCH, view: VIEW, run: `${CASE_5_ID}-${arm}` });
+    const runtime = openRuntime({ log, clock, sources: [source], watch: () => NWS_WATCH, view: VIEW, run: `${CASE_5_ID}-${arm}` });
     const end = start + settings.armMs;
     while (clock.now() < end) {
       const before = clock.now();
