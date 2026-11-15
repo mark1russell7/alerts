@@ -97,6 +97,9 @@ export interface IncidentOptions {
  * 1. One report references the key of the other in the same source.
  * 2. The two reports share a correlation key.
  * 3. The link rule matches.
+ *
+ * A head of an incident is a report that no report of its source references, and that no later
+ * report of its origin replaces (the rule of the copies, `docs/CONTRACTS.md`).
  */
 export function incidents(state: MergeState, at: Instant, options: IncidentOptions = {}): Incident[] {
   const reports = state.reports;
@@ -178,7 +181,8 @@ function incidentOf(group: readonly Report[], at: Instant): Incident {
   for (const report of group) {
     for (const reference of report.references) superseded.add(JSON.stringify([report.source, reference]));
   }
-  let heads = group.filter((report) => !superseded.has(JSON.stringify([report.source, report.key])));
+  const replaced = replacedCopies(group);
+  let heads = group.filter((report) => !superseded.has(JSON.stringify([report.source, report.key])) && !replaced.has(report.id));
   // A cycle of references leaves no head. Then each report counts as a head.
   if (heads.length === 0) heads = [...group];
   const liveHeads = heads.filter((report) => report.op !== "cancel" && !(report.expires !== undefined && report.expires <= at));
@@ -206,6 +210,46 @@ function incidentOf(group: readonly Report[], at: Instant): Incident {
     // A head with no end makes the incident open.
     ...(expiries.length === basis.length && expiries.length > 0 ? { expires: expiries.reduce((a, b) => Math.max(a, b)) } : {}),
   };
+}
+
+/**
+ * The rule of the copies. Two reports of one origin with a shared correlation key tell of one event.
+ * The later report replaces the earlier report, from any source, when it names each region code of
+ * the earlier report. Thus a cancel of the NWS also ends the copy of that alert from IPAWS.
+ *
+ * A later report that names only a part of the codes replaces nothing, and a report with no code is
+ * not replaced. Then the copy stays live: the error is on the safe side. The rule reads only the
+ * group, so it keeps the laws of the merge.
+ */
+function replacedCopies(group: readonly Report[]): Set<ReportId> {
+  const byEvent = new Map<string, Report[]>();
+  for (const report of group) {
+    for (const key of report.correlation) {
+      const event = JSON.stringify([report.origin, key.system, key.id]);
+      const reports = byEvent.get(event);
+      if (reports === undefined) byEvent.set(event, [report]);
+      else reports.push(report);
+    }
+  }
+  const codes = new Map<ReportId, ReadonlySet<string>>();
+  const codesOf = (report: Report): ReadonlySet<string> => {
+    let set = codes.get(report.id);
+    if (set === undefined) {
+      set = new Set(report.areas.flatMap((area) => (area.type === "code" ? [JSON.stringify([area.system, area.code])] : [])));
+      codes.set(report.id, set);
+    }
+    return set;
+  };
+  const replaced = new Set<ReportId>();
+  for (const reports of byEvent.values()) {
+    for (const earlier of reports) {
+      const named = codesOf(earlier);
+      if (replaced.has(earlier.id) || named.size === 0) continue;
+      const covers = (later: Report): boolean => later.sent > earlier.sent && [...named].every((code) => codesOf(later).has(code));
+      if (reports.some(covers)) replaced.add(earlier.id);
+    }
+  }
+  return replaced;
 }
 
 function highest(parts: readonly { readonly level: Level }[]): Level | undefined {
