@@ -2,8 +2,15 @@ import { readdirSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const page = readFileSync(new URL("../index.html", import.meta.url), "utf8");
+const local = readFileSync(new URL("../local.html", import.meta.url), "utf8");
 const SOURCES = readdirSync(new URL("./", import.meta.url)).filter((name) => name.endsWith(".ts") && !name.endsWith(".test.ts"));
-const code = SOURCES.map((name) => readFileSync(new URL(name, import.meta.url), "utf8")).join("\n");
+const read = (name: string): string => readFileSync(new URL(name, import.meta.url), "utf8");
+const code = SOURCES.map(read).join("\n");
+// The local page reads the map from the runtime on this computer. Only its entry calls fetch.
+const LOCAL_ENTRY = "local.ts";
+const demoCode = SOURCES.filter((name) => name !== LOCAL_ENTRY)
+  .map(read)
+  .join("\n");
 
 describe("the home page", () => {
   it("names the package and gives the install command", () => {
@@ -27,10 +34,28 @@ describe("the home page", () => {
 describe("the code of the demo", () => {
   it("makes no network call: it only reads the files of the site", () => {
     expect(SOURCES.length).toBeGreaterThan(3);
-    for (const call of ["fetch(", "XMLHttpRequest", "WebSocket", "EventSource", "sendBeacon", "import("]) expect(code).not.toContain(call);
+    expect(SOURCES).toContain(LOCAL_ENTRY);
+    for (const call of ["fetch(", "XMLHttpRequest", "WebSocket", "EventSource", "sendBeacon", "import("]) expect(demoCode).not.toContain(call);
   });
 
   it("reads no configuration from the address of the page", () => {
     for (const read of ["location.search", "location.hash", "URLSearchParams"]) expect(code).not.toContain(read);
+  });
+});
+
+describe("the local page", () => {
+  const entry = read(LOCAL_ENTRY);
+
+  it("has each part of the page, and asks the search engines not to list it", () => {
+    for (const id of ["theme", "read", "problem", "map", "incidents", "unshaped"]) expect(local).toContain(`id="${id}"`);
+    expect(local).toContain('<meta name="robots" content="noindex">');
+    expect(local).toContain('<script type="module" src="./src/local.ts"></script>');
+  });
+
+  it("calls fetch once, with the path of readMap, and names no URL with a host", () => {
+    expect(entry.split("fetch(")).toHaveLength(2);
+    expect(entry).toContain("readMap((path) => fetch(path, {");
+    for (const text of [entry, read("map-read.ts"), read("map-view.ts"), local]) expect(text).not.toMatch(/https?:|\/\/[a-z0-9.-]+[.:]/i);
+    for (const call of ["XMLHttpRequest", "WebSocket", "EventSource", "sendBeacon", "import("]) expect(entry).not.toContain(call);
   });
 });

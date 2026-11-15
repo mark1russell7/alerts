@@ -3,8 +3,9 @@
  * the incidents and the message of the step. The view only draws: the frames hold each decision.
  */
 
-import type { AssessedLevel, Assessment, HealthState, Incident, Report, Position } from "@mark1russell7/alerts";
+import type { Assessment, HealthState, Incident, Report, Position } from "@mark1russell7/alerts";
 import { h } from "@mark1russell7/site-pages/chrome";
+import { LEVEL_WORDS, levelChip, s } from "./draw.ts";
 import { COUNTIES, PEOPLE, PLACES, RIVER, SOURCES, ZONES, type Zone } from "./demo.ts";
 import {
   changeText,
@@ -14,26 +15,12 @@ import {
   joinFacts,
   KIND_WORDS,
   LEVEL_MEANINGS,
-  LEVEL_WORDS,
   nameOf,
   OP_WORDS,
   reasonText,
   shortName,
 } from "./explain.ts";
 import { LEVELS_DOWN, topLevel, type Frame } from "./replay.ts";
-
-const SVG = "http://www.w3.org/2000/svg";
-
-/**
- * This function makes an SVG element. It is a local copy of the private `s` of the explorer of
- * `@mark1russell7/site-pages`. It goes when `@mark1russell7/site-pages/chrome` exports `svg`.
- */
-function s(tag: string, attrs: Readonly<Record<string, string | number>>, ...children: (Node | string)[]): SVGElement {
-  const element = document.createElementNS(SVG, tag);
-  for (const [name, value] of Object.entries(attrs)) element.setAttribute(name, String(value));
-  element.append(...children);
-  return element;
-}
 
 // The map puts the longitude 0 to 1 on x and the latitude 0.6 to 0 on y. The sea is below the latitude 0.
 const X = (position: Position): number => Math.round(position[0] * 1000);
@@ -119,11 +106,6 @@ export function drawMap(frame: Frame, selected: string | undefined, select: (anc
     map.append(pin);
   }
   return map;
-}
-
-/** This function draws a small chip of a level. */
-export function levelChip(level: AssessedLevel): HTMLElement {
-  return h("span", { class: `chip level-${level}` }, LEVEL_WORDS[level]);
 }
 
 /**
