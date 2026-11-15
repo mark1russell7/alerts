@@ -1,7 +1,7 @@
-import type { Incident, MapRegion, PlaceId, RegionCode, ReportId, WatchedPlace } from "@mark1russell7/alerts";
+import { CONFIG_FORMAT, type AlertConfig, type Incident, type MapRegion, type PlaceConfig, type PlaceId, type Position, type RegionCode, type ReportId, type WatchedPlace } from "@mark1russell7/alerts";
 import type { Refreshed, RefreshInput, ShapeStore } from "@mark1russell7/alerts-shapes-nws";
 import { describe, expect, it } from "vitest";
-import { keepShapes, liveCodes, shapeReport, wantedShapes } from "./shapes.ts";
+import { keepShapes, liveCodes, placeCodesKey, shapeReport, wantedShapes, withZoneCodes } from "./shapes.ts";
 
 const T0 = Date.UTC(2026, 10, 15, 18, 0, 0);
 const RING = [
@@ -90,6 +90,70 @@ describe("the codes of the outlines", () => {
   it("wants no state for a place with only a country code", () => {
     const world: WatchedPlace = { id: "place-us" as PlaceId, codes: [{ system: "iso3166", code: "US" }], bufferKm: 0 };
     expect(wantedShapes([world], [])).toEqual({ states: [], codes: [] });
+  });
+});
+
+// Two squares of one degree in Kansas with a shared edge at the longitude -97, and a square in Texas.
+const square = (west: number, south: number): Position[] => [
+  [west, south],
+  [west + 1, south],
+  [west + 1, south + 1],
+  [west, south + 1],
+  [west, south],
+];
+const zoneRegion = (id: string, west: number, south: number): MapRegion => ({ code: { system: "ugc", code: id }, name: `Zone ${id}`, shapes: [{ type: "polygon", rings: [square(west, south)] }] });
+const OUTLINES: Readonly<Record<string, readonly MapRegion[]>> = {
+  KS: [zoneRegion("KSC173", -98, 37), zoneRegion("KSZ083", -98, 37), zoneRegion("KSC015", -97, 37)],
+  TX: [zoneRegion("TXC029", -99, 29)],
+};
+const outlines = (state: string): readonly MapRegion[] => OUTLINES[state] ?? [];
+
+/** This function gives a configuration with these places and no person. */
+const configOf = (...places: PlaceConfig[]): AlertConfig => ({ format: CONFIG_FORMAT, places, people: [], contacts: [], policies: [] });
+const kansasPlace: PlaceConfig = { id: "place-ks" as PlaceId, label: "A place", at: [-97.5, 37.5], codes: [{ system: "same", code: "020173" }], bufferKm: 0 };
+
+describe("withZoneCodes", () => {
+  it("adds the codes of the zones that contain the position, after the codes of the file", () => {
+    const [place] = withZoneCodes(configOf(kansasPlace), outlines).places;
+    expect(place?.codes).toEqual([
+      { system: "same", code: "020173" },
+      { system: "state", code: "KS" },
+      { system: "ugc", code: "KSC173" },
+      { system: "ugc", code: "KSZ083" },
+    ]);
+  });
+
+  it("adds the codes of a zone in the buffer, and no code of the file again", () => {
+    const near: PlaceConfig = { ...kansasPlace, codes: [{ system: "ugc", code: "ksc173" }, { system: "same", code: "020173" }], bufferKm: 50 };
+    const [place] = withZoneCodes(configOf(near), outlines).places;
+    expect(place?.codes.map((code) => `${code.system}:${code.code}`)).toEqual(["ugc:ksc173", "same:020173", "same:020015", "state:KS", "ugc:KSC015", "ugc:KSZ083"]);
+  });
+
+  it("keeps the codes of a place with no position, or with no outline of its states", () => {
+    const noPosition: PlaceConfig = { id: "place-a" as PlaceId, label: "A", codes: [{ system: "state", code: "KS" }], bufferKm: 0 };
+    const noOutline: PlaceConfig = { id: "place-b" as PlaceId, label: "B", at: [-100.5, 44.5], codes: [{ system: "state", code: "SD" }], bufferKm: 0 };
+    const config = configOf(noPosition, noOutline);
+    expect(withZoneCodes(config, outlines).places).toEqual(config.places);
+  });
+
+  it("reads only the outlines of the states of the codes of the place", () => {
+    const asked: string[] = [];
+    // The position is in the square of Texas, but the place has only a code of Kansas.
+    const wrong: PlaceConfig = { ...kansasPlace, at: [-98.5, 29.5] };
+    const [place] = withZoneCodes(configOf(wrong), (state) => {
+      asked.push(state);
+      return outlines(state);
+    }).places;
+    expect(asked).toEqual(["KS"]);
+    expect(place?.codes).toEqual(wrong.codes);
+  });
+
+  it("gives one key for the same codes, and a new key for new codes", () => {
+    const config = configOf(kansasPlace);
+    const zoned = withZoneCodes(config, outlines);
+    expect(placeCodesKey(config)).toBe(placeCodesKey(configOf({ ...kansasPlace, label: "Other", codes: [{ system: "same", code: "020173" }] })));
+    expect(placeCodesKey(zoned)).not.toBe(placeCodesKey(config));
+    expect(placeCodesKey(withZoneCodes(zoned, outlines))).toBe(placeCodesKey(zoned));
   });
 });
 

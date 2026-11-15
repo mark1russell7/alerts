@@ -499,6 +499,16 @@ A writer of the configuration does these steps, thus the live instance does not 
 
 The output of the check gives the count of the places, the people, the contacts and the policies, or the problems. It holds no value and no path.
 
+The runtime adds the codes of the zones near each place with a position (`withZoneCodes`). Thus a writer gives a position and one code of the state of the place. A `same` code of the county is better, because the IPAWS and radio alerts use it.
+
+- At the start, the store of shapes gives the outlines of the zones of each state of the codes of the place. No request names the position.
+- The function `zoneCodesNear` gives the codes of each county and forecast zone in the buffer of the place. The codes are the UGC codes, the `same` code of each county and the `state` code.
+- The codes of the file stay first. The runtime only adds codes. It does not write `config.json`.
+- The added codes hold the `state` code. Thus the NWS API source asks by state, not by zone.
+- After a refresh with requests, when no task is due, the instance compares the codes again. A change starts `onPlaceCodes` one time. The profile `daemon` then stops, and the supervisor starts it again with the new codes.
+- A place near the line of a state gets the zones of the states of its codes only. To watch a zone of the next state, give a code of that state too.
+- The first start with a new state has no outlines of that state. The place uses the codes of the file until the store has the outlines and the runtime starts again.
+
 The function `sourcePlaces` gives the places for one source, with no label, and with a position only when the place shares it with that source. The function `localPlaces` gives each position for the matching on the machine of the instance.
 
 A person also watches subjects, other than places, in `PersonWatch.subjects`: a source of the system, a service or a cloud region. A watch with no id matches each subject of its system. A rule with places does not apply to a subject. The person who operates the system watches `{ system: "alerts.source" }`, and gets the health reports.

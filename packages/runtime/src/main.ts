@@ -137,7 +137,17 @@ async function runtime(): Promise<ServiceBuilder> {
       const report = shapeReport(outcome);
       if (report !== undefined) console.error(redactSecrets(report, values));
     },
+    // New outlines change the codes of a place. Only the profile daemon has a supervisor that starts the runtime again.
+    onPlaceCodes: () => {
+      if (name !== "daemon") {
+        console.error("New outlines change the codes of a place. Start the runtime again to use them.");
+        return;
+      }
+      console.error("New outlines change the codes of a place. The runtime stops, and the supervisor starts it again.");
+      void service.lifecycle?.shutdown("The codes of a place changed.");
+    },
   });
+  console.log(`The outlines of the zones added ${instance.zoneCodes} codes to the places.`);
 
   // The service closes the log and the store of shapes in its shutdown.
   const service = declare({ port: port("PORT", 8080), probePort: port("PROBE_PORT", 9090), profile, loop: instance.loop, log, shapes: instance.shapes, quotas });
