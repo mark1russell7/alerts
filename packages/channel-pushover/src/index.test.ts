@@ -2,7 +2,7 @@ import type { Level, Message, PersonId, ReportId } from "@mark1russell7/alerts";
 import type { PushoverFetch } from "@procedures/notify/pushover";
 import { quotaGate, type QuotaGate } from "polite-crawler/api";
 import { describe, expect, it } from "vitest";
-import { createPushoverChannel, isPushoverKey, priorityOf, PUSHOVER_QUOTA, pushoverCost, pushoverDescriptor, pushoverMessageOf } from "./index.ts";
+import { createPushoverChannel, isPushoverKey, priorityOf, PUSHOVER_QUOTA, PUSHOVER_RESERVE_NOTICES, pushoverCost, pushoverDescriptor, pushoverMessageOf } from "./index.ts";
 
 // Fake keys: 30 letters and digits, as Pushover keys are. No real key is in this repository.
 const TOKEN = "t".repeat(30);
@@ -244,6 +244,47 @@ describe("the quota of the month", () => {
     const channel = createPushoverChannel({ token: TOKEN, fetch: fake.fetch, now: () => AT, quota: gate });
     expect(await channel.send({ message: message("urgent"), address: ADDRESS })).toMatchObject({ ok: false, kind: "refused" });
     expect(gate.state().used).toBe(0);
+  });
+
+  const noticesOf = () => quotaGate(PUSHOVER_RESERVE_NOTICES, { key: "pushover:reserve-notices", now: () => AT });
+
+  it("sends the message of the entry into the reserve one time in each window, and stops each other message of the reserve", async () => {
+    const gate = gateOf();
+    gate.note({ remaining: 1_000 });
+    const notices = noticesOf();
+    const fake = server(sent("req-1", 999));
+    const channel = createPushoverChannel({ token: TOKEN, fetch: fake.fetch, now: () => AT, quota: gate, reserveNotices: notices });
+    const entry = message("notice", { useReserve: true });
+    expect(await channel.send({ message: entry, address: ADDRESS })).toMatchObject({ ok: true });
+    expect(gate.state().used).toBe(9_001);
+    expect(notices.state().used).toBe(1);
+    expect(await channel.send({ message: entry, address: ADDRESS })).toMatchObject({ ok: false, kind: "reserved", retryAfter: RESET - AT });
+    expect(await channel.send({ message: message("notice"), address: ADDRESS })).toMatchObject({ ok: false, kind: "reserved" });
+    expect(fake.calls).toHaveLength(1);
+  });
+
+  it("stops the message of the entry with no gate of the notices, and when Pushover refuses each message", async () => {
+    const gate = gateOf();
+    gate.note({ remaining: 1_000 });
+    const fake = server();
+    const bare = createPushoverChannel({ token: TOKEN, fetch: fake.fetch, now: () => AT, quota: gate });
+    expect(await bare.send({ message: message("notice", { useReserve: true }), address: ADDRESS })).toMatchObject({ ok: false, kind: "reserved" });
+    gate.note({ remaining: 0, resetAt: RESET });
+    const notices = noticesOf();
+    const full = createPushoverChannel({ token: TOKEN, fetch: fake.fetch, now: () => AT, quota: gate, reserveNotices: notices });
+    expect(await full.send({ message: message("notice", { useReserve: true }), address: ADDRESS })).toMatchObject({ ok: false, kind: "rate-limited" });
+    expect(notices.state().used).toBe(0);
+    expect(fake.calls).toEqual([]);
+  });
+
+  it("gives back the notice of a message of the entry that Pushover refused", async () => {
+    const gate = gateOf();
+    gate.note({ remaining: 1_000 });
+    const notices = noticesOf();
+    const fake = server({ status: 400, body: { status: 0, user: "invalid", errors: ["user identifier is invalid"] } });
+    const channel = createPushoverChannel({ token: TOKEN, fetch: fake.fetch, now: () => AT, quota: gate, reserveNotices: notices });
+    expect(await channel.send({ message: message("notice", { useReserve: true }), address: ADDRESS })).toMatchObject({ ok: false, kind: "refused" });
+    expect(notices.state().used).toBe(0);
   });
 
   it("sends with no count when the store of the gate fails, and keeps the outcome when the count fails", async () => {

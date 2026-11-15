@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fakeWallClock, type WallClock } from "@mark1russell7/algebra/clock";
-import { reportId, type Expectation, type FetchOutcome, type Observation, type ObservationId, type PlaceId, type Report, type SourceDescriptor, type SourceId, type SourceProcedures, type Watch, type WatchedPlace } from "@mark1russell7/alerts";
+import { reportId, type ChannelId, type ChannelQuota, type Expectation, type FetchOutcome, type Observation, type ObservationId, type PlaceId, type Report, type SourceDescriptor, type SourceId, type SourceProcedures, type Watch, type WatchedPlace } from "@mark1russell7/alerts";
 import { random, seedsFrom } from "@mark1russell7/rigor-generators";
 import { afterEach, describe, expect, it } from "vitest";
 import type { RuntimeEvent } from "./events.ts";
@@ -257,6 +257,28 @@ describe("one pass of the runtime", () => {
       throw error;
     }
   }
+
+  it("keeps each open line of a quota when the read of the quotas throws, and ends the lines when the quotas have no stage", async () => {
+    let read = (): readonly ChannelQuota[] => [{ channel: "pushover" as ChannelId, limit: 100, reserve: 10, used: 95 }];
+    // With no source, the pass also opens a line of the coverage. The test reads only the lines of the quota.
+    const quotaReports = (pass: Pass) => pass.view.step.reports.filter((report) => report.kind.code.startsWith("system.quota.")).map((report) => [report.op, report.kind.code]);
+    const { runtime, log } = open([], { quotas: () => read() });
+    expect(quotaReports(await runtime.pass())).toEqual([
+      ["alert", "system.quota.low"],
+      ["alert", "system.quota.reserve"],
+    ]);
+    read = () => {
+      throw new Error("The disk is full.");
+    };
+    expect(quotaReports(await runtime.pass())).toEqual([]);
+    expect(Object.keys(runtime.state().lines.open).filter((name) => name.startsWith("quota/"))).toEqual(["quota/pushover/low", "quota/pushover/reserve"]);
+    read = () => [];
+    expect(quotaReports(await runtime.pass())).toEqual([
+      ["cancel", "system.quota.low"],
+      ["cancel", "system.quota.reserve"],
+    ]);
+    log.close();
+  });
 
   it("records a timeout when a fetch takes longer than its limit, and ends the pass", async () => {
     const { clock, runtime, log } = open([scripted(API, () => new Promise<FetchOutcome>(() => undefined))], { fetchLimit: () => 5_000 });

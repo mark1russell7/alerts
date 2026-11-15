@@ -538,6 +538,11 @@ export interface Message {
    * message is not quiet at any time. The channel keeps no rule of its own about the time of day.
    */
   readonly quiet: boolean;
+  /**
+   * True: the message tells of the entry of a channel into the reserve of its quota. The channel can send
+   * it from the reserve, one time in each window. `messageOf` sets it.
+   */
+  readonly useReserve?: boolean;
 }
 
 /** The address of a person on a channel, from the private configuration. The repo does not hold an address. */
@@ -545,6 +550,30 @@ export type Address = Readonly<Record<string, string>>;
 
 /** The receipt of a sent message, as the channel gives it. */
 export type Receipt = Readonly<Record<string, string>>;
+
+/**
+ * The stages of the quota of a channel. Each stage is a line of system reports:
+ *
+ * - `low`: the window has 2 reserves of units or fewer left.
+ * - `reserve`: the window has the reserve or fewer left. The channel sends only `life-safety`.
+ * - `spent`: the provider refuses each message, also a `life-safety` message.
+ */
+export type QuotaStage = "low" | "reserve" | "spent";
+
+/** The state of the quota of a channel in its window, as the gate of the channel counts it. */
+export interface ChannelQuota {
+  readonly channel: ChannelId;
+  /** The units of one window. */
+  readonly limit: number;
+  /** The last units of the window. The channel uses them only for `life-safety`. */
+  readonly reserve: number;
+  /** The units used in the window. */
+  readonly used: number;
+  /** The end of the window. */
+  readonly resetAt?: Instant;
+  /** The provider refuses each message until this time. */
+  readonly blockedUntil?: Instant;
+}
 
 /**
  * The result of a send. A failed send has one of these kinds:
@@ -766,7 +795,8 @@ export interface PersonWatch {
   readonly places: readonly PlaceId[];
   /**
    * The subjects that the person watches. The health reports of the sources have the subjects of
-   * the system `alerts.source`. So the person who operates the system watches `{ system: "alerts.source" }`.
+   * the system `alerts.source`, and the quota reports have the subjects of the system `alerts.channel`. So the
+   * person who operates the system watches `{ system: "alerts.source" }` and `{ system: "alerts.channel" }`.
    */
   readonly subjects?: readonly SubjectWatch[];
   /** The rules of the person, in order. */

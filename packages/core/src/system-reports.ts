@@ -1,16 +1,17 @@
 /**
- * The reports of the system itself. Each source that is down or late and each gap of the coverage
- * becomes a line of reports with the status `system`. So the merge, the assessment and the escalation carry
- * them as they carry the reports of a source.
+ * The reports of the system itself. Each source that is down or late becomes a line of reports with the
+ * status `system`. Each gap of the coverage and each stage of the quota of a channel also becomes such a
+ * line. So the merge, the assessment and the escalation carry them as they carry the reports of a source.
  *
  * The function is a fold over snapshots of the health and the coverage. A condition that starts
  * gives an alert. A change of its facts gives an update that references the last key of the line.
  * The end of the condition gives a cancel. The fold reads no clock.
  */
 import { canonicalJson } from "@mark1russell7/rigor-generators";
-import { COVERAGE_KIND, hasKind, HEALTH_KIND, matchPlaces } from "./assess.ts";
+import { COVERAGE_KIND, hasKind, HEALTH_KIND, matchPlaces, QUOTA_KIND } from "./assess.ts";
 import type {
   Area,
+  ChannelQuota,
   Coverage,
   HealthState,
   Incident,
@@ -19,6 +20,7 @@ import type {
   Observation,
   Operation,
   PlaceId,
+  QuotaStage,
   Report,
   ResponseType,
   Severity,
@@ -33,12 +35,19 @@ import type {
 import { coverageShort } from "./coverage.ts";
 import { observationId, reportId } from "./ids.ts";
 import type { Lateness } from "./lateness.ts";
+import { TAXONOMY } from "./taxonomy.ts";
 
 /** The source of each report of the core. No adapter has this id. */
 export const SYSTEM_SOURCE = "system" as SourceId;
 
 /** The system of the subjects of the health reports. The id of a subject is the id of a source. */
 export const SOURCE_SUBJECT = "alerts.source";
+
+/** The system of the subjects of the quota reports. The id of a subject is the id of a channel. */
+export const CHANNEL_SUBJECT = "alerts.channel";
+
+/** The stages of a quota, from the first to the last. */
+export const QUOTA_STAGES: readonly QuotaStage[] = ["low", "reserve", "spent"];
 
 /** The health states that start a line of health reports. */
 export const DOWN_STATES: readonly HealthState[] = ["failing", "silent", "changed"];
@@ -85,6 +94,11 @@ export interface SystemSnapshot {
   readonly threats: readonly Threat[];
   /** The lateness of the sources that carry the reports of other sources. Each `late` entry is a condition. */
   readonly lateness?: readonly Lateness[];
+  /**
+   * The quotas of the channels. Each stage that `quotaStages` gives is a condition. With no quotas, each
+   * open line of a quota stays open: a failed read of a count ends no line.
+   */
+  readonly quotas?: readonly ChannelQuota[];
 }
 
 /** The result of one step of the fold. */
@@ -109,6 +123,18 @@ export function threats(incidents: readonly Incident[], places: readonly Watched
 }
 
 /**
+ * This function gives the stages that a quota reached, in the order of `QUOTA_STAGES`. Each later stage
+ * holds the earlier stages. Thus each stage is one line, and the line of the entry into the reserve is
+ * one alert in a window.
+ */
+export function quotaStages(quota: ChannelQuota): QuotaStage[] {
+  const left = quota.limit - quota.used;
+  const spent = quota.blockedUntil !== undefined || left <= 0;
+  const reached: Readonly<Record<QuotaStage, boolean>> = { low: spent || left <= 2 * quota.reserve, reserve: spent || left <= quota.reserve, spent };
+  return QUOTA_STAGES.filter((stage) => reached[stage]);
+}
+
+/**
  * This function gives the CAP severity and urgency of a gap of the coverage. The assessment policy
  * gives the level from them:
  *
@@ -124,7 +150,7 @@ export function gapGrade(entry: Coverage, threatened: boolean): { readonly sever
 
 /**
  * This function adds one snapshot to the fold at the time `at`. Each source in `DOWN_STATES`, each
- * late expectation and each coverage that is short is a condition. An open line with no condition in the snapshot ends
+ * late expectation, each coverage that is short and each stage of a quota is a condition. An open line with no condition in the snapshot ends
  * with a cancel. Equal snapshots give no new report.
  */
 export function systemReports(lines: SystemLines, snapshot: SystemSnapshot, at: Instant): SystemStep {
@@ -141,6 +167,9 @@ export function systemReports(lines: SystemLines, snapshot: SystemSnapshot, at: 
     const threatened = snapshot.threats.some((threat) => threat.place === entry.place && hasKind([entry.kind], threat.kind));
     conditions.set(coverageName(entry.place, entry.kind), coverageCondition(entry, threatened));
   }
+  for (const quota of snapshot.quotas ?? []) {
+    for (const stage of quotaStages(quota)) conditions.set(quotaName(quota.channel, stage), quotaCondition(quota, stage));
+  }
   const names = [...new Set([...Object.keys(lines.open), ...conditions.keys()])].sort(compare);
   let count = lines.count;
   const open = new Map(Object.entries(lines.open));
@@ -149,6 +178,7 @@ export function systemReports(lines: SystemLines, snapshot: SystemSnapshot, at: 
   for (const name of names) {
     const line = lines.open[name];
     const condition = conditions.get(name);
+    if (condition === undefined && snapshot.quotas === undefined && name.startsWith(QUOTA_LINE)) continue;
     const draft = condition === undefined ? (line === undefined ? undefined : cancelOf(line)) : condition;
     if (draft === undefined) continue;
     const facts = canonicalJson(draft.facts, { form: "json" });
@@ -223,6 +253,13 @@ function lateName(expectation: string): string {
   return `late/${encodeURIComponent(expectation)}`;
 }
 
+// The start of the name of each line of a quota.
+const QUOTA_LINE = "quota/";
+
+function quotaName(channel: string, stage: QuotaStage): string {
+  return `${QUOTA_LINE}${encodeURIComponent(channel)}/${stage}`;
+}
+
 function coverageName(place: PlaceId, kind: string): string {
   return `coverage/${encodeURIComponent(place)}/${encodeURIComponent(kind)}`;
 }
@@ -291,6 +328,39 @@ function coverageCondition(entry: Coverage, threatened: boolean): Condition {
       faults: entry.faults,
       sources: entry.sources,
     },
+  };
+}
+
+function quotaCondition(quota: ChannelQuota, stage: QuotaStage): Condition {
+  const { channel, limit, reserve, used } = quota;
+  const until = stage === "spent" ? (quota.blockedUntil ?? quota.resetAt) : quota.resetAt;
+  const end = until === undefined ? "" : ` until ${new Date(until).toISOString()}`;
+  const text: Readonly<Record<QuotaStage, { readonly headline: string; readonly description: string }>> = {
+    low: {
+      headline: `${channel}: ${Math.max(0, limit - used)} of ${limit} units of the window are left.`,
+      description: `At ${reserve} units left, the channel sends only life-safety messages${end}. The other messages then wait for the reset.`,
+    },
+    reserve: {
+      headline: `${channel} sends only life-safety messages${end}.`,
+      description: `The channel keeps its last ${reserve} of ${limit} units for life-safety. The other messages wait for the reset.`,
+    },
+    spent: {
+      headline: `${channel} sends no message${end}.`,
+      description: "The provider refuses each message, also a life-safety message. Only the other channels carry the alerts.",
+    },
+  };
+  const code = `${QUOTA_KIND}.${stage}`;
+  return {
+    // A new count is not a fact. Thus each stage gives one alert in a window, and no update.
+    facts: { channel, stage, ...(until === undefined ? {} : { until }) },
+    kind: { code, label: TAXONOMY[code] ?? code },
+    severity: stage === "low" ? "moderate" : "severe",
+    urgency: stage === "spent" ? "immediate" : "expected",
+    response: ["assess"],
+    areas: [],
+    about: [{ system: CHANNEL_SUBJECT, id: channel, label: channel }],
+    ...text[stage],
+    parameters: { stage: [stage], used: [String(used)], limit: [String(limit)], reserve: [String(reserve)] },
   };
 }
 

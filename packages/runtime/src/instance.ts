@@ -15,6 +15,7 @@ import { requireKey, type InstanceCheck } from "./config.ts";
 import type { DeliveryOptions } from "./delivery.ts";
 import type { RuntimeLog } from "./log.ts";
 import { createLoop, loopTimes, type LoopTimes, type RuntimeLoop } from "./loop.ts";
+import { channelQuota } from "./quota.ts";
 import { openRuntime, type Pass, type Runtime, type RuntimeOptions } from "./runtime.ts";
 import { keepShapes, type InstanceShapes, type ShapeOutcome } from "./shapes.ts";
 import { DELAY_LIMITS, earliest, nextFetch } from "./view.ts";
@@ -134,6 +135,8 @@ export interface InstanceOptions {
    * thus the count holds across a restart. With no gate, the channel counts nothing.
    */
   readonly pushoverQuota?: PushoverChannelOptions["quota"];
+  /** The gate of the Pushover messages that tell of the entry into the reserve: one in each window. */
+  readonly pushoverReserveNotices?: PushoverChannelOptions["reserveNotices"];
   /** The id of this run. Each start of the process has a new id. */
   readonly run: string;
   /** The runtime starts this hook at the end of each pass with no error. */
@@ -194,7 +197,13 @@ export function openInstance(options: InstanceOptions): Instance {
   const cache = options.shapes;
   const shapes = keepShapes({ store, places, onShapes: options.onShapes, close: () => cache?.close() });
 
-  const pushover = createPushoverChannel({ token, fetch: options.pushover, now: () => wall.now(), ...(options.pushoverQuota === undefined ? {} : { quota: options.pushoverQuota }) });
+  const pushover = createPushoverChannel({
+    token,
+    fetch: options.pushover,
+    now: () => wall.now(),
+    ...(options.pushoverQuota === undefined ? {} : { quota: options.pushoverQuota }),
+    ...(options.pushoverReserveNotices === undefined ? {} : { reserveNotices: options.pushoverReserveNotices }),
+  });
   const callLimit = CALL_LIMIT;
   const delivery: DeliveryOptions = {
     recipients,
@@ -223,6 +232,8 @@ export function openInstance(options: InstanceOptions): Instance {
     delivery,
     // The loop exists before the first pass, and only a pass starts a wake.
     wake: () => loop.wake(),
+    // Each stage of the Pushover quota is a line of system reports.
+    quotas: () => (options.pushoverQuota === undefined ? [] : [channelQuota(CHANNEL_ID, options.pushoverQuota)]),
     // After each pass, the store of shapes gets the outlines that are due, and it ends before the next fetch of a source.
     onPass: async (pass) => {
       shapes.afterPass(pass.view.incidents, earliest(runtime.config.sources.map((descriptor) => nextFetch(runtime.state(), descriptor))));

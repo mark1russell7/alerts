@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fakeClock, type FakeClock, type WallClock } from "@mark1russell7/algebra/clock";
 import { CONFIG_FORMAT, matchPlaces, parseConfig, type AlertConfig, type Watch, type ChannelId, type EscalationPolicy, type PersonId, type PlaceId, type SecretLookup, type SourceId } from "@mark1russell7/alerts";
-import { PUSHOVER_QUOTA, PUSHOVER_TIMEOUT_MS, type PushoverChannelOptions } from "@mark1russell7/alerts-channel-pushover";
+import { PUSHOVER_QUOTA, PUSHOVER_RESERVE_NOTICES, PUSHOVER_TIMEOUT_MS, type PushoverChannelOptions } from "@mark1russell7/alerts-channel-pushover";
 import { memoryCache, type ShapeCache } from "@mark1russell7/alerts-shapes-nws";
 import { CANARY_PATH, createNwsSource } from "@mark1russell7/alerts-source-nws-api";
 import { quotaGate, type Exchange, type Transport } from "polite-crawler/api";
@@ -200,6 +200,19 @@ describe("openInstance", () => {
     const pass = await finish(held.clock, held.instance.runtime.pass());
     expect(held.server.calls).toEqual([]);
     expect(pass.delivery?.failures.map((failure) => failure.kind)).toEqual(["reserved"]);
+  });
+
+  it("sends the line of the entry into the reserve from the reserve, one time, and holds the other messages", async () => {
+    const gate = quotaGate(PUSHOVER_QUOTA, { key: "pushover:app", now: () => T0 });
+    gate.note({ remaining: 1_000 });
+    const notices = quotaGate(PUSHOVER_RESERVE_NOTICES, { key: "pushover:reserve-notices", now: () => T0 });
+    const watching: AlertConfig = { ...CONFIG, people: CONFIG.people.map((entry) => ({ ...entry, watch: { ...entry.watch, subjects: [{ system: "alerts.channel" }] } })) };
+    const { clock, instance, server } = await open(undefined, watching, undefined, undefined, { pushoverQuota: gate, pushoverReserveNotices: notices });
+    const pass = await finish(clock, instance.runtime.pass());
+    expect(pass.view.step.reports.map((report) => report.kind.code)).toEqual(["system.quota.low", "system.quota.reserve"]);
+    expect(server.calls.map((call) => call.fields["title"])).toEqual([expect.stringContaining("sends only life-safety messages")]);
+    expect(pass.delivery?.failures.map((failure) => failure.kind)).toEqual(["reserved", "reserved"]);
+    expect(notices.state().used).toBe(1);
   });
 
   it("sends the warning by the county code to a place in the county but out of the polygon", async () => {

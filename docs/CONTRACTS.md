@@ -162,7 +162,7 @@ The coverage has these parts:
 
 ### System reports
 
-`systemReports(lines, snapshot, at)` makes the reports of the core. Each source in `DOWN_STATES` (`failing`, `silent` and `changed`) is a condition. Each coverage that `coverageShort` finds is a condition. Each condition is a line of CAP reports with the status `system` and the source `system`:
+`systemReports(lines, snapshot, at)` makes the reports of the core. Each source in `DOWN_STATES` (`failing`, `silent` and `changed`) is a condition. Each coverage that `coverageShort` finds is a condition. Each stage of the quota of a channel is a condition. Each condition is a line of CAP reports with the status `system` and the source `system`:
 
 - The start of a condition gives an `alert`.
 - A change of its facts gives an `update`. The update references the last key of the line. A new count in the reason of the health is not a fact, so it gives no update.
@@ -181,6 +181,18 @@ A coverage report has the area of the watched place, `{ type: "place", place }`.
 | No independent source during a watch or a warning of the kind at the place | `extreme`, `immediate` | `life-safety` | `notice` |
 | Fewer independent sources than the policy needs | `severe`, `expected` | `urgent` | `notice` |
 | A count that the search did not prove | `moderate`, `expected` | `notice` | `notice` |
+
+A quota report has no area. Its subject is `{ system: "alerts.channel", id: <channel id> }`. Its kind is `system.quota.<stage>`, and it gets `notice` at most. `quotaStages` gives the stages that a quota reached, and each stage is one line:
+
+| Stage | Condition | Severity, urgency |
+| --- | --- | --- |
+| `low` | 2 reserves of units or fewer left in the window | `moderate`, `expected` |
+| `reserve` | The reserve or fewer left. The channel sends only `life-safety`. | `severe`, `expected` |
+| `spent` | The provider refuses each message | `severe`, `immediate` |
+
+- The facts of a line are the channel, the stage and the end of the window. A new count gives no update. Thus each stage gives one alert in a window.
+- The message of the line `reserve` has `useReserve`. The channel sends it from the reserve, one time in each window (`PUSHOVER_RESERVE_NOTICES`). Else the reserve stops the message that tells of it.
+- A snapshot with no quotas keeps each open line of a quota. Thus a failed read of a count ends no line.
 
 `threats(incidents, places)` gives the watches and the warnings. A threat is a live incident with the status `actual` at a watched place. Its stage is `watch`, `warning` or absent. A report of the core has the status `system`, so it is not a threat.
 
@@ -501,7 +513,7 @@ The output of the check gives the count of the places, the people, the contacts 
 
 The function `sourcePlaces` gives the places for one source, with no label, and with a position only when the place shares it with that source. The function `localPlaces` gives each position for the matching on the machine of the instance.
 
-A person also watches subjects, other than places, in `PersonWatch.subjects`: a source of the system, a service or a cloud region. A watch with no id matches each subject of its system. A rule with places does not apply to a subject. The person who operates the system watches `{ system: "alerts.source" }`, and gets the health reports.
+A person also watches subjects, other than places, in `PersonWatch.subjects`: a source of the system, a service or a cloud region. A watch with no id matches each subject of its system. A rule with places does not apply to a subject. The person who operates the system watches `{ system: "alerts.source" }` and `{ system: "alerts.channel" }`, and gets the health reports and the quota reports.
 
 The positions of the places do not go to a source. A source fetches by area, for example all the alerts of a state, and the core matches the places on the machine of the instance. So a `WatchedPlace` gives an adapter region codes and a buffer, and no name, no address and no position. A source that needs a position gets it only when the owner lets that source get it.
 

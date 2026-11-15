@@ -3,7 +3,7 @@
  * send and the acknowledgment of a status. It is pure. The runtime gives the time, and
  * the runtime does each call of a channel.
  */
-import { assess, COVERAGE_KIND, DEFAULT_ASSESS_POLICY, hasKind, LIFE_SAFETY_KINDS } from "./assess.ts";
+import { assess, COVERAGE_KIND, DEFAULT_ASSESS_POLICY, hasKind, LIFE_SAFETY_KINDS, QUOTA_KIND } from "./assess.ts";
 import {
   LEVELS,
   type Acknowledgment,
@@ -203,6 +203,9 @@ export function recipientProblems(recipient: Recipient, channels: readonly Chann
  * This function makes the message of a send. The text comes from one report of the incident. That
  * report has the severity and the urgency of the incident, and it is the latest one by its time of
  * sending. The channel cuts the text to its limits.
+ *
+ * A message of the line `system.quota.reserve` can use the reserve of the quota. Else the reserve
+ * stops the message that tells of it.
  */
 export function messageOf(incident: Incident, reports: readonly Report[], send: EscalationSend): Message {
   const report = textReport(incident, reports);
@@ -218,6 +221,7 @@ export function messageOf(incident: Incident, reports: readonly Report[], send: 
     incident: send.incident,
     ...(incident.expires === undefined ? {} : { expires: incident.expires }),
     quiet: send.quiet,
+    ...(incident.kind.code === `${QUOTA_KIND}.reserve` ? { useReserve: true } : {}),
   };
 }
 

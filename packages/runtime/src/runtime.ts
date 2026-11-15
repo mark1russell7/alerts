@@ -5,7 +5,7 @@
  * that it gets.
  */
 import type { WallClock } from "@mark1russell7/algebra/clock";
-import type { Duration, FetchOutcome, Instant, ReportId, SourceDescriptor, SourceId, SourceProcedures, Watch } from "@mark1russell7/alerts";
+import type { ChannelQuota, Duration, FetchOutcome, Instant, ReportId, SourceDescriptor, SourceId, SourceProcedures, Watch } from "@mark1russell7/alerts";
 import { errorMessage } from "@mark1russell7/text";
 import { createDispatcher, type DeliveryOptions, type DeliveryStep } from "./delivery.ts";
 import { envelope, type RuntimeEvent } from "./events.ts";
@@ -49,6 +49,11 @@ export interface RuntimeOptions {
    * with a delivery. The loop of the service gives its `wake()` here.
    */
   readonly wake?: () => void;
+  /**
+   * This function gives the quotas of the channels at the time of the view. Each stage of a quota is a
+   * line of system reports. A throw keeps each open line of a quota as it is.
+   */
+  readonly quotas?: () => readonly ChannelQuota[];
   /** The runtime starts this hook at the end of each pass with no error. The outside heartbeat goes here. */
   readonly onPass?: (pass: Pass) => void | Promise<void>;
 }
@@ -130,6 +135,16 @@ export function openRuntime(options: RuntimeOptions): Runtime {
     return [...conflicts, ...more];
   };
 
+  // A fault of the store of a gate ends no line of a quota. The notes of the heartbeat tell of the fault.
+  const readQuotas = (): readonly ChannelQuota[] | undefined => {
+    if (options.quotas === undefined) return [];
+    try {
+      return options.quotas();
+    } catch {
+      return undefined;
+    }
+  };
+
   return {
     config,
     state: () => state,
@@ -146,7 +161,7 @@ export function openRuntime(options: RuntimeOptions): Runtime {
       const conflicts = settled.flatMap((result) => (result.status === "fulfilled" ? result.value : []));
 
       const at = clock.now();
-      const view = systemView(state, config, at);
+      const view = systemView(state, config, at, readQuotas());
       const event = systemEvent(view);
       if (event !== undefined) conflicts.push(...append([event]));
 

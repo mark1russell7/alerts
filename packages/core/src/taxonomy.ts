@@ -7,8 +7,8 @@
  * adapter holds this rule. A code with a typo does not match the life-safety class, so it can stop a
  * wake. A new adapter adds its new codes here, in its pull request.
  */
-import { COVERAGE_KIND, HEALTH_KIND } from "./assess.ts";
-import type { Category, HealthState } from "./contracts.ts";
+import { COVERAGE_KIND, HEALTH_KIND, QUOTA_KIND } from "./assess.ts";
+import type { Category, HealthState, QuotaStage } from "./contracts.ts";
 
 /** The plain name of each category of the system. Each category is also the root code of a tree. */
 export const CATEGORY_LABELS: Readonly<Record<Category, string>> = {
@@ -43,6 +43,12 @@ export function categoryOf(kindCode: string): Category {
 export const UNKNOWN_KIND = "other.unknown";
 
 /** The health kinds of the core: one for each health state, and `late` for the lateness against another source. */
+const QUOTA_LABELS: Readonly<Record<QuotaStage, string>> = {
+  low: "Low quota of a channel",
+  reserve: "Quota of a channel in its reserve",
+  spent: "Spent quota of a channel",
+};
+
 const HEALTH_LABELS: Readonly<Record<HealthState | "late", string>> = {
   unknown: "Health of a source not known",
   healthy: "Healthy source",
@@ -165,6 +171,8 @@ export const TAXONOMY: Readonly<Record<string, string>> = {
   [HEALTH_KIND]: "Health of a source",
   ...Object.fromEntries(Object.entries(HEALTH_LABELS).map(([state, label]) => [`${HEALTH_KIND}.${state}`, label])),
   [COVERAGE_KIND]: "Coverage of a kind",
+  [QUOTA_KIND]: "Quota of a channel",
+  ...Object.fromEntries(Object.entries(QUOTA_LABELS).map(([stage, label]) => [`${QUOTA_KIND}.${stage}`, label])),
 };
 
 /**
