@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { isSameCode, isUgcCode, parseSameLocation, sameOfCountyUgc, STATE_FIPS, STATE_POSTAL, stateOfSame, stateOfUgc } from "./codes.ts";
+import fc from "fast-check";
+import { countyUgcOfSame, isSameCode, isUgcCode, parseSameLocation, sameOfCountyUgc, STATE_FIPS, STATE_POSTAL, stateOfSame, stateOfUgc } from "./codes.ts";
 
 describe("isUgcCode", () => {
   it.each(["KSZ001", "TXC123", "GMZ250", "PKZ414"])("accepts %s", (code) => {
@@ -56,6 +57,28 @@ describe("the state codes", () => {
     expect(stateOfSame("020173")).toBe("KS");
     expect(stateOfSame("048000")).toBe("TX");
     expect(stateOfSame("003001")).toBeUndefined();
+  });
+});
+
+describe("countyUgcOfSame", () => {
+  it("gives the county UGC code of a county and of a part of a county", () => {
+    expect(countyUgcOfSame("020173")).toBe("KSC173");
+    expect(countyUgcOfSame(" 148019 ")).toBe("TXC019");
+  });
+
+  it.each(["020000", "003001", "20173", "KSC173", ""])("gives no code for %j", (code) => {
+    expect(countyUgcOfSame(code)).toBeUndefined();
+  });
+
+  it("is the reverse of sameOfCountyUgc for each county of each state", () => {
+    const states = Object.keys(STATE_FIPS);
+    const county = fc.integer({ min: 1, max: 999 }).map((value) => String(value).padStart(3, "0"));
+    fc.assert(
+      fc.property(fc.constantFrom(...states), county, (state, number) => {
+        const ugc = `${state}C${number}`;
+        expect(countyUgcOfSame(sameOfCountyUgc(ugc) ?? "")).toBe(ugc);
+      }),
+    );
   });
 });
 
