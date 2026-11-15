@@ -246,7 +246,7 @@ The assessment reads no clock, because the level is about the incident. The esca
 - Each person can have a quiet window (`PersonWatch.quiet`): a time zone, and a start and an end in local times, for example `22:00` to `07:00`. An equal start and end give the full day.
 - In the window, each send below `life-safety` is quiet. A `life-safety` send ignores the window. It wakes the person.
 - The quiet value is for the time of the send. A step that became due before the end of the window and goes out after it is not quiet.
-- `inQuietWindow` calculates the local time with `Intl.DateTimeFormat` and the time zone. So the window follows the change to and from daylight saving time.
+- `inQuietWindow` is `inWindow` of `@mark1russell7/algebra/clock`. It calculates the local time in the time zone of the window. Thus the window follows the change to and from daylight saving time.
 - Tests hold a window across midnight, the two days of the change, an hour that occurs two times and an hour that does not occur.
 - A bad window gives no quiet send. A message that is too loud is not a miss. `quietWindowProblems` finds the bad window.
 - The system does not use the Quiet Hours of Pushover. The core holds the one rule, so each channel follows the same rule.

@@ -11,6 +11,7 @@
  */
 
 import type { Machine, Transition } from "@mark1russell7/algebra";
+import { inWindow, windowProblems } from "@mark1russell7/algebra/clock";
 import { LEVELS } from "./contracts.ts";
 import type {
   Acknowledgment,
@@ -304,81 +305,22 @@ export function escalationProblems(policy: EscalationPolicy): string[] {
 }
 
 /**
- * This function tells if the time `at` is in the quiet window. It uses the local time of the time
- * zone of the window. Thus a change to or from daylight saving time moves the window with the clock
- * of the person. The start is in the window, and the end is not. An end before the start crosses
- * midnight, and an end equal to the start gives the full day.
+ * This function tells if the time `at` is in the quiet window. It is `inWindow` of
+ * `@mark1russell7/algebra/clock`. Thus the window follows the clock of the person when daylight
+ * saving time starts or ends. The start is in the window, and the end is not. An end before the
+ * start crosses midnight, and an end equal to the start gives the full day.
  *
  * The function does not throw. An absent window, a bad time zone, a bad local time or a bad `at`
  * gives `false`. A message that is not quiet is louder than the person wants, but it is not a miss.
  * `quietWindowProblems` finds a bad window.
- *
- * The home of civil time is `@mark1russell7/algebra/clock`. This
- * function and its helpers move to `localTime` and `inWindow` of that entry after its next npm
- * release. Until then, the core keeps them.
  */
 export function inQuietWindow(window: QuietWindow | undefined, at: Instant): boolean {
-  if (window === undefined) return false;
-  const start = minutesOf(window.start);
-  const end = minutesOf(window.end);
-  const local = localMinutes(window.zone, at);
-  if (start === undefined || end === undefined || local === undefined) return false;
-  return start < end ? start <= local && local < end : local >= start || local < end;
+  return window !== undefined && inWindow(at, window);
 }
 
 /** This function gives the problems of a quiet window: a bad time zone or a bad local time. With a problem, `inQuietWindow` gives `false`. */
 export function quietWindowProblems(window: QuietWindow): string[] {
-  const problems: string[] = [];
-  if (formatOf(window.zone) === undefined) problems.push(`"${window.zone}" is not the IANA name of a time zone.`);
-  const start = minutesOf(window.start);
-  const end = minutesOf(window.end);
-  if (start === undefined) problems.push(`The start "${window.start}" is not a local time HH:MM from 00:00 to 23:59.`);
-  if (end === undefined) problems.push(`The end "${window.end}" is not a local time HH:MM from 00:00 to 23:59.`);
-  return problems;
-}
-
-const LOCAL_TIME = /^([01]\d|2[0-3]):([0-5]\d)$/;
-
-/** The minutes from the local midnight of a time `HH:MM`. */
-function minutesOf(time: string): number | undefined {
-  const match = LOCAL_TIME.exec(time);
-  return match === null ? undefined : Number(match[1]) * 60 + Number(match[2]);
-}
-
-/** One format for each time zone. The cache holds `null` for a name that is not a time zone. */
-const FORMATS = new Map<string, Intl.DateTimeFormat | null>();
-
-function formatOf(timeZone: string): Intl.DateTimeFormat | undefined {
-  let format = FORMATS.get(timeZone);
-  if (format === undefined) {
-    try {
-      format = new Intl.DateTimeFormat("en-US", { timeZone, hourCycle: "h23", hour: "2-digit", minute: "2-digit" });
-    } catch {
-      format = null;
-    }
-    FORMATS.set(timeZone, format);
-  }
-  return format ?? undefined;
-}
-
-/** The minutes from the local midnight of the time `at` in the time zone. */
-function localMinutes(timeZone: string, at: Instant): number | undefined {
-  const format = formatOf(timeZone);
-  if (format === undefined) return undefined;
-  let parts: Intl.DateTimeFormatPart[];
-  try {
-    parts = format.formatToParts(at);
-  } catch {
-    // A time out of the range of a date
-    return undefined;
-  }
-  let hour = 0;
-  let minute = 0;
-  for (const part of parts) {
-    if (part.type === "hour") hour = Number(part.value) % 24;
-    else if (part.type === "minute") minute = Number(part.value);
-  }
-  return hour * 60 + minute;
+  return windowProblems(window);
 }
 
 const nonNegative = (value: number | undefined): number => (value !== undefined && Number.isFinite(value) && value > 0 ? value : 0);
