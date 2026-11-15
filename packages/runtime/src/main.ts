@@ -12,6 +12,9 @@
  * without the variable. An empty value counts as no value, and a relative path starts at the working
  * folder. The folder holds the private files of the instance: `config.json`,
  * `secrets.env` and the log `runtime.sqlite`. No repository holds them.
+ *
+ * The key `HEALTHCHECKS_PING_URL` of `secrets.env` gives the outside heartbeat (`heartbeat.ts`). The
+ * profile `daemon` of the live instance does not start without it. Another profile starts with a warning.
  */
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -23,6 +26,7 @@ import { errorMessage } from "@mark1russell7/text";
 import { redactSecrets } from "@mark1russell7/text/redact";
 import { fetchTransport } from "polite-crawler/api";
 import { alertsHome, configPath, envSecrets, fileSource, requireConfig } from "./config.ts";
+import { heartbeat } from "./heartbeat.ts";
 import { PROFILES, declare } from "./index.ts";
 import { INSTANCE_CHANNELS, openInstance, USER_AGENT } from "./instance.ts";
 import { openRuntimeLog } from "./log.ts";
@@ -50,6 +54,15 @@ async function runtime(): Promise<ServiceBuilder> {
   const values = Object.values(secrets.env);
 
   const secret = envSecrets(secrets.env);
+  const wall = wallClock();
+
+  // The outside heartbeat. Without it, a stop of this process is silent.
+  const pingUrl = secrets.env["HEALTHCHECKS_PING_URL"] ?? "";
+  if (pingUrl === "") {
+    if (name === "daemon") throw new Error("The file secrets.env has no HEALTHCHECKS_PING_URL. The live instance needs its outside heartbeat.");
+    console.warn("The file secrets.env has no HEALTHCHECKS_PING_URL. This runtime has no outside heartbeat.");
+  }
+  const onPass = pingUrl === "" ? undefined : heartbeat({ url: pingUrl, fetch, clock: wall, userAgent: USER_AGENT, onError: (message) => console.error(redactSecrets(message, values)) });
 
   // A problem of the configuration holds no value of the file, no value of a secret and no path.
   const config = await requireConfig(fileSource(configPath(process.env, process.cwd())), INSTANCE_CHANNELS, secret);
@@ -60,10 +73,11 @@ async function runtime(): Promise<ServiceBuilder> {
     secret,
     log,
     clock: realClock,
-    wall: wallClock(),
+    wall,
     transport: fetchTransport({ userAgent: USER_AGENT }),
     pushover: fetch,
     run: randomUUID(),
+    ...(onPass === undefined ? {} : { onPass }),
     // The output gets no secret, also when an error quotes a request.
     onError: (error, failures) => console.error(`A pass failed (${failures} in sequence): ${redactSecrets(errorMessage(error), values)}`),
   });

@@ -21,6 +21,12 @@ export const HOST_NAME = "alerts";
 /** The ports of the live instance. They are below the dynamic ports of Windows, and away from the usual ports of servers in development. */
 export const HOST_PORTS: { readonly port: number; readonly probePort: number } = { port: 4750, probePort: 4751 };
 
+/** The supervisor waits this time for the first ready probe of the runtime: its startup budget and one readiness interval. */
+export const READY_WITHIN: Quantity = add(STARTUP_BUDGET, READINESS.interval);
+
+/** This function gives the readiness probe of the runtime on its probe port. The supervisor and the install use it. */
+export const readinessProbe = (probePort: number = HOST_PORTS.probePort): { readonly kind: "http"; readonly url: string } => ({ kind: "http", url: `http://127.0.0.1:${probePort}/readiness` });
+
 /** The options of the host. */
 export interface HostOptions {
   /** The folder of the private files: `config.json`, `secrets.env` and the log. The host keeps its own files in the subfolder `host`. */
@@ -88,7 +94,7 @@ export function hostGroup(options: HostOptions): GroupSpec {
         cwd: options.root,
         env: { ALERTS_HOME: options.home, PORT: String(port), PROBE_PORT: String(probePort), SERVICE_PROFILE: "daemon" },
         ipc: true,
-        ready: { probe: { kind: "http", url: `${probes}/readiness` }, interval: ms(500), timeout: ms(250), within: add(STARTUP_BUDGET, READINESS.interval) },
+        ready: { probe: readinessProbe(probePort), interval: ms(500), timeout: ms(250), within: READY_WITHIN },
         alive: { probe: { kind: "http", url: `${probes}/liveness` }, interval: s(10), timeout: s(2), failures: 3 },
         stop: { grace: RUNTIME_GRACE, message: STOP_MESSAGE },
         listen: { port, url: `http://127.0.0.1:${port}/` },
