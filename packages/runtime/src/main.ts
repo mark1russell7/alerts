@@ -26,7 +26,7 @@ import { fetchTransport } from "polite-crawler/api";
 import { alertsHome, configPath, envSecrets, fileSource, readSecrets, requireConfig } from "./config.ts";
 import { heartbeat } from "./heartbeat.ts";
 import { PROFILES, declare } from "./index.ts";
-import { INSTANCE_CHANNELS, openInstance, USER_AGENT } from "./instance.ts";
+import { INSTANCE_CHANNELS, openInstance, userAgent } from "./instance.ts";
 import { openRuntimeLog } from "./log.ts";
 import { supervisor } from "./supervise.ts";
 
@@ -55,16 +55,18 @@ async function runtime(): Promise<ServiceBuilder> {
   const secret = envSecrets(keys);
   const wall = wallClock();
 
+  // A problem of the configuration holds no value of the file, no value of a secret and no path.
+  const config = await requireConfig(fileSource(configPath(process.env, process.cwd())), INSTANCE_CHANNELS, secret);
+  // Each request to the server of another party has this User-Agent.
+  const agent = userAgent(config.config.contact);
+
   // The outside heartbeat. Without it, a stop of this process is silent.
   const pingUrl = keys["HEALTHCHECKS_PING_URL"] ?? "";
   if (pingUrl === "") {
     if (name === "daemon") throw new Error("The file secrets.env has no HEALTHCHECKS_PING_URL. The live instance needs its outside heartbeat.");
     console.warn("The file secrets.env has no HEALTHCHECKS_PING_URL. This runtime has no outside heartbeat.");
   }
-  const onPass = pingUrl === "" ? undefined : heartbeat({ url: pingUrl, fetch, clock: wall, userAgent: USER_AGENT, onError: (message) => console.error(redactSecrets(message, values)) });
-
-  // A problem of the configuration holds no value of the file, no value of a secret and no path.
-  const config = await requireConfig(fileSource(configPath(process.env, process.cwd())), INSTANCE_CHANNELS, secret);
+  const onPass = pingUrl === "" ? undefined : heartbeat({ url: pingUrl, fetch, clock: wall, userAgent: agent, onError: (message) => console.error(redactSecrets(message, values)) });
 
   const log = openRuntimeLog(join(home, "runtime.sqlite"));
   const instance = openInstance({
@@ -73,7 +75,7 @@ async function runtime(): Promise<ServiceBuilder> {
     log,
     clock: realClock,
     wall,
-    transport: fetchTransport({ userAgent: USER_AGENT }),
+    transport: fetchTransport({ userAgent: agent }),
     pushover: fetch,
     run: randomUUID(),
     ...(onPass === undefined ? {} : { onPass }),

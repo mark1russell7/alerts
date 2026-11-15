@@ -1,0 +1,116 @@
+{
+ "@context": {
+  "@version": "1.1"
+ },
+ "id": "https://api.weather.gov/zones/county/TXC167",
+ "type": "Feature",
+ "geometry": {
+  "type": "MultiPolygon",
+  "coordinates": [
+   [
+    [
+     [
+      -94.493398,
+      29.521066
+     ],
+     [
+      -94.494102,
+      29.521135
+     ],
+     [
+      -94.493346,
+      29.521616
+     ],
+     [
+      -94.492953,
+      29.521502
+     ],
+     [
+      -94.492981,
+      29.521254
+     ],
+     [
+      -94.493398,
+      29.521066
+     ]
+    ]
+   ],
+   [
+    [
+     [
+      -94.499659,
+      29.518359
+     ],
+     [
+      -94.500626,
+      29.518362
+     ],
+     [
+      -94.500653,
+      29.51882
+     ],
+     [
+      -94.499659,
+      29.519115
+     ],
+     [
+      -94.499504,
+      29.518864
+     ],
+     [
+      -94.499659,
+      29.518359
+     ]
+    ]
+   ],
+   [
+    [
+     [
+      -94.830207,
+      29.344604
+     ],
+     [
+      -94.830097,
+      29.343437
+     ],
+     [
+      -94.831097,
+      29.343935
+     ],
+     [
+      -94.830604,
+      29.348726
+     ],
+     [
+      -94.830207,
+      29.344604
+     ]
+    ]
+   ]
+  ]
+ },
+ "properties": {
+  "@id": "https://api.weather.gov/zones/county/TXC167",
+  "@type": "wx:Zone",
+  "id": "TXC167",
+  "type": "county",
+  "name": "Galveston",
+  "effectiveDate": "2026-04-16T18:00:00+00:00",
+  "expirationDate": "2200-01-01T00:00:00+00:00",
+  "state": "TX",
+  "forecastOffice": "https://api.weather.gov/offices/HGX",
+  "gridIdentifier": "HGX",
+  "awipsLocationIdentifier": "HGX",
+  "cwa": [
+   "HGX"
+  ],
+  "forecastOffices": [
+   "https://api.weather.gov/offices/HGX"
+  ],
+  "timeZone": [
+   "America/Chicago"
+  ],
+  "observationStations": [],
+  "radarStation": null
+ }
+}
