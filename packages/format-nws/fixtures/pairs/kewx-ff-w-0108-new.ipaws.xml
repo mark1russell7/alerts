@@ -1,0 +1,135 @@
+<alert xmlns="urn:oasis:names:tc:emergency:cap:1.2"><identifier>urn:oid:2.49.0.1.840.0.01008b96dac39f7a04ddcc53eb85874a9b3b68cb.001.1.IPAWS</identifier><sender>w-nws.webmaster@noaa.gov</sender><sent>2026-11-08T13:23:00-06:00</sent><status>Actual</status><msgType>Alert</msgType><source>211803 v2.3.0</source><scope>Public</scope><code>IPAWSv1.0</code><info><language>en-US</language><category>Met</category><event>Flash Flood Warning</event><responseType>Avoid</responseType><urgency>Immediate</urgency><severity>Severe</severity><certainty>Likely</certainty><eventCode><valueName>SAME</valueName><value>FFW</value></eventCode><eventCode><valueName>NationalWeatherService</valueName><value>FFW</value></eventCode><effective>2026-11-08T13:23:00-06:00</effective><onset>2026-11-08T13:23:00-06:00</onset><expires>2026-11-08T20:00:00-06:00</expires><senderName>NWS Austin/San Antonio TX</senderName><headline>Flash Flood Warning issued November 8 at 1:23PM CST until November 8 at 8:00PM CST by NWS Austin/San Antonio TX</headline><description>FFWEWX
+
+The National Weather Service in Austin/San Antonio has issued a
+
+* Flash Flood Warning for...
+Western Bandera County in south central Texas...
+Edwards County in south central Texas...
+Northwestern Kerr County in south central Texas...
+Northern Kinney County in south central Texas...
+Real County in south central Texas...
+Northern Uvalde County in south central Texas...
+Northeastern Val Verde County in south central Texas...
+
+* Until 800 PM CST Sunday.
+
+* At 123 PM CST, Doppler radar indicated thunderstorms producing
+heavy rain across the warned area. Between 3 and 5 inches of rain
+have fallen. Additional rainfall amounts up to 2 inches are
+possible in the warned area. Flash flooding is ongoing or expected
+to begin shortly.
+
+HAZARD...Life threatening flash flooding. Thunderstorms producing
+flash flooding.
+
+SOURCE...Radar indicated.
+
+IMPACT...Life threatening flash flooding of creeks and streams,
+along highways where low water crossings exist.
+
+* Some locations that will experience flash flooding include...
+Medina, Rocksprings, Leakey, Loma Alta, Vanderpool, Camp Wood,
+Vance, Barksdale, Montell, Tuff, Reagan Wells, Rio Frio, Garner
+State Park, Carta Valley, Lost Maples State Natural Area, Concan,
+Kerr Wildlife Management Area, Utopia, Devil's Sinkhole State
+Natural Area and Kickapoo Cavern State Park.
+
+At 1:21 PM, Edwards County Emergency Management reported several low
+water crossings near Barksdale were flooded, some of which were
+impassable.
+</description><instruction>Turn around, don't drown when encountering flooded roads. Most flood
+deaths occur in vehicles.
+
+In hilly terrain there are hundreds of low water crossings which are
+potentially dangerous in heavy rain. Do not attempt to cross flooded
+roads. Find an alternate route.
+
+Flooding is occurring or is imminent. It is important to know where
+you are relative to streams, rivers, or creeks which can become
+killers in heavy rains. Campers and hikers should avoid streams or
+creeks.</instruction><web>http://www.weather.gov</web><parameter><valueName>AWIPSidentifier</valueName><value>FFWEWX</value></parameter><parameter><valueName>WMOidentifier</valueName><value>WGUS54 KEWX 081923</value></parameter><parameter><valueName>flashFloodDetection</valueName><value>RADAR INDICATED</value></parameter><parameter><valueName>flashFloodDamageThreat</valueName><value>CONSIDERABLE</value></parameter><parameter><valueName>BLOCKCHANNEL</valueName><value>EAS</value></parameter><parameter><valueName>BLOCKCHANNEL</valueName><value>NWEM</value></parameter><parameter><valueName>EAS-ORG</valueName><value>WXR</value></parameter><parameter><valueName>VTEC</valueName><value>/O.NEW.KEWX.FF.W.0108.261108T1923Z-261109T0200Z/</value></parameter><parameter><valueName>eventEndingTime</valueName><value>2026-11-08T20:00:00-06:00</value></parameter><parameter><valueName>WEAHandling</valueName><value>Imminent Threat</value></parameter><parameter><valueName>CMAMtext</valueName><value>NWS: FLASH FLOOD WARNING this area til 8:00 PM CST. Avoid flooded areas.</value></parameter><parameter><valueName>CMAMlongtext</valueName><value>National Weather Service: A FLASH FLOOD WARNING is in effect for this area until 8:00 PM CST. This is a dangerous and life-threatening situation. Do not attempt to travel unless you are fleeing an area subject to flooding or under an evacuation order.</value></parameter><area><areaDesc>Bandera, TX; Edwards, TX; Kerr, TX; Kinney, TX; Real, TX; Uvalde, TX; Val Verde, TX</areaDesc><polygon>30.29,-100.79 30.29,-99.55 30.28,-99.54 29.84,-99.18 29.63,-99.36 29.63,-99.41 29.56,-99.41 29.49,-99.47 29.47,-100.84 29.72,-101.15 30.29,-100.79</polygon><geocode><valueName>SAME</valueName><value>048019</value></geocode><geocode><valueName>SAME</valueName><value>048137</value></geocode><geocode><valueName>SAME</valueName><value>048265</value></geocode><geocode><valueName>SAME</valueName><value>048271</value></geocode><geocode><valueName>SAME</valueName><value>048385</value></geocode><geocode><valueName>SAME</valueName><value>048463</value></geocode><geocode><valueName>SAME</valueName><value>048465</value></geocode><geocode><valueName>UGC</valueName><value>TXC019</value></geocode><geocode><valueName>UGC</valueName><value>TXC137</value></geocode><geocode><valueName>UGC</valueName><value>TXC265</value></geocode><geocode><valueName>UGC</valueName><value>TXC271</value></geocode><geocode><valueName>UGC</valueName><value>TXC385</value></geocode><geocode><valueName>UGC</valueName><value>TXC463</value></geocode><geocode><valueName>UGC</valueName><value>TXC465</value></geocode></area></info><info><language>es-US</language><category>Met</category><event>Flash Flood Warning</event><responseType>Avoid</responseType><urgency>Immediate</urgency><severity>Severe</severity><certainty>Likely</certainty><eventCode><valueName>SAME</valueName><value>FFW</value></eventCode><eventCode><valueName>NationalWeatherService</valueName><value>FFW</value></eventCode><effective>2026-11-08T13:23:00-06:00</effective><onset>2026-11-08T13:23:00-06:00</onset><expires>2026-11-08T20:00:00-06:00</expires><senderName>NWS Austin/San Antonio TX</senderName><headline>Flash Flood Warning issued November 8 at 1:23PM CST until November 8 at 8:00PM CST by NWS Austin/San Antonio TX</headline><description>FFWEWX
+
+The National Weather Service in Austin/San Antonio has issued a
+
+* Flash Flood Warning for...
+Western Bandera County in south central Texas...
+Edwards County in south central Texas...
+Northwestern Kerr County in south central Texas...
+Northern Kinney County in south central Texas...
+Real County in south central Texas...
+Northern Uvalde County in south central Texas...
+Northeastern Val Verde County in south central Texas...
+
+* Until 800 PM CST Sunday.
+
+* At 123 PM CST, Doppler radar indicated thunderstorms producing
+heavy rain across the warned area. Between 3 and 5 inches of rain
+have fallen. Additional rainfall amounts up to 2 inches are
+possible in the warned area. Flash flooding is ongoing or expected
+to begin shortly.
+
+HAZARD...Life threatening flash flooding. Thunderstorms producing
+flash flooding.
+
+SOURCE...Radar indicated.
+
+IMPACT...Life threatening flash flooding of creeks and streams,
+along highways where low water crossings exist.
+
+* Some locations that will experience flash flooding include...
+Medina, Rocksprings, Leakey, Loma Alta, Vanderpool, Camp Wood,
+Vance, Barksdale, Montell, Tuff, Reagan Wells, Rio Frio, Garner
+State Park, Carta Valley, Lost Maples State Natural Area, Concan,
+Kerr Wildlife Management Area, Utopia, Devil's Sinkhole State
+Natural Area and Kickapoo Cavern State Park.
+
+At 1:21 PM, Edwards County Emergency Management reported several low
+water crossings near Barksdale were flooded, some of which were
+impassable.
+</description><instruction>Turn around, don't drown when encountering flooded roads. Most flood
+deaths occur in vehicles.
+
+In hilly terrain there are hundreds of low water crossings which are
+potentially dangerous in heavy rain. Do not attempt to cross flooded
+roads. Find an alternate route.
+
+Flooding is occurring or is imminent. It is important to know where
+you are relative to streams, rivers, or creeks which can become
+killers in heavy rains. Campers and hikers should avoid streams or
+creeks.</instruction><web>http://www.weather.gov</web><parameter><valueName>AWIPSidentifier</valueName><value>FFWEWX</value></parameter><parameter><valueName>WMOidentifier</valueName><value>WGUS54 KEWX 081923</value></parameter><parameter><valueName>flashFloodDetection</valueName><value>RADAR INDICATED</value></parameter><parameter><valueName>flashFloodDamageThreat</valueName><value>CONSIDERABLE</value></parameter><parameter><valueName>BLOCKCHANNEL</valueName><value>EAS</value></parameter><parameter><valueName>BLOCKCHANNEL</valueName><value>NWEM</value></parameter><parameter><valueName>EAS-ORG</valueName><value>WXR</value></parameter><parameter><valueName>VTEC</valueName><value>/O.NEW.KEWX.FF.W.0108.261108T1923Z-261109T0200Z/</value></parameter><parameter><valueName>eventEndingTime</valueName><value>2026-11-08T20:00:00-06:00</value></parameter><parameter><valueName>WEAHandling</valueName><value>Imminent Threat</value></parameter><parameter><valueName>CMAMtext</valueName><value>SNM: AVISO DE INUNDACIONES REPENTINAS hasta 8:00 PM CST. Evite areas inundadas.</value></parameter><parameter><valueName>CMAMlongtext</valueName><value>Servicio Nacional de Meteorologia: AVISO DE INUNDACIONES REPENTINAS en efecto para esta area hasta las 8:00 PM CST. Esta es una situacion peligrosa y amenaza la vida. No intente viajar a menos que sea para abandonar un area propensa a inundaciones o bajo una orden de desalojo.</value></parameter><area><areaDesc>Bandera, TX; Edwards, TX; Kerr, TX; Kinney, TX; Real, TX; Uvalde, TX; Val Verde, TX</areaDesc><polygon>30.29,-100.79 30.29,-99.55 30.28,-99.54 29.84,-99.18 29.63,-99.36 29.63,-99.41 29.56,-99.41 29.49,-99.47 29.47,-100.84 29.72,-101.15 30.29,-100.79</polygon><geocode><valueName>SAME</valueName><value>048019</value></geocode><geocode><valueName>SAME</valueName><value>048137</value></geocode><geocode><valueName>SAME</valueName><value>048265</value></geocode><geocode><valueName>SAME</valueName><value>048271</value></geocode><geocode><valueName>SAME</valueName><value>048385</value></geocode><geocode><valueName>SAME</valueName><value>048463</value></geocode><geocode><valueName>SAME</valueName><value>048465</value></geocode><geocode><valueName>UGC</valueName><value>TXC019</value></geocode><geocode><valueName>UGC</valueName><value>TXC137</value></geocode><geocode><valueName>UGC</valueName><value>TXC265</value></geocode><geocode><valueName>UGC</valueName><value>TXC271</value></geocode><geocode><valueName>UGC</valueName><value>TXC385</value></geocode><geocode><valueName>UGC</valueName><value>TXC463</value></geocode><geocode><valueName>UGC</valueName><value>TXC465</value></geocode></area></info><Signature xmlns="http://www.w3.org/2000/09/xmldsig#" xmlns:ns5="http://gov.fema.ipaws.services/IPAWS_CAPService/" xmlns:ns2="urn:oasis:names:tc:emergency:cap:1.2" xmlns:ns4="http://gov.fema.ipaws.services/capresponse" xmlns:ns3="http://gov.fema.ipaws.services/caprequest"><SignedInfo><CanonicalizationMethod Algorithm="http://www.w3.org/2001/10/xml-exc-c14n#"/><SignatureMethod Algorithm="http://www.w3.org/2001/04/xmldsig-more#rsa-sha256"/><Reference URI=""><Transforms><Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature"/></Transforms><DigestMethod Algorithm="http://www.w3.org/2001/04/xmlenc#sha256"/><DigestValue>AfYVA8dTlOvPJzkNir9b6VIL28YH0qiPdGGRWCJBOKY=</DigestValue></Reference></SignedInfo><SignatureValue>JNJnwmTB9GbI6T/qWDJirQdL6AxxYdc7Wl097Qbrv8AA3wAntOQORDT/bS/BeAPb0yJJwE5LA4S/&#13;
+zHpBgVqVD3EYiE/hUxvt/XEuLoAlyyQJF4X0mSrRDq1rQRodl6/w8tr6y9FYlFIS16llnIIsf4lN&#13;
+VcTBAc+ezAJwjntJA5UljjaPPVWhaxNBDk81R6cxGrZcuR2+hFeBlxzGCDeD7U4OGcOiY+cujM/c&#13;
+EOKpXA0IUfC+Ph72cWK3Y3LaQSI+/lJNK0upsOK1ddxU0SV0iFbj1sPCQvFa5cOsIPONlsNDUGJA&#13;
+0K8AhiJyzqkFwSgO0MfCeO05hvhFWvrjxxN+Cg==</SignatureValue><KeyInfo><X509Data><X509SubjectName>CN=IPAWSOPEN200032,OU=A01410D0000019A5E4549540014DF2C,OU=Devices IPAWS,OU=National Continuity Programs,O=FEMA IPAWS,C=US</X509SubjectName><X509Certificate>MIIHPzCCBSegAwIBAgIQQAGaXkVJb3yj70Q8FAqMbzANBgkqhkiG9w0BAQsFADBdMQswCQYDVQQG&#13;
+EwJVUzESMBAGA1UEChMJSWRlblRydXN0MSAwHgYDVQQLExdJZGVuVHJ1c3QgR2xvYmFsIENvbW1v&#13;
+bjEYMBYGA1UEAxMPSUdDIERldmljZSBDQSAyMB4XDTI1MTEwNzEyMjMxMFoXDTI4MTEwNjEyMjIx&#13;
+MFowgaUxCzAJBgNVBAYTAlVTMRMwEQYDVQQKEwpGRU1BIElQQVdTMSUwIwYDVQQLExxOYXRpb25h&#13;
+bCBDb250aW51aXR5IFByb2dyYW1zMRYwFAYDVQQLEw1EZXZpY2VzIElQQVdTMSgwJgYDVQQLEx9B&#13;
+MDE0MTBEMDAwMDAxOUE1RTQ1NDk1NDAwMTRERjJDMRgwFgYDVQQDEw9JUEFXU09QRU4yMDAwMzIw&#13;
+ggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQCOdhA5DPitMFp6DUbiQZi/anJ6L9qtPrRz&#13;
+gZksP2aOSve50875b4yi2eMv2caKpF+lxtbmzxdZjRuV55TnCkn7HaaLpi+7nFP4aDB9DDw/Gnop&#13;
+65nNzLvZ7MXpCC3ikJk09iSgwVaw6RGte9X2WyUoPaEmygjv1lsVx+JGohgvPxTtiZhQJyxkxbM5&#13;
+rR2MAC5VjsrZNu3idfvd1B0EEGM1cVU9jpVuyiWK53k+vPuSOH/UWMXezzrBEwjtw1SMVv2/dxKz&#13;
+79gaITMmF6z5QqDFV0cstzmyEZWhyoavCpXW4W+vU+FLO0IgXINzY34IsnFQ/cqGEJ6MtC63uM8f&#13;
+2L7dAgMBAAGjggKwMIICrDAOBgNVHQ8BAf8EBAMCBaAwfQYIKwYBBQUHAQEEcTBvMCkGCCsGAQUF&#13;
+BzABhh1odHRwOi8vaWdjLm9jc3AuaWRlbnRydXN0LmNvbTBCBggrBgEFBQcwAoY2aHR0cDovL3Zh&#13;
+bGlkYXRpb24uaWRlbnRydXN0LmNvbS9jZXJ0cy9pZ2NkZXZpY2VjYTIucDdjMB8GA1UdIwQYMBaA&#13;
+FD+LR65hHetlI5XEOi3tu0jVIykiMIIBQwYDVR0gBIIBOjCCATYwDQYLYIZIAYb5LwBkJQEwggEj&#13;
+BgtghkgBhvkvAGQmATCCARIwSwYIKwYBBQUHAgEWP2h0dHBzOi8vc2VjdXJlLmlkZW50cnVzdC5j&#13;
+b20vY2VydGlmaWNhdGVzL3BvbGljeS9JR0MvaW5kZXguaHRtbDCBwgYIKwYBBQUHAgIwgbUMgbJD&#13;
+ZXJ0aWZpY2F0ZSB1c2UgcmVzdHJpY3RlZCB0byBSZWx5aW5nIFBhcnR5KHMpIGluIGFjY29yZGFu&#13;
+Y2Ugd2l0aCBJR0MtQ1AgKHNlZSBodHRwczovL3NlY3VyZS5pZGVudHJ1c3QuY29tL2NlcnRpZmlj&#13;
+YXRlcy9wb2xpY3kvaWdjL2luZGV4Lmh0bWwpLiBJR0MtQ1BTIGluY29ycG9yYXRlZCBieSByZWZl&#13;
+cmVuY2UuMEUGA1UdHwQ+MDwwOqA4oDaGNGh0dHA6Ly92YWxpZGF0aW9uLmlkZW50cnVzdC5jb20v&#13;
+Y3JsL2lnY2RldmljZWNhMi5jcmwwGgYDVR0RBBMwEYIPSVBBV1NPUEVOMjAwMDMyMB0GA1UdDgQW&#13;
+BBQ8QhNU0KQ6GUEOz5peBrNTppU+fDAxBgNVHSUEKjAoBggrBgEFBQcDAgYIKwYBBQUHAwUGCCsG&#13;
+AQUFBwMGBggrBgEFBQcDBzANBgkqhkiG9w0BAQsFAAOCAgEAXiYe+0catdoGF4nXiIoyywVkVTaG&#13;
+BacaUIjTceAJv35LhC5gwAM+O3OudKQQbMeIzOcjJluFc4vFjmzL/DxLLKk6IVVZQ+MXO8O5UZ6e&#13;
+0hSwQv3mO+9JkCYL7M/GIJwiq6XuEiLS7wESwnHq2tIppZNfpcZcMSlQC+4hoUPJuVNU7QVFtvXe&#13;
+6FaB/zDMTU3pzOuCxn/SNIhBKHVesE8n5soIp5q8U/R/I9vYM52NISzZcYPGUp6Snyd9mVqmxAo+&#13;
+t3pAgsojLOrSBPLQoPoip/KeKCMahrumQuaHi6t3ML6IlCIuOeNnHEaxnUIWGD7kAswOKsqGGjMN&#13;
+JwXw6TeqrddvCg8Nd0SH7mWI/vjOq/ykZs2q6lB3b/5ur7YjGOdT3310R0VhZ8pxuyUTrR6EFlFR&#13;
+PkWhg46BaEiP1GtzmEW7wT0YStf4wvwDR3HkjpzNoBO92+iwhVHPKyl7T4METnDyTAD+aDn/Xtp/&#13;
+pZePlh9uOkCqS7NOm6B4Hjra/iL3BQG2gwcE6XOzbETH6/ibKwMroFDAgqe8AA6xdmcajHBf7/wA&#13;
+maMrAQmgbINPpZWjMo3wf2IccUTVHxLaZj+yQZcWMuX9R2H84eTo/CfqmG1RyxcqO0Nd1BS8i8Ii&#13;
+YnCXXUlXkpl0xFj1R1xiGv8bd4l5AGjorijY2Wnub1m4Y4k=</X509Certificate></X509Data></KeyInfo></Signature></alert>

@@ -13,22 +13,7 @@ export { checkCanary, keepaliveSent, KEEPALIVE_MAX_AGE_MS } from "./check.ts";
 export { KIND_PREFIXES, NWS_DESCRIPTOR } from "./descriptor.ts";
 export { CANARY_PATH, createNwsFetch, failureOf, NWS_BASE_URL, queriesOf, readAnswer } from "./fetch.ts";
 export type { NwsFetchInput, NwsFetchOptions, Query } from "./fetch.ts";
-export {
-  categoryOf,
-  EVENT_CODES,
-  fromEventCode,
-  fromEventName,
-  fromPhenomenon,
-  PHENOMENA,
-  resolveKind,
-  SIGNIFICANCE,
-  STAGE_WORDS,
-  UNKNOWN_KIND,
-} from "./kinds.ts";
-export type { EventCode, Hazard, KindFacts, ResolvedKind } from "./kinds.ts";
 export { KNOWN_FIELDS, mapObservation, ORIGIN, SOURCE_ID } from "./map.ts";
-export { CLOSING_ACTIONS, mainVtec, parseVtec, vtecKey, vtecTime } from "./vtec.ts";
-export type { Vtec, VtecClass } from "./vtec.ts";
 
 /**
  * This function makes the procedures of the NWS API source: `describe`, `fetch`, `map` and `check`.

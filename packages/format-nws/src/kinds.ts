@@ -6,8 +6,7 @@
  * form have a table of their own. The NWS API, FEMA IPAWS and the NOAA Weather Radio give these
  * codes, so the tables serve each of them.
  *
- * This file is a draft. The tables move to the core package (`@mark1russell7/alerts`), which owns the
- * taxonomy (AL-5). The adapter then imports them from there.
+ * This package is the home of the tables. Each source of NWS or SAME messages imports them from here.
  */
 
 import type { Category, Kind, Significance } from "@mark1russell7/alerts";

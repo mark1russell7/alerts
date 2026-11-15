@@ -24,8 +24,7 @@ import type {
 import { Problems, reportId } from "@mark1russell7/alerts";
 import { errorMessage } from "@mark1russell7/text";
 
-import { categoryOf, resolveKind } from "./kinds.ts";
-import { parseVtec, vtecKey, type Vtec } from "./vtec.ts";
+import { categoryOf, parseVtec, resolveKind, vtecKey, type Vtec } from "@mark1russell7/alerts-format-nws";
 
 /** The id of this source. */
 export const SOURCE_ID = "nws-api" as SourceId;
