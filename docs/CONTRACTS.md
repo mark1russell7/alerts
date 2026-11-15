@@ -473,14 +473,24 @@ A problem names ids, fields and the names of secrets. It does not hold the value
 
 The function `parseConfig` reads the JSON text of the configuration. It checks the JSON, then the schema, then the references. Its result is a `Result` of `@mark1russell7/optional`: the configuration and the recipients, or the problems. The runtime starts only with an `ok` result. A problem of the JSON does not quote the text, because the text can hold a private value.
 
-The runtime reads the text with `requireConfig`. A `ConfigSource` gives the text. Today it is the private file `config.json` in the folder `ALERTS_HOME`, or in `~/.alerts` with no variable. A procedure that gives the configuration replaces the file later, with the same interface.
+The runtime reads two private files in the folder `ALERTS_HOME`, or in `~/.alerts` with no variable: the configuration `config.json` and the keys `secrets.env`. A procedure that gives the configuration replaces the file later.
 
-The entry reads the keys of `secrets.env` in the same folder with `readSecrets`, on `parseEnvFile` of `@mark1russell7/service/host`. `envSecrets` gives them as the secret store. The keys do not go into `process.env`, because each child process gets that environment. On a problem, `requireConfig` throws `ConfigRefused`, and the process does not start. A read error gives only its code, because the path can hold a user name.
+The function `checkTexts` checks the texts of the two files, as the start does. It reads no file. The keys go through `parseEnvFile` of `@mark1russell7/service/host`, and `envSecrets` gives them as the secret store. The keys do not go into `process.env`, because each child process gets that environment. A read error gives only its code, because the path can hold a user name.
 
-A bad `config.json` stops the next start. Thus a writer of the configuration does these steps:
+The start keeps the last good configuration, and a change of the files restarts the runtime (`reload.ts`):
+
+- When `config.json` passes the check, the start uses it and writes it as the last good copy `config.good.json`. The write is atomic.
+- When `config.json` has problems, the start uses the last good copy and gives the problems. Thus a bad edit does not stop the alerts.
+- When the two copies have problems, `startConfig` throws `ConfigRefused`, and the process does not start.
+- In the profile `daemon`, the hook of each pass reads the two files again. A change that passes the check stops the runtime, and the supervisor starts it again.
+- A change with problems gives its problems one time, and the runtime keeps the files of its start.
+
+The check of the profile `daemon` also needs the key `HEALTHCHECKS_PING_URL`, because the live instance needs its outside heartbeat.
+
+A writer of the configuration does these steps, thus the live instance does not use a bad file:
 
 1. Write the new file in the folder `ALERTS_HOME`, next to `config.json`.
-2. Start `node src/check.ts <file>` in the runtime package. The check uses `checkConfig`, with the keys and the channels of the start.
+2. Start `node src/check.ts <file>` in the runtime package. The check uses `checkConfig`, with the keys, the channels and the check of the profile `daemon`.
 3. Rename the file to `config.json` only when the exit code is 0. Code 1 gives the problems, and code 2 gives a wrong command.
 
 The output of the check gives the count of the places, the people, the contacts and the policies, or the problems. It holds no value and no path.
