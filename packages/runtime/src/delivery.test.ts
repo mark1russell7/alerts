@@ -122,13 +122,15 @@ interface Script {
   status?: (receipt: Receipt) => DeliveryStatus;
   cancel?: (receipt: Receipt) => void | Promise<void>;
   stop?: (copy: string) => void | Promise<void>;
+  /** The fields that replace the fields of the default descriptor. */
+  describe?: Partial<ChannelDescriptor>;
 }
 
 // A channel of the test. Its default send accepts each message with a new receipt.
 function channel(id: ChannelId, ack: ChannelDescriptor["ack"], now: () => number, script: Script = {}): { readonly procedures: ChannelProcedures; readonly calls: Calls } {
   const calls: Calls = { send: [], copies: [], status: [], cancel: [], stops: [] };
   const procedures: ChannelProcedures = {
-    describe: () => ({ id, title: id, dependsOn: [], uses: ["internet"], breaksThrough: true, repeats: ack === "poll", ack, maxTitle: 250, maxBody: 1024 }),
+    describe: () => ({ id, title: id, dependsOn: [], uses: ["internet"], breaksThrough: true, repeats: ack === "poll", ack, maxTitle: 250, maxBody: 1024, ...script.describe }),
     send: async ({ message, copy }) => {
       calls.send.push(message);
       calls.copies.push(copy);
@@ -150,6 +152,9 @@ function channel(id: ChannelId, ack: ChannelDescriptor["ack"], now: () => number
   };
   return { procedures, calls };
 }
+
+// Six people with the same place and the same policy.
+const PEOPLE: readonly Recipient[] = [1, 2, 3, 4, 5, 6].map((n) => ({ ...RECIPIENT, watch: { ...RECIPIENT.watch, person: `person-${n}` as PersonId } }));
 
 const DELIVERY = { recipients: [RECIPIENT], pollEvery: 30 * SECOND, retry: 15 * SECOND, callLimit: 10 * SECOND, flightLimit: 40 * SECOND } as const;
 
@@ -702,7 +707,7 @@ describe("the delivery step of a pass", () => {
     log.close();
   });
 
-  it("sends one stop of a channel at each step while its stops fail, and the held stops after a good probe", async () => {
+  it("backs off the stop probe of a down channel, and a good poll of the channel moves the probe to the next step", async () => {
     let down = true;
     const clock = fakeWallClock(T0);
     const woken: number[] = [];
@@ -728,14 +733,22 @@ describe("the delivery step of a pass", () => {
       counts.push(pushover.stops.length - before);
       await clock.advance(15 * SECOND);
     }
-    // With no probe, the stops grow with the copies: 0, 1, 2, 3, 4, 4.
-    expect(counts).toEqual([0, 1, 1, 1, 1, 1]);
+    // With no probe, the stops grow with the copies: 0, 1, 2, 3, 4, 4. With a probe at each step: 0, 1, 1, 1, 1, 1. The
+    // probes go at 15, 30 and 60 seconds. The good send at 60 seconds does not move the probe, because the probe of the same
+    // step failed.
+    expect(counts).toEqual([0, 1, 1, 0, 1, 0]);
     expect(woken).toEqual([]);
     down = false;
+    // The next probe is at 120 seconds. The poll of the receipt at 90 seconds is a good answer, thus the probe goes at the next step.
+    const poll = await runtime.pass();
+    expect(pushover.status).toHaveLength(1);
+    expect(poll.delivery?.stopped).toEqual([]);
+    expect(woken).toEqual([T0 + 90 * SECOND]);
+    expect(poll.wakeAt).toBeLessThanOrEqual(T0 + 105 * SECOND);
+    await clock.advance(SECOND);
     const probe = await runtime.pass();
     expect(probe.delivery?.stopped).toHaveLength(1);
-    expect(woken).toEqual([T0 + 90 * SECOND]);
-    expect(probe.wakeAt).toBeLessThanOrEqual(T0 + 105 * SECOND);
+    expect(woken).toEqual([T0 + 90 * SECOND, T0 + 91 * SECOND]);
     await clock.advance(SECOND);
     const drain = await runtime.pass();
     expect(drain.delivery?.stopped).toHaveLength(3);
@@ -765,6 +778,115 @@ describe("the delivery step of a pass", () => {
       await clock.advance(20 * SECOND);
     }
     expect(stopped.sort()).toEqual([`${RUN}-2`, `${RUN}-3`]);
+    log.close();
+  });
+
+  // The times of the stops of a channel whose sends and stops always fail, in seconds from T0, with a pass each 15 seconds.
+  async function probeTimes(extra: Partial<DeliveryOptions>): Promise<number[]> {
+    const clock = fakeWallClock(T0);
+    const times: number[] = [];
+    const { runtime, log } = open(
+      {
+        pushover: {
+          send: () => ({ ok: false, kind: "network", message: "The connection reset." }),
+          stop: () => {
+            times.push((clock.now() - T0) / SECOND);
+            throw new Error("Pushover is down.");
+          },
+        },
+      },
+      openRuntimeLog(":memory:"),
+      clock,
+      extra,
+    );
+    for (let pass = 0; pass < 16; pass += 1) {
+      await runtime.pass();
+      await clock.advance(15 * SECOND);
+    }
+    log.close();
+    return times;
+  }
+
+  it("doubles the wait before the next stop probe of a down channel after each failed probe, up to the probe limit", async () => {
+    // A probe at each pass gives 15 probes from 15 to 225 seconds.
+    expect(await probeTimes({})).toEqual([15, 30, 60, 120, 180]);
+    expect(await probeTimes({ probeLimit: 30 * SECOND })).toEqual([15, 30, 60, 90, 120, 150, 180, 210]);
+  });
+
+  it("keeps at most maxInFlight calls of a channel in progress, and the end of a call wakes the loop for the held calls", async () => {
+    const clock = fakeWallClock(T0);
+    const woken: number[] = [];
+    let busy = 0;
+    let peak = 0;
+    let free = (): void => undefined;
+    const gate = new Promise<void>((resolve) => {
+      free = resolve;
+    });
+    const { runtime, log, pushover } = open(
+      {
+        pushover: {
+          describe: { maxInFlight: 2 },
+          send: async (_, count): Promise<SendOutcome> => {
+            busy += 1;
+            peak = Math.max(peak, busy);
+            await gate;
+            busy -= 1;
+            return { ok: true, receipt: { receipt: `pushover-${count}` }, accepted: clock.now() };
+          },
+        },
+      },
+      openRuntimeLog(":memory:"),
+      clock,
+      { recipients: PEOPLE },
+      () => woken.push(clock.now()),
+    );
+    // Six people get a send. Two sends start, and the other four wait for a free place.
+    const running = runtime.pass();
+    await settle();
+    expect(pushover.send).toHaveLength(2);
+    expect(woken).toEqual([]);
+    // The end of the two sends frees their places and wakes the loop one time.
+    free();
+    expect((await running).delivery?.sent).toHaveLength(2);
+    expect(woken).toEqual([T0]);
+    await clock.advance(SECOND);
+    expect((await runtime.pass()).delivery?.sent).toHaveLength(2);
+    expect(woken).toEqual([T0, T0 + SECOND]);
+    // No call waits for a place after the last two sends, thus no wake comes.
+    await clock.advance(SECOND);
+    expect((await runtime.pass()).delivery?.sent).toHaveLength(2);
+    expect(woken).toEqual([T0, T0 + SECOND]);
+    expect(new Set(pushover.send.map((message) => message.person))).toEqual(new Set(PEOPLE.map((person) => person.watch.person)));
+    expect(peak).toBe(2);
+    log.close();
+  });
+
+  it("frees the place of a call that hangs when its flight limit passes", async () => {
+    const clock = fakeWallClock(T0);
+    const { runtime, log, pushover } = open(
+      {
+        pushover: {
+          describe: { maxInFlight: 1 },
+          // The first send hangs for all time.
+          send: (_, count) => (count === 1 ? new Promise<SendOutcome>(() => undefined) : undefined),
+        },
+      },
+      openRuntimeLog(":memory:"),
+      clock,
+      { recipients: PEOPLE.slice(0, 2) },
+    );
+    const running = runtime.pass();
+    await clock.advance(10 * SECOND);
+    expect((await running).wakeAt).toBeLessThanOrEqual(T0 + 40 * SECOND);
+    expect(pushover.send).toHaveLength(1);
+    // The hung send keeps its place until its flight limit at 40 seconds.
+    await clock.advance(20 * SECOND);
+    await runtime.pass();
+    expect(pushover.send).toHaveLength(1);
+    // At the flight limit, the place is free again. One call gets it, and the other calls wait.
+    await clock.advance(10 * SECOND);
+    await runtime.pass();
+    expect(pushover.send).toHaveLength(2);
     log.close();
   });
 
@@ -865,6 +987,14 @@ describe("the delivery step of a pass", () => {
 
   it("refuses a flight limit that is shorter than the call limit", () => {
     expect(() => open({}, openRuntimeLog(":memory:"), fakeWallClock(T0), { flightLimit: 5 * SECOND })).toThrow("The flight limit (5000 ms) is shorter than the call limit (10000 ms).");
+  });
+
+  it("refuses a probe limit that is shorter than the retry", () => {
+    expect(() => open({}, openRuntimeLog(":memory:"), fakeWallClock(T0), { probeLimit: 5 * SECOND })).toThrow("The probe limit (5000 ms) is shorter than the retry (15000 ms).");
+  });
+
+  it("refuses a channel whose maxInFlight is not an integer of 1 or more", () => {
+    expect(() => open({ pushover: { describe: { maxInFlight: 0 } } })).toThrow("The channel pushover has maxInFlight 0. It must be an integer of 1 or more.");
   });
 
   it("refuses two channels with the same id", () => {

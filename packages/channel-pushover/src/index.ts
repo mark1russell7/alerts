@@ -38,6 +38,12 @@ export const PUSHOVER_REPEAT_MS: number = PUSHOVER_RETRY_MIN_MS;
 /** The id of the channel. */
 export const CHANNEL_ID = "pushover" as ChannelId;
 
+/**
+ * The most calls of one client in progress at the same time. The Pushover API asks for no more than 2
+ * HTTP requests at the same time, and it limits an IP address that opens more.
+ */
+const PUSHOVER_MAX_IN_FLIGHT = 2;
+
 /** The count of messages that Pushover gives one application in a month, with no paid upgrade. */
 export const PUSHOVER_MONTHLY_LIMIT = 10_000;
 
@@ -130,6 +136,7 @@ export function pushoverDescriptor(platform?: "ios" | "android"): ChannelDescrip
     ack: "poll",
     maxTitle: PUSHOVER_LIMITS.title,
     maxBody: PUSHOVER_LIMITS.message,
+    maxInFlight: PUSHOVER_MAX_IN_FLIGHT,
   };
 }
 

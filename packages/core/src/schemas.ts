@@ -550,6 +550,7 @@ export const channelDescriptorSchema: z.ZodType<ChannelDescriptor, ChannelDescri
       maxTitle: z.number(),
       maxBody: z.number(),
       costUsd: z.number().exactOptional(),
+      maxInFlight: z.number().int().min(1).exactOptional(),
     })
     .readonly(),
 );

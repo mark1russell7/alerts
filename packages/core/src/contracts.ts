@@ -524,6 +524,11 @@ export interface ChannelDescriptor {
   readonly maxBody: number;
   /** The cost of one message, when the channel costs money. */
   readonly costUsd?: number;
+  /**
+   * The most calls of the channel in progress at the same time, from the rules of its provider. The delivery
+   * holds each other call for a later step. Without it, the delivery has no limit.
+   */
+  readonly maxInFlight?: number;
 }
 
 /** One message to one person on one channel. */
