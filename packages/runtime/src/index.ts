@@ -10,6 +10,7 @@ export { LOOPBACK, attachApi, statusOf, type ApiOptions, type Status } from "./a
 export * from "./config.ts";
 export * from "./delivery.ts";
 export * from "./events.ts";
+export { SOURCE_POLICY, sourcePace } from "./instance.ts";
 export * from "./fetch.ts";
 export * from "./limit.ts";
 export * from "./log.ts";
