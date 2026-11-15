@@ -314,6 +314,11 @@ export type FetchOutcome =
        * not "no answer".
        */
       readonly complete: boolean;
+      /**
+       * The time of the data of a complete list of a snapshot source: the time of its newest product. A cache can give an
+       * old list, and this time tells its age. The runtime reads a list with no time as current.
+       */
+      readonly asOf?: Instant;
     }
   | { readonly ok: false; readonly failure: FetchFailure };
 
@@ -655,6 +660,8 @@ export interface EndMark {
   readonly at: Instant;
   /** True: the report left the list of its source. False: the report is in the list again. */
   readonly ended: boolean;
+  /** The time of the data of the list that ended the report (`asOf` of the fetch), if the list has a time. */
+  readonly asOf?: Instant;
 }
 
 /**

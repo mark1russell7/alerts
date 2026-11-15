@@ -100,7 +100,7 @@ function descriptor(listing: boolean): SourceDescriptor {
 }
 
 /** One answer of the fake list: the keys of a complete list, a part of a list, or a failure. */
-type Answer = { readonly keys: readonly string[]; readonly complete?: false } | "failure";
+type Answer = { readonly keys: readonly string[]; readonly complete?: false; readonly asOf?: number } | "failure";
 
 describe("snapshotStep", () => {
   const a = report("a", row("a", T0));
@@ -110,7 +110,7 @@ describe("snapshotStep", () => {
     const input: SnapshotInput = { source: LIST, started: T0 + MINUTE, ended: T0 + MINUTE + 300, outcome, merge: state, misses, limit: 2 };
     return snapshotStep(input);
   };
-  const listed = (...keys: string[]): FetchOutcome => ({ ok: true, complete: true, observations: keys.map((key) => row(key, T0 + MINUTE)) });
+  const listed = (...keys: string[]): Extract<FetchOutcome, { ok: true }> => ({ ok: true, complete: true, observations: keys.map((key) => row(key, T0 + MINUTE)) });
 
   it("counts one miss for each live report that a complete list does not have, and ends it at the limit", () => {
     const first = step(listed("a"));
@@ -154,6 +154,47 @@ describe("snapshotStep", () => {
     const result = step(listed("a", "b"), new Map(), ended);
     expect(result.events.map((event) => [event.type, event.reports])).toEqual([["back", [b.id]]]);
   });
+
+  describe("an old list", () => {
+    // The report `c` is newer than `a` and `b`: its product came 10 minutes later.
+    const c = report("c", row("c", T0 + MINUTE), { sent: T0 + 10 * MINUTE });
+    const three = normalize({ reports: [a, b, c] });
+    const at = (asOf: number, ...keys: string[]): FetchOutcome => ({ ...listed(...keys), asOf });
+
+    it("counts no miss for a report that is newer than the list, and keeps its count", () => {
+      const old = step(at(T0, "a", "b"), new Map([[c.id, 1]]), three);
+      expect(old.events).toEqual([]);
+      expect([...old.misses]).toEqual([[c.id, 1]]);
+      expect([...step(at(T0, "a", "b"), new Map(), three).misses]).toEqual([]);
+    });
+
+    it("counts a miss for a report that is as old as the list or older", () => {
+      expect([...step(at(T0 + 10 * MINUTE, "a", "b"), new Map(), three).misses]).toEqual([[c.id, 1]]);
+      expect([...step(at(T0, "a"), new Map(), three).misses]).toEqual([[b.id, 1]]);
+    });
+
+    it("counts misses for an empty list with a time, because the time comes from each row of the nation", () => {
+      const result = step(at(T0 + 10 * MINUTE), new Map([[a.id, 1]]), three);
+      expect(result.events.flatMap((event) => event.reports)).toEqual([a.id]);
+      expect([...result.misses].sort()).toEqual([[b.id, 1], [c.id, 1]].sort());
+    });
+
+    it("writes the time of the list in the ended event", () => {
+      const [event] = step(at(T0 + 10 * MINUTE, "a", "c"), new Map([[b.id, 1]]), three).events;
+      expect(event).toMatchObject({ type: "ended", reports: [b.id], asOf: T0 + 10 * MINUTE });
+    });
+
+    it("gives no back event for a list that is not newer than the list that ended the report", () => {
+      const ends = (asOf?: number) => normalize({ reports: [a, b, c], ends: [{ report: b.id, at: T0, ended: true, ...(asOf === undefined ? {} : { asOf }) }] });
+      const backs = (outcome: FetchOutcome, state: MergeState) => step(outcome, new Map(), state).events.filter((event) => event.type === "back");
+      expect(backs(at(T0, "a", "b"), ends(T0 + 10 * MINUTE))).toEqual([]);
+      expect(backs(at(T0 + 10 * MINUTE, "a", "b", "c"), ends(T0 + 10 * MINUTE))).toEqual([]);
+      expect(backs(at(T0 + 11 * MINUTE, "a", "b", "c"), ends(T0 + 10 * MINUTE)).map((event) => event.reports)).toEqual([[b.id]]);
+      // An end or a list with no time keeps the rule of a current list.
+      expect(backs(at(T0, "a", "b"), ends()).map((event) => event.reports)).toEqual([[b.id]]);
+      expect(backs(listed("a", "b"), ends(T0 + 10 * MINUTE)).map((event) => event.reports)).toEqual([[b.id]]);
+    });
+  });
 });
 
 describe("a snapshot source in the runtime", () => {
@@ -166,7 +207,7 @@ describe("a snapshot source in the runtime", () => {
       async fetch() {
         const answer = answers[Math.min(fetches++, answers.length - 1)]!;
         if (answer === "failure") return { ok: false, failure: { kind: "server", message: "The fake list failed." } };
-        return { ok: true, complete: answer.complete ?? true, observations: answer.keys.map((key) => row(key, clock.now())) };
+        return { ok: true, complete: answer.complete ?? true, observations: answer.keys.map((key) => row(key, clock.now())), ...(answer.asOf === undefined ? {} : { asOf: answer.asOf }) };
       },
       map,
     };
@@ -239,6 +280,35 @@ describe("a snapshot source in the runtime", () => {
     const { events, live } = await run([{ keys: ["a", "b"] }, { keys: [] }, { keys: [] }], true);
     expect(ends(events)).toEqual([["ended", [ids.a, ids.b].sort().map(keyOf)]]);
     expect([live.at(-1)?.["a"], live.at(-1)?.["b"]]).toEqual([false, false]);
+  });
+
+  it("ends no report for an old list, and gives no back event for an old list after an end, also after a restart", async () => {
+    // `a` and `b` have the product time T0. The true lists have the time T0 + 5 minutes: a newer product of a
+    // different place. The old list has the time T0 - 5 minutes, before the products of `a` and `b`.
+    const NEW = T0 + 5 * MINUTE;
+    const OLD = T0 - 5 * MINUTE;
+    const answers: readonly Answer[] = [
+      { keys: ["a", "b"], asOf: NEW },
+      { keys: [], asOf: OLD }, // an old list: no count
+      { keys: [], asOf: OLD }, // an old list again: no count
+      { keys: ["a"], asOf: NEW }, // b: one miss
+      { keys: ["a"], asOf: NEW }, // b: two misses, thus the end
+      { keys: ["a", "b"], asOf: NEW }, // the same time as the list of the end: no back
+      { keys: ["a", "b"], asOf: OLD }, // an old list: no back
+      { keys: ["a"], asOf: NEW + MINUTE }, // a newer list without b
+    ];
+    for (const restartAt of [undefined, 5]) {
+      const { events, live } = await run(answers, true, restartAt);
+      expect(ends(events)).toEqual([["ended", ["b"]]]);
+      expect(events.find((event) => event.type === "ended")).toMatchObject({ time: T0 + 4 * MINUTE, asOf: NEW });
+      expect(live.map((row) => row["b"])).toEqual([true, true, true, true, false, false, false, false]);
+      expect(live.every((row) => row["a"] === true)).toBe(true);
+    }
+  });
+
+  it("gives a back event for a list that is newer than the list of the end", async () => {
+    const answers: readonly Answer[] = [{ keys: ["a", "b"], asOf: T0 }, { keys: ["a"], asOf: T0 }, { keys: ["a"], asOf: T0 }, { keys: ["a", "b"], asOf: T0 + MINUTE }];
+    expect(ends((await run(answers, true)).events)).toEqual([["ended", ["b"]], ["back", ["b"]]]);
   });
 
   it("keeps the incidents of a report with a mark after the time of a view", async () => {

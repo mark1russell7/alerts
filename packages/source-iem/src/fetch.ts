@@ -7,7 +7,8 @@
  * IEM reads the products of the NWS from its own feeds, not from the NWS API.
  */
 
-import { observationId, type Cursor, type FetchOutcome, type Instant, type Observation, type Watch } from "@mark1russell7/alerts";
+import { observationId, Problems, type Cursor, type FetchOutcome, type Instant, type Observation, type Watch } from "@mark1russell7/alerts";
+import { capTime } from "@mark1russell7/alerts-format-cap";
 import { createRequester } from "@mark1russell7/alerts-fetch";
 import { stateOfUgc, statesOf } from "@mark1russell7/alerts-format-nws";
 import type { Pace, Reply, Transport } from "polite-crawler/api";
@@ -89,6 +90,23 @@ export function isListRow(row: unknown): boolean {
 interface Read {
   readonly observations: Observation[];
   readonly complete: boolean;
+  /** The time of the newest product of the whole national list, for a complete list only. */
+  readonly asOf?: Instant;
+}
+
+/**
+ * This function gives the time of the data of a list: the newest product time of its rows. A cache can give an old list,
+ * and this time tells its age. The time reads each row of the nation, so a list with no row of the watch has a time too.
+ */
+export function listTime(rows: readonly unknown[]): Instant | undefined {
+  const ignored = new Problems();
+  let newest: Instant | undefined;
+  for (const row of rows) {
+    if (typeof row !== "object" || row === null) continue;
+    const time = capTime((row as Readonly<Record<string, unknown>>)["utc_product_issue"], "utc_product_issue", ignored);
+    if (time !== undefined && (newest === undefined || time > newest)) newest = time;
+  }
+  return newest;
 }
 
 /**
@@ -104,6 +122,9 @@ interface Read {
  *
  * The id of each observation has the URL of the list and the body of the row. The same row in two
  * answers gives one observation. A row that changes gives a new observation.
+ *
+ * A complete list has the time of its data (`listTime`), from each row of the nation. The runtime reads an old list by
+ * this time.
  */
 export function readAnswer(reply: Reply, url: string, fetched: Instant, latency: number, states: ReadonlySet<string> | undefined): Read | undefined {
   const contentType = reply.headers["content-type"] ?? "application/json";
@@ -125,7 +146,9 @@ export function readAnswer(reply: Reply, url: string, fetched: Instant, latency:
   const data = typeof parsed === "object" && parsed !== null && "data" in parsed && Array.isArray(parsed.data) ? (parsed.data as unknown[]) : undefined;
   if (data === undefined) return { observations: [observation(reply.body)], complete: false };
   const rows = data.filter((row) => keepsRow(row, states));
-  return { observations: rows.map((row) => observation(rowBody(row))), complete: data.length > 0 && data.every(isListRow) };
+  const complete = data.length > 0 && data.every(isListRow);
+  const asOf = complete ? listTime(data) : undefined;
+  return { observations: rows.map((row) => observation(rowBody(row))), complete, ...(asOf === undefined ? {} : { asOf }) };
 }
 
 /**
@@ -153,6 +176,6 @@ export function createIemFetch(options: IemFetchOptions): (input: IemFetchInput,
     const { url, answer, latency } = requested;
     const read = readAnswer(answer.reply, url, now(), latency, statesOf(watch));
     if (read === undefined) return { ok: false, failure: { kind: "network", message: `truncated or malformed body: ${url}` } };
-    return { ok: true, observations: read.observations, complete: read.complete };
+    return { ok: true, observations: read.observations, complete: read.complete, ...(read.asOf === undefined ? {} : { asOf: read.asOf }) };
   };
 }
