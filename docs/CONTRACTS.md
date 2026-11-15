@@ -54,7 +54,9 @@ The groups of reports are a function of the merge state alone, with no clock. Tw
 
 The links are transitive: when A links to B and B links to C, the three reports are in one incident. A link rule gives the blocks of a report, for example its family of kind and its day. The merge tests only two reports that share a block. So the cost grows with the size of the blocks, not with the square of the count of reports.
 
-A line is a report and the reports of its source that update or cancel it. The head of a line is its last report: no report of the same source references it. An incident is live at a time when one or more heads are not cancelled and not expired at that time. Its severity, urgency and certainty are the highest of its live heads. Its corroboration is the count of the different origins of its reports.
+A line is a report and the reports of its source that update or cancel it. The head of a line is its last report: no report of the same source references it. An incident is live at a time when one or more heads are not cancelled and not expired at that time. Its corroboration is the count of the different origins of its reports.
+
+The severity, urgency and certainty of an incident are the highest of its live heads. An `unknown` value of a head takes the value of the latest report of its event with a known value. That report is not later than the head and is not a cancel. A tie of time takes the highest value. Thus a row of IEM keeps the values of the message of the NWS.
 
 A copy of a message from another source does not get the references of the line. The rule of the copies closes this gap:
 
