@@ -16,7 +16,7 @@
     "@mark1russell7/alerts-fetch": "workspace:*",
     "@mark1russell7/alerts-format-nws": "workspace:*",
     "@mark1russell7/alerts-source-nws-api": "workspace:*",
-    "@mark1russell7/geo": "^0.1.0",
+    "@mark1russell7/geo": "^0.2.1",
     "@mark1russell7/sqlite": "^0.2.6",
     "polite-crawler": "^0.6.2"
   },
