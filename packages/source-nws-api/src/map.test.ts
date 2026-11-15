@@ -314,7 +314,8 @@ describe("the map function", () => {
   };
 
   it("gives a fatal or a lossy problem when a field that the report holds has a value of the wrong JSON type", () => {
-    const scalar = fc.oneof(fc.integer(), fc.double({ noNaN: true }), fc.boolean());
+    // JSON has no NaN and no Infinity: JSON.stringify writes null, which is the value of an absent field.
+    const scalar = fc.oneof(fc.integer(), fc.double({ noNaN: true, noDefaultInfinity: true }), fc.boolean());
     const wrong = (field: string): fc.Arbitrary<unknown> =>
       OBJECTS.has(field)
         ? fc.oneof(scalar, fc.string(), fc.array(fc.jsonValue(), { minLength: 1 }))

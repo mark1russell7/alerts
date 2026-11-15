@@ -20,6 +20,8 @@
     "polite-crawler": "^0.6.2"
   },
   "devDependencies": {
+    "@mark1russell7/algebra": "^0.8.9",
+    "@mark1russell7/alerts-runtime": "workspace:*",
     "@mark1russell7/alerts-source-nws-api": "workspace:*",
     "@mark1russell7/cue": "^2.0.0",
     "@types/node": "^26.6.5",

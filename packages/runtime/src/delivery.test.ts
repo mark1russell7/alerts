@@ -1,4 +1,4 @@
-import { fakeClock } from "@mark1russell7/algebra/clock";
+import { fakeWallClock } from "@mark1russell7/algebra/clock";
 import {
   reportId,
   type ChannelDescriptor,
@@ -142,14 +142,14 @@ const DELIVERY = { recipients: [RECIPIENT], pollEvery: 30 * SECOND, retry: 15 * 
 // The microtasks and the callbacks of the promises end before this promise resolves.
 const settle = (): Promise<void> => new Promise((resolve) => setImmediate(resolve));
 
-function open(scripts: { readonly pushover?: Script; readonly sms?: Script } = {}, log: RuntimeLog = openRuntimeLog(":memory:"), clock = fakeClock(T0), extra: Partial<DeliveryOptions> = {}, wake?: () => void) {
+function open(scripts: { readonly pushover?: Script; readonly sms?: Script } = {}, log: RuntimeLog = openRuntimeLog(":memory:"), clock = fakeWallClock(T0), extra: Partial<DeliveryOptions> = {}, wake?: () => void) {
   const pushover = channel(PUSHOVER, "poll", () => clock.now(), scripts.pushover);
   const sms = channel(SMS, "none", () => clock.now(), scripts.sms);
   const runtime = openRuntime({
     log,
     clock,
     sources: [SOURCE],
-    watch: { places: [KANSAS], kinds: ["met"] },
+    watch: () => ({ places: [KANSAS], kinds: ["met"] }),
     view: VIEW,
     run: `run-${clock.now()}`,
     delivery: { ...DELIVERY, channels: [pushover.procedures, sms.procedures], ...extra },
@@ -257,7 +257,7 @@ describe("the delivery step of a pass", () => {
   });
 
   it("writes a send that the channel accepts after the time limit, and sends no second copy", async () => {
-    const clock = fakeClock(T0);
+    const clock = fakeWallClock(T0);
     let woken = 0;
     const late = (): Promise<SendOutcome> => new Promise((resolve) => clock.after(15 * SECOND, () => resolve({ ok: true, receipt: { receipt: "late-1" }, accepted: clock.now() })));
     const { runtime, log, pushover } = open({ pushover: { send: (_, count) => (count === 1 ? late() : undefined) } }, openRuntimeLog(":memory:"), clock, {}, () => (woken += 1));
@@ -279,7 +279,7 @@ describe("the delivery step of a pass", () => {
   });
 
   it("tells a late send that lands after a second send of its key as a duplicate, and keeps the first delivery of the log", async () => {
-    const clock = fakeClock(T0);
+    const clock = fakeWallClock(T0);
     const late = (): Promise<SendOutcome> => new Promise((resolve) => clock.after(50 * SECOND, () => resolve({ ok: true, receipt: { receipt: "late-1" }, accepted: clock.now() })));
     const { runtime, log, pushover } = open({ pushover: { send: (_, count) => (count === 1 ? late() : undefined) } }, openRuntimeLog(":memory:"), clock);
     const running = runtime.pass();
@@ -298,7 +298,7 @@ describe("the delivery step of a pass", () => {
   });
 
   it("keeps the start after a restart, thus the next step comes at its time and no step goes twice", async () => {
-    const clock = fakeClock(T0);
+    const clock = fakeWallClock(T0);
     const log = openRuntimeLog(":memory:");
     const before = open({}, log, clock);
     await before.runtime.pass();
@@ -317,7 +317,7 @@ describe("the delivery step of a pass", () => {
   });
 
   it("writes a delivery whose write failed at the next pass, and sends no second copy", async () => {
-    const clock = fakeClock(T0);
+    const clock = fakeWallClock(T0);
     const inner = openRuntimeLog(":memory:");
     let fail = true;
     const flaky: RuntimeLog = {
@@ -371,7 +371,7 @@ describe("the delivery step of a pass", () => {
   });
 
   it("tells an on-time send whose key the log already has as a duplicate, not as sent", async () => {
-    const clock = fakeClock(T0);
+    const clock = fakeWallClock(T0);
     const inner = openRuntimeLog(":memory:");
     // Another writer puts a delivery with the same id and another receipt into the log first.
     const shared: RuntimeLog = {
@@ -391,7 +391,7 @@ describe("the delivery step of a pass", () => {
   });
 
   it("writes one delivery when two late sends of one key land before the same pass", async () => {
-    const clock = fakeClock(T0);
+    const clock = fakeWallClock(T0);
     const late = (after: number, receipt: string): Promise<SendOutcome> => new Promise((resolve) => clock.after(after, () => resolve({ ok: true, receipt: { receipt }, accepted: clock.now() })));
     // The first send lands at 50 s. The second send starts at 40 s, after the flight limit, and lands at 52 s.
     const { runtime, log, pushover } = open({ pushover: { send: (_, count) => (count === 1 ? late(50 * SECOND, "late-1") : late(12 * SECOND, "late-2")) } }, openRuntimeLog(":memory:"), clock);
@@ -413,7 +413,7 @@ describe("the delivery step of a pass", () => {
   });
 
   it("keeps the later flight of a key when an earlier flight fails after it started", async () => {
-    const clock = fakeClock(T0);
+    const clock = fakeWallClock(T0);
     // The first send fails at 50 s. The second send starts at 40 s and hangs.
     const refused = (): Promise<SendOutcome> => new Promise((resolve) => clock.after(50 * SECOND, () => resolve({ ok: false, kind: "network", message: "The connection reset." })));
     const { runtime, log, pushover } = open({ pushover: { send: (_, count) => (count === 1 ? refused() : new Promise<SendOutcome>(() => undefined)) } }, openRuntimeLog(":memory:"), clock);
@@ -432,7 +432,7 @@ describe("the delivery step of a pass", () => {
   });
 
   it("keeps a late delivery for the next pass when its write fails", async () => {
-    const clock = fakeClock(T0);
+    const clock = fakeWallClock(T0);
     const inner = openRuntimeLog(":memory:");
     let fail = true;
     const flaky: RuntimeLog = {
@@ -460,11 +460,11 @@ describe("the delivery step of a pass", () => {
   });
 
   it("refuses a flight limit that is shorter than the call limit", () => {
-    expect(() => open({}, openRuntimeLog(":memory:"), fakeClock(T0), { flightLimit: 5 * SECOND })).toThrow("The flight limit (5000 ms) is shorter than the call limit (10000 ms).");
+    expect(() => open({}, openRuntimeLog(":memory:"), fakeWallClock(T0), { flightLimit: 5 * SECOND })).toThrow("The flight limit (5000 ms) is shorter than the call limit (10000 ms).");
   });
 
   it("refuses two channels with the same id", () => {
-    const clock = fakeClock(T0);
+    const clock = fakeWallClock(T0);
     const twice = channel(PUSHOVER, "poll", () => clock.now()).procedures;
     expect(() => open({}, openRuntimeLog(":memory:"), clock, { channels: [twice, twice] })).toThrow("Two channels have the id pushover.");
   });

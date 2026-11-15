@@ -34,6 +34,7 @@ import {
   type Delivery,
   type DeliveryState,
   type DeliveryStatus,
+  type EndMark,
   type Duration,
   type EscalationPolicy,
   type EscalationStep,
@@ -333,6 +334,7 @@ export const sourceDescriptorSchema: z.ZodType<SourceDescriptor, SourceDescripto
       slowAfter: durationSchema,
       maxQuiet: durationSchema.exactOptional(),
       auth: z.enum(["none", "key", "oauth"]),
+      listing: z.literal("snapshot").exactOptional(),
       canary: z.string().exactOptional(),
     })
     .readonly(),
@@ -621,6 +623,17 @@ export const acknowledgmentSchema: z.ZodType<Acknowledgment, Acknowledgment> = s
       person: personIdSchema,
       at: instantSchema,
       via: z.union([channelIdSchema, z.literal("ui")]),
+    })
+    .readonly(),
+);
+
+/** This schema checks an end mark of a report of a snapshot source. */
+export const endMarkSchema: z.ZodType<EndMark, EndMark> = schemaOf<EndMark>()(
+  z
+    .strictObject({
+      report: reportIdSchema,
+      at: instantSchema,
+      ended: z.boolean(),
     })
     .readonly(),
 );

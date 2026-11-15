@@ -38,7 +38,7 @@ The repo is public. It holds no person, no place, no address and no key. The pri
 
 ## The merge laws
 
-The merge state is a set of grow-only sets: reports, acknowledgments and deliveries. The join of two states is their union. So the join is:
+The merge state is a set of grow-only sets: reports, acknowledgments, deliveries and end marks. The join of two states is their union. So the join is:
 
 - **idempotent**: `join(a, a) = a`. A duplicate report changes nothing.
 - **commutative**: `join(a, b) = join(b, a)`. The order of arrival changes nothing.
@@ -54,7 +54,7 @@ The groups of reports are a function of the merge state alone, with no clock. Tw
 
 The links are transitive: when A links to B and B links to C, the three reports are in one incident. A link rule gives the blocks of a report, for example its family of kind and its day. The merge tests only two reports that share a block. So the cost grows with the size of the blocks, not with the square of the count of reports.
 
-A line is a report and the reports of its source that update or cancel it. The head of a line is its last report: no report of the same source references it. An incident is live at a time when one or more heads are not cancelled and not expired at that time. Its corroboration is the count of the different origins of its reports.
+A line is a report and the reports of its source that update or cancel it. The head of a line is its last report: no report of the same source references it. An incident is live at a time when one or more heads are not cancelled, not expired and not ended at that time. Its corroboration is the count of the different origins of its reports.
 
 The severity, urgency and certainty of an incident are the highest of its live heads. An `unknown` value of a head takes the value of the latest report of its event with a known value. That report is not later than the head and is not a cancel. A tie of time takes the highest value. Thus a row of IEM keeps the values of the message of the NWS.
 
@@ -65,6 +65,8 @@ A copy of a message from another source does not get the references of the line.
 - A replaced report is not a head. Thus a cancel of the NWS also ends the copy of that alert from IPAWS. The rows of IEM, one for each county, end the NWS message of two counties.
 
 For each code, the latest reports that name it stay. So the rule loses no later statement of a code. A code that no later report names keeps its report live, and a report with no region code is not replaced. Then the report stays live until it expires or its source ends it. This error is on the safe side. The rule reads only the reports of the group, so it keeps the three laws.
+
+An end mark tells that a report of a snapshot source left the list of the source (`ended: true`), or is in the list again (`ended: false`). A report is ended at a time when its latest mark at or before that time is an end. When two marks of one report have the same time, the report stays live. This choice is on the safe side, and it is a function of the set, so the three laws hold. A mark changes no group. It changes only the field `live` and the levels of the live heads. An ended report still gives its known values to the fill of `unknown` values, as an expired report does.
 
 The incident id is its anchor: its smallest report id. The anchor can change when two incidents merge. So an acknowledgment and a delivery point to a report of the incident, not to the anchor.
 
@@ -102,7 +104,12 @@ The rules of each adapter:
    - The hash input is a JSON array that starts with the scheme `alerts-id/1` and the kind of id. Each copy of the system gives the same id.
 5. **The fixtures are real and contain no personal data.** Each adapter keeps recorded answers of its source in `fixtures/`, with the expected reports. The places of the tests are public places, not the places of a real person.
 6. **A canary when the source has one.** For example: the national feed of the NWS has one or more active alerts. A national feed with no alert is more likely a fault than a calm country.
-7. **The kinds are codes of the taxonomy.** Each kind that `map` gives is a code of `TAXONOMY`. A kind that the tables do not know is `other.unknown`, with a problem. A gate test of the adapter holds this rule with `unknownKinds`.
+7. **A snapshot source tells it.** A source whose complete fetch gives each message in effect sets `listing: "snapshot"`. A message of such a list ends when it leaves the list, with no cancel.
+   - After `SNAPSHOT_MISSES` complete fetches in a row with no observation of a live report, the runtime writes an `ended` event.
+   - A failed fetch or an incomplete fetch counts nothing.
+   - A report that ended and is in a complete list again gets a `back` event.
+   - The counts are in memory only. A restart makes an end later, not sooner.
+8. **The kinds are codes of the taxonomy.** Each kind that `map` gives is a code of `TAXONOMY`. A kind that the tables do not know is `other.unknown`, with a problem. A gate test of the adapter holds this rule with `unknownKinds`.
 
 The testkit gives one conformance suite, and each adapter passes it. The suite examines the laws of `map` on the fixtures and on mutated fixtures. It examines the outcomes of `fetch` behind a fault proxy: cut, delay, reset, 429, 500 and a changed body. It also examines the descriptor.
 
@@ -339,6 +346,56 @@ Each assessment has its reasons: the gate that stopped it, the class, the two lo
 
 The table becomes the calculation of AL-31. The calculation multiplies the probability that the event is real, the impact on the person and the urgency. It compares the result with the cost to interrupt the person at that time. The probabilities come from base rates that the event log measures, not from values that a person sets.
 
+## The service
+
+The runtime operates as one service of `@mark1russell7/service`. Its entry is `packages/runtime/src/main.ts`. Only that file uses `run()`, and only that file reads a real clock.
+
+The loop of the runtime is the worker `passes`:
+
+- The worker does one pass at a time. After a pass, it sleeps until the wake time of the pass, or until `wake()`.
+- The function `loopTimes` gives the times of the loop from the limits of the runtime. No time of the loop is set by hand.
+- The bound of a pass is the longest fetch limit, plus two calls of the delivery. A failed pass waits its retry, and the wait doubles up to the shortest interval of a source.
+- The loop reads two clocks. The monotonic clock of the lifecycle gives its waits and its bounds. The wall clock gives the instants of the runtime.
+- A test gives `fakeClock` and `fakeWallClock` of `@mark1russell7/algebra/clock`.
+
+The service keeps the loop alive and safe:
+
+- The check `passes.progress` gates the liveness. It fails when a pass takes longer than its bound, or when the next pass is later than its bound. Then the supervisor stops the process and starts it again.
+- The drain holds the pass in flight. Its cap is the cap of the profile, plus the bound of a pass. Thus a shutdown does not cut a pass.
+- The service closes the log in the phase `tear down dependencies`, after the close of the worker. Thus no pass writes to a closed log.
+- The API on the loopback address gives `GET /status`: the time, the wake time, the sources, the sends and the conflicts of the last pass. It also gives the reason when the loop is stuck. The probes have a port of their own.
+
+The function `openInstance` makes the instance of the owner from the private configuration:
+
+- The sources are the NWS API and IPAWS. The channel is Pushover.
+- Each source gets the watch of `sourcePlaces`. Thus a source gets the region codes, and a position only when the place shares it with that source.
+- The User-Agent of each request names the project and its page. It names no person.
+- The times of the delivery come from facts of the channel. A call has a limit of 10 seconds. The poll goes at the pace of the emergency repeats, 30 seconds.
+- A failed call goes again after one time limit of a call. The flight limit is two time limits.
+- The limits of the lateness use the quantile 0.99, at the level 0.95.
+
+The instance does not start when it finds one of these problems:
+
+- a missing secret, or a key that does not have the form of a Pushover key (30 letters and digits)
+- each problem of `parseConfig`: the JSON, the schema and the references
+- a place that no source covers. Usually the place does not have a code of each level: the zone, the county, SAME, the state and the country.
+
+The environment gives `PORT` (8080), `PROBE_PORT` (9090) and `SERVICE_PROFILE` (`local`, `daemon` or `pod`). The folder `ALERTS_HOME` (`.alerts` in the home folder) holds the private files: `config.json`, `secrets.env` and the log `runtime.sqlite`. No repository holds them. A problem of `secrets.env` names its line and its key, and no value. The output of a failed pass shows no value of `secrets.env`.
+
+### The host on one computer
+
+The module `host.ts` gives the host of the live instance as data. A boot task starts a supervisor, and the supervisor starts the runtime:
+
+- `node src/install.ts install` installs the boot task, and starts it. A boot task needs an elevated shell one time. `remove` stops the supervisor and removes the task. `status` gives the state of the task.
+- The boot task starts the supervisor at the start of the computer, before a logon. It starts the supervisor again 1 minute after a stop.
+- The supervisor starts the runtime with the profile `daemon` on the ports 4750 and 4751. The runtime is ready when `/readiness` passes, in its startup budget plus one readiness interval.
+- The supervisor uses `/liveness` each 10 seconds. After 3 failures in sequence, it stops the runtime and starts it again. A stuck loop fails the liveness.
+- A stop goes as the message `shutdown` on the IPC channel, because a Windows process cannot catch a signal of its parent. Then the runtime drains its pass.
+- The stop grace is the sum of the caps of the phases of the runtime, plus 2 seconds. After the grace, the supervisor stops the process tree. The supervisor holds the grace in its phase `tear down dependencies`.
+- The host keeps its files in the folder `host` of `ALERTS_HOME`: the task file, the locks, the discovery files and the logs of the runtime.
+
+A lock keeps one runtime on the computer. The live instance runs from a checkout of its own, not from a working copy. Thus a change of branch does not change the code that runs.
+
 ## People and places
 
 The contracts carry only ids: `PersonId` and `PlaceId`. The runtime gets people, places, addresses and the night rule of each person from the private configuration.
@@ -365,6 +422,10 @@ A problem names ids, fields and the names of secrets. It does not hold the value
 
 The function `parseConfig` reads the JSON text of the configuration. It checks the JSON, then the schema, then the references. Its result is a `Result` of `@mark1russell7/optional`: the configuration and the recipients, or the problems. The runtime starts only with an `ok` result. A problem of the JSON does not quote the text, because the text can hold a private value.
 
+The runtime reads the text with `requireConfig`. A `ConfigSource` gives the text. Today it is the private file `config.json` in the folder `ALERTS_HOME`, or in `~/.alerts` with no variable. A procedure that gives the configuration replaces the file later, with the same interface.
+
+The entry reads the keys of `secrets.env` in the same folder with `parseEnvFile` of `@mark1russell7/service/host`. `envSecrets` gives them as the secret store. The keys do not go into `process.env`, because each child process gets that environment. On a problem, `requireConfig` throws `ConfigRefused`, and the process does not start. A read error gives only its code, because the path can hold a user name.
+
 The function `sourcePlaces` gives the places for one source, with no label, and with a position only when the place shares it with that source. The function `localPlaces` gives each position for the matching on the machine of the instance.
 
 A person also watches subjects, other than places, in `PersonWatch.subjects`: a source of the system, a service or a cloud region. A watch with no id matches each subject of its system. A rule with places does not apply to a subject. The person who operates the system watches `{ system: "alerts.source" }`, and gets the health reports.
@@ -376,6 +437,20 @@ The core matches the area of a report to a place with one rule for each source. 
 Two codes match when their systems and their values are equal. The first digit of a SAME code is a part of the county, and `0` is the full county. So a part also matches the full county, and the match errs on the safe side.
 
 The area `{ type: "place" }` covers that watched place only. Only the reports of the core use it. An area with only shapes matches no place until `@mark1russell7/geo` has the tests. The assessment then gives the reason `no-codes`. The first sources, the NWS and IPAWS, give codes with each area.
+
+## The map
+
+The function `mapView` of the core gives the view of the map from the state of one pass. It takes the incidents, the assessments, the places, the coverage and a `ShapeLookup`. The view is a pure calculation, and the order of its inputs does not change it.
+
+- Incidents: each live incident, from the highest level, then the highest severity, then the anchor. The level is the highest level over each person.
+- Shapes: each polygon and circle of an incident, and the shapes of each region code from the store. A code with no shape goes to `unshaped`, and the renderer lists it as text.
+- Places: the label, the position and the shapes of the smallest region with a shape. Each place also has its highest level, its live incidents and its gaps of coverage.
+
+The level of a place is an upper bound. An assessment keeps only the highest level of its places. Thus a rule that lowers the level at one place does not show on the map.
+
+The store of shapes fetches each zone and county of a state, not one code. A fetch of the code of a place names the place to the server. The map has no tiles from an outside server, because the tiles around a place also name the place. The renderer draws the outlines of the states, the counties and the zones.
+
+The view holds labels and positions. Only a route on the loopback address gives it, and `GET /status` does not hold it.
 
 ## The schemas
 
@@ -392,4 +467,5 @@ The file `schemas.ts` of the core has one zod 4 schema for each data type of the
 - The procedure tools take the schema of each input and output from `schemas.ts`.
 - The link rule of each family of kind, for rule 3 of the merge.
 - The calculation of the level from probabilities and costs (AL-31), with the base rates from the event log.
+- The count of misses that ends a report of a snapshot source is 2 (`SNAPSHOT_MISSES`). This value is a shortcut. A measure of the flap rate of the IEM list replaces it (AL-8).
 - The merge state grows with each report. A compaction of the incidents that ended before a horizon keeps it small. It must keep the three laws.

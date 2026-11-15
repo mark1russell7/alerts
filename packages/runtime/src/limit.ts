@@ -1,10 +1,11 @@
 /**
  * This module holds the time limit of one call, on the clock of the runtime.
  *
- * This module is local until `@mark1russell7/service` has a time limit of a promise that cancels its
- * timer. The request went to the owner of `systems` on 2026-11-15. Then the runtime uses that function.
+ * This module is local until `within` of `@mark1russell7/service` accepts the wall clock of the runtime.
+ * `within` of 0.8.16 reads only the timers of its clock, and its type accepts only a monotonic clock.
+ * The request went to the owner of `systems` on 2026-11-15. Then the runtime uses `within`.
  */
-import type { Clock } from "@mark1russell7/algebra/clock";
+import type { WallClock } from "@mark1russell7/algebra/clock";
 import type { Duration } from "@mark1russell7/alerts";
 
 /**
@@ -12,7 +13,7 @@ import type { Duration } from "@mark1russell7/alerts";
  * `failed(error)` when the work rejects. It does not reject. The work continues after the limit, and
  * the function ignores its value.
  */
-export function limited<T>(work: Promise<T>, limit: Duration, clock: Clock, late: () => T, failed: (error: unknown) => T): Promise<T> {
+export function limited<T>(work: Promise<T>, limit: Duration, clock: WallClock, late: () => T, failed: (error: unknown) => T): Promise<T> {
   return new Promise((resolve) => {
     const cancel = clock.after(limit, () => resolve(late()));
     work.then(

@@ -2,8 +2,10 @@ import { createServer } from "node:net";
 import type { AddressInfo } from "node:net";
 import { embeddedProcess, lint, localDev } from "@mark1russell7/service";
 import type { Rule, Scenario } from "@mark1russell7/service";
+import { realClock, wallClock } from "@mark1russell7/algebra/clock";
+import type { SourceId } from "@mark1russell7/alerts";
 import { describe, expect, it } from "vitest";
-import { PROFILES, declare } from "./index.ts";
+import { PROFILES, STOP_MESSAGE, createLoop, declare, type Pass, type Status } from "./index.ts";
 
 const s = (value: number) => ({ value, unit: "s" });
 
@@ -50,6 +52,17 @@ const POD: Scenario = {
   probes: { readiness: s(30), liveness: s(30) },
 };
 
+/** This function gives a loop whose passes fetch one source and wake one minute later. */
+const loopOf = () => {
+  const wall = wallClock();
+  return createLoop({
+    clock: realClock,
+    wall,
+    times: { passLimit: 1000, retryBase: 1000, retryCap: 1000 },
+    pass: async (): Promise<Pass> => ({ at: wall.now(), fetched: ["nws-api" as SourceId], view: {} as Pass["view"], conflicts: [], wakeAt: wall.now() + 60_000 }),
+  });
+};
+
 /** This function gives a free TCP port of the loopback interface. */
 const freePort = (): Promise<number> =>
   new Promise((resolve, reject) => {
@@ -65,34 +78,53 @@ describe("the declaration of the service", () => {
   for (const [name, profile] of Object.entries(PROFILES)) {
     it(`passes describe() and lint() with the profile ${name}`, () => {
       // describe() throws when the declaration lacks a policy, the startup budget, the phases or the effect of a second signal
-      const description = declare({ port: 0, probePort: 0, profile }).describe();
-      expect(description.transports.map((transport) => [transport.kind, transport.name])).toEqual([["server", "http"]]);
+      const description = declare({ port: 0, probePort: 0, profile, loop: loopOf(), log: { close: () => undefined } }).describe();
+      expect(description.dependencies.map((dependency) => dependency.name)).toEqual(["log"]);
+      expect(description.transports.map((transport) => [transport.kind, transport.name])).toEqual([
+        ["server", "http"],
+        ["worker", "passes"],
+      ]);
+      expect(description.checks.map((check) => [check.name, check.gates])).toEqual([["passes.progress", "liveness"]]);
+      // A supervisor on Windows stops the service with a message, because the process cannot catch its signal.
+      expect(description.shutdown.messages).toEqual([{ match: STOP_MESSAGE, as: "SIGTERM" }]);
       // each rule holds, and no field of the declaration is missing (a "depends" finding of the rule "declaration")
       const findings = lint(description, POD, [O10, O16]);
       expect(findings.map((finding) => [finding.rule, finding.verdict])).toEqual([
         ["O10", "holds"],
         ["O16", "holds"],
+        ["unit-bound", "holds"],
+        ["close-bound", "holds"],
       ]);
     });
   }
 });
 
 describe("the lifecycle of the service", () => {
-  it("answers a route and the probes, and exits 0 after the shutdown", async () => {
+  it("runs the passes, answers the status and the probes, and exits 0 after the shutdown", async () => {
     const port = await freePort();
     const probePort = await freePort();
     // embeddedProcess() adds no signal handler and does not end the process of the test
-    const life = await declare({ port, probePort, profile: localDev }).run({ process: embeddedProcess() });
+    const loop = loopOf();
+    let closes = 0;
+    const log = { close: () => (closes += 1) };
+    const life = await declare({ port, probePort, profile: localDev, loop, log }).run({ process: embeddedProcess() });
     try {
-      const hello = await fetch(`http://127.0.0.1:${port}/hello`);
-      expect(hello.status).toBe(200);
-      expect(await hello.json()).toEqual({ hello: "world" });
-      expect((await fetch(`http://127.0.0.1:${port}/nothing`)).status).toBe(404);
+      // The worker starts the first pass at the start of the service.
+      for (let tries = 0; loop.last() === undefined && tries < 100; tries += 1) await new Promise((resolve) => setTimeout(resolve, 10));
+      const status = await fetch(`http://127.0.0.1:${port}/status`);
+      expect(status.status).toBe(200);
+      const body = (await status.json()) as Status;
+      expect(body).toEqual({ at: loop.last()?.at, wakeAt: loop.last()?.wakeAt, fetched: ["nws-api"], sent: 0, conflicts: 0, stuck: null });
+      expect((await fetch(`http://127.0.0.1:${port}/hello`)).status).toBe(404);
       expect((await fetch(`http://127.0.0.1:${probePort}/readiness`)).status).toBe(200);
+      expect((await fetch(`http://127.0.0.1:${probePort}/liveness`)).status).toBe(200);
+      // The log stays open while the service operates.
+      expect(closes).toBe(0);
     } finally {
       await life.shutdown("the test ended");
     }
     expect(await life.done).toBe(0);
     expect(life.errors).toEqual([]);
+    expect(closes).toBe(1);
   });
 });
