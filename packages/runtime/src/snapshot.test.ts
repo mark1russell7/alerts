@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fakeClock } from "@mark1russell7/algebra/clock";
+import { fakeWallClock } from "@mark1russell7/algebra/clock";
 import {
   incidents,
   normalize,
@@ -159,7 +159,7 @@ describe("snapshotStep", () => {
 describe("a snapshot source in the runtime", () => {
   /** This function runs the answers, one fetch for each minute, and restarts the runtime before the answer at `restartAt`. */
   async function run(answers: readonly Answer[], listing: boolean, restartAt?: number) {
-    const clock = fakeClock(T0);
+    const clock = fakeWallClock(T0);
     let fetches = 0;
     const source: SourceProcedures = {
       describe: () => descriptor(listing),
@@ -172,10 +172,12 @@ describe("a snapshot source in the runtime", () => {
     };
     const path = logPath();
     let log = openRuntimeLog(path);
-    const open = (name: string) => openRuntime({ log, clock, sources: [source], watch: { places: [KANSAS], kinds: ["met"] }, view: VIEW, run: name });
+    const open = (name: string) => openRuntime({ log, clock, sources: [source], watch: () => ({ places: [KANSAS], kinds: ["met"] }), view: VIEW, run: name });
     let runtime = open("run-0");
     const live: Record<string, boolean>[] = [];
-    while (fetches < answers.length) {
+    // The guard stops a pass that fetches nothing, so a fault fails the test and does not hang it.
+    for (let guard = 0; fetches < answers.length; guard += 1) {
+      if (guard >= 10 * answers.length) throw new Error(`The runtime made ${String(fetches)} of ${String(answers.length)} fetches.`);
       if (fetches === restartAt) {
         log.close();
         log = openRuntimeLog(path);

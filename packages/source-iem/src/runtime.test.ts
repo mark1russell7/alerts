@@ -1,7 +1,7 @@
 import { readFileSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fakeClock } from "@mark1russell7/algebra/clock";
+import { fakeWallClock } from "@mark1russell7/algebra/clock";
 import type { PlaceId, Watch, WatchedPlace } from "@mark1russell7/alerts";
 import { openRuntime, openRuntimeLog, type RuntimeEvent } from "@mark1russell7/alerts-runtime";
 import type { Reply } from "polite-crawler/api";
@@ -29,7 +29,7 @@ afterEach(() => {
 
 /** This function runs the real IEM source in the runtime, one fetch for each answer, and gives the log. */
 async function run(answers: readonly Reply[]): Promise<RuntimeEvent[]> {
-  const clock = fakeClock(Date.UTC(2026, 10, 15, 13, 20, 0));
+  const clock = fakeWallClock(Date.UTC(2026, 10, 15, 13, 20, 0));
   let fetches = 0;
   const pace = { now: () => clock.now(), sleep: async () => {} };
   const source = createIemSource({
@@ -42,7 +42,7 @@ async function run(answers: readonly Reply[]): Promise<RuntimeEvent[]> {
   const folder = mkdtempSync(join(tmpdir(), "alerts-iem-"));
   folders.push(folder);
   const log = openRuntimeLog(join(folder, "log.sqlite"));
-  const runtime = openRuntime({ log, clock, sources: [source], watch: WATCH, view: { places: [KANSAS], kinds: ["met"], expectations: [], delay: { quantile: 0.9, level: 0.9 } }, run: "run-0" });
+  const runtime = openRuntime({ log, clock, sources: [source], watch: () => WATCH, view: { places: [KANSAS], kinds: ["met"], expectations: [], delay: { quantile: 0.9, level: 0.9 } }, run: "run-0" });
   for (let guard = 0; fetches < answers.length && guard < 10 * answers.length; guard += 1) {
     await runtime.pass();
     await clock.advance(IEM_DESCRIPTOR.interval);

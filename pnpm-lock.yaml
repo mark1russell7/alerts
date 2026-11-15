@@ -474,8 +474,8 @@ importers:
         specifier: workspace:*
         version: link:../source-nws-api
       '@mark1russell7/algebra':
-        specifier: ^0.8.7
-        version: 0.8.7(zod@4.6.7)
+        specifier: ^0.8.9
+        version: 0.8.9(zod@4.6.7)
       '@mark1russell7/cue':
         specifier: ^2.0.0
         version: 2.1.4
