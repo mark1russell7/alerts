@@ -30,6 +30,13 @@ import {
 import { envelope, type SystemEvent } from "./events.ts";
 import type { FoldContext, RuntimeState } from "./state.ts";
 
+/**
+ * The quantile and the level of the two limits of each expectation. In normal work, 1 copy in 100 or
+ * fewer comes after the limit of the delay. A run of misses makes a source late by chance in 1 case
+ * in 20 or fewer. The count of misses of a snapshot source uses the same tolerance (`missesDecision`).
+ */
+export const DELAY_LIMITS: DelayLimitOptions = { quantile: 0.99, level: 0.95 };
+
 /** The configuration of the views. The private configuration gives the places. */
 export interface ViewConfig extends FoldContext {
   readonly places: readonly WatchedPlace[];
