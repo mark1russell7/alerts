@@ -187,6 +187,14 @@ export const EVENT_CODES: Readonly<Record<string, EventCode>> = {
   NMN: code("system.admin", "Network Message Notification"),
 };
 
+/**
+ * The first parts of the taxonomy codes in the kind tables: the kinds that a source of NWS or SAME
+ * messages covers. A descriptor gives them as its `kinds`.
+ */
+export const KIND_PREFIXES: readonly string[] = [
+  ...new Set([...Object.values(PHENOMENA), ...Object.values(EVENT_CODES)].map((hazard) => hazard.code.split(".", 1)[0] ?? "other")),
+].sort();
+
 /** This function calculates the event code of a phenomenon and a significance, for example `TO` and `W`. */
 export function fromPhenomenon(phenomenon: string, significance: string): EventCode | undefined {
   const hazard = PHENOMENA[phenomenon];

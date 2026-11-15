@@ -3,7 +3,60 @@
  * or an EDXL envelope. Each alert becomes one observation, so the id of each observation is stable.
  */
 
-import { localName, nextTag } from "./scan.ts";
+import { declaredNamespace, localName, nextTag, prefixOf } from "./scan.ts";
+
+/** A document that holds CAP alerts, as `splitFeed` reads it. */
+export interface CapFeed {
+  /** The name of the root element, with its prefix. It is absent when the text has no element. */
+  readonly root?: string;
+  /** The namespace of the root element, when its start tag declares it. */
+  readonly namespace?: string;
+  /** The text of each alert, as `splitAlerts` gives it. */
+  readonly alerts: readonly string[];
+  /**
+   * True: the root element ends, and only blanks, comments and processing instructions follow it. A
+   * cut document is not whole. The client cannot see each cut, for example a cut of a body with no length.
+   */
+  readonly whole: boolean;
+}
+
+/** This function examines that the text from `from` holds only blanks, comments and processing instructions. */
+function onlyBlanks(xml: string, from: number): boolean {
+  let at = from;
+  while (at < xml.length) {
+    if ((xml[at] as string).trim() === "") {
+      at += 1;
+      continue;
+    }
+    const end = xml.startsWith("<!--", at) ? "-->" : xml.startsWith("<?", at) ? "?>" : undefined;
+    if (end === undefined) return false;
+    const close = xml.indexOf(end, at + 2);
+    if (close < 0) return false;
+    at = close + end.length;
+  }
+  return true;
+}
+
+/**
+ * This function reads a document that holds CAP alerts: its root, the namespace of the root, its
+ * alerts, and the end of the root. The function does not check the XML of the alerts: `readCap` does that.
+ */
+export function splitFeed(xml: string): CapFeed {
+  const alerts = splitAlerts(xml);
+  const first = nextTag(xml, 0);
+  if (first === undefined || first.kind === "close") return { alerts, whole: false };
+  const namespace = declaredNamespace(xml, first, prefixOf(first.name));
+  const head = { root: first.name, ...(namespace === undefined ? {} : { namespace }), alerts };
+  if (first.kind === "empty") return { ...head, whole: onlyBlanks(xml, first.end) };
+  let depth = 1;
+  let tag = nextTag(xml, first.end);
+  while (tag !== undefined) {
+    if (tag.kind !== "empty") depth += tag.kind === "open" ? 1 : -1;
+    if (depth === 0) return { ...head, whole: onlyBlanks(xml, tag.end) };
+    tag = nextTag(xml, tag.end);
+  }
+  return { ...head, whole: false };
+}
 
 /**
  * This function gives the text of each `alert` element of a document, in order, as the document has
