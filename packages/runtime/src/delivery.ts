@@ -74,9 +74,9 @@ export interface DeliveryStep {
   /** The deliveries that the step wrote: the sends of the step, and the late sends of earlier steps. */
   readonly sent: readonly Delivery[];
   /**
-   * The keys of the sends that the channel accepted when the log already had a delivery of the key: a
-   * late send after a second send of the same key. The log keeps the first delivery. The cancel by tag
-   * of the channel stops the repeats of each copy.
+   * The keys of the sends that the channel accepted when the log already had a delivery of the key. A
+   * late send after a second send of the same key is one. The log keeps the first delivery. The cancel
+   * by tag of the channel stops the repeats of each copy.
    */
   readonly duplicates: readonly string[];
   readonly acknowledged: readonly Acknowledgment[];

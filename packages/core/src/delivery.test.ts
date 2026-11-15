@@ -277,8 +277,12 @@ describe("recipientProblems", () => {
       keeps(1, "cbrne.radiological", "urgent"),
       keeps(2, "system.coverage", "digest"),
     ]);
-    // A rule at life-safety, a rule of other kinds, and a rule with no place or no kind keep nothing.
-    expect(recipientProblems(rules({ max: "life-safety" }, { kinds: ["met.heat", "system.health"], max: "notice" }, { places: [], max: "digest" }, { kinds: [], max: "digest" }), CHANNELS)).toEqual([]);
+    // A rule at a place that the person watches keeps the kinds there.
+    expect(recipientProblems(rules({ places: ["place-9" as PlaceId, home], kinds: ["met"], max: "urgent" }), CHANNELS)).toEqual([keeps(0, "met", "urgent")]);
+    // A rule at life-safety, a rule of other kinds, and a rule with no watched place or no kind keep nothing.
+    expect(
+      recipientProblems(rules({ max: "life-safety" }, { kinds: ["met.heat", "system.health"], max: "notice" }, { places: [], max: "digest" }, { places: ["place-9" as PlaceId], max: "digest" }, { kinds: [], max: "digest" }), CHANNELS),
+    ).toEqual([]);
   });
 
   it("finds a bad quiet window", () => {

@@ -190,8 +190,8 @@ export function recipientProblems(recipient: Recipient, channels: readonly Chann
   if (watches && !seen.has("life-safety")) problems.push("The person watches a place or a subject, and has no policy of the level life-safety. A life-safety alert sends nothing to the person.");
   recipient.watch.rules.forEach((rule, index) => {
     for (const code of unknownKinds(rule.kinds ?? [])) problems.push(`Rule ${index} names the kind ${code}, and the taxonomy has no such code. The rule matches no alert of it.`);
-    // A rule with an empty list of places or kinds matches no alert.
-    if (rule.max === "life-safety" || rule.places?.length === 0) return;
+    // A rule only at places that the person does not watch matches no alert. A rule with an empty list of kinds also matches none.
+    if (rule.max === "life-safety" || (rule.places !== undefined && !rule.places.some((place) => recipient.watch.places.includes(place)))) return;
     const capped = rule.kinds === undefined ? ["each kind"] : rule.kinds.filter((kind) => LIFE_SAFETY_CODES.some((code) => overlap(kind, code)));
     if (capped.length > 0) problems.push(`Rule ${index} keeps ${capped.join(", ")} at ${rule.max} or lower. A life-safety kind is in it, and a rule does not keep a life-safety kind below life-safety.`);
   });

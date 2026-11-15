@@ -246,6 +246,7 @@ A send that passes its time limit stays in flight, because the provider can acce
 - No second send of its key starts until the first send ends, or until the flight limit `flightLimit` ends. The flight limit is not shorter than the time limit.
 - A late send that the provider accepts gets its delivery in the log at the next step. Thus its acknowledgment and its cancel work.
 - After the flight limit, a second send goes. A late first send that lands after it is a duplicate, and the log keeps one delivery of the key.
+- A send that the channel accepts in time, and whose write to the log fails, also gets its delivery at the next step. Thus no second send goes.
 
 The Pushover channel tags each emergency message with its delivery key, and it cancels by the tag. Thus a cancel also stops the repeats of a copy whose receipt the log does not have. A crash after a send and before its write is such a case.
 
