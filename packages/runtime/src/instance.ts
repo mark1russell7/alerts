@@ -69,22 +69,11 @@ export function sourcePace(clock: Clock, wall: WallClock, sources: number): Pace
 /** The channel stops its own call at this time limit. */
 const CALL_LIMIT = PUSHOVER_TIMEOUT_MS;
 
-/** The times of the delivery step of an instance. The fault cases of the channel use these times. */
-export const DELIVERY_TIMES: Pick<DeliveryOptions, "pollEvery" | "retry" | "callLimit" | "flightLimit"> = {
-  // A `life-safety` message repeats until the person acknowledges it. A poll at the pace of the repeats sees an acknowledgment in one repeat.
-  pollEvery: PUSHOVER_REPEAT_MS,
-  // A failed call goes again after the time limit of one call. Pushover asks for a wait of 5 seconds or more after a failure.
-  retry: CALL_LIMIT,
-  callLimit: CALL_LIMIT,
-  // A send ends by the time limit of the channel. A second send of its key goes after its retry.
-  flightLimit: CALL_LIMIT + CALL_LIMIT,
-};
-
 /**
  * The times of the loop of the instance. They come from the intervals of the sources and the time
  * limit of the Pushover channel. The host reads them before a start: the stop grace holds one pass.
  */
-export const INSTANCE_TIMES: LoopTimes = loopTimes(INSTANCE_SOURCES, { delivery: { callLimit: DELIVERY_TIMES.callLimit, retry: DELIVERY_TIMES.retry } });
+export const INSTANCE_TIMES: LoopTimes = loopTimes(INSTANCE_SOURCES, { delivery: { callLimit: CALL_LIMIT, retry: CALL_LIMIT } });
 
 /** The times of the delivery step of an instance. The fault cases of the channel use these times. */
 export const DELIVERY_TIMES: Pick<DeliveryOptions, "pollEvery" | "retry" | "callLimit" | "flightLimit"> & { readonly overdueAfter: Duration } = {
