@@ -1,7 +1,7 @@
 /**
  * This module gives the host of the live instance on one computer, as data. A boot task starts the
- * supervisor (`supervise.ts`). The supervisor starts the runtime (`main.ts`). It starts the runtime
- * again after an exit, or after the liveness probe fails. The entries give the paths and the ports.
+ * supervisor (`main.ts supervise`). The supervisor starts the runtime (`main.ts`). It starts the runtime
+ * again after an exit, or after the liveness probe fails. The entry gives the paths and the ports.
  */
 import { join } from "node:path";
 import { add, sum, type Quantity } from "@mark1russell7/quantity";
@@ -94,7 +94,7 @@ export function hostTask(options: HostOptions): ServiceSpec {
     name: HOST_NAME,
     description: "The alerts runtime: a supervisor that keeps the runtime alive.",
     program: options.node,
-    args: [join(options.root, "src", "supervise.ts"), options.home],
+    args: [join(options.root, "src", "main.ts"), "supervise", options.home],
     cwd: options.root,
     start: "boot",
     restart: { after: { value: 1, unit: "min" } },
@@ -117,7 +117,7 @@ export interface HostedGroup {
 
 /**
  * This function declares the service of the supervisor. The group is its one dependency: the start
- * connects it, and the shutdown stops each program in stages. Only the entry `supervise.ts` uses `run()`.
+ * connects it, and the shutdown stops each program in stages. Only the entry `main.ts` uses `run()`.
  */
 export const declareSupervisor = (group: HostedGroup): ServiceBuilder =>
   service(`${HOST_NAME}-host`)

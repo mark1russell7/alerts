@@ -95,7 +95,7 @@ describe("the host of the instance", () => {
 
   it("gives a boot task that starts the supervisor with the folder of the private files, and starts it again 1 minute after a stop", () => {
     const spec = hostTask(OPTIONS);
-    expect(spec.args).toEqual([join(ROOT, "src", "supervise.ts"), HOME]);
+    expect(spec.args).toEqual([join(ROOT, "src", "main.ts"), "supervise", HOME]);
     expect(supervisorDiscovery(HOME)).toBe(join(HOME, "host", "supervisor.json"));
     const xml = renderTaskXml(spec, { user: "HOST\\test", conhost: "C:\\Windows\\System32\\conhost.exe" });
     expect(xml).toContain("<BootTrigger>");

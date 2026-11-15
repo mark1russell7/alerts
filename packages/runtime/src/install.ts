@@ -6,19 +6,19 @@
  * - `node src/install.ts remove` stops the supervisor and removes the task.
  * - `node src/install.ts status` tells if the task exists, and its state.
  *
- * The environment gives `ALERTS_HOME`, the folder of the private files. Without it, the folder is
- * `.alerts` in the home folder.
+ * The environment gives `ALERTS_HOME`, the folder of the private files, as for `main.ts`. Without
+ * it, the folder is `.alerts` in the home folder.
  */
-import { homedir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { installService, nodeHostPorts, serviceStatus, uninstallService, type ServiceOutcome } from "@mark1russell7/service/host";
+import { alertsHome } from "./config.ts";
 import { hostTask, supervisorDiscovery } from "./host.ts";
 
 const ACTIONS = ["install", "remove", "status"] as const;
 const action = process.argv[2];
 
-const home = process.env["ALERTS_HOME"] ?? join(homedir(), ".alerts");
+const home = alertsHome(process.env, process.cwd());
 const root = join(fileURLToPath(new URL(".", import.meta.url)), "..");
 const spec = hostTask({ home, root, node: process.execPath });
 const ports = nodeHostPorts();
