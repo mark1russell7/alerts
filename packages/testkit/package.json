@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json.schemastore.org/package",
+  "name": "@mark1russell7/alerts-testkit",
+  "description": "The fault suite of the alert system: each source and each channel behind a fault proxy, with a gate for each case.",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.test.json",
+    "faults": "node scripts/fault-cases.ts"
+  },
+  "dependencies": {
+    "@mark1russell7/alerts": "workspace:*",
+    "@mark1russell7/alerts-source-nws-api": "workspace:*",
+    "@mark1russell7/rigor-chaos": "^0.2.2",
+    "@mark1russell7/rigor-proxy": "^0.2.1",
+    "@mark1russell7/rigor-testkit": "^0.1.7",
+    "polite-crawler": "^0.6.2"
+  },
+  "devDependencies": {
+    "@mark1russell7/cue": "^2.0.0",
+    "@types/node": "^26.6.5",
+    "@vitest/coverage-v8": "^5.0.3",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.3"
+  }
+}
