@@ -1,6 +1,6 @@
 import { Problems, type Severity } from "@mark1russell7/alerts";
 import { describe, expect, it } from "vitest";
-import { CAP_SEVERITY, CAP_STATUS, capList, capTime, capValue } from "./values.ts";
+import { CAP_SEVERITY, CAP_STATUS, capCertainty, capList, capTime, capValue } from "./values.ts";
 
 const sink = (): Problems => new Problems();
 
@@ -25,6 +25,22 @@ describe("the readers of the CAP values", () => {
     expect(capValue("", CAP_STATUS, "actual", "status", problems)).toBe("actual");
     const absent = (path: string, fallback: string) => ({ path, message: `the value is absent: the map uses ${fallback}`, fatal: false, lossy: true });
     expect(problems.list).toEqual([absent("severity", "unknown"), absent("severity", "unknown"), absent("severity", "unknown"), absent("status", "actual")]);
+  });
+
+  it("reads the deprecated certainty Very Likely as likely, with no problem (CAP 1.2, section 3.2.2)", () => {
+    const problems = sink();
+    expect(capCertainty("Very Likely", "certainty", problems)).toBe("likely");
+    expect(capCertainty(" very likely ", "certainty", problems)).toBe("likely");
+    expect(capCertainty("Likely", "certainty", problems)).toBe("likely");
+    expect(capCertainty("Observed", "certainty", problems)).toBe("observed");
+    expect(problems.list).toEqual([]);
+  });
+
+  it("reads each other certainty as capValue does", () => {
+    const problems = sink();
+    expect(capCertainty("Very Sure", "certainty", problems)).toBe("unknown");
+    expect(capCertainty(undefined, "certainty", problems)).toBe("unknown");
+    expect(problems.list.map((problem) => problem.message)).toEqual(['the value "Very Sure" is not known: the map uses unknown', "the value is absent: the map uses unknown"]);
   });
 
   it("reads the times of CAP, and the times with Z and parts of a second", () => {

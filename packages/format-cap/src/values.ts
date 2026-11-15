@@ -25,6 +25,12 @@ export const CAP_URGENCY: ReadonlySet<string> = new Set<Urgency>(["immediate", "
 /** The CAP certainty values, in lower case. */
 export const CAP_CERTAINTY: ReadonlySet<string> = new Set<Certainty>(["observed", "likely", "possible", "unlikely", "unknown"]);
 
+/**
+ * The deprecated CAP certainty values, in lower case, with their equivalents. CAP 1.2 (section 3.2.2) treats
+ * "Very Likely" of CAP 1.0 as "Likely".
+ */
+export const CAP_CERTAINTY_ALIASES: ReadonlyMap<string, Certainty> = new Map<string, Certainty>([["very likely", "likely"]]);
+
 /** The CAP response types, in lower case. */
 export const CAP_RESPONSES: ReadonlySet<string> = new Set<ResponseType>([
   "shelter",
@@ -81,6 +87,15 @@ export function capValue<T extends string>(value: unknown, allowed: ReadonlySet<
   if (value !== null && value !== undefined && text !== "") problems.add(path, `the value ${JSON.stringify(value)} is not known: the map uses ${fallback}`);
   else problems.add(path, `the value is absent: the map uses ${fallback}`);
   return fallback;
+}
+
+/**
+ * This function reads the certainty of a CAP `info` block. A deprecated value gives its equivalent, with no problem.
+ * Each other value goes through `capValue`, with the fallback `unknown`.
+ */
+export function capCertainty(value: unknown, path: string, problems: ProblemSink): Certainty {
+  const alias = typeof value === "string" ? CAP_CERTAINTY_ALIASES.get(value.trim().toLowerCase()) : undefined;
+  return alias ?? capValue<Certainty>(value, CAP_CERTAINTY, "unknown", path, problems);
 }
 
 /**

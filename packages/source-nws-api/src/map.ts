@@ -6,7 +6,6 @@
 import type {
   Area,
   Category,
-  Certainty,
   CorrelationKey,
   MapProblem,
   MapResult,
@@ -25,13 +24,13 @@ import { errorMessage } from "@mark1russell7/text";
 
 import {
   CAP_CATEGORIES,
-  CAP_CERTAINTY,
   CAP_NOT_ALERTS,
   CAP_OPERATIONS,
   CAP_RESPONSES,
   CAP_SEVERITY,
   CAP_STATUS,
   CAP_URGENCY,
+  capCertainty,
   capTime,
   capValue,
 } from "@mark1russell7/alerts-format-cap";
@@ -391,7 +390,7 @@ function mapFeature(feature: unknown, observation: Observation, problems: Proble
     categories,
     severity: capValue<Severity>(properties["severity"], CAP_SEVERITY, "unknown", "properties.severity", problems),
     urgency: capValue<Urgency>(properties["urgency"], CAP_URGENCY, "unknown", "properties.urgency", problems),
-    certainty: capValue<Certainty>(properties["certainty"], CAP_CERTAINTY, "unknown", "properties.certainty", problems),
+    certainty: capCertainty(properties["certainty"], "properties.certainty", problems),
     response,
     sent,
     received: observation.fetched,

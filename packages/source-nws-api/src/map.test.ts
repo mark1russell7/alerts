@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import { NWS_DESCRIPTOR } from "./descriptor.ts";
 import { mapObservation, SOURCE_ID } from "./map.ts";
 import { isSameCode, isUgcCode, mainVtec, NWS_ORIGIN, parseVtec, PHENOMENA, vtecKey, type Vtec } from "@mark1russell7/alerts-format-nws";
-import { CAP_CATEGORIES, CAP_CERTAINTY, CAP_NOT_ALERTS, CAP_OPERATIONS, CAP_RESPONSES, CAP_SEVERITY, CAP_STATUS, CAP_URGENCY } from "@mark1russell7/alerts-format-cap";
+import { CAP_CATEGORIES, CAP_CERTAINTY, CAP_CERTAINTY_ALIASES, CAP_NOT_ALERTS, CAP_OPERATIONS, CAP_RESPONSES, CAP_SEVERITY, CAP_STATUS, CAP_URGENCY } from "@mark1russell7/alerts-format-cap";
 
 const FIXTURES = new URL("../fixtures/", import.meta.url);
 const NAMES = readdirSync(FIXTURES).filter((name) => name.endsWith(".json"));
@@ -336,7 +336,8 @@ describe("the map function", () => {
       messageType: new Set([...CAP_OPERATIONS, ...CAP_NOT_ALERTS]),
       severity: CAP_SEVERITY,
       urgency: CAP_URGENCY,
-      certainty: CAP_CERTAINTY,
+      // A deprecated certainty is not a problem: it reads as its equivalent.
+      certainty: new Set([...CAP_CERTAINTY, ...CAP_CERTAINTY_ALIASES.keys()]),
       category: CAP_CATEGORIES,
       response: CAP_RESPONSES,
     };
