@@ -772,14 +772,18 @@ export type AssessReason =
   /** The incident has no area, and the person watches no subject of the incident. */
   | { readonly kind: "no-subject" }
   /**
-   * The areas of the incident are shapes with no code. The core matches only codes until the home of
-   * geography has the tests of shapes.
+   * The areas of the incident have no code and no place, and no shape can match. Either the areas have
+   * no shape, or no place of the person has a position.
    */
   | { readonly kind: "no-codes" }
   /** The configuration has no watched place for this id of the person. */
   | { readonly kind: "unknown-place"; readonly place: PlaceId }
-  /** An area of the incident covers this place. The codes are the codes of the place that the areas have. */
-  | { readonly kind: "place"; readonly place: PlaceId; readonly codes: readonly RegionCode[] }
+  /**
+   * An area of the incident covers this place. The codes are the codes of the place that the areas have.
+   * `distanceKm` is the distance from the place to the nearest shape, and it is 0 in a shape. It is
+   * present when that distance is in the buffer of the place. For a match by a shape only, the codes are empty.
+   */
+  | { readonly kind: "place"; readonly place: PlaceId; readonly codes: readonly RegionCode[]; readonly distanceKm?: number }
   /** The person watches a subject of the incident. */
   | { readonly kind: "subject"; readonly subject: SubjectWatch }
   /** The table gave this level. The class is absent for the table `otherwise`. */

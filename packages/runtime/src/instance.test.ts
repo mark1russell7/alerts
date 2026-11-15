@@ -3,7 +3,7 @@ import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fakeClock, type FakeClock, type WallClock } from "@mark1russell7/algebra/clock";
-import { CONFIG_FORMAT, parseConfig, type AlertConfig, type Watch, type ChannelId, type EscalationPolicy, type PersonId, type PlaceId, type SecretLookup, type SourceId } from "@mark1russell7/alerts";
+import { CONFIG_FORMAT, matchPlaces, parseConfig, type AlertConfig, type Watch, type ChannelId, type EscalationPolicy, type PersonId, type PlaceId, type SecretLookup, type SourceId } from "@mark1russell7/alerts";
 import { PUSHOVER_TIMEOUT_MS, type PushoverChannelOptions } from "@mark1russell7/alerts-channel-pushover";
 import { CANARY_PATH, createNwsSource } from "@mark1russell7/alerts-source-nws-api";
 import type { Exchange, Transport } from "polite-crawler/api";
@@ -22,9 +22,10 @@ const pushover = "pushover" as ChannelId;
 const person = "person-1" as PersonId;
 const place = "place-1" as PlaceId;
 
-// A public point in McMullen County TX. No request of a source holds it.
+// A public point in McMullen County TX, in the polygon of the recorded Flood Warning. The polygon decides the
+// match, not the county code. No request of a source holds the point.
 const LONGITUDE = -98.55;
-const LATITUDE = 28.46;
+const LATITUDE = 28.3;
 
 const policy = (level: EscalationPolicy["level"]): EscalationPolicy => ({ level, steps: [{ channel: pushover, at: 0 }], exhaustedAfter: 20 * MINUTE });
 
@@ -175,6 +176,21 @@ describe("openInstance", () => {
     expect(pass.delivery?.sent).toHaveLength(1);
     // The source asks for the alerts of the state. The match to the county is local.
     expect(net.exchanges.map((exchange) => exchange.url)).toContain("https://api.weather.gov/alerts/active?area=TX");
+  });
+
+  it("sends the warning by the county code to a place in the county but out of the polygon", async () => {
+    // A public point in McMullen County TX, 8.9 km north of the polygon. The buffer of the place is 5 km. A shape adds
+    // a place and does not remove a match by codes, so the county code matches the place.
+    const outside = { ...CONFIG.places[0]!, at: [LONGITUDE, 28.46] as const };
+    const { instance, clock, server } = open(store(SECRETS), { ...CONFIG, places: [outside] });
+    const pass = await finish(clock, instance.runtime.pass());
+    expect(pass.fetched).toEqual(["nws-api", "ipaws"]);
+    expect(server.calls).toHaveLength(1);
+    expect(pass.delivery?.sent).toHaveLength(1);
+    const [incident] = pass.view.incidents;
+    const [match] = matchPlaces(incident!, [outside]);
+    expect(match?.codes.map((code) => code.code)).toEqual(["TXC311", "048311"]);
+    expect(match?.distanceKm).toBeUndefined();
   });
 
   it("sends the warning when each exchange takes real time, as on a busy runner", async () => {

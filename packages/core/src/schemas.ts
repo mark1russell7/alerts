@@ -729,7 +729,12 @@ export const assessReasonSchema: z.ZodType<AssessReason, AssessReason> = schemaO
       z.strictObject({ kind: z.literal("no-subject") }),
       z.strictObject({ kind: z.literal("no-codes") }),
       z.strictObject({ kind: z.literal("unknown-place"), place: placeIdSchema }),
-      z.strictObject({ kind: z.literal("place"), place: placeIdSchema, codes: z.array(regionCodeSchema).readonly() }),
+      z.strictObject({
+        kind: z.literal("place"),
+        place: placeIdSchema,
+        codes: z.array(regionCodeSchema).readonly(),
+        distanceKm: z.number().min(0).exactOptional(),
+      }),
       z.strictObject({ kind: z.literal("subject"), subject: subjectWatchSchema }),
       z.strictObject({
         kind: z.literal("table"),

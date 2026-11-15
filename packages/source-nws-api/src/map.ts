@@ -74,6 +74,8 @@ export const KNOWN_FIELDS: ReadonlySet<string> = new Set([
   "language",
   "web",
   "eventCode",
+  "replacedBy",
+  "replacedAt",
 ]);
 
 type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
@@ -237,6 +239,9 @@ function referencesOf(properties: JsonObject, key: string, parameters: JsonObjec
 /**
  * This function gives the name and value pairs of the message that the report does not hold in a field of
  * its own. A parameter keeps each value as a text. An event code or a field that is not a text is a lossy problem.
+ *
+ * The NWS API adds `replacedBy` and `replacedAt` to a message after a later message replaces it. The core ends the
+ * message from the later message itself, so the two fields stay parameters.
  */
 function parametersOf(properties: JsonObject, parameters: JsonObject | undefined, eventCode: JsonObject | undefined, problems: Problems): Record<string, string[]> {
   const result: Record<string, string[]> = {};
@@ -245,7 +250,7 @@ function parametersOf(properties: JsonObject, parameters: JsonObject | undefined
     result[name] = Array.isArray(value) ? value.map((item) => (typeof item === "string" ? item : JSON.stringify(item))) : [typeof value === "string" ? value : JSON.stringify(value)];
   }
   for (const [name, value] of Object.entries(eventCode ?? {})) result[`eventCode.${name}`] = textsAt(value, `properties.eventCode.${name}`, problems);
-  for (const name of ["note", "scope", "code", "language", "@id"]) {
+  for (const name of ["note", "scope", "code", "language", "@id", "replacedBy", "replacedAt"]) {
     const value = textAt(properties[name], `properties.${name}`, problems);
     if (value !== undefined) result[name] = [value];
   }

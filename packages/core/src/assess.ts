@@ -16,11 +16,14 @@ import type {
   LevelTable,
   PersonWatch,
   PlaceId,
+  Position,
   RegionCode,
   SubjectWatch,
   WatchedPlace,
 } from "./contracts.ts";
 import { ASSESSED_LEVELS } from "./contracts.ts";
+import type { MapShape } from "./map.ts";
+import { isShape, shapeDistanceKm } from "./shapes.ts";
 
 /**
  * The kinds that can reach `life-safety` in the first policy: the list of `docs/CONTRACTS.md`, as
@@ -170,25 +173,52 @@ export function regionCovers(area: RegionCode, place: RegionCode): boolean {
   return area.code.slice(1) === place.code.slice(1) && (areaPart === "0" || placePart === "0");
 }
 
-/** A place in the areas of an incident, with the codes of the place that the areas cover. */
+/** A place in the areas of an incident, with the codes or the distance that decided the match. */
 export interface PlaceMatch {
   readonly place: PlaceId;
+  /** The codes of the place that the areas cover. The list is empty for a match by a shape only. */
   readonly codes: readonly RegionCode[];
+  /**
+   * The great-circle distance in kilometers from the place to the nearest shape of the areas. It is 0
+   * in a shape. It is present only when that distance is in the buffer of the place.
+   */
+  readonly distanceKm?: number;
 }
 
 /**
  * This function gives the places that the areas of an incident cover, in the order of the places.
- * It matches by codes, and an area of a watched place covers that place. The tests of polygons and
- * circles with the buffer of a place wait for the home of geography, `@mark1russell7/geo`. Until
- * then, an area with only a shape covers no place.
+ *
+ * - An area of a watched place covers that place.
+ * - The region codes are the floor of each match. A place matches when the areas cover one of its codes.
+ * - A shape adds a place. It does not remove a match by codes. A place with a position also matches when
+ *   the distance to the nearest polygon or circle is not more than its buffer.
+ * - A shape that `@mark1russell7/geo` refuses adds no place.
+ * - The rule stays until the areas keep their CAP block. Today one list holds the areas of all blocks,
+ *   so the shape of one block cannot remove a place from a block with only codes.
  */
 export function matchPlaces(incident: Pick<Incident, "areas">, places: readonly WatchedPlace[]): PlaceMatch[] {
+  const shapes = incident.areas.filter(isShape);
   const codes = incident.areas.flatMap((area) => (area.type === "code" ? [area] : []));
   const ids = new Set(incident.areas.flatMap((area) => (area.type === "place" ? [area.place] : [])));
-  return places.flatMap((place) => {
+  return places.flatMap((place): PlaceMatch[] => {
     const covered = place.codes.filter((code) => codes.some((area) => regionCovers(area, code)));
-    return covered.length > 0 || ids.has(place.id) ? [{ place: place.id, codes: covered }] : [];
+    const byCodes = covered.length > 0 || ids.has(place.id) ? [{ place: place.id, codes: covered }] : [];
+    if (ids.has(place.id) || shapes.length === 0 || place.at === undefined) return byCodes;
+    const nearest = nearestShape(shapes, place.at);
+    const near = nearest <= place.bufferKm;
+    if (covered.length > 0) return [{ place: place.id, codes: covered, ...(near ? { distanceKm: nearest } : {}) }];
+    return near ? [{ place: place.id, codes: [], distanceKm: nearest }] : [];
   });
+}
+
+// The distance to the nearest shape that geo reads. A shape that geo refuses adds no distance.
+function nearestShape(shapes: readonly MapShape[], at: Position): number {
+  let nearest = Number.POSITIVE_INFINITY;
+  for (const shape of shapes) {
+    const distance = shapeDistanceKm(shape, at);
+    if (distance !== undefined) nearest = Math.min(nearest, distance);
+  }
+  return nearest;
 }
 
 /**
@@ -242,7 +272,7 @@ export function assess(
     return result("none");
   }
   if (matches.length === 0 && subjects.length === 0) {
-    reasons.push({ kind: noMatch(incident) });
+    reasons.push({ kind: noMatch(incident, watched) });
     return result("none");
   }
   const table = tableLevel(policy, incident);
@@ -261,7 +291,11 @@ export function assess(
     return rule.max;
   };
   for (const match of matches) {
-    reasons.push({ kind: "place", place: match.place, codes: match.codes });
+    reasons.push(
+      match.distanceKm === undefined
+        ? { kind: "place", place: match.place, codes: match.codes }
+        : { kind: "place", place: match.place, codes: match.codes, distanceKm: match.distanceKm },
+    );
     level = higherLevel(level, atMatch(match.place));
   }
   for (const subject of subjects) {
@@ -271,9 +305,11 @@ export function assess(
   return result(level);
 }
 
-// The reason when the incident has no place and no subject of the person.
-function noMatch(incident: Pick<Incident, "areas" | "about">): "no-place" | "no-subject" | "no-codes" {
+// The reason when the incident has no place and no subject of the person. A shape can match only a
+// place with a position.
+function noMatch(incident: Pick<Incident, "areas" | "about">, places: readonly WatchedPlace[]): "no-place" | "no-subject" | "no-codes" {
   if (incident.areas.some((area) => area.type === "code" || area.type === "place")) return "no-place";
+  if (incident.areas.some(isShape) && places.some((place) => place.at !== undefined)) return "no-place";
   if (incident.areas.length === 0 && incident.about.length > 0) return "no-subject";
   return "no-codes";
 }
