@@ -184,7 +184,7 @@ export function staleTransport(options: StaleTransportOptions): Transport {
   };
 }
 
-/** This function gives the faults of the proxy of an arm: one answer with an old list for each connection, in the order of the fetches. */
+/** This function gives the faults of the proxy of an arm. Each connection gets one answer with an old list, in the order of the fetches. */
 export function oldAnswersOf(arm: StaleArm): Fault[] {
   return [...OLD_LISTS[arm].values()].map((list, connection) => ({
     connection,
@@ -403,8 +403,8 @@ export function staleGatesOf(record: Pick<StaleRecord, "fetches">): StaleResult 
 /** The verdict of the case. A case with no read does not pass. */
 export interface StaleVerdict {
   /**
-   * True when the settings are valid, each arm has each fetch with no error, each true list is complete, each old list
-   * came from the proxy and none got past it, and the control ends the report of `r3` at fetch `R3_UNTIL + SNAPSHOT_MISSES - 1`.
+   * True when the settings are valid, and each arm has each fetch with no error. Each true list is complete. Each old list
+   * came from the proxy, and none got past it. The only event of the control is the end of `r3` at its fetch.
    */
   readonly read: boolean;
   readonly results: Readonly<Partial<Record<StaleArm, StaleResult>>>;
