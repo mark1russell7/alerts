@@ -139,6 +139,8 @@ export function reasonText(reason: AssessReason, incident: Pick<Incident, "sever
       const table = reason.class === undefined ? "the table of the other kinds" : `the table "${reason.class}"`;
       return `In ${table}, the severity "${incident.severity}" gives ${reason.bySeverity}, and the urgency "${incident.urgency}" gives ${reason.byUrgency}. The level is the lower of the two: ${reason.level}.`;
     }
+    case "place-table":
+      return `The lines that hold ${nameOf(reason.place)} give the level ${reason.level} at that place.`;
     case "rule":
       return `Rule ${String(reason.index + 1)} of the person sets ${reason.max} as the highest level${reason.place === undefined ? "" : ` at ${nameOf(reason.place)}`}.`;
     case "shadow":
