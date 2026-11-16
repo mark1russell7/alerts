@@ -273,6 +273,8 @@
   "system.balance.empty",
   "system.balance.low",
   "system.balance.unread",
+  "system.clock",
+  "system.clock.step",
   "system.coverage",
   "system.health",
   "system.health.changed",

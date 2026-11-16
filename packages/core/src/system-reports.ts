@@ -1,19 +1,20 @@
 /**
  * The reports of the system itself. Each source that is down or late becomes a line of reports with the
- * status `system`. Each gap of the coverage and each stage of the quota of a channel also becomes such a
- * line. So the merge, the assessment and the escalation carry them as they carry the reports of a source.
+ * status `system`. Each gap of the coverage and each stage of the quota of a channel also becomes such a line.
+ * Each recent step of the wall clock is also a line. So the merge, the assessment and the escalation carry them as they carry the reports of a source.
  *
  * The function is a fold over snapshots of the health and the coverage. A condition that starts
  * gives an alert. A change of its facts gives an update that references the last key of the line.
  * The end of the condition gives a cancel. The fold reads no clock.
  */
 import { canonicalJson } from "@mark1russell7/rigor-generators";
-import { BALANCE_KIND, COVERAGE_KIND, hasKind, HEALTH_KIND, matchPlaces, QUOTA_KIND } from "./assess.ts";
+import { BALANCE_KIND, CLOCK_KIND, COVERAGE_KIND, hasKind, HEALTH_KIND, matchPlaces, QUOTA_KIND } from "./assess.ts";
 import type {
   Area,
   BalanceStage,
   ChannelQuota,
   Coverage,
+  Duration,
   HealthState,
   Incident,
   Instant,
@@ -48,6 +49,9 @@ export const SOURCE_SUBJECT = "alerts.source";
 /** The system of the subjects of the quota reports. The id of a subject is the id of a channel. */
 export const CHANNEL_SUBJECT = "alerts.channel";
 
+/** The system of the subject of the clock reports. The id of the subject is `wall`: the wall clock of the computer. */
+export const CLOCK_SUBJECT = "alerts.clock";
+
 /** The stages of a quota, from the first to the last. */
 export const QUOTA_STAGES: readonly QuotaStage[] = ["low", "reserve", "spent"];
 
@@ -59,6 +63,28 @@ export const DOWN_STATES: readonly HealthState[] = ["failing", "silent", "change
 
 /** The stages of an incident that make a gap of the coverage more dangerous. An incident with no stage also counts. */
 export const THREAT_STAGES: readonly Significance[] = ["warning", "watch"];
+
+/** One step of the wall clock. */
+export interface ClockStep {
+  /** The time of the step on the wall clock after the step. A later step moves it. */
+  readonly at: Instant;
+  /** The size of the step in milliseconds: negative for a step back. */
+  readonly size: Duration;
+}
+
+/** The time after a step during which its system report stays open. Thus the digest of the day shows the step. */
+export const CLOCK_STEP_WINDOW: Duration = 24 * 60 * 60 * 1000;
+
+/**
+ * This function gives the size of a step in a text: whole hours, whole minutes, or else whole seconds. A step of
+ * 3600000 ms is `1 h`, a step of 600000 ms is `10 min`, and a step of 90000 ms is `90 s`.
+ */
+export function stepSizeText(size: Duration): string {
+  const ms = Math.abs(size);
+  if (ms >= 3_600_000 && ms % 3_600_000 === 0) return `${String(ms / 3_600_000)} h`;
+  if (ms >= 60_000 && ms % 60_000 === 0) return `${String(ms / 60_000)} min`;
+  return `${String(Math.round(ms / 1000))} s`;
+}
 
 /** An open line of reports. The fold keeps it until the condition ends. */
 export interface SystemLine {
@@ -109,6 +135,8 @@ export interface SystemSnapshot {
    * balances, each open line of a balance stays open.
    */
   readonly balances?: readonly ProviderBalance[];
+  /** The steps of the wall clock. The latest step in `CLOCK_STEP_WINDOW` before the time of the snapshot is a condition. */
+  readonly steps?: readonly ClockStep[];
 }
 
 /** The result of one step of the fold. */
@@ -166,6 +194,13 @@ export function balanceUnreadAt(balance: ProviderBalance): Instant {
   return (balance.read?.at ?? balance.since) + balance.maxAge;
 }
 
+/** This function gives the latest step at `at` or before it, in `CLOCK_STEP_WINDOW` before `at`, or `undefined`. */
+export function recentStep(steps: readonly ClockStep[], at: Instant): ClockStep | undefined {
+  let found: ClockStep | undefined;
+  for (const step of steps) if (step.at <= at && at - step.at < CLOCK_STEP_WINDOW && (found === undefined || step.at >= found.at)) found = step;
+  return found;
+}
+
 /**
  * This function gives the CAP severity and urgency of a gap of the coverage. The assessment policy
  * gives the level from them:
@@ -185,6 +220,7 @@ export function gapGrade(entry: Coverage, threatened: boolean): { readonly sever
  *
  * - Each source in `DOWN_STATES`, each late expectation and each coverage that is short.
  * - Each stage of a quota and each stage of a balance.
+ * - The latest step of the wall clock in `CLOCK_STEP_WINDOW` before `at`.
  *
  * An open line with no condition in the snapshot ends with a cancel. Equal snapshots give no new report.
  */
@@ -208,6 +244,8 @@ export function systemReports(lines: SystemLines, snapshot: SystemSnapshot, at: 
   for (const balance of snapshot.balances ?? []) {
     for (const stage of balanceStages(balance, at)) conditions.set(balanceName(balance.provider, stage), balanceCondition(balance, stage, at));
   }
+  const step = recentStep(snapshot.steps ?? [], at);
+  if (step !== undefined) conditions.set(CLOCK_LINE, clockCondition(step));
   const names = [...new Set([...Object.keys(lines.open), ...conditions.keys()])].sort(compare);
   let count = lines.count;
   const open = new Map(Object.entries(lines.open));
@@ -305,6 +343,9 @@ const BALANCE_LINE = "balance/";
 function balanceName(provider: string, stage: BalanceStage): string {
   return `${BALANCE_LINE}${encodeURIComponent(provider)}/${stage}`;
 }
+
+// The name of the line of the steps of the wall clock. A step in the window of an open line gives an update.
+const CLOCK_LINE = "clock";
 
 function coverageName(place: PlaceId, kind: string): string {
   return `coverage/${encodeURIComponent(place)}/${encodeURIComponent(kind)}`;
@@ -446,6 +487,25 @@ function balanceCondition(balance: ProviderBalance, stage: BalanceStage, at: Ins
       ...(read === undefined ? {} : { balance: [String(read.balance)], currency: [read.currency] }),
       age: [String(at - (read?.at ?? balance.since))],
     },
+  };
+}
+
+function clockCondition(step: ClockStep): Condition {
+  const code = `${CLOCK_KIND}.step`;
+  return {
+    // Each step is a new fact, thus a second step in the window gives an update.
+    facts: { at: step.at, size: step.size },
+    kind: { code, label: kindLabel(code) },
+    severity: "minor",
+    urgency: "past",
+    response: ["assess"],
+    onset: step.at,
+    areas: [],
+    about: [{ system: CLOCK_SUBJECT, id: "wall", label: "Wall clock" }],
+    headline: `The wall clock stepped ${step.size < 0 ? "back" : "forward"} by ${stepSizeText(step.size)}.`,
+    description: "The alert system moved its own times by the step, thus each timer keeps its time. The times of the sources and the channels did not move.",
+    instruction: "Examine the time settings and the time server of the computer.",
+    parameters: { size: [String(step.size)] },
   };
 }
 

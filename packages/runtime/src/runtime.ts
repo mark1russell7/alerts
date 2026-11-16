@@ -11,6 +11,7 @@ import type { BalanceWatch } from "./balance.ts";
 import { createDispatcher, type DeliveryOptions, type DeliveryStep } from "./delivery.ts";
 import { envelope, type RuntimeEvent } from "./events.ts";
 import { fetchEvents } from "./fetch.ts";
+import { isFrameClock } from "./frame.ts";
 import { limited } from "./limit.ts";
 import type { RuntimeLog } from "./log.ts";
 import { SNAPSHOT_MISSES, snapshotStep } from "./snapshot.ts";
@@ -23,6 +24,9 @@ export interface RuntimeOptions {
   /**
    * The clock of the runtime, and the only clock that it reads. Its `now()` is the instant: the time in
    * milliseconds since the epoch. A test gives `fakeWallClock(start)` of `@mark1russell7/algebra/clock`.
+   *
+   * A clock of `frameClock` also gives each step of the wall clock against the monotonic clock. Then the start of each
+   * pass writes the step to the log and moves each own instant by it. Thus each timer keeps its time on the monotonic clock.
    */
   readonly clock: WallClock;
   /** The adapters of the sources. Each adapter holds its transport, thus a test gives a transport with faults. */
@@ -80,6 +84,11 @@ export interface Pass {
   readonly wakeAt?: Instant;
   /** The ids of the events that are different from the events of the log with the same ids. The log kept its events. */
   readonly conflicts: readonly string[];
+  /**
+   * The size of the step of the wall clock that the start of the pass wrote. A hook with times in memory moves them by
+   * this size, as the runtime moves its own times.
+   */
+  readonly stepped?: Duration;
 }
 
 /** The runtime: its state and its pass. */
@@ -105,6 +114,7 @@ export interface Runtime {
  */
 export function openRuntime(options: RuntimeOptions): Runtime {
   const { clock, log } = options;
+  const frame = isFrameClock(clock) ? clock : undefined;
   const config: ViewConfig = { ...options.view, sources: options.sources.map((source) => source.describe()) };
   const ids = config.sources.map((source) => source.id);
   const repeated = ids.find((id, at) => ids.indexOf(id) !== at);
@@ -152,10 +162,10 @@ export function openRuntime(options: RuntimeOptions): Runtime {
     // A failure after the stop is the stop, not a fault of the source. The log keeps no fetch, and the cursor stays.
     if (stopped && !outcome.ok) return [];
     const ended = clock.now();
-    const conflicts = append(fetchEvents({ source: descriptor.id, procedures: source, started, ended, outcome, known: (id) => log.has(id) }));
+    const conflicts = append(fetchEvents({ source: descriptor.id, procedures: source, started, ended, outcome, known: (id) => log.has(id), frame: state.steps.length }));
     if (descriptor.listing !== "snapshot") return conflicts;
     // The step reads the merge state after the fetch, thus a new report of the fetch has no miss.
-    const step = snapshotStep({ source: descriptor.id, started, ended, outcome, merge: state.merge, misses: misses.get(descriptor.id) ?? new Map(), limit });
+    const step = snapshotStep({ source: descriptor.id, started, ended, outcome, merge: state.merge, misses: misses.get(descriptor.id) ?? new Map(), limit, frame: state.steps.length });
     const more = append(step.events);
     // The counts change only after the write. A failed write leaves the old counts, thus the end comes later.
     misses.set(descriptor.id, step.misses);
@@ -176,10 +186,28 @@ export function openRuntime(options: RuntimeOptions): Runtime {
     }
   };
 
+  // A step of the wall clock since the last mark moves each own instant: the fold of the clock event moves the state,
+  // and then the dispatcher and the balance watches move their times in memory. The mark comes after the write. Thus
+  // a failed write leaves the step to the next pass, and the next pass writes it with the same id.
+  const followStep = (): { readonly size: Duration; readonly conflicts: readonly string[] } => {
+    if (frame === undefined) return { size: 0, conflicts: [] };
+    const size = frame.step();
+    if (size === 0) {
+      frame.mark();
+      return { size, conflicts: [] };
+    }
+    const conflicts = append([{ ...envelope("clock", `clock:${state.steps.length + 1}`, clock.now() + size), size }]);
+    dispatcher?.shift(size);
+    for (const watch of watches) watch.shift(size);
+    frame.mark();
+    return { size, conflicts };
+  };
+
   return {
     config,
     state: () => state,
     async pass(stop) {
+      const stepped = followStep();
       const start = clock.now();
       const due = options.sources.flatMap((source, at) => {
         const descriptor = config.sources[at]!;
@@ -192,7 +220,7 @@ export function openRuntime(options: RuntimeOptions): Runtime {
       await checks;
       const failed = settled.find((result) => result.status === "rejected");
       if (failed !== undefined) throw failed.reason;
-      const conflicts = settled.flatMap((result) => (result.status === "fulfilled" ? result.value : []));
+      const conflicts = [...stepped.conflicts, ...settled.flatMap((result) => (result.status === "fulfilled" ? result.value : []))];
 
       const at = clock.now();
       const view = systemView(state, config, at, readQuotas(), watches.flatMap((watch) => watch.balance() ?? []));
@@ -212,6 +240,7 @@ export function openRuntime(options: RuntimeOptions): Runtime {
         fetched: due.map(({ descriptor }) => descriptor.id),
         view,
         conflicts,
+        ...(stepped.size === 0 ? {} : { stepped: stepped.size }),
         ...(delivery === undefined ? {} : { delivery }),
         ...(wakeAt === undefined ? {} : { wakeAt }),
       };

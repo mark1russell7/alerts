@@ -10,11 +10,20 @@ import {
   NO_SYSTEM_LINES,
   normalize,
   observeFetch,
+  shiftDelivery,
+  shiftEndMark,
+  shiftEscalationEnd,
+  shiftEscalationStart,
+  shiftHealth,
+  shiftMerge,
+  shiftReport,
   startHealth,
   type Acknowledgment,
   type ChannelId,
+  type ClockStep,
   type Cursor,
   type Delivery,
+  type Duration,
   type EndMark,
   type EscalationEnd,
   type EscalationStart,
@@ -69,6 +78,11 @@ export interface RuntimeState {
   readonly refusals: Readonly<Record<string, Refusal>>;
   /** The count of the deliveries of each channel in the log, by the channel id. */
   readonly delivered: Readonly<Record<string, number>>;
+  /**
+   * The steps of the wall clock, in the order of the log. A later step moves the time of each earlier step, as it
+   * moves each own instant of the state.
+   */
+  readonly steps: readonly ClockStep[];
 }
 
 /** The last refusal of a delivery key. */
@@ -106,6 +120,7 @@ export const EMPTY_RUNTIME: RuntimeState = {
   copies: {},
   refusals: {},
   delivered: {},
+  steps: [],
 };
 
 /** This function adds one event to the state. */
@@ -127,6 +142,12 @@ export function rebuild(events: Iterable<RuntimeEvent>, context: FoldContext): R
   const ends: EndMark[] = [];
   for (const event of events) {
     state = foldRest(state, event, context);
+    // A step moves the parts before it, as the fold moves its merge state. The parts after it are in the new frame.
+    if (event.type === "clock") {
+      for (let index = 0; index < reports.length; index += 1) reports[index] = shiftReport(reports[index]!, event.size);
+      for (let index = 0; index < deliveries.length; index += 1) deliveries[index] = shiftDelivery(deliveries[index]!, event.size);
+      for (let index = 0; index < ends.length; index += 1) ends[index] = shiftEndMark(ends[index]!, event.size);
+    }
     const parts = partsOf(event);
     reports.push(...(parts?.reports ?? []));
     deliveries.push(...(parts?.deliveries ?? []));
@@ -204,9 +225,36 @@ function foldRest(state: RuntimeState, event: RuntimeEvent, context: FoldContext
       const refusals = { ...waiting(state.refusals, event.time), [event.key]: refusal };
       return { ...base, refusals, copies: event.copy === undefined ? state.copies : without(state.copies, event.copy) };
     }
+    case "clock": {
+      const shifted = shiftState(state, event.size);
+      return { ...shifted, time: Math.max(shifted.time, event.time), steps: [...shifted.steps, { at: event.time, size: event.size }] };
+    }
     default:
       return base;
   }
+}
+
+/**
+ * This function moves each own instant of a state by the size of a step of the wall clock. The instants of the sources
+ * and the channels do not move: `shiftMerge` of the core tells which instants of the merge move. The cursors, the
+ * lines of the system reports and the counts hold no own instant.
+ */
+export function shiftState(state: RuntimeState, size: Duration): RuntimeState {
+  const health = Object.fromEntries(Object.entries(state.health).map(([source, track]) => [source, shiftHealth(track, size)]));
+  const fetched = Object.fromEntries(Object.entries(state.fetched).map(([source, at]) => [source, at + size]));
+  const refusals = Object.fromEntries(Object.entries(state.refusals).map(([key, refusal]) => [key, { ...refusal, at: refusal.at + size, retryAt: refusal.retryAt + size }]));
+  return {
+    ...state,
+    ...(state.start === undefined ? {} : { start: state.start + size }),
+    time: state.time + size,
+    merge: shiftMerge(state.merge, size),
+    health,
+    fetched,
+    refusals,
+    starts: state.starts.map((start) => shiftEscalationStart(start, size)),
+    escalationEnds: state.escalationEnds.map((end) => shiftEscalationEnd(end, size)),
+    steps: state.steps.map((step) => ({ ...step, at: step.at + size })),
+  };
 }
 
 // The refusals with a retry after the time `at`. A refusal with an earlier retry holds no send and no channel after a restart.

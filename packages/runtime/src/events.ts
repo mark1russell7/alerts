@@ -3,7 +3,7 @@
  * events and the configuration, and of nothing else. Thus a restart reads the log and gets the same
  * state as a run with no restart.
  */
-import type { Acknowledgment, ChannelId, Cursor, Delivery, EscalationEnd, EscalationStart, FetchRecord, Instant, MapProblem, Observation, Report, ReportId, SendOutcome, SourceId } from "@mark1russell7/alerts";
+import type { Acknowledgment, ChannelId, Cursor, Delivery, Duration, EscalationEnd, EscalationStart, FetchRecord, Instant, MapProblem, Observation, Report, ReportId, SendOutcome, SourceId } from "@mark1russell7/alerts";
 
 /** The kind of a failed call of a channel. */
 export type ChannelFailureKind = Extract<SendOutcome, { readonly ok: false }>["kind"];
@@ -123,6 +123,15 @@ export interface EscalationEndEvent extends Envelope<"escalation-end"> {
   readonly end: EscalationEnd;
 }
 
+/**
+ * The wall clock stepped against the monotonic clock, back or forward. The fold moves each own instant of the state by
+ * `size`. Thus each timer keeps its distance on the monotonic clock, and a rebuild gives the same state.
+ */
+export interface ClockEvent extends Envelope<"clock"> {
+  /** The size of the step: below 0 for a step back, above 0 for a step forward. */
+  readonly size: Duration;
+}
+
 /** One event of the log of the runtime. */
 export type RuntimeEvent =
   | StartedEvent
@@ -138,7 +147,8 @@ export type RuntimeEvent =
   | CancelledEvent
   | AttemptEvent
   | SettledEvent
-  | RefusedEvent;
+  | RefusedEvent
+  | ClockEvent;
 
 /** The types of the events. */
 export const EVENT_TYPES: readonly RuntimeEvent["type"][] = [
@@ -156,7 +166,16 @@ export const EVENT_TYPES: readonly RuntimeEvent["type"][] = [
   "attempt",
   "settled",
   "refused",
+  "clock",
 ];
+
+/**
+ * This function gives the frame tag of an id with a time of the runtime. The tag is empty before the first step of
+ * the wall clock, and `~<count of steps>` after it. Thus a time that comes again after a step back gives a new id.
+ */
+export function frameTag(steps: number): string {
+  return steps === 0 ? "" : `~${steps}`;
+}
 
 /** This function gives the fields of the envelope of an event at a time. */
 export function envelope<T extends RuntimeEvent["type"]>(type: T, id: string, time: Instant): Envelope<T> {

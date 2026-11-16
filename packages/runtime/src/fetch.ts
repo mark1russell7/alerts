@@ -6,7 +6,7 @@
  */
 import type { CanaryResult, FetchOutcome, FetchRecord, Instant, MapProblem, MapResult, Observation, ObservationId, Report, SourceId, SourceProcedures } from "@mark1russell7/alerts";
 import { errorMessage } from "@mark1russell7/text";
-import { envelope, type FetchEvent, type ObservationEvent } from "./events.ts";
+import { envelope, frameTag, type FetchEvent, type ObservationEvent } from "./events.ts";
 
 /** The input of `fetchEvents`. */
 export interface FetchInput {
@@ -19,13 +19,15 @@ export interface FetchInput {
   readonly outcome: FetchOutcome;
   /** This function tells if the log has an observation. */
   readonly known: (id: ObservationId) => boolean;
+  /** The count of the steps of the wall clock in the log. The id of the fetch has its frame tag. The default is 0. */
+  readonly frame?: number;
 }
 
 /** This function gives the events of one fetch: one event for each new observation, then the fetch event. */
 export function fetchEvents(input: FetchInput): (ObservationEvent | FetchEvent)[] {
   const { source, started, ended, outcome } = input;
   const took = Math.max(0, ended - started);
-  const id = `fetch:${source}:${started}`;
+  const id = `fetch:${source}:${started}${frameTag(input.frame ?? 0)}`;
   if (!outcome.ok) {
     const record: FetchRecord = { source, at: started, took, failure: outcome.failure, fresh: 0, fatal: 0 };
     return [{ ...envelope("fetch", id, ended), record, reports: [], problems: [] }];

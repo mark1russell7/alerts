@@ -5,7 +5,25 @@ import { messageOf } from "./delivery.ts";
 import type { ChannelId, ChannelQuota, Coverage, HealthState, Incident, Observation, PersonId, PersonWatch, PlaceId, ProviderBalance, Report, ReportId, SourceDescriptor, SourceHealth, SourceId, WatchedPlace } from "./contracts.ts";
 import type { Lateness } from "./lateness.ts";
 import { incidents, normalize } from "./merge.ts";
-import { addSystemReports, balanceStages, balanceUnreadAt, CHANNEL_SUBJECT, gapGrade, NO_SYSTEM_LINES, quotaStages, SOURCE_SUBJECT, SYSTEM_SOURCE, systemReports, threats, type SystemLines, type SystemSnapshot } from "./system-reports.ts";
+import {
+  addSystemReports,
+  balanceStages,
+  balanceUnreadAt,
+  CHANNEL_SUBJECT,
+  CLOCK_STEP_WINDOW,
+  CLOCK_SUBJECT,
+  gapGrade,
+  NO_SYSTEM_LINES,
+  quotaStages,
+  recentStep,
+  SOURCE_SUBJECT,
+  stepSizeText,
+  SYSTEM_SOURCE,
+  systemReports,
+  threats,
+  type SystemLines,
+  type SystemSnapshot,
+} from "./system-reports.ts";
 import { unknownKinds } from "./taxonomy.ts";
 
 const SEEDS = seedsFrom(process.env["SEED"], [1, 2, 3, 4, 5, 6, 7, 8]);
@@ -359,6 +377,70 @@ describe("the balance reports", () => {
     expect(levels(step.reports, WATCHER, START)).toEqual(["notice", "notice"]);
     expect(levels(step.reports, OPERATOR, START)).toEqual(["none", "none"]);
     expect(addSystemReports(NO_SYSTEM_LINES, step.reports, step.observations)).toEqual(step.lines);
+  });
+});
+
+describe("the clock reports", () => {
+  const HOUR = 3_600_000;
+  const START = Date.UTC(2026, 10, 15, 12);
+  const WATCHER: PersonWatch = { ...NEIGHBOR, subjects: [{ system: CLOCK_SUBJECT }] };
+  const codes = (reports: readonly Report[]) => reports.map((report) => [report.op, report.kind.code]);
+
+  it("names the size of a step in whole hours, whole minutes or whole seconds", () => {
+    expect(stepSizeText(HOUR)).toBe("1 h");
+    expect(stepSizeText(-2 * HOUR)).toBe("2 h");
+    expect(stepSizeText(1.5 * HOUR)).toBe("90 min");
+    expect(stepSizeText(-600_000)).toBe("10 min");
+    expect(stepSizeText(90_000)).toBe("90 s");
+    expect(stepSizeText(2_400)).toBe("2 s");
+    expect(unknownKinds(["system.clock", "system.clock.step"])).toEqual([]);
+  });
+
+  it("finds the latest step at the time or before it, in the window", () => {
+    const steps = [
+      { at: START, size: -HOUR },
+      { at: START + HOUR, size: 5_000 },
+    ];
+    expect(recentStep(steps, START - 1)).toBeUndefined();
+    expect(recentStep(steps, START)).toEqual(steps[0]);
+    expect(recentStep(steps, START + HOUR)).toEqual(steps[1]);
+    expect(recentStep(steps, START + HOUR + CLOCK_STEP_WINDOW - 1)).toEqual(steps[1]);
+    expect(recentStep(steps, START + HOUR + CLOCK_STEP_WINDOW)).toBeUndefined();
+    expect(recentStep([], START)).toBeUndefined();
+  });
+
+  it("gives an alert for a step, an update for the next step in the window, and a cancel at the end of the window", () => {
+    const back = systemReports(NO_SYSTEM_LINES, snapshot({ steps: [{ at: START, size: -HOUR }] }), START);
+    expect(back.reports).toMatchObject([
+      {
+        op: "alert",
+        status: "system",
+        kind: { code: "system.clock.step", label: "Step of the clock" },
+        severity: "minor",
+        urgency: "past",
+        onset: START,
+        areas: [],
+        about: [{ system: CLOCK_SUBJECT, id: "wall" }],
+        headline: "The wall clock stepped back by 1 h.",
+        parameters: { size: [String(-HOUR)] },
+      },
+    ]);
+    expect(Object.keys(back.lines.open)).toEqual(["clock"]);
+    expect(systemReports(back.lines, snapshot({ steps: [{ at: START, size: -HOUR }] }), START + HOUR).reports).toEqual([]);
+    const steps = [
+      { at: START, size: -HOUR },
+      { at: START + HOUR, size: 600_000 },
+    ];
+    const forward = systemReports(back.lines, snapshot({ steps }), START + HOUR);
+    expect(forward.reports).toMatchObject([{ op: "update", references: [back.reports[0]!.key], headline: "The wall clock stepped forward by 10 min." }]);
+    expect(codes(systemReports(forward.lines, snapshot({ steps }), START + HOUR + CLOCK_STEP_WINDOW).reports)).toEqual([["cancel", "system.clock.step"]]);
+    expect(addSystemReports(NO_SYSTEM_LINES, [...back.reports, ...forward.reports], [...back.observations, ...forward.observations])).toEqual(forward.lines);
+  });
+
+  it("goes to the digest of the person who watches the clock, and to no other person", () => {
+    const step = systemReports(NO_SYSTEM_LINES, snapshot({ steps: [{ at: START, size: HOUR }] }), START);
+    expect(levels(step.reports, WATCHER, START)).toEqual(["digest"]);
+    expect(levels(step.reports, OPERATOR, START)).toEqual(["none"]);
   });
 });
 
