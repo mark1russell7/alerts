@@ -115,6 +115,8 @@ export interface AlertConfig {
   /**
    * The wait of one rank of a copy, for each level. A level with no entry takes the default of the runtime. Each copy
    * loads the same table. With 0 for `life-safety`, each copy sends each life-safety step at once.
+   * Two copies with different tables are safe. The copy of rank 0 sends at once in each case. A copy with no
+   * entry for a level waits the default.
    */
   readonly rankDelay?: RankDelays;
   /**
