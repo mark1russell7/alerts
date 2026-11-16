@@ -20,7 +20,7 @@ const observe = (body: string, center: TsunamiCenter = NTWC): Observation => ({
 });
 
 /** This function maps a fixture, and fails the test for a problem that is not a note. */
-const reportsOf = (name: string, center: TsunamiCenter = NTWC): Report[] => {
+const reportsOf = (name: string, center: TsunamiCenter = NTWC): readonly Report[] => {
   const result = mapObservation(observe(fixture(name), center), center);
   expect(result.problems.filter((problem) => problem.fatal || problem.lossy === true)).toEqual([]);
   return result.reports;
