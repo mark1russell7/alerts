@@ -33,7 +33,7 @@ import { startScriptedServer } from "@mark1russell7/rigor-testkit/http";
 import { type PushoverLedger, pushoverApi, pushoverFetchTo, pushoverLedgerOf } from "@procedures/notify/testing";
 import { type CallFailure, deliveryFixture, FIXTURE_PLACE, type LogSummary, logSummaryOf } from "./delivery-fixture.ts";
 import { acceptGatesOf } from "./late-accept.ts";
-import { caseClock, type RequestCounts } from "./source-down.ts";
+import { caseClock, caseDeliveryTimes, type RequestCounts } from "./source-down.ts";
 
 /** The id of the case. */
 export const CASE_7_ID = "al-13-case-7";
@@ -241,7 +241,7 @@ export async function runChannelArm(arm: ChannelArm, settings: ChannelSettings =
       watch: () => ({ places: [FIXTURE_PLACE], kinds: ["met"] }),
       view: FIXTURE.view,
       run: `${CASE_7_ID}-${arm}`,
-      delivery: { recipients: [FIXTURE.recipient], channels: [channel], ...DELIVERY_TIMES },
+      delivery: { recipients: [FIXTURE.recipient], channels: [channel], ...caseDeliveryTimes(settings.speed) },
       onPass: (pass) => beat(pass),
     });
     const end = start + settings.armMs;
@@ -393,5 +393,5 @@ export interface ChannelRun {
 export async function runChannelDown(given: Partial<ChannelSettings> = {}): Promise<ChannelRun> {
   const settings: ChannelSettings = { ...CASE_7_SETTINGS, ...given };
   const records = await Promise.all(CHANNEL_ARMS.map((arm) => runChannelArm(arm, settings)));
-  return { id: CASE_7_ID, settings, times: DELIVERY_TIMES, records, verdict: channelVerdictOf(records, settings) };
+  return { id: CASE_7_ID, settings, times: caseDeliveryTimes(settings.speed), records, verdict: channelVerdictOf(records, settings) };
 }

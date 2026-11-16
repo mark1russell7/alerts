@@ -1,5 +1,5 @@
 import type { HealthState } from "@mark1russell7/alerts";
-import { SOURCE_POLICY } from "@mark1russell7/alerts-runtime";
+import { DELIVERY_TIMES, overdueLimit, SOURCE_POLICY } from "@mark1russell7/alerts-runtime";
 import { CANARY_PATH, checkCanary, readAnswer, WEA_PATH } from "@mark1russell7/alerts-source-nws-api";
 import type { Exchange, Reply, Transport } from "polite-crawler/api";
 import { describe, expect, it } from "vitest";
@@ -9,6 +9,7 @@ import {
   CASE_5_SETTINGS,
   canaryAnswer,
   caseClock,
+  caseDeliveryTimes,
   caseTransport,
   DOWN_ARMS,
   type DownArm,
@@ -20,6 +21,7 @@ import {
   gatesRead,
   outageOf,
   planOf,
+  REAL_CALL_FLOOR_MS,
   samplesOf,
   settingsProblems,
   windowFaultOf,
@@ -175,6 +177,27 @@ describe("caseClock", () => {
     cancel();
     await clock.sleep(5000);
     expect(fired).toBe(false);
+  });
+});
+
+describe("caseDeliveryTimes", () => {
+  it("keeps the times of production while the call limit gets the floor of real time", () => {
+    expect(caseDeliveryTimes(1)).toBe(DELIVERY_TIMES);
+    expect(caseDeliveryTimes(DELIVERY_TIMES.callLimit / REAL_CALL_FLOOR_MS)).toBe(DELIVERY_TIMES);
+  });
+
+  it("gives each call the floor of real time on a fast clock, and keeps the relations of production", () => {
+    const pass = DELIVERY_TIMES.overdueAfter - overdueLimit({ passLimit: 0, flightLimit: DELIVERY_TIMES.flightLimit, retry: DELIVERY_TIMES.retry });
+    for (const speed of [1, 10, 11, 30, 60, 120]) {
+      const times = caseDeliveryTimes(speed);
+      expect(times.callLimit / speed).toBeGreaterThanOrEqual(REAL_CALL_FLOOR_MS);
+      expect(times.callLimit).toBeGreaterThanOrEqual(DELIVERY_TIMES.callLimit);
+      expect(times.flightLimit).toBe(2 * times.callLimit);
+      expect(times.overdueAfter).toBe(overdueLimit({ passLimit: pass, flightLimit: times.flightLimit, retry: times.retry }));
+      expect({ pollEvery: times.pollEvery, retry: times.retry }).toEqual({ pollEvery: DELIVERY_TIMES.pollEvery, retry: DELIVERY_TIMES.retry });
+    }
+    // Case 9 has the speed 30. Its call limit of production is 333 ms of real time.
+    expect(caseDeliveryTimes(30)).toMatchObject({ callLimit: 30_000, flightLimit: 60_000 });
   });
 });
 
