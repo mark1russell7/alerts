@@ -19,7 +19,7 @@
     "@mark1russell7/geo": "^0.5.2",
     "@mark1russell7/site-pages": "^0.4.8",
     "@mark1russell7/text": "^0.0.10",
-    "@mark1russell7/visuals": "^0.2.2",
+    "@mark1russell7/visuals": "^0.2.3",
     "@types/d3-geo": "^3.1.1",
     "@types/node": "^26.6.5",
     "@types/three": "^0.187.0",
