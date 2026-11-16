@@ -95,6 +95,7 @@ export const ESCALATION_MACHINE: Machine = {
       arms: ["enter:last"],
       cancels: ["app.ack", "app.end"],
       fires: "timer.exhaust",
+      note: "it does not arm in the silent mode of a mute: a quiet message asks for no acknowledgment",
     },
   },
   transitions: [
@@ -138,6 +139,11 @@ export interface EscalationInput {
    * The default is 0. Each send has it, thus `messageKey` gives new keys after an end.
    */
   readonly episode?: number | undefined;
+  /**
+   * True: the escalation is in the silent mode of a mute. Each send is quiet, also at `life-safety`, and the exhaust
+   * timer does not arm. The caller gives the steps of the mode: `route` gives step 0 at most.
+   */
+  readonly silent?: boolean | undefined;
   readonly now: Instant;
 }
 
@@ -195,7 +201,8 @@ const ACTIVE: ReadonlySet<EscalationState> = new Set(["sent", "last", "exhausted
  * - The delivery is at least once, not exactly once. A crash after a send and before its record
  *   gives a second send with the same `messageKey`. A channel that drops a repeated key drops it.
  * - A send below `life-safety` at `now` in the quiet window of the person is quiet. A send of
- *   `life-safety` is not quiet at any time.
+ *   `life-safety` is not quiet in the window.
+ * - In the silent mode of a mute, each send is quiet, also at `life-safety`, and the exhaustion does not come.
  */
 export function escalate(input: EscalationInput): EscalationPlan {
   const { policy, person, incident, now } = input;
@@ -209,7 +216,8 @@ export function escalate(input: EscalationInput): EscalationPlan {
   const acknowledgment = input.acknowledgments.filter(covers).sort(byTimeThenVia)[0];
   const steps = policy.steps;
   const wait = nonNegative(input.rank) * nonNegative(input.rankDelay);
-  const quiet = level !== "life-safety" && inQuietWindow(input.quiet, now);
+  const silent = input.silent === true;
+  const quiet = silent || (level !== "life-safety" && inQuietWindow(input.quiet, now));
 
   // A step time that is not a number of 0 or more counts as 0: escalationProblems reports it, and a send comes early, not late.
   const offsets = steps.map((step) => nonNegative(step.at));
@@ -223,7 +231,8 @@ export function escalate(input: EscalationInput): EscalationPlan {
 
   const events: Event[] = offsets.map((offset, index) => ({ at: start + offset + wait, on: ESCALATION_EVENTS.step, order: 2, step: index }));
   const lastAt = Math.max(0, ...offsets);
-  events.push({ at: start + lastAt + nonNegative(policy.exhaustedAfter) + wait, on: ESCALATION_EVENTS.exhaust, order: 3, step: -1 });
+  // A quiet message asks for no acknowledgment, thus the silent mode has no exhaustion.
+  if (!silent) events.push({ at: start + lastAt + nonNegative(policy.exhaustedAfter) + wait, on: ESCALATION_EVENTS.exhaust, order: 3, step: -1 });
   // An acknowledgment in the merge state occurred, also when the clock of its copy is ahead or broken.
   if (acknowledgment !== undefined) {
     events.push({ at: Number.isFinite(acknowledgment.at) ? Math.min(acknowledgment.at, now) : now, on: ESCALATION_EVENTS.ack, order: 0, step: -1 });

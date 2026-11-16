@@ -208,6 +208,7 @@ describe("escalate over a grid of inputs", () => {
   const acks = [undefined, 0, 4 * MINUTE, 26 * MINUTE];
   const ends = [undefined, 6 * MINUTE, 35 * MINUTE];
   const ranks = [0, 2];
+  const silents = [false, true];
   const times = Array.from({ length: 41 }, (_, minute) => minute * MINUTE);
 
   it("makes only the transitions of the machine document, and each later plan extends the earlier one", () => {
@@ -215,7 +216,7 @@ describe("escalate over a grid of inputs", () => {
     for (const each of policies)
       for (const ackAt of acks)
         for (const endAt of ends)
-          for (const rank of ranks) {
+          for (const [rank, silent] of ranks.flatMap((item) => silents.map((mode) => [item, mode] as const))) {
             let before: EscalationPlan | undefined;
             for (const time of times) {
               const plan = escalate(
@@ -223,6 +224,7 @@ describe("escalate over a grid of inputs", () => {
                   policy: each,
                   rank,
                   rankDelay: 15_000,
+                  silent,
                   acknowledgments: ackAt === undefined || ackAt > time ? [] : [ack(T0 + ackAt)],
                   ...(endAt === undefined ? {} : { endsAt: T0 + endAt }),
                   now: T0 + time,
@@ -233,12 +235,14 @@ describe("escalate over a grid of inputs", () => {
               if (final) expect(plan.sends).toEqual([]);
               else expect(plan.cancels).toEqual([]);
               if (plan.wakeAt !== undefined) expect(plan.wakeAt).toBeGreaterThan(T0 + time);
+              // The silent mode of a mute makes each send quiet, and it never exhausts.
+              if (silent) expect([plan.sends.every((send) => send.quiet), plan.state === "exhausted"]).toEqual([true, false]);
               if (before !== undefined) expect(plan.transitions.slice(0, before.transitions.length)).toEqual(before.transitions);
               before = plan;
               count += 1;
             }
           }
-    expect(count).toBe(policies.length * acks.length * ends.length * ranks.length * times.length);
+    expect(count).toBe(policies.length * acks.length * ends.length * ranks.length * silents.length * times.length);
   });
 });
 
@@ -411,5 +415,24 @@ describe("escalate with a quiet window", () => {
   it("makes no send quiet out of the window or with no window", () => {
     expect(escalate(input({ policy: notice, quiet, since: atDay, now: atDay })).sends[0]?.quiet).toBe(false);
     expect(escalate(input({ policy: notice, since: atNight, now: atNight })).sends[0]?.quiet).toBe(false);
+  });
+});
+
+describe("escalate in the silent mode of a mute", () => {
+  it("makes each send quiet, also at life-safety and out of a quiet window", () => {
+    const plan = escalate(input({ silent: true, now: T0 + 10 * MINUTE }));
+    expect(plan.sends.map((send) => [send.step, send.quiet])).toEqual([
+      [0, true],
+      [1, true],
+      [2, true],
+    ]);
+  });
+
+  it("does not exhaust after the last step, and an acknowledgment or an end still stops it", () => {
+    const deliveries = [delivery(0, T0), delivery(1, T0 + 5 * MINUTE), delivery(2, T0 + 10 * MINUTE)];
+    const plan = escalate(input({ silent: true, deliveries, now: T0 + 60 * MINUTE }));
+    expect([plan.state, plan.exhaustedAt, plan.wakeAt]).toEqual(["last", undefined, undefined]);
+    expect(escalate(input({ silent: true, deliveries, acknowledgments: [ack(T0 + 40 * MINUTE)], now: T0 + 60 * MINUTE })).state).toBe("acknowledged");
+    expect(escalate(input({ silent: true, deliveries, endsAt: T0 + 50 * MINUTE, now: T0 + 60 * MINUTE })).state).toBe("ended");
   });
 });
