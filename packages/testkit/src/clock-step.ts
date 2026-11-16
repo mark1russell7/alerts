@@ -32,11 +32,11 @@ import { createLoop, DELIVERY_TIMES, type DeliveryOptions, loopTimes, openRuntim
 import { type Fault, faultPlanOf } from "@mark1russell7/rigor-chaos";
 import { startFaultProxy } from "@mark1russell7/rigor-proxy";
 import { startScriptedServer } from "@mark1russell7/rigor-testkit/http";
-import { detachedLifecycle } from "@mark1russell7/service/testing";
 import { errorMessage } from "@mark1russell7/text";
-import { type PushoverLedger, type PushoverLedgerMessage, pushoverApi, pushoverFetchTo, pushoverLedgerOf } from "@procedures/notify/testing";
+import { type PushoverLedger, pushoverApi, pushoverFetchTo, pushoverLedgerOf } from "@procedures/notify/testing";
 import { type CallFailure, deliveryFixture, FIXTURE_PLACE, type LogSummary, logSummaryOf } from "./delivery-fixture.ts";
-import { type AcceptGate, acceptGatesOf } from "./late-accept.ts";
+import { driveFakeLoop, firstFrom, passTracker } from "./fake-loop.ts";
+import { type AcceptGate, acceptGatesOf, copyOnceOf } from "./late-accept.ts";
 
 /** The id of the case. */
 export const CASE_11_ID = "al-13-case-11";
@@ -48,7 +48,7 @@ export const CASE_11_SOURCE = "case-11";
 export const CASE_11_WORD = "caseeleven";
 
 /** The start of each arm: the instant and the monotonic time of the first pass. */
-export const CASE_11_START = Date.UTC(2026, 3, 1, 18);
+export const CASE_11_START: number = Date.UTC(2026, 3, 1, 18);
 
 /** The source, the person and the test values of the case. */
 const FIXTURE = deliveryFixture(CASE_11_SOURCE, CASE_11_WORD);
@@ -240,25 +240,6 @@ export interface StepRun {
   readonly verdict: StepVerdict;
 }
 
-// The microtasks and the callbacks of the promises end before this promise resolves.
-const settle = (): Promise<void> => new Promise((resolve) => setImmediate(resolve));
-
-/** The real time that the case waits for one pass in flight. A pass on loopback ends in milliseconds. */
-const PASS_GUARD_MS = 30_000;
-
-/** This function waits for `work`, and it throws when the work takes longer than `PASS_GUARD_MS` of real time. */
-async function guarded(work: Promise<unknown>): Promise<void> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const guard = new Promise<never>((_resolve, reject) => {
-    timer = setTimeout(() => reject(new Error(`A pass did not end in ${String(PASS_GUARD_MS)} ms of real time.`)), PASS_GUARD_MS);
-  });
-  try {
-    await Promise.race([work, guard]);
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
 /** This function tells if a pass of the list has the fact of the point. */
 function reached(point: StepPoint, passes: readonly StepPassNote[]): boolean {
   switch (point) {
@@ -304,7 +285,7 @@ export async function runStepArm(arm: StepArm, settings: StepSettings = CASE_11_
   const planned = stepOf(arm, settings);
   let step: StepMark | undefined;
   let stuck: string | undefined;
-  let inflight: Promise<unknown> | undefined;
+  const flight = passTracker();
   let error: string | undefined;
   // The fake time does not move while a pass is in flight. Thus each request of a pass has the time of its pass.
   const stamp = (): void => {
@@ -324,16 +305,6 @@ export async function runStepArm(arm: StepArm, settings: StepSettings = CASE_11_
       failures: (delivery?.failures ?? []).map((failure) => ({ call: failure.call, kind: failure.kind, message: failure.message, retryIn: failure.retryAt - pass.at })),
     });
   };
-  // This function waits until no pass is in flight, also a pass that starts in the wait.
-  const quiet = async (): Promise<void> => {
-    await settle();
-    while (inflight !== undefined) {
-      const work = inflight;
-      await guarded(work);
-      if (inflight === work) inflight = undefined;
-      await settle();
-    }
-  };
   try {
     const delivery: DeliveryOptions = { recipients: [FIXTURE.recipient], channels: [channel], ...DELIVERY_TIMES };
     let wake = (): void => undefined;
@@ -348,14 +319,13 @@ export async function runStepArm(arm: StepArm, settings: StepSettings = CASE_11_
       wake: () => wake(),
     });
     const loop = createLoop({
-      pass: (stop) => {
-        const work = runtime.pass(stop).then((pass) => {
-          note(pass);
-          return pass;
-        });
-        inflight = work.catch(() => undefined);
-        return work;
-      },
+      pass: (stop) =>
+        flight.track(
+          runtime.pass(stop).then((pass) => {
+            note(pass);
+            return pass;
+          }),
+        ),
       clock: mono,
       wall,
       times: loopTimes(runtime.config.sources, { delivery }),
@@ -365,27 +335,24 @@ export async function runStepArm(arm: StepArm, settings: StepSettings = CASE_11_
       },
     });
     wake = () => loop.wake();
-    const signal = new AbortController().signal;
-    await loop.worker.start(signal, detachedLifecycle());
-    try {
-      await mono.advance(0);
-      await quiet();
-      while (since() < settings.armMs) {
-        // The step falls in the sleep after the pass with the fact of its point, as a correction of the system time does.
+    await driveFakeLoop({
+      loop,
+      clock: mono,
+      flight,
+      tickMs: settings.tickMs,
+      until: CASE_11_START + settings.armMs,
+      // The step falls in the sleep after the pass with the fact of its point, as a correction of the system time does.
+      beforeTick: () => {
         if (planned !== undefined && step === undefined && reached(planned.point, passes)) {
           step = { point: planned.point, size: planned.size, at: since(), events: [...log.read()].length };
           offset += planned.size;
         }
-        await mono.advance(settings.tickMs);
-        await quiet();
+      },
+      afterTick: () => {
         stamp();
         if (planned === undefined || step !== undefined) stuck ??= loop.stuck();
-      }
-    } finally {
-      await loop.worker.stopIntake();
-      await loop.worker.drain(mono.now() + loop.times.passLimit, signal);
-      await loop.worker.close();
-    }
+      },
+    });
   } catch (thrown) {
     error = errorMessage(thrown);
   }
@@ -433,16 +400,6 @@ export async function runClockStep(given: Partial<StepSettings> = {}): Promise<S
   const { pollEvery, retry, callLimit, flightLimit, overdueAfter } = DELIVERY_TIMES;
   return { id: CASE_11_ID, settings, times: { pollEvery, retry, callLimit, flightLimit, overdueAfter, interval: CASE_11_INTERVAL }, records, verdict: stepVerdictOf(records, settings) };
 }
-
-/** The copy id of a message: its second tag. A `life-safety` message has the tags of its key and its copy. */
-const copyOf = (message: PushoverLedgerMessage): string | undefined => message.tags[1];
-
-/** This function gives the earliest time of a list at `from` or later, or `undefined`. */
-const firstFrom = (times: readonly (number | undefined)[], from: number): number | undefined => {
-  let found: number | undefined;
-  for (const time of times) if (time !== undefined && time >= from && (found === undefined || time < found)) found = time;
-  return found;
-};
 
 /** The monotonic times of the first read of each message, and of each send, in a record. */
 function requestTimes(record: Pick<StepRecord, "ledger" | "requests">): { readonly reads: readonly (number | undefined)[]; readonly sends: readonly (number | undefined)[] } {
@@ -511,17 +468,8 @@ export function namesSize(text: string, size: number): boolean {
 export function stepGatesOf(record: StepRecord, settings: StepSettings = CASE_11_SETTINGS): StepResult {
   const wanted = new Set(ARM_STEP_GATES[record.arm]);
   const accept = acceptGatesOf(record);
-  const problems: string[] = [...accept.problems];
-
-  const counts = new Map<string, number>();
-  for (const message of record.ledger.messages) {
-    const copy = copyOf(message);
-    if (copy === undefined) problems.push(`${record.arm}: the message ${message.receipt} has no copy id.`);
-    else counts.set(copy, (counts.get(copy) ?? 0) + 1);
-  }
-  const twice = [...counts].filter(([, count]) => count > 1);
-  for (const [copy, count] of twice) problems.push(`${record.arm}: the copy ${copy} has ${String(count)} sends, not 1.`);
-  const copyOnce = twice.length === 0 && record.ledger.messages.every((message) => copyOf(message) !== undefined);
+  const { copyOnce, problems: copyProblems } = copyOnceOf(record);
+  const problems: string[] = [...accept.problems, ...copyProblems];
 
   const noThrow = record.loopErrors.length === 0;
   for (const thrown of record.loopErrors) problems.push(`${record.arm}: a pass threw at ${String(thrown.at)} ms: ${thrown.message}`);
