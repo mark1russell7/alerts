@@ -6,7 +6,7 @@
  * sends no cookie and keeps none: the answers set a cookie of the load balancer, and the source does not use it.
  */
 
-import { observationId, type FetchOutcome, type Instant, type Observation, type Watch } from "@mark1russell7/alerts";
+import { observationId, type FetchOutcome, type FetchSignal, type Instant, type Observation, type Watch } from "@mark1russell7/alerts";
 import { createRequester } from "@mark1russell7/alerts-fetch";
 import type { Condition, Conditions, Pace, Reply, Transport } from "polite-crawler/api";
 
@@ -192,7 +192,7 @@ function lastUrlStore(): Conditions & { clear(): void } {
  * full answer. A 304 answer has no body. Then the fetch gives the observations of the last full answer again, with
  * only the events of the past day. The fetch gives no cursor: the answer holds each event of the past day.
  */
-export function createEmscFetch(options: EmscFetchOptions): (input: EmscFetchInput, signal?: AbortSignal) => Promise<FetchOutcome> {
+export function createEmscFetch(options: EmscFetchOptions): (input: EmscFetchInput, signal?: FetchSignal) => Promise<FetchOutcome> {
   const requester = createRequester({
     source: SOURCE_ID,
     pace: options.pace,
