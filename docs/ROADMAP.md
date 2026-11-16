@@ -21,7 +21,7 @@ The target is the whole vision. The milestones give the order of the work.
   - The priority comes from the chance and the cost of each event. The relevance comes from the interest graph of each person.
   - The copies come from code, and the availability algebra gives their places. The alerts go to other people too.
   - Items: AL-35 first, then AL-14, AL-19, AL-21, AL-22, AL-25, AL-26, AL-31, AL-33, AL-34, AL-36, AL-38, AL-40, AL-41, AL-46, AL-51 and AL-53.
-- **Later:** AL-20, AL-23, AL-24 and AL-27.
+- **Later:** AL-20, AL-23, AL-24, AL-27 and AL-56.
 
 ## Phase 1: the live slice
 
@@ -48,7 +48,8 @@ The target is the whole vision. The milestones give the order of the work.
 | AL-45 | A source that comes due during a pass | done | A source that comes due while the fetches of a pass run wakes the next pass at once. Before, the loop took it for a fault and waited its retry. |
 | AL-48 | A restart of the live runtime with no elevated shell | done | A new text of the restart request restarts the runtime. `install.ts restart` checks the files with the new code, writes the request and waits for the ready runtime. Live since 2026-11-16: each deploy uses it. |
 | AL-49 | The runtime follows a step of the wall clock | done | A correction of the system time moves the wall clock. The runtime writes each step to its log and moves its own times by it. Thus each timer keeps its time, and the times of the sources do not move. A system report tells the step in the digest. Fault case 11 holds it. |
-| AL-44 | The outage call | done | When the instance is down, the outside check starts three Functions on the server of Twilio. They call each person in the order of the list, until the person presses 1. A voicemail does not count. The private configuration holds the list (`outage`). The worker `outage` of the runtime deploys the Functions and the list at each start and once in each day. The Functions stop at a monthly cap of calls from the spend cap of Twilio. On 2026-11-16, the outage call went live, and a drill rang each phone of the list. Later: a text after the calls needs a registered sender in the United States. |
+| AL-44 | The outage call | done | When the instance is down, the outside check starts three Functions on the server of Twilio. They call each person in the order of the list, until the person presses 1. A voicemail does not count. The private configuration holds the list (`outage`). The worker `outage` of the runtime deploys the Functions and the list at each start and once in each day. The Functions stop at a monthly cap of calls from the spend cap of Twilio. On 2026-11-16, the outage call went live, and a drill rang each phone of the list. AL-56 is the text after the calls. |
+| AL-56 | A text after the outage calls | later | After the calls of an outage, each person also gets a text. A text to a number in the United States needs a registered sender. The owner registers it first. |
 | AL-50 | A broken log file at the boot | in progress | At the boot, the runtime checks its log file. A broken file goes into a quarantine folder, and a new file gets each event that the salvage reads. A system report names the folder. A loss of events gets `notice`, and a whole salvage gets `digest`. Fault case 12 tests it. |
 | AL-29 | A standalone weather radio | waiting | The owner sets up a SAME weather radio at the bed. It needs no internet and no part of this system. |
 | AL-30 | NWWS-OI, the push feed of the NWS | in progress | Each NWS product in CAP within 10 seconds, over XMPP, from servers apart from the NWS API. It is the second path for NWS warnings. The two accounts exist. On 2026-11-16 a connect check of each account passed: TLS 1.2 and SASL PLAIN. The next part is the source package on XMPP. |
