@@ -153,6 +153,44 @@ export interface RecoveredEvent extends Envelope<"recovered"> {
   readonly problems: readonly string[];
 }
 
+/** The reports of one fetch of another copy. It has no fetch record and no cursor: each copy has its own health and cursors. */
+export interface SharedFetchEvent extends Envelope<"fetch"> {
+  readonly reports: readonly Report[];
+}
+
+/** One accepted send of another copy. It has no copy id: only the copy of the send stops the copies of its channel. */
+export type SharedDeliveryEvent = Omit<DeliveryEvent, "copy">;
+
+/**
+ * An event that a copy of the system gives to the other copies (AL-16): a part of the merge state or of the ledger.
+ * Each other event stays in its copy, because each copy has its own sources, health and channels.
+ */
+export type SharedEvent = SharedFetchEvent | EndedEvent | BackEvent | SharedDeliveryEvent | AcknowledgmentEvent | CancelledEvent | EscalationEndEvent;
+
+/**
+ * A shared event of another copy in the log of this copy. The fold changes only the shared state. The instants of the
+ * event come from the clock of the other copy. Thus a step of the clock of this copy does not move them. The envelope
+ * has the time of the inner event, thus two reads of one event give the same import.
+ */
+export interface ImportEvent extends Envelope<"import"> {
+  /** The id of the copy that wrote the inner event. */
+  readonly from: string;
+  readonly event: SharedEvent;
+}
+
+/**
+ * The read position in the log of another copy. The runtime writes it with the imports of a read. Thus after a restart,
+ * the next read starts at this position, not at the start of the log.
+ */
+export interface ExchangeEvent extends Envelope<"exchange"> {
+  /** The id of the other copy. */
+  readonly peer: string;
+  /** The id of the first event of the log of the other copy. A new log of the copy has a new id. */
+  readonly log: string;
+  /** The position of the last entry that the read examined. */
+  readonly next: number;
+}
+
 /** One event of the log of the runtime. */
 export type RuntimeEvent =
   | StartedEvent
@@ -170,7 +208,9 @@ export type RuntimeEvent =
   | SettledEvent
   | RefusedEvent
   | ClockEvent
-  | RecoveredEvent;
+  | RecoveredEvent
+  | ImportEvent
+  | ExchangeEvent;
 
 /** The types of the events. */
 export const EVENT_TYPES: readonly RuntimeEvent["type"][] = [
@@ -190,6 +230,8 @@ export const EVENT_TYPES: readonly RuntimeEvent["type"][] = [
   "refused",
   "clock",
   "recovered",
+  "import",
+  "exchange",
 ];
 
 /**

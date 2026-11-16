@@ -127,7 +127,7 @@ import {
   type SecretRef,
 } from "./config.ts";
 import type { TryChain } from "./chain.ts";
-import type { Recipient } from "./delivery.ts";
+import type { EscalationEnd, Recipient } from "./delivery.ts";
 import type { Lateness, LatenessLimit, LatenessState } from "./lateness.ts";
 import type { LinkFamily, LinkPolicy } from "./link.ts";
 import { COVERAGE_KIND } from "./assess.ts";
@@ -756,6 +756,18 @@ export const acknowledgmentSchema: z.ZodType<Acknowledgment, Acknowledgment> = s
     .readonly(),
 );
 
+/** This schema checks the end of the escalations of a person in an incident. An end with no reason is an end `ended`. */
+export const escalationEndSchema: z.ZodType<EscalationEnd, EscalationEnd> = schemaOf<EscalationEnd>()(
+  z
+    .strictObject({
+      incident: reportIdSchema,
+      person: personIdSchema,
+      at: instantSchema,
+      reason: z.enum(["ended", "muted"]).exactOptional(),
+    })
+    .readonly(),
+);
+
 /** This schema checks an end mark of a report of a snapshot source. */
 export const endMarkSchema: z.ZodType<EndMark, EndMark> = schemaOf<EndMark>()(
   z
@@ -1337,7 +1349,8 @@ export const alertConfigSchema: z.ZodType<AlertConfig, AlertConfig> = schemaOf<A
 );
 
 // The id of a copy: a short name of lowercase letters, digits and hyphens, thus a log line and a file name can hold it.
-const copyIdSchema = z.string().regex(/^[a-z0-9][a-z0-9-]{0,31}$/u, "The id of a copy is 1 to 32 lowercase letters, digits and hyphens.");
+/** This schema checks the id of a copy of the system: 1 to 32 lowercase letters, digits and hyphens. */
+export const copyIdSchema: z.ZodType<string, string> = z.string().regex(/^[a-z0-9][a-z0-9-]{0,31}$/u, "The id of a copy is 1 to 32 lowercase letters, digits and hyphens.");
 
 // The URL of the exchange of another copy. The tailnet carries it, thus `http` is also a valid protocol. The host is a
 // name with one label or more, an IPv4 address or an IPv6 address in brackets. The URL has no user, no query and no fragment.

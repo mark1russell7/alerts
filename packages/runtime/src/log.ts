@@ -9,10 +9,30 @@ import { openEventLog, type EventLogFile } from "@mark1russell7/sqlite";
 import { openCheckedEventLog } from "./checked-log.ts";
 import { envelope, parseEvent, type RecoveredEvent, type RuntimeEvent } from "./events.ts";
 
+/** One event of the log with its position. The position of a later event is larger. */
+export interface RuntimeLogEntry {
+  readonly seq: number;
+  readonly event: RuntimeEvent;
+}
+
+/** The options of a read of entries. */
+export interface EntriesOptions {
+  /** The read gives only the entries after this position. */
+  readonly after: number;
+  /** The read gives only the events of these types. */
+  readonly types: readonly RuntimeEvent["type"][];
+  /** The highest count of entries that the read gives. */
+  readonly limit: number;
+}
+
 /** The log of the runtime. */
 export interface RuntimeLog {
   /** This function gives the events of the log, in their order. */
   read(): Iterable<RuntimeEvent>;
+  /** This function gives the entries of the log after a position, in their order. */
+  entries(options: EntriesOptions): Iterable<RuntimeLogEntry>;
+  /** This function gives the position of the last event, or 0 for an empty log. */
+  head(): number;
   /** This function tells if the log has an event with an id. */
   has(id: string): boolean;
   /**
@@ -97,6 +117,8 @@ function fileOptions(options: RuntimeLogOptions): { readonly makeFolder: true; r
 function runtimeLog(log: EventLogFile<RuntimeEvent>): RuntimeLog {
   return {
     read: () => log.read(),
+    entries: (options) => log.entries(options),
+    head: () => log.head(),
     has: (id) => log.get(id) !== undefined,
     appendAll(events, accept) {
       let results;

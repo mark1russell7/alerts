@@ -7,6 +7,7 @@ import {
   add,
   addSystemReports,
   EMPTY_STATE,
+  join,
   NO_SYSTEM_LINES,
   normalize,
   observeFetch,
@@ -37,7 +38,7 @@ import {
   type SourceDescriptor,
   type SystemLines,
 } from "@mark1russell7/alerts";
-import type { RefusalKind, RuntimeEvent } from "./events.ts";
+import type { ImportEvent, RefusalKind, RuntimeEvent, SharedEvent } from "./events.ts";
 
 /** What the fold reads from the configuration: the descriptors of the sources and the options of the health. */
 export interface FoldContext {
@@ -45,14 +46,42 @@ export interface FoldContext {
   readonly health?: HealthOptions;
 }
 
+/** The shared state of one side: this copy, or the other copies of the system. */
+export interface SharedState {
+  /** The reports, the deliveries, the acknowledgments and the end marks. */
+  readonly merge: MergeState;
+  /** The ends of the escalations, in the order of the log. */
+  readonly escalationEnds: readonly EscalationEnd[];
+}
+
+/** The read position in the log of another copy. */
+export interface ExchangeCursor {
+  /** The id of the first event of the log of the copy. */
+  readonly log: string;
+  /** The position of the last entry that the read examined. */
+  readonly next: number;
+}
+
+/** The shared state with no part. */
+export const NO_SHARED: SharedState = { merge: EMPTY_STATE, escalationEnds: [] };
+
 /** The state of the runtime: a fold of the log. */
 export interface RuntimeState {
   /** The time of the first start. Each health track starts at it. */
   readonly start?: Instant;
   /** The time of the latest event. */
   readonly time: Instant;
-  /** The reports, the deliveries and the acknowledgments. */
+  /** The reports, the deliveries and the acknowledgments of each copy: the join of `own` and `imported`. */
   readonly merge: MergeState;
+  /** The shared state that this copy wrote. A step of the wall clock moves it. Without imports, its merge is `merge`. */
+  readonly own: SharedState;
+  /**
+   * The shared state that the other copies wrote (AL-16). It has the times of their clocks, thus a step of the wall clock
+   * of this copy does not move it.
+   */
+  readonly imported: SharedState;
+  /** The read position in the log of each other copy, by the id of the copy. */
+  readonly exchanges: Readonly<Record<string, ExchangeCursor>>;
   /** The health track of each source, by its id. Only a fetch record moves it. A view at a later time advances a copy. */
   readonly health: Readonly<Record<string, HealthTrack>>;
   /** The start of the last fetch of each source, by its id. */
@@ -65,7 +94,10 @@ export interface RuntimeState {
   readonly cancelled: readonly string[];
   /** The start of each escalation, in the order of the log. */
   readonly starts: readonly EscalationStart[];
-  /** The end of the escalations of a person in a live incident that no longer reaches the person, in the order of the log. */
+  /**
+   * The end of the escalations of a person in a live incident that no longer reaches the person. It holds the ends of
+   * `own`, then the ends of `imported`.
+   */
   readonly escalationEnds: readonly EscalationEnd[];
   /**
    * The open copies, by copy id: each send on a channel that repeats with no delivery of its copy and no
@@ -113,6 +145,9 @@ export interface OpenCopy {
 export const EMPTY_RUNTIME: RuntimeState = {
   time: Number.NEGATIVE_INFINITY,
   merge: EMPTY_STATE,
+  own: NO_SHARED,
+  imported: NO_SHARED,
+  exchanges: {},
   health: {},
   fetched: {},
   cursors: {},
@@ -130,8 +165,12 @@ export const EMPTY_RUNTIME: RuntimeState = {
 /** This function adds one event to the state. */
 export function fold(state: RuntimeState, event: RuntimeEvent, context: FoldContext): RuntimeState {
   const rest = foldRest(state, event, context);
-  const parts = partsOf(event);
-  return parts === undefined ? rest : { ...rest, merge: add(state.merge, parts) };
+  const parts = event.type === "import" ? partsOf(event.event) : partsOf(event);
+  if (parts === undefined) return rest;
+  // The merge is a join of a semilattice, thus the view of each copy gets the parts of each side in any order.
+  if (event.type === "import") return { ...rest, merge: add(rest.merge, parts), imported: { ...rest.imported, merge: add(rest.imported.merge, parts) } };
+  const own = add(rest.own.merge, parts);
+  return { ...rest, merge: hasImports(rest) ? add(rest.merge, parts) : own, own: { ...rest.own, merge: own } };
 }
 
 /**
@@ -140,29 +179,66 @@ export function fold(state: RuntimeState, event: RuntimeEvent, context: FoldCont
  */
 export function rebuild(events: Iterable<RuntimeEvent>, context: FoldContext): RuntimeState {
   let state = EMPTY_RUNTIME;
+  const own = collector();
+  const imported = collector();
+  for (const event of events) {
+    state = foldRest(state, event, context);
+    // A step moves the own parts before it, as the fold moves its own merge state. The parts after it are in the new frame.
+    if (event.type === "clock") own.shift(event.size);
+    if (event.type === "import") imported.push(partsOf(event.event));
+    else own.push(partsOf(event));
+  }
+  const sides = { own: { ...state.own, merge: normalize(own.parts) }, imported: { ...state.imported, merge: normalize(imported.parts) } };
+  return { ...state, ...sides, ...joined(sides.own, sides.imported) };
+}
+
+// The parts of one side of a rebuild, in the order of the log.
+function collector(): { readonly parts: MergeParts; push(parts: MergeParts | undefined): void; shift(size: Duration): void } {
   const reports: Report[] = [];
   const deliveries: Delivery[] = [];
   const acks: Acknowledgment[] = [];
   const ends: EndMark[] = [];
-  for (const event of events) {
-    state = foldRest(state, event, context);
-    // A step moves the parts before it, as the fold moves its merge state. The parts after it are in the new frame.
-    if (event.type === "clock") {
-      for (let index = 0; index < reports.length; index += 1) reports[index] = shiftReport(reports[index]!, event.size);
-      for (let index = 0; index < deliveries.length; index += 1) deliveries[index] = shiftDelivery(deliveries[index]!, event.size);
-      for (let index = 0; index < ends.length; index += 1) ends[index] = shiftEndMark(ends[index]!, event.size);
-    }
-    const parts = partsOf(event);
-    reports.push(...(parts?.reports ?? []));
-    deliveries.push(...(parts?.deliveries ?? []));
-    acks.push(...(parts?.acks ?? []));
-    ends.push(...(parts?.ends ?? []));
-  }
-  return { ...state, merge: normalize({ reports, deliveries, acks, ends }) };
+  return {
+    parts: { reports, deliveries, acks, ends },
+    push(parts) {
+      reports.push(...(parts?.reports ?? []));
+      deliveries.push(...(parts?.deliveries ?? []));
+      acks.push(...(parts?.acks ?? []));
+      ends.push(...(parts?.ends ?? []));
+    },
+    shift(size) {
+      for (let index = 0; index < reports.length; index += 1) reports[index] = shiftReport(reports[index]!, size);
+      for (let index = 0; index < deliveries.length; index += 1) deliveries[index] = shiftDelivery(deliveries[index]!, size);
+      for (let index = 0; index < ends.length; index += 1) ends[index] = shiftEndMark(ends[index]!, size);
+    },
+  };
+}
+
+// The merge state has no part.
+function emptyMerge(merge: MergeState): boolean {
+  return merge.reports.length + merge.deliveries.length + merge.acks.length + merge.ends.length === 0;
+}
+
+// The state has a part of another copy.
+function hasImports(state: RuntimeState): boolean {
+  return !emptyMerge(state.imported.merge) || state.imported.escalationEnds.length > 0;
+}
+
+// The views of each copy: the join of the two sides. Without imports, the views are the own side.
+function joined(own: SharedState, imported: SharedState): Pick<RuntimeState, "merge" | "escalationEnds"> {
+  return {
+    merge: emptyMerge(imported.merge) ? own.merge : join(own.merge, imported.merge),
+    escalationEnds: joinedEnds(own, imported),
+  };
+}
+
+// The ends of the escalations of each copy: the own ends, then the imported ends. It does not join the merge states.
+function joinedEnds(own: SharedState, imported: SharedState): readonly EscalationEnd[] {
+  return imported.escalationEnds.length === 0 ? own.escalationEnds : [...own.escalationEnds, ...imported.escalationEnds];
 }
 
 // The parts of the merge in an event.
-function partsOf(event: RuntimeEvent): MergeParts | undefined {
+function partsOf(event: RuntimeEvent | SharedEvent): MergeParts | undefined {
   switch (event.type) {
     case "fetch":
     case "system":
@@ -210,8 +286,10 @@ function foldRest(state: RuntimeState, event: RuntimeEvent, context: FoldContext
       return { ...base, lines: addSystemReports(state.lines, event.reports, event.observations) };
     case "escalation":
       return { ...base, starts: [...state.starts, event.start] };
-    case "escalation-end":
-      return { ...base, escalationEnds: [...state.escalationEnds, event.end] };
+    case "escalation-end": {
+      const own = { ...state.own, escalationEnds: [...state.own.escalationEnds, event.end] };
+      return { ...base, own, escalationEnds: joinedEnds(own, state.imported) };
+    }
     case "cancelled":
       return state.cancelled.includes(event.delivery) ? base : { ...base, cancelled: [...state.cancelled, event.delivery].sort(compare) };
     case "attempt":
@@ -233,32 +311,61 @@ function foldRest(state: RuntimeState, event: RuntimeEvent, context: FoldContext
       const shifted = shiftState(state, event.size);
       return { ...shifted, time: Math.max(shifted.time, event.time), steps: [...shifted.steps, { at: event.time, size: event.size }] };
     }
-    case "recovered":
-      return { ...base, recoveries: [...state.recoveries, { at: event.time, quarantine: event.quarantine, kept: event.added, lost: event.lost, whole: event.whole }] };
+    case "recovered": {
+      const recoveries = [...state.recoveries, { at: event.time, quarantine: event.quarantine, kept: event.added, lost: event.lost, whole: event.whole }];
+      // The salvage can lose an import and keep the position after it. Thus the next read of each other copy starts at 0.
+      return { ...base, recoveries, exchanges: {} };
+    }
+    case "import":
+      return foldImport(state, event);
+    case "exchange":
+      return { ...base, exchanges: { ...state.exchanges, [event.peer]: { log: event.log, next: event.next } } };
     default:
       return base;
   }
 }
 
 /**
+ * The change of an import other than the merge. It changes only the shared state: the cancels, the ends of the
+ * escalations and the refusals of a delivered key. The time of the state stays, because the instants of the import come
+ * from the clock of another copy.
+ */
+function foldImport(state: RuntimeState, { event }: ImportEvent): RuntimeState {
+  switch (event.type) {
+    case "delivery":
+      return { ...state, refusals: without(state.refusals, event.delivery.key) };
+    case "cancelled":
+      return state.cancelled.includes(event.delivery) ? state : { ...state, cancelled: [...state.cancelled, event.delivery].sort(compare) };
+    case "escalation-end": {
+      const imported = { ...state.imported, escalationEnds: [...state.imported.escalationEnds, event.end] };
+      return { ...state, imported, escalationEnds: joinedEnds(state.own, imported) };
+    }
+    default:
+      return state;
+  }
+}
+
+/**
  * This function moves each own instant of a state by the size of a step of the wall clock. The instants of the sources
  * and the channels do not move: `shiftMerge` of the core tells which instants of the merge move. The cursors, the
- * lines of the system reports and the counts hold no own instant.
+ * lines of the system reports and the counts hold no own instant. The imported state has the instants of other clocks,
+ * thus it does not move.
  */
 export function shiftState(state: RuntimeState, size: Duration): RuntimeState {
   const health = Object.fromEntries(Object.entries(state.health).map(([source, track]) => [source, shiftHealth(track, size)]));
   const fetched = Object.fromEntries(Object.entries(state.fetched).map(([source, at]) => [source, at + size]));
   const refusals = Object.fromEntries(Object.entries(state.refusals).map(([key, refusal]) => [key, { ...refusal, at: refusal.at + size, retryAt: refusal.retryAt + size }]));
+  const own: SharedState = { merge: shiftMerge(state.own.merge, size), escalationEnds: state.own.escalationEnds.map((end) => shiftEscalationEnd(end, size)) };
   return {
     ...state,
     ...(state.start === undefined ? {} : { start: state.start + size }),
     time: state.time + size,
-    merge: shiftMerge(state.merge, size),
+    own,
+    ...joined(own, state.imported),
     health,
     fetched,
     refusals,
     starts: state.starts.map((start) => shiftEscalationStart(start, size)),
-    escalationEnds: state.escalationEnds.map((end) => shiftEscalationEnd(end, size)),
     steps: state.steps.map((step) => ({ ...step, at: step.at + size })),
     recoveries: state.recoveries.map((recovery) => ({ ...recovery, at: recovery.at + size })),
   };
