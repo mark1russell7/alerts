@@ -1,7 +1,7 @@
 import { closeSync, existsSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, rmSync, writeFileSync, writeSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fakeClock } from "@mark1russell7/algebra/clock";
+import { fakeWallClock } from "@mark1russell7/algebra/clock";
 import { reportId, type Observation, type ObservationId, type PlaceId, type Report, type SourceId, type SourceProcedures, type WatchedPlace } from "@mark1russell7/alerts";
 import { checkIntegrity, openDatabase } from "@mark1russell7/sqlite";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -50,7 +50,7 @@ function report(seen: Observation): Report {
 }
 
 // A runtime on a log, with one source that gives the same warning at each fetch.
-function runtimeOn(log: RuntimeLog, clock: ReturnType<typeof fakeClock>, run: string) {
+function runtimeOn(log: RuntimeLog, clock: ReturnType<typeof fakeWallClock>, run: string) {
   const source: SourceProcedures = {
     describe: () => ({
       id: API,
@@ -116,7 +116,7 @@ describe("the checked open of the log at the boot (AL-50)", () => {
     const opened = openCheckedRuntimeLog(path, { now: () => T0 });
     expect(opened.recovered).toBeUndefined();
     try {
-      await runtimeOn(opened.log, fakeClock(T0), "run-1").pass();
+      await runtimeOn(opened.log, fakeWallClock(T0), "run-1").pass();
       return ids(opened.log);
     } finally {
       opened.log.close();
@@ -159,7 +159,7 @@ describe("the checked open of the log at the boot (AL-50)", () => {
       expect(ids(opened.log)).toEqual([...first, recovered?.id]);
 
       // The fold of the recovered event gives one system report that names the quarantine.
-      const runtime = runtimeOn(opened.log, fakeClock(at), "run-2");
+      const runtime = runtimeOn(opened.log, fakeWallClock(at), "run-2");
       expect(runtime.state().recoveries).toEqual([{ at, quarantine: recovered?.quarantine, kept: first.length, lost: 0, whole: true }]);
       await runtime.pass();
       const system = [...opened.log.read()].filter((event): event is Extract<RuntimeEvent, { type: "system" }> => event.type === "system");
