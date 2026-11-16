@@ -1707,16 +1707,26 @@
       "url": "https://www.seismicportal.eu/terms.html",
       "automated": "allowed",
       "redistribution": "allowed",
-      "note": "The page gives client code and says websocket data is under CC BY 4.0. The linked terms page was not opened."
+      "note": "The terms page puts the data under CC BY 4.0, with the credit EMSC-CSEM SeismicPortal. The site and its databases are not under CC BY, so a mirror or a bulk copy needs written permission. The page tells nothing of automated reading or of a rate."
     },
     "cost": "free",
     "delay": "near real time (no figure given)",
     "history": "unknown",
     "rateLimit": "unknown",
     "calibration": null,
-    "coverage": "World earthquakes, with insert and update messages.",
+    "coverage": "World earthquakes, with insert and update messages. The author of each solution is a network or an agency of the region of the event.",
     "origins": [
-      "emsc"
+      "emsc",
+      "usgs"
+    ],
+    "regionalOrigins": [
+      {
+        "region": "us",
+        "origins": [
+          "usgs"
+        ],
+        "note": "One read of the event service of EMSC at 2026-11-16 05:28 UTC: 13 of the 24 USGS events of M2.5 or more in the areas of the US networks were in it. Each of the 13 had the solution of a US network of ANSS as its author."
+      }
     ],
     "path": [
       "www.seismicportal.eu"
@@ -1725,11 +1735,13 @@
     "risks": [],
     "decision": "plan",
     "adapter": null,
-    "reason": "A push stream that is independent of USGS, so it can confirm or beat it.",
+    "reason": "A push stream on other hosts than USGS, so it is a second path. In the United States it gives the solutions of the US networks, so there it is not a second origin.",
     "evidence": [
-      "https://www.seismicportal.eu/realtime.html"
+      "https://www.seismicportal.eu/realtime.html",
+      "https://www.seismicportal.eu/terms.html",
+      "https://www.seismicportal.eu/fdsnws/event/1/query?format=json&minmag=2.5&limit=500"
     ],
-    "round": 1
+    "round": 3
   },
   {
     "id": "endoflife-date-api",

@@ -773,7 +773,7 @@
     "id": "usgs",
     "name": "US Geological Survey",
     "issues": null,
-    "note": "The records of usgs-comcat-geojson, usgs-hans-api, usgs-landslide-program, usgs-vns, usgs-wateralert name this issuer."
+    "note": "The records of usgs-comcat-geojson, usgs-hans-api, usgs-landslide-program, usgs-vns, usgs-wateralert name this issuer. The record emsc-seismicportal-ws names it for the solutions of the US networks of ANSS."
   },
   {
     "id": "usps",
