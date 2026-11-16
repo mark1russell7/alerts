@@ -124,7 +124,7 @@ export function tokenMatches(given: unknown, expected: string): boolean {
 export function noteLine(note: OutageNote): string {
   switch (note.kind) {
     case "capped":
-      return `The cap stopped a call of the person ${note.person}.`;
+      return note.cap === "month" ? `The monthly cap stopped a call of the person ${note.person}.` : `The cap stopped a call of the person ${note.person}.`;
     case "acked":
       return `The person ${note.person} confirmed at step ${note.step}.`;
     case "exhausted":
@@ -152,7 +152,7 @@ async function readList(ports: OutagePorts): Promise<OutageList | undefined> {
 // A failed read counts no call. Thus an outage of the Twilio API does not stop the calls of an outage.
 async function recentOf(ports: OutagePorts, list: OutageList): Promise<readonly Instant[]> {
   try {
-    return await ports.recent(list.maxCalls);
+    return await ports.recent(Math.max(list.maxCalls, list.month.maxCalls));
   } catch (error) {
     ports.log(`The read of the recent calls failed, so the cap counts no call: ${errorMessage(error)}`);
     return [];

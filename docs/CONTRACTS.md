@@ -858,6 +858,10 @@ The package `@mark1russell7/alerts-channel-twilio` operates the chain on the ser
 - The URL of each callback holds the outage, the person, the step and the version of the list. A callback of another version starts no call.
 - Twilio signs each request to the press and end Functions. Thus a person outside Twilio cannot make a step. The entry is public, and it checks its own token.
 - A cap counts the calls of the Twilio number in a time window. A try above the cap makes no call.
+- A monthly cap counts the calls of the number from the start of the calendar month. The month starts in the time zone of the spend entry of Twilio.
+- The monthly cap is the spend cap of Twilio in whole calls of 4 cents, at most 1000. Each call of the number counts, also a call of the instance.
+- The setup of the runtime refuses an outage call with no spend entry for Twilio. Each problem of the monthly cap names no count, because the spend cap is private.
+- A gap stays open: the spend gate of the instance does not count the calls of the Functions. Thus one month can have more calls than the cap, by the calls of the Functions.
 - If the move of the status callback fails, the end has no `acked=1`. Then the chain calls again. That is the safe side.
 - Each handler gives the script of the call as data. The Function renders it with the TwiML builders of `@procedures/notify/twilio`.
 - `outageListOf` makes the list from the field `outage` of the private configuration and the recipients of `loadConfig`. The number of each person is the contact of the person on `twilio-call`.

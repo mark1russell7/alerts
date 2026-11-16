@@ -7,11 +7,15 @@
  * - Once in each day, the worker deploys again. A deploy with no change reads three lists. Thus a change on the side of Twilio heals in a day.
  * - A failed deploy goes again after a backoff. The worker runs beside the passes, so a slow build of Twilio holds no alert.
  */
-import type { Duration, Instant, ParsedConfig, SecretLookup } from "@mark1russell7/alerts";
+import type { Duration, Instant, ParsedConfig, SecretLookup, SpendConfig } from "@mark1russell7/alerts";
 import {
   deployOutage,
+  OUTAGE_MONTH_MAX,
   outageListOf,
+  TWILIO_CALL_COST_USD,
+  twilioCallDescriptor,
   type OutageList,
+  type OutageMonthCap,
   type TwilioCredentials,
   type TwilioFetch,
   type TwilioServerlessDeployResult,
@@ -20,6 +24,7 @@ import { delay, type Clock, type WallClock } from "@mark1russell7/algebra/clock"
 import { err, ok, type Result } from "@mark1russell7/optional";
 import { workerLoop, type WorkerLoop } from "@mark1russell7/service";
 import { errorMessage } from "@mark1russell7/text";
+import { spendEntryOf, spendQuota, spendUnits } from "./balance.ts";
 
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
@@ -47,10 +52,21 @@ export interface OutageKeys {
 }
 
 /**
+ * This function gives the monthly cap of the outage call from the spend entry of Twilio. The cap is the whole calls of
+ * one month in the cap of the entry, and its month starts in the time zone of the entry. The reserve is a part of the
+ * cap, and the outage call can use it. A cap above `OUTAGE_MONTH_MAX` calls takes that count.
+ */
+export function outageMonthCapOf(spend: Pick<SpendConfig, "monthlyUsd" | "timeZone">): OutageMonthCap {
+  const cents = spendQuota({ name: "Twilio spend", monthlyUsd: spend.monthlyUsd, timeZone: spend.timeZone }).limit;
+  return { maxCalls: Math.min(OUTAGE_MONTH_MAX, Math.floor(cents / spendUnits(TWILIO_CALL_COST_USD))), timeZone: spend.timeZone };
+}
+
+/**
  * This function gives the setup of the outage call from the configuration and the secrets.
  *
  * - With no field `outage` in the configuration, it gives `undefined`. The instance then deploys nothing.
  * - The outage call needs the keys of Twilio and the key `OUTAGE_TOKEN`. Without them, or with a bad list, it gives the problems.
+ * - The outage call needs a spend entry for Twilio. The monthly cap of its Functions comes from it.
  *
  * A problem names keys, fields and ids, and no value.
  */
@@ -62,7 +78,12 @@ export function outageSetup(parsed: ParsedConfig, secret: SecretLookup, keys: Ou
   const token = secret(OUTAGE_TOKEN_KEY) ?? "";
   if (token === "") problems.push(`The configuration has an outage call, and the secret store has no value for ${OUTAGE_TOKEN_KEY}, the token of its entry.`);
   else if (!TOKEN_FORM.test(token)) problems.push(`The value of ${OUTAGE_TOKEN_KEY} is not 32 to 128 letters, digits, "-" or "_".`);
-  const list = outageListOf(outage, parsed.recipients);
+  const spend = spendEntryOf(twilioCallDescriptor(), parsed.config.spend);
+  if (spend === undefined) {
+    problems.push("The configuration has an outage call, and no spend entry for the provider of the calls. The monthly cap of the Functions comes from it.");
+    return err(problems);
+  }
+  const list = outageListOf(outage, parsed.recipients, outageMonthCapOf(spend));
   problems.push(...list.problems);
   if (problems.length > 0 || keys === undefined) return err(problems);
   return ok({ credentials: keys.credentials, from: keys.from, list: list.list, token });

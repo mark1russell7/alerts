@@ -2,7 +2,7 @@ import type { ChannelId, PersonId, Recipient } from "@mark1russell7/alerts";
 import { describe, expect, it } from "vitest";
 import { CHANNEL_ID } from "./descriptor.ts";
 import { OUTAGE_CAP_OUTAGES, OUTAGE_CAP_WINDOW, OUTAGE_MESSAGE, OUTAGE_REPEATS, OUTAGE_RING_SECONDS, outageListOf } from "./list.ts";
-import { outageListSchema } from "./outage.ts";
+import { outageListSchema, type OutageMonthCap } from "./outage.ts";
 
 // Fake numbers only: 555-0100 to 555-0199 are numbers of fiction.
 const p1 = "person-1" as PersonId;
@@ -17,6 +17,8 @@ function recipient(person: PersonId, to?: string): Recipient {
   };
 }
 
+// A public time zone of Texas.
+const MONTH: OutageMonthCap = { maxCalls: 250, timeZone: "America/Chicago" };
 const RECIPIENTS = [recipient(p1, "+15555550123"), recipient(p2, "+15555550124")];
 const OUTAGE = {
   people: [
@@ -27,7 +29,7 @@ const OUTAGE = {
 
 describe("outageListOf", () => {
   it("gives the number of each person on the channel of the calls, and the defaults", () => {
-    const { list, problems } = outageListOf(OUTAGE, RECIPIENTS);
+    const { list, problems } = outageListOf(OUTAGE, RECIPIENTS, MONTH);
     expect(problems).toEqual([]);
     expect(list).toEqual({
       version: expect.stringMatching(/^[0-9a-f]{16}$/u),
@@ -40,13 +42,14 @@ describe("outageListOf", () => {
       ringSeconds: OUTAGE_RING_SECONDS,
       maxCalls: OUTAGE_CAP_OUTAGES * 5,
       capWindow: OUTAGE_CAP_WINDOW,
+      month: MONTH,
     });
     // The Function reads the list with this schema.
     expect(outageListSchema.safeParse(JSON.parse(JSON.stringify(list))).success).toBe(true);
   });
 
   it("gives the same version for the same list, and a new version for each change", () => {
-    const version = (options = {}, outage = OUTAGE, recipients = RECIPIENTS) => outageListOf(outage, recipients, options).list.version;
+    const version = (options = {}, outage = OUTAGE, recipients = RECIPIENTS, month = MONTH) => outageListOf(outage, recipients, month, options).list.version;
     expect(version()).toBe(version());
     // The order of the people is the order of the calls, so it is a change.
     const changes = [
@@ -56,12 +59,14 @@ describe("outageListOf", () => {
       version({ texts: { prompt: "Press 1." } }),
       version({}, { people: [...OUTAGE.people].reverse() }),
       version({}, OUTAGE, [recipient(p1, "+15555550125"), RECIPIENTS[1]!]),
+      version({}, OUTAGE, RECIPIENTS, { ...MONTH, maxCalls: 100 }),
+      version({}, OUTAGE, RECIPIENTS, { ...MONTH, timeZone: "UTC" }),
     ];
     expect(new Set([version(), ...changes]).size).toBe(changes.length + 1);
   });
 
   it("keeps the options, and gives the problems of the values of the list", () => {
-    const { list, problems } = outageListOf(OUTAGE, RECIPIENTS, { repeats: 9, maxCalls: 2, capWindow: 0, language: "en-US", texts: { confirmed: "" } });
+    const { list, problems } = outageListOf(OUTAGE, RECIPIENTS, MONTH, { repeats: 9, maxCalls: 2, capWindow: 0, language: "en-US", texts: { confirmed: "" } });
     expect(list).toMatchObject({ repeats: 9, maxCalls: 2, capWindow: 0, language: "en-US", texts: { confirmed: "" } });
     expect(problems).toEqual([
       "The text confirmed is empty.",
@@ -81,6 +86,7 @@ describe("outageListOf", () => {
         ],
       },
       [RECIPIENTS[0]!, recipient(p2)],
+      MONTH,
     );
     expect(problems[0]).toBe("The outage call names the person person-9, and no recipient has that id.");
     expect(problems).toContain("Step 1 of the person person-1 uses the channel pushover. The outage call makes only calls on twilio-call.");
@@ -90,7 +96,7 @@ describe("outageListOf", () => {
   });
 
   it("gives a cap of 1 call for a list with no step, and the problem of a list with no person", () => {
-    const { list, problems } = outageListOf({ people: [] }, RECIPIENTS);
+    const { list, problems } = outageListOf({ people: [] }, RECIPIENTS, MONTH);
     expect(list.maxCalls).toBe(1);
     expect(problems).toEqual(["The list has no person, so no outage call reaches a person."]);
   });

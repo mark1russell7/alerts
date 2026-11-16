@@ -20,6 +20,7 @@
   },
   "dependencies": {
     "@mark1russell7/alerts": "workspace:*",
+    "@mark1russell7/algebra": "^0.9.5",
     "@mark1russell7/rigor-generators": "^0.1.18",
     "@mark1russell7/text": "^0.0.10",
     "@procedures/notify": "^0.60.0",

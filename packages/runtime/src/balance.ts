@@ -5,7 +5,7 @@
  * - A failed read keeps the last read that passed. The core gives the line `unread` when the last read is too old.
  * - The watch keeps no record. After a restart, the first check reads again.
  */
-import type { BalanceRead, ChannelId, Duration, Instant, ProviderBalance, SpendConfig } from "@mark1russell7/alerts";
+import type { BalanceRead, ChannelDescriptor, ChannelId, Duration, Instant, ProviderBalance, SpendConfig } from "@mark1russell7/alerts";
 import type { WallClock } from "@mark1russell7/algebra/clock";
 import { errorMessage } from "@mark1russell7/text";
 import { quotaGate, type Quota, type QuotaGate, type QuotaGateOptions } from "polite-crawler/api";
@@ -138,6 +138,14 @@ export function balanceWatch(options: BalanceWatchOptions): BalanceWatch {
 export interface SpendCap extends Pick<SpendConfig, "monthlyUsd" | "reserveUsd" | "timeZone"> {
   /** The name of the quota in a message: for example `Twilio spend`. */
   readonly name: string;
+}
+
+/**
+ * This function gives the spend entry of a channel with a cost: the first entry for a provider in the `dependsOn` of the
+ * channel. The cap of the entry counts each send of the channel.
+ */
+export function spendEntryOf(descriptor: ChannelDescriptor, spend: readonly SpendConfig[] | undefined): SpendConfig | undefined {
+  return spend?.find((entry) => descriptor.dependsOn.includes(entry.provider));
 }
 
 /** The unit of a quota of the spend, for the texts of the core. */

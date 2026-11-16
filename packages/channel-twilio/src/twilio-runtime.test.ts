@@ -27,6 +27,7 @@ const LIST: OutageList = {
   ringSeconds: 45,
   maxCalls: 10,
   capWindow: 3_600_000,
+  month: { maxCalls: 250, timeZone: "America/Chicago" },
 };
 
 const assetsOf = (text: string): Readonly<Record<string, { open(): string }>> => ({ [OUTAGE_LIST_ASSET]: { open: () => text } });

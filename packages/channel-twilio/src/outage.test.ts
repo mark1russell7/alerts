@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { CHANNEL_ID } from "./index.ts";
 import {
   callEnd,
+  monthStartOf,
   cursorQuery,
   MAX_PRESS_ROUNDS,
   OUTAGE_TEXTS,
@@ -33,6 +34,7 @@ const LIST: OutageList = {
   ringSeconds: 45,
   maxCalls: 10,
   capWindow: 60 * MINUTE,
+  month: { maxCalls: 250, timeZone: "America/Chicago" },
 };
 const AT = 1_000 * MINUTE;
 
@@ -60,7 +62,7 @@ describe("outageStart", () => {
     const recent = [AT - 61 * MINUTE, AT - 30 * MINUTE, ...Array.from({ length: 8 }, (_, i) => AT - i * MINUTE)];
     const step = outageStart(LIST, BASE, AT, recent);
     expect(step.actions.map((action) => action.person)).toEqual([p1]);
-    expect(step.notes).toEqual([{ kind: "capped", person: p2 }]);
+    expect(step.notes).toEqual([{ kind: "capped", person: p2, cap: "window" }]);
   });
 
   it("gives the voice and the texts of the list to the script", () => {
@@ -120,7 +122,7 @@ describe("outageEnded", () => {
     expect(ended(0, "in-progress")).toEqual({ actions: [], notes: [{ kind: "open", status: "in-progress" }] });
     expect(outageEnded({ ...LIST, version: "v2" }, BASE, { ...Object.fromEntries(cursorQuery({ outage: AT, person: 0, step: 0, round: 0 }, "v1")), CallStatus: "busy" }, AT, [])).toEqual({ actions: [], notes: [{ kind: "stale" }] });
     expect(ended(7, "busy")).toEqual({ actions: [], notes: [{ kind: "exhausted", person: p1 }] });
-    expect(ended(0, "busy", false, Array.from({ length: 10 }, () => AT))).toEqual({ actions: [], notes: [{ kind: "capped", person: p1 }] });
+    expect(ended(0, "busy", false, Array.from({ length: 10 }, () => AT))).toEqual({ actions: [], notes: [{ kind: "capped", person: p1, cap: "window" }] });
   });
 });
 
@@ -238,6 +240,7 @@ describe("outageListProblems", () => {
       ringSeconds: 4,
       maxCalls: 1,
       capWindow: 0,
+      month: { maxCalls: 0, timeZone: "Mars/Olympus" },
       texts: { confirmed: "" },
     };
     const problems = outageListProblems(bad);
@@ -253,12 +256,54 @@ describe("outageListProblems", () => {
       "The ring seconds are not a whole number from 5 to 600.",
       "The time of the cap is not more than 0.",
       "The cap of 1 calls is below the 2 calls of one outage, so the cap stops tries of one outage.",
+      "The monthly cap of calls is not a whole number from 1 to 1000.",
+      "The time zone of the monthly cap is not an IANA time zone.",
     ]);
+    // A monthly cap below the calls of one outage stops tries of one outage. Its problem names no count.
+    expect(outageListProblems({ ...LIST, month: { maxCalls: 4, timeZone: "UTC" } })).toEqual(["The monthly cap of calls is below the calls of one outage, so the cap stops tries of one outage."]);
     expect(problems.join(" ")).not.toMatch(/555/);
   });
 
   it("finds a message that is too long and a list with no person", () => {
     expect(outageListProblems({ ...LIST, message: "x".repeat(600) })).toEqual(["The message and the prompt have more than 600 characters."]);
     expect(outageListProblems({ ...LIST, people: [], maxCalls: 1 })).toEqual(["The list has no person, so no outage call reaches a person."]);
+  });
+});
+
+describe("the monthly cap", () => {
+  const DAY = 24 * 60 * MINUTE;
+  // Midnight of 1 April 2026 in Chicago is 05:00 UTC, in daylight time.
+  const APRIL = Date.UTC(2026, 3, 1, 5);
+
+  it("gives the start of the calendar month in the time zone of the cap", () => {
+    expect(monthStartOf(Date.UTC(2026, 3, 15, 12), "America/Chicago")).toBe(APRIL);
+    expect(monthStartOf(APRIL, "America/Chicago")).toBe(APRIL);
+    // One millisecond before, Chicago is in March, in standard time.
+    expect(monthStartOf(APRIL - 1, "America/Chicago")).toBe(Date.UTC(2026, 2, 1, 6));
+    // The clock goes back at 02:00 on 1 November 2026. Midnight is before the change, thus in daylight time.
+    expect(monthStartOf(Date.UTC(2026, 10, 20), "America/Chicago")).toBe(Date.UTC(2026, 10, 1, 5));
+    expect(monthStartOf(Date.UTC(2026, 3, 15), "UTC")).toBe(Date.UTC(2026, 3, 1));
+    // A name that is not a time zone gives 31 days, thus the cap counts more calls, not fewer.
+    expect(monthStartOf(APRIL, "Mars/Olympus")).toBe(APRIL - 31 * DAY);
+  });
+
+  it("counts each call of the number from the start of the month, and stops each try at the cap", () => {
+    const list: OutageList = { ...LIST, month: { maxCalls: 6, timeZone: "America/Chicago" } };
+    const at = APRIL + 10 * DAY;
+    // Five calls in April and twenty in March. Only the calls of April count, thus one call starts.
+    const recent = [...Array.from({ length: 5 }, (_, i) => APRIL + i * DAY), ...Array.from({ length: 20 }, (_, i) => APRIL - (i + 1) * MINUTE)];
+    const step = outageStart(list, BASE, at, recent);
+    expect(step.actions.map((action) => action.person)).toEqual([p1]);
+    expect(step.notes).toEqual([{ kind: "capped", person: p2, cap: "month" }]);
+    // On 1 May, the calls of April do not count.
+    expect(outageStart(list, BASE, Date.UTC(2026, 4, 1, 5), recent).actions.map((action) => action.person)).toEqual([p1, p2]);
+  });
+
+  it("stops the next step of a chain at the monthly cap, and names the cap of the window first", () => {
+    const params = { ...Object.fromEntries(cursorQuery({ outage: AT, person: 0, step: 0, round: 0 }, "v1")), CallStatus: "busy" };
+    const three = [AT - 1, AT - 2, AT - 3];
+    expect(outageEnded({ ...LIST, month: { maxCalls: 3, timeZone: "UTC" } }, BASE, params, AT, three)).toEqual({ actions: [], notes: [{ kind: "capped", person: p1, cap: "month" }] });
+    expect(outageEnded({ ...LIST, maxCalls: 3, month: { maxCalls: 3, timeZone: "UTC" } }, BASE, params, AT, three).notes).toEqual([{ kind: "capped", person: p1, cap: "window" }]);
+    expect(calls(outageEnded({ ...LIST, month: { maxCalls: 4, timeZone: "UTC" } }, BASE, params, AT, three).actions)).toHaveLength(1);
   });
 });
