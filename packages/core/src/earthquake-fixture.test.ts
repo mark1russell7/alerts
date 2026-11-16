@@ -30,7 +30,8 @@ describe("a real earthquake: the bands of us6000jllz (AL-31, AL-14)", () => {
     expect(found).toHaveLength(1);
     expect(incidentSchema.safeParse(quake).success).toBe(true);
     expect(quake?.lines?.map((line) => line.severity).sort()).toEqual(["extreme", "minor", "moderate", "severe"]);
-    expect(distanceKm(north(100), epicenter)).toBeCloseTo(100, 6);
+    const latLon = (at: Position) => ({ lat: at[1], lon: at[0] });
+    expect(distanceKm(latLon(north(100)), latLon(epicenter))).toBeCloseTo(100, 6);
   });
 
   it("wakes a place in the band extreme, and gives each band farther out a lower level", () => {
