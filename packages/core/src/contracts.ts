@@ -865,6 +865,12 @@ export const ASSESSED_LEVELS: readonly AssessedLevel[] = ["none", ...LEVELS];
 export interface LevelTable {
   readonly severity: Readonly<Record<Severity, AssessedLevel>>;
   readonly urgency: Readonly<Record<Urgency, AssessedLevel>>;
+  /**
+   * The time after the onset in which the urgency `past` counts as `immediate`. A report of an event that
+   * occurred, for example an earthquake, has the urgency `past`. With no time of the assessment or no onset,
+   * the age is unknown, and `past` counts as `immediate`. When it is absent, `past` keeps its lookup.
+   */
+  readonly pastWithin?: Duration;
 }
 
 /** A class of kinds with its own table, for example the kinds that can reach `life-safety`. */
@@ -1054,6 +1060,8 @@ export type AssessReason =
       readonly bySeverity: AssessedLevel;
       readonly byUrgency: AssessedLevel;
       readonly level: AssessedLevel;
+      /** This value is true when the urgency `past` counted as `immediate` in the window `pastWithin` of the table. */
+      readonly recentPast?: true;
     }
   /**
    * A rule of the person lowered the level at this place. The index is the position of the rule.
