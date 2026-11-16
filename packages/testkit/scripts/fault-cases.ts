@@ -11,6 +11,7 @@ import { FRAMINGS } from "@mark1russell7/rigor-testkit/http";
 import { CHANNEL_ARMS, CHANNEL_GATES, recoverLimit, runChannelDown } from "../src/channel-down.ts";
 import { runCutInBody } from "../src/cut-in-body.ts";
 import { changesOf, runChangedFormat } from "../src/changed-format.ts";
+import { KILL_ARMS, KILL_GATES, runKillRestart } from "../src/kill-restart.ts";
 import { ACCEPT_ARMS, ACCEPT_GATES, runLateAccept } from "../src/late-accept.ts";
 import { runSlowSource, SLOW_ARMS, trickleMs } from "../src/slow-source.ts";
 import { DOWN_ARMS, runSourceDown } from "../src/source-down.ts";
@@ -306,4 +307,32 @@ report(order.id, { ...order.verdict, problems: [...order.verdict.problems, ...or
   `Known faults: ${ORDER_KNOWN_FAULTS.length === 0 ? "none" : ORDER_KNOWN_FAULTS.map((fault) => `${fault.arm} ${fault.gate}`).join(", ")}.`,
   "",
   `Read: ${yes(order.verdict.read)}. Pass: **${yes(order.verdict.pass)}**.`,
+]);
+
+const kill = await runKillRestart();
+write("case-10.json", kill);
+const ends = (record: (typeof kill.records)[number]): string =>
+  record.lives
+    .map((life) => {
+      const point = life.notes.find((note) => note.kind === "kill");
+      const how = life.signal === null ? `code ${String(life.code)}` : `${life.signal}${point?.kind === "kill" ? ` at ${point.point}` : ""}`;
+      return `${String(life.life)}: ${how}${life.timedOut ? " (time limit)" : ""}`;
+    })
+    .join(", ") || "none";
+report(kill.id, kill.verdict, [
+  `## ${kill.id}: a hard stop of the runtime in a delivery, and a restart`,
+  "",
+  `Each arm lasts ${String(kill.settings.armMs)} ms. The first life of each arm except control ends by SIGKILL at its point. A second life opens the same log, with a new run id, to the end of the arm.`,
+  "Pushover only: the Twilio arms come with AL-15, because `instance.ts` has no Twilio sender.",
+  "",
+  `| Arm | Lives | Fault at its point | Sends | Reads | Cancels | Cancels by tag | Copies of each life | Cancelled copies | Failed calls | ${KILL_GATES.join(" | ")} |`,
+  `| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | ${KILL_GATES.map(() => "---").join(" | ")} |`,
+  ...kill.records.map((r) => {
+    const result = kill.verdict.results[r.arm];
+    const c = r.ledger.counts;
+    const copies = result.copies.map((list) => String(list.length)).join(" + ") || "0";
+    return `| ${r.arm} | ${ends(r)} | ${yes(r.faulted)} | ${String(c.sends)} | ${String(c.reads)} | ${String(c.cancels)} | ${String(c.tagCancels)} | ${copies} | ${result.cancelled.join(" ") || "none"} | ${String(r.failures.length)} | ${KILL_GATES.map((g) => yes(result.gates[g])).join(" | ")} |`;
+  }),
+  "",
+  `Read: ${yes(kill.verdict.read)}. Arms: ${KILL_ARMS.join(", ")}. Known faults: none. Pass: **${yes(kill.verdict.pass)}**.`,
 ]);
