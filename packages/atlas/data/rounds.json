@@ -370,5 +370,46 @@
       "unknownPaths": 4,
       "cause": "Round 5 adopts the CAP files of the tsunami warning centers for geo.tsunami. The class now has 2 adopted sources with no risk on 2 paths with no shared part, so its adopted and path layers reach the cover. The NWS is the only origin of the class, so the origin layers do not change."
     }
+  },
+  {
+    "round": 6,
+    "date": "2026-11-16",
+    "by": "One session, for the adapter of the space weather messages of the SWPC (AL-14), then a check of each fact in the tests of the adapter.",
+    "method": "The check of one planned source before its adapter. It read the list alerts.json with its headers, and two monthly archive files. The merge of the core joined the days of the watches.",
+    "lists": [
+      "The SWPC, the data access page: https://www.spaceweather.gov/content/data-access",
+      "The SWPC, the subscription services: https://www.spaceweather.gov/content/subscription-services",
+      "The SWPC, the alerts, watches and warnings: https://www.spaceweather.gov/products/alerts-watches-and-warnings",
+      "The list of the messages: https://services.swpc.noaa.gov/products/alerts.json",
+      "The monthly archive files of the messages: ftp://ftp.swpc.noaa.gov/pub/alerts/",
+      "The disclaimer of the NWS: https://www.weather.gov/disclaimer"
+    ],
+    "queries": [],
+    "notes": [
+      "The SWPC is a part of the NWS, so the disclaimer of the NWS puts its messages in the public domain.",
+      "The list held 71 messages of the past 30 days, newest first, at 2026-11-16 15:53 UTC. Each entry has the code of a product, the issue time in UTC and the text of the message.",
+      "The answers had an ETag, a Last-Modified time and max-age=60. CloudFront serves the host. The adapter sends If-None-Match and If-Modified-Since.",
+      "A watch gives the highest level of the G scale for each of three days. The days of consecutive watches overlap, so each day is a report of its own, and a later watch replaces the forecast of a day.",
+      "The text of an alert or a watch of the G scale tells the geomagnetic latitude of the effects, for example poleward of 60 degrees. The adapter gives two caps around the geomagnetic poles of WMM2025.",
+      "The archive of May 2024 holds the G4 and G5 watches of the storm of 10 and 11 May. The list of 2026-11-16 holds no level above G2, and no level of the S or R scales."
+    ],
+    "studies": [],
+    "measures": {
+      "classes": 200,
+      "gaps": 132,
+      "cover": {
+        "adopted": 26,
+        "paths": 26,
+        "origins": 1
+      },
+      "total": {
+        "adopted": 83,
+        "paths": 83,
+        "origins": 56
+      },
+      "unknownOrigins": 3,
+      "unknownPaths": 4,
+      "cause": "Round 6 adopts the list of the SWPC for the four classes of space weather. Each class now has 1 adopted source on 1 path, with 1 origin, so the adopted, path and origin totals each gain 4. One source is below the cover of 2, so the cover does not change."
+    }
   }
 ]

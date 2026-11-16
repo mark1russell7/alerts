@@ -1,0 +1,170 @@
+[
+  {
+    "file": "alerts_202405.html",
+    "message": "Space Weather Message Code: ALTEF3\nSerial Number: 3396\nIssue Time: 2024 May 15 1533 UTC\n\n\n\nALERT: Electron 2MeV Integral Flux exceeded 1000pfu\nThreshold Reached: 2024 May 15 1525 UTC\nStation: GOES16\nPotential Impacts: Satellite systems may experience significant charging resulting in increased risk to satellite systems."
+  },
+  {
+    "file": "alerts_202405.html",
+    "message": "Space Weather Message Code: ALTK04\nSerial Number: 2450\nIssue Time: 2024 May 31 0446 UTC\n\n\n\nALERT: Geomagnetic K-index of 4\nSynoptic Period: 0300-0600 UTC\nActive Warning: Yes\nwww.swpc.noaa.gov/noaa-scales-explanation\nPotential Impacts: Area of impact primarily poleward of 65 degrees Geomagnetic Latitude.\nInduced Currents - Weak power grid fluctuations can occur.\nAurora - Aurora may be visible at high latitudes such as Canada and Alaska."
+  },
+  {
+    "file": "alerts_202405.html",
+    "message": "Space Weather Message Code: ALTK05\nSerial Number: 1598\nIssue Time: 2024 May 31 0519 UTC\n\n\n\nALERT: Geomagnetic K-index of 5\nSynoptic Period: 0300-0600 UTC\nActive Warning: Yes\nNOAA Scale: G1 - Minor\nwww.swpc.noaa.gov/noaa-scales-explanation\nPotential Impacts: Area of impact primarily poleward of 60 degrees Geomagnetic Latitude.\nInduced Currents - Weak power grid fluctuations can occur.\nSpacecraft - Minor impact on satellite operations possible.\nAurora - Aurora may be visible at high latitudes, i.e., northern tier of the U.S. such as northern Michigan and Maine."
+  },
+  {
+    "file": "alerts_202410.html",
+    "message": "Space Weather Message Code: ALTK05\nSerial Number: 1653\nIssue Time: 2024 Oct 06 2244 UTC\n\n\n\nCANCEL ALERT: Geomagnetic K-index of 5\nCancel Serial Number: 1652\nOriginal Issue Time: 2024 Oct 06 2241 UTC\n\n\n\nComment: Issued with incorrect Threshold Reached time.  Will re-issue with correct time. \nwww.swpc.noaa.gov/noaa-scales-explanation\nPotential Impacts: Area of impact primarily poleward of 60 degrees Geomagnetic Latitude.\nInduced Currents - Weak power grid fluctuations can occur.\nSpacecraft - Minor impact on satellite operations possible.\nAurora - Aurora may be visible at high latitudes, i.e., northern tier of the U.S. such as northern Michigan and Maine."
+  },
+  {
+    "file": "alerts_202405.html",
+    "message": "Space Weather Message Code: ALTK06\nSerial Number: 573\nIssue Time: 2024 May 17 1929 UTC\n\n\n\nALERT: Geomagnetic K-index of 6\nSynoptic Period: 1800-2100 UTC\nActive Warning: Yes\nNOAA Scale: G2 - Moderate\nwww.swpc.noaa.gov/noaa-scales-explanation\nPotential Impacts: Area of impact primarily poleward of 55 degrees Geomagnetic Latitude.\nInduced Currents - Power grid fluctuations can occur. High-latitude power systems may experience voltage alarms.\nSpacecraft - Satellite orientation irregularities may occur; increased drag on low Earth-orbit satellites is possible.\nRadio - HF (high frequency) radio propagation can fade at higher latitudes.\nAurora - Aurora may be seen as low as New York to Wisconsin to Washington state."
+  },
+  {
+    "file": "alerts_202405.html",
+    "message": "Space Weather Message Code: ALTK07\nSerial Number: 155\nIssue Time: 2024 May 12 0437 UTC\n\n\n\nALERT: Geomagnetic K-index of 7\nSynoptic Period: 0300-0600 UTC\nActive Warning: Yes\nNOAA Scale: G3 - Strong\nwww.swpc.noaa.gov/noaa-scales-explanation\nPotential Impacts: Area of impact primarily poleward of 50 degrees Geomagnetic Latitude.\nInduced Currents - Power system voltage irregularities possible, false alarms may be triggered on some protection devices.\nSpacecraft - Systems may experience surface charging; increased drag on low Earth-orbit satellites and orientation problems may occur.\nNavigation - Intermittent satellite navigation (GPS) problems, including loss-of-lock and increased range error may occur.\nRadio - HF (high frequency) radio may be intermittent.\nAurora - Aurora may be seen as low as Pennsylvania to Iowa to Oregon."
+  },
+  {
+    "file": "alerts_202405.html",
+    "message": "Space Weather Message Code: ALTK08\nSerial Number: 39\nIssue Time: 2024 May 11 1650 UTC\n\n\n\nALERT: Geomagnetic K-index of 8, 9-\nSynoptic Period: 1500-1800 UTC\nActive Warning: Yes\nNOAA Scale: G4 - Severe\nwww.swpc.noaa.gov/noaa-scales-explanation\nPotential Impacts: Area of impact primarily poleward of 45 degrees Geomagnetic Latitude.\nInduced Currents - Possible widespread voltage control problems and some protective systems may mistakenly trip out key assets from the power grid. Induced pipeline currents intensify.\nSpacecraft - Systems may experience surface charging; increased drag on low earth orbit satellites, and tracking and orientation problems may occur.\nNavigation - Satellite navigation (GPS) degraded or inoperable for hours.\nRadio - HF (high frequency) radio propagation sporadic or blacked out.\nAurora - Aurora may be seen as low as Alabama and northern California."
+  },
+  {
+    "file": "alerts_202405.html",
+    "message": "Space Weather Message Code: ALTK09\nSerial Number: 8\nIssue Time: 2024 May 11 1139 UTC\n\n\n\nALERT: Geomagnetic K-index of 9o\nSynoptic Period: 0900-1200 UTC\nActive Warning: Yes\nNOAA Scale: G5 - Extreme\nwww.swpc.noaa.gov/noaa-scales-explanation\nPotential Impacts: Area of impact primarily poleward of 40 degrees Geomagnetic Latitude.\nInduced Currents - Widespread voltage control problems and protective system problems may occur; some power grid systems may experience component failures or protective device trips resulting in blackouts or disruption of service. Pipeline currents can reach hundreds of amps.\nSpacecraft - Systems may experience anomalies to include: extensive surface charging, unexpected orientation and attitude changes, uplink/downlink errors, and satellite orbit degradation.\nNavigation - Satellite navigation (GPS) may be degraded or unavailable for days.\nRadio - HF (high frequency) radio propagation may be impossible in many areas for one to two days.\nAurora - Aurora may be seen as low as Florida to southern Texas and southern California."
+  },
+  {
+    "file": "alerts_202405.html",
+    "message": "Space Weather Message Code: ALTPC0\nSerial Number: 49\nIssue Time: 2024 May 11 0227 UTC\n\n\n\nALERT: Proton Event 100MeV Integral Flux exceeded 1pfu\nBegin Time: 2024 May 11 0210 UTC\nwww.swpc.noaa.gov/noaa-scales-explanation\nPotential Impacts: An enhancement in the energetic portion of the solar radiation spectrum may indicate increased biological risk to astronauts or passengers and crew in high latitude, high altitude flights. Additionally, energetic particles may represent an increased risk to all satellite systems susceptible to single event effects. This information should be used in conjunction with the current Solar Radiation Storm conditions when assessing overall impact."
+  },
+  {
+    "file": "alerts_202405.html",
+    "message": "Space Weather Message Code: ALTPX1\nSerial Number: 347\nIssue Time: 2024 May 13 1408 UTC\n\n\n\nALERT: Proton Event 10MeV Integral Flux exceeded 10pfu\nBegin Time: 2024 May 13 1407 UTC\nNOAA Scale: S1 - Minor\nwww.swpc.noaa.gov/noaa-scales-explanation\nPotential Impacts: Radio - Minor impacts on polar HF (high frequency) radio propagation resulting in fades at lower frequencies."
+  },
+  {
+    "file": "alerts_202405.html",
+    "message": "Space Weather Message Code: ALTPX2\nSerial Number: 72\nIssue Time: 2024 May 14 0417 UTC\n\n\n\nALERT: Proton Event 10MeV Integral Flux exceeded 100pfu\nBegin Time: 2024 May 14 0335 UTC\nNOAA Scale: S2 - Moderate\nwww.swpc.noaa.gov/noaa-scales-explanation\nPotential Impacts: Radiation - Passengers and crew in high latitude, high altitude flights may experience small, increased radiation exposures.\nSpacecraft - Infrequent single-event upsets to satellites are possible.\nRadio - Small effects on polar HF (high frequency) propagation resulting in fades at lower frequencies."
+  },
+  {
+    "file": "alerts_202410.html",
+    "message": "Space Weather Message Code: ALTPX3\nSerial Number: 32\nIssue Time: 2024 Oct 09 1724 UTC\n\n\n\nALERT: Proton Event 10MeV Integral Flux exceeded 1000pfu\nBegin Time: 2024 Oct 09 1705 UTC\nNOAA Scale: S3 - Strong\nwww.swpc.noaa.gov/noaa-scales-explanation\nPotential Impacts: Radiation - Passengers and crew in high latitude, high altitude flights may experience increasing radiation exposures. Astronauts on EVA (extra-vehicular activity) are exposed to elevated radiation levels.\nSpacecraft - Single-event upsets to satellite operations, noise in imaging systems, and slight reduction of efficiency in solar panels are likely.\nRadio - Degraded or episodically blacked-out polar HF (high frequency) radio propagation."
+  },
+  {
+    "file": "alerts_202405.html",
+    "message": "Space Weather Message Code: ALTTP2\nSerial Number: 1305\nIssue Time: 2024 May 29 1441 UTC\n\n\n\nALERT: Type II Radio Emission\nBegin Time: 2024 May 29 1426 UTC\nEstimated Velocity: 878 km/s\nDescription: Type II emissions occur in association with eruptions on the sun and typically indicate a coronal mass ejection is associated with a flare event."
+  },
+  {
+    "file": "alerts_202410.html",
+    "message": "Space Weather Message Code: ALTTP2\nSerial Number: 1360\nIssue Time: 2024 Oct 03 1232 UTC\n\n\n\nCANCEL ALERT: Type II Radio Emission\nCancel Serial Number: 1359\nOriginal Issue Time: 2024 Oct 03 1229 UTC\n\n\n\nComment: Wrong sstart time entered\nDescription: Type II emissions occur in association with eruptions on the sun and typically indicate a coronal mass ejection is associated with a flare event."
+  },
+  {
+    "file": "alerts_202405.html",
+    "message": "Space Weather Message Code: ALTTP4\nSerial Number: 648\nIssue Time: 2024 May 29 1530 UTC\n\n\n\nALERT: Type IV Radio Emission\nBegin Time: 2024 May 29 1448 UTC\nDescription: Type IV emissions occur in association with major eruptions on the sun and are typically associated with strong coronal mass ejections and solar radiation storms."
+  },
+  {
+    "file": "alerts_202405.html",
+    "message": "Space Weather Message Code: ALTXMF\nSerial Number: 390\nIssue Time: 2024 May 31 2203 UTC\n\n\n\nALERT: X-Ray Flux exceeded M5\nThreshold Reached: 2024 May 31 2201 UTC\nNOAA Scale: R2 - Moderate\nwww.swpc.noaa.gov/noaa-scales-explanation\nPotential Impacts: Area of impact centered on sub-solar point on the sunlit side of Earth. Extent of blackout of HF (high frequency) radio communication dependent upon current X-ray Flux intensity. For real-time information on affected area and expected duration please see http://www.swpc.noaa.gov/products/d-region-absorption-predictions-d-rap."
+  },
+  {
+    "file": "alerts_202405.html",
+    "message": "Space Weather Message Code: SUM10R\nSerial Number: 806\nIssue Time: 2024 May 29 1454 UTC\n\n\n\nSUMMARY: 10cm Radio Burst\nBegin Time: 2024 May 29 1421 UTC\nMaximum Time: 2024 May 29 1423 UTC\nEnd Time: 2024 May 29 1424 UTC\nDuration: 3 minutes\nPeak Flux: 300 sfu\nLatest Penticton Noon Flux: 166 sfu\nDescription: A 10cm radio burst indicates that the electromagnetic burst associated with a solar flare at the 10cm wavelength was double or greater than the initial 10cm radio background. This can be indicative of significant radio noise in association with a solar flare. This noise is generally short-lived but can cause interference for sensitive receivers including radar, GPS, and satellite communications."
+  },
+  {
+    "file": "alerts_202405.html",
+    "message": "Space Weather Message Code: SUMPC0\nSerial Number: 33\nIssue Time: 2024 May 12 1613 UTC\n\n\n\nSUMMARY: Proton Event 100MeV Integral Flux exceeded 1pfu\nBegin Time: 2024 May 11 0210 UTC\nMaximum Time: 2024 May 11 0715 UTC\nEnd Time: 2024 May 12 0030 UTC\nMaximum 100MeV Flux: 7 pfu\nwww.swpc.noaa.gov/noaa-scales-explanation"
+  },
+  {
+    "file": "alerts_202405.html",
+    "message": "Space Weather Message Code: SUMPX1\nSerial Number: 112\nIssue Time: 2024 May 17 1137 UTC\n\n\n\nSUMMARY: Proton Event 10MeV Integral Flux exceeded 10pfu\nBegin Time: 2024 May 13 1400 UTC\nMaximum Time: 2024 May 14 0520 UTC\nEnd Time: 2024 May 16 1455 UTC\nMaximum 10MeV Flux: 121 pfu\nNOAA Scale: S2 - Moderate\nwww.swpc.noaa.gov/noaa-scales-explanation"
+  },
+  {
+    "file": "alerts_202405.html",
+    "message": "Space Weather Message Code: SUMPX2\nSerial Number: 51\nIssue Time: 2024 May 15 1329 UTC\n\n\n\nSUMMARY: Proton Event 10MeV Integral Flux exceeded 100pfu\nBegin Time: 2024 May 14 0315 UTC\nMaximum Time: 2024 May 14 0505 UTC\nEnd Time: 2024 May 14 0650 UTC\nMaximum 10MeV Flux: 121 pfu\nNOAA Scale: S2 - Moderate\nwww.swpc.noaa.gov/noaa-scales-explanation"
+  },
+  {
+    "file": "alerts_202410.html",
+    "message": "Space Weather Message Code: SUMPX3\nSerial Number: 20\nIssue Time: 2024 Oct 10 1957 UTC\n\n\n\nSUMMARY:  Proton Event 10MeV Integral Flux exceeded 1000pfu\nBegin Time: 2024 Oct 09 1240 UTC\nMaximum Time: 2024 Oct 10 1515 UTC\nEnd Time: 2024 Oct 10 1545 UTC\nMaximum 10MeV Flux: 1810 pfu\nNOAA Scale: S3 - Strong\nwww.swpc.noaa.gov/noaa-scales-explanation"
+  },
+  {
+    "file": "alerts_202405.html",
+    "message": "Space Weather Message Code: SUMSUD\nSerial Number: 271\nIssue Time: 2024 May 17 1342 UTC\n\n\n\nSUMMARY: Geomagnetic Sudden Impulse\nObserved: 2024 May 17 1325 UTC\nDeviation: 11 nT\nStation: BOU\nwww.swpc.noaa.gov/noaa-scales-explanation"
+  },
+  {
+    "file": "alerts_202405.html",
+    "message": "Space Weather Message Code: SUMX01\nSerial Number: 160\nIssue Time: 2024 May 31 2221 UTC\n\n\n\nSUMMARY: X-ray Event exceeded X1\nBegin Time: 2024 May 31 2152 UTC\nMaximum Time: 2024 May 31 2203 UTC\nEnd Time: 2024 May 31 2209 UTC\nX-ray Class: X1.1\nOptical Class: 2b\nLocation: S17E34\nNOAA Scale: R3 - Strong\nwww.swpc.noaa.gov/noaa-scales-explanation\nPotential Impacts: Area of impact consists of large portions of the sunlit side of Earth, strongest at the sub-solar point.\nRadio - Wide area blackout of HF (high frequency) radio communication for about an hour."
+  },
+  {
+    "file": "alerts_202405.html",
+    "message": "Space Weather Message Code: SUMXM5\nSerial Number: 229\nIssue Time: 2024 May 29 1856 UTC\n\n\n\nSUMMARY: X-ray Event exceeded M5\nBegin Time: 2024 May 29 1832 UTC\nMaximum Time: 2024 May 29 1841 UTC\nEnd Time: 2024 May 29 1845 UTC\nX-ray Class: M5.7\nOptical Class: 2b\nLocation: N25E10\nNOAA Scale: R2 - Moderate\nwww.swpc.noaa.gov/noaa-scales-explanation\nPotential Impacts: Area of impact centered primarily on sub-solar point on the sunlit side of Earth.\nRadio - Limited blackout of HF (high frequency) radio communication for tens of minutes."
+  },
+  {
+    "file": "alerts_202405.html",
+    "message": "Space Weather Message Code: WARK04\nSerial Number: 4617\nIssue Time: 2024 May 24 0554 UTC\n\n\n\nEXTENDED WARNING: Geomagnetic K-index of 4 expected\nExtension to Serial Number: 4616\nValid From: 2024 May 23 2225 UTC\nNow Valid Until: 2024 May 24 1200 UTC\nWarning Condition: Persistence\nwww.swpc.noaa.gov/noaa-scales-explanation\nPotential Impacts: Area of impact primarily poleward of 65 degrees Geomagnetic Latitude.\nInduced Currents - Weak power grid fluctuations can occur.\nAurora - Aurora may be visible at high latitudes such as Canada and Alaska."
+  },
+  {
+    "file": "alerts_202405.html",
+    "message": "Space Weather Message Code: WARK04\nSerial Number: 4620\nIssue Time: 2024 May 31 0233 UTC\n\n\n\nWARNING: Geomagnetic K-index of 4 expected\nValid From: 2024 May 31 0235 UTC\nValid To: 2024 May 31 1500 UTC\nWarning Condition: Onset\nwww.swpc.noaa.gov/noaa-scales-explanation\nPotential Impacts: Area of impact primarily poleward of 65 degrees Geomagnetic Latitude.\nInduced Currents - Weak power grid fluctuations can occur.\nAurora - Aurora may be visible at high latitudes such as Canada and Alaska."
+  },
+  {
+    "file": "alerts_202405.html",
+    "message": "Space Weather Message Code: WARK05\nSerial Number: 1884\nIssue Time: 2024 May 18 0556 UTC\n\n\n\nEXTENDED WARNING: Geomagnetic K-index of 5 expected\nExtension to Serial Number: 1883\nValid From: 2024 May 17 1305 UTC\nNow Valid Until: 2024 May 18 1200 UTC\nWarning Condition: Persistence\nwww.swpc.noaa.gov/noaa-scales-explanation\nPotential Impacts: Area of impact primarily poleward of 60 degrees Geomagnetic Latitude.\nInduced Currents - Weak power grid fluctuations can occur.\nSpacecraft - Minor impact on satellite operations possible.\nAurora - Aurora may be visible at high latitudes, i.e., northern tier of the U.S. such as northern Michigan and Maine."
+  },
+  {
+    "file": "alerts_202405.html",
+    "message": "Space Weather Message Code: WARK05\nSerial Number: 1885\nIssue Time: 2024 May 31 0500 UTC\n\n\n\nWARNING: Geomagnetic K-index of 5 expected\nValid From: 2024 May 31 0500 UTC\nValid To: 2024 May 31 1200 UTC\nWarning Condition: Onset\nNOAA Scale: G1 - Minor\nwww.swpc.noaa.gov/noaa-scales-explanation\nPotential Impacts: Area of impact primarily poleward of 60 degrees Geomagnetic Latitude.\nInduced Currents - Weak power grid fluctuations can occur.\nSpacecraft - Minor impact on satellite operations possible.\nAurora - Aurora may be visible at high latitudes, i.e., northern tier of the U.S. such as northern Michigan and Maine."
+  },
+  {
+    "file": "alerts_202405.html",
+    "message": "Space Weather Message Code: WARK06\nSerial Number: 525\nIssue Time: 2024 May 17 1902 UTC\n\n\n\nWARNING: Geomagnetic K-Index of 6 expected\nValid From: 2024 May 17 1901 UTC\nValid To: 2024 May 17 2359 UTC\nWarning Condition: Onset\nNOAA Scale: G2 - Moderate\nwww.swpc.noaa.gov/noaa-scales-explanation\nPotential Impacts: Area of impact primarily poleward of 55 degrees Geomagnetic Latitude.\nInduced Currents - Power grid fluctuations can occur. High-latitude power systems may experience voltage alarms.\nSpacecraft - Satellite orientation irregularities may occur; increased drag on low Earth-orbit satellites is possible.\nRadio - HF (high frequency) radio propagation can fade at higher latitudes.\nAurora - Aurora may be seen as low as New York to Wisconsin to Washington state."
+  },
+  {
+    "file": "alerts_202405.html",
+    "message": "Space Weather Message Code: WARK06\nSerial Number: 526\nIssue Time: 2024 May 17 2301 UTC\n\n\n\nEXTENDED WARNING: Geomagnetic K-Index of 6 expected\nExtension to Serial Number: 525\nValid From: 2024 May 17 1901 UTC\nNow Valid Until: 2024 May 18 0600 UTC\nWarning Condition: Persistence\nwww.swpc.noaa.gov/noaa-scales-explanation\nPotential Impacts: Area of impact primarily poleward of 55 degrees Geomagnetic Latitude.\nInduced Currents - Power grid fluctuations can occur. High-latitude power systems may experience voltage alarms.\nSpacecraft - Satellite orientation irregularities may occur; increased drag on low Earth-orbit satellites is possible.\nRadio - HF (high frequency) radio propagation can fade at higher latitudes.\nAurora - Aurora may be seen as low as New York to Wisconsin to Washington state."
+  },
+  {
+    "file": "alerts_202405.html",
+    "message": "Space Weather Message Code: WARK07\nSerial Number: 103\nIssue Time: 2024 May 10 1716 UTC\n\n\n\nWARNING: Geomagnetic K-index of 7 or greater expected\nValid From: 2024 May 10 1715 UTC\nValid To: 2024 May 10 2359 UTC\nWarning Condition: Onset\nNOAA Scale: G3 or greater\nwww.swpc.noaa.gov/noaa-scales-explanation\nPotential Impacts: Area of impact primarily poleward of 50 degrees Geomagnetic Latitude.\nInduced Currents - Power system voltage irregularities possible, false alarms may be triggered on some protection devices.\nSpacecraft - Systems may experience surface charging; increased drag on low Earth-orbit satellites and orientation problems may occur.\nNavigation - Intermittent satellite navigation (GPS) problems, including loss-of-lock and increased range error may occur.\nRadio - HF (high frequency) radio may be intermittent.\nAurora - Aurora may be seen as low as Pennsylvania to Iowa to Oregon."
+  },
+  {
+    "file": "alerts_202405.html",
+    "message": "Space Weather Message Code: WARK07\nSerial Number: 107\nIssue Time: 2024 May 12 2243 UTC\n\n\n\nEXTENDED WARNING: Geomagnetic K-index of 7 or greater expected\nExtension to Serial Number: 106\nValid From: 2024 May 10 1715 UTC\nNow Valid Until: 2024 May 13 0600 UTC\nWarning Condition: Persistence\nwww.swpc.noaa.gov/noaa-scales-explanation\nPotential Impacts: Area of impact primarily poleward of 50 degrees Geomagnetic Latitude.\nInduced Currents - Power system voltage irregularities possible, false alarms may be triggered on some protection devices.\nSpacecraft - Systems may experience surface charging; increased drag on low Earth-orbit satellites and orientation problems may occur.\nNavigation - Intermittent satellite navigation (GPS) problems, including loss-of-lock and increased range error may occur.\nRadio - HF (high frequency) radio may be intermittent.\nAurora - Aurora may be seen as low as Pennsylvania to Iowa to Oregon."
+  },
+  {
+    "file": "alerts_202405.html",
+    "message": "Space Weather Message Code: WARPC0\nSerial Number: 100\nIssue Time: 2024 May 11 0206 UTC\n\n\n\nWARNING: Proton 100MeV Integral Flux above 1pfu expected\nValid From: 2024 May 11 0205 UTC\nValid To: 2024 May 11 1200 UTC\nWarning Condition: Onset\nwww.swpc.noaa.gov/noaa-scales-explanation\nPotential Impacts: An enhancement in the energetic portion of the solar radiation spectrum may indicate increased biological risk to astronauts or passengers and crew in high latitude, high altitude flights. Additionally, energetic particles may represent an increased risk to all satellite systems susceptible to single event effects. This information should be used in conjunction with the current Solar Radiation Storm conditions when assessing overall impact."
+  },
+  {
+    "file": "alerts_202405.html",
+    "message": "Space Weather Message Code: WARPC0\nSerial Number: 102\nIssue Time: 2024 May 11 1120 UTC\n\n\n\nEXTENDED WARNING: Proton 100MeV Integral Flux above 1pfu expected\nExtension to Serial Number: 101\nValid From: 2024 May 11 0205 UTC\nNow Valid Until: 2024 May 12 1200 UTC\nWarning Condition: Persistence\nwww.swpc.noaa.gov/noaa-scales-explanation\nPotential Impacts: An enhancement in the energetic portion of the solar radiation spectrum may indicate increased biological risk to astronauts or passengers and crew in high latitude, high altitude flights. Additionally, energetic particles may represent an increased risk to all satellite systems susceptible to single event effects. This information should be used in conjunction with the current Solar Radiation Storm conditions when assessing overall impact."
+  },
+  {
+    "file": "alerts_202405.html",
+    "message": "Space Weather Message Code: WARPX1\nSerial Number: 558\nIssue Time: 2024 May 13 1328 UTC\n\n\n\nWARNING: Proton 10MeV Integral Flux above 10pfu expected\nValid From: 2024 May 13 1328 UTC\nValid To: 2024 May 13 2359 UTC\nWarning Condition: Onset\nPredicted NOAA Scale: S1 - Minor\nwww.swpc.noaa.gov/noaa-scales-explanation\nPotential Impacts: Radio - Minor impacts on polar HF (high frequency) radio propagation resulting in fades at lower frequencies."
+  },
+  {
+    "file": "alerts_202405.html",
+    "message": "Space Weather Message Code: WARPX1\nSerial Number: 562\nIssue Time: 2024 May 16 1422 UTC\n\n\n\nEXTENDED WARNING: Proton 10MeV Integral Flux above 10pfu expected\nExtension to Serial Number: 561\nValid From: 2024 May 13 1328 UTC\nNow Valid Until: 2024 May 16 2359 UTC\nWarning Condition: Persistence\nPredicted NOAA Scale: S1 - Minor\nwww.swpc.noaa.gov/noaa-scales-explanation\nPotential Impacts: Radio - Minor impacts on polar HF (high frequency) radio propagation resulting in fades at lower frequencies."
+  },
+  {
+    "file": "alerts_202410.html",
+    "message": "Space Weather Message Code: WARPX1\nSerial Number: 580\nIssue Time: 2024 Oct 11 1120 UTC\n\n\n\nCANCEL WARNING: Proton 10MeV Integral Flux above 10pfu expected\nCancel Serial Number: 579\nOriginal Issue Time: 2024 Oct 09 0438 UTC\n\n\n\nComment: Conditions have subsided.\nwww.swpc.noaa.gov/noaa-scales-explanation\nPotential Impacts: Radio - Minor impacts on polar HF (high frequency) radio propagation resulting in fades at lower frequencies."
+  },
+  {
+    "file": "alerts_202405.html",
+    "message": "Space Weather Message Code: WARSUD\nSerial Number: 224\nIssue Time: 2024 May 17 1257 UTC\n\n\n\nWARNING: Geomagnetic Sudden Impulse expected\nValid From: 2024 May 17 1315 UTC\nValid To: 2024 May 17 1345 UTC\nIP Shock Passage Observed: 2024 May 17 1245 UTC\nwww.swpc.noaa.gov/noaa-scales-explanation"
+  },
+  {
+    "file": "alerts_202405.html",
+    "message": "Space Weather Message Code: WATA20\nSerial Number: 999\nIssue Time: 2024 May 18 1952 UTC\n\n\n\nWATCH: Geomagnetic Storm Category G1 Predicted\nHighest Storm Level Predicted by Day:\nMay 19:  None (Below G1)   May 20:  G1 (Minor)   May 21:  None (Below G1)\nTHIS SUPERSEDES ANY/ALL PRIOR WATCHES IN EFFECT\nwww.swpc.noaa.gov/noaa-scales-explanation\nPotential Impacts: Area of impact primarily poleward of 60 degrees Geomagnetic Latitude.\nInduced Currents - Weak power grid fluctuations can occur.\nSpacecraft - Minor impact on satellite operations possible.\nAurora - Aurora may be visible at high latitudes, i.e., northern tier of the U.S. such as northern Michigan and Maine."
+  },
+  {
+    "file": "alerts_202405.html",
+    "message": "Space Weather Message Code: WATA30\nSerial Number: 233\nIssue Time: 2024 May 29 2126 UTC\n\n\n\nWATCH: Geomagnetic Storm Category G2 Predicted\nHighest Storm Level Predicted by Day:\nMay 30:  None (Below G1)   May 31:  G2 (Moderate)   Jun 01:  G2 (Moderate)\nTHIS SUPERSEDES ANY/ALL PRIOR WATCHES IN EFFECT\nwww.swpc.noaa.gov/noaa-scales-explanation\nPotential Impacts: Area of impact primarily poleward of 55 degrees Geomagnetic Latitude.\nInduced Currents - Power grid fluctuations can occur. High-latitude power systems may experience voltage alarms.\nSpacecraft - Satellite orientation irregularities may occur; increased drag on low Earth-orbit satellites is possible.\nRadio - HF (high frequency) radio propagation can fade at higher latitudes.\nAurora - Aurora may be seen as low as New York to Wisconsin to Washington state."
+  },
+  {
+    "file": "alerts_202405.html",
+    "message": "Space Weather Message Code: WATA50\nSerial Number: 76\nIssue Time: 2024 May 11 1120 UTC\n\n\n\nWATCH: Geomagnetic Storm Category G3 Predicted\nHighest Storm Level Predicted by Day:\nMay 11:  G4 (Severe)   May 12:  G3 (Strong)   May 13:  G3 (Strong)\nTHIS SUPERSEDES ANY/ALL PRIOR WATCHES IN EFFECT\nwww.swpc.noaa.gov/noaa-scales-explanation\nPotential Impacts: Area of impact primarily poleward of 50 degrees Geomagnetic Latitude.\nInduced Currents - Power system voltage irregularities possible, false alarms may be triggered on some protection devices.\nSpacecraft - Systems may experience surface charging; increased drag on low Earth-orbit satellites and orientation problems may occur.\nNavigation - Intermittent satellite navigation (GPS) problems, including loss-of-lock and increased range error may occur.\nRadio - HF (high frequency) radio may be intermittent.\nAurora - Aurora may be seen as low as Pennsylvania to Iowa to Oregon."
+  },
+  {
+    "file": "alerts_202405.html",
+    "message": "Space Weather Message Code: WATA99\nSerial Number: 7\nIssue Time: 2024 May 11 1753 UTC\n\n\n\nWATCH: Geomagnetic Storm Category G4 or Greater Predicted\nHighest Storm Level Predicted by Day:\nMay 12:  G5 (Extreme)   May 13:  G3 (Strong)   May 14:  G1 (Minor)\nTHIS SUPERSEDES ANY/ALL PRIOR WATCHES IN EFFECT\nwww.swpc.noaa.gov/noaa-scales-explanation\nPotential Impacts: Area of impact primarily poleward of 45 degrees Geomagnetic Latitude.\nInduced Currents - Possible widespread voltage control problems and some protective systems may mistakenly trip out key assets from the power grid. Induced pipeline currents intensify.\nSpacecraft - Systems may experience surface charging; increased drag on low earth orbit satellites, and tracking and orientation problems may occur.\nNavigation - Satellite navigation (GPS) degraded or inoperable for hours.\nRadio - HF (high frequency) radio propagation sporadic or blacked out.\nAurora - Aurora may be seen as low as Alabama and northern California."
+  }
+]
