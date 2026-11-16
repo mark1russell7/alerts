@@ -194,16 +194,22 @@ describe("the map of other messages", () => {
     expect(problems).toEqual([{ path: "info[0].area[0].geocode", message: 'the map function does not know the geocode "FIPS6"', fatal: false, lossy: true }]);
   });
 
-  it("gives the areas of each block of the chosen language, and tells of the second block", () => {
-    const two = authority("<geocode><valueName>SAME</valueName><value>048019</value></geocode>").replace(
+  it("gives one report for each block of the chosen language, with the key of the message and its own areas", () => {
+    const one = authority("<geocode><valueName>SAME</valueName><value>048019</value></geocode>");
+    const two = one.replace(
       "</info></alert>",
       "</info><info><category>Safety</category><event>Test Message</event><urgency>Unknown</urgency><severity>Unknown</severity><certainty>Unknown</certainty><area><areaDesc>A second area</areaDesc><geocode><valueName>SAME</valueName><value>020173</value></geocode></area></info></alert>",
     );
-    const { report, problems } = mapOne(two);
-    expect(codesOf(report)).toEqual(["same:020173", "same:048019"]);
-    expect(report.areaText).toBe("A test area; A second area");
-    expect(problems).toHaveLength(1);
-    expect(problems[0]).toMatchObject({ path: "info", fatal: false });
+    const result = mapObservation(observe(two));
+    expect(result.problems).toEqual([]);
+    expect(result.reports.map(codesOf)).toEqual([["same:048019"], ["same:020173"]]);
+    expect(result.reports.map((report) => report.areaText)).toEqual(["A test area", "A second area"]);
+    // Each report has the key of the message, so a later reference to the message ends each of them.
+    expect(new Set(result.reports.map((report) => report.key))).toEqual(new Set(["TEST-1"]));
+    const sent = Date.parse("2026-11-15T00:00:00Z");
+    expect(result.reports.map((report) => report.id)).toEqual([0, 1].map((index) => reportId({ source: SOURCE_ID, key: "TEST-1", sent, part: `info[${String(index)}]` })));
+    // A message of one block keeps the id of a report with no part.
+    expect(mapOne(one).report.id).toBe(reportId({ source: SOURCE_ID, key: "TEST-1", sent }));
   });
 
   it("gives each area of an NWS message the key of its CAP area element, and no key for another sender", () => {

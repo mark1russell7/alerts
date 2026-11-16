@@ -129,7 +129,7 @@ The rules of each adapter:
 3. **The descriptor tells the truth about dependencies.** `origins` names the authorities whose messages the source carries. `dependsOn` names the failure domains outside the cell: providers, CDNs, transmitters. `uses` names the resources of the cell: `internet`, `power`, `receiver`. The coverage uses both.
 4. **The ids are hashes of content.** The core gives the id functions in `ids.ts`. An adapter does not make its own ids.
    - `observationId`: the SHA-256 of the source id, the content type, the request URL and the body. The fetch time is not part of it, so a poll with no change gives the same id. The URL is the part that the `map` function reads. A URL with the time of the poll gives the URL with no time, and a test holds that `map` does not read the time.
-   - `reportId`: the SHA-256 of the source id, the source key and the sent time.
+   - `reportId`: the SHA-256 of the source id, the source key and the sent time. A message with two or more reports adds the part of each report, for example the info block `info[1]` of a CAP message.
    - `messageKey`: the SHA-256 of the incident report, the level, the person and the step. An episode after the first one is also in it.
    - The hash input is a JSON array that starts with the scheme `alerts-id/1` and the kind of id. Each copy of the system gives the same id.
 5. **The fixtures are real and contain no personal data.** Each adapter keeps recorded answers of its source in `fixtures/`, with the expected reports. The places of the tests are public places, not the places of a real person.

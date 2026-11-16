@@ -27,11 +27,17 @@ export interface ObservationIdInput {
   readonly url?: string;
 }
 
-/** The input of `reportId`: the source, the key that the source gives and the sent time. */
+/** The input of `reportId`: the source, the key that the source gives, the sent time and the part. */
 export interface ReportIdInput {
   readonly source: SourceId;
   readonly key: string;
   readonly sent: Instant;
+  /**
+   * The part of a message that gives two or more reports, for example `info[1]`, the second info block of a CAP
+   * message. The reports of one message keep its key, so a reference to the message ends each of them. A report
+   * with no part keeps the id of a report of one part.
+   */
+  readonly part?: string | undefined;
 }
 
 /** The input of `messageKey`: one step of the escalation of one level of one incident to one person. */
@@ -62,7 +68,8 @@ export function observationId(input: ObservationIdInput): ObservationId {
  * time, so it gets a new id. The merge uses the smallest report id of an incident as its anchor.
  */
 export function reportId(input: ReportIdInput): ReportId {
-  return digest(["report", input.source, input.key, input.sent]) as ReportId;
+  const fields = ["report", input.source, input.key, input.sent];
+  return digest(input.part === undefined ? fields : [...fields, input.part]) as ReportId;
 }
 
 /**

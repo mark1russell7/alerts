@@ -13,11 +13,11 @@
   },
   "dependencies": {
     "@mark1russell7/alerts": "workspace:*",
+    "@mark1russell7/alerts-format-nws": "workspace:*",
     "@nodable/entities": "^3.1.0",
     "fast-xml-parser": "^5.12.1"
   },
   "devDependencies": {
-    "@mark1russell7/alerts-format-nws": "workspace:*",
     "@mark1russell7/cue": "^2.0.0",
     "@types/node": "^26.6.5",
     "@vitest/coverage-v8": "^5.0.3",

@@ -68,6 +68,14 @@ describe("reportId", () => {
     expect(new Set(ids).size).toBe(ids.length);
   });
 
+  it("gives each part of a message its own id, and the id of a report of one part to no part", () => {
+    const parts = ["info[0]", "info[1]", "info[2]"].map((part) => reportId({ ...report, part }));
+    expect(new Set([reportId(report), ...parts]).size).toBe(4);
+    expect(reportId({ ...report, part: undefined })).toBe(GOLDEN.report);
+    // A part does not mix with the key: the key `k` with the part `1` is not the key `k1`.
+    expect(reportId({ ...report, key: "k", part: "1" })).not.toBe(reportId({ ...report, key: "k1" }));
+  });
+
   it("does not mix fields that a separator character can join", () => {
     const a = reportId({ source: "a|b" as SourceId, key: "c", sent: 0 });
     const b = reportId({ source: "a" as SourceId, key: "b|c", sent: 0 });
