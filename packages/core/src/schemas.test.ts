@@ -1,7 +1,7 @@
 import { random, seedsFrom } from "@mark1russell7/rigor-generators";
 import { describe, expect, expectTypeOf, it } from "vitest";
 import { z } from "zod";
-import { assess, DEFAULT_ASSESS_POLICY } from "./assess.ts";
+import { assess, COVERAGE_KIND, DEFAULT_ASSESS_POLICY } from "./assess.ts";
 import { CONFIG_FORMAT, loadConfig, type AlertConfig } from "./config.ts";
 import type {
   Acknowledgment,
@@ -164,6 +164,7 @@ import {
   whyLimitSchema,
 } from "./schemas.ts";
 import { NO_SYSTEM_LINES, SOURCE_SUBJECT, systemReports } from "./system-reports.ts";
+import { categoryOf, TAXONOMY } from "./taxonomy.ts";
 
 const SEEDS = seedsFrom(process.env["SEED"], [1, 2, 3, 4, 5, 6, 7, 8]);
 const HOUR = 3_600_000;
@@ -513,6 +514,33 @@ describe("the JSON Schema of each schema", () => {
     expect(z.toJSONSchema(reportIdSchema)).toMatchObject({ type: "string", minLength: 1 });
     expect(z.toJSONSchema(durationSchema)).toMatchObject({ type: "number", minimum: 0 });
     expect(z.toJSONSchema(kindSchema)).toMatchObject({ required: ["code", "label"] });
+  });
+
+  it("gives the closed list of the kind codes, and the parse takes exactly the codes of the list", () => {
+    const codes = Object.keys(TAXONOMY);
+    const covered = codes.filter((code) => categoryOf(code) !== "system").map((code) => `${COVERAGE_KIND}.${code}`);
+    const json = z.toJSONSchema(kindCodeSchema) as { $ref?: string; $defs?: Record<string, { type?: string; enum?: string[] }> };
+    expect(json.$ref).toBe("#/$defs/KindCode");
+    expect(json.$defs?.["KindCode"]?.type).toBe("string");
+    const list = json.$defs?.["KindCode"]?.enum ?? [];
+    expect(list.length).toBe(codes.length + covered.length);
+    expect(new Set(list)).toEqual(new Set([...codes, ...covered]));
+    expect(list).toEqual([...list].sort());
+    const inList = new Set(list);
+    const near = list.flatMap((code) => [code, `${code}.x`, code.slice(0, -1), code.toUpperCase(), `${COVERAGE_KIND}.${code}`]);
+    for (const code of [...near, "", "toString", "__proto__"]) expect(kindCodeSchema.safeParse(code).success, code).toBe(inList.has(code));
+  });
+
+  it("puts the list one time in $defs, and each kind field refers to it", () => {
+    const list = (z.toJSONSchema(kindCodeSchema) as { $defs?: Record<string, { enum?: string[] }> }).$defs?.["KindCode"]?.enum ?? [];
+    expect(list).toContain("met.tornado");
+    const config = z.toJSONSchema(alertConfigSchema) as { $defs?: Record<string, { enum?: string[] }> };
+    expect(config.$defs?.["KindCode"]?.enum).toEqual(list);
+    const text = JSON.stringify(config);
+    expect(text.split(JSON.stringify(list)).length - 1).toBe(1);
+    expect(text).toContain('"$ref":"#/$defs/KindCode"');
+    const priors = JSON.stringify(z.toJSONSchema(schemas.scorePriorsSchema));
+    expect(priors).toContain('"propertyNames":{"$ref":"#/$defs/KindCode"}');
   });
 });
 
