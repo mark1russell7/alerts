@@ -482,4 +482,47 @@ describe("two runtimes", () => {
     expect(read(restarted.runtime, b.runtime, "b").take).toEqual({ imports: 0, next: take.next, problems: [], conflicts: [] });
     expect(restarted.runtime.state().imported.merge.reports.map((one) => one.key)).toEqual(["w2"]);
   });
+
+  // The salvage of a broken file: a new file gets the events of the old file, with new positions, and then one recovery.
+  function salvage(old: RuntimeLog, quarantine: string): RuntimeLog {
+    const recovered: RuntimeEvent = { ...envelope("recovered", `recovered:${quarantine}`, T0), quarantine, fault: "corrupt", read: 0, added: 0, lost: 0, whole: true, problems: [] };
+    const salvaged = openRuntimeLog(":memory:");
+    salvaged.appendAll([...old.read(), recovered], () => undefined);
+    return salvaged;
+  }
+
+  it("reads a recovered log of another copy again from the start, because the salvage gives new positions", async () => {
+    const clock = fakeWallClock(T0);
+    const a = open("a", ["w1"], clock);
+    const b = open("b", ["w2"], clock);
+    await b.runtime.pass();
+    const before = read(a.runtime, b.runtime, "b");
+    const merged = shared(a.runtime.state());
+
+    const recovered = open("b", ["w2"], clock, salvage(b.log, "events.db.broken-1"), "run-b2");
+    const refused = read(a.runtime, recovered.runtime, "b");
+    expect(refused.page.log).toBe("recovered:events.db.broken-1");
+    expect(refused.page.log).not.toBe(before.page.log);
+    expect(refused.take).toEqual({ imports: 0, next: 0, problems: [], conflicts: [] });
+
+    const again = read(a.runtime, recovered.runtime, "b");
+    expect(again.page.after).toBe(0);
+    expect(again.take).toEqual({ imports: before.take.imports, next: recovered.log.head(), problems: [], conflicts: [] });
+    expect(shared(a.runtime.state())).toEqual(merged);
+    expect(rebuild(a.log.read(), a.runtime.config)).toEqual(a.runtime.state());
+  });
+
+  it("reads each other copy again from the start after a recovery of its own log, because the salvage can lose an import", async () => {
+    const clock = fakeWallClock(T0);
+    const a = open("a", ["w1"], clock);
+    const b = open("b", ["w2"], clock);
+    await b.runtime.pass();
+    const { take } = read(a.runtime, b.runtime, "b");
+    expect(take.next).toBeGreaterThan(0);
+
+    const recovered = open("a", ["w1"], clock, salvage(a.log, "events.db.broken-2"), "run-a2");
+    expect(recovered.runtime.position("b")).toBe(0);
+    expect(read(recovered.runtime, b.runtime, "b").take).toEqual({ imports: take.imports, next: take.next, problems: [], conflicts: [] });
+    expect(recovered.runtime.state().imported.merge.reports.map((one) => one.key)).toEqual(["w2"]);
+  });
 });

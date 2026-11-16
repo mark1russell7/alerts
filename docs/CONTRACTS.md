@@ -385,10 +385,11 @@ Each copy reads the log of each other copy, and adds the shared events to its ow
 
 - The procedure `alerts.log.entries` gives the shared events of the log after a position, one page at a time. It also gives the time of the copy and the hash of its configuration.
 - A page has the format `alerts-exchange/1`. It examines 500 entries of the log or fewer. It gives the head of the log and the position of the next page.
-- Each page gives the id of the log: the id of its first event. A new log has a new id. Then the worker starts again from 0.
+- Each page gives the id of the log: the id of its first event, or the id of its last event `recovered`. The salvage of a broken file gives new positions. Thus a new log and a recovered log have a new id, and the worker starts again from 0.
 - The procedures host of `@procedures/peer` serves the procedure on the address `listen`. The host checks the token. The runtime has no route and no token check of its own.
 - A worker of each copy reads each other copy each 5 seconds, with a time limit of 3 seconds. It keeps the read position of each copy in memory.
-- The worker refuses a page that starts after its position, because the page skips entries. The position does not move back at any time.
+- The worker refuses a page that starts after its position, because the page skips entries.
+- A recovery of the log of this copy clears the positions of the other copies. The salvage can lose an import and keep the position after it.
 - The event `exchange` writes the position to the log with the imports of a page, or after 10,000 entries with no import. Thus a restart reads 10,000 entries again or fewer.
 - At its start, a copy reads each other copy before its first delivery step, for one time limit or less. Thus a restart does not repeat the sends of another copy.
 
@@ -400,7 +401,7 @@ The shared events are the parts of the merge state and of the delivery ledger:
 
 The other events stay in their copy, because each copy has its own sources, health and channels:
 
-- the events `started`, `observation`, `system`, `escalation` and `clock`
+- the events `started`, `observation`, `system`, `escalation`, `clock` and `recovered`
 - the events of the tries of a send: `attempt`, `settled` and `refused`
 
 The rules of an import:

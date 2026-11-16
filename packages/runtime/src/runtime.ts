@@ -161,9 +161,11 @@ export function openRuntime(options: RuntimeOptions): Runtime {
 
   append([{ ...envelope("started", `started:${options.run}`, clock.now()), run: options.run }]);
 
-  // The id of this copy and of its log: the id of the first event. A new log has a new first event.
+  // The id of this copy and of its log: the id of the first event. A new log has a new first event. The salvage of a
+  // broken file gives new positions, thus a recovered log has the id of its last recovery.
   const self = options.copy ?? ONLY_COPY.id;
-  const logId = [...log.entries({ after: 0, types: EVENT_TYPES, limit: 1 })][0]?.event.id ?? `started:${options.run}`;
+  const recovery = state.recoveries.at(-1);
+  const logId = recovery === undefined ? ([...log.entries({ after: 0, types: EVENT_TYPES, limit: 1 })][0]?.event.id ?? `started:${options.run}`) : `recovered:${recovery.quarantine}`;
   // The position of the next read of each other copy. It starts at the position of the log, and it moves at each page.
   const positions = new Map<string, ExchangeCursor>();
 

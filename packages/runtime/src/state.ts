@@ -311,8 +311,11 @@ function foldRest(state: RuntimeState, event: RuntimeEvent, context: FoldContext
       const shifted = shiftState(state, event.size);
       return { ...shifted, time: Math.max(shifted.time, event.time), steps: [...shifted.steps, { at: event.time, size: event.size }] };
     }
-    case "recovered":
-      return { ...base, recoveries: [...state.recoveries, { at: event.time, quarantine: event.quarantine, kept: event.added, lost: event.lost, whole: event.whole }] };
+    case "recovered": {
+      const recoveries = [...state.recoveries, { at: event.time, quarantine: event.quarantine, kept: event.added, lost: event.lost, whole: event.whole }];
+      // The salvage can lose an import and keep the position after it. Thus the next read of each other copy starts at 0.
+      return { ...base, recoveries, exchanges: {} };
+    }
     case "import":
       return foldImport(state, event);
     case "exchange":
