@@ -873,6 +873,14 @@ describe("the private configuration", () => {
     fails(alertConfigSchema, { ...CONFIG, link: { families: [{ ...family, windowMs: 0 }] } });
   });
 
+  it("takes a policy of the assessment, and refuses a policy with a kind that the taxonomy does not have", () => {
+    holds(alertConfigSchema, { ...CONFIG, assess: DEFAULT_ASSESS_POLICY });
+    holds(alertConfigSchema, { ...CONFIG, assess: { ...DEFAULT_ASSESS_POLICY, relevance: { hopCap: 2, topPaths: 1, mandatory: "absent", entryMax: "notice" } } });
+    const [first, ...others] = DEFAULT_ASSESS_POLICY.classes;
+    fails(alertConfigSchema, { ...CONFIG, assess: { ...DEFAULT_ASSESS_POLICY, classes: [{ ...first!, kinds: ["met.no-such-kind"] }, ...others] } });
+    fails(alertConfigSchema, { ...CONFIG, assess: { ...DEFAULT_ASSESS_POLICY, extra: 1 } });
+  });
+
   const store = (name: string): string | undefined => (name === "PUSHOVER_USER" ? "user-test" : undefined);
   const problemsOf = (text: string, secret = store): readonly string[] => {
     const parsed = parseConfig(text, [CHANNEL], secret);

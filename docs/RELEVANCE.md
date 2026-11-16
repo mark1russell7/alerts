@@ -200,7 +200,7 @@ The system `place` holds the watched places of a person, by their ids in the con
 | Hop cap and cycles | Property | An edge that adds only a path longer than the hop cap, or only a cycle, changes nothing. |
 | An honest why | Property | The coverage equals the reach of the shown paths alone, divided by the full reach. |
 | Who each class reaches | Table | For each class of event and each example person, the test holds the expected reach and the expected why. The tier comes when the score of AL-31 reads the reach. |
-| Compatibility | Compat | A graph with only place edges of weight 1 gives a reach of 1 when the incident hits a watched place, and 0 when it does not. The routing test holds the old levels and places of nine incidents. A replay of the recorded incidents comes with the runtime configuration. |
+| Compatibility | Compat | A graph with only place edges of weight 1 gives a reach of 1 when the incident hits a watched place, and 0 when it does not. The routing test holds the old levels and places of nine incidents. A replay of the recorded incidents with a configured graph is an open point. |
 | The why fits each channel | Limits | Each why text keeps the limits of its channel and holds no address, point or code. |
 
 ## The routing
@@ -225,6 +225,15 @@ Step 5 routes the alerts by the relevance. `assess` uses the graph in `PersonWat
 - A match by the codes or by the id of the place is in each range. A match by a shape is in the range when its distance is `rangeKm` or less.
 - A place under the rule always counts, also with an edge that is off. Then the incident is of the mandatory class, and a mute has the effect `policy.mandatory`.
 
+### The runtime configuration
+
+The private configuration gives the graph and the rules in the `PersonWatch` of each person. The field `assess` of the configuration gives the policy.
+
+- The load refuses a graph of another person, and a place of the graph that the person does not watch.
+- The load refuses a rule at a place that the person does not watch, and rules with no graph.
+- The why of a route is the why of the reach (`assessmentWhy`). With no why of the reach, the watched place with the first id gives the why.
+- A why line takes the labels of the instance first, and then the labels of the graph of the person (`graphLabels`). No label goes into the log.
+
 ## The tests of step 5
 
 These tests come with the routing:
@@ -241,6 +250,7 @@ These tests come with the routing:
 
 ## Open points
 
+- A replay of the recorded incidents with a configured graph, before the graph goes into the configuration. It compares the levels with and without the graph.
 - A fast path: when the two bounds give the same level, the exact sum is not necessary.
 - The size of a real graph, and the budget of steps that it needs. A check of the configuration can give a problem before a sum ends with `bound`.
 - Weights from travel time, for a place that the person visits.

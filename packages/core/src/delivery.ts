@@ -30,7 +30,7 @@ import {
 import { escalate, escalationProblems, quietWindowProblems, type EscalationPlan, type EscalationSend } from "./escalation.ts";
 import { messageKey } from "./ids.ts";
 import { unknownKinds } from "./taxonomy.ts";
-import { placeWhy } from "./why.ts";
+import { assessmentWhy } from "./why.ts";
 
 /** A person of the delivery. The private configuration gives each one. */
 export interface Recipient {
@@ -129,8 +129,9 @@ export interface Route {
   readonly end?: EscalationEnd;
   readonly freshEnd: boolean;
   /**
-   * Why the incident reaches the person: today the watched place of the match with the first id (`placeWhy`). A route
-   * of an incident that is not live, or of a match by subjects, has no why.
+   * Why the incident reaches the person (`assessmentWhy`): the why of the interest graph, or else the watched place of
+   * the match with the first id. A route of an incident that is not live has no why. A match by the subjects of
+   * `PersonWatch.subjects` has no why.
    */
   readonly why?: WhyRecord;
 }
@@ -216,7 +217,7 @@ export function route(input: RouteInput): Route[] {
         const reason: EndReason = changed || muted?.effect === "absent" ? "muted" : "ended";
         const closing = closed ?? (freshEnd ? { incident: incident.anchor, person, at: now, ...(reason === "ended" ? {} : { reason }) } : undefined);
         if (changed && closing !== undefined) closes.push(closing);
-        const why = current && assessment !== undefined ? placeWhy(assessment.places) : undefined;
+        const why = current && assessment !== undefined ? assessmentWhy(assessment) : undefined;
         // A later episode keeps only the acknowledgments from its first time. An end `muted` joins two episodes: the
         // acknowledgments of the episode before it still count, thus a change of a mute does not alert again.
         let from = episode;

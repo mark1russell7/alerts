@@ -10,6 +10,7 @@ import {
   type DeliveryStatus,
   type EscalationPolicy,
   type LinkPolicy,
+  type InterestGraph,
   type Message,
   type Observation,
   type ObservationId,
@@ -204,6 +205,27 @@ describe("the delivery step of a pass", () => {
     await none.runtime.pass();
     expect(none.pushover.send[0]).not.toHaveProperty("why");
     none.log.close();
+  });
+
+  it("names a node by the label of the interest graph of the person, and the rule of the life-safety warnings keeps the level", async () => {
+    // The person turned the route of the place off and follows the topic. The rule of the place keeps the warning at life-safety.
+    const interests: InterestGraph = {
+      format: "alerts-interest/1",
+      person: PERSON,
+      edges: [
+        { id: "e1", from: `place:${KANSAS.id}`, to: "person", kind: "geographic", weight: { value: 1, low: 1, high: 1 }, origin: "places", on: false },
+        { id: "e2", from: "topic:met.tornado", to: "person", kind: "interest", weight: { value: 1, low: 1, high: 1 }, origin: "person", on: true },
+      ],
+      mutes: [],
+      labels: { "topic:met.tornado": "Twisters" },
+    };
+    const follower: Recipient = { ...RECIPIENT, watch: { ...RECIPIENT.watch, interests, mandatory: [{ place: KANSAS.id, on: true, rangeKm: 0 }] } };
+    const { runtime, log, pushover } = open({ pushover: { describe: { why: WHY_LIMITS.push } } }, undefined, undefined, { recipients: [follower] });
+    await runtime.pass();
+    expect(pushover.send).toHaveLength(1);
+    expect(pushover.send[0]).toMatchObject({ person: PERSON, level: "life-safety", why: "Why: you follow Twisters" });
+    expect(JSON.stringify([...log.read()])).not.toContain("Twisters");
+    log.close();
   });
 
   it("starts the escalation of a warning at a watched place, and sends its first step", async () => {

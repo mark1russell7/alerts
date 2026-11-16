@@ -2,7 +2,7 @@ import { random, seedsFrom, type Random } from "@mark1russell7/rigor-generators"
 import { describe, expect, it } from "vitest";
 import { SUBJECT_SYSTEMS, type EdgeOrigin, type NodeKey, type PlaceId, type WhyRecord } from "./contracts.ts";
 import { whyRecordSchema } from "./schemas.ts";
-import { fitsWhy, kindOfNode, NO_LABELS, placeWhy, plainLabel, WHY_FULL_COVERAGE, WHY_LIMITS, whyLine, type WhyLabels } from "./why.ts";
+import { assessmentWhy, fitsWhy, graphLabels, kindOfNode, NO_LABELS, placeNode, placeOfNode, placeWhy, plainLabel, WHY_FULL_COVERAGE, WHY_LIMITS, whyLine, type WhyLabels } from "./why.ts";
 
 const SEEDS = seedsFrom(process.env["SEED"], [1, 2, 3, 4, 5, 6, 7, 8]);
 
@@ -171,5 +171,56 @@ describe("placeWhy", () => {
 
   it("gives no why when no place matches", () => {
     expect(placeWhy([])).toBeUndefined();
+  });
+});
+
+describe("the place node key", () => {
+  it("gives the node of a place, and the place of the node", () => {
+    expect(placeNode("home" as PlaceId)).toBe("place:home");
+    expect(placeOfNode(placeNode("home" as PlaceId))).toBe("home");
+    // The id of a place can hold the prefix again. The key keeps it.
+    expect(placeOfNode(placeNode("place:a" as PlaceId))).toBe("place:a");
+  });
+
+  it("gives no place for a node of another system", () => {
+    expect(placeOfNode("topic:met.tornado")).toBeUndefined();
+    expect(placeOfNode("place")).toBeUndefined();
+  });
+});
+
+describe("graphLabels", () => {
+  const instance: WhyLabels = (node) => (node === "place:home" ? "Home" : undefined);
+
+  it("gives the labels of the instance first, and then the labels of the graph", () => {
+    const labels = graphLabels(instance, { labels: { "place:home": "Not this", "topic:met.tornado": "Twisters" } });
+    expect(labels("place:home")).toBe("Home");
+    expect(labels("topic:met.tornado")).toBe("Twisters");
+    expect(labels("topic:met")).toBeUndefined();
+  });
+
+  it("keeps the labels of the instance when the graph has no labels", () => {
+    expect(graphLabels(instance, undefined)).toBe(instance);
+    expect(graphLabels(instance, {})).toBe(instance);
+  });
+
+  it("reads only the own keys of the labels", () => {
+    const labels = graphLabels(NO_LABELS, { labels: {} });
+    expect(labels("constructor" as NodeKey)).toBeUndefined();
+    expect(labels("toString" as NodeKey)).toBeUndefined();
+  });
+});
+
+describe("assessmentWhy", () => {
+  const reach: WhyRecord = { rule: "reach.topic", subject: "topic:met.tornado", kind: "topic", anchor: "topic:met.tornado", origin: "person", coverage: 1 };
+
+  it("gives the why of the reach first", () => {
+    const reasons = [{ kind: "reach", why: reach }] as unknown as Parameters<typeof assessmentWhy>[0]["reasons"];
+    expect(assessmentWhy({ reasons, places: ids("home") })).toEqual(reach);
+  });
+
+  it("gives the why of the watched place when the reach has no why", () => {
+    const reasons = [{ kind: "reach" }] as unknown as Parameters<typeof assessmentWhy>[0]["reasons"];
+    expect(assessmentWhy({ reasons, places: ids("work", "home") })).toEqual(placeWhy(ids("home")));
+    expect(assessmentWhy({ reasons: [], places: [] })).toBeUndefined();
   });
 });

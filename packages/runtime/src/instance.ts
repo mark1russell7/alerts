@@ -445,8 +445,8 @@ export function openInstance(options: InstanceOptions): Instance {
   ];
   const balances = twilio?.watch === undefined ? [] : [twilio.watch];
   const channels = twilio === undefined ? [pushover] : [pushover, twilio.channel];
-  // The labels of the places go only into the why line of each message.
-  const delivery: DeliveryOptions = { recipients, channels, labels: placeLabels(placed), ...DELIVERY_TIMES };
+  // The labels of the places go only into the why line of each message. The policy of the configuration replaces the default policy of the core.
+  const delivery: DeliveryOptions = { recipients, channels, labels: placeLabels(placed), ...(config.assess === undefined ? {} : { assess: config.assess }), ...DELIVERY_TIMES };
 
   const runtime: Runtime = openRuntime({
     log: options.log,

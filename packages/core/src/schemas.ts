@@ -1326,6 +1326,7 @@ export const alertConfigSchema: z.ZodType<AlertConfig, AlertConfig> = schemaOf<A
       spend: z.array(spendConfigSchema).readonly().exactOptional(),
       link: linkPolicySchema.exactOptional(),
       outage: outageConfigSchema.exactOptional(),
+      assess: assessPolicySchema.exactOptional(),
     })
     .readonly(),
 );

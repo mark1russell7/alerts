@@ -3,7 +3,7 @@
  * the reports of an incident. These functions only write text. The core makes each decision.
  */
 
-import type { AssessedLevel, AssessReason, Estimate, HealthState, HealthStep, Incident, Report, ScoreFactor, ShadowScore } from "@mark1russell7/alerts";
+import { placeOfNode, type AssessedLevel, type AssessReason, type Estimate, type HealthState, type HealthStep, type Incident, type Report, type ScoreFactor, type ShadowScore } from "@mark1russell7/alerts";
 import { NAMES, SHORT_NAMES } from "./demo.ts";
 
 /** This function gives the name of a person or a place on the page. */
@@ -154,7 +154,8 @@ export function reasonText(reason: AssessReason, incident: Pick<Incident, "sever
 
 // The name of a node of an interest graph: the name of a watched place, or the key of each other node.
 function nodeName(node: string): string {
-  return node.startsWith("place:") ? nameOf(node.slice("place:".length)) : node;
+  const place = placeOfNode(node);
+  return place === undefined ? node : nameOf(place);
 }
 
 // The text of the relevance: the reach, the entries that reach the person, the rule of the life-safety warnings and the level of the other entries.

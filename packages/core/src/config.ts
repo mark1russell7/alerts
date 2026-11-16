@@ -4,12 +4,12 @@
  * configuration. The functions are pure, and the caller gives the secrets.
  */
 import { localTime } from "@mark1russell7/algebra/clock";
-import type { Address, ChannelDescriptor, ChannelId, EscalationPolicy, Instant, NodeKey, PersonId, PersonWatch, PlaceId, Position, RegionCode, SourceId, WatchedPlace } from "./contracts.ts";
+import type { Address, AssessPolicy, ChannelDescriptor, ChannelId, EscalationPolicy, Instant, InterestGraph, NodeKey, PersonId, PersonWatch, PlaceId, Position, RegionCode, SourceId, WatchedPlace } from "./contracts.ts";
 import { recipientProblems, type Recipient } from "./delivery.ts";
 import type { TryChain } from "./chain.ts";
 import type { Expectation } from "./lateness.ts";
 import type { LinkPolicy } from "./link.ts";
-import type { WhyLabels } from "./why.ts";
+import { placeNode, placeOfNode, type WhyLabels } from "./why.ts";
 
 /** The name of the format of a configuration. A change that breaks a configuration gets a new name. */
 export const CONFIG_FORMAT = "alerts-config/1";
@@ -110,6 +110,11 @@ export interface AlertConfig {
   readonly link?: LinkPolicy;
   /** The outage call. Without it, an outage of the instance calls no person. */
   readonly outage?: OutageConfig;
+  /**
+   * The policy of the assessment: the statuses, the tables of the levels and the relevance policy. When it is absent,
+   * the default policy of the core applies. A policy here replaces the full default policy.
+   */
+  readonly assess?: AssessPolicy;
 }
 
 /** The settings of one expectation of the instance, for example the WEA check of a copy source. */
@@ -194,6 +199,7 @@ export function loadConfig(config: AlertConfig, channels: readonly ChannelDescri
         if (!own.has(place)) problems.push(`Rule ${index} of the person ${person} names the place ${place}, and the person does not watch it. The rule matches no incident there.`);
       }
     });
+    problems.push(...relevanceProblems(watch, own));
   }
 
   const expectations = new Set<string>();
@@ -267,6 +273,36 @@ export function loadConfig(config: AlertConfig, channels: readonly ChannelDescri
   return { recipients, problems };
 }
 
+// The place ids of the place nodes of a graph, in the order of the edges and then of the mutes.
+function graphPlaces(graph: InterestGraph): PlaceId[] {
+  const nodes = [...graph.edges.flatMap((edge) => [edge.from, edge.to]), ...graph.mutes.flatMap((mute) => mute.subjects ?? [])];
+  return [...new Set(nodes.flatMap((node) => placeOfNode(node) ?? []))];
+}
+
+/**
+ * This function gives the problems of the interest graph and of the rule of the life-safety warnings of a person. The
+ * set `own` holds the places of the person. A graph of another person makes the relevance fail at each incident. A
+ * place node or a rule at a place that the person does not watch matches no incident.
+ */
+function relevanceProblems(watch: PersonWatch, own: ReadonlySet<string>): string[] {
+  const person = watch.person;
+  const problems: string[] = [];
+  const graph = watch.interests;
+  if (graph !== undefined) {
+    if (graph.person !== person) problems.push(`The interest graph of the person ${person} is of the person ${graph.person}. The relevance fails, and the places decide.`);
+    for (const place of graphPlaces(graph)) {
+      if (!own.has(place)) problems.push(`The interest graph of the person ${person} names the place ${place}, and the person does not watch it.`);
+    }
+  }
+  for (const rule of watch.mandatory ?? []) {
+    if (!own.has(rule.place)) problems.push(`The rule of the life-safety warnings of the person ${person} names the place ${rule.place}, and the person does not watch it.`);
+  }
+  if (graph === undefined && (watch.mandatory?.length ?? 0) > 0) {
+    problems.push(`The person ${person} has rules of the life-safety warnings and no interest graph. The rules have no effect without a graph.`);
+  }
+  return problems;
+}
+
 /**
  * This function gives the places of the configuration for the matching on the machine of the
  * instance, with each position. Do not give these places to a source: use `sourcePlaces`.
@@ -285,7 +321,7 @@ export function sourcePlaces(config: AlertConfig, source: SourceId): WatchedPlac
  * stay on the machine of the instance: the runtime puts them only in the why line of a message.
  */
 export function placeLabels(config: AlertConfig): WhyLabels {
-  const labels = new Map<NodeKey, string>(config.places.map((place) => [`place:${place.id}`, place.label]));
+  const labels = new Map<NodeKey, string>(config.places.map((place) => [placeNode(place.id), place.label]));
   return (node) => labels.get(node);
 }
 

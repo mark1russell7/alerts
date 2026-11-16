@@ -1,6 +1,6 @@
 // The why line: why a message reaches a person, in the limit of each channel (AL-35, `docs/RELEVANCE.md`).
 
-import { SUBJECT_SYSTEMS, type NodeKey, type PlaceId, type SubjectKind, type WhyLimit, type WhyRecord } from "./contracts.ts";
+import { SUBJECT_SYSTEMS, type Assessment, type InterestGraph, type NodeKey, type PlaceId, type SubjectKind, type WhyLimit, type WhyRecord } from "./contracts.ts";
 
 /**
  * The limit of the why line on each kind of channel. A channel descriptor gives the limit of its kind in its
@@ -23,6 +23,17 @@ export type WhyLabels = (node: NodeKey) => string | undefined;
 
 /** A function of labels that gives no label. Each why line then uses plain nouns. */
 export const NO_LABELS: WhyLabels = () => undefined;
+
+/**
+ * This function adds the labels of an interest graph to the labels of the instance. A label of the instance comes
+ * first, so the label of a place in the configuration stays. With no graph or no graph labels, the labels stay the same.
+ */
+export function graphLabels(labels: WhyLabels, graph: Pick<InterestGraph, "labels"> | undefined): WhyLabels {
+  const own = graph?.labels;
+  if (own === undefined) return labels;
+  // `Object.hasOwn`, thus a key such as `constructor` is a plain key.
+  return (node) => labels(node) ?? (Object.hasOwn(own, node) ? own[node] : undefined);
+}
 
 /** A why with a coverage below this value tells that it is a part of the reason. */
 export const WHY_FULL_COVERAGE = 0.99;
@@ -48,6 +59,18 @@ export function kindOfNode(node: NodeKey): SubjectKind | undefined {
   if (colon <= 0) return undefined;
   const system = node.slice(0, colon);
   return Object.hasOwn(SUBJECT_SYSTEMS, system) ? SUBJECT_SYSTEMS[system as keyof typeof SUBJECT_SYSTEMS] : undefined;
+}
+
+const PLACE_SYSTEM = "place:";
+
+/** This function gives the node key of a watched place: `place:<id>`. */
+export function placeNode(place: PlaceId): NodeKey {
+  return `${PLACE_SYSTEM}${place}`;
+}
+
+/** This function gives the id of the watched place of a node key `place:<id>`, or `undefined` for another node. */
+export function placeOfNode(node: NodeKey): PlaceId | undefined {
+  return node.startsWith(PLACE_SYSTEM) ? (node.slice(PLACE_SYSTEM.length) as PlaceId) : undefined;
 }
 
 /** This function tells if a text keeps a limit of a why line. It counts code points and words. */
@@ -116,6 +139,16 @@ export function whyLine(record: WhyRecord, labels: WhyLabels, limit: WhyLimit): 
 export function placeWhy(places: readonly PlaceId[]): WhyRecord | undefined {
   if (places.length === 0) return undefined;
   const first = places.reduce((least, id) => (id < least ? id : least));
-  const key = `place:${first}`;
+  const key = placeNode(first);
   return { rule: "reach.place.places", subject: key, kind: "place", anchor: key, origin: "places", coverage: 1 };
+}
+
+/**
+ * This function gives the why of an assessment. The why of the reason `reach` comes first, when the interest graph
+ * gives one. Else the why is the watched place with the first id (`placeWhy`). A place of the rule of the life-safety
+ * warnings with an edge that is off has no path, thus its why is its place.
+ */
+export function assessmentWhy(assessment: Pick<Assessment, "reasons" | "places">): WhyRecord | undefined {
+  for (const reason of assessment.reasons) if (reason.kind === "reach" && reason.why !== undefined) return reason.why;
+  return placeWhy(assessment.places);
 }

@@ -829,6 +829,7 @@ The core gives the format of the private configuration, `AlertConfig` (`alerts-c
 - `spend`: the money rules of each paid provider account. An entry has the monthly cap and its reserve in US dollars, the floor of the balance and the time zone of the month.
 - `link`: the policy of the link rule of the merge (rule 3). Without it, the instance uses `DEFAULT_LINK_POLICY`.
 - `outage`: the people of the outage call, each with a `TryChain`. Without it, an outage of the instance calls no person.
+- `assess`: the policy of the assessment, `AssessPolicy`. It replaces the full default policy of the core. With no field, the default policy applies.
 
 The times of the delivery and the rank of a copy are not in `AlertConfig`. They are settings of each copy.
 
@@ -840,6 +841,8 @@ The schema `alertConfigSchema` checks the JSON of the configuration first. Then 
 - two spend entries of one provider, and a provider that no channel depends on
 - a reserve of a spend entry that is not below its cap, and a time zone that is not an IANA name
 - an unknown person of the outage call, a person two times, a chain with no step, and a step on a channel with no contact of the person
+- an interest graph of another person, and a place of the graph that the person does not watch
+- a rule of the life-safety warnings at a place that the person does not watch, and rules with no interest graph
 - each problem of `recipientProblems`
 
 A problem names ids, fields and the names of secrets. It does not hold the value of a secret, a label or a position.

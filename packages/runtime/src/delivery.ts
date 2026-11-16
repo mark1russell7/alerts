@@ -11,6 +11,7 @@ import {
   DEFAULT_LINK_POLICY,
   NO_LABELS,
   acknowledgmentOf,
+  graphLabels,
   incidents,
   linkRule,
   messageKey,
@@ -273,6 +274,9 @@ export function createDispatcher(options: DeliveryOptions, context: DeliveryCont
   // Only a copy that the channel repeats needs a stop.
   const repeating = new Set(descriptors.filter((descriptor) => descriptor.repeats).map((descriptor) => descriptor.id as string));
   const recipients = new Map(options.recipients.map((recipient) => [recipient.watch.person as string, recipient]));
+  // The labels of each person: the labels of the instance, and then the labels of the interest graph of the person.
+  const personLabels = new Map(options.recipients.map((recipient) => [recipient.watch.person as string, graphLabels(labels, recipient.watch.interests)]));
+  const labelsOf = (person: string): WhyLabels => personLabels.get(person) ?? labels;
   if (!(options.flightLimit >= options.callLimit)) throw new Error(`The flight limit (${options.flightLimit} ms) is shorter than the call limit (${options.callLimit} ms).`);
   const probeLimit = options.probeLimit ?? Math.max(PROBE_LIMIT, options.retry);
   if (!(probeLimit >= options.retry)) throw new Error(`The probe limit (${probeLimit} ms) is shorter than the retry (${options.retry} ms).`);
@@ -494,7 +498,7 @@ export function createDispatcher(options: DeliveryOptions, context: DeliveryCont
                 return;
               }
               const limit = whyLimits.get(send.channel);
-              const why = limit === undefined || entry.why === undefined ? undefined : whyLine(entry.why, labels, limit);
+              const why = limit === undefined || entry.why === undefined ? undefined : whyLine(entry.why, labelsOf(send.person), limit);
               const message = messageOf(entry.incident, context.state().merge.reports, send, why);
               const deliveryOf = (accepted: Extract<SendOutcome, { ok: true }>): Delivery => ({ key: message.key, incident: send.incident, level: send.level, person: send.person, channel: send.channel, step: send.step, at: accepted.accepted, receipt: accepted.receipt });
               // A send with no free place on its channel goes at a later step. It has no copy yet.
