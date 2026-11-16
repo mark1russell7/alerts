@@ -20,6 +20,7 @@ export * from "./config.ts";
 export * from "./health.ts";
 export * from "./coverage.ts";
 export * from "./lateness.ts";
+export * from "./link.ts";
 export * from "./basemap.ts";
 export * from "./map.ts";
 export * from "./problems.ts";

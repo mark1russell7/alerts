@@ -9,11 +9,13 @@ import {
   type ChannelProcedures,
   type DeliveryStatus,
   type EscalationPolicy,
+  type LinkPolicy,
   type Message,
   type Observation,
   type ObservationId,
   type PersonId,
   type PlaceId,
+  type Position,
   type Receipt,
   type Recipient,
   type Report,
@@ -1059,5 +1061,69 @@ describe("the delivery step of a pass", () => {
     const clock = fakeWallClock(T0);
     const twice = channel(PUSHOVER, "poll", () => clock.now()).procedures;
     expect(() => open({}, openRuntimeLog(":memory:"), clock, { channels: [twice, twice] })).toThrow("Two channels have the id pushover.");
+  });
+});
+
+// A source that reports one earthquake. The code area puts it at the watched place, and the circle is its epicenter.
+function quakeSource(id: SourceId, onset: number, center: Position, magnitude: string): SourceProcedures {
+  return {
+    describe: () => ({ ...SOURCE.describe(), id, title: `The source ${id}`, origins: [id], dependsOn: [`provider:${id}`], kinds: ["geo"] }),
+    fetch: async () => ({
+      ok: true,
+      observations: [{ id: `${id}:q1` as ObservationId, source: id, fetched: T0, contentType: "application/json", body: "{}", transport: { latency: 0 } }],
+      complete: true,
+    }),
+    map: ({ observation }) => ({
+      reports: [
+        {
+          ...warning(observation),
+          id: reportId({ source: id, key: "q1", sent: onset }),
+          source: id,
+          origin: id,
+          key: "q1",
+          kind: { code: "geo.earthquake", label: "Earthquake" },
+          categories: ["geo"],
+          sent: onset,
+          onset,
+          areas: [{ type: "code", system: "ugc", code: "KSZ083" }, { type: "circle", center, radiusKm: 30 }],
+          headline: `Earthquake, from ${id}`,
+          parameters: { magnitude: [magnitude] },
+        },
+      ],
+      problems: [],
+    }),
+  };
+}
+
+describe("the link rule of the merge in the delivery", () => {
+  // Two sources report one earthquake with their own ids: 6 s, 20 km and 0.2 of magnitude apart.
+  function quakes(link?: LinkPolicy) {
+    const clock = fakeWallClock(T0);
+    const log = openRuntimeLog(":memory:");
+    const pushover = channel(PUSHOVER, "poll", () => clock.now());
+    const sms = channel(SMS, "none", () => clock.now());
+    const runtime = openRuntime({
+      log,
+      clock,
+      sources: [quakeSource("usgs" as SourceId, T0, [-97.4, 37.7], "4.5"), quakeSource("emsc" as SourceId, T0 + 6 * SECOND, [-97.3, 37.85], "4.3")],
+      watch: () => ({ places: [KANSAS], kinds: ["geo"] }),
+      view: { ...VIEW, kinds: ["geo"], ...(link === undefined ? {} : { link }) },
+      run: RUN,
+      delivery: { ...DELIVERY, channels: [pushover.procedures, sms.procedures] },
+    });
+    return { runtime, log, pushover: pushover.calls };
+  }
+
+  it("sends one alert for one earthquake of two sources, and an alert for each report with no family in the policy", async () => {
+    const linked = quakes();
+    const pass = await linked.runtime.pass();
+    expect(pass.view.incidents.map((incident) => incident.reports.length)).toEqual([2]);
+    expect(linked.pushover.send).toHaveLength(1);
+    linked.log.close();
+    const apart = quakes({ families: [] });
+    const second = await apart.runtime.pass();
+    expect(second.view.incidents.map((incident) => incident.reports.length)).toEqual([1, 1]);
+    expect(apart.pushover.send).toHaveLength(2);
+    apart.log.close();
   });
 });

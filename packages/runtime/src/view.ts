@@ -5,6 +5,7 @@
  * view again at that time.
  */
 import {
+  DEFAULT_LINK_POLICY,
   advanceHealth,
   balanceUnreadAt,
   carriages,
@@ -13,6 +14,7 @@ import {
   lateness,
   lateSources,
   limitRule,
+  linkRule,
   startHealth,
   systemReports,
   threats,
@@ -25,6 +27,7 @@ import {
   type Incident,
   type Instant,
   type Lateness,
+  type LinkPolicy,
   type SourceDescriptor,
   type SourceHealth,
   type SystemStep,
@@ -50,6 +53,8 @@ export interface ViewConfig extends FoldContext {
   /** The quantile and the level of the two limits of each expectation: the delay and the count of misses. They come from the log. */
   readonly delay: DelayLimitOptions;
   readonly coverage?: CoveragePolicy;
+  /** The policy of the link rule of the merge. The default is `DEFAULT_LINK_POLICY`. The delivery uses the same policy. */
+  readonly link?: LinkPolicy;
 }
 
 /** The view of the system at one time. */
@@ -74,7 +79,7 @@ export interface SystemView {
 export function systemView(state: RuntimeState, config: ViewConfig, at: Instant, quotas?: readonly ChannelQuota[], balances?: readonly ProviderBalance[]): SystemView {
   const steps = config.sources.map((source) => advanceHealth(state.health[source.id] ?? startHealth(source.id, state.start ?? at), at, source, config.health));
   const health = steps.map((step) => step.health);
-  const found = incidents(state.merge, at);
+  const found = incidents(state.merge, at, { link: linkRule(config.link ?? DEFAULT_LINK_POLICY) });
   const checks = carriages(state.merge, found, config.expectations);
   const late = lateness(checks, config.expectations, at, limitRule(config.delay));
   const covered = coverage({ sources: config.sources, health, late: lateSources(late), places: config.places, kinds: config.kinds }, config.coverage);
