@@ -3,7 +3,7 @@
   "name": "@mark1russell7/alerts-channel-twilio",
   "version": "0.1.0",
   "private": true,
-  "description": "The Twilio voice call channel of the alert system: its descriptor, the form of a phone number, and the send, the status and the end of a call.",
+  "description": "The Twilio voice call channel of the alert system: its descriptor, the send of a call, and the three Functions of the outage call.",
   "type": "module",
   "main": "./src/index.ts",
   "scripts": {
@@ -20,8 +20,11 @@
   },
   "dependencies": {
     "@mark1russell7/alerts": "workspace:*",
+    "@mark1russell7/rigor-generators": "^0.1.16",
     "@mark1russell7/text": "^0.0.6",
     "@procedures/notify": "^0.59.1",
-    "polite-crawler": "^0.7.3"
+    "esbuild": "^0.28.2",
+    "polite-crawler": "^0.7.3",
+    "zod": "^4.6.7"
   }
 }

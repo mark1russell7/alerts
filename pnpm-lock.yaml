@@ -270,15 +270,24 @@ importers:
       '@mark1russell7/alerts':
         specifier: workspace:*
         version: link:../core
+      '@mark1russell7/rigor-generators':
+        specifier: ^0.1.16
+        version: 0.1.16
       '@mark1russell7/text':
         specifier: ^0.0.6
         version: 0.0.6
       '@procedures/notify':
         specifier: ^0.59.1
         version: 0.59.1(@mark1russell7/rigor-testkit@0.1.7(@opentelemetry/api@1.10.0)(fast-check@4.10.2))
+      esbuild:
+        specifier: ^0.28.2
+        version: 0.28.2
       polite-crawler:
         specifier: ^0.7.3
         version: 0.7.4(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
+      zod:
+        specifier: ^4.6.7
+        version: 4.6.7
     devDependencies:
       '@mark1russell7/cue':
         specifier: ^2.0.0

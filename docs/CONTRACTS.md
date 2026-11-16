@@ -696,6 +696,8 @@ The package `@mark1russell7/alerts-channel-twilio` operates the chain on the ser
 - A cap counts the calls of the Twilio number in a time window. A try above the cap makes no call.
 - If the move of the status callback fails, the end has no `acked=1`. Then the chain calls again. That is the safe side.
 - Each handler gives the script of the call as data. The Function renders it with the TwiML builders of `@procedures/notify/twilio`.
+- `outageListOf` makes the list from the field `outage` of the private configuration and the recipients of `loadConfig`. The number of each person is the contact of the person on `twilio-call`.
+- The version of the list is the start of its content hash. Thus each change of the list stops the chains of the old list.
 - `outageListProblems` checks the list that the deploy copies from the private configuration. Each problem names no phone number.
 - A gate of `outage.test.ts` follows each sequence of call outcomes through the three handlers. The calls of a person stop at the first key press, and each step makes one call.
 
@@ -713,6 +715,7 @@ The core gives the format of the private configuration, `AlertConfig` (`alerts-c
 - `policies`: the escalation policies of each person with no policies of their own.
 - `spend`: the money rules of each paid provider account. An entry has the monthly cap and its reserve in US dollars, the floor of the balance and the time zone of the month.
 - `link`: the policy of the link rule of the merge (rule 3). Without it, the instance uses `DEFAULT_LINK_POLICY`.
+- `outage`: the people of the outage call, each with a `TryChain`. Without it, an outage of the instance calls no person.
 
 The times of the delivery and the rank of a copy are not in `AlertConfig`. They are settings of each copy.
 
@@ -723,6 +726,7 @@ The schema `alertConfigSchema` checks the JSON of the configuration first. Then 
 - a contact of an unknown person, two contacts of a person on one channel, and a secret with no value
 - two spend entries of one provider, and a provider that no channel depends on
 - a reserve of a spend entry that is not below its cap, and a time zone that is not an IANA name
+- an unknown person of the outage call, a person two times, a chain with no step, and a step on a channel with no contact of the person
 - each problem of `recipientProblems`
 
 A problem names ids, fields and the names of secrets. It does not hold the value of a secret, a label or a position.

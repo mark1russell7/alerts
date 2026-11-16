@@ -167,6 +167,9 @@ export function createTwilioCallChannel(options: TwilioCallChannelOptions): Chan
 }
 
 export * from "./outage.ts";
+export * from "./list.ts";
+export * from "./function.ts";
+export * from "./twilio-runtime.ts";
 
 /** The answer of a read of the balance of the account. */
 export type TwilioBalanceReading = { readonly ok: true; readonly balance: number; readonly currency: string } | { readonly ok: false; readonly message: string };

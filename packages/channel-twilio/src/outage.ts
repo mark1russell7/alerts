@@ -12,9 +12,23 @@
  * The Function renders the script with the TwiML builders of `@procedures/notify/twilio`, and applies the actions.
  */
 
-import { addressProblems, chainNext, type ChainState, type Duration, type Instant, type PersonId, type TryChain, type TryEnd } from "@mark1russell7/alerts";
-// The module `index.ts` exports this module. This module reads its two names only in functions, so the cycle is safe.
-import { CHANNEL_ID, twilioCallDescriptor } from "./index.ts";
+import {
+  addressProblems,
+  chainNext,
+  channelIdSchema,
+  durationSchema,
+  personIdSchema,
+  schemaOf,
+  type ChainState,
+  type Duration,
+  type Instant,
+  type PersonId,
+  type TryChain,
+  type TryEnd,
+} from "@mark1russell7/alerts";
+import { z } from "zod";
+// The descriptor module, not `index.ts`: the bundle of each Function then holds no send code of the channel.
+import { CHANNEL_ID, twilioCallDescriptor } from "./descriptor.ts";
 
 /** One person of the outage call: the phone number and the chain of tries. Each step of the chain is a call. */
 export interface OutagePerson {
@@ -32,6 +46,8 @@ export interface OutageTexts {
   readonly confirmed: string;
   /** The text at the end of a call with no key press. */
   readonly noPress: string;
+  /** The text after a key press of 1 when the Function cannot record the confirmation. The chain then calls again. */
+  readonly unrecorded: string;
 }
 
 /** The default texts of the outage call. */
@@ -39,6 +55,7 @@ export const OUTAGE_TEXTS: OutageTexts = {
   prompt: "Press 1 to confirm.",
   confirmed: "Confirmed. Thank you. No more calls follow for this outage.",
   noPress: "No confirmation. The next call follows.",
+  unrecorded: "The system did not record the confirmation. The next call follows.",
 };
 
 /** The list of the outage call. The deploy of the Function copies it from the private configuration. */
@@ -63,6 +80,35 @@ export interface OutageList {
   /** The texts of the call. Each absent text is the text of `OUTAGE_TEXTS`. */
   readonly texts?: Partial<OutageTexts>;
 }
+
+/**
+ * This schema checks the JSON of a list: the fields and their types. The Function reads the list with it.
+ * Then `outageListProblems` checks the rules of the values.
+ */
+export const outageListSchema: z.ZodType<OutageList, OutageList> = schemaOf<OutageList>()(
+  z.strictObject({
+    version: z.string(),
+    message: z.string(),
+    people: z
+      .array(z.strictObject({ person: personIdSchema, to: z.string(), chain: z.strictObject({ steps: z.array(channelIdSchema).readonly() }).readonly() }).readonly())
+      .readonly(),
+    repeats: z.number(),
+    ringSeconds: z.number(),
+    maxCalls: z.number(),
+    capWindow: durationSchema,
+    voice: z.string().exactOptional(),
+    language: z.string().exactOptional(),
+    texts: z
+      .strictObject({
+        prompt: z.string().exactOptional(),
+        confirmed: z.string().exactOptional(),
+        noPress: z.string().exactOptional(),
+        unrecorded: z.string().exactOptional(),
+      })
+      .readonly()
+      .exactOptional(),
+  }).readonly(),
+);
 
 /** The most rounds of a key press that is not 1. After them, the call ends with no confirmation. */
 export const MAX_PRESS_ROUNDS = 3;
@@ -156,7 +202,7 @@ export function outageStart(list: OutageList, base: string, at: Instant, recent:
  * text for a 1, and the message for another key.
  */
 export function outagePress(list: OutageList, base: string, params: Readonly<Record<string, unknown>>): OutageStep {
-  const texts = textsOf(list);
+  const texts = outageTexts(list);
   const cursor = parseCursor(params, list.version);
   const person = cursor === undefined ? undefined : list.people[cursor.person];
   if (cursor === undefined || person === undefined) return { actions: [], script: say(list, params["Digits"] === "1" ? texts.confirmed : list.message), notes: [{ kind: "stale" }] };
@@ -215,8 +261,8 @@ export function outageListProblems(list: OutageList): string[] {
   const problems: string[] = [];
   const descriptor = twilioCallDescriptor();
   if (list.version.trim() === "") problems.push("The list has no version.");
-  const texts = textsOf(list);
-  for (const [field, text] of [["message", list.message], ["prompt", texts.prompt], ["confirmed", texts.confirmed], ["noPress", texts.noPress]] as const) {
+  const texts = outageTexts(list);
+  for (const [field, text] of [["message", list.message], ["prompt", texts.prompt], ["confirmed", texts.confirmed], ["noPress", texts.noPress], ["unrecorded", texts.unrecorded]] as const) {
     if (text.trim() === "") problems.push(`The text ${field} is empty.`);
     if (UNSPEAKABLE.test(text)) problems.push(`The text ${field} has a control character, and TwiML cannot hold it.`);
   }
@@ -277,7 +323,8 @@ function isCount(value: number, min: number, max: number): boolean {
   return Number.isInteger(value) && value >= min && value <= max;
 }
 
-function textsOf(list: OutageList): OutageTexts {
+/** This function gives the texts of a list: each text of the list, and the default text for each absent text. */
+export function outageTexts(list: OutageList): OutageTexts {
   return { ...OUTAGE_TEXTS, ...list.texts };
 }
 
@@ -290,7 +337,7 @@ function say(list: OutageList, text: string): CallScript {
 }
 
 function gather(list: OutageList, base: string, cursor: OutageCursor): CallScript {
-  const texts = textsOf(list);
+  const texts = outageTexts(list);
   return { kind: "gather", text: `${list.message} ${texts.prompt}`, action: urlOf(base, OUTAGE_PATHS.press, cursor, list.version), repeats: list.repeats, after: texts.noPress, ...voiceOf(list) };
 }
 
