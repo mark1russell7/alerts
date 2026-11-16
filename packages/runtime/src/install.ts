@@ -7,27 +7,34 @@
  * - `node src/install.ts status` tells if the task exists, its state, and the result of one readiness probe of the runtime.
  *   It also reads the check of the heartbeat on Healthchecks.io. The period plus the grace of the check must be the gap of two pings or more.
  *
+ * - `node src/install.ts restart` restarts the runtime on the code of this checkout, with no elevated shell. It checks
+ *   the private files with this code first. Then it waits for the new runtime and its readiness.
+ *
  * After each install, and after each change of `config.json` or `secrets.env`, start `status` when the
  * time of the ready wait passed. A runtime that is not ready sends no alert.
  *
  * The environment gives `ALERTS_HOME`, the folder of the private files, as for `main.ts`. Without
  * it, the folder is `.alerts` in the home folder.
  */
+import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { setTimeout as sleep } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
+import { writeFileAtomic } from "@procedures/fs/files";
 import { valueIn } from "@mark1russell7/quantity";
 import { installService, nodeHostPorts, probeOnce, serviceStatus, uninstallService, type ServiceOutcome } from "@mark1russell7/service/host";
 import { errorMessage } from "@mark1russell7/text";
 import { redactSecrets } from "@mark1russell7/text/redact";
 import { fetchTransport, send, statusLine } from "polite-crawler/api";
 import { HostScheduler, realClock } from "polite-crawler/politeness";
-import { alertsHome, readText, SECRETS_FILE } from "./config.ts";
+import { alertsHome, configPath, readText, SECRETS_FILE } from "./config.ts";
 import { checkOfPingUrl, checksRequest, checkTimesProblem, heartbeatGap } from "./heartbeat.ts";
-import { hostTask, READY_WITHIN, readinessProbe, supervisorDiscovery } from "./host.ts";
-import { checksKeys, INSTANCE_TIMES, USER_AGENT_NAME } from "./instance.ts";
+import { discoveryPid, hostTask, READY_WITHIN, readinessProbe, RUNTIME_GRACE, runtimeDiscovery, supervisorDiscovery } from "./host.ts";
+import { checksKeys, DAEMON_CHECK, INSTANCE_TIMES, USER_AGENT_NAME } from "./instance.ts";
+import { privateFiles, requestRestart, type RestartOutcome } from "./reload.ts";
 
-const ACTIONS = ["install", "remove", "status"] as const;
+const ACTIONS = ["install", "remove", "status", "restart"] as const;
 const action = process.argv[2];
 
 const home = alertsHome(process.env, process.cwd());
@@ -57,6 +64,31 @@ function report(outcome: ServiceOutcome): number {
 
 // The longest time of one readiness probe of the status.
 const PROBE_TIMEOUT_MS = 2000;
+
+// The longest wait of a restart: the longest gap of two passes, the stop of the old runtime, and the readiness of the new one.
+const RESTART_WAIT_MS = heartbeatGap(INSTANCE_TIMES) + valueIn(RUNTIME_GRACE, "ms") + valueIn(READY_WITHIN, "ms");
+
+/** This function prints the outcome of a restart request, and gives the exit code. No line holds a value of a private file. */
+function reportRestart(outcome: RestartOutcome): number {
+  switch (outcome.kind) {
+    case "refused":
+      console.error(`The private files have problems with the code of this checkout. No restart request was written:\n- ${outcome.problems.join("\n- ")}`);
+      return 1;
+    case "no-runtime":
+      console.error("No runtime runs: its discovery file has no process ID. Then read: node src/install.ts status");
+      return 1;
+    case "no-restart":
+      console.error(`The runtime (process ${outcome.pid}) did not restart in ${Math.round(RESTART_WAIT_MS / 1000)} s. The request stays, and the next pass of the runtime reads it.`);
+      return 1;
+    case "restarted":
+      if (outcome.ready) {
+        console.log(`Done. The runtime restarted (process ${outcome.from}, then ${outcome.to}), and it is ready.`);
+        return 0;
+      }
+      console.error(`The runtime restarted (process ${outcome.from}, then ${outcome.to}), and it is not ready. Then read: node src/install.ts status`);
+      return 1;
+  }
+}
 
 /** The result of the read of the outside check. The times are in seconds, as Healthchecks.io shows them. */
 interface OutsideCheck {
@@ -110,6 +142,20 @@ if (action === "install") {
   const loud = keys.tag === "ok" && keys.value.loudUrl !== undefined ? { loud: await outsideCheck(keys.value.key, keys.value.loudUrl, secrets) } : {};
   console.log(JSON.stringify({ task: await serviceStatus(spec, ports, { discovery }), readiness, heartbeat, ...loud }, null, 2));
   if (!readiness.ok || !heartbeat.ok || ("loud" in loud && !loud.loud.ok)) process.exitCode = 1;
+} else if (action === "restart") {
+  const files = privateFiles(home, configPath(process.env, process.cwd()));
+  const outcome = await requestRestart(
+    { files, check: DAEMON_CHECK, waitMs: RESTART_WAIT_MS, pollMs: 2000 },
+    {
+      write: (path, text) => writeFileAtomic(path, text),
+      pid: async () => discoveryPid(await readText(() => readFile(runtimeDiscovery(home), "utf8"))),
+      ready: async () => (await probeOnce(readinessProbe(), PROBE_TIMEOUT_MS, ports)).ok,
+      sleep: (ms) => sleep(ms),
+      now: () => Date.now(),
+      token: () => `${new Date().toISOString()} ${randomUUID()}`,
+    },
+  );
+  process.exitCode = reportRestart(outcome);
 } else {
   console.error(`The action is one of: ${ACTIONS.join(", ")}.`);
   process.exitCode = 2;

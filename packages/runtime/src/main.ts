@@ -96,16 +96,18 @@ async function runtime(): Promise<ServiceBuilder> {
     }),
   );
 
-  // A change of the private files restarts the runtime. Only the profile daemon has a supervisor that starts it again.
+  // A change of the private files, or a restart request, restarts the runtime. Only the profile daemon has a supervisor that starts it again.
   const reload =
     name === "daemon"
       ? reloadHook({
           files,
           check,
           started: loaded.texts,
-          restart: () => {
-            console.error("The private files changed, and they pass the check. The runtime stops, and the supervisor starts it again.");
-            void service.lifecycle?.shutdown("The private files changed.");
+          request: loaded.request,
+          restart: (cause) => {
+            const reason = cause === "requested" ? "A restart request came." : "The private files changed, and they pass the check.";
+            console.error(`${reason} The runtime stops, and the supervisor starts it again.`);
+            void service.lifecycle?.shutdown(cause === "requested" ? "A restart request came." : "The private files changed.");
           },
           onRefused: (problems) => console.error(`A change of the private files has problems. The runtime keeps its files:\n- ${problems.join("\n- ")}`),
         })
