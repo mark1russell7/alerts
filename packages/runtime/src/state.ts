@@ -11,6 +11,8 @@ import {
   NO_SYSTEM_LINES,
   normalize,
   observeFetch,
+  pruneTombstones,
+  retire,
   shiftDelivery,
   shiftEndMark,
   shiftEscalationEnd,
@@ -35,11 +37,13 @@ import {
   type MergeParts,
   type MergeState,
   type Report,
+  type ReportId,
   type SourceDescriptor,
   type SystemLines,
+  type Tombstone,
 } from "@mark1russell7/alerts";
 import { compareCodeUnits } from "@mark1russell7/text/order";
-import type { ImportEvent, RefusalKind, RuntimeEvent, SharedEvent } from "./events.ts";
+import type { ImportEvent, RefusalKind, RetiredEvent, RuntimeEvent, SharedEvent } from "./events.ts";
 
 /** What the fold reads from the configuration: the descriptors of the sources and the options of the health. */
 export interface FoldContext {
@@ -166,7 +170,8 @@ export const EMPTY_RUNTIME: RuntimeState = {
 /** This function adds one event to the state. */
 export function fold(state: RuntimeState, event: RuntimeEvent, context: FoldContext): RuntimeState {
   const rest = foldRest(state, event, context);
-  const parts = event.type === "import" ? partsOf(event.event) : partsOf(event);
+  // A tombstone of this copy keeps the parts of a retired report out of each side. The own merge state applies its own tombstones.
+  const parts = event.type === "import" ? withoutRetired(partsOf(event.event), rest.own.merge.retired) : partsOf(event);
   if (parts === undefined) return rest;
   // The merge is a join of a semilattice, thus the view of each copy gets the parts of each side in any order.
   if (event.type === "import") return { ...rest, merge: add(rest.merge, parts), imported: { ...rest.imported, merge: add(rest.imported.merge, parts) } };
@@ -183,24 +188,50 @@ export function rebuild(events: Iterable<RuntimeEvent>, context: FoldContext): R
   const own = collector();
   const imported = collector();
   for (const event of events) {
+    // The tombstones before the event. A retirement drops some of them, but they still remove the own parts before it.
+    const before = state.own.merge.retired;
     state = foldRest(state, event, context);
     // A step moves the own parts before it, as the fold moves its own merge state. The parts after it are in the new frame.
     if (event.type === "clock") own.shift(event.size);
-    if (event.type === "import") imported.push(partsOf(event.event));
+    if (event.type === "retired") {
+      // The fold drops the expired tombstones only at a retirement. Thus each tombstone of before removed each own part up to this event.
+      own.compact([...before, ...state.own.merge.retired]);
+      imported.drop(event.reports);
+    } else if (event.type === "import") imported.push(withoutRetired(partsOf(event.event), state.own.merge.retired));
     else own.push(partsOf(event));
   }
-  const sides = { own: { ...state.own, merge: normalize(own.parts) }, imported: { ...state.imported, merge: normalize(imported.parts) } };
+  // The live tombstones are in the state, because the collectors keep no tombstone.
+  const sides = { own: { ...state.own, merge: normalize({ ...own.parts, retired: state.own.merge.retired }) }, imported: { ...state.imported, merge: normalize(imported.parts) } };
   return { ...state, ...sides, ...joined(sides.own, sides.imported) };
 }
 
 // The parts of one side of a rebuild, in the order of the log.
-function collector(): { readonly parts: MergeParts; push(parts: MergeParts | undefined): void; shift(size: Duration): void } {
+function collector(): {
+  readonly parts: MergeParts;
+  push(parts: MergeParts | undefined): void;
+  shift(size: Duration): void;
+  compact(tombstones: readonly Tombstone[]): void;
+  drop(gone: readonly ReportId[]): void;
+} {
   const reports: Report[] = [];
   const deliveries: Delivery[] = [];
   const acks: Acknowledgment[] = [];
   const ends: EndMark[] = [];
+  const replace = (merge: Omit<MergeState, "retired">): void => {
+    reports.splice(0, reports.length, ...merge.reports);
+    deliveries.splice(0, deliveries.length, ...merge.deliveries);
+    acks.splice(0, acks.length, ...merge.acks);
+    ends.splice(0, ends.length, ...merge.ends);
+  };
   return {
     parts: { reports, deliveries, acks, ends },
+    // The parts with no part of a report with a tombstone. The collector keeps no tombstone.
+    compact(tombstones) {
+      replace(normalize({ reports, deliveries, acks, ends, retired: tombstones }));
+    },
+    drop(gone) {
+      replace(withoutReports({ reports, deliveries, acks, ends }, new Set(gone)));
+    },
     push(parts) {
       reports.push(...(parts?.reports ?? []));
       deliveries.push(...(parts?.deliveries ?? []));
@@ -319,6 +350,8 @@ function foldRest(state: RuntimeState, event: RuntimeEvent, context: FoldContext
     }
     case "import":
       return foldImport(state, event);
+    case "retired":
+      return foldRetired(base, event);
     case "exchange":
       return { ...base, exchanges: { ...state.exchanges, [event.peer]: { log: event.log, next: event.next } } };
     default:
@@ -338,12 +371,71 @@ function foldImport(state: RuntimeState, { event }: ImportEvent): RuntimeState {
     case "cancelled":
       return state.cancelled.includes(event.delivery) ? state : { ...state, cancelled: [...state.cancelled, event.delivery].sort(compareCodeUnits) };
     case "escalation-end": {
+      if (isRetired(state.own.merge.retired, event.end.incident)) return state;
       const imported = { ...state.imported, escalationEnds: [...state.imported.escalationEnds, event.end] };
       return { ...state, imported, escalationEnds: joinedEnds(state.own, imported) };
     }
     default:
       return state;
   }
+}
+
+/**
+ * The change of a retirement. The own side gets the tombstones, and then it drops each tombstone that ended at the time
+ * of the event. The imported side has no tombstone: the retirement removes its parts, and the fold of an import keeps the
+ * parts of a retired report out. Thus a step of the clock of this copy moves each tombstone, and the imported side has
+ * only the instants of the other copies.
+ */
+function foldRetired(state: RuntimeState, event: RetiredEvent): RuntimeState {
+  const gone = new Set<ReportId>(event.reports);
+  const keep = (end: EscalationEnd): boolean => !gone.has(end.incident);
+  const own: SharedState = { merge: pruneTombstones(retire(state.own.merge, event.reports, event.until), event.time), escalationEnds: state.own.escalationEnds.filter(keep) };
+  const imported: SharedState = { merge: withoutReports(state.imported.merge, gone), escalationEnds: state.imported.escalationEnds.filter(keep) };
+  const cancelled = new Set(event.cancelled);
+  return {
+    ...state,
+    own,
+    imported,
+    ...joined(own, imported),
+    starts: state.starts.filter((start) => !gone.has(start.incident)),
+    cancelled: state.cancelled.filter((key) => !cancelled.has(key)),
+  };
+}
+
+// The merge parts with no part of a report of gone. A merge state in normal form keeps its form, because the function only removes parts.
+function withoutReports<M extends Omit<MergeState, "retired">>(merge: M, gone: ReadonlySet<ReportId>): M {
+  if (gone.size === 0) return merge;
+  return {
+    ...merge,
+    reports: merge.reports.filter((report) => !gone.has(report.id)),
+    deliveries: merge.deliveries.filter((delivery) => !gone.has(delivery.incident)),
+    acks: merge.acks.filter((ack) => !gone.has(ack.incident)),
+    ends: merge.ends.filter((end) => !gone.has(end.report)),
+  };
+}
+
+// The parts with no part of a report with a tombstone. It gives undefined when no part stays.
+function withoutRetired(parts: MergeParts | undefined, retired: readonly Tombstone[]): MergeParts | undefined {
+  if (parts === undefined || retired.length === 0) return parts;
+  const reports = (parts.reports ?? []).filter((report) => !isRetired(retired, report.id));
+  const deliveries = (parts.deliveries ?? []).filter((delivery) => !isRetired(retired, delivery.incident));
+  const acks = (parts.acks ?? []).filter((ack) => !isRetired(retired, ack.incident));
+  const ends = (parts.ends ?? []).filter((end) => !isRetired(retired, end.report));
+  return reports.length + deliveries.length + acks.length + ends.length === 0 ? undefined : { reports, deliveries, acks, ends };
+}
+
+// The report has a tombstone. The tombstones of a merge state in normal form are in the order of their reports.
+function isRetired(retired: readonly Tombstone[], report: ReportId): boolean {
+  let low = 0;
+  let high = retired.length - 1;
+  while (low <= high) {
+    const middle = (low + high) >> 1;
+    const order = compareCodeUnits(retired[middle]!.report, report);
+    if (order === 0) return true;
+    if (order < 0) low = middle + 1;
+    else high = middle - 1;
+  }
+  return false;
 }
 
 /**

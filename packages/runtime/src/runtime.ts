@@ -5,7 +5,7 @@
  * that it gets.
  */
 import { isFrameClock, type WallClock } from "@mark1russell7/algebra/clock";
-import { ONLY_COPY, type ChannelQuota, type CopyWatch, type Duration, type FetchOutcome, type Instant, type LatenessFolds, type ReportId, type SourceDescriptor, type SourceId, type SourceProcedures, type Watch } from "@mark1russell7/alerts";
+import { DEFAULT_LINK_POLICY, linkRule, ONLY_COPY, type ChannelQuota, type CopyWatch, type Duration, type FetchOutcome, type Instant, type LatenessFolds, type ReportId, type SourceDescriptor, type SourceId, type SourceProcedures, type Watch } from "@mark1russell7/alerts";
 import { errorMessage } from "@mark1russell7/text";
 import type { BalanceWatch } from "./balance.ts";
 import { createDispatcher, type DeliveryOptions, type DeliveryStep } from "./delivery.ts";
@@ -15,6 +15,7 @@ import { fetchEvents } from "./fetch.ts";
 import { limited } from "./limit.ts";
 import type { RuntimeLog } from "./log.ts";
 import { SNAPSHOT_MISSES, snapshotStep } from "./snapshot.ts";
+import { retention, retiredEvent, type RetentionOptions } from "./retention.ts";
 import { fold, rebuild, type ExchangeCursor, type RuntimeState } from "./state.ts";
 import { earliest, nextFetch, systemEvent, systemView, type SystemView, type ViewConfig } from "./view.ts";
 
@@ -59,6 +60,8 @@ export interface RuntimeOptions {
    * default is `SNAPSHOT_MISSES`.
    */
   readonly snapshotMisses?: number;
+  /** The retention of old incidents (AL-47). The defaults come from the core. */
+  readonly retention?: RetentionOptions;
   /** The recipients and the channels. Without them, a pass sends nothing. */
   readonly delivery?: DeliveryOptions;
   /**
@@ -197,6 +200,11 @@ export function openRuntime(options: RuntimeOptions): Runtime {
 
   // The misses of the reports of each snapshot source, in memory only. A restart starts them at 0.
   const misses = new Map<SourceId, ReadonlyMap<ReportId, number>>();
+  // The time of the last search for retirements, in memory only. A restart searches again at its first pass.
+  const kept = retention(options.retention);
+  const link = linkRule(config.link ?? DEFAULT_LINK_POLICY);
+  let searched: Instant | undefined;
+
   const limit = options.snapshotMisses ?? SNAPSHOT_MISSES;
   if (!Number.isInteger(limit) || limit < 1) throw new Error(`The count of snapshot misses is ${limit}, not an integer of 1 or more.`);
 
@@ -295,6 +303,13 @@ export function openRuntime(options: RuntimeOptions): Runtime {
       // The system reports of this pass are incidents too, thus the delivery comes after their write.
       const delivery = await dispatcher?.step(at);
       if (delivery !== undefined) conflicts.push(...delivery.conflicts);
+
+      // The retirement comes after the delivery, at most once in each interval. A retired incident is not live, thus no send needs it.
+      if (searched === undefined || at - searched >= kept.every) {
+        searched = at;
+        const retired = retiredEvent(state, at, link, kept);
+        if (retired !== undefined) conflicts.push(...append([retired]));
+      }
 
       // A source or a balance watch can come due after `start`, while the fetches of the pass run. A fetch that runs to its
       // limit of one interval also ends at its next fetch. Such work is due, not a fault: its wake is the first instant after the pass.
