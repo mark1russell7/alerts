@@ -24,11 +24,15 @@
  * The field `outage` of `config.json` gives the outage call. It needs the keys of Twilio and the key
  * `OUTAGE_TOKEN`. The worker `outage` deploys its Functions to Twilio (`outage.ts`).
  *
+ * A copy with other copies reads them over HTTP (`exchange-http.ts`). A copy with the address `listen` serves its
+ * shared events on that address. Both need the key `COPY_TOKEN` of `secrets.env`, with 32 or more characters.
+ *
  * A bad `config.json` gives way to the last good copy `config.good.json` (`reload.ts`). In the profile
  * `daemon`, a change of the private files that passes the check stops the runtime. The supervisor starts it again.
  */
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
+import { configHash } from "@mark1russell7/alerts";
 import { PUSHOVER_QUOTA, PUSHOVER_RESERVE_NOTICES } from "@mark1russell7/alerts-channel-pushover";
 import { openShapeCache, SHAPES_FILE } from "@mark1russell7/alerts-shapes-nws";
 import { realClock, wallClock } from "@mark1russell7/algebra/clock";
@@ -39,12 +43,14 @@ import { SqliteHostStateStore } from "polite-crawler";
 import { fetchTransport, quotaGate } from "polite-crawler/api";
 import { writeFileAtomic } from "@procedures/fs/files";
 import { alertsHome, ConfigRefused, configPath, envSecrets } from "./config.ts";
-import { readCopySettings } from "./copy.ts";
+import { COPY_TOKEN_KEY, readCopySettings } from "./copy.ts";
+import { EXCHANGE_TOKEN_LENGTH, exchangeCall, exchangeHost } from "./exchange-http.ts";
 import { heartbeat, heldOf, type PassSummary } from "./heartbeat.ts";
 import { quotaNote } from "./quota.ts";
 import { PROFILES, declare } from "./index.ts";
 import { daemonCheck, INSTANCE_CHECK, LOUD_PING_URL_KEY, openInstance, pingKeyOf, pingTargets, userAgent } from "./instance.ts";
 import { openCheckedRuntimeLog } from "./log.ts";
+import type { ExchangeRound } from "./peers.ts";
 import { GOOD_CONFIG_FILE, privateFiles, reloadHook, startConfig } from "./reload.ts";
 import { shapeReport, zoneCodesText } from "./shapes.ts";
 import { supervisor } from "./supervise.ts";
@@ -86,6 +92,28 @@ async function runtime(): Promise<ServiceBuilder> {
   const config = loaded.parsed;
   // Each request to the server of another party has this User-Agent.
   const agent = userAgent(config.config.contact);
+
+  // The exchange with the other copies. Each copy has the same token, and a problem holds no value of the token.
+  const exchanges = peers.length > 0 || copy.listen !== undefined;
+  const token = exchanges ? secret(COPY_TOKEN_KEY) : undefined;
+  if (exchanges && (token === undefined || token.length < EXCHANGE_TOKEN_LENGTH)) {
+    throw new ConfigRefused([`The file secrets.env needs ${COPY_TOKEN_KEY} with ${String(EXCHANGE_TOKEN_LENGTH)} or more characters. A copy with other copies or the address listen uses it.`]);
+  }
+  // Each problem of a page goes to the output. A failed read of a copy goes to the output once when it starts and once when it ends.
+  const failing = new Set<string>();
+  const onExchange = (round: ExchangeRound): void => {
+    for (const problem of round.problems) console.error(redactSecrets(`The exchange: ${problem}`, values));
+    for (const id of round.conflicts) console.error(`The exchange: the import ${id} has the id of a different event of the log. The log kept its event.`);
+    for (const peer of peers) {
+      const failure = instance.copies?.worker?.failure(peer.id);
+      if (failure !== undefined && !failing.has(peer.id)) {
+        failing.add(peer.id);
+        console.error(redactSecrets(`The reads of the copy ${peer.id} fail: ${failure}`, values));
+      } else if (failure === undefined && failing.delete(peer.id)) {
+        console.log(`The reads of the copy ${peer.id} work again.`);
+      }
+    }
+  };
 
   // The count of the Pushover messages of the month. The file keeps it across a restart. The key names the application, not its token.
   const quotas = new SqliteHostStateStore(join(home, "quotas.sqlite"));
@@ -154,6 +182,7 @@ async function runtime(): Promise<ServiceBuilder> {
     spendStore: quotas,
     run: randomUUID(),
     copy,
+    ...(token === undefined ? {} : { exchange: { call: exchangeCall({ token }), configHash: configHash(config.config) }, onExchange }),
     ...(onPass === undefined ? {} : { onPass }),
     // The output gets no secret, also when an error quotes a request.
     onError: (error, failures) => console.error(`A pass failed (${failures} in sequence): ${redactSecrets(errorMessage(error), values)}`),
@@ -177,6 +206,11 @@ async function runtime(): Promise<ServiceBuilder> {
   });
   if (instance.zones !== undefined) console.log(zoneCodesText(instance.zones));
 
+  // The listener of the exchange is on the address listen of copy.json. Only the token check of the host guards it.
+  const copies = instance.copies;
+  const host = copies === undefined || copy.listen === undefined || token === undefined ? undefined : exchangeHost({ source: copies.source, token, listen: copy.listen });
+  const exchange = { ...(copies?.loop === undefined ? {} : { loop: copies.loop }), ...(host === undefined ? {} : { host }) };
+
   // The service closes the log and the store of shapes in its shutdown.
   const service = declare({
     port: port("PORT", 8080),
@@ -188,6 +222,7 @@ async function runtime(): Promise<ServiceBuilder> {
     quotas,
     map: instance.map,
     ...(instance.outage === undefined ? {} : { outage: instance.outage }),
+    exchange,
   });
   return service;
 }

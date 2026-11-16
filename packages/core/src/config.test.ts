@@ -1,6 +1,6 @@
 import { random, seedsFrom } from "@mark1russell7/rigor-generators";
 import { describe, expect, it } from "vitest";
-import { CONFIG_FORMAT, configuredExpectations, expectationProblems, loadConfig, localPlaces, placeLabels, sourcePlaces, type AlertConfig, type ContactConfig, type PersonConfig, type PlaceConfig, type SecretLookup } from "./config.ts";
+import { CONFIG_FORMAT, configHash, configuredExpectations, expectationProblems, loadConfig, localPlaces, placeLabels, sourcePlaces, type AlertConfig, type ContactConfig, type PersonConfig, type PlaceConfig, type SecretLookup } from "./config.ts";
 import type { ChannelDescriptor, ChannelId, EscalationPolicy, InterestEdge, InterestGraph, NodeKey, PersonId, PlaceId, Position, SourceId } from "./contracts.ts";
 import type { Expectation } from "./lateness.ts";
 
@@ -218,6 +218,21 @@ describe("loadConfig", () => {
     const addresses = loaded.recipients[0]!.addresses;
     expect(Object.keys(addresses)).toEqual(["pushover", "sms", "constructor"]);
     expect(Object.keys(addresses["constructor"]!)).toEqual(["__proto__", "constructor"]);
+  });
+});
+
+describe("the hash of a configuration", () => {
+  it("does not change with the order of the keys, and changes with each value", () => {
+    const first = config();
+    const reordered = Object.fromEntries(Object.entries(first).reverse()) as unknown as AlertConfig;
+    expect(configHash(reordered)).toBe(configHash(first));
+    expect(configHash(first)).toMatch(/^[0-9a-f]{64}$/);
+    expect(configHash(config({ places: [...PLACES].reverse() }))).not.toBe(configHash(first));
+  });
+
+  it("does not change with the order of the keys of a nested object", () => {
+    const places = PLACES.map((place) => Object.fromEntries(Object.entries(place).reverse()) as unknown as PlaceConfig);
+    expect(configHash(config({ places }))).toBe(configHash(config()));
   });
 });
 

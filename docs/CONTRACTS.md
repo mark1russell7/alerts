@@ -448,6 +448,17 @@ The worker of the exchange (`exchangeWorker` of the runtime) does the reads:
 - Each pass waits for `ready` of the worker before its view. It resolves after the first round, or after one time limit.
 - The transport is a parameter (`ExchangeCall`). `serveEntries` gives the output of the procedure on the side of the other copy.
 
+The HTTP transport (`exchange-http.ts` of the runtime) carries the reads:
+
+- The procedures host of the exchange has the base path `/exchange` on the address `listen`. The reader adds the base path to the URL of each other copy.
+- The host serves only `alerts.log.entries`, and it is read-only. Its probes are off, because the probes of the service stay on the loopback.
+- Each call needs the token `COPY_TOKEN` in the header `Authorization`. A call with another token or with no token gets 401, and the source reads no page.
+- The token has 32 characters or more. Without it, a copy with other copies or with the address `listen` does not start.
+- The host checks the input before the handler. `after` is a whole number of 0 or more, and `limit` is from 1 to 500. The input has no other field.
+- The reader keeps one client of `@procedures/client` for each other copy. The worker gives the time limit and the stop as the signal of each call.
+- The hash of the configuration is the SHA-256 of its canonical JSON (RFC 8785), with the scheme `alerts-config-hash/1` (`configHash` of the core). The order of the keys does not change it.
+- The entry writes each problem of a page to its output. It writes a failure of the reads of a copy one time at its start, and one time at its end.
+
 ### The checks of the copies
 
 - Each copy pings its own first check, with the URL of `pingKey`. Thus the owner gets a message when one copy stops.

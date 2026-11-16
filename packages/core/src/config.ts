@@ -4,6 +4,7 @@
  * configuration. The functions are pure, and the caller gives the secrets.
  */
 import { localTime } from "@mark1russell7/algebra/clock";
+import { canonicalHash } from "@mark1russell7/rigor-generators";
 import type { Address, AssessPolicy, ChannelDescriptor, ChannelId, EscalationPolicy, Instant, InterestGraph, NodeKey, PersonId, PersonWatch, PlaceId, Position, RegionCode, SourceId, WatchedPlace } from "./contracts.ts";
 import { recipientProblems, type Recipient } from "./delivery.ts";
 import type { TryChain } from "./chain.ts";
@@ -390,6 +391,18 @@ export function sourcePlaces(config: AlertConfig, source: SourceId): WatchedPlac
 export function placeLabels(config: AlertConfig): WhyLabels {
   const labels = new Map<NodeKey, string>(config.places.map((place) => [placeNode(place.id), place.label]));
   return (node) => labels.get(node);
+}
+
+/** The scheme of the hash of a configuration. A new scheme gives a new hash to each configuration. */
+export const CONFIG_HASH_SCHEME = "alerts-config-hash/1";
+
+/**
+ * This function gives the hash of a configuration: the SHA-256 of its canonical JSON (RFC 8785), as 64 hex characters.
+ * The order of the keys does not change the hash. The copies of the system compare their hashes in the exchange.
+ * A different hash tells that two copies can route an alert in two ways. The hash holds no value of the configuration.
+ */
+export function configHash(config: AlertConfig): string {
+  return canonicalHash([CONFIG_HASH_SCHEME, config], { form: "json" });
 }
 
 // A watched place has no label. It has the position only when `withPosition` is true.
