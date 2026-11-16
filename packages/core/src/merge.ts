@@ -14,6 +14,7 @@ import type {
   Delivery,
   EndMark,
   Incident,
+  IncidentLine,
   Instant,
   Level,
   MergeState,
@@ -209,6 +210,17 @@ function incidentOf(group: readonly Report[], at: Instant, ended: ReadonlySet<Re
   const liveHeads = heads.filter((report) => report.op !== "cancel" && !(report.expires !== undefined && report.expires <= at) && !ended.has(report.id));
   const basis = liveHeads.length > 0 ? liveHeads : heads;
   const stated = basis.map((report) => ({ report, ...knownValues(report, events) }));
+  const lines = stated.map(
+    ({ report, severity, urgency, certainty }): IncidentLine => ({
+      report: report.id,
+      kind: report.kind,
+      severity,
+      urgency,
+      certainty,
+      ...(report.onset === undefined ? {} : { onset: report.onset }),
+      areas: liveAreas(report, later.get(report.id)),
+    }),
+  );
   const first = group[0]!;
   const worst = top(stated, (values) => SEVERITY.indexOf(values.severity));
   const onsets = basis.flatMap((report) => (report.onset === undefined ? [] : [report.onset]));
@@ -221,10 +233,12 @@ function incidentOf(group: readonly Report[], at: Instant, ended: ReadonlySet<Re
     severity: worst.severity,
     urgency: top(stated, (values) => URGENCY.indexOf(values.urgency)).urgency,
     certainty: top(stated, (values) => CERTAINTY.indexOf(values.certainty)).certainty,
-    areas: uniqueByText(basis.flatMap((report) => liveAreas(report, later.get(report.id)))),
+    areas: uniqueByText(lines.flatMap((line) => line.areas)),
     about: uniqueByText(basis.flatMap((report) => report.about)),
     live: liveHeads.length > 0,
     corroboration: new Set(group.map((report) => report.origin)).size,
+    // The lines are present only when their values differ. Else each place gets the values of the incident.
+    ...(new Set(lines.map(lineValues)).size > 1 ? { lines } : {}),
   };
   return {
     ...incident,
@@ -233,6 +247,9 @@ function incidentOf(group: readonly Report[], at: Instant, ended: ReadonlySet<Re
     ...(expiries.length === basis.length && expiries.length > 0 ? { expires: expiries.reduce((a, b) => Math.max(a, b)) } : {}),
   };
 }
+
+// The values of a line with no areas, as one key for a set.
+const lineValues = (line: IncidentLine): string => canonical([line.kind, line.severity, line.urgency, line.certainty, line.onset ?? null]);
 
 // The text of a region code, as one key for a set.
 const codeText = (area: Extract<Area, { type: "code" }>): string => JSON.stringify([area.system, area.code]);

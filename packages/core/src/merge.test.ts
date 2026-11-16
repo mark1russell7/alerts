@@ -1,6 +1,6 @@
 import { canonicalJson, random, seedsFrom, type Random } from "@mark1russell7/rigor-generators";
 import { describe, expect, it } from "vitest";
-import type { Acknowledgment, ChannelId, Delivery, EndMark, Incident, MergeState, ObservationId, PersonId, Report, SourceId, Status } from "./contracts.ts";
+import type { Acknowledgment, ChannelId, Delivery, EndMark, Incident, MergeState, ObservationId, PersonId, Report, Severity, SourceId, Status } from "./contracts.ts";
 import { reportId } from "./ids.ts";
 import { areasWithoutBlocks } from "./shapes.ts";
 import { EMPTY_STATE, acknowledgedLevel, add, endedReports, incidents, join, normalize, sentLevel, type LinkRule } from "./merge.ts";
@@ -535,5 +535,54 @@ describe("the levels of a person", () => {
     expect(rest).toEqual([]);
     expect(sentLevel(after, merged!, person)).toBe("urgent");
     expect(acknowledgedLevel(after, merged!, person)).toBe("urgent");
+  });
+});
+
+describe("the lines of an incident (AL-14)", () => {
+  // The bands of the shaking of one made-up earthquake at 0, 0: one report for each band, with one circle.
+  const band = (key: string, severity: Severity, radiusKm: number): Report =>
+    report({
+      key,
+      kind: { code: "geo.earthquake", label: "Earthquake" },
+      severity,
+      correlation: [{ system: "quake", id: "q1" }],
+      areas: [{ type: "circle", center: [0, 0], radiusKm, block: "band" }],
+    });
+  const bands = [band("b1", "extreme", 40), band("b2", "severe", 76), band("b3", "moderate", 137), band("b4", "minor", 522)];
+
+  it("gives one line for each live head, with its values and its areas", () => {
+    const [one, ...rest] = incidents(normalize({ reports: bands }), T0 + 1);
+    expect(rest).toEqual([]);
+    expect(one?.severity).toBe("extreme");
+    const lines = one?.lines ?? [];
+    expect(lines.map((line) => [line.severity, line.areas])).toEqual(
+      [...bands].sort((a, b) => (a.id < b.id ? -1 : 1)).map((head) => [head.severity, [{ ...head.areas[0], block: `${head.id}/band` }]]),
+    );
+    expect(new Set(lines.map((line) => line.report))).toEqual(new Set(bands.map((head) => head.id)));
+    // The areas of the incident are the areas of its lines.
+    expect(new Set(one?.areas.map((area) => JSON.stringify(area)))).toEqual(new Set(lines.flatMap((line) => line.areas.map((area) => JSON.stringify(area)))));
+  });
+
+  it("gives no lines when the values of the heads are equal, or for one head", () => {
+    const equal = [band("b1", "severe", 40), band("b2", "severe", 76)];
+    expect(incidents(normalize({ reports: equal }), T0 + 1)[0]?.lines).toBeUndefined();
+    expect(incidents(normalize({ reports: [bands[0] as Report] }), T0 + 1)[0]?.lines).toBeUndefined();
+  });
+
+  it("drops a line when its report ends", () => {
+    const [one] = incidents(normalize({ reports: bands }), (bands[0] as Report).expires as number);
+    expect(one?.live).toBe(false);
+    const cancel = report({ key: "c1", op: "cancel", sent: T0 + 1, references: ["b4"], correlation: [{ system: "quake", id: "q1" }], areas: [] });
+    const [left] = incidents(normalize({ reports: [...bands, cancel] }), T0 + 2);
+    expect(left?.lines?.map((line) => line.report).sort()).toEqual(bands.slice(0, 3).map((head) => head.id).sort());
+  });
+
+  it.each(SEEDS)("gives the same lines in each order of the reports (seed %i)", (seed) => {
+    const r = random(seed);
+    for (let round = 0; round < 50; round += 1) {
+      const pool = bands.map((_, index) => band(`b${String(index + 1)}`, r.pick(["extreme", "severe", "moderate", "minor"] as const), r.int(1, 600)));
+      const shuffled = r.shuffle([...pool]);
+      same(incidents(normalize({ reports: pool }), T0 + 1), incidents(normalize({ reports: shuffled }), T0 + 1));
+    }
   });
 });

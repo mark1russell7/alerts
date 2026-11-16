@@ -47,6 +47,7 @@ import {
   type HealthState,
   type Id,
   type Incident,
+  type IncidentLine,
   type Instant,
   type Kind,
   type KindClass,
@@ -517,6 +518,21 @@ export const coverageSchema: z.ZodType<Coverage, Coverage> = schemaOf<Coverage>(
  * go from the smallest, each one time, and its anchor is the smallest (lines 434 and 436). The order
  * is the order of the code units, as in the merge. The corroboration is a count (line 450).
  */
+/** This schema checks one line of an incident: a report that gives the values of the incident, with its areas. */
+export const incidentLineSchema: z.ZodType<IncidentLine, IncidentLine> = schemaOf<IncidentLine>()(
+  z
+    .strictObject({
+      report: reportIdSchema,
+      kind: kindSchema,
+      severity: severitySchema,
+      urgency: urgencySchema,
+      certainty: certaintySchema,
+      onset: instantSchema.exactOptional(),
+      areas: z.array(areaSchema).readonly(),
+    })
+    .readonly(),
+);
+
 export const incidentSchema: z.ZodType<Incident, Incident> = schemaOf<Incident>()(
   z
     .strictObject({
@@ -533,8 +549,13 @@ export const incidentSchema: z.ZodType<Incident, Incident> = schemaOf<Incident>(
       about: z.array(subjectSchema).readonly(),
       live: z.boolean(),
       corroboration: count(),
+      lines: z.array(incidentLineSchema).min(2, "An incident with lines has two lines or more.").readonly().exactOptional(),
     })
     .readonly()
+    .refine((incident) => (incident.lines ?? []).every((line) => incident.reports.includes(line.report)), {
+      error: "The report of each line is a report of the incident.",
+      path: ["lines"],
+    })
     .refine((incident) => incident.reports[0] === incident.anchor, { error: "The anchor of an incident is its smallest report id.", path: ["anchor"] })
     .refine(
       (incident) =>
@@ -1069,6 +1090,7 @@ export const assessReasonSchema: z.ZodType<AssessReason, AssessReason> = schemaO
         shapeRefused: z.literal(true).exactOptional(),
       }),
       z.strictObject({ kind: z.literal("subject"), subject: subjectWatchSchema }),
+      z.strictObject({ kind: z.literal("place-table"), place: placeIdSchema, reports: z.array(reportIdSchema).min(1).readonly(), level: assessedLevelSchema }),
       z.strictObject({
         kind: z.literal("table"),
         class: z.string().exactOptional(),

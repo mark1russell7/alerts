@@ -12,6 +12,7 @@ import type {
   AssessReason,
   Assessment,
   Incident,
+  IncidentLine,
   KindClass,
   LevelTable,
   PersonWatch,
@@ -161,8 +162,8 @@ export function admits(policy: AssessPolicy, incident: Pick<Incident, "status" |
   return (classOf(policy, incident.kind.code)?.statuses ?? policy.statuses).includes(incident.status);
 }
 
-/** This function gives the level of the table for an incident: the lower of its two lookups. */
-export function tableLevel(policy: AssessPolicy, incident: Pick<Incident, "kind" | "severity" | "urgency">): TableResult {
+/** This function gives the level of the table for an incident or a line: the lower of its two lookups. */
+export function tableLevel(policy: AssessPolicy, incident: Pick<Incident | IncidentLine, "kind" | "severity" | "urgency">): TableResult {
   const found = classOf(policy, incident.kind.code);
   const table = found ?? policy.otherwise;
   const bySeverity = table.severity[incident.severity];
@@ -285,6 +286,10 @@ export function matchSubjects(incident: Pick<Incident, "about">, watches: readon
  * Else the level is the highest level at the matches of the person: each place in the areas, and
  * each watched subject. At each match, the first rule of the person that matches can lower the
  * level of the table. A rule with places does not match a subject.
+ *
+ * An incident with lines has a table level at each place: the highest level of the lines whose areas
+ * hold that place. Thus a far place of an earthquake gets the level of its band of shaking, not the
+ * level of the center. A subject gets the level of the incident.
  */
 export function assess(
   incident: Incident,
@@ -324,27 +329,44 @@ export function assess(
   const table = tableLevel(policy, incident);
   reasons.push({ kind: "table", ...table });
   let level: AssessedLevel = "none";
+  // The level of the table at one place: the highest table of the lines that hold the place.
+  const placeTable = (id: PlaceId): AssessedLevel => {
+    const place = byId.get(id);
+    const holding = place === undefined ? [] : linesAt(incident, place);
+    if (holding.length === 0) return table.level;
+    const found = holding.map((line) => tableLevel(policy, line).level).reduce(higherLevel);
+    if (found !== table.level) reasons.push({ kind: "place-table", place: id, reports: holding.map((line) => line.report), level: found });
+    return found;
+  };
   // The level at one match: the first rule that matches can lower the level of the table.
-  const atMatch = (place: PlaceId | undefined): AssessedLevel => {
+  const atMatch = (place: PlaceId | undefined, base: AssessedLevel): AssessedLevel => {
     const index = person.rules.findIndex(
       (rule) =>
         (rule.places === undefined || (place !== undefined && rule.places.includes(place))) &&
         (rule.kinds === undefined || hasKind(rule.kinds, incident.kind.code)),
     );
     const rule = person.rules[index];
-    if (rule === undefined || rank(rule.max) >= rank(table.level)) return table.level;
+    if (rule === undefined || rank(rule.max) >= rank(base)) return base;
     reasons.push(place === undefined ? { kind: "rule", index, max: rule.max } : { kind: "rule", place, index, max: rule.max });
     return rule.max;
   };
   for (const match of matches) {
     reasons.push({ kind: "place", ...match });
-    level = higherLevel(level, atMatch(match.place));
+    level = higherLevel(level, atMatch(match.place, placeTable(match.place)));
   }
   for (const subject of subjects) {
     reasons.push({ kind: "subject", subject });
-    level = higherLevel(level, atMatch(undefined));
+    level = higherLevel(level, atMatch(undefined, table.level));
   }
   return result(level);
+}
+
+/**
+ * This function gives the lines of an incident whose areas hold a place, in the order of the lines. Each line
+ * decides by the rules of `matchPlaces`. An incident with no lines gives an empty list.
+ */
+export function linesAt(incident: Pick<Incident, "lines">, place: WatchedPlace): IncidentLine[] {
+  return (incident.lines ?? []).filter((line) => matchPlaces(line, [place]).length > 0);
 }
 
 // The reason when the incident has no place and no subject of the person. A shape can match only a
