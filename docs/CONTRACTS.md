@@ -871,7 +871,8 @@ The schema `alertConfigSchema` checks the JSON of the configuration first. Then 
 - a contact of an unknown person, two contacts of a person on one channel, and a secret with no value
 - two spend entries of one provider, and a provider that no channel depends on
 - a reserve of a spend entry that is not below its cap, and a time zone that is not an IANA name
-- an unknown person of the outage call, a person two times, a chain with no step, and a step on a channel with no contact of the person
+- an unknown person of the outage call, and a person two times in the call
+- a chain of the call with no step, and a step on a channel with no contact of the person
 - an interest graph of another person, and a place of the graph that the person does not watch
 - a rule of the life-safety warnings at a place that the person does not watch, and rules with no interest graph
 - each problem of `recipientProblems`

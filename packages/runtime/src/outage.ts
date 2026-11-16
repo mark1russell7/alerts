@@ -83,8 +83,8 @@ export interface OutageDeployOptions {
   /** The clock of the times of the state. */
   readonly wall: WallClock;
   /**
-   * The longest time of one deploy. At it, the worker aborts the deploy. Give the pass limit: the drain
-   * of the service holds the pass limit, so the drain does not cut a deploy before its bound.
+   * The longest time of one deploy. At it, the worker aborts the deploy. Give the pass limit. The drain
+   * of the service holds the pass limit. Thus the drain does not cut a deploy before its bound.
    */
   readonly limit: Duration;
   /** The time between two deploys that pass. The default is one day. */
