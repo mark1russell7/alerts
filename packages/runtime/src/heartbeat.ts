@@ -46,6 +46,8 @@ export const TOLERATED_FAILED_PASSES = 1;
 /** The parts of a pass that the heartbeat reads. A `Pass` of the runtime has them. */
 export interface PassSummary {
   readonly at: Instant;
+  /** The size of the step of the wall clock that the pass followed (`Pass.stepped`). The heartbeat moves its times by it. */
+  readonly stepped?: Duration;
   readonly view: { readonly health: readonly { readonly source: SourceId; readonly state: HealthState }[] };
   readonly delivery?: {
     readonly sent: readonly { readonly channel: string }[];
@@ -156,11 +158,21 @@ export function pingOf(pass: PassSummary, held: HeartbeatState["held"] = holdSte
  * `busy` is true, a ping is in flight. Then no ping goes, and only the fails change.
  */
 export function heartbeatStep(state: HeartbeatState, pass: PassSummary, every: Duration, busy = false): { readonly state: HeartbeatState; readonly ping?: Ping } {
-  const held = holdStep(state.held, pass);
+  const moved = pass.stepped === undefined ? state : shiftHeartbeat(state, pass.stepped);
+  const held = holdStep(moved.held, pass);
   const ping = pingOf(pass, held);
-  const last = state.last;
+  const last = moved.last;
   const due = !busy && (last === undefined || last.kind !== ping.kind || pass.at - last.at >= every || pass.at < last.at);
-  return due ? { state: { held, last: { at: pass.at, kind: ping.kind } }, ping } : { state: { ...state, held } };
+  return due ? { state: { held, last: { at: pass.at, kind: ping.kind } }, ping } : { state: { ...moved, held } };
+}
+
+/**
+ * This function moves the times of the state of the heartbeat by the size of a step of the wall clock. They are the
+ * time of the last ping and the end of each fail. Thus a fail ends at its time on the monotonic clock.
+ */
+export function shiftHeartbeat(state: HeartbeatState, size: Duration): HeartbeatState {
+  const held = Object.fromEntries(Object.entries(state.held).map(([channel, hold]) => [channel, { ...hold, until: hold.until + size }]));
+  return { held, ...(state.last === undefined ? {} : { last: { ...state.last, at: state.last.at + size } }) };
 }
 
 /** The options of `heartbeatGap`. */
@@ -260,7 +272,9 @@ export function heartbeat(options: HeartbeatOptions): (pass: PassSummary) => voi
   return (pass) => {
     if (!started) {
       started = true;
-      state = { held: options.held?.(pass.at) ?? {} };
+      // The fails of the log are in the frame of the pass already. The step of the pass moves them again, thus the
+      // start moves them back by the same size first.
+      state = shiftHeartbeat({ held: options.held?.(pass.at) ?? {} }, -(pass.stepped ?? 0));
     }
     const step = heartbeatStep(state, pass, every, flight);
     state = step.state;

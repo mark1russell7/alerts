@@ -17,6 +17,7 @@ import {
   pingOf,
   pingUrl,
   REFUSAL_KINDS,
+  shiftHeartbeat,
   UNREACHABLE,
   type HeartbeatFetch,
   type HeartbeatState,
@@ -121,6 +122,24 @@ describe("the steps of the heartbeat", () => {
   it("holds the fail through the passes before the retry: one fail ping and no success ping", () => {
     const passes = [healthy(T0), refused(T0 + SECOND, "auth", T0 + 11 * SECOND), healthy(T0 + 4 * SECOND), healthy(T0 + 8 * SECOND), refused(T0 + 11 * SECOND, "auth", T0 + 21 * SECOND)];
     expect(kindsOf(passes)).toEqual(["success", "fail", "-", "-", "-"]);
+  });
+
+  it("moves its times by a step of the wall clock: the fail holds to its retry, and the next ping comes at its time (AL-49)", () => {
+    const HOUR = 3_600_000;
+    const every = 60 * SECOND;
+    // The channel refused a send at T0 + 1 s, with a retry at T0 + 11 s. Then the wall clock stepped back 1 h.
+    let state = heartbeatStep(HEARTBEAT_START, healthy(T0), every).state;
+    state = heartbeatStep(state, refused(T0 + SECOND, "auth", T0 + 11 * SECOND), every).state;
+    expect(shiftHeartbeat(state, -HOUR)).toEqual({ last: { at: T0 + SECOND - HOUR, kind: "fail" }, held: { pushover: { kinds: ["auth"], until: T0 + 11 * SECOND - HOUR } } });
+    const after = heartbeatStep(state, { ...healthy(T0 + 4 * SECOND - HOUR), stepped: -HOUR }, every);
+    // No ping: the step back is not a change, and the fail holds to its retry on the monotonic clock.
+    expect(after.ping).toBeUndefined();
+    expect(after.state.held["pushover"]?.until).toBe(T0 + 11 * SECOND - HOUR);
+    expect(heartbeatStep(after.state, healthy(T0 + 10 * SECOND - HOUR), every).ping).toBeUndefined();
+    expect(heartbeatStep(after.state, healthy(T0 + 11 * SECOND - HOUR), every).ping?.kind).toBe("success");
+    // With no size of the step, a time before the last ping gives a ping, as a clock with no frames needs.
+    expect(heartbeatStep(state, healthy(T0 + 4 * SECOND - HOUR), every).ping?.kind).toBe("fail");
+    expect(shiftHeartbeat(HEARTBEAT_START, HOUR)).toEqual(HEARTBEAT_START);
   });
 
   it("ends the fail at the first pass at or after the retry with no refusal on the channel", () => {
