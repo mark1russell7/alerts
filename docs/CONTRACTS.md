@@ -287,11 +287,11 @@ Each channel package registers four procedures under `alerts.channel.<id>`:
 | `status` | reads `network` | It gives the state of a receipt: accepted, delivered, acknowledged, expired or failed. |
 | `cancel` | writes `network` | It stops the repeats of a message: each copy of a receipt, or one copy by its copy id. It is idempotent. |
 
-A descriptor with `address` tells the fields of the address of a person on the channel: the name, the need and the form of each field.
+A descriptor with `address` tells the fields of the address of a person on the channel. Each field has a name, a need and a form.
 
 - The load of the configuration checks each address on a known channel with `addressProblems`. A problem stops the start, before the first alert.
-- An address has each required field, and each value has the form of its field. It has no field that the channel does not read.
-- A problem names the field and its form, and never its value, because a value can be a secret.
+- An address has each necessary field, and each value has the form of its field. It has no field that the channel does not read.
+- A problem names the field and its form, and not its value, because a value can be a secret.
 - The form is a regular expression of the whole value. Pushover takes the key form of `@procedures/notify`. The Twilio call takes a phone number in E.164 form.
 
 The channel does not escalate. The core does:
@@ -303,6 +303,22 @@ The channel does not escalate. The core does:
 - The core decides the silent mode. `escalate` sets `quiet` on each send, and `Message.quiet` takes it. Each channel maps it to its silent mode: Pushover priority `-1`, or a text and no call on Twilio. No channel keeps its own rule about the time of day.
 - On an iPhone, an Emergency message of Pushover sounds through silent mode only when the Pushover app has Critical Alerts on for Emergency. A reset of the iOS permission of Pushover turns that setting off.
 - A channel with `why` in its descriptor gets a why line in `Message.why`: why the message reaches the person, in the limit of the channel. `WHY_LIMITS` in `why.ts` holds the limit of each kind of channel. Pushover takes the push limit, and puts the line first in the body.
+
+The Twilio call channel makes one voice call for each send:
+
+- The call says the title, the why line and the body two times. Its last sentence tells the person to acknowledge in the app.
+- A quiet message, a message that expired and an address with a problem get no call. The outcome is `refused`.
+- An answer is `delivered`, and not `acknowledged`. The machine detection of Twilio can take a voice mailbox for a person.
+- A call that nobody answered, and a call that Twilio could not make, are `failed`. The escalation goes to its next step.
+- `cancel` ends the call in each state. Twilio refuses the end of a call that it does not know, and the cancel ends with no error.
+
+The cap of the spend of a call channel is two gates of `polite-crawler/api`, with one store, one key and one quota name:
+
+- The two gates count the same units. The gate of `life-safety` has no reserve. Thus only `life-safety` uses the last part of the cap.
+- A full cap gives `rate-limited`. A cap in its reserve gives `reserved` to a message below `life-safety`.
+- A call that Twilio refused, did not authorize or limited gives its units back. Twilio made no call.
+- A network fault, a time-out and a server error keep the units, because the call can have started.
+- A fault of the store of a gate does not stop a call. The call goes with no count.
 
 ## The delivery promise
 

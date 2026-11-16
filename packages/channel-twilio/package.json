@@ -3,7 +3,7 @@
   "name": "@mark1russell7/alerts-channel-twilio",
   "version": "0.1.0",
   "private": true,
-  "description": "The Twilio voice call channel of the alert system: its descriptor and the form of a phone number of a person.",
+  "description": "The Twilio voice call channel of the alert system: its descriptor, the form of a phone number, and the send, the status and the end of a call.",
   "type": "module",
   "main": "./src/index.ts",
   "scripts": {
@@ -19,6 +19,9 @@
     "vitest": "^5.0.3"
   },
   "dependencies": {
-    "@mark1russell7/alerts": "workspace:*"
+    "@mark1russell7/alerts": "workspace:*",
+    "@mark1russell7/text": "^0.0.6",
+    "@procedures/notify": "link:../../../../client-wt/notify-main/packages/notify",
+    "polite-crawler": "^0.7.3"
   }
 }
