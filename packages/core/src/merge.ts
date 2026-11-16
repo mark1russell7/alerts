@@ -104,8 +104,9 @@ export interface IncidentOptions {
  * 2. The two reports share a correlation key.
  * 3. The link rule matches.
  *
- * A head of an incident is a report that no report of its source references, and that no later
- * report of its origin replaces (the rule of the copies, `docs/CONTRACTS.md`).
+ * A head of an incident is a report that no reference ends as a whole, and that no later report of
+ * its origin replaces (the rule of the copies, `docs/CONTRACTS.md`). The areas of the incident are
+ * the areas of its heads with no code that has a later statement.
  */
 export function incidents(state: MergeState, at: Instant, options: IncidentOptions = {}): Incident[] {
   const reports = state.reports;
@@ -200,13 +201,9 @@ function top<T>(items: readonly T[], rank: (item: T) => number): T {
 }
 
 function incidentOf(group: readonly Report[], at: Instant, ended: ReadonlySet<ReportId>): Incident {
-  const superseded = new Set<string>();
-  for (const report of group) {
-    for (const reference of report.references) superseded.add(JSON.stringify([report.source, reference]));
-  }
   const events = eventsOf(group);
-  const replaced = replacedCopies(events);
-  let heads = group.filter((report) => !superseded.has(JSON.stringify([report.source, report.key])) && !replaced.has(report.id));
+  const { superseded, later, replaced } = statementsOf(group, events);
+  let heads = group.filter((report) => !superseded.has(report.id) && !replaced.has(report.id));
   // A cycle of references leaves no head. Then each report counts as a head.
   if (heads.length === 0) heads = [...group];
   const liveHeads = heads.filter((report) => report.op !== "cancel" && !(report.expires !== undefined && report.expires <= at) && !ended.has(report.id));
@@ -224,7 +221,7 @@ function incidentOf(group: readonly Report[], at: Instant, ended: ReadonlySet<Re
     severity: worst.severity,
     urgency: top(stated, (values) => URGENCY.indexOf(values.urgency)).urgency,
     certainty: top(stated, (values) => CERTAINTY.indexOf(values.certainty)).certainty,
-    areas: uniqueByText(basis.flatMap(blockAreas)),
+    areas: uniqueByText(basis.flatMap((report) => liveAreas(report, later.get(report.id)))),
     about: uniqueByText(basis.flatMap((report) => report.about)),
     live: liveHeads.length > 0,
     corroboration: new Set(group.map((report) => report.origin)).size,
@@ -237,42 +234,99 @@ function incidentOf(group: readonly Report[], at: Instant, ended: ReadonlySet<Re
   };
 }
 
+// The text of a region code, as one key for a set.
+const codeText = (area: Extract<Area, { type: "code" }>): string => JSON.stringify([area.system, area.code]);
+
+function codesOf(report: Report): ReadonlySet<string> {
+  return new Set(report.areas.flatMap((area) => (area.type === "code" ? [codeText(area)] : [])));
+}
+
+/** The later statements of the codes of the reports of a group. */
+interface Statements {
+  /** The reports that a reference ends as a whole. */
+  readonly superseded: ReadonlySet<ReportId>;
+  /** For each report, the codes of it that a later statement names. */
+  readonly later: ReadonlyMap<ReportId, ReadonlySet<string>>;
+  /** The reports with one or more codes, each of which has a later statement (the rule of the copies). */
+  readonly replaced: ReadonlySet<ReportId>;
+}
+
 /**
- * The rule of the copies. Two reports of one origin with a shared correlation key tell of one event.
- * The later reports of the event replace an earlier report, from any source, when together they name
- * each region code of the earlier report. Thus a cancel of the NWS also ends the copy of that alert
- * from IPAWS. The rows of IEM, one for each county, end the NWS message of two counties.
+ * This function gives the later statements of the codes of each report of a group. Two rules give a statement.
  *
- * For each code, the latest reports that name it stay, so no later statement of a code is lost. A
- * code that no later report names keeps its report live, and a report with no code is not replaced.
- * Then the error is on the safe side. The rule reads only the group, so it keeps the laws of the merge.
+ * - The rule of the copies. Two reports of one origin with a shared correlation key tell of one event. A report
+ *   of the event with a later sent time states each code that it names. A tie of the sent time states nothing.
+ * - The rule of a part. A cancel that names a proper subset of the codes of a report that it references states
+ *   only those codes. The NWS ends a part of a warning so: one cancel for the part, one update for the rest.
+ *
+ * Each other reference ends the whole report, as CAP tells. A report is replaced when each of its codes has a
+ * later statement. Thus a cancel of the NWS also ends the copy of that alert from IPAWS. The rows of IEM, one
+ * for each county, end the NWS message of two counties.
+ *
+ * For each code, the latest reports that name it stay, so no later statement of a code is lost. A code with no
+ * later statement keeps its report live, and a report with no code is not replaced. When the update of the rest
+ * is lost, the rest stays live until it expires. Each error is on the safe side. The rule reads only the group,
+ * so it keeps the laws of the merge.
  */
-function replacedCopies(byEvent: Events): Set<ReportId> {
-  const codes = new Map<ReportId, ReadonlySet<string>>();
-  const codesOf = (report: Report): ReadonlySet<string> => {
-    let set = codes.get(report.id);
-    if (set === undefined) {
-      set = new Set(report.areas.flatMap((area) => (area.type === "code" ? [JSON.stringify([area.system, area.code])] : [])));
-      codes.set(report.id, set);
-    }
-    return set;
+function statementsOf(group: readonly Report[], byEvent: Events): Statements {
+  const codes = new Map(group.map((report) => [report.id, codesOf(report)]));
+  const later = new Map<ReportId, Set<string>>();
+  const state = (report: Report, named: Iterable<string>): void => {
+    let set = later.get(report.id);
+    if (set === undefined) later.set(report.id, (set = new Set()));
+    for (const code of named) set.add(code);
   };
-  const replaced = new Set<ReportId>();
   for (const reports of byEvent.values()) {
-    // From the latest sent time to the earliest. `later` holds the codes of the reports after the current time.
+    // From the latest sent time to the earliest. `seen` holds the codes of the reports after the current time.
     const ordered = [...reports].sort((a, b) => b.sent - a.sent);
-    const later = new Set<string>();
+    const seen = new Set<string>();
     for (let start = 0, end = 0; start < ordered.length; start = end) {
       while (end < ordered.length && ordered[end]!.sent === ordered[start]!.sent) end += 1;
       const tied = ordered.slice(start, end);
-      for (const report of tied) {
-        const named = codesOf(report);
-        if (named.size > 0 && [...named].every((code) => later.has(code))) replaced.add(report.id);
-      }
-      for (const report of tied) for (const code of codesOf(report)) later.add(code);
+      if (seen.size > 0) for (const report of tied) state(report, seen);
+      for (const report of tied) for (const code of codes.get(report.id)!) seen.add(code);
     }
   }
-  return replaced;
+  const byKey = new Map<string, Report[]>();
+  for (const report of group) {
+    const key = JSON.stringify([report.source, report.key]);
+    const reports = byKey.get(key);
+    if (reports === undefined) byKey.set(key, [report]);
+    else reports.push(report);
+  }
+  const superseded = new Set<ReportId>();
+  for (const report of group) {
+    const named = codes.get(report.id)!;
+    for (const reference of report.references) {
+      for (const target of byKey.get(JSON.stringify([report.source, reference])) ?? []) {
+        const own = codes.get(target.id)!;
+        const part = report.op === "cancel" && named.size > 0 && named.size < own.size && [...named].every((code) => own.has(code));
+        if (part) state(target, named);
+        else superseded.add(target.id);
+      }
+    }
+  }
+  const replaced = new Set<ReportId>();
+  for (const report of group) {
+    const own = codes.get(report.id)!;
+    const stated = later.get(report.id);
+    if (own.size > 0 && stated !== undefined && [...own].every((code) => stated.has(code))) replaced.add(report.id);
+  }
+  return { superseded, later, replaced };
+}
+
+/**
+ * This function gives the areas of a report with no code that has a later statement. A block with such a code also
+ * loses its shapes, because a code cannot cut a shape. The block then decides by its other codes. A block with no
+ * shape covers each place in its codes, so the error is on the safe side.
+ */
+function liveAreas(report: Report, later: ReadonlySet<string> | undefined): Area[] {
+  const areas = blockAreas(report);
+  if (later === undefined) return areas;
+  const stated = (area: Area): boolean => area.type === "code" && later.has(codeText(area));
+  const cut = new Set(areas.flatMap((area) => (area.type !== "place" && area.block !== undefined && stated(area) ? [area.block] : [])));
+  const inCut = (area: Area): boolean => area.type !== "place" && area.type !== "code" && area.block !== undefined && cut.has(area.block);
+  return areas.filter((area) => !stated(area) && !inCut(area));
 }
 
 // The reports of each event of a group: one origin and one correlation key.

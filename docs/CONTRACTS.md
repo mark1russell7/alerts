@@ -55,7 +55,7 @@ The groups of reports are a function of the merge state alone, with no clock. Tw
 
 The links are transitive: when A links to B and B links to C, the three reports are in one incident. A link rule gives the blocks of a report, for example its family of kind and its day. The merge tests only two reports that share a block. So the cost grows with the size of the blocks, not with the square of the count of reports.
 
-A line is a report and the reports of its source that update or cancel it. The head of a line is its last report: no report of the same source references it. An incident is live at a time when one or more heads are not cancelled, not expired and not ended at that time. Its corroboration is the count of the different origins of its reports.
+A line is a report and the reports of its source that update or cancel it. The head of a line is its last report: no report of the same source references it. A cancel of a part is the one exception (below). An incident is live at a time when one or more heads are not cancelled, not expired and not ended at that time. Its corroboration is the count of the different origins of its reports.
 
 The severity, urgency and certainty of an incident are the highest of its live heads. An `unknown` value of a head takes the value of the latest report of its event with a known value. That report is not later than the head and is not a cancel. A tie of time takes the highest value. Thus a row of IEM keeps the values of the message of the NWS.
 
@@ -66,6 +66,10 @@ A copy of a message from another source does not get the references of the line.
 - A replaced report is not a head. Thus a cancel of the NWS also ends the copy of that alert from IPAWS. The rows of IEM, one for each county, end the NWS message of two counties.
 
 For each code, the latest reports that name it stay. So the rule loses no later statement of a code. A code that no later report names keeps its report live, and a report with no region code is not replaced. Then the report stays live until it expires or its source ends it. This error is on the safe side. The rule reads only the reports of the group, so it keeps the three laws.
+
+The rule of a part: a cancel that names a proper subset of the codes of the report that it references ends only those codes. The NWS ends a part of a warning so: one cancel for the part, and one update for the rest. When the update is lost, the rest stays live until it expires, on the safe side. Each other reference ends the whole report, as CAP tells.
+
+A later statement of a code also removes the code from the areas of the incident. The incident takes from each head only its codes with no later statement. A block with such a code also loses its shapes, because a code cannot cut a shape. The block then decides by its other codes, and a block with no shape covers each place in its codes. So this error is on the safe side too.
 
 An end mark tells that a report of a snapshot source left the list of the source (`ended: true`), or is in the list again (`ended: false`). A report is ended at a time when its latest mark at or before that time is an end. When two marks of one report have the same time, the report stays live. This choice is on the safe side, and it is a function of the set, so the three laws hold. A mark changes no group. It changes only the field `live` and the levels of the live heads. An ended report still gives its known values to the fill of `unknown` values, as an expired report does.
 
