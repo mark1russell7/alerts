@@ -74,7 +74,7 @@ import { coverage } from "./coverage.ts";
 import { escalate } from "./escalation.ts";
 import { observeFetch, startHealth } from "./health.ts";
 import { messageKey, observationId, reportId } from "./ids.ts";
-import { lateness, type Lateness, type LatenessLimit, type LatenessState } from "./lateness.ts";
+import { lateness, limitRule, type Lateness, type LatenessLimit, type LatenessState } from "./lateness.ts";
 import { incidents, normalize } from "./merge.ts";
 import * as schemas from "./schemas.ts";
 import {
@@ -83,6 +83,7 @@ import {
   addressSchema,
   addressValueSchema,
   alertConfigSchema,
+  expectationConfigSchema,
   areaSchema,
   assessedLevelSchema,
   assessmentSchema,
@@ -384,7 +385,7 @@ describe("the JSON Schema of each schema", () => {
   const exported = Object.entries(schemas).filter(([name]) => name.endsWith("Schema"));
 
   it("has each exported schema", () => {
-    expect(exported.length).toBe(96);
+    expect(exported.length).toBe(97);
     for (const [name, schema] of exported) expect(schema instanceof z.ZodType, name).toBe(true);
   });
 
@@ -510,9 +511,9 @@ describe("the round trip of real values", () => {
       { expectation: expectation.id, report: reportId({ source: API, key: "k2", sent: T0 }), started: T0 + 60_000 },
     ];
     for (const at of [T0, T0 + HOUR]) {
-      for (const entry of lateness(checks, [expectation], { [expectation.id]: limit }, at)) holds(latenessSchema, entry);
+      for (const entry of lateness(checks, [expectation], at, { delay: () => limit.delay, misses: () => limit.misses })) holds(latenessSchema, entry);
     }
-    for (const entry of lateness(checks, [expectation], {}, T0)) holds(latenessSchema, entry);
+    for (const entry of lateness(checks, [expectation], T0, limitRule({ quantile: 0.99, level: 0.95 }))) holds(latenessSchema, entry);
   });
 });
 
@@ -681,6 +682,10 @@ describe("the private configuration", () => {
     fails(contactConfigSchema, { person: PERSON, channel: PUSHOVER, address: { user: 7 } });
     fails(placeConfigSchema, { id: KANSAS.id, codes: KANSAS.codes, bufferKm: 0 });
     fails(personConfigSchema, { watch: { person: PERSON, places: [], rules: [] }, policies: [{ ...ESCALATION, level: "loud" }] });
+    fails(alertConfigSchema, { ...CONFIG, expectations: [{ id: "api-to-wea", since: "2026-11-16" }] });
+    fails(alertConfigSchema, { ...CONFIG, expectations: [{ id: "api-to-wea" }] });
+    fails(expectationConfigSchema, { id: "api-to-wea", since: 0, extra: 1 });
+    holds(alertConfigSchema, { ...CONFIG, expectations: [{ id: "api-to-wea", since: 1_794_700_000_000 }] });
     // A person who watches a place that the configuration does not have is a problem of the load, not of the form.
     holds(alertConfigSchema, { ...CONFIG, people: [{ watch: { person: PERSON, places: ["place:z"], rules: [] } }] });
   });

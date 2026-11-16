@@ -3,8 +3,8 @@
  * Pushover channel, the runtime and its loop. The entry `main.ts` reads the files, and it gives the
  * clocks and the transports. This module reads no file, no environment variable and no clock.
  */
-import { delay, type Clock, type WallClock } from "@mark1russell7/algebra/clock";
-import { localPlaces, placeLabels, sourceCovers, sourcePlaces, type ChannelDescriptor, type ChannelId, type Duration, type ParsedConfig, type SecretLookup, type SourceDescriptor } from "@mark1russell7/alerts";
+import { delay, wallClock, type Clock, type WallClock } from "@mark1russell7/algebra/clock";
+import { configuredExpectations, expectationProblems, localPlaces, placeLabels, sourceCovers, sourcePlaces, type ChannelDescriptor, type ChannelId, type Duration, type Expectation, type Instant, type ParsedConfig, type SecretLookup, type SourceDescriptor } from "@mark1russell7/alerts";
 import { twilioCallDescriptor } from "@mark1russell7/alerts-channel-twilio";
 import { CHANNEL_ID, createPushoverChannel, isPushoverKey, pushoverDescriptor, PUSHOVER_REPEAT_MS, PUSHOVER_TIMEOUT_MS, type PushoverChannelOptions } from "@mark1russell7/alerts-channel-pushover";
 import { createIpawsSource, IPAWS_DESCRIPTOR, WEA_EXPECTATION } from "@mark1russell7/alerts-source-ipaws";
@@ -110,6 +110,9 @@ export const INSTANCE_SENDERS: readonly ChannelId[] = [CHANNEL_ID];
 /** The descriptors of the sources of the instance. The function `describe` of each source gives the same descriptor. */
 export const INSTANCE_SOURCES: readonly SourceDescriptor[] = [NWS_DESCRIPTOR, IPAWS_DESCRIPTOR];
 
+/** The expectations of the instance. The field `expectations` of the configuration sets their `since`. */
+export const INSTANCE_EXPECTATIONS: readonly Expectation[] = [WEA_EXPECTATION];
+
 /**
  * The politeness policy of the sources. After 5 failures in a row, a host stops for the longest step of the backoff, not for
  * the hour of `DEFAULT_POLICY`. A stop of one hour hides each alert of that hour.
@@ -156,13 +159,14 @@ export const DELIVERY_TIMES: Pick<DeliveryOptions, "pollEvery" | "retry" | "call
  *
  * - a missing token, or a token with a bad form
  * - a step of a policy on a channel with no sender
- * - a place that no source covers.
+ * - a place that no source covers
+ * - a setting of an unknown expectation, or a `since` after the time `at`.
  *
  * The message names ids, fields and the names of secrets, and no value.
  *
  * The function `parseConfig` checks the fields of each address with the descriptors of `INSTANCE_CHANNELS`.
  */
-export function instanceProblems(parsed: ParsedConfig, secret: SecretLookup, descriptors: readonly SourceDescriptor[]): string[] {
+export function instanceProblems(parsed: ParsedConfig, secret: SecretLookup, descriptors: readonly SourceDescriptor[], at: Instant): string[] {
   const token = secret(PUSHOVER_TOKEN) ?? "";
   // A bad key fails each send. Thus it stops the start, before the first alert.
   const tokenProblems =
@@ -188,13 +192,13 @@ export function instanceProblems(parsed: ParsedConfig, secret: SecretLookup, des
       ? []
       : [`No source covers the place ${place.id}. Give the place its codes at each level: the NWS zone and county, SAME, the state and the country (iso3166).`],
   );
-  return [...tokenProblems, ...senderProblems, ...placeProblems];
+  return [...tokenProblems, ...senderProblems, ...placeProblems, ...expectationProblems(parsed.config.expectations, INSTANCE_EXPECTATIONS, at)];
 }
 
 /** The check of a configuration file for the live instance: its channels and the problems that stop its start. */
 export const INSTANCE_CHECK: InstanceCheck = {
   channels: INSTANCE_CHANNELS,
-  problems: (parsed, secret) => instanceProblems(parsed, secret, INSTANCE_SOURCES),
+  problems: (parsed, secret) => instanceProblems(parsed, secret, INSTANCE_SOURCES, wallClock().now()),
 };
 
 /**
@@ -282,7 +286,7 @@ export function openInstance(options: InstanceOptions): Instance {
   const kinds = [...new Set(descriptors.flatMap((descriptor) => descriptor.kinds))];
 
   const { config, recipients } = options.config;
-  const problems = instanceProblems(options.config, options.secret, descriptors);
+  const problems = instanceProblems(options.config, options.secret, descriptors, wall.now());
   if (problems.length > 0) throw new Error(`The instance does not start. The configuration has these problems:\n- ${problems.join("\n- ")}`);
   const token = options.secret(PUSHOVER_TOKEN) ?? "";
 
@@ -334,7 +338,7 @@ export function openInstance(options: InstanceOptions): Instance {
     view: {
       places,
       kinds,
-      expectations: [WEA_EXPECTATION],
+      expectations: configuredExpectations(INSTANCE_EXPECTATIONS, config.expectations),
       delay: DELAY_LIMITS,
     },
     run: options.run,

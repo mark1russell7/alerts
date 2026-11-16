@@ -761,18 +761,11 @@ export interface KnownFault {
   readonly reason: string;
 }
 
-const AL_8 = "AL-8: the limit of the delay learns the delay of a late copy, and a late copy clears the misses.";
-
 /**
  * The gates that fail because of a known fault of the core. The verdict expects each one to fail. The fix of a fault
  * removes its gates from this list, in the same change.
  */
-export const KNOWN_FAULTS: readonly KnownFault[] = [
-  { arm: "copy-stopped", gate: "limitHolds", reason: AL_8 },
-  { arm: "ipaws-lag", gate: "staysLate", reason: AL_8 },
-  { arm: "ipaws-lag", gate: "limitHolds", reason: AL_8 },
-  { arm: "copy-backlog", gate: "limitHolds", reason: AL_8 },
-];
+export const KNOWN_FAULTS: readonly KnownFault[] = [];
 
 /** This function gives the known fault of a gate of an arm, or `undefined` when the gate has no known fault. */
 export function knownFaultOf(arm: CopyArm, gate: CopyGate, known: readonly KnownFault[] = KNOWN_FAULTS): KnownFault | undefined {
@@ -965,8 +958,13 @@ export function backlogProblems(record: Pick<CopyRecord, "arm" | "fetches" | "fa
   return problems;
 }
 
-/** This function gives the verdict of the records of a run. */
-export function copyVerdictOf(records: readonly CopyRecord[], settings: CopySettings = CASE_8_SETTINGS, pair: PairFixtures = readPair()): CopyVerdict {
+/** This function gives the verdict of the records of a run. The list `known` gives the gates that fail because of a known fault. */
+export function copyVerdictOf(
+  records: readonly CopyRecord[],
+  settings: CopySettings = CASE_8_SETTINGS,
+  pair: PairFixtures = readPair(),
+  known: readonly KnownFault[] = KNOWN_FAULTS,
+): CopyVerdict {
   const problems = copySettingsProblems(settings, pair);
   for (const arm of COPY_ARMS) {
     const count = records.filter((record) => record.arm === arm).length;
@@ -1006,7 +1004,7 @@ export function copyVerdictOf(records: readonly CopyRecord[], settings: CopySett
   const read = problems.length === 0;
   const results: Partial<Record<CopyArm, CopyResult>> = {};
   for (const record of records) results[record.arm] = copyGatesOf(record, settings);
-  const expected = (arm: CopyArm, gate: CopyGate): boolean => knownFaultOf(arm, gate) === undefined;
+  const expected = (arm: CopyArm, gate: CopyGate): boolean => knownFaultOf(arm, gate, known) === undefined;
   const fixed = COPY_ARMS.flatMap((arm) =>
     ARM_GATES[arm]
       .filter((gate) => !expected(arm, gate) && results[arm]?.gates[gate] === true)

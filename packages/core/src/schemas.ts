@@ -110,6 +110,7 @@ import {
   type AddressValue,
   type AlertConfig,
   type ContactConfig,
+  type ExpectationConfig,
   type PersonConfig,
   type PlaceConfig,
   type SecretLookup,
@@ -1178,6 +1179,11 @@ export const personConfigSchema: z.ZodType<PersonConfig, PersonConfig> = schemaO
     .readonly(),
 );
 
+/** This schema checks the settings of one expectation of the instance. */
+export const expectationConfigSchema: z.ZodType<ExpectationConfig, ExpectationConfig> = schemaOf<ExpectationConfig>()(
+  z.strictObject({ id: z.string(), since: instantSchema }).readonly(),
+);
+
 /** This schema checks one address of one person on one channel. */
 export const contactConfigSchema: z.ZodType<ContactConfig, ContactConfig> = schemaOf<ContactConfig>()(
   z.strictObject({ person: personIdSchema, channel: channelIdSchema, address: z.record(z.string(), addressValueSchema).readonly() }).readonly(),
@@ -1197,6 +1203,7 @@ export const alertConfigSchema: z.ZodType<AlertConfig, AlertConfig> = schemaOf<A
       contacts: z.array(contactConfigSchema).readonly(),
       policies: z.array(escalationPolicySchema).readonly(),
       contact: z.string().refine(isContactUrl, "The contact is not an https URL or a mailto URL.").exactOptional(),
+      expectations: z.array(expectationConfigSchema).readonly().exactOptional(),
     })
     .readonly(),
 );
