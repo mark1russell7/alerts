@@ -271,8 +271,8 @@ importers:
         specifier: ^0.8.9
         version: 0.8.9(zod@4.6.7)
       '@mark1russell7/collections':
-        specifier: ^0.10.2
-        version: 0.10.2(zod@4.6.7)
+        specifier: ^0.11.2
+        version: 0.11.2(zod@4.6.7)
       '@mark1russell7/geo':
         specifier: ^0.3.0
         version: 0.3.0
@@ -295,6 +295,9 @@ importers:
       '@mark1russell7/cue':
         specifier: ^2.0.0
         version: 2.1.4
+      '@mark1russell7/rational':
+        specifier: ^0.1.3
+        version: 0.1.3
       '@types/node':
         specifier: ^26.6.5
         version: 26.6.6
@@ -1029,6 +1032,10 @@ packages:
     resolution: {integrity: sha512-s2DyC8i8JhP0Ue6oG+dLUHrjwvUjz+UQrrSIViLkDdU0t+LhLChLrkRpcwr/eof62ffOSPXifLVYuzM7alEEPw==}
     engines: {node: '>=22.12'}
 
+  '@mark1russell7/collections@0.11.2':
+    resolution: {integrity: sha512-6JXrfvg2vMGITbc11C3POvDwbbCU7PMkFWSYdYjshJj5o0LSAMnpPsVSQySfA5G4mdYeAdJ/VfN5Yc3foJkdCQ==}
+    engines: {node: '>=22.12'}
+
   '@mark1russell7/conventions@0.41.5':
     resolution: {integrity: sha512-utYAEou/70qKRpukES+mYKZ+KxNpjOd9yyyM6sdQS0+geurjQ7YTlW0ov2CbjnTK8HVSkf1OHRo+SnIBD3fYmA==}
     engines: {node: '>=22'}
@@ -1070,6 +1077,10 @@ packages:
 
   '@mark1russell7/rational@0.1.2':
     resolution: {integrity: sha512-hn2C5jjOFCGKJqFQPHt57C/Cn1l9Lb9MltVNtL71KSu+nRrfPOmg8ujYB5n3oDFFWNdNA4bE/8LLT4tG3lmrGA==}
+    engines: {node: '>=22'}
+
+  '@mark1russell7/rational@0.1.3':
+    resolution: {integrity: sha512-S28nfQFfRax40wbV9UTw711ZwnVB3rCW/SPpAuJtyKBh/zFbQx69+qnAeLF7u2B9GccaY75nIMZtN8mvgSRA1Q==}
     engines: {node: '>=22'}
 
   '@mark1russell7/rigor-chaos@0.3.0':
@@ -2443,6 +2454,14 @@ snapshots:
     transitivePeerDependencies:
       - zod
 
+  '@mark1russell7/collections@0.11.2(zod@4.6.7)':
+    dependencies:
+      '@mark1russell7/algebra': 0.8.10(zod@4.6.7)
+      '@mark1russell7/optional': 1.2.0
+      '@mark1russell7/rigor-statistics': 0.2.4
+    transitivePeerDependencies:
+      - zod
+
   '@mark1russell7/conventions@0.41.5':
     dependencies:
       yaml: 2.9.1
@@ -2469,6 +2488,8 @@ snapshots:
       zod: 4.6.7
 
   '@mark1russell7/rational@0.1.2': {}
+
+  '@mark1russell7/rational@0.1.3': {}
 
   '@mark1russell7/rigor-chaos@0.3.0':
     dependencies:
