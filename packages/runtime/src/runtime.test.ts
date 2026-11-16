@@ -153,6 +153,7 @@ function crashing(inner: RuntimeLog, at: number): RuntimeLog {
     read: () => inner.read(),
     has: (id) => inner.has(id),
     entries: (options) => inner.entries(options),
+    count: () => inner.count(),
     head: () => inner.head(),
     close: () => inner.close(),
     appendAll(events, accept) {

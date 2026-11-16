@@ -130,6 +130,11 @@ export interface Runtime {
   /** This function gives the state: the fold of the log. */
   state(): RuntimeState;
   /**
+   * The count of the events of the log at the open with a type that this build does not know. The fold skips them.
+   * A later build wrote them, thus a count above 0 tells of a rollback.
+   */
+  readonly skipped: number;
+  /**
    * This function does one pass. It throws when a write to the log fails. Then the state is the state of
    * the log, and the next pass does the work again.
    *
@@ -161,7 +166,9 @@ export function openRuntime(options: RuntimeOptions): Runtime {
   const repeated = ids.find((id, at) => ids.indexOf(id) !== at);
   if (repeated !== undefined) throw new Error(`Two sources have the id ${repeated}.`);
 
-  let state = rebuild(log.read(), config);
+  let read = 0;
+  let state = rebuild(counted(log.read(), () => (read += 1)), config);
+  const skipped = log.count() - read;
 
   // The fold runs on a draft before each write. The state changes only when the transaction commits.
   const append = (events: readonly RuntimeEvent[]): readonly string[] => {
@@ -260,6 +267,7 @@ export function openRuntime(options: RuntimeOptions): Runtime {
   return {
     config,
     state: () => state,
+    skipped,
     async pass(stop) {
       const stepped = followStep();
       const start = clock.now();
@@ -329,4 +337,12 @@ export function bounded(work: Promise<FetchOutcome>, limit: Duration, clock: Wal
     () => ({ ok: false, failure: { kind: "timeout", message: `The fetch took longer than ${limit} ms.` } }),
     (error) => ({ ok: false, failure: { kind: "network", message: `The fetch threw: ${errorMessage(error)}` } }),
   );
+}
+
+// The events of a log, with a call for each event.
+function* counted<T>(events: Iterable<T>, each: () => void): Generator<T> {
+  for (const event of events) {
+    each();
+    yield event;
+  }
 }

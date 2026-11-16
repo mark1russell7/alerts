@@ -5,7 +5,7 @@ import { fakeWallClock } from "@mark1russell7/algebra/clock";
 import { reportId, type Observation, type ObservationId, type PlaceId, type Report, type SourceId, type SourceProcedures, type WatchedPlace } from "@mark1russell7/alerts";
 import { checkIntegrity, openDatabase } from "@mark1russell7/sqlite";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import type { RuntimeEvent } from "./events.ts";
+import { envelope, type RuntimeEvent } from "./events.ts";
 import { openCheckedRuntimeLog, openRuntimeLog, type RuntimeLog } from "./log.ts";
 import { openRuntime } from "./runtime.ts";
 
@@ -206,5 +206,54 @@ describe("the checked open of the log at the boot (AL-50)", () => {
     }
     const plain = openRuntimeLog(":memory:");
     plain.close();
+  });
+});
+
+describe("a log of a later build", () => {
+  let folder: string;
+  let path: string;
+  beforeEach(() => {
+    folder = mkdtempSync(join(tmpdir(), "alerts-log-"));
+    path = join(folder, LOG_FILE);
+  });
+  afterEach(() => {
+    rmSync(folder, { recursive: true, force: true });
+  });
+
+  it("skips each event of a type that this build does not know, counts it, and opens with no recovery", async () => {
+    const clock = fakeWallClock(T0);
+    const first = openRuntimeLog(path);
+    let before: string[];
+    try {
+      await runtimeOn(first, clock, "run-1").pass();
+      before = ids(first);
+      // A later build adds a type. The value is a good envelope, thus only its type is new.
+      const later = { ...envelope("started", "later:1", T0 + MINUTE), type: "later-type", reports: ["x"] } as unknown as RuntimeEvent;
+      first.appendAll([later], () => {});
+      expect(first.count()).toBe(before.length + 1);
+      expect(ids(first)).toEqual(before);
+    } finally {
+      first.close();
+    }
+    const opened = openCheckedRuntimeLog(path, { now: () => T0 + 2 * MINUTE });
+    try {
+      expect(opened.recovered).toBeUndefined();
+      await clock.advance(2 * MINUTE);
+      const runtime = runtimeOn(opened.log, clock, "run-2");
+      expect(runtime.skipped).toBe(1);
+      expect(runtime.state().merge.reports).toHaveLength(1);
+      await runtime.pass();
+      expect(ids(opened.log).slice(0, before.length)).toEqual(before);
+    } finally {
+      opened.log.close();
+    }
+  });
+
+  it("counts no skipped event in a log of this build", async () => {
+    const log = openRuntimeLog(":memory:");
+    const clock = fakeWallClock(T0);
+    await runtimeOn(log, clock, "run-1").pass();
+    expect(runtimeOn(log, clock, "run-2").skipped).toBe(0);
+    log.close();
   });
 });

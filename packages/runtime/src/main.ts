@@ -205,6 +205,9 @@ async function runtime(): Promise<ServiceBuilder> {
     onOutageError: (error, failures) => console.error(`A deploy of the outage call failed (${failures} in sequence): ${redactSecrets(errorMessage(error), values)}`),
   });
   if (instance.zones !== undefined) console.log(zoneCodesText(instance.zones));
+  if (instance.runtime.skipped > 0) {
+    console.error(`The log has ${String(instance.runtime.skipped)} events of types that this build does not know. A later build wrote them. The runtime skips them.`);
+  }
 
   // The listener of the exchange is on the address listen of copy.json. Only the token check of the host guards it.
   const copies = instance.copies;
