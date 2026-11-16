@@ -24,7 +24,7 @@ import {
   type Status,
 } from "./contracts.ts";
 import { coverageShort } from "./coverage.ts";
-import { areasWithoutBlocks } from "./shapes.ts";
+import { areasWithoutBlocks, distinctShapes } from "./shapes.ts";
 
 /** A shape of the map in WGS 84: a polygon or a circle. A region code gets its shapes from the store. */
 export type MapShape = Extract<Area, { readonly type: "polygon" } | { readonly type: "circle" }>;
@@ -70,7 +70,7 @@ export interface MapIncident {
   readonly severity: Severity;
   readonly onset?: Instant;
   readonly expires?: Instant;
-  /** The shapes of the areas: each polygon, each circle and the shapes of each region code. */
+  /** The shapes of the areas: each polygon, each circle and the shapes of each region code. Each shape comes one time. */
   readonly shapes: readonly MapShape[];
   /** The region codes of the areas with no shape in the store. The renderer lists them as text. */
   readonly unshaped: readonly RegionCode[];
@@ -213,7 +213,8 @@ export function mapView(input: MapInput): MapView {
         severity: incident.severity,
         ...(incident.onset === undefined ? {} : { onset: incident.onset }),
         ...(incident.expires === undefined ? {} : { expires: incident.expires }),
-        shapes,
+        // A zone and its county can give one outline from the store. The renderer draws each shape one time.
+        shapes: distinctShapes(shapes),
         unshaped: missing,
         places: matchPlaces(incident, input.places).map((match) => match.place),
       };
