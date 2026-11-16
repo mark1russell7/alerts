@@ -331,5 +331,44 @@
       "unknownPaths": 4,
       "cause": "Round 4 adopts the EMSC event service for geo.earthquake. The class now has 3 adopted sources on 3 paths with no shared part, so the adopted and path totals each gain 1. In the US, EMSC gives the solutions of the US networks, so the origin count of the class stays 2."
     }
+  },
+  {
+    "round": 5,
+    "date": "2026-11-16",
+    "by": "One session, for the adapter of the tsunami warning centers (AL-14), then a check of each fact in the tests of the adapter.",
+    "method": "The check of one planned source before its adapter. It read the latest CAP file of each center with its headers, and three bulletins of one past event. The merge of the core joined the bulletins.",
+    "lists": [
+      "The tsunami warning centers, the help page with the feeds: https://www.tsunami.gov/?page=help",
+      "The tsunami warning centers, the CAP page: https://www.tsunami.gov/?page=cap",
+      "The tsunami warning centers, the past events: https://www.tsunami.gov/php/previousEvents.php",
+      "The disclaimer of the NWS: https://www.weather.gov/disclaimer"
+    ],
+    "queries": [],
+    "notes": [
+      "The site has no terms page. Its footer links to the disclaimer of the NWS, which puts the information in the public domain.",
+      "The latest file of each center, at 2026-11-16 11:34 UTC, held a statement (Tsunami Information) with no VTEC and no zone. Its only area was a circle of radius 0 at the epicenter.",
+      "The answers had Content-Type text/xml, a Last-Modified time and no ETag. The adapter sends If-Modified-Since.",
+      "Bulletin 2 of the event t06p1k (2025-07-29, off Kamchatka) holds a warning, an advisory and a watch, each in its own info block with its own zones and VTEC.",
+      "Bulletin 35 of the event cancels the last advisory with msgType Update. It references the 34 earlier bulletins, and its only area is the circle at the epicenter.",
+      "The site keeps each bulletin of each past event at its own URL. The file of a center holds only its latest message, so a poll once a minute does not see a message that the center replaces in less than one minute."
+    ],
+    "studies": [],
+    "measures": {
+      "classes": 200,
+      "gaps": 132,
+      "cover": {
+        "adopted": 26,
+        "paths": 26,
+        "origins": 1
+      },
+      "total": {
+        "adopted": 79,
+        "paths": 79,
+        "origins": 52
+      },
+      "unknownOrigins": 3,
+      "unknownPaths": 4,
+      "cause": "Round 5 adopts the CAP files of the tsunami warning centers for geo.tsunami. The class now has 2 adopted sources with no risk on 2 paths with no shared part, so its adopted and path layers reach the cover. The NWS is the only origin of the class, so the origin layers do not change."
+    }
   }
 ]
