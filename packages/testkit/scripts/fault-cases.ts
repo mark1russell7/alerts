@@ -14,6 +14,7 @@ import { changesOf, runChangedFormat } from "../src/changed-format.ts";
 import { ACCEPT_ARMS, ACCEPT_GATES, runLateAccept } from "../src/late-accept.ts";
 import { runSlowSource, SLOW_ARMS, trickleMs } from "../src/slow-source.ts";
 import { DOWN_ARMS, runSourceDown } from "../src/source-down.ts";
+import { COPY_ARMS, COPY_GATES, COPY_ROUTES, copyFaultsOf, extFetchOf, LAG, PER_FETCH, runCopyLate, WINDOW } from "../src/copy-late.ts";
 import { OLD_LISTS, R2_FROM, R3_UNTIL, runStaleList, STALE_ARMS, STALE_GATES } from "../src/stale-list.ts";
 
 const at = process.argv.indexOf("--out");
@@ -191,4 +192,28 @@ report(channel.id, channel.verdict, [
   }),
   "",
   `Read: ${yes(channel.verdict.read)}. Pass: **${yes(channel.verdict.pass)}**.`,
+]);
+
+const copy = await runCopyLate();
+write("case-8.json", copy);
+report(copy.id, copy.verdict, [
+  `## ${copy.id}: a copy feed that stops or lags`,
+  "",
+  `Each arm has ${String(copy.settings.fetches)} fetches of the NWS source and of the IPAWS source. The case clock moves ${String(copy.settings.speed)} times faster than real time.`,
+  `Each NWS fetch gives ${String(PER_FETCH)} WEA messages. The faults are in the fetches from ${String(WINDOW.from)} to ${String(WINDOW.to - 1)}. A lag gives the answer of ${String(LAG)} fetches before.`,
+  "",
+  `| Arm | Faults (route) | EXT at | Limit before the window (s) | Late periods (first fetch) | First late in the window | False clears | Double threats | ${COPY_GATES.join(" | ")} |`,
+  `| --- | --- | --- | --- | --- | --- | --- | --- | ${COPY_GATES.map(() => "---").join(" | ")} |`,
+  ...COPY_ARMS.map((arm) => {
+    const record = copy.records.find((one) => one.arm === arm);
+    const result = copy.verdict.results[arm];
+    const faults = copyFaultsOf(arm);
+    const routes = COPY_ROUTES.filter((route) => faults[route].size > 0).map((route) => `${String(faults[route].size)} ${route}`).join(", ") || "none";
+    const limit = record?.passes.filter((pass) => pass.nws <= WINDOW.from).at(-1)?.limit;
+    const periods = result?.periods.map((period) => String(period.nws - 1)).join(", ") || "none";
+    const gates = COPY_GATES.map((gate) => (result?.gates[gate] === undefined ? "-" : yes(result.gates[gate] === true))).join(" | ");
+    return `| ${arm} | ${routes} | ${String(extFetchOf(arm, copy.settings.fetches))} | ${s(limit)} | ${String(result?.periods.length ?? 0)} (${periods}) | ${result?.toldAt === undefined ? "none" : String(result.toldAt - 1)} | ${String(result?.falseClears.length ?? 0)} | ${String(result?.doubles.length ?? 0)} | ${gates} |`;
+  }),
+  "",
+  `Read: ${yes(copy.verdict.read)}. Pass: **${yes(copy.verdict.pass)}**.`,
 ]);

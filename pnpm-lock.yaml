@@ -730,12 +730,18 @@ importers:
       '@mark1russell7/alerts-channel-pushover':
         specifier: workspace:*
         version: link:../channel-pushover
+      '@mark1russell7/alerts-format-cap':
+        specifier: workspace:*
+        version: link:../format-cap
       '@mark1russell7/alerts-runtime':
         specifier: workspace:*
         version: link:../runtime
       '@mark1russell7/alerts-source-iem':
         specifier: workspace:*
         version: link:../source-iem
+      '@mark1russell7/alerts-source-ipaws':
+        specifier: workspace:*
+        version: link:../source-ipaws
       '@mark1russell7/alerts-source-nws-api':
         specifier: workspace:*
         version: link:../source-nws-api
