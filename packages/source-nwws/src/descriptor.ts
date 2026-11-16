@@ -15,7 +15,7 @@ export const NWWS_DESCRIPTOR: SourceDescriptor = {
   title: "NOAA Weather Wire Service Open Interface (NWWS-OI)",
   origins: [NWS_ORIGIN],
   dependsOn: ["provider:nwws-oi"],
-  uses: ["internet", "power"],
+  uses: ["internet", "dns", "power"],
   kinds: KIND_PREFIXES,
   coverage: US_COVERAGE,
   transport: "stream",

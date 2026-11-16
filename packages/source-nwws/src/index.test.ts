@@ -33,7 +33,7 @@ describe("createNwwsSource", () => {
 describe("NWWS_DESCRIPTOR", () => {
   it("is a valid descriptor of a stream with a key, and each of its kinds is known", () => {
     expect(sourceDescriptorSchema.parse(NWWS_DESCRIPTOR)).toEqual(NWWS_DESCRIPTOR);
-    expect(NWWS_DESCRIPTOR).toMatchObject({ id: "nwws", origins: ["nws"], dependsOn: ["provider:nwws-oi"], transport: "stream", auth: "key", uses: ["internet", "power"] });
+    expect(NWWS_DESCRIPTOR).toMatchObject({ id: "nwws", origins: ["nws"], dependsOn: ["provider:nwws-oi"], transport: "stream", auth: "key", uses: ["internet", "dns", "power"] });
     for (const kind of NWWS_DESCRIPTOR.kinds) expect(knownKind(kind)).toBe(true);
     expect(NWWS_DESCRIPTOR.coverage).toContainEqual({ type: "code", system: "iso3166", code: "US" });
   });
