@@ -371,6 +371,15 @@ describe("the check of Healthchecks.io", () => {
     expect(checkOfPingUrl(answer([other, { ...check, ping_url: `${URL_OF_CHECK}/` }]), URL_OF_CHECK)).toEqual({ ok: true, check: { status: "up", timeout: 60 * SECOND, grace: 400 * SECOND } });
   });
 
+  it("compares the URLs in linear time, also for a long run of slashes from the server", { timeout: 2_000 }, () => {
+    const slashes = "/".repeat(100_000);
+    const hostile = { ...check, ping_url: `${slashes}x` };
+    const found = checkOfPingUrl(answer([hostile, { ...check, ping_url: `${URL_OF_CHECK}${slashes}` }]), URL_OF_CHECK);
+    expect(found).toEqual({ ok: true, check: { status: "up", timeout: 60 * SECOND, grace: 400 * SECOND } });
+    expect(checkOfPingUrl(answer([hostile]), `${slashes}x${slashes}`)).toMatchObject({ ok: true });
+    expect(checkOfPingUrl(answer([hostile]), `${slashes}y`)).toMatchObject({ ok: false });
+  });
+
   it("gives a problem with no URL for no check, a key that only reads, a cron check and a bad answer", () => {
     const problems = [
       checkOfPingUrl(answer([]), URL_OF_CHECK),

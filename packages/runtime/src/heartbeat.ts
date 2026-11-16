@@ -221,7 +221,7 @@ export interface HeartbeatOptions {
 export function pingUrl(url: string, kind: Ping["kind"]): string {
   if (kind === "success") return url;
   const target = new URL(url);
-  target.pathname = `${target.pathname.replace(/\/+$/, "")}/fail`;
+  target.pathname = `${withoutEndSlashes(target.pathname)}/fail`;
   return target.toString();
 }
 
@@ -314,6 +314,14 @@ export interface CheckTimes {
  * when it finds no such check. A key that can only read gives no ping URL, thus it finds no check.
  * A problem names no URL and no key.
  */
+// The text with no slash at its end. A loop is linear. The regular expression `/\/+$/` is quadratic on a long run of
+// slashes before another character, and the text can come from the answer of a server (CodeQL js/polynomial-redos).
+function withoutEndSlashes(text: string): string {
+  let end = text.length;
+  while (end > 0 && text.charCodeAt(end - 1) === 0x2f) end -= 1;
+  return text.slice(0, end);
+}
+
 export function checkOfPingUrl(body: string, url: string): { readonly ok: true; readonly check: CheckTimes } | { readonly ok: false; readonly problem: string } {
   let checks: unknown;
   try {
@@ -322,7 +330,7 @@ export function checkOfPingUrl(body: string, url: string): { readonly ok: true; 
     return { ok: false, problem: "The answer of the management API is not valid JSON." };
   }
   if (!Array.isArray(checks)) return { ok: false, problem: "The answer of the management API has no list of checks." };
-  const plain = (text: unknown): string | undefined => (typeof text === "string" ? text.replace(/\/+$/, "") : undefined);
+  const plain = (text: unknown): string | undefined => (typeof text === "string" ? withoutEndSlashes(text) : undefined);
   const records = checks.filter((entry: unknown): entry is Record<string, unknown> => typeof entry === "object" && entry !== null);
   const check = records.find((entry) => plain(entry["ping_url"]) === plain(url));
   if (check === undefined) return { ok: false, problem: "No check of the key has the ping URL of secrets.env. The key must be able to write, and the ping URL must be the URL with the id of the check." };
