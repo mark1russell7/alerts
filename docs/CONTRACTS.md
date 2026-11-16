@@ -727,6 +727,7 @@ The service keeps the loop alive and safe:
 - The service closes the log in the phase `tear down dependencies`, after the close of the worker. Thus no pass writes to a closed log.
 - The API on the loopback address gives `GET /status`: the time, the wake time, the sources, the sends and the conflicts of the last pass. It also gives the reason when the loop is stuck. The probes have a port of their own.
 - The API also gives `GET /map`, the `MapPayload` of the last pass. The section "The map" tells its parts.
+- The API also gives `GET /health`, the `HealthPayload` of each part of the system. The section "The health route" tells its parts.
 
 The function `openInstance` makes the instance of the owner from the private configuration:
 
@@ -1023,6 +1024,19 @@ The API also serves the built local page (`packages/site/dist`) on the same addr
 - Each file gets the policy of the folder: no inline script, no inline style and no connection to another origin.
 - The theme before the first paint is the classic script `theme.js`, not an inline script. The plugin `themeFile` of `packages/site/theme-file.ts` adds it to the build and to the head of each page.
 - Build the page before the start of the runtime: `pnpm --filter ./packages/site build`. Without the build, the path `/` gives 404.
+
+### The health route
+
+The route `GET /health` of the runtime gives the `HealthPayload` of `healthPayload`. The page reads it on its own origin, next to the map. `healthPayloadSchema` checks it.
+
+- `format`: `alerts-health/1` (`HEALTH_FORMAT`). A change that breaks a reader gets a new name.
+- `at`: the time of the last pass, or `null` before the first pass. The sources, the lateness and the coverage come from that pass.
+- `now`: the time of the read. The stages of the copies and of the balances are at this time.
+- `sources`: the health of each source. The last failure keeps its time and its kind, and not its message, because a message can hold the address of a fetch.
+- `lateness` and `coverage`: the lists of the view of the last pass.
+- `copies`, `quotas` and `balances`: each watch with its stages. The stages come from `copyStages`, `quotaStages` and `balanceStages`, thus the page and the system reports agree.
+
+The coverage holds the ids of the places. Thus only the loopback address gives the route, as for the map.
 
 ## Relevance
 

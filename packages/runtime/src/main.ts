@@ -238,6 +238,7 @@ async function runtime(): Promise<ServiceBuilder> {
     shapes: instance.shapes,
     quotas,
     map: instance.map,
+    health: instance.health,
     page,
     ...(instance.outage === undefined ? {} : { outage: instance.outage }),
     exchange,

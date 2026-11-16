@@ -6,7 +6,7 @@ import type { AddressInfo } from "node:net";
 import { embeddedProcess, lint, localDev } from "@mark1russell7/service";
 import type { Rule, Scenario } from "@mark1russell7/service";
 import { realClock, wallClock } from "@mark1russell7/algebra/clock";
-import { MAP_FORMAT, type MapPayload, type SourceId } from "@mark1russell7/alerts";
+import { HEALTH_FORMAT, MAP_FORMAT, type HealthPayload, type MapPayload, type SourceId } from "@mark1russell7/alerts";
 import { describe, expect, it } from "vitest";
 import { PAGE_INDEX, PROFILES, STOP_MESSAGE, createLoop, declare, outageDeployWorker, statusOf, type Pass, type Status } from "./index.ts";
 
@@ -68,6 +68,7 @@ const loopOf = () => {
 
 // A map before the first pass: no incident, no place and no region.
 const EMPTY_MAP: MapPayload = { format: MAP_FORMAT, at: null, view: { incidents: [], places: [], unshaped: [] }, basemap: [] };
+const EMPTY_HEALTH: HealthPayload = { format: HEALTH_FORMAT, at: null, now: 0, sources: [], lateness: [], coverage: [], copies: [], quotas: [], balances: [] };
 
 // The deadline of each wait of the lifecycle test. A busy runner can take some seconds for the start and the first pass.
 const WAIT_LIMIT_MS = 20_000;
@@ -119,13 +120,15 @@ describe("the declaration of the service", () => {
     });
   }
 
-  it("declares the route GET /map only with a function of the map", () => {
-    const routes = (map?: () => MapPayload) =>
-      declare({ port: 0, probePort: 0, profile: localDev, loop: loopOf(), log: { close: () => undefined }, map })
+  it("declares the routes GET /map and GET /health only with their functions", () => {
+    const routes = (map?: () => MapPayload, health?: () => HealthPayload) =>
+      declare({ port: 0, probePort: 0, profile: localDev, loop: loopOf(), log: { close: () => undefined }, map, health })
         .describe()
         .controllers.map((controller) => [controller.name, Object.keys(controller.routes)]);
     expect(routes()).toEqual([["api", ["GET /status"]]]);
     expect(routes(() => EMPTY_MAP)).toEqual([["api", ["GET /status", "GET /map"]]]);
+    expect(routes(undefined, () => EMPTY_HEALTH)).toEqual([["api", ["GET /status", "GET /health"]]]);
+    expect(routes(() => EMPTY_MAP, () => EMPTY_HEALTH)).toEqual([["api", ["GET /status", "GET /map", "GET /health"]]]);
   });
 
   it("declares the worker of the deploy of the outage call beside the passes, and each rule still holds", () => {
@@ -157,7 +160,7 @@ describe("the lifecycle of the service", () => {
     // A built page with one file. The path / gives it.
     const page = await mkdtemp(join(tmpdir(), "alerts-page-"));
     await writeFile(join(page, PAGE_INDEX), "<!doctype html><title>the map</title>");
-    const life = await declare({ port, probePort, profile: localDev, loop, log, map: () => EMPTY_MAP, page }).run({ process: embeddedProcess() });
+    const life = await declare({ port, probePort, profile: localDev, loop, log, map: () => EMPTY_MAP, health: () => EMPTY_HEALTH, page }).run({ process: embeddedProcess() });
     try {
       // The probe answers after the start of each transport. The worker starts the first pass at the start of the service.
       await waitUntil(() => answers(`http://127.0.0.1:${probePort}/readiness`), "the readiness probe");
@@ -169,6 +172,9 @@ describe("the lifecycle of the service", () => {
       const map = await fetch(`http://127.0.0.1:${port}/map`);
       expect(map.status).toBe(200);
       expect(await map.json()).toEqual(EMPTY_MAP);
+      const health = await fetch(`http://127.0.0.1:${port}/health`);
+      expect(health.status).toBe(200);
+      expect(await health.json()).toEqual(EMPTY_HEALTH);
       // The path / gives the page with the policy of the folder. The routes come first, and a path of no file gets 404.
       const home = await fetch(`http://127.0.0.1:${port}/`);
       expect(home.status).toBe(200);

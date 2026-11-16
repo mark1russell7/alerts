@@ -3,7 +3,7 @@ import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fakeClock, type FakeClock, type WallClock } from "@mark1russell7/algebra/clock";
-import { CONFIG_FORMAT, COPY_FORMAT, MAP_FORMAT, matchPlaces, ONLY_COPY, parseConfig, type AlertConfig, type Watch, type ChannelId, type EscalationPolicy, type PersonId, type PlaceId, type SecretLookup, type CopySettings, type SourceId, type SpendConfig } from "@mark1russell7/alerts";
+import { CONFIG_FORMAT, COPY_FORMAT, HEALTH_FORMAT, healthPayloadSchema, MAP_FORMAT, matchPlaces, ONLY_COPY, parseConfig, type AlertConfig, type Watch, type ChannelId, type EscalationPolicy, type PersonId, type PlaceId, type SecretLookup, type CopySettings, type SourceId, type SpendConfig } from "@mark1russell7/alerts";
 import type { TwilioFetch } from "@mark1russell7/alerts-channel-twilio";
 import { PUSHOVER_QUOTA, PUSHOVER_RESERVE_NOTICES, PUSHOVER_TIMEOUT_MS, type PushoverChannelOptions } from "@mark1russell7/alerts-channel-pushover";
 import { memoryCache, type ShapeCache } from "@mark1russell7/alerts-shapes-nws";
@@ -244,6 +244,26 @@ describe("openInstance", () => {
     // The warning of the county reaches the person, thus the map shows a level above `none`.
     expect(after.view.incidents.length).toBeGreaterThan(0);
     expect(after.view.incidents.some((incident) => incident.level !== "none")).toBe(true);
+  });
+
+  it("gives the health of the last pass with no message of a failure, and the quotas at the time of the read", async () => {
+    const { instance, clock } = await open();
+    const before = instance.health();
+    expect(before.format).toBe(HEALTH_FORMAT);
+    expect(before.at).toBeNull();
+    expect(before.sources).toEqual([]);
+    const pass = await finish(clock, instance.runtime.pass());
+    const after = instance.health();
+    expect(after.at).toBe(pass.at);
+    expect(after.sources.map((entry) => [entry.source, entry.state])).toEqual(pass.view.health.map((entry) => [entry.source, entry.state]));
+    expect(after.lateness).toEqual(pass.view.lateness);
+    expect(after.coverage).toEqual(pass.view.coverage);
+    expect(after.quotas.map((entry) => entry.quota)).toEqual(instance.quotas());
+    // An instance with no other copy has no watch of a copy.
+    expect(after.copies).toEqual([]);
+    const text = JSON.stringify(after);
+    expect(text).not.toContain('"message"');
+    expect(healthPayloadSchema.safeParse(JSON.parse(text)).success).toBe(true);
   });
 
   it("gives the gate of the month to the Pushover channel: a send counts, and the reserve stops a send below life-safety", async () => {
