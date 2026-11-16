@@ -3,8 +3,9 @@
  * sources, the Pushover channel, the Twilio call channel, the runtime and its loop. The entry `main.ts` reads the files, and it gives the
  * clocks and the transports. This module reads no file, no environment variable and no clock.
  */
-import { delay, wallClock, type Clock, type WallClock } from "@mark1russell7/algebra/clock";
+import { delay, frameClock, wallClock, type Clock, type WallClock } from "@mark1russell7/algebra/clock";
 import {
+  CLOCK_STEP_ABOVE,
   configuredExpectations,
   expectationProblems,
   localPlaces,
@@ -54,7 +55,6 @@ import { balanceWatch, SPEND_UNIT, spendGates, spendQuota, spendUnits, type Bala
 import { parseSecrets, requireKey, SECRETS_FILE, type FileText, type InstanceCheck } from "./config.ts";
 import { CLOCK_SKEW_LIMIT, COPY_FILE, COPY_TOKEN_KEY, EXCHANGE_EVERY, EXCHANGE_LIMIT } from "./copy.ts";
 import { overdueLimit, type DeliveryOptions } from "./delivery.ts";
-import { frameClock } from "./frame.ts";
 import type { RuntimeLog } from "./log.ts";
 import { createLoop, loopTimes, type LoopTimes, type RuntimeLoop } from "./loop.ts";
 import { outageDeploy, outageDeployWorker, outageSetup, type OutageDeployWorker } from "./outage.ts";
@@ -489,7 +489,8 @@ export interface Instance {
  */
 export function openInstance(options: InstanceOptions): Instance {
   const { clock } = options;
-  const wall = frameClock(options.wall, clock);
+  // A change of the wall clock of CLOCK_STEP_ABOVE or less is a drift. A larger change is a step of the clock.
+  const wall = frameClock(options.wall, clock, { driftLimit: CLOCK_STEP_ABOVE });
   const factories = [createNwsSource, createIpawsSource, createUsgsSource, createEmscSource, ...TSUNAMI.map((center) => tsunamiFactory(center))] as const;
   const pace = sourcePace(clock, wall, factories.length);
   // One User-Agent for each request of the instance: the sources and the store of shapes.

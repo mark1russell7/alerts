@@ -10,6 +10,7 @@
 import type { Duration, HealthState, Instant, SourceId } from "@mark1russell7/alerts";
 import type { WallClock } from "@mark1russell7/algebra/clock";
 import { errorMessage } from "@mark1russell7/text";
+import { compareCodeUnits } from "@mark1russell7/text/order";
 import { redactSecrets } from "@mark1russell7/text/redact";
 import type { Exchange } from "polite-crawler/api";
 import type { RefusalKind } from "./events.ts";
@@ -140,8 +141,8 @@ function hold(held: Record<string, HeldFail>, channel: string, kind: string, ret
  * quote a request.
  */
 export function pingOf(pass: PassSummary, held: HeartbeatState["held"] = holdStep({}, pass)): Ping {
-  const refused = Object.entries(held).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
-  const overdue = [...(pass.delivery?.overdue ?? [])].sort((a, b) => (a.channel < b.channel ? -1 : a.channel > b.channel ? 1 : 0));
+  const refused = Object.entries(held).sort(([a], [b]) => compareCodeUnits(a, b));
+  const overdue = [...(pass.delivery?.overdue ?? [])].sort((a, b) => compareCodeUnits(a.channel, b.channel));
   if (refused.length > 0 || overdue.length > 0) {
     const lines = [
       ...refused.flatMap(([channel, hold]) => hold.kinds.map((kind) => `The channel ${channel} gave the kind ${kind} to a send.`)),

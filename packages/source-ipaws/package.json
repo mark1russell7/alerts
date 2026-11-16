@@ -16,7 +16,7 @@
     "@mark1russell7/alerts-fetch": "workspace:*",
     "@mark1russell7/alerts-format-cap": "workspace:*",
     "@mark1russell7/alerts-format-nws": "workspace:*",
-    "@mark1russell7/text": "^0.0.6",
+    "@mark1russell7/text": "^0.0.10",
     "polite-crawler": "^0.7.3"
   },
   "devDependencies": {

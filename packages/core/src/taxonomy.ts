@@ -10,6 +10,7 @@
  * The source atlas (`@mark1russell7/alerts-atlas`) uses these codes as its signal classes. Each code has
  * its plain name and its summary here, and in no other place. A new code comes here first, in its pull request.
  */
+import { compareCodeUnits } from "@mark1russell7/text/order";
 import { BALANCE_KIND, CLOCK_KIND, COPY_KIND, COVERAGE_KIND, HEALTH_KIND, LOG_KIND, QUOTA_KIND } from "./assess.ts";
 import type { BalanceStage, Category, CopyStage, HealthState, QuotaStage } from "./contracts.ts";
 
@@ -435,7 +436,7 @@ export function knownKind(code: string): boolean {
 
 /** This function gives the codes that are not in the taxonomy, sorted and each one time. The gate tests of the adapters use it. */
 export function unknownKinds(codes: Iterable<string>): string[] {
-  return [...new Set([...codes].filter((code) => !knownKind(code)))].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+  return [...new Set([...codes].filter((code) => !knownKind(code)))].sort(compareCodeUnits);
 }
 
 /** This function gives the parent of a code: the code without its last part, or `null` for a category. */

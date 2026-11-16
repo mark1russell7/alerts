@@ -755,7 +755,7 @@ After each pass, the runtime gets the outlines of the zones of the watched state
 
 ### Steps of the wall clock
 
-A step changes the wall clock and not the monotonic clock, for example a correction of the system time. A change of `CLOCK_STEP_ABOVE` (2 seconds) or less is a drift, not a step. The instance gives a frame clock, `frameClock(wall, monotonic)`, to the runtime, the loop and the channels:
+A step changes the wall clock and not the monotonic clock, for example a correction of the system time. A change of `CLOCK_STEP_ABOVE` (2 seconds) or less is a drift, not a step. The instance gives a frame clock to the runtime, the loop and the channels. The clock is `frameClock` of `@mark1russell7/algebra/clock`, with the drift limit `CLOCK_STEP_ABOVE`:
 
 - In a frame, the time is the wall time at the mark plus the monotonic time since the mark. Thus the time does not go back in a pass.
 - At the start of each pass, the runtime reads the step since the last mark. Then it marks a new frame.
@@ -783,9 +783,9 @@ The instants of others do not move. They come from the clocks of the sources and
 At the boot, the instance opens the log with `openCheckedRuntimeLog`. A broken log file does not stop the runtime:
 
 1. The function checks the file with `PRAGMA quick_check`. A new file and a log in memory get no check.
-2. When the check or the open finds a broken file, the file goes into the quarantine folder `runtime.sqlite.broken-<time>` next to the log. Its companion files go with it. The time is the boot time in UTC, for example `20261116T120500Z`.
-3. A new log file starts at the path. `salvageEventLog` of `@mark1russell7/sqlite` copies each event that it can read and parse into the new file, in the order of the log.
-4. Then the runtime appends one event `recovered`, with the id `recovered:<folder>`. The event has the kind of the fault, the counts of the salvage, the flag `whole` and the first 10 problems.
+2. The check or the open finds a broken file. Then the salvage copies each event that it can read into a temporary file, in the order of the log.
+3. The broken file goes into the quarantine folder `runtime.sqlite.broken-<time>` next to the log. Its companion files go with it. The time is the boot time in UTC, for example `20261116T120500Z`. Then the temporary file takes the path.
+4. Then the runtime appends one event `recovered` for each quarantine folder, with the id `recovered:<folder>`. The event has the kind of the fault, the counts of the salvage, the flag `whole` and the first 10 problems.
 5. The fold of the event adds a recovery to the state, and the view gives the log report of it. A later step of the wall clock moves the time of the recovery.
 
 The flag `whole` is true only when the salvage read each part of the file with no problem and lost no position. A file that is not a database gives no lost positions, but `whole` is false.
@@ -794,9 +794,11 @@ A fault that is not a broken file goes to the caller, for example a lock or a fo
 
 The quarantine folder stays. Examine the disk of the computer, and keep the folder until you know the cause.
 
-The function `openCheckedEventLog` of `checked-log.ts` is a local copy. Its home is `@mark1russell7/sqlite`. After its release there, the runtime imports it, and the local copy goes.
+The steps 1 to 3 are `openCheckedEventLog` of `@mark1russell7/sqlite`. A record in the quarantine folder keeps the cause and the counts. A crash in a step leaves the record or the broken file, and the next boot completes the steps.
 
-A known gap: the salvage or the append of `recovered` can fail after the quarantine. Then the next boot finds a good partial file, and no report tells the loss. A fix in `@mark1russell7/sqlite` salvages into a temporary file, and renames it at the end.
+The runtime appends the events of step 4 at each boot, from `listRecoveries` of the home. An event that the log has changes nothing. Thus a crash before the append loses no report.
+
+A WAL, SHM or journal file with no database file also goes into a quarantine folder. Its event has the fault `orphan-journal`. A quarantine folder with no record gives the fault `no-read`.
 
 ### The host on one computer
 

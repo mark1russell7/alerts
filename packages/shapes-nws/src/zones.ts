@@ -5,6 +5,7 @@
 import type { MapShape, Position, RegionCode } from "@mark1russell7/alerts";
 import { countyUgcOfSame, stateOfUgc } from "@mark1russell7/alerts-format-nws";
 import { parseGeometry, type Geometry } from "@mark1russell7/geo";
+import { compareCodeUnits } from "@mark1russell7/text/order";
 
 /**
  * The kinds of zones of the store: the counties (`KSC173`) and the forecast zones (`KSZ083`). The
@@ -50,7 +51,7 @@ export function zoneOfCode(code: RegionCode): ZoneKey | undefined {
 
 /** This function compares two codes by their code units, thus the order does not change with the locale. */
 export function compareCodes(a: string, b: string): number {
-  return a < b ? -1 : a > b ? 1 : 0;
+  return compareCodeUnits(a, b);
 }
 
 

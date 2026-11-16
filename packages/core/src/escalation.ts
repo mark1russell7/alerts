@@ -12,6 +12,7 @@
 
 import type { Machine, Transition } from "@mark1russell7/algebra";
 import { inWindow, windowProblems } from "@mark1russell7/algebra/clock";
+import { compareCodeUnits } from "@mark1russell7/text/order";
 import { LEVELS } from "./contracts.ts";
 import type {
   Acknowledgment,
@@ -284,7 +285,7 @@ export function escalate(input: EscalationInput): EscalationPlan {
   const cancels: Delivery[] = [];
   if (FINAL.has(state)) {
     const seen = new Set<string>(input.cancelled ?? []);
-    for (const delivery of [...deliveries].sort((a, b) => byTime(a.at, b.at) || compare(a.key, b.key))) {
+    for (const delivery of [...deliveries].sort((a, b) => byTime(a.at, b.at) || compareCodeUnits(a.key, b.key))) {
       if (seen.has(delivery.key)) continue;
       seen.add(delivery.key);
       cancels.push(delivery);
@@ -341,8 +342,6 @@ export function quietWindowProblems(window: QuietWindow): string[] {
 
 const nonNegative = (value: number | undefined): number => (value !== undefined && Number.isFinite(value) && value > 0 ? value : 0);
 
-const compare = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
-
 /** This order puts a time that is not a number last, so the order of the input has no effect. */
 const byTime = (a: number, b: number): number => {
   const x = Number.isFinite(a) ? a : Number.POSITIVE_INFINITY;
@@ -351,5 +350,5 @@ const byTime = (a: number, b: number): number => {
 };
 
 function byTimeThenVia(a: Acknowledgment, b: Acknowledgment): number {
-  return byTime(a.at, b.at) || compare(a.via, b.via);
+  return byTime(a.at, b.at) || compareCodeUnits(a.via, b.via);
 }

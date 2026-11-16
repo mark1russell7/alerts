@@ -5,8 +5,7 @@
  */
 import { basename } from "node:path";
 import type { Instant } from "@mark1russell7/alerts";
-import { openEventLog, type EventLogFile } from "@mark1russell7/sqlite";
-import { openCheckedEventLog } from "./checked-log.ts";
+import { listRecoveries, openCheckedEventLog, openEventLog, type EventLogFile, type RecoveryEntry } from "@mark1russell7/sqlite";
 import { envelope, parseEvent, type RecoveredEvent, type RuntimeEvent } from "./events.ts";
 
 /** One event of the log with its position. The position of a later event is larger. */
@@ -74,9 +73,13 @@ export interface CheckedLog {
 }
 
 /**
- * This function opens the log at the boot of the runtime. It checks the file with `PRAGMA quick_check` first. A broken
- * file goes into a quarantine folder `<name>.broken-<time>` next to it. Then a new file gets each event that the
- * salvage reads, and one `recovered` event. The fold of that event gives a system report that names the quarantine.
+ * This function opens the log at the boot of the runtime, with `openCheckedEventLog` of `@mark1russell7/sqlite`. It
+ * checks the file with `PRAGMA quick_check` first. A broken file goes into a quarantine folder `<name>.broken-<time>`
+ * next to it. Then a new file gets each event that the salvage reads.
+ *
+ * Each quarantine folder of the log gives one `recovered` event, with the folder name in its id. The fold of that
+ * event gives a system report that names the quarantine. The function appends the event of each folder at each open,
+ * thus a crash before the append loses no event. An event that the log has changes nothing.
  *
  * A fault that is not a broken file, for example a lock, goes to the caller. The broken file does not change.
  *
@@ -86,26 +89,42 @@ export interface CheckedLog {
 export function openCheckedRuntimeLog(path: string, options: CheckedLogOptions): CheckedLog {
   const opened = openCheckedEventLog(path, parseEvent, { ...fileOptions(options), quarantine: { now: new Date(options.now()) } });
   const log = runtimeLog(opened.log);
-  if (opened.quarantined === undefined) return { log, recovered: undefined };
-  const quarantine = basename(opened.quarantined.folder);
-  const { salvaged } = opened;
-  const recovered: RecoveredEvent = {
-    ...envelope("recovered", `recovered:${quarantine}`, options.now()),
-    quarantine,
-    fault: opened.fault?.kind ?? "corrupt",
-    read: salvaged?.read ?? 0,
-    added: salvaged?.added ?? 0,
-    lost: salvaged?.lost ?? 0,
-    whole: salvaged !== undefined && salvaged.problems.length === 0 && salvaged.lost === 0,
-    problems: [...(opened.integrity?.problems ?? []), ...(salvaged?.problems ?? [])].slice(0, RECOVERY_PROBLEMS),
-  };
+  let events: readonly RecoveredEvent[];
   try {
-    log.appendAll([recovered], () => undefined);
+    events = path === ":memory:" || path === "" ? [] : listRecoveries(path).map((entry) => recoveredEvent(entry, options.now));
+    log.appendAll(events, () => undefined);
   } catch (error) {
     log.close();
     throw error;
   }
-  return { log, recovered };
+  if (opened.kind !== "recovered" && opened.kind !== "orphan-journal") return { log, recovered: undefined };
+  const id = `recovered:${basename(opened.quarantined.folder)}`;
+  return { log, recovered: events.find((event) => event.id === id) };
+}
+
+// The problem of a quarantine of a WAL, SHM or journal file with no database file.
+const ORPHAN_PROBLEM = "The folder of the log had a WAL, SHM or journal file, but no database file.";
+
+// The recovered event of one quarantine folder. A record with no time gives the time of the clock.
+function recoveredEvent(entry: RecoveryEntry, now: () => Instant): RecoveredEvent {
+  const id = `recovered:${entry.id}`;
+  const time = entry.kind === "no-read" || !Number.isFinite(Date.parse(entry.at)) ? now() : Date.parse(entry.at);
+  if (entry.kind === "recovered") {
+    const { cause, salvage } = entry;
+    return {
+      ...envelope("recovered", id, time),
+      quarantine: entry.id,
+      fault: cause.kind === "fault" ? cause.fault.kind : "corrupt",
+      read: salvage.kept,
+      added: salvage.kept,
+      lost: salvage.lost,
+      whole: salvage.problems.length === 0 && salvage.lost === 0,
+      problems: [...(cause.kind === "integrity" ? cause.integrity.problems : [cause.fault.message]), ...salvage.problems].slice(0, RECOVERY_PROBLEMS),
+    };
+  }
+  const empty = { quarantine: entry.id, read: 0, added: 0, lost: 0, whole: false };
+  if (entry.kind === "orphan-journal") return { ...envelope("recovered", id, time), ...empty, fault: "orphan-journal", problems: [ORPHAN_PROBLEM] };
+  return { ...envelope("recovered", id, time), ...empty, fault: "no-read", problems: [entry.problem] };
 }
 
 // The options of the file of the log: a new folder when it is not there, and a wait for the lock of another connection.

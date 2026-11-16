@@ -7,6 +7,7 @@
  */
 import { stronglyConnectedComponents } from "@mark1russell7/collections/graph";
 import { canonicalJson } from "@mark1russell7/rigor-generators";
+import { compareCodeUnits } from "@mark1russell7/text/order";
 import type {
   Acknowledgment,
   Area,
@@ -50,7 +51,7 @@ export function normalize(parts: MergeParts): MergeState {
     if (held === undefined || text < held.text) reports.set(report.id, { report, text });
   }
   return {
-    reports: [...reports.entries()].sort(([a], [b]) => compare(a, b)).map(([, held]) => held.report),
+    reports: [...reports.entries()].sort(([a], [b]) => compareCodeUnits(a, b)).map(([, held]) => held.report),
     deliveries: uniqueByText(parts.deliveries ?? []),
     acks: uniqueByText(parts.acks ?? []),
     ends: uniqueByText(parts.ends ?? []),
@@ -153,7 +154,7 @@ export function incidents(state: MergeState, at: Instant, options: IncidentOptio
   const ended = endedReports(state, at);
   return components
     .map((component) => incidentOf(component.map((index) => reports[index]!), at, ended))
-    .sort((a, b) => compare(a.anchor, b.anchor));
+    .sort((a, b) => compareCodeUnits(a.anchor, b.anchor));
 }
 
 /**
@@ -422,7 +423,7 @@ function uniqueByText<T extends object>(items: readonly T[]): T[] {
     const text = canonical(item);
     if (!byText.has(text)) byText.set(text, item);
   }
-  return [...byText.entries()].sort(([a], [b]) => compare(a, b)).map(([, item]) => item);
+  return [...byText.entries()].sort(([a], [b]) => compareCodeUnits(a, b)).map(([, item]) => item);
 }
 
 /**
@@ -431,9 +432,4 @@ function uniqueByText<T extends object>(items: readonly T[]): T[] {
  */
 function blockAreas(report: Report): Area[] {
   return report.areas.map((area) => (area.type === "place" || area.block === undefined ? area : { ...area, block: `${report.id}/${area.block}` }));
-}
-
-// The order of the code units, the same in each copy and each locale.
-function compare(a: string, b: string): number {
-  return a < b ? -1 : a > b ? 1 : 0;
 }

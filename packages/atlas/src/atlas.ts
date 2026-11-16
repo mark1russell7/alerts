@@ -22,6 +22,7 @@
  */
 
 import { categoryOf, knownKind, SUBJECT_SYSTEMS, TAXONOMY, type Category, type SubjectKind, type SubjectSystem } from "@mark1russell7/alerts";
+import { compareCodeUnits } from "@mark1russell7/text/order";
 
 /** The ways to get the data of a source. */
 export const ACCESS = ["api", "feed", "stream", "file", "page", "push", "email"] as const;
@@ -331,7 +332,6 @@ const isUrl = (text: string): boolean => {
 };
 
 const isUnder = (name: string, id: string): boolean => name === id || name.startsWith(`${id}.`);
-const byText = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
 // The ancestors of a code: for `a.b.c` they are `a` and `a.b`.
 const ancestors = (code: string): string[] => code.split(".").slice(0, -1).map((_, index, parts) => parts.slice(0, index + 1).join("."));
 // A source reaches a leaf code of a class through one of its classes: the class, the leaf code or a code between them.
@@ -409,7 +409,7 @@ export function parentOf(id: string, classIds: ReadonlySet<string>): string | nu
 export function unreachedCodes(classes: readonly Pick<SignalClass, "id">[], codes: Iterable<string> = Object.keys(TAXONOMY)): string[] {
   const ids = classes.map((item) => item.id);
   const reached = (code: string): boolean => ids.some((id) => isUnder(id, code) || isUnder(code, id));
-  return [...new Set(codes)].filter((code) => !EXEMPT_CATEGORIES.includes(categoryOf(code)) && !reached(code)).sort(byText);
+  return [...new Set(codes)].filter((code) => !EXEMPT_CATEGORIES.includes(categoryOf(code)) && !reached(code)).sort(compareCodeUnits);
 }
 
 /**
@@ -419,7 +419,7 @@ export function unreachedCodes(classes: readonly Pick<SignalClass, "id">[], code
 export function leafCodes(id: string, codes: Iterable<string> = Object.keys(TAXONOMY)): string[] {
   const list = [...new Set(codes)];
   const inner = new Set(list.flatMap(ancestors));
-  const leaves = list.filter((code) => isUnder(code, id) && !inner.has(code)).sort(byText);
+  const leaves = list.filter((code) => isUnder(code, id) && !inner.has(code)).sort(compareCodeUnits);
   return leaves.length > 0 ? leaves : [id];
 }
 

@@ -14,6 +14,7 @@
  * its deadline enters the sample at its limit. So a lag does not teach the limit.
  */
 import { clopperPearson, quantileInterval } from "@mark1russell7/rigor-statistics";
+import { compareCodeUnits } from "@mark1russell7/text/order";
 import { hasKind } from "./assess.ts";
 import type { Duration, Incident, Instant, MergeState, Operation, Report, ReportId, SourceId, Status } from "./contracts.ts";
 
@@ -149,7 +150,7 @@ export function carriages(state: MergeState, found: readonly Incident[], expecta
       }
     }
   }
-  return checks.sort((a, b) => compare(a.expectation, b.expectation) || a.started - b.started || compare(a.report, b.report));
+  return checks.sort((a, b) => compareCodeUnits(a.expectation, b.expectation) || a.started - b.started || compareCodeUnits(a.report, b.report));
 }
 
 /**
@@ -274,7 +275,7 @@ export function decideStep(
 ): DecideStep {
   const own = checks
     .filter((check) => check.expectation === expectation && check.started <= at)
-    .sort((a, b) => a.started - b.started || compare(a.report, b.report));
+    .sort((a, b) => a.started - b.started || compareCodeUnits(a.report, b.report));
   const kept = before !== undefined && agrees(before, own, expectation, at, limitOf) ? before : undefined;
   // Each decision of the state takes the check of this fold, thus the record is the record of the fold from the start.
   const record: Decision[] = kept === undefined ? [] : kept.record.map((entry, index) => ({ ...entry, check: own[index]! }));
@@ -447,7 +448,7 @@ export function latenessStep(checks: readonly Carriage[], expectations: readonly
 
 /** This function gives the sources that are late, sorted. The coverage does not count them. */
 export function lateSources(states: readonly Lateness[]): SourceId[] {
-  return [...new Set(states.filter((entry) => entry.state === "late").map((entry) => entry.to))].sort(compare);
+  return [...new Set(states.filter((entry) => entry.state === "late").map((entry) => entry.to))].sort(compareCodeUnits);
 }
 
 // The reports by their sent time.
@@ -461,12 +462,7 @@ function bySent(reports: readonly Report[]): Map<Instant, Report[]> {
 function firstOf(reports: readonly Report[]): Report | undefined {
   let first: Report | undefined;
   for (const report of reports) {
-    if (first === undefined || report.received < first.received || (report.received === first.received && compare(report.id, first.id) < 0)) first = report;
+    if (first === undefined || report.received < first.received || (report.received === first.received && compareCodeUnits(report.id, first.id) < 0)) first = report;
   }
   return first;
-}
-
-// The order of the code units, the same in each copy and each locale.
-function compare(a: string, b: string): number {
-  return a < b ? -1 : a > b ? 1 : 0;
 }

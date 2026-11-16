@@ -8,6 +8,7 @@
  * The end of the condition gives a cancel. The fold reads no clock.
  */
 import { canonicalJson } from "@mark1russell7/rigor-generators";
+import { compareCodeUnits } from "@mark1russell7/text/order";
 import { BALANCE_KIND, CLOCK_KIND, COPY_KIND, COVERAGE_KIND, hasKind, HEALTH_KIND, LOG_KIND, matchPlaces, QUOTA_KIND } from "./assess.ts";
 import type {
   Area,
@@ -324,7 +325,7 @@ export function systemReports(lines: SystemLines, snapshot: SystemSnapshot, at: 
   if (step !== undefined) conditions.set(CLOCK_LINE, clockCondition(step));
   const recovery = recentRecovery(snapshot.recoveries ?? [], at);
   if (recovery !== undefined) conditions.set(LOG_LINE, logCondition(recovery));
-  const names = [...new Set([...Object.keys(lines.open), ...conditions.keys()])].sort(compare);
+  const names = [...new Set([...Object.keys(lines.open), ...conditions.keys()])].sort(compareCodeUnits);
   let count = lines.count;
   const open = new Map(Object.entries(lines.open));
   const reports: Report[] = [];
@@ -348,7 +349,7 @@ export function systemReports(lines: SystemLines, snapshot: SystemSnapshot, at: 
     if (op === "cancel") open.delete(name);
     else open.set(name, { key, facts, kind: draft.kind, areas: draft.areas, about: draft.about });
   }
-  const sorted = [...open.entries()].sort(([a], [b]) => compare(a, b));
+  const sorted = [...open.entries()].sort(([a], [b]) => compareCodeUnits(a, b));
   return { lines: { count, open: Object.fromEntries(sorted) }, reports, observations };
 }
 
@@ -375,7 +376,7 @@ export function addSystemReports(lines: SystemLines, reports: readonly Report[],
     if (report.op === "cancel") open.delete(name);
     else open.set(name, { key: report.key, facts: canonicalJson(facts, { form: "json" }), kind: report.kind, areas: report.areas, about: report.about });
   }
-  const sorted = [...open.entries()].sort(([a], [b]) => compare(a, b));
+  const sorted = [...open.entries()].sort(([a], [b]) => compareCodeUnits(a, b));
   return { count, open: Object.fromEntries(sorted) };
 }
 
@@ -720,9 +721,4 @@ function reportOf(draft: Condition, envelope: Envelope): Report {
     observation,
     parameters: draft.parameters,
   };
-}
-
-// The order of the code units, the same in each copy and each locale.
-function compare(a: string, b: string): number {
-  return a < b ? -1 : a > b ? 1 : 0;
 }

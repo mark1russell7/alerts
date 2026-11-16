@@ -19,6 +19,7 @@
  * The function `missesDecision` gives the count of misses from the bounds of the measure.
  */
 import type { Instant } from "@mark1russell7/alerts";
+import { compareCodeUnits } from "@mark1russell7/text/order";
 
 /** One fetch of a measure. */
 export interface ListFetch {
@@ -151,7 +152,7 @@ function limitRuns(complete: readonly ListFetch[], misses: number, observed: (in
     }
     keepSents(sents, fetch);
   }
-  ends.sort((a, b) => a.left - b.left || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
+  ends.sort((a, b) => a.left - b.left || compareCodeUnits(a.key, b.key));
   return { misses, ends, censored };
 }
 

@@ -3,6 +3,7 @@
  * send and the acknowledgment of a status. It is pure. The runtime gives the time, and
  * the runtime does each call of a channel.
  */
+import { compareCodeUnits } from "@mark1russell7/text/order";
 import { assess, COVERAGE_KIND, DEFAULT_ASSESS_POLICY, hasKind, LIFE_SAFETY_KINDS, QUOTA_KIND, reachedAssessment } from "./assess.ts";
 import {
   LEVELS,
@@ -181,7 +182,7 @@ export function route(input: RouteInput): Route[] {
       // The ends of the person in time order. Each one closes an episode. A change of the mode adds its end at `now`.
       const closes: EscalationEnd[] = mine(ends)
         .filter((item) => Number.isFinite(item.at))
-        .sort((a, b) => a.at - b.at || compare(a.incident, b.incident));
+        .sort((a, b) => a.at - b.at || compareCodeUnits(a.incident, b.incident));
       // The episode of a time: the count of the ends before it. A time that is not a number is in the first episode.
       const episodeOf = (at: Instant): number => closes.filter((close) => close.at < at).length;
       // The first time of an episode: its earliest start or delivery, or `now`.
@@ -281,7 +282,7 @@ export function route(input: RouteInput): Route[] {
     }
   }
   return routes.sort(
-    (a, b) => compare(a.incident.anchor, b.incident.anchor) || compare(a.person, b.person) || a.episode - b.episode || LEVELS.indexOf(a.policy.level) - LEVELS.indexOf(b.policy.level),
+    (a, b) => compareCodeUnits(a.incident.anchor, b.incident.anchor) || compareCodeUnits(a.person, b.person) || a.episode - b.episode || LEVELS.indexOf(a.policy.level) - LEVELS.indexOf(b.policy.level),
   );
 }
 
@@ -422,7 +423,7 @@ function earliestStart(starts: readonly EscalationStart[], person: PersonId, lev
   let found: EscalationStart | undefined;
   for (const start of starts) {
     if (start.person !== person || start.level !== level || !Number.isFinite(start.at)) continue;
-    if (found === undefined || start.at < found.at || (start.at === found.at && compare(start.incident, found.incident) < 0)) found = start;
+    if (found === undefined || start.at < found.at || (start.at === found.at && compareCodeUnits(start.incident, found.incident) < 0)) found = start;
   }
   return found;
 }
@@ -438,9 +439,4 @@ function textReport(incident: Incident, reports: readonly Report[]): Report | un
     if (found === undefined || (matches && !foundMatches) || (matches === foundMatches && report.sent > found.sent)) found = report;
   }
   return found;
-}
-
-// The order of the code units, the same in each copy and each locale.
-function compare(a: string, b: string): number {
-  return a < b ? -1 : a > b ? 1 : 0;
 }

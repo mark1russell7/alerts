@@ -5,6 +5,7 @@
  */
 import { distanceKm, distanceToGeometryKm, GeoError } from "@mark1russell7/geo";
 import { canonicalJson } from "@mark1russell7/rigor-generators";
+import { compareCodeUnits } from "@mark1russell7/text/order";
 import type { Area, Position } from "./contracts.ts";
 import type { MapRegion, MapShape } from "./map.ts";
 
@@ -85,8 +86,5 @@ export function regionsNear(regions: readonly MapRegion[], at: Position, bufferK
     const distanceKm = regionDistanceKm(region, at);
     if (distanceKm !== undefined && distanceKm <= bufferKm) near.push({ region, distanceKm });
   }
-  return near.sort((a, b) => a.distanceKm - b.distanceKm || order(a.region.code.system, b.region.code.system) || order(a.region.code.code, b.region.code.code));
+  return near.sort((a, b) => a.distanceKm - b.distanceKm || compareCodeUnits(a.region.code.system, b.region.code.system) || compareCodeUnits(a.region.code.code, b.region.code.code));
 }
-
-// The order of two texts by their code units, thus the order does not change with the locale.
-const order = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);

@@ -3,6 +3,7 @@
  * shapes. The view also gives each watched place with its highest level and its gaps of coverage. The view is a pure
  * calculation. A renderer draws it, and a store of shapes gives the outline of each region code.
  */
+import { compareCodeUnits } from "@mark1russell7/text/order";
 import { assess, higherLevel, matchPlaces, reachedAssessment } from "./assess.ts";
 import {
   ASSESSED_LEVELS,
@@ -214,7 +215,7 @@ export function mapView(input: MapInput): MapView {
       (a, b) =>
         ASSESSED_LEVELS.indexOf(b.level) - ASSESSED_LEVELS.indexOf(a.level) ||
         SEVERITY_ORDER.indexOf(a.severity) - SEVERITY_ORDER.indexOf(b.severity) ||
-        compareText(a.anchor, b.anchor),
+        compareCodeUnits(a.anchor, b.anchor),
     );
 
   const places = input.places.map((place): MapPlace => {
@@ -226,14 +227,14 @@ export function mapView(input: MapInput): MapView {
       shapes: smallestShapes(place.codes, input.shape),
       level: placeLevels.get(place.id) ?? "none",
       incidents: incidents.filter((incident) => incident.places.includes(place.id)).map((incident) => incident.anchor),
-      gaps: [...new Set(gaps)].sort(compareText),
+      gaps: [...new Set(gaps)].sort(compareCodeUnits),
     };
   });
 
   return {
     incidents,
     places,
-    unshaped: [...unshaped.values()].sort((a, b) => compareText(a.system, b.system) || compareText(a.code, b.code)),
+    unshaped: [...unshaped.values()].sort((a, b) => compareCodeUnits(a.system, b.system) || compareCodeUnits(a.code, b.code)),
   };
 }
 
@@ -249,8 +250,4 @@ function smallestShapes(codes: readonly RegionCode[], shape: ShapeLookup): reado
 
 function codeKey(code: RegionCode): string {
   return `${code.system}\u0000${code.code}`;
-}
-
-function compareText(a: string, b: string): number {
-  return a < b ? -1 : a > b ? 1 : 0;
 }

@@ -17,7 +17,6 @@ export * from "./exchange-http.ts";
 export * from "./heartbeat.ts";
 export { DELIVERY_TIMES, SOURCE_POLICY, sourcePace } from "./instance.ts";
 export * from "./fetch.ts";
-export * from "./frame.ts";
 export * from "./limit.ts";
 export * from "./log.ts";
 export * from "./loop.ts";
