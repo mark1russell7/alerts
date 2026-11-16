@@ -21,7 +21,7 @@
   "dependencies": {
     "@mark1russell7/alerts": "workspace:*",
     "@mark1russell7/text": "^0.0.6",
-    "@procedures/notify": "link:../../../../client-wt/notify-main/packages/notify",
+    "@procedures/notify": "^0.59.1",
     "polite-crawler": "^0.7.3"
   }
 }
