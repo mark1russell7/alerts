@@ -186,16 +186,22 @@ export function exchangeWorker(options: ExchangeWorkerOptions): ExchangeWorker {
     if (stop?.aborted === true) return undefined;
     const own = new AbortController();
     let stopped = false;
+    // A stop ends the read at once, also when the transport misses an abort that came before its call.
+    let halt: (answer: Answer) => void = () => undefined;
+    const halted = new Promise<Answer>((resolve) => {
+      halt = resolve;
+    });
     const onStop = (): void => {
       stopped = true;
       own.abort(stop?.reason);
+      halt({ ok: false, message: `The stop ended the read of the copy ${peer.id}.` });
     };
     stop?.addEventListener("abort", onStop, { once: true });
     const input: EntriesInput = { after, ...(options.entries === undefined ? {} : { limit: options.entries }) };
     const work = Promise.resolve().then(() => options.call(peer, input, own.signal)).then((value): Answer => ({ ok: true, value }));
     const late = (): Answer => ({ ok: false, message: `The read of the copy ${peer.id} took longer than ${limit} ms.` });
     const thrown = (error: unknown): Answer => ({ ok: false, message: `The read of the copy ${peer.id} failed: ${errorMessage(error)}` });
-    const answer = await limited(work, limit, clock, late, thrown);
+    const answer = await limited(Promise.race([work, halted]), limit, clock, late, thrown);
     stop?.removeEventListener("abort", onStop);
     own.abort(new Error("The read of the copy ended."));
     // A read that the stop ended is not a fault of the other copy.

@@ -569,7 +569,12 @@ describe("two runtimes", () => {
       const clock = fakeWallClock(T0);
       const a = open("a", [], clock);
       const b = open("b", ["w1", "w2", "w3", "w4"], clock);
-      await b.runtime.pass();
+      // Each pass writes one shared event of its fetch. Thus four passes give four pages of one entry.
+      for (let pass = 0; pass < 4; pass += 1) {
+        await b.runtime.pass();
+        // Two intervals of the source, thus each pass fetches.
+        await clock.advance(2 * MINUTE);
+      }
       const worker = workerOf(a.runtime, serve(b.runtime, clock), clock, { entries: 1, pages: 2 });
       const rounds: ExchangeRound[] = [];
       do rounds.push(await worker.round());
@@ -578,7 +583,8 @@ describe("two runtimes", () => {
       expect(rounds[0]!.more).toBe(true);
       expect(rounds.at(-1)!.more).toBe(false);
       expect(a.runtime.position("b")).toBe(b.log.head());
-      expect(shared(a.runtime.state()).reports.map((one) => one.key).sort()).toEqual(["w1", "w2", "w3", "w4"]);
+      expect([...new Set(shared(a.runtime.state()).reports.map((one) => one.key))].sort()).toEqual(["w1", "w2", "w3", "w4"]);
+      expect(shared(a.runtime.state())).toEqual(shared(b.runtime.state()));
     });
 
     it("gives the stages skew and config, and a read with the same clock and configuration ends them", async () => {
@@ -672,6 +678,20 @@ describe("two runtimes", () => {
       expect(await running).toEqual(quiet);
       expect(worker.failure("b")).toBeUndefined();
       expect(worker.watches()[0]!.read).toBeUndefined();
+    });
+
+    it("ends a read at the stop also when the transport misses the abort of its signal", async () => {
+      const clock = fakeWallClock(T0);
+      const a = open("a", [], clock);
+      // This transport never ends, and it reads no signal.
+      const deaf: ExchangeCall = () => new Promise(() => undefined);
+      const worker = workerOf(a.runtime, deaf, clock);
+      const stop = new AbortController();
+      const running = worker.round(stop.signal);
+      await settle();
+      stop.abort(new Error("shutdown"));
+      expect(await running).toEqual(quiet);
+      expect(worker.failure("b")).toBeUndefined();
     });
 
     it("moves its times at a step of the wall clock, and a read across a step keeps its imports and gives no times", async () => {
