@@ -16,6 +16,7 @@ import { compareCodeUnits } from "@mark1russell7/text/order";
 import { LEVELS } from "./contracts.ts";
 import type {
   Acknowledgment,
+  ChannelDescriptor,
   ChannelId,
   Delivery,
   Duration,
@@ -72,8 +73,14 @@ export const ESCALATION_MACHINE: Machine = {
   },
   knobs: {
     step_at: { key: "EscalationStep.at", scope: "policy", unit: "ms", default: null, note: "the time from the start to the first step" },
-    step_wait: { key: "the time from one step of the policy to the next", scope: "policy", unit: "ms", default: null, note: "the policy gives one for each step" },
-    rank_wait: { key: "rank × the rank delay of the level", scope: "cell", unit: "ms", default: null, note: "a copy waits for its rank before each send. The rank delay of a level can be 0, then each copy sends at once" },
+    step_wait: { key: "the time from one step of the policy to the next", scope: "policy", unit: "ms", default: null, note: "the policy gives one for each step. At a rank above 0, the rank floor of a channel changes it" },
+    rank_wait: {
+      key: "rank × max(the rank delay of the level, the rank floor of the channel of the step)",
+      scope: "cell",
+      unit: "ms",
+      default: null,
+      note: "a copy waits for its rank before each send. The rank delay of a level can be 0, then each copy sends a step of a channel with no floor at once",
+    },
     exhausted_after: { key: "EscalationPolicy.exhaustedAfter", scope: "policy", unit: "ms", default: null },
   },
   timers: {
@@ -134,6 +141,11 @@ export interface EscalationInput {
   readonly rank?: number | undefined;
   /** The wait of one rank at the level of the policy. `rankDelayOf` gives it from the table of the levels. */
   readonly rankDelay?: Duration | undefined;
+  /**
+   * The least wait of one rank before a step of each channel: the rank floor. A channel with no entry has the floor 0.
+   * `rankFloors` gives the floor of each exclusive channel.
+   */
+  readonly floors?: ReadonlyMap<ChannelId, Duration> | undefined;
   /** The quiet window of the person, from `PersonWatch.quiet`. A send below `life-safety` in the window is quiet. */
   readonly quiet?: QuietWindow | undefined;
   /**
@@ -155,8 +167,23 @@ export interface EscalationInput {
  */
 export type RankDelays = Readonly<Partial<Record<Level, Duration>>>;
 
-/** The longest rank delay of a level in a configuration: one hour. */
+/** The longest rank delay of a level in a configuration: one hour. The longest rank floor is the same. */
 export const RANK_DELAY_LIMIT: Duration = 60 * 60_000;
+
+/**
+ * This function gives the rank floor of each exclusive channel: `floor`. A person takes one message of such a channel at a
+ * time. Thus a copy with a rank above 0 waits for the delivery of rank 0 before its step of the channel.
+ */
+export function rankFloors(channels: readonly ChannelDescriptor[], floor: Duration | undefined): ReadonlyMap<ChannelId, Duration> {
+  return new Map(floor === undefined ? [] : channels.filter((channel) => channel.exclusive === true).map((channel) => [channel.id, floor] as const));
+}
+
+/** This function gives the problems of a rank floor: it is a whole number of milliseconds up to `RANK_DELAY_LIMIT`. */
+export function rankFloorProblems(floor: Duration | undefined): string[] {
+  return floor === undefined || (Number.isInteger(floor) && floor >= 0 && floor <= RANK_DELAY_LIMIT)
+    ? []
+    : [`The rank floor is not a whole number of milliseconds from 0 to ${RANK_DELAY_LIMIT}.`];
+}
 
 /** This function gives the rank delay of a level: its entry in the table, or else the default. */
 export function rankDelayOf(level: Level, delays: RankDelays | undefined, fallback: Duration | undefined): Duration | undefined {
@@ -175,7 +202,7 @@ export interface EscalationSend extends MessageKeyInput {
   readonly channel: ChannelId;
   /** The time at which the step became due. It holds `wait`. */
   readonly due: Instant;
-  /** The wait of the rank of this copy before the send: `rank × rankDelay`. At 0, each copy sends the step at once. */
+  /** The wait of the rank of this copy before the send: `rank × max(rankDelay, floor)` for the channel. At 0, each copy sends the step at once. */
   readonly wait: Duration;
   /** True: the channel sends in its silent mode. The value is for a send at `now`. `Message.quiet` takes it. */
   readonly quiet: boolean;
@@ -218,10 +245,11 @@ const ACTIVE: ReadonlySet<EscalationState> = new Set(["sent", "last", "exhausted
  * the same plan, and it does not throw. Two copies of the system with the same merge state give the
  * same plan, apart from the wait of their rank.
  *
- * - A step is due at `start + step.at + rank × rankDelay`. Each due step without a delivery in the
- *   ledger is a send, also a late one. The system prefers a duplicate to a miss.
+ * - A step is due at `start + step.at + wait`. The wait of a step is `rank × max(rankDelay, floor)`, with the floor of
+ *   the channel of the step. Each due step without a delivery in the ledger is a send, also a late one. The system
+ *   prefers a duplicate to a miss.
  * - An acknowledgment stops the sends, and each delivery becomes a cancel. The end does the same.
- * - The exhaustion comes `exhaustedAfter` after the last step. The repeats continue after it.
+ * - The exhaustion comes `exhaustedAfter` after the latest due time of a step. The repeats continue after it.
  * - A failed send makes no delivery, so its step stays due and the next plan sends it again.
  * - The delivery is at least once, not exactly once. A crash after a send and before its record
  *   gives a second send with the same `messageKey`. A channel that drops a repeated key drops it.
@@ -240,7 +268,10 @@ export function escalate(input: EscalationInput): EscalationPlan {
   const covers = (ack: Acknowledgment): boolean => reports.has(ack.incident) && ack.person === person && LEVELS.indexOf(ack.level) >= least;
   const acknowledgment = input.acknowledgments.filter(covers).sort(byTimeThenVia)[0];
   const steps = policy.steps;
-  const wait = nonNegative(input.rank) * nonNegative(input.rankDelay);
+  const rank = nonNegative(input.rank);
+  const delay = nonNegative(input.rankDelay);
+  // Each step has its wait: a step of an exclusive channel waits at least the floor of the channel for each rank.
+  const waits = steps.map((step) => rank * Math.max(delay, nonNegative(input.floors?.get(step.channel))));
   const silent = input.silent === true;
   const quiet = silent || (level !== "life-safety" && inQuietWindow(input.quiet, now));
 
@@ -254,10 +285,12 @@ export function escalate(input: EscalationInput): EscalationPlan {
     if (offset !== undefined && Number.isFinite(delivery.at)) start = Math.min(start, delivery.at - offset);
   }
 
-  const events: Event[] = offsets.map((offset, index) => ({ at: start + offset + wait, on: ESCALATION_EVENTS.step, order: 2, step: index }));
-  const lastAt = Math.max(0, ...offsets);
+  const dueAt = offsets.map((offset, index) => offset + (waits[index] ?? 0));
+  const events: Event[] = dueAt.map((at, index) => ({ at: start + at, on: ESCALATION_EVENTS.step, order: 2, step: index }));
+  // The latest due time of a step. A policy with no step has the wait of the rank delay.
+  const lastAt = Math.max(rank * delay, ...dueAt);
   // A quiet message asks for no acknowledgment, thus the silent mode has no exhaustion.
-  if (!silent) events.push({ at: start + lastAt + nonNegative(policy.exhaustedAfter) + wait, on: ESCALATION_EVENTS.exhaust, order: 3, step: -1 });
+  if (!silent) events.push({ at: start + lastAt + nonNegative(policy.exhaustedAfter), on: ESCALATION_EVENTS.exhaust, order: 3, step: -1 });
   // An acknowledgment in the merge state occurred, also when the clock of its copy is ahead or broken.
   if (acknowledgment !== undefined) {
     events.push({ at: Number.isFinite(acknowledgment.at) ? Math.min(acknowledgment.at, now) : now, on: ESCALATION_EVENTS.ack, order: 0, step: -1 });
@@ -299,10 +332,10 @@ export function escalate(input: EscalationInput): EscalationPlan {
   const sends: EscalationSend[] = ACTIVE.has(state)
     ? due.flatMap((index) => {
         const step = steps[index];
-        const offset = offsets[index] ?? 0;
+        const wait = waits[index] ?? 0;
         return step === undefined || delivered.has(index)
           ? []
-          : [{ incident: incident.anchor, level, person, step: index, ...(episode === 0 ? {} : { episode }), channel: step.channel, due: start + offset + wait, wait, quiet }];
+          : [{ incident: incident.anchor, level, person, step: index, ...(episode === 0 ? {} : { episode }), channel: step.channel, due: start + (dueAt[index] ?? 0), wait, quiet }];
       })
     : [];
 

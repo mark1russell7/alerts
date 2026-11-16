@@ -3,7 +3,29 @@ import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fakeClock, type FakeClock, type WallClock } from "@mark1russell7/algebra/clock";
-import { CONFIG_FORMAT, COPY_FORMAT, HEALTH_FORMAT, healthPayloadSchema, MAP_FORMAT, matchPlaces, ONLY_COPY, parseConfig, type AlertConfig, type Watch, type ChannelId, type EscalationPolicy, type PersonId, type PlaceId, type SecretLookup, type CopySettings, type SourceId, type SpendConfig } from "@mark1russell7/alerts";
+import {
+  CONFIG_FORMAT,
+  COPY_FORMAT,
+  escalate,
+  HEALTH_FORMAT,
+  healthPayloadSchema,
+  MAP_FORMAT,
+  matchPlaces,
+  ONLY_COPY,
+  parseConfig,
+  type AlertConfig,
+  type Watch,
+  type ChannelId,
+  type Delivery,
+  type EscalationPolicy,
+  type PersonId,
+  type PlaceId,
+  type ReportId,
+  type SecretLookup,
+  type CopySettings,
+  type SourceId,
+  type SpendConfig,
+} from "@mark1russell7/alerts";
 import type { TwilioFetch } from "@mark1russell7/alerts-channel-twilio";
 import { PUSHOVER_QUOTA, PUSHOVER_RESERVE_NOTICES, PUSHOVER_TIMEOUT_MS, type PushoverChannelOptions } from "@mark1russell7/alerts-channel-pushover";
 import { memoryCache, type ShapeCache } from "@mark1russell7/alerts-shapes-nws";
@@ -12,7 +34,7 @@ import { SWPC_KINDS } from "@mark1russell7/alerts-source-swpc";
 import { memoryQuotaStore, quotaGate, type Exchange, type Transport } from "polite-crawler/api";
 import { DEFAULT_POLICY } from "polite-crawler/politeness";
 import { afterEach, describe, expect, it } from "vitest";
-import { CHECKS_KEY, checksKeys, DAEMON_CHECK, daemonCheck, DELIVERY_TIMES, INSTANCE_CHANNELS, INSTANCE_CHECK, INSTANCE_EXPECTATIONS, INSTANCE_SOURCES, INSTANCE_TIMES, instanceProblems, LOUD_PING_URL_KEY, openInstance, PING_URL_KEY, pingKeyOf, pingTargets, RANK_DELAY, SOURCE_POLICY, sourcePace, USER_AGENT_NAME, type Instance, type InstanceOptions } from "./instance.ts";
+import { CHECKS_KEY, checksKeys, DAEMON_CHECK, daemonCheck, DELIVERY_TIMES, INSTANCE_CHANNELS, INSTANCE_CHECK, INSTANCE_EXPECTATIONS, INSTANCE_SOURCES, INSTANCE_TIMES, instanceProblems, LOUD_PING_URL_KEY, openInstance, PING_URL_KEY, pingKeyOf, pingTargets, RANK_DELAY, RANK_FLOOR, SOURCE_POLICY, sourcePace, USER_AGENT_NAME, type Instance, type InstanceOptions } from "./instance.ts";
 import { spendGates, spendQuota } from "./balance.ts";
 import { CLOCK_SKEW_LIMIT, COPY_TOKEN_KEY, EXCHANGE_EVERY, EXCHANGE_LIMIT } from "./copy.ts";
 import { overdueLimit } from "./delivery.ts";
@@ -36,6 +58,10 @@ const LONGITUDE = -98.55;
 const LATITUDE = 28.3;
 
 const policy = (level: EscalationPolicy["level"]): EscalationPolicy => ({ level, steps: [{ channel: pushover, at: 0 }], exhaustedAfter: 20 * MINUTE });
+
+// A copy with rank 1 and its own first check. The addresses are fake.
+const CLOUD_KEY = "HEALTHCHECKS_PING_URL_CLOUD";
+const CLOUD: CopySettings = { format: COPY_FORMAT, id: "cloud", rank: 1, listen: { host: "cloud.example", port: 4751 }, peers: [{ id: "home", url: "http://home.example:4751" }], pingKey: CLOUD_KEY };
 
 const CONFIG: AlertConfig = {
   format: CONFIG_FORMAT,
@@ -567,6 +593,32 @@ describe("the Twilio call channel of the instance", () => {
     expect(instance.balances.map((watch) => [watch.provider, watch.balance()?.read?.balance, watch.balance()?.floor])).toEqual([["provider:twilio", 12.5, 5]]);
   });
 
+  it("calls from a copy with rank 1 one rank floor after its push, also with no rank delay at the level (AL-15)", async () => {
+    const twilio = twilioServer();
+    const noDelay: AlertConfig = { ...calling([SPEND]), rankDelay: { digest: 0, notice: 0, urgent: 0, "life-safety": 0 } };
+    const { instance, clock, server } = open(store({ ...SECRETS, ...TWILIO }), noDelay, undefined, undefined, { twilio: twilio.fetch, spendStore: memoryQuotaStore(), copy: CLOUD });
+    const first = await finish(clock, instance.runtime.pass());
+    // The push goes at once. The call waits for the call of rank 0.
+    expect(server.calls).toHaveLength(1);
+    expect(twilio.made()).toEqual([]);
+    const route = first.delivery?.routes[0];
+    expect(route?.plan.wakeAt).toBe((route?.plan.start ?? 0) + RANK_FLOOR);
+    await clock.advance(RANK_FLOOR);
+    await finish(clock, instance.runtime.pass());
+    expect(twilio.made()).toHaveLength(1);
+    expect(server.calls).toHaveLength(1);
+  });
+
+  it("takes the rank floor of the configuration", async () => {
+    const twilio = twilioServer();
+    const floor: AlertConfig = { ...calling([SPEND]), rankDelay: { digest: 0, notice: 0, urgent: 0, "life-safety": 0 }, rankFloor: 45_000 };
+    const { instance, clock } = open(store({ ...SECRETS, ...TWILIO }), floor, undefined, undefined, { twilio: twilio.fetch, spendStore: memoryQuotaStore(), copy: CLOUD });
+    const first = await finish(clock, instance.runtime.pass());
+    const route = first.delivery?.routes[0];
+    expect(route?.plan.wakeAt).toBe((route?.plan.start ?? 0) + 45_000);
+    expect(twilio.made()).toEqual([]);
+  });
+
   it("keeps the reserve of the cap for life-safety: a call below life-safety in the reserve does not go", async () => {
     const twilio = twilioServer();
     const spendStore = memoryQuotaStore();
@@ -727,9 +779,6 @@ describe("the check of the instance", () => {
 });
 
 describe("the copies of the system", () => {
-  // A copy with rank 1 and its own first check. The addresses are fake.
-  const CLOUD_KEY = "HEALTHCHECKS_PING_URL_CLOUD";
-  const CLOUD: CopySettings = { format: COPY_FORMAT, id: "cloud", rank: 1, listen: { host: "cloud.example", port: 4751 }, peers: [{ id: "home", url: "http://home.example:4751" }], pingKey: CLOUD_KEY };
   const URL_OF_CHECK = "https://hc-ping.com/00000000-0000-4000-8000-000000000000";
   const lookup = (values: Record<string, string>) => (key: string) => values[key];
 
@@ -738,6 +787,48 @@ describe("the copies of the system", () => {
     expect(RANK_DELAY).toBe(30_000);
     // The delivery of rank 0 comes to rank 1 before its wait ends, also after the longest send and one failed read.
     expect(RANK_DELAY).toBeGreaterThan(DELIVERY_TIMES.flightLimit + 2 * EXCHANGE_EVERY - EXCHANGE_EVERY + EXCHANGE_LIMIT);
+  });
+
+  it("waits 31 s for each rank before a call: the delivery of rank 0 comes to rank 1 in the worst case before its due time", () => {
+    expect(RANK_FLOOR).toBe(DELIVERY_TIMES.callLimit + 3 * EXCHANGE_EVERY + 2 * EXCHANGE_LIMIT);
+    expect(RANK_FLOOR).toBe(31_000);
+    const call = "twilio-call" as ChannelId;
+    const anchor = "a".repeat(64) as ReportId;
+    const steps = [
+      { channel: pushover, at: 0 },
+      { channel: call, at: 0 },
+    ];
+    const plan = (rank: number, since: number, deliveries: readonly Delivery[], now: number) =>
+      escalate({
+        policy: { level: "life-safety", steps, exhaustedAfter: 20 * MINUTE },
+        person,
+        incident: { anchor, reports: [anchor] },
+        since,
+        deliveries,
+        acknowledgments: [],
+        rank,
+        rankDelay: 0,
+        floors: new Map([[call, RANK_FLOOR]]),
+        now,
+      });
+    const calls = (each: ReturnType<typeof plan>) => each.sends.filter((send) => send.channel === call);
+    // Rank 1 sees the incident first, at s1. Rank 0 sees it one exchange later: one interval and one read.
+    const s1 = T0;
+    const seen = s1 + EXCHANGE_EVERY + EXCHANGE_LIMIT;
+    // Rank 0 calls at once, and the send ends in the call limit.
+    expect(calls(plan(0, seen, [], seen)).map((send) => send.due)).toEqual([seen]);
+    const sent = seen + DELIVERY_TIMES.callLimit;
+    // A read in progress misses the delivery. Two intervals and one read bring it to rank 1.
+    const merged = sent + 2 * EXCHANGE_EVERY + EXCHANGE_LIMIT;
+    const first = plan(1, s1, [], s1);
+    expect(first.sends.map((send) => send.channel)).toEqual([pushover]);
+    expect(first.wakeAt).toBe(s1 + RANK_FLOOR);
+    expect(first.wakeAt).toBeGreaterThanOrEqual(merged);
+    // At its due time, rank 1 has the call of rank 0 in its ledger, thus it does not call.
+    const delivered: Delivery = { key: "k-call", incident: anchor, level: "life-safety", person, channel: call, step: 1, at: sent };
+    expect(calls(plan(1, s1, [delivered], s1 + RANK_FLOOR))).toEqual([]);
+    // With no delivery, rank 1 calls at its due time: the system prefers a second call to a missed call.
+    expect(calls(plan(1, s1, [], s1 + RANK_FLOOR)).map((send) => send.due)).toEqual([s1 + RANK_FLOOR]);
   });
 
   it("sends a step of a copy with rank 1 one rank delay after the start of the escalation", async () => {

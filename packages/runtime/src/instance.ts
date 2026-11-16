@@ -273,6 +273,18 @@ export const DELIVERY_TIMES: Pick<DeliveryOptions, "pollEvery" | "retry" | "call
 export const RANK_DELAY: Duration = DELIVERY_TIMES.flightLimit + EXCHANGE_EVERY + EXCHANGE_LIMIT + CLOCK_SKEW_LIMIT;
 
 /**
+ * The default least wait of each rank before a step of an exclusive channel, as a call: 31 s. A phone takes one call at
+ * a time. Thus a copy with rank 1 calls only after the call of rank 0 is in its ledger. In the worst case:
+ *
+ * - rank 0 sees the incident one exchange after rank 1: one interval, 5 s, and one read, 3 s
+ * - the send of rank 0 ends in the call limit, 10 s
+ * - the delivery comes to rank 1 by the exchange: a read in progress misses it, thus two intervals and one read, 13 s.
+ *
+ * The field `rankFloor` of the configuration replaces it.
+ */
+export const RANK_FLOOR: Duration = DELIVERY_TIMES.callLimit + 3 * EXCHANGE_EVERY + 2 * EXCHANGE_LIMIT;
+
+/**
  * This function gives the problems of a configuration that stop the start of the instance:
  *
  * - a missing token, or a token with a bad form
@@ -581,6 +593,7 @@ export function openInstance(options: InstanceOptions): Instance {
     rank: copy.rank,
     rankDelay: RANK_DELAY,
     ...(config.rankDelay === undefined ? {} : { rankDelays: config.rankDelay }),
+    rankFloor: config.rankFloor ?? RANK_FLOOR,
   };
 
   // The last pass of the runtime, from the loop or from a direct call of `pass`. The map reads it.

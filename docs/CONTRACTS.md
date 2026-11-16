@@ -392,6 +392,16 @@ Thus when each copy is up, the copy after gets the delivery of the copy before, 
 
 A copy with a higher rank sends first when it sees the incident `RANK_DELAY` or more before the other copies. Then the other copies get its delivery, and they do not send.
 
+The field `rankDelay` of the configuration gives the wait of one rank for a level. With 0 for `life-safety`, each copy sends each life-safety push at once. Thus the worst alerts come once from each copy.
+
+A phone takes one call at a time. Thus a channel with `exclusive` in its descriptor has a rank floor: the least wait of one rank before its step. The wait of a step is `rank × max(rank delay of the level, floor of the channel)`. The Twilio call channel is exclusive. The default floor `RANK_FLOOR` is 31 seconds, for the worst case:
+
+- the copy with rank 0 sees the incident one exchange after the copy with rank 1: 5 seconds and 3 seconds
+- the call of rank 0 ends in the call limit, 10 seconds
+- a read in progress misses the delivery, thus two periods and one time limit bring it to rank 1: 13 seconds
+
+The field `rankFloor` of the configuration replaces the default floor. A push channel has no floor.
+
 ### The exchange
 
 Each copy reads the log of each other copy, and adds the shared events to its own log:

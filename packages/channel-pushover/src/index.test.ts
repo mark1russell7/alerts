@@ -138,6 +138,8 @@ describe("the descriptor", () => {
     expect(pushoverDescriptor("ios").dependsOn).toEqual(["provider:pushover", "provider:apns"]);
     expect(pushoverDescriptor("android").dependsOn).toEqual(["provider:pushover", "provider:fcm"]);
     expect(pushoverDescriptor()).toMatchObject({ id: "pushover", uses: ["internet", "dns", "power"], breaksThrough: true, repeats: true, ack: "poll", maxTitle: 250, maxBody: 1024 });
+    // A phone takes many pushes at once, thus each copy sends a life-safety push with no floor.
+    expect(pushoverDescriptor().exclusive).toBeUndefined();
     // A push takes the why line of the push limit.
     expect(pushoverDescriptor().why).toEqual(WHY_LIMITS.push);
     const fake = server();
