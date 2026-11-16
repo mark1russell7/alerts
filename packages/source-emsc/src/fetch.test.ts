@@ -56,9 +56,10 @@ const fetchWith = (replies: readonly Reply[]) => {
     if (reply === undefined) throw new Error("no reply");
     return reply;
   };
-  const clock = { time: START, now: () => clock.time, sleep: async (ms: number) => void (clock.time += ms) };
+  let time = START;
+  const clock = { now: () => time, sleep: async (ms: number) => void (time += ms) };
   const fetch = createEmscFetch({ pace: { scheduler: new HostScheduler(clock, 1), now: clock.now }, transport, userAgent: "alerts-tests", baseUrl: `${BASE}/`, minIntervalMs: 0, timeoutMs: 1000 });
-  return { fetch, sent, clock };
+  return { fetch, sent, now: clock.now, setTime: (at: number) => void (time = at) };
 };
 const failureOf = (outcome: FetchOutcome): unknown => (outcome.ok ? undefined : outcome.failure);
 const observationsOf = (outcome: FetchOutcome): readonly unknown[] => (outcome.ok ? outcome.observations : []);
@@ -209,26 +210,26 @@ describe("createEmscFetch", () => {
   });
 
   it("gives only the events of the past day for a 304 later in the hour", async () => {
-    const { fetch, sent, clock } = fetchWith([FULL, NOT_MODIFIED]);
+    const { fetch, sent, now, setTime } = fetchWith([FULL, NOT_MODIFIED]);
     await fetch({ watch: WATCH });
-    clock.time = START + 30 * 60_000;
+    setTime(START + 30 * 60_000);
     const later = await fetch({ watch: WATCH });
     expect(sent.map((exchange) => exchange.url)).toEqual([URL_OF_QUERY, URL_OF_QUERY]);
-    const kept = FEATURES.filter((feature) => timeOf(feature) > clock.time - REPORT_LIFE_MS);
+    const kept = FEATURES.filter((feature) => timeOf(feature) > now() - REPORT_LIFE_MS);
     expect(kept.length).toBeLessThan(FEATURES.length);
     expect(observationsOf(later)).toHaveLength(kept.length);
     expect(later).toMatchObject({ ok: true, complete: true });
   });
 
   it("asks for a new path in the next hour, with no condition", async () => {
-    const { fetch, sent, clock } = fetchWith([FULL, NOT_MODIFIED]);
+    const { fetch, sent, now, setTime } = fetchWith([FULL, NOT_MODIFIED]);
     await fetch({ watch: WATCH });
-    clock.time = Date.parse("2026-11-16T06:00:00Z");
+    setTime(Date.parse("2026-11-16T06:00:00Z"));
     const next = await fetch({ watch: WATCH });
-    expect(sent.map((exchange) => exchange.url)).toEqual([URL_OF_QUERY, `${BASE}${queryPath(clock.time)}`]);
+    expect(sent.map((exchange) => exchange.url)).toEqual([URL_OF_QUERY, `${BASE}${queryPath(now())}`]);
     expect(conditionsOf(sent)).toEqual([undefined, undefined]);
     // A 304 for a path with no full answer is a failure.
-    expect(failureOf(next)).toEqual({ kind: "network", message: `a 304 answer with no earlier full answer: ${BASE}${queryPath(clock.time)}` });
+    expect(failureOf(next)).toEqual({ kind: "network", message: `a 304 answer with no earlier full answer: ${BASE}${queryPath(now())}` });
   });
 
   it("fails a 304 with no earlier full answer, and then sends no condition", async () => {
