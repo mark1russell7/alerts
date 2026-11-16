@@ -1,11 +1,11 @@
 import { fakeWallClock } from "@mark1russell7/algebra/clock";
-import { reportId, TOMBSTONE_LIFE, type ChannelId, type Delivery, type Observation, type ObservationId, type PersonId, type PlaceId, type Report, type ReportId, type SourceId, type SourceProcedures, type WatchedPlace } from "@mark1russell7/alerts";
+import { DEFAULT_LINK_POLICY, linkRule, RETENTION_HORIZON, reportId, TOMBSTONE_LIFE, type ChannelId, type Delivery, type Observation, type ObservationId, type PersonId, type PlaceId, type Report, type ReportId, type SourceId, type SourceProcedures, type WatchedPlace } from "@mark1russell7/alerts";
 import { random, seedsFrom, type Random } from "@mark1russell7/rigor-generators";
 import { describe, expect, it } from "vitest";
 import { envelope, type RuntimeEvent } from "./events.ts";
 import { importOf, sharedItem } from "./exchange.ts";
 import { openRuntimeLog } from "./log.ts";
-import { retention, RETIRE_EVERY } from "./retention.ts";
+import { retention, retiredEvent, RETIRE_EVERY } from "./retention.ts";
 import { openRuntime } from "./runtime.ts";
 import { EMPTY_RUNTIME, fold, rebuild, type FoldContext, type RuntimeState } from "./state.ts";
 
@@ -97,6 +97,8 @@ function expectNoRetiredPart(state: RuntimeState): void {
   // A key with a live tombstone is not a cancel of the state.
   const keys = new Set(state.cancelTombstones.map((tombstone) => tombstone.key));
   expect(state.cancelled.filter((key) => keys.has(key))).toEqual([]);
+  // Each time of entry is the time of a key of cancelled.
+  expect(Object.keys(state.cancelledSince).filter((key) => !state.cancelled.includes(key))).toEqual([]);
 }
 
 describe("the fold of a retirement (AL-47)", () => {
@@ -180,6 +182,12 @@ describe("the fold of a retirement (AL-47)", () => {
     const later = foldAll([...log, retired(until + HOUR, [W2], until + HOUR + TOMBSTONE_LIFE), imported(cancelled("k1", T0 + 5 * SECOND))]);
     expect(later.cancelTombstones).toEqual([]);
     expect(later.cancelled).toEqual(["k1", "k9"]);
+  });
+
+  it("gives each cancelled key its own time of entry, and a step of the clock moves it", () => {
+    // The cancel of k1 is at T0 + 5 s. The step of 5 minutes after it moves its time of entry.
+    expect(at(firstRetirement - 1).cancelledSince).toEqual({ k1: T0 + 5 * SECOND + 5 * MINUTE });
+    expect(at(firstRetirement).cancelledSince).toEqual({});
   });
 
   it("moves each tombstone at a step of the clock, as each own instant", () => {
@@ -333,5 +341,60 @@ describe("retention", () => {
     expect(() => retention({ horizon: -1 })).toThrow("The horizon of the retention is -1");
     expect(() => retention({ life: Number.NaN })).toThrow("The life of the retention is NaN");
     expect(() => retention({ every: 0 })).toThrow("The interval of the retirements is 0");
+  });
+});
+
+describe("the retirement of an orphan key (AL-47)", () => {
+  const options = retention();
+  const link = linkRule(DEFAULT_LINK_POLICY);
+  // An own delivery of k1, and its cancel from the other copy.
+  const first: RuntimeEvent[] = [
+    started("run-a", T0),
+    fetched("fetch:1", T0 + SECOND, [report("w1", T0 + SECOND)]),
+    delivered("k1", W1, T0 + 3 * SECOND),
+    imported(cancelled("k1", T0 + 4 * SECOND)),
+  ];
+  const foldWith = (events: readonly RuntimeEvent[], at: number): readonly RuntimeEvent[] => {
+    const event = retiredEvent(foldAll(events), at, link, options);
+    if (event === undefined) throw new Error(`No retirement at ${String(at)}.`);
+    return [...events, event];
+  };
+
+  it("drops an old cancel that a new read of the other copy brings back, at the horizon after its entry", () => {
+    // The incident retires with its key. The retirement after the life of the tombstones drops the key tombstone.
+    const retiredAt = T0 + 8 * DAY;
+    const once = foldWith(first, retiredAt);
+    expect(once.at(-1)).toMatchObject({ reports: [W1], cancelled: ["k1"] });
+    const until = retiredAt + TOMBSTONE_LIFE;
+    // A recovery sets each read position to 0, thus the next read imports the old cancel again. The own delivery stays out.
+    const recovery: RuntimeEvent = { ...envelope("recovered", "recovered:q-1", until + 2 * HOUR), quarantine: "q-1", fault: "corrupt", read: 4, added: 4, lost: 0, whole: true, problems: [] };
+    const log = [...once, retired(until + HOUR, [], until + HOUR + TOMBSTONE_LIFE), recovery, imported(cancelled("k1", T0 + 4 * SECOND))];
+    const state = foldAll(log);
+    expect(state.cancelled).toEqual(["k1"]);
+    expect(state.cancelledSince).toEqual({ k1: until + 2 * HOUR });
+    expect(state.merge.deliveries).toEqual([]);
+    // One millisecond before the horizon after its entry, the orphan stays.
+    const due = until + 2 * HOUR + RETENTION_HORIZON;
+    expect(retiredEvent(state, due - 1, link, options)).toBeUndefined();
+    const dropped = foldWith(log, due);
+    expect(dropped.at(-1)).toMatchObject({ type: "retired", reports: [], cancelled: ["k1"] });
+    const after = foldAll(dropped);
+    expect(after.cancelled).toEqual([]);
+    expect(after.cancelTombstones).toEqual([{ key: "k1", until: due + TOMBSTONE_LIFE }]);
+    expectNoRetiredPart(after);
+    expect(rebuild(dropped, CONTEXT)).toEqual(after);
+  });
+
+  it("keeps an old cancel with a delivery in the merge, and a cancel with no time of entry", () => {
+    // The warning expires at T0 + 1 h, thus its incident retires at the horizon after that. The key is older before then.
+    const state = foldAll(first);
+    expect(state.cancelledSince).toEqual({ k1: T0 + 3 * SECOND });
+    expect(retiredEvent(state, T0 + 3 * SECOND + RETENTION_HORIZON + MINUTE, link, options)).toBeUndefined();
+    expect(retiredEvent(state, T0 + HOUR + RETENTION_HORIZON, link, options)).toMatchObject({ reports: [W1], cancelled: ["k1"] });
+    // An import before each own event has no own time, thus its key has no age.
+    const early = foldAll([imported(cancelled("k6", T0))]);
+    expect(early.cancelled).toEqual(["k6"]);
+    expect(early.cancelledSince).toEqual({});
+    expect(retiredEvent(early, T0 + 100 * DAY, link, options)).toBeUndefined();
   });
 });

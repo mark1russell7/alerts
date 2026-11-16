@@ -32,19 +32,30 @@ export function retention(options: RetentionOptions = {}): Required<RetentionOpt
 }
 
 /**
- * This function gives the event that retires each old incident of the state at a time, or `undefined` when no incident
- * retires. The incidents come from the merge state of each copy. `link` is the link rule of the delivery step and the view,
- * thus the retirement removes only whole incidents of the delivery step.
+ * This function gives the event that retires each old incident and old orphan key of the state at a time. It gives
+ * `undefined` when nothing retires. The incidents come from the merge state of each copy. `link` is the link rule of the
+ * delivery step and the view, thus the retirement removes only whole incidents of the delivery step.
+ *
+ * - An orphan key is a cancelled key with no delivery in the merge. A new read of the log of another copy can bring back an old cancel.
+ * - The delivery of an own retired incident does not come back with it. Thus the orphan goes at the horizon after its time of entry.
+ * - A key with no time of entry stays, because an imported cancel can come before its delivery.
  */
 export function retiredEvent(state: RuntimeState, at: Instant, link: LinkRule, { horizon, life }: Required<RetentionOptions>): RetiredEvent | undefined {
   const found = incidents(state.merge, at, { link });
   const reports = retirements(state.merge, found, at, horizon);
-  if (reports.length === 0) return undefined;
   const gone = new Set(reports);
   // A delivery key does not name its incident, thus the event names the cancelled keys of the deliveries of the incidents.
   const keys = new Set(state.merge.deliveries.filter((delivery) => gone.has(delivery.incident)).map((delivery) => delivery.key));
-  const cancelled = state.cancelled.filter((key) => keys.has(key));
+  const known = new Set(state.merge.deliveries.map((delivery) => delivery.key));
+  const cancelled = state.cancelled.filter((key) => keys.has(key) || (!known.has(key) && isOld(state, key, at - horizon)));
+  if (reports.length === 0 && cancelled.length === 0) return undefined;
   return { ...envelope("retired", `retired:${at}${frameTag(state.steps.length)}`, at), reports, until: at + life, cancelled };
+}
+
+// The cancelled key has a time of entry at or before old.
+function isOld(state: RuntimeState, key: string, old: Instant): boolean {
+  const since = Object.hasOwn(state.cancelledSince, key) ? state.cancelledSince[key] : undefined;
+  return since !== undefined && since <= old;
 }
 
 // A time of the options: a finite number of 0 or more.
