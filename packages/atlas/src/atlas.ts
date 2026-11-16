@@ -133,6 +133,12 @@ export interface Measures {
   readonly adoptedCover: number;
 }
 
+/** The measures that a round records, with the cause of the change from the record before. */
+export interface RoundMeasures extends Measures {
+  /** The cause tells a gain of research or of the class list from a gain of delivery. Only a new adapter adds delivery. */
+  readonly cause: string;
+}
+
 /** The record of one research round. */
 export interface Round {
   readonly round: number;
@@ -148,7 +154,7 @@ export interface Round {
   readonly notes: readonly string[];
   readonly studies: readonly Study[];
   /** The measures of the atlas at the end of the round. The gate does not let the adopted cover fall below them. */
-  readonly measures: Measures;
+  readonly measures: RoundMeasures;
 }
 
 /** The whole atlas. */
@@ -279,7 +285,10 @@ export function checkAtlas(atlas: Atlas, context: AtlasContext = {}): AtlasProbl
     // The JSON of a round is not parsed by a schema, so the gate reports a round with no measures.
     const recorded = (round as Partial<Round>).measures;
     if (recorded === undefined) add(at, "the round has no measures");
-    else for (const value of [recorded.classes, recorded.gaps, recorded.adoptedCover]) if (!Number.isSafeInteger(value) || value < 0) add(at, `the measure ${String(value)} is not a count`);
+    else {
+      for (const value of [recorded.classes, recorded.gaps, recorded.adoptedCover]) if (!Number.isSafeInteger(value) || value < 0) add(at, `the measure ${String(value)} is not a count`);
+      if (typeof recorded.cause !== "string" || recorded.cause.trim() === "") add(at, "the measures have no cause");
+    }
   }
   // The adopted cover is the outcome. A change that makes it fall below the measure of a round stops at the gate.
   const floor = Math.max(0, ...atlas.rounds.map((round) => (round as Partial<Round>).measures?.adoptedCover ?? 0));

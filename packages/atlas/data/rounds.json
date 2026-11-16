@@ -181,7 +181,8 @@
     "measures": {
       "classes": 200,
       "gaps": 131,
-      "adoptedCover": 24
+      "adoptedCover": 24,
+      "cause": "At the merge of PR 115 the adopted cover was 16. The change of the class ids made it 24: 13 new classes are NWS products that the two adopted NWS sources already read. No adapter is new, so no new signal reaches a person."
     }
   }
 ]

@@ -13,7 +13,7 @@ const round: Round = {
   queries: [],
   notes: [],
   studies: [],
-  measures: { classes: 0, gaps: 0, adoptedCover: 0 },
+  measures: { classes: 0, gaps: 0, adoptedCover: 0, cause: "a test" },
 };
 
 const klass = (id: string, gap: string | null = null): SignalClass => ({
@@ -145,12 +145,12 @@ describe("the adopted cover", () => {
   it("stops a change that makes the adopted cover fall below the measure of a round", () => {
     const classes = [klass("infra.power")];
     const covered = atlas(classes, [source("a", ["infra.power"], "adopt"), source("b", ["infra.power"], "adopt")]);
-    const recorded: Atlas = { ...covered, rounds: [{ ...round, measures: { classes: 1, gaps: 0, adoptedCover: 1 } }] };
+    const recorded: Atlas = { ...covered, rounds: [{ ...round, measures: { classes: 1, gaps: 0, adoptedCover: 1, cause: "a test" } }] };
     expect(checkAtlas(recorded)).toEqual([]);
     const fallen: Atlas = { ...recorded, sources: [source("a", ["infra.power"], "adopt"), source("b", ["infra.power"])] };
     expect(checkAtlas(fallen)).toEqual([{ at: "atlas", problem: "the adopted cover is 0 classes, below the 1 classes of a round" }]);
-    const bad: Atlas = { ...recorded, rounds: [{ ...round, measures: { classes: -1, gaps: 0.5, adoptedCover: 1 } }] };
-    expect(checkAtlas(bad).map((item) => item.problem)).toEqual(["the measure -1 is not a count", "the measure 0.5 is not a count"]);
+    const bad: Atlas = { ...recorded, rounds: [{ ...round, measures: { classes: -1, gaps: 0.5, adoptedCover: 1, cause: " " } }] };
+    expect(checkAtlas(bad).map((item) => item.problem)).toEqual(["the measure -1 is not a count", "the measure 0.5 is not a count", "the measures have no cause"]);
     const { measures: _gone, ...unmeasured } = round;
     expect(checkAtlas({ ...recorded, rounds: [unmeasured as Round] })).toEqual([{ at: "round 1", problem: "the round has no measures" }]);
   });
