@@ -600,6 +600,19 @@ The outage call starts when the instance is down. So the escalation of the runti
 - `outageAudit(outages, chains, records, within)` compares each outage with the records of the tries of the provider. The tries of an outage start in the time `within` after its down time, and before the next down time.
 - Each person of each outage gets `acked`, `exhausted`, `open` or `untried`. `untried` shows a webhook or a start that failed. Each reach that is not `acked` is a fault of the outage call.
 
+The package `@mark1russell7/alerts-channel-twilio` operates the chain on the server of Twilio, in three Functions. Its module `outage.ts` has a pure handler for each Function.
+
+- `outageStart` gets the webhook of the outside check. It starts the first call of each person.
+- `outagePress` gets the key of the person. A 1 moves the status callback of the live call to a URL with `acked=1`.
+- `outageEnded` gets the status callback at the end of each call. It gives the next call by `chainNext`.
+- The URL of each callback holds the outage, the person, the step and the version of the list. A callback of another version starts no call.
+- Twilio signs each request to the press and end Functions. Thus a person outside Twilio cannot make a step. The entry is public, and it checks its own token.
+- A cap counts the calls of the Twilio number in a time window. A try above the cap makes no call.
+- If the move of the status callback fails, the end has no `acked=1`. Then the chain calls again. That is the safe side.
+- Each handler gives the script of the call as data. The Function renders it with the TwiML builders of `@procedures/notify/twilio`.
+- `outageListProblems` checks the list that the deploy copies from the private configuration. Each problem names no phone number.
+- A gate of `outage.test.ts` follows each sequence of call outcomes through the three handlers. The calls of a person stop at the first key press, and each step makes one call.
+
 ## People and places
 
 The contracts carry only ids: `PersonId` and `PlaceId`. The runtime gets people, places, addresses and the night rule of each person from the private configuration.
