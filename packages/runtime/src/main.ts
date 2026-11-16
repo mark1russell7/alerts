@@ -21,6 +21,9 @@
  * The optional file `copy.json` gives the settings of this copy of the system (`copy.ts`): its rank and the key of its
  * first check. Without the file, the runtime is the only copy. A change of the file needs `install.ts restart`.
  *
+ * The field `outage` of `config.json` gives the outage call. It needs the keys of Twilio and the key
+ * `OUTAGE_TOKEN`. The worker `outage` deploys its Functions to Twilio (`outage.ts`).
+ *
  * A bad `config.json` gives way to the last good copy `config.good.json` (`reload.ts`). In the profile
  * `daemon`, a change of the private files that passes the check stops the runtime. The supervisor starts it again.
  */
@@ -168,11 +171,24 @@ async function runtime(): Promise<ServiceBuilder> {
       console.error("New outlines change the codes of a place. The runtime stops, and the supervisor starts it again.");
       void service.lifecycle?.shutdown("The codes of a place changed.");
     },
+    // The worker of the outage call deploys its Functions at the start and once in each day. A failed deploy goes again after a backoff.
+    onOutageLog: (line) => console.log(line),
+    onOutageError: (error, failures) => console.error(`A deploy of the outage call failed (${failures} in sequence): ${redactSecrets(errorMessage(error), values)}`),
   });
   if (instance.zones !== undefined) console.log(zoneCodesText(instance.zones));
 
   // The service closes the log and the store of shapes in its shutdown.
-  const service = declare({ port: port("PORT", 8080), probePort: port("PROBE_PORT", 9090), profile, loop: instance.loop, log, shapes: instance.shapes, quotas, map: instance.map });
+  const service = declare({
+    port: port("PORT", 8080),
+    probePort: port("PROBE_PORT", 9090),
+    profile,
+    loop: instance.loop,
+    log,
+    shapes: instance.shapes,
+    quotas,
+    map: instance.map,
+    ...(instance.outage === undefined ? {} : { outage: instance.outage }),
+  });
   return service;
 }
 

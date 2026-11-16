@@ -56,6 +56,7 @@ import { overdueLimit, type DeliveryOptions } from "./delivery.ts";
 import { frameClock } from "./frame.ts";
 import type { RuntimeLog } from "./log.ts";
 import { createLoop, loopTimes, type LoopTimes, type RuntimeLoop } from "./loop.ts";
+import { outageDeploy, outageDeployWorker, outageSetup, type OutageDeployWorker } from "./outage.ts";
 import { channelQuota } from "./quota.ts";
 import { openRuntime, type Pass, type Runtime, type RuntimeOptions } from "./runtime.ts";
 import { addZoneCodes, keepShapes, placeCodesKey, type InstanceShapes, type ShapeOutcome, type ZoneCodeCounts } from "./shapes.ts";
@@ -275,6 +276,7 @@ export const RANK_DELAY: Duration = DELIVERY_TIMES.flightLimit + EXCHANGE_EVERY 
  * - a step of a policy on a channel with no sender
  * - a step on a channel with a cost, when the configuration has no spend entry for its provider
  * - a place that no source covers
+ * - an outage call with no keys of Twilio, no token `OUTAGE_TOKEN` or a bad list
  * - a setting of an unknown expectation, or a `since` after the time `at`.
  *
  * The message names ids, fields and the names of secrets, and no value.
@@ -318,7 +320,18 @@ export function instanceProblems(parsed: ParsedConfig, secret: SecretLookup, des
       ? []
       : [`No source covers the place ${place.id}. Give the place its codes at each level: the NWS zone and county, SAME, the state and the country (iso3166).`],
   );
-  return [...tokenProblems, ...twilioProblems, ...senderProblems, ...spendProblems, ...placeProblems, ...expectationProblems(parsed.config.expectations, INSTANCE_EXPECTATIONS, at)];
+  // The outage call deploys at the start. A bad list or a missing key fails the deploy, so it stops the start.
+  const outage = outageSetup(parsed, secret, twilio.tag === "ok" ? twilio.value : undefined);
+  const outageProblems = outage.tag === "err" ? outage.error : [];
+  return [
+    ...tokenProblems,
+    ...twilioProblems,
+    ...senderProblems,
+    ...spendProblems,
+    ...placeProblems,
+    ...outageProblems,
+    ...expectationProblems(parsed.config.expectations, INSTANCE_EXPECTATIONS, at),
+  ];
 }
 
 /** The check of a configuration file for the live instance: its channels and the problems that stop its start. */
@@ -405,6 +418,10 @@ export interface InstanceOptions {
    * with requests, when no task is due. The entry of the profile `daemon` stops the runtime, and the supervisor starts it again.
    */
   readonly onPlaceCodes?: () => void;
+  /** The worker of the deploy of the outage call gives each failed deploy to this function. */
+  readonly onOutageError?: (error: unknown, failures: number) => void;
+  /** The worker of the deploy of the outage call gives a line to this function for each deploy that changed the Functions. */
+  readonly onOutageLog?: (line: string) => void;
 }
 
 /** The instance: the runtime, its loop and the outlines of the regions. */
@@ -424,6 +441,8 @@ export interface Instance {
    * the basemap. The first read after a change of the store simplifies the basemap of the watched states.
    */
   readonly map: () => MapPayload;
+  /** The worker of the deploy of the outage call, when the configuration has an outage call. The service declares it. */
+  readonly outage?: OutageDeployWorker;
 }
 
 /**
@@ -562,7 +581,29 @@ export function openInstance(options: InstanceOptions): Instance {
       basemap: shapes.basemap(),
     });
   };
-  return { runtime, loop, shapes, ...(start === undefined ? {} : { zones: start.counts }), quotas, balances, map };
+  const outage = outageWorker(options, loop.times.passLimit);
+  return { runtime, loop, shapes, ...(start === undefined ? {} : { zones: start.counts }), quotas, balances, map, ...(outage === undefined ? {} : { outage }) };
+}
+
+/**
+ * This function makes the worker of the deploy of the outage call when the configuration has an outage call. The function
+ * `instanceProblems` checked the setup before. The bound of one deploy is the pass limit, because the drain holds it.
+ */
+function outageWorker(options: InstanceOptions, limit: Duration): OutageDeployWorker | undefined {
+  const twilio = twilioSetup(options.secret);
+  const setup = outageSetup(options.config, options.secret, twilio.tag === "ok" ? twilio.value : undefined);
+  if (setup.tag === "err" || setup.value === undefined) return undefined;
+  const fetch = options.twilio;
+  if (fetch === undefined) throw new Error("The configuration has an outage call, and the instance has no fetch for the requests of Twilio.");
+  const log = options.onOutageLog;
+  return outageDeployWorker({
+    deploy: outageDeploy(setup.value, { fetch, clock: options.clock, ...(log === undefined ? {} : { log }) }),
+    clock: options.clock,
+    wall: options.wall,
+    limit,
+    ...(log === undefined ? {} : { log }),
+    ...(options.onOutageError === undefined ? {} : { onError: options.onOutageError }),
+  });
 }
 
 /** The Twilio call channel of an instance, its gates of the spend and the watch of its balance. */

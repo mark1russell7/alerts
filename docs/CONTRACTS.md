@@ -827,6 +827,24 @@ The package `@mark1russell7/alerts-channel-twilio` operates the chain on the ser
 - `outageListProblems` checks the list that the deploy copies from the private configuration. Each problem names no phone number.
 - A gate of `outage.test.ts` follows each sequence of call outcomes through the three handlers. The calls of a person stop at the first key press, and each step makes one call.
 
+#### The deploy of the outage call
+
+The module `deploy.ts` of the package puts the three Functions and the list on one service of Twilio Serverless. `twilioServerlessDeploy` of `@procedures/notify/twilio-serverless` sends the requests.
+
+- `outageDeployPlan` gives the plan: the bundles of the Functions, the list as a private asset, the build, and the variables `OUTAGE_TOKEN` and `OUTAGE_FROM`.
+- The version of the plan is the start of the content hash of the files and of the build. A second deploy of the same plan reads three lists and changes nothing.
+- The variables are not in the version. A new token or a new number changes only the variables.
+- `deployOutage` makes the bundles with esbuild, and then it deploys the plan. It loads esbuild only when it deploys.
+- `outageEntryUrl` gives the address of the entry. The webhook of the outside check calls it with the parameter `token`.
+
+The runtime operates the deploy in the worker `outage` of its service (`outage.ts`), beside the worker `passes`.
+
+- `outageSetup` reads the field `outage`, the keys of Twilio and the key `OUTAGE_TOKEN`. A missing key, a token of a bad form or a bad list stops the start.
+- The worker deploys after the startup. A change of the private files restarts the runtime, so a new list deploys at once.
+- Once in each day, the worker deploys again. Thus a change on the side of Twilio heals in a day.
+- A failed deploy goes again after a backoff: one minute, then double, up to one hour. The pass limit bounds one deploy, so the drain of the service holds it.
+- `GET /status` gives the state of the last deploy: `pending`, `current` or `failed`, with its stage and its count of failures. The state holds no private value.
+
 ## People and places
 
 The contracts carry only ids: `PersonId` and `PlaceId`. The runtime gets people, places, addresses and the night rule of each person from the private configuration.
@@ -853,7 +871,8 @@ The schema `alertConfigSchema` checks the JSON of the configuration first. Then 
 - a contact of an unknown person, two contacts of a person on one channel, and a secret with no value
 - two spend entries of one provider, and a provider that no channel depends on
 - a reserve of a spend entry that is not below its cap, and a time zone that is not an IANA name
-- an unknown person of the outage call, a person two times, a chain with no step, and a step on a channel with no contact of the person
+- an unknown person of the outage call, and a person two times in the call
+- a chain of the call with no step, and a step on a channel with no contact of the person
 - an interest graph of another person, and a place of the graph that the person does not watch
 - a rule of the life-safety warnings at a place that the person does not watch, and rules with no interest graph
 - each problem of `recipientProblems`

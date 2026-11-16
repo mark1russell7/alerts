@@ -3,8 +3,8 @@
  * each module that it imports. The Functions runtime of Twilio gives only the Node built-ins and the
  * helper library of Twilio, so a bundle imports nothing else.
  *
- * The module `index.ts` does not export this module. Thus the runtime of the instance loads esbuild
- * only for a deploy.
+ * The module `index.ts` does not export this module. `deployOutage` of `deploy.ts` loads it with a
+ * dynamic import. Thus the runtime of the instance loads esbuild only for a deploy.
  */
 
 import { fileURLToPath } from "node:url";
