@@ -16,6 +16,8 @@ on:
       - packages/core/**
       - packages/runtime/**
       - packages/channel-pushover/**
+      - packages/source-ipaws/**
+      - packages/format-cap/**
       - pnpm-lock.yaml
       - .github/workflows/faults.yml
   # A person starts a run on a branch with no pull request: gh workflow run faults.yml --ref <branch>
@@ -53,6 +55,8 @@ jobs:
             packages/core/**
             packages/runtime/**
             packages/channel-pushover/**
+            packages/source-ipaws/**
+            packages/format-cap/**
             pnpm-lock.yaml
             .github/workflows/faults.yml
 

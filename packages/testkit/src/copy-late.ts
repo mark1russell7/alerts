@@ -37,8 +37,8 @@ import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { threats, type FetchOutcome, type LatenessState, type PlaceId, type SourceProcedures, type Watch, type WatchedPlace } from "@mark1russell7/alerts";
 import { DELAY_LIMITS, openRuntime, openRuntimeLog, sourcePace, type RuntimeOptions } from "@mark1russell7/alerts-runtime";
-import { COPY_SUFFIX, createIpawsSource, FEED_PATH, IPAWS_DESCRIPTOR, SOURCE_ID as IPAWS_ID, WEA_EXPECTATION } from "@mark1russell7/alerts-source-ipaws";
-import { CANARY_PATH, createNwsSource, NWS_DESCRIPTOR, queriesOf, SOURCE_ID as NWS_ID, WEA_PATH } from "@mark1russell7/alerts-source-nws-api";
+import { COPY_SUFFIX, createIpawsSource, FEED_PATH, IPAWS_DESCRIPTOR, WEA_EXPECTATION } from "@mark1russell7/alerts-source-ipaws";
+import { CANARY_PATH, createNwsSource, NWS_DESCRIPTOR, queriesOf, WEA_PATH } from "@mark1russell7/alerts-source-nws-api";
 import { type Fault, faultPlanOf } from "@mark1russell7/rigor-chaos";
 import { random, sha256Hex } from "@mark1russell7/rigor-generators";
 import { startFaultProxy } from "@mark1russell7/rigor-proxy";
@@ -88,10 +88,13 @@ export const CASE_8_SETTINGS: CopySettings = { speed: 30, fetches: 110, start: D
 /** The names of the watched places. */
 export type CopyPlace = "kept" | "dropped";
 
+/** The id of each watched place. */
+const PLACE_IDS: Readonly<Record<CopyPlace, PlaceId>> = { kept: "kept" as PlaceId, dropped: "dropped" as PlaceId };
+
 /** The watched places: the county TXC137 is in the NEW and the EXT message, and the county TXC019 is only in the NEW message. */
 export const COPY_PLACES: readonly WatchedPlace[] = [
-  { id: "kept" as PlaceId, codes: [{ system: "ugc", code: "TXC137" }], bufferKm: 0 },
-  { id: "dropped" as PlaceId, codes: [{ system: "ugc", code: "TXC019" }], bufferKm: 0 },
+  { id: PLACE_IDS.kept, codes: [{ system: "ugc", code: "TXC137" }], bufferKm: 0 },
+  { id: PLACE_IDS.dropped, codes: [{ system: "ugc", code: "TXC019" }], bufferKm: 0 },
 ];
 const WATCH: Watch = { places: COPY_PLACES };
 const VIEW: RuntimeOptions["view"] = {
@@ -190,7 +193,7 @@ export function readPair(): PairFixtures {
 /** The fields of the NEW message that the synthetic messages do not keep: they name the real EXT message. */
 const DROPPED_FIELDS: ReadonlySet<string> = new Set(["replacedBy", "replacedAt"]);
 
-/** This function gives the NWS feature of a synthetic message, from the real NEW message with the id, the times, the area and the VTEC of the message. */
+/** This function gives the NWS feature of a synthetic message from the real NEW message. The feature has the id, times, area and VTEC of the message. */
 export function featureOf(message: WeaMessage, template: Readonly<Record<string, unknown>>): Record<string, unknown> {
   const properties = template["properties"] as Readonly<Record<string, unknown>>;
   const parameters = properties["parameters"] as Readonly<Record<string, unknown>>;
@@ -534,7 +537,7 @@ export async function runCopyArm(arm: CopyArm, settings: CopySettings = CASE_8_S
         at: result.at - settings.start,
         nws: records.nws.length,
         ipaws: records.ipaws.length,
-        threats: { kept: found.filter((one) => one.place === "kept").length, dropped: found.filter((one) => one.place === "dropped").length },
+        threats: { kept: found.filter((one) => one.place === PLACE_IDS.kept).length, dropped: found.filter((one) => one.place === PLACE_IDS.dropped).length },
         state: late?.state ?? "none",
         ...(late?.limit === undefined ? {} : { limit: late.limit.delay, misses: late.limit.misses }),
         missed: late?.missed.length ?? 0,
