@@ -6319,33 +6319,38 @@
     "access": "file",
     "auth": "none",
     "terms": {
-      "url": null,
-      "automated": "unclear",
-      "redistribution": "unclear",
-      "note": "Terms not opened. Files are in a public directory."
+      "url": "https://www.weather.gov/disclaimer",
+      "automated": "allowed",
+      "redistribution": "allowed",
+      "note": "The SWPC is a part of the NWS. The disclaimer of the NWS puts its information in the public domain, free for each lawful purpose. It asks for request cycles that fit the refresh frequency of the data."
     },
     "cost": "free",
-    "delay": "unknown",
-    "history": "unknown",
-    "rateLimit": "unknown",
+    "delay": "near real time. The list changes when the SWPC sends a message, and its answers have max-age=60.",
+    "history": "The list holds the messages of the past 30 days. The monthly archive files are at ftp://ftp.swpc.noaa.gov/pub/alerts/, from 2002.",
+    "rateLimit": "No published limit. The answers have an ETag, a Last-Modified time and max-age=60. The adapter asks once a minute, with If-None-Match and If-Modified-Since.",
     "calibration": null,
     "coverage": "Global space weather: alerts, warnings, watches, NOAA G/S/R scales, planetary Kp and its forecast.",
     "origins": [
       "nws"
     ],
     "path": [
-      "services.swpc.noaa.gov"
+      "services.swpc.noaa.gov",
+      "cloudfront"
     ],
-    "subjectIds": null,
+    "subjectIds": [],
     "risks": [],
-    "decision": "plan",
-    "adapter": null,
-    "reason": "Machine-readable form of the official space weather alerts with no account.",
+    "decision": "adopt",
+    "adapter": "@mark1russell7/alerts-source-swpc",
+    "reason": "The space weather messages of the NOAA in one list with no account: alerts, warnings, watches and summaries of the G, S and R scales. The adapter reads alerts.json only. A K-index message or a watch day gives two caps around the geomagnetic poles. Each day of a watch is a report of its own.",
     "evidence": [
       "https://services.swpc.noaa.gov/products/",
-      "https://www.spaceweather.gov/content/subscription-services"
+      "https://www.spaceweather.gov/content/subscription-services",
+      "https://services.swpc.noaa.gov/products/alerts.json",
+      "https://www.spaceweather.gov/content/data-access",
+      "https://www.spaceweather.gov/products/alerts-watches-and-warnings",
+      "https://www.weather.gov/disclaimer"
     ],
-    "round": 1
+    "round": 6
   },
   {
     "id": "thousandeyes-outages",
