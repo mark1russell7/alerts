@@ -1,6 +1,6 @@
 // The gates of the relevance (AL-35, `docs/RELEVANCE.md`, the section "The gates"). Each graph here is made up.
 
-import { RATIONAL_RING, fromFloat, type Rational } from "@mark1russell7/rational";
+import { RATIONAL_RING, ZERO, compare, fromFloat, type Rational } from "@mark1russell7/rational";
 import { random, seedsFrom, type Random } from "@mark1russell7/rigor-generators";
 import { describe, expect, it } from "vitest";
 import type { Estimate, InterestEdge, InterestGraph, Mute, NodeKey, PersonId, RelevancePolicy, SubjectEntry, SubjectKind } from "./contracts.ts";
