@@ -2,7 +2,7 @@ import { random, seedsFrom } from "@mark1russell7/rigor-generators";
 import { describe, expect, it } from "vitest";
 import { assess } from "./assess.ts";
 import { messageOf } from "./delivery.ts";
-import type { ChannelId, ChannelQuota, Coverage, HealthState, Incident, Observation, PersonId, PersonWatch, PlaceId, ProviderBalance, Report, ReportId, SourceDescriptor, SourceHealth, SourceId, WatchedPlace } from "./contracts.ts";
+import type { ChannelId, ChannelQuota, CopyRead, CopyWatch, Coverage, HealthState, Incident, Observation, PersonId, PersonWatch, PlaceId, ProviderBalance, Report, ReportId, SourceDescriptor, SourceHealth, SourceId, WatchedPlace } from "./contracts.ts";
 import type { Lateness } from "./lateness.ts";
 import { incidents, normalize } from "./merge.ts";
 import {
@@ -12,6 +12,9 @@ import {
   CHANNEL_SUBJECT,
   CLOCK_STEP_WINDOW,
   CLOCK_SUBJECT,
+  COPY_SUBJECT,
+  copyStages,
+  copyUnreadAt,
   gapGrade,
   latestIn,
   LOG_RECOVERY_WINDOW,
@@ -379,6 +382,90 @@ describe("the balance reports", () => {
   it("goes at notice to the person who watches the channels of the account, and rebuilds from its reports", () => {
     const step = systemReports(NO_SYSTEM_LINES, snapshot({ balances: [balance({ balance: 0 }, { channels: [CALL, "twilio-sms" as ChannelId] })] }), START);
     expect(step.reports[0]?.about.map((subject) => subject.id)).toEqual([CALL, "twilio-sms"]);
+    expect(levels(step.reports, WATCHER, START)).toEqual(["notice", "notice"]);
+    expect(levels(step.reports, OPERATOR, START)).toEqual(["none", "none"]);
+    expect(addSystemReports(NO_SYSTEM_LINES, step.reports, step.observations)).toEqual(step.lines);
+  });
+});
+
+describe("the copy reports", () => {
+  const MINUTE = 60_000;
+  const START = Date.UTC(2026, 10, 15, 12);
+  const WATCHER: PersonWatch = { ...NEIGHBOR, subjects: [{ system: COPY_SUBJECT }] };
+  const codes = (reports: readonly Report[]) => reports.map((report) => [report.op, report.kind.code]);
+  const watch = (read?: Partial<CopyRead>, fields: Partial<CopyWatch> = {}): CopyWatch => ({
+    copy: "cloud",
+    skewLimit: 2_000,
+    maxAge: MINUTE,
+    since: START,
+    ...(read === undefined ? {} : { read: { at: START, skew: 0, sameConfig: true, ...read } }),
+    ...fields,
+  });
+
+  it("reaches skew above the limit, config at a different hash, and unread at the maximum age", () => {
+    expect(copyStages(watch({}), START)).toEqual([]);
+    expect(copyStages(watch({ skew: 2_000 }), START)).toEqual([]);
+    expect(copyStages(watch({ skew: 2_001 }), START)).toEqual(["skew"]);
+    expect(copyStages(watch({ skew: -2_001 }), START)).toEqual(["skew"]);
+    expect(copyStages(watch({ sameConfig: false }), START)).toEqual(["config"]);
+    // The age counts from the last read, or from the start of the watch with no read.
+    expect(copyStages(watch({}), START + MINUTE - 1)).toEqual([]);
+    expect(copyStages(watch({ skew: 5_000, sameConfig: false }), START + MINUTE)).toEqual(["skew", "config", "unread"]);
+    expect(copyStages(watch(), START + MINUTE - 1)).toEqual([]);
+    expect(copyStages(watch(), START + MINUTE)).toEqual(["unread"]);
+    expect(copyUnreadAt(watch({ at: START + 5_000 }))).toBe(START + 5_000 + MINUTE);
+    expect(unknownKinds(["system.copy", "system.copy.skew", "system.copy.config", "system.copy.unread"])).toEqual([]);
+  });
+
+  it("gives one alert for each stage, no update for a new difference, and a cancel at a good read", () => {
+    const skewed = systemReports(NO_SYSTEM_LINES, snapshot({ copies: [watch({ skew: -2_540 })] }), START);
+    expect(skewed.reports).toMatchObject([
+      {
+        op: "alert",
+        status: "system",
+        kind: { code: "system.copy.skew", label: "Clock difference of a copy" },
+        severity: "moderate",
+        urgency: "expected",
+        areas: [],
+        about: [{ system: COPY_SUBJECT, id: "cloud", label: "Copy cloud" }],
+        headline: "The clock of the copy cloud differs from the clock of this copy by 2.5 s.",
+        parameters: { stage: ["skew"], skew: ["-2540"], sameConfig: ["true"], age: ["0"] },
+      },
+    ]);
+    expect(Object.keys(skewed.lines.open)).toEqual(["copy/cloud/skew"]);
+    expect(systemReports(skewed.lines, snapshot({ copies: [watch({ at: START + 5_000, skew: 3_900 })] }), START + 5_000).reports).toEqual([]);
+    const config = systemReports(skewed.lines, snapshot({ copies: [watch({ at: START + 5_000, skew: 3_900, sameConfig: false })] }), START + 5_000);
+    expect(config.reports).toMatchObject([{ op: "alert", kind: { code: "system.copy.config" }, headline: "The copy cloud has a different configuration." }]);
+    const good = systemReports(config.lines, snapshot({ copies: [watch({ at: START + 10_000 })] }), START + 10_000);
+    expect(codes(good.reports)).toEqual([
+      ["cancel", "system.copy.config"],
+      ["cancel", "system.copy.skew"],
+    ]);
+    expect(good.lines.open).toEqual({});
+  });
+
+  it("gives the unread line when no read passes, and ends it at the next read", () => {
+    const unread = systemReports(NO_SYSTEM_LINES, snapshot({ copies: [watch()] }), START + MINUTE);
+    expect(unread.reports).toMatchObject([
+      { op: "alert", kind: { code: "system.copy.unread" }, headline: `No read of the copy cloud passed since the start of the watch at ${new Date(START).toISOString()}.` },
+    ]);
+    const old = systemReports(NO_SYSTEM_LINES, snapshot({ copies: [watch({ at: START })] }), START + 2 * MINUTE);
+    expect(old.reports[0]).toMatchObject({ headline: `No read of the copy cloud passed since ${new Date(START).toISOString()}.`, parameters: { age: [String(2 * MINUTE)] } });
+    const read = systemReports(unread.lines, snapshot({ copies: [watch({ at: START + MINUTE })] }), START + MINUTE);
+    expect(codes(read.reports)).toEqual([["cancel", "system.copy.unread"]]);
+  });
+
+  it("keeps each open line of a copy when the snapshot has no copies, and ends the lines of a copy that the snapshot does not have", () => {
+    const skewed = systemReports(NO_SYSTEM_LINES, snapshot({ copies: [watch({ skew: 9_000 })], balances: [] }), START);
+    expect(systemReports(skewed.lines, snapshot(), START + 1).reports).toEqual([]);
+    expect(codes(systemReports(skewed.lines, snapshot({ copies: [] }), START + 1).reports)).toEqual([["cancel", "system.copy.skew"]]);
+    // Each copy has its own lines.
+    const two = systemReports(NO_SYSTEM_LINES, snapshot({ copies: [watch({ skew: 9_000 }), watch({ sameConfig: false }, { copy: "home-2" })] }), START);
+    expect(Object.keys(two.lines.open)).toEqual(["copy/cloud/skew", "copy/home-2/config"]);
+  });
+
+  it("goes at notice to the person who watches the copies, and rebuilds from its reports", () => {
+    const step = systemReports(NO_SYSTEM_LINES, snapshot({ copies: [watch({ skew: 9_000, sameConfig: false })] }), START);
     expect(levels(step.reports, WATCHER, START)).toEqual(["notice", "notice"]);
     expect(levels(step.reports, OPERATOR, START)).toEqual(["none", "none"]);
     expect(addSystemReports(NO_SYSTEM_LINES, step.reports, step.observations)).toEqual(step.lines);

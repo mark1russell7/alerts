@@ -5,7 +5,7 @@
  * that it gets.
  */
 import type { WallClock } from "@mark1russell7/algebra/clock";
-import { ONLY_COPY, type ChannelQuota, type Duration, type FetchOutcome, type Instant, type LatenessFolds, type ReportId, type SourceDescriptor, type SourceId, type SourceProcedures, type Watch } from "@mark1russell7/alerts";
+import { ONLY_COPY, type ChannelQuota, type CopyWatch, type Duration, type FetchOutcome, type Instant, type LatenessFolds, type ReportId, type SourceDescriptor, type SourceId, type SourceProcedures, type Watch } from "@mark1russell7/alerts";
 import { errorMessage } from "@mark1russell7/text";
 import type { BalanceWatch } from "./balance.ts";
 import { createDispatcher, type DeliveryOptions, type DeliveryStep } from "./delivery.ts";
@@ -18,6 +18,16 @@ import type { RuntimeLog } from "./log.ts";
 import { SNAPSHOT_MISSES, snapshotStep } from "./snapshot.ts";
 import { fold, rebuild, type ExchangeCursor, type RuntimeState } from "./state.ts";
 import { earliest, nextFetch, systemEvent, systemView, type SystemView, type ViewConfig } from "./view.ts";
+
+/** The parts of the worker of the exchange that a pass reads (AL-16). `exchangeWorker` gives them. */
+export interface CopyChecks {
+  /** This method gives the watch of each other copy at this time. Each stage of a watch is a line of system reports. */
+  watches(): readonly CopyWatch[];
+  /** This method moves the own times of the watches by the size of a step of the wall clock. */
+  shift(size: Duration): void;
+  /** This method resolves after the first read of each other copy, or after one time limit. The first view waits for it. */
+  ready(): Promise<void>;
+}
 
 /** The options of `openRuntime`. */
 export interface RuntimeOptions {
@@ -67,6 +77,11 @@ export interface RuntimeOptions {
    * its fetches. Each stage of a balance is a line of system reports.
    */
   readonly balances?: readonly BalanceWatch[];
+  /**
+   * The checks of the other copies. Each pass waits for `ready` before its view. Thus the first delivery step after a
+   * start sees the sends of the other copies, and it does not repeat them.
+   */
+  readonly copies?: CopyChecks;
   /** The runtime starts this hook at the end of each pass with no error. The outside heartbeat goes here. */
   readonly onPass?: (pass: Pass) => void | Promise<void>;
 }
@@ -226,7 +241,7 @@ export function openRuntime(options: RuntimeOptions): Runtime {
   };
 
   // A step of the wall clock since the last mark moves each own instant: the fold of the clock event moves the state,
-  // and then the dispatcher and the balance watches move their times in memory. The mark comes after the write. Thus
+  // and then the dispatcher, the balance watches and the copy watches move their times in memory. The mark comes after the write. Thus
   // a failed write leaves the step to the next pass, and the next pass writes it with the same id.
   const followStep = (): { readonly size: Duration; readonly conflicts: readonly string[] } => {
     if (frame === undefined) return { size: 0, conflicts: [] };
@@ -238,6 +253,7 @@ export function openRuntime(options: RuntimeOptions): Runtime {
     const conflicts = append([{ ...envelope("clock", `clock:${state.steps.length + 1}`, clock.now() + size), size }]);
     dispatcher?.shift(size);
     for (const watch of watches) watch.shift(size);
+    options.copies?.shift(size);
     frame.mark();
     return { size, conflicts };
   };
@@ -257,12 +273,14 @@ export function openRuntime(options: RuntimeOptions): Runtime {
       // Each fetch ends before the pass ends, also when one of them fails. Thus no fetch of a pass runs on in the next pass.
       const settled = await Promise.allSettled(due.map(({ source, descriptor }) => fetchOne(source, descriptor, stop)));
       await checks;
+      await options.copies?.ready();
       const failed = settled.find((result) => result.status === "rejected");
       if (failed !== undefined) throw failed.reason;
       const conflicts = [...stepped.conflicts, ...settled.flatMap((result) => (result.status === "fulfilled" ? result.value : []))];
 
       const at = clock.now();
-      const view = systemView(state, config, at, readQuotas(), watches.flatMap((watch) => watch.balance() ?? []), folds);
+      const quotas = readQuotas();
+      const view = systemView(state, config, at, { ...(quotas === undefined ? {} : { quotas }), balances: watches.flatMap((watch) => watch.balance() ?? []), ...(options.copies === undefined ? {} : { copies: options.copies.watches() }), ...(folds === undefined ? {} : { folds }) });
       folds = view.folds;
       const event = systemEvent(view);
       if (event !== undefined) conflicts.push(...append([event]));

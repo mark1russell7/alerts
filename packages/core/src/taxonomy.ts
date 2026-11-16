@@ -10,8 +10,8 @@
  * The source atlas (`@mark1russell7/alerts-atlas`) uses these codes as its signal classes. Each code has
  * its plain name and its summary here, and in no other place. A new code comes here first, in its pull request.
  */
-import { BALANCE_KIND, CLOCK_KIND, COVERAGE_KIND, HEALTH_KIND, LOG_KIND, QUOTA_KIND } from "./assess.ts";
-import type { BalanceStage, Category, HealthState, QuotaStage } from "./contracts.ts";
+import { BALANCE_KIND, CLOCK_KIND, COPY_KIND, COVERAGE_KIND, HEALTH_KIND, LOG_KIND, QUOTA_KIND } from "./assess.ts";
+import type { BalanceStage, Category, CopyStage, HealthState, QuotaStage } from "./contracts.ts";
 
 /** One code of the taxonomy: its plain name and one plain sentence about it. */
 export interface KindEntry {
@@ -72,6 +72,13 @@ const BALANCE_ENTRIES: Readonly<Record<BalanceStage, KindEntry>> = {
   low: entry("Low balance of a provider", "The balance of a paid provider account is below its floor."),
   empty: entry("Empty balance of a provider", "The balance of a paid provider account is 0 or less, so the provider refuses each paid message."),
   unread: entry("Balance of a provider not read", "No read of the balance of a paid provider account passed for the maximum age, so a low balance is not seen."),
+};
+
+// The copy kinds of the core: one for each stage of the watch of another copy of the system.
+const COPY_ENTRIES: Readonly<Record<CopyStage, KindEntry>> = {
+  skew: entry("Clock difference of a copy", "The clock of another copy of the alert system differs from the clock of this copy by more than the limit."),
+  config: entry("Configuration difference of a copy", "Another copy of the alert system has a different configuration, so the copies can route an alert in two ways."),
+  unread: entry("Copy not read", "No read of the log of another copy of the alert system passed for the maximum age, so the two copies can both send."),
 };
 
 // The health kinds of the core: one for each health state, and `late` for the lateness against another source.
@@ -391,6 +398,8 @@ export const TAXONOMY: Readonly<Record<string, KindEntry>> = {
   [CLOCK_KIND]: entry("Clock of the computer", "The wall clock of the computer that runs the alert system."),
   [`${CLOCK_KIND}.step`]: entry("Step of the clock", "The wall clock of the computer stepped back or forward against its monotonic clock."),
   [LOG_KIND]: entry("Log of the runtime", "The log file of the runtime of the alert system. The state of the runtime comes from it."),
+  [COPY_KIND]: entry("Copy of the system", "Another copy of the alert system on another computer. The copies share their reports and their sends."),
+  ...Object.fromEntries(Object.entries(COPY_ENTRIES).map(([stage, value]) => [`${COPY_KIND}.${stage}`, value])),
   [`${LOG_KIND}.recovered`]: entry("Recovery of the log", "The log file was broken. The runtime moved it into quarantine and started a new file with the events that it read."),
 };
 
