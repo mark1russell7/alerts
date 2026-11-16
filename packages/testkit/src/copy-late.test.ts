@@ -23,6 +23,7 @@ import {
   type CopyPass,
   type CopyRecord,
   type CopyRoute,
+  type KnownFault,
   copySettingsProblems,
   copyTransport,
   copyVerdictOf,
@@ -464,11 +465,23 @@ describe("the gates", () => {
     expect(ARM_GATES["copy-stopped"]).toContain("tellsStop");
     expect(ARM_GATES["copy-backlog"]).toContain("limitHolds");
     expect(ARM_GATES.control).toContain("noLongLate");
-    for (const fault of KNOWN_FAULTS) expect(ARM_GATES[fault.arm]).toContain(fault.gate);
-    expect(knownFaultOf("ipaws-lag", "staysLate")?.reason).toContain("AL-8");
-    expect(knownFaultOf("control", "clears")).toBeUndefined();
+    for (const fault of [...KNOWN_FAULTS, ...TEST_FAULTS]) expect(ARM_GATES[fault.arm]).toContain(fault.gate);
+    expect(knownFaultOf("ipaws-lag", "staysLate", TEST_FAULTS)?.reason).toBe(TEST_FAULT);
+    expect(knownFaultOf("control", "clears", TEST_FAULTS)).toBeUndefined();
   });
 });
+
+/** The reason of each fault of `TEST_FAULTS`. */
+const TEST_FAULT = "A fault of the test, for the verdict of the known faults.";
+
+/** The known faults of these tests: one gate of each kind that the function `today` fails. The live list can be empty. */
+const TEST_FAULTS: readonly KnownFault[] = [
+  { arm: "copy-stopped", gate: "limitHolds", reason: TEST_FAULT },
+  { arm: "ipaws-lag", gate: "staysLate", reason: TEST_FAULT },
+  { arm: "ipaws-lag", gate: "limitHolds", reason: TEST_FAULT },
+  { arm: "copy-backlog", gate: "limitHolds", reason: TEST_FAULT },
+  { arm: "copy-backlog", gate: "keepsPace", reason: TEST_FAULT },
+];
 
 describe("the verdict", () => {
   const record = (arm: CopyArm): CopyRecord => {
@@ -495,10 +508,10 @@ describe("the verdict", () => {
     };
   };
 
-  /** This function gives the record of an arm with the response of the core of today: each gate of `KNOWN_FAULTS` fails. */
+  /** This function gives the record of an arm with a response of the core that has the faults of `TEST_FAULTS`. */
   const today = (arm: CopyArm): CopyRecord => {
     const one = record(arm);
-    const known = KNOWN_FAULTS.filter((fault) => fault.arm === arm).map((fault) => fault.gate);
+    const known = TEST_FAULTS.filter((fault) => fault.arm === arm).map((fault) => fault.gate);
     const start = arm === "copy-backlog" ? OUTAGE.from : WINDOW.from;
     const passes = one.passes.map((pass, fetch) => ({
       ...pass,
@@ -511,7 +524,7 @@ describe("the verdict", () => {
   };
 
   it("reads and passes a run whose known faults fail and whose other gates pass", () => {
-    const verdict = copyVerdictOf(COPY_ARMS.map(today), CASE_8_SETTINGS, PAIR);
+    const verdict = copyVerdictOf(COPY_ARMS.map(today), CASE_8_SETTINGS, PAIR, TEST_FAULTS);
     expect(verdict.problems).toEqual([]);
     expect(verdict.read).toBe(true);
     expect(verdict.fixed).toEqual([]);
@@ -519,16 +532,16 @@ describe("the verdict", () => {
   });
 
   it("does not pass a run whose known faults pass, and names each fixed fault", () => {
-    const verdict = copyVerdictOf(COPY_ARMS.map(record), CASE_8_SETTINGS, PAIR);
+    const verdict = copyVerdictOf(COPY_ARMS.map(record), CASE_8_SETTINGS, PAIR, TEST_FAULTS);
     expect(verdict.read).toBe(true);
     expect(verdict.pass).toBe(false);
-    expect(verdict.fixed).toHaveLength(KNOWN_FAULTS.length);
+    expect(verdict.fixed).toHaveLength(TEST_FAULTS.length);
     expect(verdict.fixed[0]).toContain("remove it from KNOWN_FAULTS");
   });
 
   it("does not pass a run with a gate that fails and has no known fault", () => {
     const records = COPY_ARMS.map(today).map((one) => (one.arm === "control" ? { ...one, passes: one.passes.slice(0, -1).concat({ ...(one.passes.at(-1) as CopyPass), state: "late" }) } : one));
-    const verdict = copyVerdictOf(records, CASE_8_SETTINGS, PAIR);
+    const verdict = copyVerdictOf(records, CASE_8_SETTINGS, PAIR, TEST_FAULTS);
     expect(verdict.read).toBe(true);
     expect(verdict.pass).toBe(false);
   });
