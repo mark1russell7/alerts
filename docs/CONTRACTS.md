@@ -546,6 +546,18 @@ The runtime cannot tell the person that it stopped. A check of Healthchecks.io t
 - The period plus the grace of the check must be this gap or more: 430 seconds for the instance. `install.ts status` reads the check with `HEALTHCHECKS_API_KEY`, and fails when it is shorter.
 - A new check alerts only after its first ping. Thus the first install checks that the check is up.
 
+### The chain of tries
+
+The outage call starts when the instance is down. So the escalation of the runtime cannot start it, and no timer of the instance operates. The module `chain.ts` gives the escalation of one person with no timer: the end of each try starts the next try.
+
+- A `TryChain` is the channel of each try, in order. Each person gets a chain, for example two calls and then a text message.
+- The end of a try is `acked`, `unconfirmed`, `failed` or `sent`. A call is `acked` only after a key press, so a voicemail is `unconfirmed`.
+- `chainNext(chain, step, end)` gives the next state: the next try, `acked` or `exhausted`. A step that the chain does not have gives `exhausted`, so an old or false step starts no try.
+- Thus a function with no state can operate the chain. The callback of each try carries its step, and the next callback gives the step and the end.
+- `chainRun` is the fold of `chainNext` over the ends of the tries. A chain makes at most one try for each step. Its transitions replay against `CHAIN_MACHINE`. A gate of `chain.test.ts` holds the two rules.
+- `outageAudit(outages, chains, records, within)` compares each outage with the records of the tries of the provider. The tries of an outage start in the time `within` after its down time, and before the next down time.
+- Each person of each outage gets `acked`, `exhausted`, `open` or `untried`. `untried` shows a webhook or a start that failed. Each reach that is not `acked` is a fault of the outage call.
+
 ## People and places
 
 The contracts carry only ids: `PersonId` and `PlaceId`. The runtime gets people, places, addresses and the night rule of each person from the private configuration.
