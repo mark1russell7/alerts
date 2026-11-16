@@ -1,8 +1,7 @@
-import { fakeClock, fakeWallClock, type Cancel, type FakeClock, type WallClock } from "@mark1russell7/algebra/clock";
+import { fakeClock, frameClock, type Cancel, type FakeClock, type WallClock } from "@mark1russell7/algebra/clock";
 import { CLOCK_STEP_ABOVE, reportId, type Observation, type ObservationId, type PlaceId, type Report, type SourceId, type SourceProcedures, type WatchedPlace } from "@mark1russell7/alerts";
 import { describe, expect, it } from "vitest";
 import type { RuntimeEvent } from "./events.ts";
-import { frameClock, isFrameClock } from "./frame.ts";
 import { openRuntimeLog } from "./log.ts";
 import { openRuntime } from "./runtime.ts";
 import { rebuild } from "./state.ts";
@@ -27,69 +26,6 @@ function steppingWall(monotonic: FakeClock): WallClock & { step(size: number): v
     },
   };
 }
-
-describe("the frame clock", () => {
-  it("keeps the time of the frame through a step, and takes the wall time again at the mark", () => {
-    const monotonic = fakeClock(0);
-    const wall = steppingWall(monotonic);
-    wall.step(T0);
-    const frame = frameClock(wall, monotonic);
-    expect(frame.time).toBe("wall");
-    expect(frame.now()).toBe(T0);
-    wall.step(-HOUR);
-    expect(frame.now()).toBe(T0);
-    expect(frame.step()).toBe(-HOUR);
-    // The step does not end at a read. Only the mark ends it.
-    expect(frame.step()).toBe(-HOUR);
-    frame.mark();
-    expect(frame.now()).toBe(T0 - HOUR);
-    expect(frame.step()).toBe(0);
-  });
-
-  it("gives whole milliseconds on a monotonic clock with fractions", () => {
-    let monotonic = 0.25;
-    const wall = steppingWall(fakeClock(0));
-    wall.step(T0);
-    const frame = frameClock(wall, { now: () => monotonic, after: () => () => undefined });
-    monotonic = 1000.75;
-    expect(frame.now()).toBe(T0 + 1000);
-    expect(Number.isInteger(frame.step())).toBe(true);
-  });
-
-  it("gives 0 for a drift of the drift limit or less, and the size for a larger change", () => {
-    const monotonic = fakeClock(0);
-    const wall = steppingWall(monotonic);
-    const frame = frameClock(wall, monotonic);
-    wall.step(CLOCK_STEP_ABOVE);
-    expect(frame.step()).toBe(0);
-    wall.step(1);
-    expect(frame.step()).toBe(CLOCK_STEP_ABOVE + 1);
-    frame.mark();
-    wall.step(-CLOCK_STEP_ABOVE);
-    expect(frame.step()).toBe(0);
-    expect(frameClock(wall, monotonic, 0).step()).toBe(0);
-  });
-
-  it("waits with the timers of the wall clock", async () => {
-    const monotonic = fakeClock(0);
-    const frame = frameClock(steppingWall(monotonic), monotonic);
-    let fired = 0;
-    frame.after(MINUTE, () => {
-      fired += 1;
-    });
-    await monotonic.advance(MINUTE - 1);
-    expect(fired).toBe(0);
-    await monotonic.advance(1);
-    expect(fired).toBe(1);
-  });
-
-  it("tells a frame clock from a wall clock, and refuses a drift limit that is not a finite number of 0 or more", () => {
-    const monotonic = fakeClock(0);
-    expect(isFrameClock(frameClock(fakeWallClock(T0), monotonic))).toBe(true);
-    expect(isFrameClock(fakeWallClock(T0))).toBe(false);
-    for (const above of [-1, Number.NaN, Number.POSITIVE_INFINITY]) expect(() => frameClock(fakeWallClock(T0), monotonic, above)).toThrow(/drift limit/);
-  });
-});
 
 describe("a step of the wall clock in the runtime (AL-49)", () => {
   function observation(at: number): Observation {
@@ -128,7 +64,7 @@ describe("a step of the wall clock in the runtime (AL-49)", () => {
   function open() {
     const monotonic = fakeClock(T0);
     const wall = steppingWall(monotonic);
-    const clock = frameClock(wall, monotonic);
+    const clock = frameClock(wall, monotonic, { driftLimit: CLOCK_STEP_ABOVE });
     const source: SourceProcedures = {
       describe: () => ({
         id: API,

@@ -139,9 +139,12 @@ export interface ClockEvent extends Envelope<"clock"> {
 export interface RecoveredEvent extends Envelope<"recovered"> {
   /** The name of the quarantine folder, in the folder of the log. The id of the event has it. */
   readonly quarantine: string;
-  /** The kind of the fault of the broken file, from `sqliteFault` of `@mark1russell7/sqlite`. An example is `corrupt`. */
+  /**
+   * The kind of the fault of the broken file, from `sqliteFault` of `@mark1russell7/sqlite`. An example is `corrupt`.
+   * `orphan-journal` is a WAL, SHM or journal file with no database file. `no-read` is a quarantine folder with no record.
+   */
   readonly fault: string;
-  /** The count of the events that the salvage read and parsed. */
+  /** The count of the events that the salvage read and parsed with no conflict. A conflict counts as lost. */
   readonly read: number;
   /** The count of the read events that the new file got. */
   readonly added: number;

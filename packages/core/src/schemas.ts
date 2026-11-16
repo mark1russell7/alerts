@@ -106,6 +106,7 @@ import {
   type WatchedPlace,
 } from "./contracts.ts";
 import { err, ok, tryCatch, type Result } from "@mark1russell7/optional";
+import { compareCodeUnits } from "@mark1russell7/text/order";
 import {
   CONFIG_FORMAT,
   COPY_FORMAT,
@@ -235,7 +236,7 @@ const kindCodes = (): string[] => {
   const codes = [...Object.keys(TAXONOMY), ...Object.keys(KIND_ALIASES)];
   const takes = (code: string): boolean => knownKind(canonicalKind(code));
   const all = new Set([...codes, ...codes.map((code) => `${COVERAGE_KIND}.${code}`)].filter(takes));
-  return [...all].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+  return [...all].sort(compareCodeUnits);
 };
 
 /**

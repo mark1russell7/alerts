@@ -4,7 +4,7 @@
  * time of the next pass. The loop of the service starts the passes. The runtime reads only the clock
  * that it gets.
  */
-import type { WallClock } from "@mark1russell7/algebra/clock";
+import { isFrameClock, type WallClock } from "@mark1russell7/algebra/clock";
 import { ONLY_COPY, type ChannelQuota, type CopyWatch, type Duration, type FetchOutcome, type Instant, type LatenessFolds, type ReportId, type SourceDescriptor, type SourceId, type SourceProcedures, type Watch } from "@mark1russell7/alerts";
 import { errorMessage } from "@mark1russell7/text";
 import type { BalanceWatch } from "./balance.ts";
@@ -12,7 +12,6 @@ import { createDispatcher, type DeliveryOptions, type DeliveryStep } from "./del
 import { envelope, EVENT_TYPES, type RuntimeEvent } from "./events.ts";
 import { importPage, sharePage, type ExchangePage, type ReceivedPage } from "./exchange.ts";
 import { fetchEvents } from "./fetch.ts";
-import { isFrameClock } from "./frame.ts";
 import { limited } from "./limit.ts";
 import type { RuntimeLog } from "./log.ts";
 import { SNAPSHOT_MISSES, snapshotStep } from "./snapshot.ts";

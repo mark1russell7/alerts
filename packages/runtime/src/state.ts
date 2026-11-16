@@ -38,6 +38,7 @@ import {
   type SourceDescriptor,
   type SystemLines,
 } from "@mark1russell7/alerts";
+import { compareCodeUnits } from "@mark1russell7/text/order";
 import type { ImportEvent, RefusalKind, RuntimeEvent, SharedEvent } from "./events.ts";
 
 /** What the fold reads from the configuration: the descriptors of the sources and the options of the health. */
@@ -291,7 +292,7 @@ function foldRest(state: RuntimeState, event: RuntimeEvent, context: FoldContext
       return { ...base, own, escalationEnds: joinedEnds(own, state.imported) };
     }
     case "cancelled":
-      return state.cancelled.includes(event.delivery) ? base : { ...base, cancelled: [...state.cancelled, event.delivery].sort(compare) };
+      return state.cancelled.includes(event.delivery) ? base : { ...base, cancelled: [...state.cancelled, event.delivery].sort(compareCodeUnits) };
     case "attempt":
       return { ...base, copies: { ...state.copies, [event.copy]: { key: event.key, channel: event.channel } } };
     case "delivery": {
@@ -335,7 +336,7 @@ function foldImport(state: RuntimeState, { event }: ImportEvent): RuntimeState {
     case "delivery":
       return { ...state, refusals: without(state.refusals, event.delivery.key) };
     case "cancelled":
-      return state.cancelled.includes(event.delivery) ? state : { ...state, cancelled: [...state.cancelled, event.delivery].sort(compare) };
+      return state.cancelled.includes(event.delivery) ? state : { ...state, cancelled: [...state.cancelled, event.delivery].sort(compareCodeUnits) };
     case "escalation-end": {
       const imported = { ...state.imported, escalationEnds: [...state.imported.escalationEnds, event.end] };
       return { ...state, imported, escalationEnds: joinedEnds(state.own, imported) };
@@ -383,9 +384,4 @@ function without<T>(record: Readonly<Record<string, T>>, id: string): Readonly<R
   const rest = { ...record };
   delete rest[id];
   return rest;
-}
-
-// The order of the code units, the same in each copy and each locale.
-function compare(a: string, b: string): number {
-  return a < b ? -1 : a > b ? 1 : 0;
 }

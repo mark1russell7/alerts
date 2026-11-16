@@ -37,6 +37,7 @@ import {
   type WhyLimit,
 } from "@mark1russell7/alerts";
 import { errorMessage } from "@mark1russell7/text";
+import { compareCodeUnits } from "@mark1russell7/text/order";
 import { envelope, frameTag, type ChannelFailureKind, type RefusalKind, type RefusedEvent, type RuntimeEvent } from "./events.ts";
 import { limited } from "./limit.ts";
 import type { RuntimeState } from "./state.ts";
@@ -750,7 +751,7 @@ function overdueSends(routes: readonly Route[], refusals: RuntimeState["refusals
     const before = byChannel.get(send.channel);
     byChannel.set(send.channel, { sends: (before?.sends ?? 0) + 1, since: Math.min(before?.since ?? send.due, send.due) });
   }
-  return [...byChannel].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)).map(([channel, sends]) => ({ channel, ...sends }));
+  return [...byChannel].sort(([a], [b]) => compareCodeUnits(a, b)).map(([channel, sends]) => ({ channel, ...sends }));
 }
 
 // The event of a delivery, with the copy id of its send.

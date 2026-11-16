@@ -17,6 +17,7 @@
     "@mark1russell7/alerts-source-nws-api": "workspace:*",
     "@mark1russell7/cue": "^2.0.0",
     "@mark1russell7/site-pages": "^0.4.8",
+    "@mark1russell7/text": "^0.0.10",
     "@types/d3-geo": "^3.1.1",
     "@types/node": "^26.6.5",
     "@vitest/coverage-v8": "^5.0.3",

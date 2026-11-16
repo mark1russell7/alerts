@@ -26,10 +26,10 @@
  * Before AL-49, a step back held each due action by the size of the step, and the log had no report of the step. The
  * frame clock of AL-49 gives each step to the runtime at the start of the next pass.
  */
-import { fakeClock, type WallClock } from "@mark1russell7/algebra/clock";
-import type { SourceProcedures } from "@mark1russell7/alerts";
+import { fakeClock, fakeWallClock, frameClock } from "@mark1russell7/algebra/clock";
+import { CLOCK_STEP_ABOVE, type SourceProcedures } from "@mark1russell7/alerts";
 import { createPushoverChannel } from "@mark1russell7/alerts-channel-pushover";
-import { createLoop, DELIVERY_TIMES, type DeliveryOptions, frameClock, loopTimes, openRuntime, openRuntimeLog, type Pass } from "@mark1russell7/alerts-runtime";
+import { createLoop, DELIVERY_TIMES, type DeliveryOptions, loopTimes, openRuntime, openRuntimeLog, type Pass } from "@mark1russell7/alerts-runtime";
 import { type Fault, faultPlanOf } from "@mark1russell7/rigor-chaos";
 import { startFaultProxy } from "@mark1russell7/rigor-proxy";
 import { startScriptedServer } from "@mark1russell7/rigor-testkit/http";
@@ -263,13 +263,11 @@ export async function runStepArm(arm: StepArm, settings: StepSettings = CASE_11_
   const fault = stepFaultOf(arm);
   const proxy = await startFaultProxy({ target: { host: server.host, port: server.port }, plan: faultPlanOf(fault === undefined ? [] : [fault]), protocol: "http" });
   const mono = fakeClock(CASE_11_START);
-  let offset = 0;
-  // The loop and the runtime share one queue of timers. `fakeWallClock` of algebra keeps its monotonic clock inside,
-  // thus the case makes this wall clock. The end: an option of `fakeWallClock` that takes a monotonic clock.
-  const wall: WallClock = { time: "wall", now: () => mono.now() + offset, after: (ms, run) => mono.after(ms, run) };
+  // The loop and the runtime share one queue of timers: the wall clock is on the monotonic clock of the case.
+  const wall = fakeWallClock(CASE_11_START, mono);
   // The instance of the runtime puts a frame clock on its wall clock. The case does the same, thus a step comes to the
   // runtime at the start of the next pass.
-  const frame = frameClock(wall, mono);
+  const frame = frameClock(wall, mono, { driftLimit: CLOCK_STEP_ABOVE });
   const since = (): number => mono.now() - CASE_11_START;
   // The channel requests the address of the Pushover API. This fetch sends each request to the proxy, with the same path and query.
   const channel = createPushoverChannel({ token: FIXTURE.token, fetch: pushoverFetchTo(`http://${proxy.host}:${String(proxy.port)}`), now: () => frame.now() });
@@ -349,7 +347,7 @@ export async function runStepArm(arm: StepArm, settings: StepSettings = CASE_11_
       beforeTick: () => {
         if (planned !== undefined && step === undefined && reached(planned.point, passes)) {
           step = { point: planned.point, size: planned.size, at: since(), events: [...log.read()].length };
-          offset += planned.size;
+          wall.set(wall.now() + planned.size);
         }
       },
       afterTick: () => {

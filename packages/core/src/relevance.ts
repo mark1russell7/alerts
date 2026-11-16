@@ -7,6 +7,7 @@ import {
   type OrderedRing,
   type TwoTerminalReliability,
 } from "@mark1russell7/collections/graph";
+import { compareCodeUnits } from "@mark1russell7/text/order";
 import { hasKind } from "./kind-prefix.ts";
 import type {
   AssessedLevel,
@@ -76,9 +77,6 @@ interface Part {
   readonly edge?: InterestEdge;
 }
 
-// Code-point order. It does not depend on the locale.
-const byText = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
-
 // The mutes that have effect at the time of the input, and whose kinds match its kind or that have no kinds.
 function activeMutes(input: RelevanceInput, graph: InterestGraph): readonly Mute[] {
   return graph.mutes
@@ -112,8 +110,8 @@ function partsOf(input: RelevanceInput, graph: InterestGraph, policy: RelevanceP
     if (edge.from === PERSON) throw new RangeError(`The edge ${edge.id} starts at the person.`);
     if (edge.on && !cut.has(edge.from) && !cut.has(edge.to)) edges.push(edge);
   }
-  edges.sort((a, b) => byText(a.id, b.id));
-  const hits = [...entries.values()].filter((entry) => !cut.has(entry.node)).sort((a, b) => byText(a.node, b.node));
+  edges.sort((a, b) => compareCodeUnits(a.id, b.id));
+  const hits = [...entries.values()].filter((entry) => !cut.has(entry.node)).sort((a, b) => compareCodeUnits(a.node, b.node));
   return [
     ...hits.map((entry): Part => ({ from: EVENT, to: entry.node, weight: entry.hit, entry })),
     ...edges.map((edge): Part => ({ from: edge.from, to: edge.to, weight: edge.weight, edge })),
@@ -124,7 +122,7 @@ function partsOf(input: RelevanceInput, graph: InterestGraph, policy: RelevanceP
 // the kinds, so the result does not depend on the order of the entries.
 function larger(a: SubjectEntry, b: SubjectEntry): SubjectEntry {
   const hit = { value: Math.max(a.hit.value, b.hit.value), low: Math.max(a.hit.low, b.hit.low), high: Math.max(a.hit.high, b.hit.high) };
-  return { node: a.node, kind: byText(a.kind, b.kind) <= 0 ? a.kind : b.kind, hit };
+  return { node: a.node, kind: compareCodeUnits(a.kind, b.kind) <= 0 ? a.kind : b.kind, hit };
 }
 
 function solve<N>(parts: readonly Part[], end: ReachEnd, arithmetic: ReachArithmetic<N>, policy: RelevancePolicy, maxSteps: number | undefined): TwoTerminalReliability<N> {
@@ -160,7 +158,7 @@ export function muteOf(input: RelevanceInput, graph: InterestGraph, policy: Rele
   const nodes = new Set(input.entries.map((entry) => entry.node));
   const matched = activeMutes(input, graph)
     .filter((mute) => mute.subjects === undefined || mute.subjects.some((node) => nodes.has(node)))
-    .sort((a, b) => byText(a.id, b.id));
+    .sort((a, b) => compareCodeUnits(a.id, b.id));
   const first = matched[0];
   if (first === undefined) return undefined;
   return { mute: first.id, effect: input.mandatory ? policy.mandatory : "absent" };

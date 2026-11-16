@@ -20,7 +20,7 @@
   },
   "dependencies": {
     "@mark1russell7/alerts": "workspace:*",
-    "@mark1russell7/text": "^0.0.6",
+    "@mark1russell7/text": "^0.0.10",
     "@procedures/notify": "^0.56.0",
     "polite-crawler": "^0.7.3"
   }
