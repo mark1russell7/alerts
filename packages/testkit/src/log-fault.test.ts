@@ -320,9 +320,9 @@ describe("runLogFaults", () => {
     expect(run === undefined ? ["The case did not start."] : bootProblemsOf(run.boot)).toEqual([]);
   });
 
-  // AL-50: the runtime opens the broken file with no check, no file keeps the broken bytes, and no report names the
-  // loss. The record has each gate, and the prediction wirelab-al13-case12 states each one. The fix of AL-50 changes this test to `it`.
-  it.fails("broken-at-boot: each gate (AL-50)", () => {
+  // The fix of AL-50 (alerts #157): the open of main.ts keeps the broken file in quarantine, salvages the log and reports
+  // the loss. The prediction wirelab-al13-case12-boot states each gate.
+  it("broken-at-boot: each gate", () => {
     for (const gate of BOOT_GATES) expect(bootGate(gate), gate).toBe(true);
   });
 });

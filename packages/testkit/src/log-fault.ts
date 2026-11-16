@@ -33,8 +33,9 @@
  * - `noPageAgain`: the second life sends no copy, because the log keeps the acknowledgment.
  * - `lossReported`: the second life writes one system report that names the quarantine.
  *
- * Known fault AL-50: the runtime opens a broken file with no check. Each write to the broken index throws, and the log
- * has no report of the loss. The tests mark the gates of `broken-at-boot` with `it.fails`. The fix of AL-50 changes them to `it`.
+ * The case found the fault AL-50: the runtime opened a broken file with no check. Each write to the broken index threw,
+ * and the log had no report of the loss. The fix of AL-50 (alerts #157) checks the file at the boot. A broken file goes
+ * into quarantine, a salvage starts a new log, and a system report names the quarantine. `openForMain` has that open.
  */
 import { closeSync, mkdtempSync, openSync, readdirSync, readFileSync, rmSync, statSync, writeSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -53,6 +54,7 @@ import {
   type LoopTimes,
   loopTimes,
   openRuntime,
+  openCheckedRuntimeLog,
   openRuntimeLog,
   type Pass,
   type RuntimeEvent,
@@ -530,11 +532,11 @@ export async function runLockArm(arm: LockArm, settings: LogFaultSettings = CASE
   };
 }
 
-/** The open of the log for `broken-at-boot`. */
-export type BootOpen = (path: string) => RuntimeLog;
+/** The open of the log for `broken-at-boot`. `now` is the wall clock of the second life. */
+export type BootOpen = (path: string, now: () => number) => RuntimeLog;
 
-/** The open of the log in `main.ts` of the runtime. The fix of AL-50 changes it there and here. */
-export const openForMain: BootOpen = (path) => openRuntimeLog(path);
+/** The open of the log in `main.ts` of the runtime: the check of AL-50, with the quarantine and the salvage of a broken file. */
+export const openForMain: BootOpen = (path, now) => openCheckedRuntimeLog(path, { now }).log;
 
 /**
  * This function breaks the file of a closed log: it writes 0 in the first byte of the root page of `BROKEN_INDEX`. That
@@ -632,7 +634,7 @@ export async function runBootArm(settings: LogFaultSettings = CASE_12_SETTINGS, 
     mono = fakeClock(mono.now());
     let reopened: RuntimeLog | undefined;
     try {
-      reopened = open(path);
+      reopened = open(path, () => mono.now());
     } catch (thrown) {
       second = { run: `${seed}-life-2`, fromRequest: server.requests.length, passes: 0, loopErrors: [], ids: [], reports: [], error: `The open of the log threw: ${errorMessage(thrown)}` };
     }
