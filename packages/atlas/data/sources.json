@@ -1707,16 +1707,26 @@
       "url": "https://www.seismicportal.eu/terms.html",
       "automated": "allowed",
       "redistribution": "allowed",
-      "note": "The page gives client code and says websocket data is under CC BY 4.0. The linked terms page was not opened."
+      "note": "The terms page puts the data under CC BY 4.0, with the credit EMSC-CSEM SeismicPortal. The site and its databases are not under CC BY, so a mirror or a bulk copy needs written permission. The page tells nothing of automated reading or of a rate."
     },
     "cost": "free",
     "delay": "near real time (no figure given)",
     "history": "unknown",
     "rateLimit": "unknown",
     "calibration": null,
-    "coverage": "World earthquakes, with insert and update messages.",
+    "coverage": "World earthquakes, with insert and update messages. The author of each solution is a network or an agency of the region of the event.",
     "origins": [
-      "emsc"
+      "emsc",
+      "usgs"
+    ],
+    "regionalOrigins": [
+      {
+        "region": "us",
+        "origins": [
+          "usgs"
+        ],
+        "note": "One read of the event service of EMSC at 2026-11-16 05:28 UTC: 13 of the 24 USGS events of M2.5 or more in the areas of the US networks were in it. Each of the 13 had the solution of a US network of ANSS as its author."
+      }
     ],
     "path": [
       "www.seismicportal.eu"
@@ -1725,11 +1735,13 @@
     "risks": [],
     "decision": "plan",
     "adapter": null,
-    "reason": "A push stream that is independent of USGS, so it can confirm or beat it.",
+    "reason": "A push stream on other hosts than USGS, so it is a second path. In the United States it gives the solutions of the US networks, so there it is not a second origin.",
     "evidence": [
-      "https://www.seismicportal.eu/realtime.html"
+      "https://www.seismicportal.eu/realtime.html",
+      "https://www.seismicportal.eu/terms.html",
+      "https://www.seismicportal.eu/fdsnws/event/1/query?format=json&minmag=2.5&limit=500"
     ],
-    "round": 1
+    "round": 3
   },
   {
     "id": "endoflife-date-api",
@@ -4974,38 +4986,40 @@
     "classes": [
       "infra.power.outage"
     ],
-    "url": "https://ornl.opendatasoft.com/p/odin-dashboard/",
-    "access": "page",
+    "url": "https://odin.ornl.gov/odi",
+    "access": "api",
     "auth": "none",
     "terms": {
       "url": null,
       "automated": "unclear",
       "redistribution": "unclear",
-      "note": "The pages named the dashboard only. Users without an account can browse datasets."
+      "note": "The OpenAPI document of the ODIN Web API (v1) states no license and no terms of service. The public paths under /odi need no token."
     },
     "cost": "free",
-    "delay": "unknown",
-    "history": "unknown",
-    "rateLimit": "unknown",
+    "delay": "Each utility sends its active outages to ODIN. At 2026-11-16 06:45 UTC, 158 of the 159 utilities of the status list had a report of the past 24 hours, and 136 had one of the past hour.",
+    "history": "The public paths give only the active outages. The path of the history needs a token.",
+    "rateLimit": "unknown: the API document states no limit. The answers have Cache-Control max-age=60 and a weak ETag.",
     "calibration": null,
-    "coverage": "unknown",
+    "coverage": "Partial: the 159 utilities that report to ODIN. 133 report by county, 11 by point, 10 by ZIP code, 4 by polygon and 1 by H3 cell. The public paths give each outage by county, with its FIPS code.",
     "origins": [
       "us-electric-utilities"
     ],
     "path": [
-      "ornl.opendatasoft.com",
-      "opendatasoft"
+      "odin.ornl.gov"
     ],
-    "subjectIds": null,
+    "subjectIds": [
+      "fips"
+    ],
     "risks": [],
-    "decision": "later",
+    "decision": "plan",
     "adapter": null,
-    "reason": "A federal effort to share utility outage data; details for round 2. The decision is later because a page source needs terms that let automated reading.",
+    "reason": "A free public API of the active outages by county, with pages and If-None-Match. It is the only live source of the class with no fee. The terms are not stated, so a question to ODIN about automated reading comes before an adapter.",
     "evidence": [
-      "https://ornl.opendatasoft.com/p/odin-dashboard/",
-      "https://ornl.opendatasoft.com/explore/"
+      "https://odin.ornl.gov/v3/api-docs",
+      "https://odin.ornl.gov/odi/status",
+      "https://odin.ornl.gov/downloadables/ODIN_Developer_Guide.pdf"
     ],
-    "round": 1
+    "round": 3
   },
   {
     "id": "ofac-recent-actions",

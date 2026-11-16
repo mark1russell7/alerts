@@ -474,22 +474,16 @@
     "note": "The host of the feed of hhs-ocr-breach-portal."
   },
   {
+    "id": "odin.ornl.gov",
+    "name": "odin.ornl.gov",
+    "kind": "host",
+    "note": "The host of the ODIN Web API of ORNL."
+  },
+  {
     "id": "ofac.treasury.gov",
     "name": "ofac.treasury.gov",
     "kind": "host",
     "note": "The host of the feed of ofac-recent-actions, ofac-sanctions-list-service."
-  },
-  {
-    "id": "opendatasoft",
-    "name": "Opendatasoft",
-    "kind": "provider",
-    "note": "The ODIN data site of ORNL runs on Opendatasoft."
-  },
-  {
-    "id": "ornl.opendatasoft.com",
-    "name": "ornl.opendatasoft.com",
-    "kind": "host",
-    "note": "The host of the feed of odin-ornl."
   },
   {
     "id": "pacer",

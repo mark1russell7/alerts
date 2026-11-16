@@ -243,7 +243,56 @@
       },
       "unknownOrigins": 3,
       "unknownPaths": 4,
-      "cause": "Round 2 adopts the USGS feed for geo.earthquake. The class now has 2 adopted sources on 2 paths with no shared part, and 2 origins: the USGS and the US alerting authorities of the NWS API. So the adopted cover is 25 and the origin cover is 1. The second origin is weak: the NWS API carries only the rare earthquake alerts of the authorities, not each event. The layers do not measure the share of the events that each source carries. The earthquake alerts of the authorities can come from ShakeAlert, a system of the USGS. Then the class has one origin. Round 3 examines it."
+      "cause": "Round 2 adopts the USGS feed for geo.earthquake. The class now has 2 adopted sources on 2 paths with no shared part, and 2 origins: the USGS and the US alerting authorities of the NWS API. So the adopted cover is 25 and the origin cover is 1. The second origin is weak: the NWS API carries only the rare earthquake alerts of the authorities, not each event. The layers do not measure the share of the events that each source carries. The earthquake alerts of the authorities can come from ShakeAlert, a system of the USGS. Then the class has one origin. A later round examines it."
+    }
+  },
+  {
+    "round": 3,
+    "date": "2026-11-16",
+    "by": "One research session, for the power-outage class of the atlas (AL-36) and for the origins of EMSC (AL-14), then a count of each fact in the raw answers.",
+    "method": "A search for a live power-outage source with no fee. It read the OpenAPI document of the ODIN Web API, the status list of the reporting utilities and one answer of the county path. It read the terms of KUBRA and of two utilities that use its outage maps. It read the terms of the EMSC seismic portal and one answer of its event service, and it matched each event of the USGS feed of the same day.",
+    "lists": [
+      "ODIN Web API, the OpenAPI document: https://odin.ornl.gov/v3/api-docs",
+      "ODIN, the status list of the reporting utilities: https://odin.ornl.gov/odi/status",
+      "ODIN Real-time Outages (County) on the Open Energy Data Portal of ORNL: https://ornl.opendatasoft.com/explore/assets/odin-real-time-outages-county/",
+      "KUBRA Storm Center: https://kubra.com/solutions/utility-maps/storm-center-outage-mapping/",
+      "EMSC seismic portal, the terms: https://www.seismicportal.eu/terms.html",
+      "EMSC seismic portal, the FDSN event service: https://www.seismicportal.eu/fdsnws/event/1/",
+      "USGS, the feed of the events of M2.5 or more of the past day: https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_day.geojson"
+    ],
+    "queries": [
+      "ODIN Outage Data Initiative Nationwide ORNL API utility outage data public access",
+      "Kubra Storm Center outage map JSON API currentState terms of use",
+      "\"odin.ornl.gov\" api outages county swagger endpoint json"
+    ],
+    "notes": [
+      "The public paths of the ODIN Web API are /odi, /odi/{utilityId}, /odi/map, /odi/status and /odi/data/{dataId}. The paths under /odin need a token of OAuth 2.0 client credentials.",
+      "The path /odi gives the active outages. With view=county it gives one total for each county. It has the filters stateCd and countyCd, and pages of up to 1000 records.",
+      "At 2026-11-16 06:45 UTC the status list had 159 utilities: 158 with a report of the past 24 hours, 136 with one of the past hour, and 9 with an error. The county path gave 86 counties.",
+      "The county dataset of ODIN on the Open Energy Data Portal had 220 records and states no license. Its last change was 7 hours before the read, so it is not the live path.",
+      "The outage maps of KUBRA Storm Center read JSON files from the servers of KUBRA. KUBRA publishes no API documentation, and its terms cover only its payment services. The terms of the two utilities forbid automated reading without written consent. So the round plans no outage map.",
+      "The match of the EMSC events to the USGS events used a time of 20 seconds and a distance of 100 km. The largest time difference of a match was 6.3 seconds.",
+      "The USGS feed had 41 events in the time of the EMSC answer. EMSC had 30 of them. Each of the 11 misses was a small event of a US network.",
+      "Of the 24 events in the areas of the US networks, 13 were in EMSC, each with the solution of a US network. Of the 17 events outside them, EMSC had 17, and NEIC was the author of 9.",
+      "So in the United States, EMSC is a second path to the solutions of the US networks, not a second origin. Outside it, EMSC gives the solutions of many agencies and of NEIC."
+    ],
+    "studies": [],
+    "measures": {
+      "classes": 200,
+      "gaps": 132,
+      "cover": {
+        "adopted": 25,
+        "paths": 25,
+        "origins": 1
+      },
+      "total": {
+        "adopted": 77,
+        "paths": 77,
+        "origins": 52
+      },
+      "unknownOrigins": 3,
+      "unknownPaths": 4,
+      "cause": "Round 3 plans ODIN for infra.power.outage. The class has one live source and stays a gap. Round 3 gives the origins of EMSC in each region, and EMSC is a planned source. The round adopts no source, so the measures do not change."
     }
   }
 ]
