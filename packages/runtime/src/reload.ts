@@ -5,7 +5,8 @@
  * - The start uses the private files when they pass the check. A ready runtime writes them as the last good set, `start.good.json`.
  * - The start uses the last good set when the private files have problems. Thus a bad edit does not stop the alerts.
  * - Before the start uses the private files, it writes their key into the start marker `start.pending`. A ready runtime removes the marker.
- * - A start that finds the marker with the key of its files knows that the last start with these files stopped before it was ready. Then it uses the last good set.
+ * - The marker counts the starts with its key that stopped before they were ready. One stop, for example a reboot, gives a second try of the files.
+ *   After `STOP_LIMIT` stops in a row, the start uses the last good set. Thus a crash loop stops, and one stop does not give an old set.
  * - At each pass, the hook reads the three files again. A change that passes the check stops the runtime,
  *   and the supervisor starts it again with the new files.
  * - A change with problems gives its problems one time. The runtime keeps the files of its start.
@@ -41,10 +42,16 @@ export const MARKER_FORMAT = "alerts-start/1";
 // The scheme of the key of a start. A new scheme gives a new key to each start.
 const START_KEY_SCHEME = "alerts-start-key/1";
 
-/** The reason of a start that uses the last good set, because the last start with the same files stopped before it was ready. */
-export const STOPPED_START = "The last start with these private files stopped before the runtime was ready.";
+/** The count of the stops in a row with one key that give way to the last good set. One stop gives a second try of the files. */
+export const STOP_LIMIT = 2;
 
-/** The note of a start after a stopped start, when the last good set has the same texts as the private files. */
+/** The note of a start after one stop with the same files. The start tries the files again. */
+export const STOPPED_ONCE = "The last start with these private files stopped before the runtime was ready. This start tries them again.";
+
+/** The reason of a start that uses the last good set, because the last starts with the same files stopped before they were ready. */
+export const STOPPED_START: string = `The last ${String(STOP_LIMIT)} starts with these private files stopped before the runtime was ready.`;
+
+/** The note of a start after the stops, when the last good set has the same texts as the private files. */
 export const STOPPED_SAME: string = `${STOPPED_START} The last good set has the same texts, thus the fault is not in the private files.`;
 
 /** The paths of the private files that the start reads and writes. */
@@ -128,7 +135,7 @@ export function startKey(texts: StartTexts, request: FileText): string {
 export type StartUse = "files" | "good";
 
 const fileTextSchema = z.union([z.strictObject({ text: z.string() }), z.strictObject({ code: z.string() })]);
-const markerSchema = z.strictObject({ format: z.literal(MARKER_FORMAT), key: z.string(), use: z.enum(["files", "good"]) });
+const markerSchema = z.strictObject({ format: z.literal(MARKER_FORMAT), key: z.string(), use: z.enum(["files", "good"]), starts: z.number().int().min(1) });
 const goodSchema = z.strictObject({ format: z.literal(GOOD_FORMAT), config: fileTextSchema, secrets: fileTextSchema, copy: fileTextSchema });
 
 // The value of a JSON text, or undefined for a text that is not JSON.
@@ -140,22 +147,24 @@ function jsonOf(text: string): unknown {
   }
 }
 
-/** The start marker: the key of the files of a start, and the files that the start uses. */
+/** The start marker: the key of the files of a start, and the files that the start uses. It also counts the starts with the key. */
 export interface StartMarker {
   readonly key: string;
   readonly use: StartUse;
+  /** The count of the starts with this key, this start too, that did not get ready. */
+  readonly starts: number;
 }
 
 /** This function gives the start marker of a text. A missing file, a read error and a bad text give `undefined`. */
 export function parseMarker(file: FileText): StartMarker | undefined {
   if ("code" in file) return undefined;
   const parsed = markerSchema.safeParse(jsonOf(file.text));
-  return parsed.success ? { key: parsed.data.key, use: parsed.data.use } : undefined;
+  return parsed.success ? { key: parsed.data.key, use: parsed.data.use, starts: parsed.data.starts } : undefined;
 }
 
 /** This function gives the text of the start marker. */
 export function markerText(marker: StartMarker): string {
-  return `${JSON.stringify({ format: MARKER_FORMAT, key: marker.key, use: marker.use })}\n`;
+  return `${JSON.stringify({ format: MARKER_FORMAT, key: marker.key, use: marker.use, starts: marker.starts })}\n`;
 }
 
 /** This function gives the texts of the last good set. A problem names the file, and it holds no value of the file. */
@@ -193,7 +202,7 @@ export interface StartedConfig extends CheckedStart {
   /**
    * This function marks the start as good. The runtime uses it when its service operates and one pass ended.
    * A start with the private files writes them as the last good set, and it removes the start marker.
-   * A start with the last good set keeps the marker. Thus the next start with the same files uses the last good set at once.
+   * A start with the last good set keeps the marker. Thus each later start with the same files uses the last good set at once.
    *
    * The function gives notes, and it throws no error. A second use gives the notes of the first use.
    */
@@ -202,8 +211,9 @@ export interface StartedConfig extends CheckedStart {
 
 /**
  * This function gives the configuration of the start, or it throws `ConfigRefused` when the private files and the last good set both have problems.
- * - The start uses the private files when they pass the check and the start marker does not have their key.
- * - The marker with the key of the files tells that the last start with these files stopped before it was ready. Then the start uses the last good set.
+ * - The start uses the private files when they pass the check, and the start marker has no `STOP_LIMIT` stops with their key.
+ * - One stop with the key gives a second try of the files, with the note `STOPPED_ONCE`.
+ * - After `STOP_LIMIT` stops with the key, or a marker with the use `good`, the start uses the last good set.
  * - When the last good set has the same texts as the private files, the start uses the files again, with the note `STOPPED_SAME`.
  */
 export async function startConfig(files: PrivateFiles, checkOf: CheckOf, ports: StartPorts): Promise<StartedConfig> {
@@ -211,14 +221,18 @@ export async function startConfig(files: PrivateFiles, checkOf: CheckOf, ports: 
   const key = startKey(texts, request);
   const goodSet = parseGood(good);
   const same = goodSet.tag === "ok" && textsKey(goodSet.value) === textsKey(texts);
-  const stopped = parseMarker(marker)?.key === key;
+  const last = parseMarker(marker);
+  // The stops with this key before this start. A marker with the use `good` holds the stops that gave way to the set.
+  const stops = last?.key !== key ? 0 : last.use === "good" ? Math.max(last.starts, STOP_LIMIT) : last.starts;
+  const stopped = stops >= STOP_LIMIT;
   const problems: string[] = [];
   if (stopped && !same) {
     problems.push(STOPPED_START);
   } else {
     const checked = checkStart(texts, checkOf);
     if (checked.tag === "ok") {
-      const notes = [...(stopped ? [STOPPED_SAME] : []), ...(await writeMarker(files, ports, { key, use: "files" }))];
+      const told = stopped ? [STOPPED_SAME] : stops > 0 ? [STOPPED_ONCE] : [];
+      const notes = [...told, ...(await writeMarker(files, ports, { key, use: "files", starts: stops + 1 }))];
       let marked: Promise<readonly string[]> | undefined;
       const ready = (): Promise<readonly string[]> => (marked ??= markGood(files, ports, texts, same));
       return { ...checked.value, texts, request, use: "files", fallback: [], notes, ready };
@@ -229,7 +243,7 @@ export async function startConfig(files: PrivateFiles, checkOf: CheckOf, ports: 
   const fallback = checkStart(goodSet.value, checkOf);
   if (fallback.tag === "err") throw new ConfigRefused([...problems, ...fallback.error.map((problem) => `The last good set ${GOOD_FILE}: ${problem}`)]);
   // A stopped start keeps the marker, with the use `good`. Files with problems need no marker, because the next check finds the problems again.
-  const notes = stopped ? await writeMarker(files, ports, { key, use: "good" }) : await removeMarker(files, ports);
+  const notes = stopped ? await writeMarker(files, ports, { key, use: "good", starts: stops }) : await removeMarker(files, ports);
   return { ...fallback.value, texts, request, use: "good", fallback: problems, notes, ready: () => Promise.resolve([]) };
 }
 

@@ -22,6 +22,8 @@ import {
   START_MARKER_FILE,
   startConfig,
   startKey,
+  STOP_LIMIT,
+  STOPPED_ONCE,
   STOPPED_SAME,
   STOPPED_START,
   textsKey,
@@ -104,7 +106,7 @@ describe("startConfig", () => {
     expect(started.texts).toEqual(textsOf(GOOD));
     expect(started.fallback).toEqual([]);
     expect(started.notes).toEqual([]);
-    expect(parseMarker(await read(files.marker))).toEqual({ key: startKey(textsOf(GOOD), NONE), use: "files" });
+    expect(parseMarker(await read(files.marker))).toEqual({ key: startKey(textsOf(GOOD), NONE), use: "files", starts: 1 });
     // The start is not ready yet, thus it writes no last good set.
     expect(await read(files.good)).toEqual(NONE);
     // No restart request exists at the first start.
@@ -244,20 +246,38 @@ describe("startConfig", () => {
       await (await startConfig(files, CHECK_OF, PORTS)).ready();
       await write(files.copy, COPY_B);
     };
+    // The starts that stop before ready, with the same files: the count of a crash loop.
+    const stops = async (count: number): Promise<void> => {
+      for (let stop = 0; stop < count; stop += 1) await startConfig(files, CHECK_OF, PORTS);
+    };
 
-    it("gives way to the last good set at the next start with the same files", async () => {
+    it("tries the private files again after one stop, for example a reboot in the first pass", async () => {
       await startedOnce();
-      const stopped = await startConfig(files, CHECK_OF, PORTS);
-      expect(stopped.use).toBe("files");
-      expect(stopped.copy.id).toBe("copy-b");
-      // The process stops here, before ready.
+      const first = await startConfig(files, CHECK_OF, PORTS);
+      expect(first.use).toBe("files");
+      expect(first.copy.id).toBe("copy-b");
+      // The process stops here, before ready. The next start tries the files again, with a note.
+      const second = await startConfig(files, CHECK_OF, PORTS);
+      expect(second.use).toBe("files");
+      expect(second.copy.id).toBe("copy-b");
+      expect(second.notes).toEqual([STOPPED_ONCE]);
+      expect(parseMarker(await read(files.marker))).toEqual({ key: startKey(second.texts, NONE), use: "files", starts: 2 });
+      // This start gets ready: the files become the last good set, and the marker goes.
+      await second.ready();
+      expect(await read(files.marker)).toEqual(NONE);
+      expect(parseGood(await read(files.good))).toEqual({ tag: "ok", value: second.texts });
+    });
+
+    it("gives way to the last good set after STOP_LIMIT stops in a row with the same files", async () => {
+      await startedOnce();
+      await stops(STOP_LIMIT);
       const next = await startConfig(files, CHECK_OF, PORTS);
       expect(next.use).toBe("good");
       expect(next.copy).toEqual(ONLY_COPY);
       expect(next.fallback).toEqual([STOPPED_START]);
       // The texts of the start are the texts on the disk, thus the hook does not restart for them.
       expect(next.texts.copy).toEqual({ text: COPY_B });
-      expect(parseMarker(await read(files.marker))).toEqual({ key: startKey(next.texts, NONE), use: "good" });
+      expect(parseMarker(await read(files.marker))).toEqual({ key: startKey(next.texts, NONE), use: "good", starts: STOP_LIMIT });
       // A ready runtime on the last good set keeps the marker and the set.
       expect(await next.ready()).toEqual([]);
       expect(await read(files.good)).toEqual({ text: goodText(textsOf(GOOD)) });
@@ -269,14 +289,16 @@ describe("startConfig", () => {
 
     it("uses the private files again after a new restart request or a change of the files", async () => {
       await startedOnce();
-      await startConfig(files, CHECK_OF, PORTS);
+      await stops(STOP_LIMIT);
       expect((await startConfig(files, CHECK_OF, PORTS)).use).toBe("good");
       // A new request gives a new key: the next start uses the files again.
       await write(files.request, "token 1\n");
       const requested = await startConfig(files, CHECK_OF, PORTS);
       expect(requested.use).toBe("files");
+      expect(requested.notes).toEqual([]);
       expect(requested.copy.id).toBe("copy-b");
-      // The start with the request stops too. Then a fixed copy.json gives a new key, and its start is good.
+      // The starts with the request stop too. Then a fixed copy.json gives a new key, and its start is good.
+      await stops(STOP_LIMIT - 1);
       expect((await startConfig(files, CHECK_OF, PORTS)).use).toBe("good");
       await write(files.copy, JSON.stringify({ ...ONLY_COPY, id: "copy-c" }));
       const fixed = await startConfig(files, CHECK_OF, PORTS);
@@ -290,25 +312,27 @@ describe("startConfig", () => {
       // New code that stops with the same files: the fault is not in the private files.
       await write(files.config, GOOD);
       await (await startConfig(files, CHECK_OF, PORTS)).ready();
-      await startConfig(files, CHECK_OF, PORTS);
+      await stops(STOP_LIMIT);
       const next = await startConfig(files, CHECK_OF, PORTS);
       expect(next.use).toBe("files");
       expect(next.notes).toEqual([STOPPED_SAME]);
       expect(next.fallback).toEqual([]);
     });
 
-    it("throws ConfigRefused after a stopped start when no last good set exists", async () => {
+    it("throws ConfigRefused after the stops when no last good set exists", async () => {
       await write(files.config, GOOD);
       await write(files.copy, COPY_B);
-      await startConfig(files, CHECK_OF, PORTS);
+      await stops(STOP_LIMIT);
       const thrown = await startConfig(files, CHECK_OF, PORTS).catch((error: unknown) => error);
       expect(thrown instanceof ConfigRefused ? thrown.problems : undefined).toEqual([STOPPED_START, `The last good set ${GOOD_FILE} cannot be read (ENOENT).`]);
     });
 
     it("sees a marker of other files, or a broken marker, as no marker", async () => {
       await startedOnce();
-      await write(files.marker, markerText({ key: "0".repeat(64), use: "files" }));
-      expect((await startConfig(files, CHECK_OF, PORTS)).use).toBe("files");
+      await write(files.marker, markerText({ key: "0".repeat(64), use: "good", starts: STOP_LIMIT }));
+      const other = await startConfig(files, CHECK_OF, PORTS);
+      expect(other.use).toBe("files");
+      expect(other.notes).toEqual([]);
       await write(files.marker, `{"key":"${PRIVATE}"`);
       expect((await startConfig(files, CHECK_OF, PORTS)).notes).toEqual([]);
     });
@@ -327,16 +351,19 @@ describe("the texts of the start files", () => {
   it("reads back the last good set and the marker that it writes", () => {
     const texts = textsOf(GOOD, KEYS, { text: COPY_B });
     expect(parseGood({ text: goodText(texts) })).toEqual({ tag: "ok", value: texts });
-    expect(parseMarker({ text: markerText({ key: "k", use: "good" }) })).toEqual({ key: "k", use: "good" });
-    expect(parseMarker({ text: JSON.stringify({ format: "alerts-start/1", key: "k", use: "other" }) })).toBeUndefined();
+    expect(parseMarker({ text: markerText({ key: "k", use: "good", starts: 2 }) })).toEqual({ key: "k", use: "good", starts: 2 });
+    // A marker with no count of the starts, or with a count of 0, is not a valid marker.
+    expect(parseMarker({ text: JSON.stringify({ format: "alerts-start/1", key: "k", use: "files" }) })).toBeUndefined();
+    expect(parseMarker({ text: JSON.stringify({ format: "alerts-start/1", key: "k", use: "files", starts: 0 }) })).toBeUndefined();
+    expect(parseMarker({ text: JSON.stringify({ format: "alerts-start/1", key: "k", use: "other", starts: 1 }) })).toBeUndefined();
     expect(parseMarker(NONE)).toBeUndefined();
   });
 
   it("gives the files of a new runtime from its start marker", () => {
     expect(restartUse(NONE)).toBe("files");
     expect(restartUse({ code: "EBUSY" })).toBe("pending");
-    expect(restartUse({ text: markerText({ key: "k", use: "files" }) })).toBe("pending");
-    expect(restartUse({ text: markerText({ key: "k", use: "good" }) })).toBe("good");
+    expect(restartUse({ text: markerText({ key: "k", use: "files", starts: 1 }) })).toBe("pending");
+    expect(restartUse({ text: markerText({ key: "k", use: "good", starts: 2 }) })).toBe("good");
   });
 });
 
@@ -580,7 +607,7 @@ describe("requestRestart", () => {
   it("writes a new request, then waits for a new process, its readiness and the mark of its start", async () => {
     // The old process stays, then the discovery file has no process, then the new process starts. Its first probe fails.
     // The new start keeps its marker until its first pass at 5 s.
-    await write(files.marker, markerText({ key: "k", use: "files" }));
+    await write(files.marker, markerText({ key: "k", use: "files", starts: 1 }));
     const { ports, writes } = portsOf([10, 10, undefined, 11], (call) => call > 0, async (time) => {
       if (time === 5000) await rm(files.marker);
     });
@@ -589,13 +616,13 @@ describe("requestRestart", () => {
   });
 
   it("tells when the new runtime uses the last good set", async () => {
-    await write(files.marker, markerText({ key: "k", use: "good" }));
+    await write(files.marker, markerText({ key: "k", use: "good", starts: 2 }));
     const { ports } = portsOf([10, 11], () => true);
     expect(await requestRestart({ files, ...OPTIONS }, ports)).toEqual({ kind: "restarted", from: 10, to: 11, ready: true, use: "good" });
   });
 
   it("gives a pending start when the new runtime keeps the marker of its files for the whole wait", async () => {
-    await write(files.marker, markerText({ key: "k", use: "files" }));
+    await write(files.marker, markerText({ key: "k", use: "files", starts: 1 }));
     const { ports } = portsOf([10, 11], () => true);
     expect(await requestRestart({ files, ...OPTIONS }, ports)).toEqual({ kind: "restarted", from: 10, to: 11, ready: true, use: "pending" });
   });

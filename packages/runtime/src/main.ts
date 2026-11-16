@@ -248,6 +248,7 @@ async function runtime(): Promise<ServiceBuilder> {
     health: instance.health,
     page,
     ...(instance.outage === undefined ? {} : { outage: instance.outage }),
+    start: { use: loaded.use, reasons: loaded.fallback.length },
     exchange,
   });
   return service;

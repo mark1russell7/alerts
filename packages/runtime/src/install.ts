@@ -39,7 +39,7 @@ import { readCopySettings } from "./copy.ts";
 import { checkOfPingUrl, checksRequest, checkTimesProblem, heartbeatGap } from "./heartbeat.ts";
 import { discoveryPid, hostTask, READY_WITHIN, readinessProbe, RUNTIME_GRACE, runtimeDiscovery, supervisorDiscovery } from "./host.ts";
 import { checksKeys, daemonCheck, INSTANCE_TIMES, USER_AGENT_NAME } from "./instance.ts";
-import { GOOD_FILE, privateFiles, requestRestart, type RestartOutcome } from "./reload.ts";
+import { checkStart, GOOD_FILE, privateFiles, readStartTexts, requestRestart, restartUse, type RestartOutcome } from "./reload.ts";
 
 const ACTIONS = ["install", "remove", "status", "restart"] as const;
 const action = process.argv[2];
@@ -159,8 +159,16 @@ if (action === "install") {
   const heartbeat: OutsideCheck = keys.tag === "err" ? { ok: false, neededSeconds, problem: keys.error.join(" ") } : await outsideCheck(keys.value.key, keys.value.url, secrets);
   // The loud check is optional. Without its key, the status has no field of it.
   const loud = keys.tag === "ok" && keys.value.loudUrl !== undefined ? { loud: await outsideCheck(keys.value.key, keys.value.loudUrl, secrets) } : {};
-  console.log(JSON.stringify({ task: await serviceStatus(spec, ports, { discovery }), readiness, heartbeat, ...loud }, null, 2));
-  if (!readiness.ok || !heartbeat.ok || ("loud" in loud && !loud.loud.ok)) process.exitCode = 1;
+  // The start marker tells the files of the runtime, and the check of the files tells the files of the next start.
+  // A runtime on the last good set, or private files with problems, give the code 1. The problems hold no value.
+  const files = privateFiles(home, configPath(process.env, process.cwd()));
+  const next = checkStart(await readStartTexts(files), daemonCheck);
+  const start = { use: restartUse(await readText(() => readFile(files.marker, "utf8"))), files: next.tag === "ok" ? [] : next.error };
+  console.log(JSON.stringify({ task: await serviceStatus(spec, ports, { discovery }), readiness, heartbeat, ...loud, start }, null, 2));
+  if (start.use !== "files") console.error(`The runtime does not use the private files (${start.use}). Read the output of the runtime.`);
+  if (start.files.length > 0) console.error(`The private files have problems, thus the next start uses the last good set ${GOOD_FILE}.`);
+  const startOk = start.use === "files" && start.files.length === 0;
+  if (!readiness.ok || !heartbeat.ok || ("loud" in loud && !loud.loud.ok) || !startOk) process.exitCode = 1;
 } else if (action === "restart") {
   const files = privateFiles(home, configPath(process.env, process.cwd()));
   // The check of the restart reads the three private files, as the start does. A bad copy.json stops the restart.
