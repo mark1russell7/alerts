@@ -34,7 +34,8 @@
  * - `metAgain` (each arm with IPAWS faults): the lateness is `met` in `MEET_WITHIN` intervals of the end of the first current fetch.
  * - `noLongLate` (`control` and `nws-lag`): each late period ends in one interval of the sources.
  * - `keepsPace` (each arm): the fetches of each source that send a request end at least `PACE_PART` of an interval apart.
- *   A burst of fetches fails it. A fetch that the runtime stops before its request sends nothing, thus it does not count.
+ *   No fetch sends more than `QUERIES_PER_FETCH`. A burst of fetches fails it. A fetch that the runtime stops before
+ *   its request sends nothing, thus it does not count.
  *
  * The limit of the delay is the upper bound of the 0.99 quantile of the delays. A copy with a delay above that bound gives
  * a short late period, by design. The gate `noLongLate` permits these periods, and the record keeps each one.
@@ -89,6 +90,13 @@ export const OUTAGE = { from: 70, to: 82 } as const;
 export const MEET_WITHIN = 2;
 /** The gate `keepsPace` permits no two fetches of one source that end closer than this part of the interval. */
 export const PACE_PART = 0.5;
+
+/**
+ * The most requests of one fetch of each source: NWS asks the zone, the WEA messages and the canary, and IPAWS
+ * asks the feed. The sources do not try again in a fetch. Thus a fetch with more requests has a late request of
+ * a fetch that the runtime stopped. That burst at the server does not show in the gaps of the ends.
+ */
+export const QUERIES_PER_FETCH = { nws: 3, ipaws: 1 } as const;
 /** The bound of the passes of an arm, for each fetch. A pass with no fetch adds no fetch. */
 const PASSES_PER_FETCH = 10;
 
@@ -877,7 +885,9 @@ export function copyGatesOf(record: Pick<CopyRecord, "arm" | "passes" | "fetches
     limitHolds: limitBefore !== undefined && (limitAfter === undefined || limitAfter <= limitBefore),
     metAgain: metAfter !== undefined && metAfter <= MEET_WITHIN * IPAWS_DESCRIPTOR.interval,
     noLongLate: periods.every((period) => period.to !== undefined && period.to - period.from <= NWS_DESCRIPTOR.interval),
-    keepsPace: Object.values(gapOf).every((gap) => gap === undefined || gap >= PACE_PART * NWS_DESCRIPTOR.interval),
+    keepsPace:
+      Object.values(gapOf).every((gap) => gap === undefined || gap >= PACE_PART * NWS_DESCRIPTOR.interval) &&
+      (["nws", "ipaws"] as const).every((source) => record.fetches[source].every((fetch) => fetch.sent <= QUERIES_PER_FETCH[source])),
   };
   const gates = Object.fromEntries(ARM_GATES[arm].map((gate) => [gate, all[gate]]));
   return {

@@ -45,6 +45,7 @@ import {
   outageWindowOf,
   PACE_PART,
   PER_FETCH,
+  QUERIES_PER_FETCH,
   readPair,
   routeOf,
   type RouteCounts,
@@ -430,6 +431,11 @@ describe("the gates", () => {
     // The same end times with a request in each fetch are a burst.
     const sentEach = { ...stopped, ipaws: stopped.ipaws.map((fetch) => ({ ...fetch, sent: 1 })) };
     expect(copyGatesOf({ arm: "copy-backlog", passes, fetches: sentEach }).gates.keepsPace).toBe(false);
+    // The stopped fetch sends its request late, in the time of the next fetch. The next fetch then has two requests: a burst.
+    const late = { ...stopped, ipaws: stopped.ipaws.map((fetch, index) => (index === OUTAGE.to ? { ...fetch, sent: QUERIES_PER_FETCH.ipaws + 1 } : fetch)) };
+    expect(copyGatesOf({ arm: "copy-backlog", passes, fetches: late }).gates.keepsPace).toBe(false);
+    const nws = { ...fetches, nws: fetches.nws.map((fetch, index) => (index === 3 ? { ...fetch, sent: QUERIES_PER_FETCH.nws + 1 } : fetch)) };
+    expect(copyGatesOf({ arm: "copy-backlog", passes, fetches: nws }).gates.keepsPace).toBe(false);
     expect(smallestGapOf([])).toBeUndefined();
     expect(smallestGapOf([{ at: 5 }])).toBeUndefined();
     expect(smallestGapOf([{ at: 0 }, { at: 9 }, { at: 12 }])).toBe(3);
