@@ -148,11 +148,29 @@ describe("the adopted cover", () => {
     const recorded: Atlas = { ...covered, rounds: [{ ...round, measures: { classes: 1, gaps: 0, adoptedCover: 1, cause: "a test" } }] };
     expect(checkAtlas(recorded)).toEqual([]);
     const fallen: Atlas = { ...recorded, sources: [source("a", ["infra.power"], "adopt"), source("b", ["infra.power"])] };
-    expect(checkAtlas(fallen)).toEqual([{ at: "atlas", problem: "the adopted cover is 0 classes, below the 1 classes of a round" }]);
+    expect(checkAtlas(fallen)).toEqual([{ at: "atlas", problem: "the adopted cover is 0 classes, below the 1 classes of round 1" }]);
     const bad: Atlas = { ...recorded, rounds: [{ ...round, measures: { classes: -1, gaps: 0.5, adoptedCover: 1, cause: " " } }] };
     expect(checkAtlas(bad).map((item) => item.problem)).toEqual(["the measure -1 is not a count", "the measure 0.5 is not a count", "the measures have no cause"]);
     const { measures: _gone, ...unmeasured } = round;
     expect(checkAtlas({ ...recorded, rounds: [unmeasured as Round] })).toEqual([{ at: "round 1", problem: "the round has no measures" }]);
+  });
+
+  it("takes the floor from the latest round, so a loss passes only with a new round that names it", () => {
+    const ids = ["infra.power", "infra.water", "met.flood"];
+    // The first `count` classes have 2 adopted sources each. The other classes have no source and a reason.
+    const covering = (count: number): Atlas =>
+      atlas(
+        ids.map((id, index) => klass(id, index < count ? null : "no source")),
+        ids.slice(0, count).flatMap((id, index) => [source(`s${String(index)}a`, [id], "adopt"), source(`s${String(index)}b`, [id], "adopt")]),
+      );
+    const measured = (number: number, adoptedCover: number, cause: string): Round => ({ ...round, round: number, measures: { classes: 3, gaps: 3 - adoptedCover, adoptedCover, cause } });
+    const rounds = [measured(1, 3, "a test"), measured(2, 2, "A source lost its terms of use.")];
+    expect(checkAtlas({ ...covering(2), rounds })).toEqual([]);
+    expect(checkAtlas({ ...covering(2), rounds: [...rounds].reverse() })).toEqual([]);
+    expect(checkAtlas({ ...covering(1), rounds })).toEqual([{ at: "atlas", problem: "the adopted cover is 1 classes, below the 2 classes of round 2" }]);
+    // With no new round, the loss stops at the gate.
+    expect(checkAtlas({ ...covering(2), rounds: rounds.slice(0, 1) })).toEqual([{ at: "atlas", problem: "the adopted cover is 2 classes, below the 3 classes of round 1" }]);
+    expect(checkAtlas({ ...covering(3), rounds: [...rounds, measured(2, 3, "a copy")] })).toEqual([{ at: "atlas", problem: "two records of rounds have one number" }]);
   });
 
   it("has the measures of the committed atlas at or above the last round", () => {

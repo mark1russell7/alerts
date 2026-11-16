@@ -153,7 +153,7 @@ export interface Round {
   readonly queries: readonly string[];
   readonly notes: readonly string[];
   readonly studies: readonly Study[];
-  /** The measures of the atlas at the end of the round. The gate does not let the adopted cover fall below them. */
+  /** The measures of the atlas at the end of the round. The adopted cover of the atlas stays at or above the measure of the latest round. */
   readonly measures: RoundMeasures;
 }
 
@@ -290,10 +290,15 @@ export function checkAtlas(atlas: Atlas, context: AtlasContext = {}): AtlasProbl
       if (typeof recorded.cause !== "string" || recorded.cause.trim() === "") add(at, "the measures have no cause");
     }
   }
-  // The adopted cover is the outcome. A change that makes it fall below the measure of a round stops at the gate.
-  const floor = Math.max(0, ...atlas.rounds.map((round) => (round as Partial<Round>).measures?.adoptedCover ?? 0));
+  if (rounds.size !== atlas.rounds.length) add("atlas", "two records of rounds have one number");
+  // The adopted cover is the outcome. Its floor is the measure of the latest round. Thus a real loss of a
+  // source needs a new round whose cause names the loss, and no record of an old round changes.
+  const latest = atlas.rounds.reduce<Round | undefined>((last, round) => (last === undefined || round.round > last.round ? round : last), undefined);
+  const floor = (latest as Partial<Round> | undefined)?.measures?.adoptedCover ?? 0;
   const { adoptedCover } = measures(atlas);
-  if (adoptedCover < floor) add("atlas", `the adopted cover is ${String(adoptedCover)} classes, below the ${String(floor)} classes of a round`);
+  if (latest !== undefined && adoptedCover < floor) {
+    add("atlas", `the adopted cover is ${String(adoptedCover)} classes, below the ${String(floor)} classes of round ${String(latest.round)}`);
+  }
   const classIds = new Set<string>();
   for (const item of atlas.classes) {
     const at = `class ${item.id}`;

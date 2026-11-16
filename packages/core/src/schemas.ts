@@ -116,7 +116,7 @@ import {
 } from "./config.ts";
 import type { Recipient } from "./delivery.ts";
 import type { Lateness, LatenessLimit, LatenessState } from "./lateness.ts";
-import { CATEGORIES, knownKind } from "./taxonomy.ts";
+import { canonicalKind, CATEGORIES, knownKind } from "./taxonomy.ts";
 
 // =============================================================================
 // The gate between a schema and its type
@@ -216,13 +216,16 @@ export const significanceSchema: z.ZodType<Significance, Significance> = schemaO
 /**
  * This schema checks a code of the taxonomy, or a prefix of a code by its parts. `knownKind` is the one rule:
  * a prefix by parts is also a code, so `met` and `met.flood` pass and `met.fl` does not. A kind with a typo
- * matches no alert, so this rule holds for each kind that a person or an adapter names.
+ * matches no alert, so this rule holds for each kind that a person or an adapter names. The parse first
+ * changes an old code to its new code (`canonicalKind`). This change is not a transform, so the JSON Schema stays.
  */
-export const kindCodeSchema: z.ZodType<string, string> = z.string().refine(knownKind, "The kind code is not in the taxonomy.");
+export const kindCodeSchema: z.ZodType<string, string> = z.string().overwrite((code) => canonicalKind(code)).refine(knownKind, "The kind code is not in the taxonomy.");
 
 // The prefix of a topic key, and the problem of a topic id that is not a code of the taxonomy.
 const TOPIC_PREFIX = "topic:";
 const TOPIC_PROBLEM = "The id of a topic is a code of the taxonomy, or a prefix of one by its parts.";
+// A topic key with an old code changes to the key of its new code. Each other key stays.
+const canonicalKey = (key: string): string => (key.startsWith(TOPIC_PREFIX) ? `${TOPIC_PREFIX}${canonicalKind(key.slice(TOPIC_PREFIX.length))}` : key);
 
 /** This schema checks a kind. Its code must be in the taxonomy: `knownKind` gives true. This rule is the runtime gate of the closed taxonomy. */
 export const kindSchema: z.ZodType<Kind, Kind> = schemaOf<Kind>()(
@@ -753,10 +756,14 @@ export const quietWindowSchema: z.ZodType<QuietWindow, QuietWindow> = schemaOf<Q
   z.strictObject({ zone: z.string(), start: z.string(), end: z.string() }).readonly(),
 );
 
-/** This schema checks a subject that a person watches. The id of a subject of the system `topic` is a code of the taxonomy. */
+/**
+ * This schema checks a subject that a person watches. The id of a subject of the system `topic` is a code of
+ * the taxonomy. The parse changes an old code to its new code first.
+ */
 export const subjectWatchSchema: z.ZodType<SubjectWatch, SubjectWatch> = schemaOf<SubjectWatch>()(
   z
     .strictObject({ system: z.string(), id: z.string().exactOptional() })
+    .overwrite((subject) => (subject.system === "topic" && subject.id !== undefined ? { ...subject, id: canonicalKind(subject.id) } : subject))
     .refine((subject) => subject.system !== "topic" || subject.id === undefined || knownKind(subject.id), TOPIC_PROBLEM)
     .readonly(),
 );
@@ -873,6 +880,7 @@ const NODE_KEY = new RegExp(`^(?:person|(?:${Object.keys(SUBJECT_SYSTEMS).join("
 const nodeKeyText = z
   .string()
   .regex(NODE_KEY, "A node key is `person`, or `<system>:<id>` with a system of SUBJECT_SYSTEMS and an id that is not empty.")
+  .overwrite(canonicalKey)
   .refine((key) => !key.startsWith(TOPIC_PREFIX) || knownKind(key.slice(TOPIC_PREFIX.length)), TOPIC_PROBLEM);
 
 /** This schema checks the key of a node of an interest graph (`contracts.ts`, `NodeKey`). */

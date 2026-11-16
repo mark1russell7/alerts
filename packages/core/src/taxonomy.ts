@@ -382,6 +382,24 @@ export const TAXONOMY: Readonly<Record<string, KindEntry>> = {
 };
 
 /**
+ * The old codes of the taxonomy, each with its new code. A code leaves `TAXONOMY` only with an entry
+ * here, so a stored kind with an old code still parses. The file `taxonomy.lock.json` holds each code
+ * of `TAXONOMY` and each old code, and a test holds the lock. Thus the removal of a code is a deliberate step.
+ */
+export const KIND_ALIASES: Readonly<Record<string, string>> = {};
+
+/**
+ * This function gives the new code of an old code, and each other code with no change. It also maps
+ * the covered code of `system.coverage.<code>`. The schemas apply it before the check of `knownKind`.
+ */
+export function canonicalKind(code: string, aliases: Readonly<Record<string, string>> = KIND_ALIASES): string {
+  if (Object.hasOwn(aliases, code)) return aliases[code] ?? code;
+  if (!code.startsWith(`${COVERAGE_KIND}.`)) return code;
+  const covered = code.slice(COVERAGE_KIND.length + 1);
+  return Object.hasOwn(aliases, covered) ? `${COVERAGE_KIND}.${aliases[covered] ?? covered}` : code;
+}
+
+/**
  * This function tells if a code is in the taxonomy. The code must be a code of `TAXONOMY`, or
  * `system.coverage.<code>` for a code of `TAXONOMY` that is not a code of the system. It is the one
  * rule for each code: the adapters, the schemas of the configuration and the source atlas use it.

@@ -1,7 +1,20 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { COVERAGE_KIND, DEFAULT_ASSESS_POLICY, HEALTH_KIND, LIFE_SAFETY_KINDS } from "./assess.ts";
 import { DEFAULT_COVERAGE_POLICY } from "./coverage.ts";
-import { CATEGORIES, CATEGORY_LABELS, categoryOf, kindLabel, knownKind, parentKind, TAXONOMY, UNKNOWN_KIND, unknownKinds } from "./taxonomy.ts";
+import {
+  canonicalKind,
+  CATEGORIES,
+  CATEGORY_LABELS,
+  categoryOf,
+  KIND_ALIASES,
+  kindLabel,
+  knownKind,
+  parentKind,
+  TAXONOMY,
+  UNKNOWN_KIND,
+  unknownKinds,
+} from "./taxonomy.ts";
 
 const CODE = /^[a-z0-9]+(?:-[a-z0-9]+)*(?:\.[a-z0-9]+(?:-[a-z0-9]+)*)*$/;
 
@@ -81,5 +94,37 @@ describe("the taxonomy", () => {
     expect(unknownKinds(LIFE_SAFETY_KINDS)).toEqual([]);
     expect(unknownKinds(DEFAULT_ASSESS_POLICY.classes.flatMap((entry) => entry.kinds))).toEqual([]);
     expect(unknownKinds(DEFAULT_COVERAGE_POLICY.needs.flatMap((need) => need.kinds))).toEqual([]);
+  });
+});
+
+// The lock holds each code that the taxonomy has or had. A stored kind, a configuration or an atlas can name each one.
+describe("the lock of the codes", () => {
+  const lock = JSON.parse(readFileSync(new URL("./taxonomy.lock.json", import.meta.url), "utf8")) as string[];
+  const isCode = (code: string): boolean => Object.hasOwn(TAXONOMY, code);
+
+  it("keeps each locked code: it stays in the taxonomy, or an alias maps it to a code of the taxonomy", () => {
+    expect(lock.filter((code) => !isCode(code) && !(Object.hasOwn(KIND_ALIASES, code) && isCode(KIND_ALIASES[code] ?? "")))).toEqual([]);
+  });
+
+  it("holds each code of the taxonomy and each old code, sorted and each one time, so a new code comes into the lock in its pull request", () => {
+    expect(lock).toEqual([...new Set([...Object.keys(TAXONOMY), ...Object.keys(KIND_ALIASES)])].sort());
+  });
+
+  it("has an alias only for an old code, and each alias goes to a code of the taxonomy", () => {
+    for (const [old, next] of Object.entries(KIND_ALIASES)) {
+      expect(isCode(old), old).toBe(false);
+      expect(isCode(next), old).toBe(true);
+    }
+  });
+
+  it("maps an old code and the coverage of an old code to the new code, and keeps each other code", () => {
+    const aliases = { "met.twister": "met.tornado" };
+    expect(canonicalKind("met.twister", aliases)).toBe("met.tornado");
+    expect(canonicalKind(`${COVERAGE_KIND}.met.twister`, aliases)).toBe(`${COVERAGE_KIND}.met.tornado`);
+    expect(canonicalKind("met.tornado", aliases)).toBe("met.tornado");
+    expect(canonicalKind("met.twisters", aliases)).toBe("met.twisters");
+    expect(canonicalKind("toString", aliases)).toBe("toString");
+    expect(canonicalKind(`${COVERAGE_KIND}.toString`, aliases)).toBe(`${COVERAGE_KIND}.toString`);
+    expect(canonicalKind("met.twister")).toBe("met.twister");
   });
 });
