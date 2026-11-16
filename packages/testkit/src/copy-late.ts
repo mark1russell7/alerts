@@ -746,7 +746,6 @@ export interface KnownFault {
 }
 
 const AL_8 = "AL-8: the limit of the delay learns the delay of a late copy, and a late copy clears the misses.";
-const BURST = "The runtime does not stop a fetch at its limit. The fetches that wait for a parked host go out together.";
 
 /**
  * The gates that fail because of a known fault of the core. The verdict expects each one to fail. The fix of a fault
@@ -757,7 +756,6 @@ export const KNOWN_FAULTS: readonly KnownFault[] = [
   { arm: "ipaws-lag", gate: "staysLate", reason: AL_8 },
   { arm: "ipaws-lag", gate: "limitHolds", reason: AL_8 },
   { arm: "copy-backlog", gate: "limitHolds", reason: AL_8 },
-  { arm: "copy-backlog", gate: "keepsPace", reason: BURST },
 ];
 
 /** This function gives the known fault of a gate of an arm, or `undefined` when the gate has no known fault. */

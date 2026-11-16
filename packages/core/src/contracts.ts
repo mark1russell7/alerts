@@ -385,12 +385,30 @@ export interface FetchRecord {
 }
 
 /**
+ * The part of an `AbortSignal` that a fetch reads. The core has no platform, thus it does not name the
+ * `AbortSignal` type of a platform. An `AbortSignal` of Node.js or of a browser has each member.
+ */
+export interface FetchSignal {
+  /** This value is true after the abort. */
+  readonly aborted: boolean;
+  /** This value is the reason of the abort, after the abort. */
+  readonly reason?: unknown;
+  /** This function adds a listener of the abort. */
+  addEventListener(type: "abort", listener: () => void, options?: { readonly once?: boolean }): void;
+  /** This function removes a listener of the abort. */
+  removeEventListener(type: "abort", listener: () => void): void;
+}
+
+/**
  * The procedures of one source. Each source package registers them under the path
  * `alerts.source.<id>.<name>`.
  *
  * - `describe`: no effects.
  * - `fetch`: it reads `network`, through polite-crawler. It is idempotent. For a failure of the
  *   source, it gives `{ ok: false }` and does not throw.
+ * - The optional `signal` of `fetch` stops the fetch. The runtime aborts it at the time limit of
+ *   the fetch and at the stop of the runtime. After the abort, the fetch sends no more requests.
+ *   It can then throw the reason of the signal.
  * - `map`: a pure, total function. It does not throw, and the same observation gives the same
  *   reports with the same ids.
  * - `check`: a pure function. It examines the observations of a fetch against the canary.
@@ -399,7 +417,7 @@ export interface FetchRecord {
  */
 export interface SourceProcedures {
   describe(): SourceDescriptor;
-  fetch(input: { readonly watch: Watch; readonly cursor?: Cursor }): Promise<FetchOutcome>;
+  fetch(input: { readonly watch: Watch; readonly cursor?: Cursor }, signal?: FetchSignal): Promise<FetchOutcome>;
   map(input: { readonly observation: Observation }): MapResult;
   check?(input: { readonly observations: readonly Observation[] }): CanaryResult;
   locate?(input: { readonly at: Position }): Promise<LocateOutcome>;

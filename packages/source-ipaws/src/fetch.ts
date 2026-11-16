@@ -6,7 +6,7 @@
  * feed answers for the last 30 minutes at most. The feed is national and has no filter by area.
  */
 
-import { observationId, type Cursor, type FetchOutcome, type Instant, type Observation, type Watch } from "@mark1russell7/alerts";
+import { observationId, type Cursor, type FetchOutcome, type FetchSignal, type Instant, type Observation, type Watch } from "@mark1russell7/alerts";
 import { createRequester } from "@mark1russell7/alerts-fetch";
 import { readCap, splitFeed } from "@mark1russell7/alerts-format-cap";
 import { stateOfSame, stateOfUgc, statesOf } from "@mark1russell7/alerts-format-nws";
@@ -159,7 +159,7 @@ export function readAnswer(reply: Reply, url: string, feedUrl: string, fetched: 
  * Each fetch is one request. Its outcome has the cursor of the next fetch: the time of the request,
  * less `OVERLAP_MS`. A failed fetch gives no cursor, so the next fetch asks again from the old cursor.
  */
-export function createIpawsFetch(options: IpawsFetchOptions): (input: IpawsFetchInput, signal?: AbortSignal) => Promise<FetchOutcome> {
+export function createIpawsFetch(options: IpawsFetchOptions): (input: IpawsFetchInput, signal?: FetchSignal) => Promise<FetchOutcome> {
   const requester = createRequester({
     source: SOURCE_ID,
     pace: options.pace,

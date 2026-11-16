@@ -22,7 +22,7 @@ export function createIemSource(options: IemFetchOptions): SourceProcedures {
   const fetch = createIemFetch(options);
   return {
     describe: () => IEM_DESCRIPTOR,
-    fetch: (input) => fetch(input),
+    fetch: (input, signal) => fetch(input, signal),
     map: ({ observation }) => mapObservation(observation),
   };
 }

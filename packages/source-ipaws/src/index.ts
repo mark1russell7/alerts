@@ -45,7 +45,7 @@ export function createIpawsSource(options: IpawsSourceOptions): SourceProcedures
   const languages = options.languages;
   return {
     describe: () => IPAWS_DESCRIPTOR,
-    fetch: (input) => fetch(input),
+    fetch: (input, signal) => fetch(input, signal),
     map: ({ observation }) => mapObservation(observation, languages),
   };
 }

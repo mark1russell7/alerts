@@ -331,7 +331,7 @@ export function openInstance(options: InstanceOptions): Instance {
     ...(options.fetchLimit === undefined ? {} : { fetchLimit: options.fetchLimit }),
   });
   const loop = createLoop({
-    pass: () => runtime.pass(),
+    pass: (stop) => runtime.pass(stop),
     clock,
     wall,
     times: loopTimes(runtime.config.sources, { delivery }),
