@@ -132,6 +132,27 @@ export interface ClockEvent extends Envelope<"clock"> {
   readonly size: Duration;
 }
 
+/**
+ * At the boot, the log file was broken. The runtime moved it into a quarantine folder, and it started a new file with
+ * each event that the salvage read. This event comes after the salvaged events. Its fold gives a system report.
+ */
+export interface RecoveredEvent extends Envelope<"recovered"> {
+  /** The name of the quarantine folder, in the folder of the log. The id of the event has it. */
+  readonly quarantine: string;
+  /** The kind of the fault of the broken file, from `sqliteFault` of `@mark1russell7/sqlite`. An example is `corrupt`. */
+  readonly fault: string;
+  /** The count of the events that the salvage read and parsed. */
+  readonly read: number;
+  /** The count of the read events that the new file got. */
+  readonly added: number;
+  /** The count of the positions of the broken file that the salvage could not read or parse. */
+  readonly lost: number;
+  /** This value tells if the salvage read each part of the broken file with no problem. */
+  readonly whole: boolean;
+  /** The first problems of the check and of the salvage, in this order. */
+  readonly problems: readonly string[];
+}
+
 /** One event of the log of the runtime. */
 export type RuntimeEvent =
   | StartedEvent
@@ -148,7 +169,8 @@ export type RuntimeEvent =
   | AttemptEvent
   | SettledEvent
   | RefusedEvent
-  | ClockEvent;
+  | ClockEvent
+  | RecoveredEvent;
 
 /** The types of the events. */
 export const EVENT_TYPES: readonly RuntimeEvent["type"][] = [
@@ -167,6 +189,7 @@ export const EVENT_TYPES: readonly RuntimeEvent["type"][] = [
   "settled",
   "refused",
   "clock",
+  "recovered",
 ];
 
 /**

@@ -246,6 +246,16 @@ A clock report has no area. Its subject is `{ system: "alerts.clock", id: "wall"
 - The line stays open for the window, thus the digest of the day shows the step. At the end of the window, the line ends with a cancel.
 - The headline gives the direction and the size of the step, in whole hours, minutes or seconds (`stepSizeText`).
 
+A log report has no area. Its subject is `{ system: "alerts.log", id: "runtime" }`. Its kind is `system.log.recovered`:
+
+- The condition is the latest recovery of the log in `LOG_RECOVERY_WINDOW` (24 hours) before the time of the snapshot (`recentRecovery`).
+- When the salvage read each part of the broken file, the severity is `minor` and the urgency is `past`. Thus it gets `digest` at most.
+- When the salvage could not read each part, the severity is `moderate` and the urgency is `expected`. Thus it gets `notice` at most.
+- The facts of the line are the time, the quarantine folder, the counts and the flag `whole`. A second recovery in the window gives an update.
+- The line stays open for the window. At the end of the window, the line ends with a cancel.
+- The description names the quarantine folder and the count of the kept events.
+
+`latestIn(items, at, window)` gives the latest item in a window before a time. `recentStep` and `recentRecovery` use it.
 `threats(incidents, places)` gives the watches and the warnings. A threat is a live incident with the status `actual` at a watched place. Its stage is `watch`, `warning` or absent. A report of the core has the status `system`, so it is not a threat.
 
 The assessment policy holds two system classes, and each class admits only the status `system`. A class can name its statuses. Else the statuses of the policy apply. The NWS kinds `system.test` and `system.admin` are not in these classes, so the policy statuses apply to them.
@@ -635,6 +645,26 @@ The instants of others do not move. They come from the clocks of the sources and
 - the times of a report of a source: `sent`, `effective`, `onset`, `expires` and `ends`
 - `asOf` of an end mark
 - the time of an acknowledgment
+
+### The check of the log at the boot
+
+At the boot, the instance opens the log with `openCheckedRuntimeLog`. A broken log file does not stop the runtime:
+
+1. The function checks the file with `PRAGMA quick_check`. A new file and a log in memory get no check.
+2. When the check or the open finds a broken file, the file goes into the quarantine folder `runtime.sqlite.broken-<time>` next to the log. Its companion files go with it. The time is the boot time in UTC, for example `20261116T120500Z`.
+3. A new log file starts at the path. `salvageEventLog` of `@mark1russell7/sqlite` copies each event that it can read and parse into the new file, in the order of the log.
+4. Then the runtime appends one event `recovered`, with the id `recovered:<folder>`. The event has the kind of the fault, the counts of the salvage, the flag `whole` and the first 10 problems.
+5. The fold of the event adds a recovery to the state, and the view gives the log report of it. A later step of the wall clock moves the time of the recovery.
+
+The flag `whole` is true only when the salvage read each part of the file with no problem and lost no position. A file that is not a database gives no lost positions, but `whole` is false.
+
+A fault that is not a broken file goes to the caller, for example a lock or a folder at the path. Then nothing moves, and the boot fails. Fault case 12 of the testkit tests this boot. It becomes a gate when the testkit opens the log with `openCheckedRuntimeLog`.
+
+The quarantine folder stays. Examine the disk of the computer, and keep the folder until you know the cause.
+
+The function `openCheckedEventLog` of `checked-log.ts` is a local copy. Its home is `@mark1russell7/sqlite`. After its release there, the runtime imports it, and the local copy goes.
+
+A known gap: the salvage or the append of `recovered` can fail after the quarantine. Then the next boot finds a good partial file, and no report tells the loss. A fix in `@mark1russell7/sqlite` salvages into a temporary file, and renames it at the end.
 
 ### The host on one computer
 

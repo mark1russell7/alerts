@@ -10,12 +10,14 @@ import {
   balanceUnreadAt,
   carriages,
   CLOCK_STEP_WINDOW,
+  LOG_RECOVERY_WINDOW,
   coverage,
   incidents,
   lateness,
   lateSources,
   limitRule,
   linkRule,
+  recentRecovery,
   recentStep,
   startHealth,
   systemReports,
@@ -78,6 +80,7 @@ export interface SystemView {
  * - The quotas are the counts of the channels at `at`. With no quotas, each open line of a quota stays open.
  * - The balances are the watches of the provider accounts. The time when a balance reaches `unread` is a timer too.
  * - The latest step of the wall clock in its window is a line. The end of the window is a timer too.
+ * - The latest recovery of the log in its window is a line. The end of the window is a timer too.
  */
 export function systemView(state: RuntimeState, config: ViewConfig, at: Instant, quotas?: readonly ChannelQuota[], balances?: readonly ProviderBalance[]): SystemView {
   const steps = config.sources.map((source) => advanceHealth(state.health[source.id] ?? startHealth(source.id, state.start ?? at), at, source, config.health));
@@ -86,12 +89,13 @@ export function systemView(state: RuntimeState, config: ViewConfig, at: Instant,
   const checks = carriages(state.merge, found, config.expectations);
   const late = lateness(checks, config.expectations, at, limitRule(config.delay));
   const covered = coverage({ sources: config.sources, health, late: lateSources(late), places: config.places, kinds: config.kinds }, config.coverage);
-  const step = systemReports(state.lines, { sources: config.sources, health, coverage: covered, threats: threats(found, config.places), lateness: late, ...(quotas === undefined ? {} : { quotas }), ...(balances === undefined ? {} : { balances }), steps: state.steps }, at);
+  const step = systemReports(state.lines, { sources: config.sources, health, coverage: covered, threats: threats(found, config.places), lateness: late, ...(quotas === undefined ? {} : { quotas }), ...(balances === undefined ? {} : { balances }), steps: state.steps, recoveries: state.recoveries }, at);
   // An incident that expires changes the threats, thus its end is a timer too.
   const ends = found.flatMap((incident) => (incident.live && incident.expires !== undefined && incident.expires > at ? [incident.expires] : []));
   const unread = (balances ?? []).flatMap((balance) => (balanceUnreadAt(balance) > at ? [balanceUnreadAt(balance)] : []));
   const stepped = recentStep(state.steps, at);
-  const wakeAt = earliest([...steps.map((entry) => entry.wakeAt), ...late.map((entry) => entry.wakeAt), ...ends, ...unread, stepped === undefined ? undefined : stepped.at + CLOCK_STEP_WINDOW]);
+  const recovered = recentRecovery(state.recoveries, at);
+  const wakeAt = earliest([...steps.map((entry) => entry.wakeAt), ...late.map((entry) => entry.wakeAt), ...ends, ...unread, stepped === undefined ? undefined : stepped.at + CLOCK_STEP_WINDOW, recovered === undefined ? undefined : recovered.at + LOG_RECOVERY_WINDOW]);
   return { at, health, incidents: found, lateness: late, coverage: covered, step, ...(wakeAt === undefined ? {} : { wakeAt }) };
 }
 

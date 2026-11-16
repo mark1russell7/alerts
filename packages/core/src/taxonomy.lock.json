@@ -284,6 +284,8 @@
   "system.health.silent",
   "system.health.slow",
   "system.health.unknown",
+  "system.log",
+  "system.log.recovered",
   "system.quota",
   "system.quota.low",
   "system.quota.reserve",

@@ -8,7 +8,7 @@
  * The end of the condition gives a cancel. The fold reads no clock.
  */
 import { canonicalJson } from "@mark1russell7/rigor-generators";
-import { BALANCE_KIND, CLOCK_KIND, COVERAGE_KIND, hasKind, HEALTH_KIND, matchPlaces, QUOTA_KIND } from "./assess.ts";
+import { BALANCE_KIND, CLOCK_KIND, COVERAGE_KIND, hasKind, HEALTH_KIND, LOG_KIND, matchPlaces, QUOTA_KIND } from "./assess.ts";
 import type {
   Area,
   BalanceStage,
@@ -52,6 +52,9 @@ export const CHANNEL_SUBJECT = "alerts.channel";
 /** The system of the subject of the clock reports. The id of the subject is `wall`: the wall clock of the computer. */
 export const CLOCK_SUBJECT = "alerts.clock";
 
+/** The system of the subject of the log reports. The id of the subject is `runtime`: the log file of the runtime. */
+export const LOG_SUBJECT = "alerts.log";
+
 /** The stages of a quota, from the first to the last. */
 export const QUOTA_STAGES: readonly QuotaStage[] = ["low", "reserve", "spent"];
 
@@ -71,6 +74,26 @@ export interface ClockStep {
   /** The size of the step in milliseconds: negative for a step back. */
   readonly size: Duration;
 }
+
+/**
+ * One recovery of the log of the runtime from a broken file. The runtime moved the file into quarantine, and it wrote
+ * each event that the salvage read into a new file.
+ */
+export interface LogRecovery {
+  /** The time of the recovery. A later step of the wall clock moves it. */
+  readonly at: Instant;
+  /** The name of the quarantine folder, in the folder of the log. */
+  readonly quarantine: string;
+  /** The count of the events that the new file got. */
+  readonly kept: number;
+  /** The count of the positions of the broken file that the salvage could not read. */
+  readonly lost: number;
+  /** This value tells if the salvage read each part of the broken file with no problem. Then no event is lost. */
+  readonly whole: boolean;
+}
+
+/** The time after a recovery of the log during which its system report stays open. Thus the digest of the day shows it. */
+export const LOG_RECOVERY_WINDOW: Duration = 24 * 60 * 60 * 1000;
 
 /** The time after a step during which its system report stays open. Thus the digest of the day shows the step. */
 export const CLOCK_STEP_WINDOW: Duration = 24 * 60 * 60 * 1000;
@@ -137,6 +160,8 @@ export interface SystemSnapshot {
   readonly balances?: readonly ProviderBalance[];
   /** The steps of the wall clock. The latest step in `CLOCK_STEP_WINDOW` before the time of the snapshot is a condition. */
   readonly steps?: readonly ClockStep[];
+  /** The recoveries of the log. The latest recovery in `LOG_RECOVERY_WINDOW` before the time of the snapshot is a condition. */
+  readonly recoveries?: readonly LogRecovery[];
 }
 
 /** The result of one step of the fold. */
@@ -194,11 +219,24 @@ export function balanceUnreadAt(balance: ProviderBalance): Instant {
   return (balance.read?.at ?? balance.since) + balance.maxAge;
 }
 
+/**
+ * This function gives the latest item at `at` or before it, in `window` before `at`, or `undefined`. Of two items at
+ * the same time, it gives the last in the list.
+ */
+export function latestIn<T extends { readonly at: Instant }>(items: readonly T[], at: Instant, window: Duration): T | undefined {
+  let found: T | undefined;
+  for (const item of items) if (item.at <= at && at - item.at < window && (found === undefined || item.at >= found.at)) found = item;
+  return found;
+}
+
 /** This function gives the latest step at `at` or before it, in `CLOCK_STEP_WINDOW` before `at`, or `undefined`. */
 export function recentStep(steps: readonly ClockStep[], at: Instant): ClockStep | undefined {
-  let found: ClockStep | undefined;
-  for (const step of steps) if (step.at <= at && at - step.at < CLOCK_STEP_WINDOW && (found === undefined || step.at >= found.at)) found = step;
-  return found;
+  return latestIn(steps, at, CLOCK_STEP_WINDOW);
+}
+
+/** This function gives the latest recovery of the log at `at` or before it, in `LOG_RECOVERY_WINDOW` before `at`, or `undefined`. */
+export function recentRecovery(recoveries: readonly LogRecovery[], at: Instant): LogRecovery | undefined {
+  return latestIn(recoveries, at, LOG_RECOVERY_WINDOW);
 }
 
 /**
@@ -221,6 +259,7 @@ export function gapGrade(entry: Coverage, threatened: boolean): { readonly sever
  * - Each source in `DOWN_STATES`, each late expectation and each coverage that is short.
  * - Each stage of a quota and each stage of a balance.
  * - The latest step of the wall clock in `CLOCK_STEP_WINDOW` before `at`.
+ * - The latest recovery of the log in `LOG_RECOVERY_WINDOW` before `at`.
  *
  * An open line with no condition in the snapshot ends with a cancel. Equal snapshots give no new report.
  */
@@ -246,6 +285,8 @@ export function systemReports(lines: SystemLines, snapshot: SystemSnapshot, at: 
   }
   const step = recentStep(snapshot.steps ?? [], at);
   if (step !== undefined) conditions.set(CLOCK_LINE, clockCondition(step));
+  const recovery = recentRecovery(snapshot.recoveries ?? [], at);
+  if (recovery !== undefined) conditions.set(LOG_LINE, logCondition(recovery));
   const names = [...new Set([...Object.keys(lines.open), ...conditions.keys()])].sort(compare);
   let count = lines.count;
   const open = new Map(Object.entries(lines.open));
@@ -346,6 +387,9 @@ function balanceName(provider: string, stage: BalanceStage): string {
 
 // The name of the line of the steps of the wall clock. A step in the window of an open line gives an update.
 const CLOCK_LINE = "clock";
+
+// The name of the line of the recoveries of the log. A second recovery in the window of an open line gives an update.
+const LOG_LINE = "log";
 
 function coverageName(place: PlaceId, kind: string): string {
   return `coverage/${encodeURIComponent(place)}/${encodeURIComponent(kind)}`;
@@ -506,6 +550,30 @@ function clockCondition(step: ClockStep): Condition {
     description: "The alert system moved its own times by the step, thus each timer keeps its time. The times of the sources and the channels did not move.",
     instruction: "Examine the time settings and the time server of the computer.",
     parameters: { size: [String(step.size)] },
+  };
+}
+
+// A loss of events can repeat a send or lose an acknowledgment, thus it gets `notice`. A recovery with no loss gets `digest`.
+function logCondition(recovery: LogRecovery): Condition {
+  const code = `${LOG_KIND}.recovered`;
+  const lossy = !recovery.whole || recovery.lost > 0;
+  const positions = recovery.lost > 0 ? ` (${String(recovery.lost)} positions)` : "";
+  const kept = lossy
+    ? `It kept ${String(recovery.kept)} events, and it could not read each part of the file${positions}. A lost event can repeat a send or lose an acknowledgment.`
+    : `It kept each of the ${String(recovery.kept)} events.`;
+  return {
+    facts: { at: recovery.at, quarantine: recovery.quarantine, kept: recovery.kept, lost: recovery.lost, whole: recovery.whole },
+    kind: { code, label: kindLabel(code) },
+    severity: lossy ? "moderate" : "minor",
+    urgency: lossy ? "expected" : "past",
+    response: ["assess"],
+    onset: recovery.at,
+    areas: [],
+    about: [{ system: LOG_SUBJECT, id: "runtime", label: "Log of the runtime" }],
+    headline: "The log file of the alert system was broken.",
+    description: `The alert system moved the broken file into the quarantine folder ${recovery.quarantine}, and it started a new log. ${kept}`,
+    instruction: "Examine the disk of the computer. Keep the quarantine folder until you know the cause.",
+    parameters: { quarantine: [recovery.quarantine], kept: [String(recovery.kept)], lost: [String(recovery.lost)], whole: [String(recovery.whole)] },
   };
 }
 
