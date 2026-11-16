@@ -24,6 +24,7 @@ export * from "./coverage.ts";
 export * from "./lateness.ts";
 export * from "./link.ts";
 export * from "./basemap.ts";
+export * from "./health-payload.ts";
 export * from "./map.ts";
 export * from "./problems.ts";
 export * from "./relevance.ts";

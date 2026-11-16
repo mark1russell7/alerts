@@ -1,6 +1,6 @@
 import { createServer } from "node:http";
 import { join } from "node:path";
-import type { Instant, MapPayload, SourceId } from "@mark1russell7/alerts";
+import type { HealthPayload, Instant, MapPayload, SourceId } from "@mark1russell7/alerts";
 import type { ServiceBuilder } from "@mark1russell7/service";
 import { handle, httpTransport } from "@mark1russell7/service/http";
 import { folderHandler } from "@mark1russell7/service/http-folder";
@@ -21,6 +21,11 @@ export interface ApiOptions {
    * thus only the loopback address serves it. Without the function, the API has no map route.
    */
   readonly map?: (() => MapPayload) | undefined;
+  /**
+   * This function gives the payload of the route `GET /health`: the health of each part of the system. Its coverage holds
+   * the ids of the places, thus only the loopback address serves it. Without the function, the API has no health route.
+   */
+  readonly health?: (() => HealthPayload) | undefined;
   /**
    * The folder of the built local page (`pageFolder`). The path `/` gives its file `PAGE_INDEX`. The page and the route
    * `GET /map` have one origin. Thus the policy of the folder lets the page read the map. Without the folder, the API serves no page.
@@ -92,6 +97,11 @@ export const attachApi = (svc: ServiceBuilder, options: ApiOptions): ServiceBuil
   if (map !== undefined) {
     http.mount(handle("api", "GET /map", () => map()));
     api.route("GET /map", { idempotent: true });
+  }
+  const health = options.health;
+  if (health !== undefined) {
+    http.mount(handle("api", "GET /health", () => health()));
+    api.route("GET /health", { idempotent: true });
   }
   // The files of the page come after the routes. A path of no file goes to the next handler, thus it gets 404.
   if (options.page !== undefined) http.mount(folderHandler(options.page, { index: PAGE_INDEX }));

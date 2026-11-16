@@ -23,12 +23,17 @@ import {
   type AssessPolicy,
   type AssessReason,
   type Assessment,
+  type BalanceRead,
+  type BalanceStage,
   type CanaryResult,
   type Category,
   type CellResource,
   type Certainty,
   type ChannelDescriptor,
   type ChannelId,
+  type ChannelQuota,
+  type CopyRead,
+  type CopyStage,
   type CorrelationKey,
   type Coverage,
   type Cursor,
@@ -67,7 +72,9 @@ import {
   type PersonWatch,
   type PlaceId,
   type Position,
+  type ProviderBalance,
   type QuietWindow,
+  type QuotaStage,
   type Receipt,
   type RegionCode,
   type Report,
@@ -130,6 +137,7 @@ import {
 import type { TryChain } from "./chain.ts";
 import type { EscalationEnd, Recipient } from "./delivery.ts";
 import type { RankDelays } from "./escalation.ts";
+import { HEALTH_FORMAT, type BalanceHealth, type CopyHealth, type HealthPayload, type QuotaHealth, type SourceHealthView } from "./health-payload.ts";
 import type { Lateness, LatenessLimit, LatenessState } from "./lateness.ts";
 import type { LinkFamily, LinkPolicy } from "./link.ts";
 import { COVERAGE_KIND } from "./assess.ts";
@@ -1388,6 +1396,105 @@ export const copySettingsSchema: z.ZodType<CopySettings, CopySettings> = schemaO
         .string()
         .regex(/^[A-Z][A-Z0-9_]*$/u, "The key is a name of the secrets: capital letters, digits and underscores.")
         .exactOptional(),
+    })
+    .readonly(),
+);
+
+// =============================================================================
+// The health payload
+// =============================================================================
+
+/** This schema checks the health of one source in the health payload: the kind of its last failure, with no message. */
+export const sourceHealthViewSchema: z.ZodType<SourceHealthView, SourceHealthView> = schemaOf<SourceHealthView>()(
+  z
+    .strictObject({
+      source: sourceIdSchema,
+      state: healthStateSchema,
+      since: instantSchema,
+      lastSuccess: instantSchema.exactOptional(),
+      lastFailure: z.strictObject({ at: instantSchema, kind: z.enum(["network", "timeout", "server", "rate-limited", "auth", "refused"]) }).readonly().exactOptional(),
+      reason: z.string(),
+    })
+    .readonly(),
+);
+
+/** This schema checks a stage of another copy. */
+export const copyStageSchema: z.ZodType<CopyStage, CopyStage> = schemaOf<CopyStage>()(z.enum(["skew", "config", "unread"]));
+
+/** This schema checks one read of the log of another copy that passed. */
+export const copyReadSchema: z.ZodType<CopyRead, CopyRead> = schemaOf<CopyRead>()(
+  z.strictObject({ at: instantSchema, skew: z.number(), sameConfig: z.boolean() }).readonly(),
+);
+
+/** This schema checks the health of another copy: its stages and its last read that passed. */
+export const copyHealthSchema: z.ZodType<CopyHealth, CopyHealth> = schemaOf<CopyHealth>()(
+  z.strictObject({ copy: copyIdSchema, stages: z.array(copyStageSchema).readonly(), read: copyReadSchema.exactOptional() }).readonly(),
+);
+
+/** This schema checks a stage of the quota of a channel. */
+export const quotaStageSchema: z.ZodType<QuotaStage, QuotaStage> = schemaOf<QuotaStage>()(z.enum(["low", "reserve", "spent"]));
+
+/** This schema checks the state of the quota of a channel in its window. Each count is an integer, 0 or more. */
+export const channelQuotaSchema: z.ZodType<ChannelQuota, ChannelQuota> = schemaOf<ChannelQuota>()(
+  z
+    .strictObject({
+      channel: channelIdSchema,
+      limit: z.int().min(0, "The limit of a quota is an integer, 0 or more."),
+      reserve: z.int().min(0, "The reserve of a quota is an integer, 0 or more."),
+      used: z.int().min(0, "The used units of a quota are an integer, 0 or more."),
+      resetAt: instantSchema.exactOptional(),
+      blockedUntil: instantSchema.exactOptional(),
+      unit: z.string().min(1, "The name of the units is a non-empty string.").exactOptional(),
+    })
+    .readonly(),
+);
+
+/** This schema checks the health of the quota of one channel: the quota and its stages. */
+export const quotaHealthSchema: z.ZodType<QuotaHealth, QuotaHealth> = schemaOf<QuotaHealth>()(
+  z.strictObject({ quota: channelQuotaSchema, stages: z.array(quotaStageSchema).readonly() }).readonly(),
+);
+
+/** This schema checks a stage of the balance of a provider account. */
+export const balanceStageSchema: z.ZodType<BalanceStage, BalanceStage> = schemaOf<BalanceStage>()(z.enum(["low", "empty", "unread"]));
+
+/** This schema checks one read of a balance that passed. The currency is a code of ISO 4217: three capital letters. */
+export const balanceReadSchema: z.ZodType<BalanceRead, BalanceRead> = schemaOf<BalanceRead>()(
+  z.strictObject({ balance: z.number(), currency: z.string().regex(/^[A-Z]{3}$/u, "A currency is a code of ISO 4217."), at: instantSchema }).readonly(),
+);
+
+/** This schema checks the watch of the balance of one provider account. */
+export const providerBalanceSchema: z.ZodType<ProviderBalance, ProviderBalance> = schemaOf<ProviderBalance>()(
+  z
+    .strictObject({
+      provider: z.string().min(1, "The provider is a non-empty string."),
+      title: z.string(),
+      channels: z.array(channelIdSchema).readonly(),
+      floor: z.number(),
+      maxAge: durationSchema,
+      since: instantSchema,
+      read: balanceReadSchema.exactOptional(),
+    })
+    .readonly(),
+);
+
+/** This schema checks the health of the balance of one provider account: the balance and its stages. */
+export const balanceHealthSchema: z.ZodType<BalanceHealth, BalanceHealth> = schemaOf<BalanceHealth>()(
+  z.strictObject({ balance: providerBalanceSchema, stages: z.array(balanceStageSchema).readonly() }).readonly(),
+);
+
+/** This schema checks the answer of the health route of the runtime. */
+export const healthPayloadSchema: z.ZodType<HealthPayload, HealthPayload> = schemaOf<HealthPayload>()(
+  z
+    .strictObject({
+      format: z.literal(HEALTH_FORMAT),
+      at: instantSchema.nullable(),
+      now: instantSchema,
+      sources: z.array(sourceHealthViewSchema).readonly(),
+      lateness: z.array(latenessSchema).readonly(),
+      coverage: z.array(coverageSchema).readonly(),
+      copies: z.array(copyHealthSchema).readonly(),
+      quotas: z.array(quotaHealthSchema).readonly(),
+      balances: z.array(balanceHealthSchema).readonly(),
     })
     .readonly(),
 );

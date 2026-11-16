@@ -8,6 +8,7 @@ import {
   CLOCK_STEP_ABOVE,
   configuredExpectations,
   expectationProblems,
+  healthPayload,
   localPlaces,
   mapPayload,
   ONLY_COPY,
@@ -21,6 +22,7 @@ import {
   type CopySettings,
   type Duration,
   type Expectation,
+  type HealthPayload,
   type Instant,
   type MapPayload,
   type ParsedConfig,
@@ -468,6 +470,11 @@ export interface Instance {
    * the basemap. The first read after a change of the store simplifies the basemap of the watched states.
    */
   readonly map: () => MapPayload;
+  /**
+   * This function gives the health payload. The sources, the lateness and the coverage come from the last pass. The copies,
+   * the quotas and the balances are at the time of the read.
+   */
+  readonly health: () => HealthPayload;
   /** The worker of the deploy of the outage call, when the configuration has an outage call. The service declares it. */
   readonly outage?: OutageDeployWorker;
   /** The exchange with the other copies, when the options give it. */
@@ -627,6 +634,18 @@ export function openInstance(options: InstanceOptions): Instance {
       basemap: shapes.basemap(),
     });
   };
+  // The health reads the view of the last pass. The watches of the copies and of the balances are at the time of the read.
+  const health = (): HealthPayload =>
+    healthPayload({
+      at: latest?.at ?? null,
+      now: wall.now(),
+      sources: latest?.view.health ?? [],
+      lateness: latest?.view.lateness ?? [],
+      coverage: latest?.view.coverage ?? [],
+      copies: worker?.watches() ?? [],
+      quotas: quotas(),
+      balances: balances.flatMap((watch) => watch.balance() ?? []),
+    });
   // A round that imports an event or changes the stage of a copy starts a pass soon.
   const rounds =
     worker === undefined
@@ -652,6 +671,7 @@ export function openInstance(options: InstanceOptions): Instance {
     quotas,
     balances,
     map,
+    health,
     ...(outage === undefined ? {} : { outage }),
     ...(copies === undefined ? {} : { copies }),
   };
