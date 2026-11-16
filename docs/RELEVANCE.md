@@ -128,7 +128,7 @@ Each alert carries a `WhyRecord`:
 
 - `rule`: a stable id of the reason, `reach.<subject kind>.<origin>`.
 - `subject`: the subject of the incident at the start of the path.
-- `via`: the first node after the subject, when the path has more than one edge.
+- `via`: the first node after the subject, when two nodes or more are between the subject and the person.
 - `anchor`: the last node before the person.
 - `origin`: the origin of the interest edge.
 - `coverage`: the reach of the shown paths alone, divided by the full reach.
@@ -146,6 +146,17 @@ The delivery puts the why in the text of each channel, with these limits:
 No text holds an address, a point or a region code.
 
 `WHY_LIMITS` in `why.ts` holds these values. A channel descriptor names the limit of its kind in its field `why`. The gate test "The why fits each channel" holds each limit.
+
+## The code
+
+The file `relevance.ts` of the core holds the calculation. `relevance-gates.test.ts` holds the gates.
+
+- `relevance(input, graph, policy)` gives the `Relevance` of one incident. The input holds the kind, the entries, the time and the mandatory class.
+- `muteOf` gives the matched mute and its effect. Of two matched mutes, the mute with the first id wins.
+- `topicEntry(kind, graph)` gives the topic entry of a kind, by the longest prefix with an edge. An edge that is off also counts, so it turns off its level only.
+- `reachOf` gives the exact sum at one end of the intervals, in a given arithmetic. The gates use exact rationals.
+- The calculation sorts the entries by node and the edges by id. Thus each order of the input gives the same result.
+- The option `maxSteps` limits each sum. When the budget ends a sum, the field `bound` tells it. The reach is then the ceiling, so an alert is not lost.
 
 ## The ids
 
@@ -171,8 +182,8 @@ The system `place` holds the watched places of a person, by their ids in the con
 | Inside the bounds | Property | `best ≤ R ≤ noisyOr` on each generated graph. |
 | Hop cap and cycles | Property | An edge that adds only a path longer than the hop cap, or only a cycle, changes nothing. |
 | An honest why | Property | The coverage equals the reach of the shown paths alone, divided by the full reach. |
-| Who each class reaches | Table | For each class of event and each example person, the test holds the expected tier and the expected why. |
-| Compatibility | Compat | A graph with only place edges of weight 1 gives the routing of the first releases on each recorded incident. |
+| Who each class reaches | Table | For each class of event and each example person, the test holds the expected reach and the expected why. The tier comes when the score of AL-31 reads the reach. |
+| Compatibility | Compat | A graph with only place edges of weight 1 gives a reach of 1 when the incident hits a watched place, and 0 when it does not. The check on each recorded incident comes with the routing. |
 | The why fits each channel | Limits | Each why text keeps the limits of its channel and holds no address, point or code. |
 
 ## Privacy
@@ -186,6 +197,6 @@ The system `place` holds the watched places of a person, by their ids in the con
 
 - The mandatory class, a decision of the owner.
 - A fast path: when the two bounds give the same level, the exact sum is not necessary.
-- A limit on the size of the exact sum, for a graph with many shared edges.
+- The size of a real graph, and the budget of steps that it needs. A check of the configuration can give a problem before a sum ends with `bound`.
 - Weights from travel time, for a place that the person visits.
 - The calibration of the default weights from the event log.

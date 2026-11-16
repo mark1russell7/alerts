@@ -1182,4 +1182,9 @@ export interface Relevance {
   readonly next?: { readonly edge: string; readonly gain: number };
   /** The mute that matched, and its effect. When the effect is `absent`, the reach is 0 and the relevance has no path. */
   readonly muted?: { readonly mute: string; readonly effect: MuteEffect };
+  /**
+   * The kind of the result when the budget of steps ended the exact sum. With `bounds`, the reach is noisy-OR, a
+   * ceiling. With `partial`, the path search did not end, and the ceiling is 1. An exact result has no field.
+   */
+  readonly bound?: "bounds" | "partial";
 }
