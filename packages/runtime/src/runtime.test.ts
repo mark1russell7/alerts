@@ -5,6 +5,7 @@ import { fakeWallClock, type WallClock } from "@mark1russell7/algebra/clock";
 import { reportId, type ChannelId, type ChannelQuota, type Expectation, type FetchOutcome, type FetchSignal, type Observation, type ObservationId, type PlaceId, type Report, type SourceDescriptor, type SourceId, type SourceProcedures, type Watch, type WatchedPlace } from "@mark1russell7/alerts";
 import { random, seedsFrom } from "@mark1russell7/rigor-generators";
 import { afterEach, describe, expect, it } from "vitest";
+import { balanceWatch, type BalanceReading } from "./balance.ts";
 import type { RuntimeEvent } from "./events.ts";
 import { openRuntimeLog, type RuntimeLog } from "./log.ts";
 import { openRuntime, type Pass, type RuntimeOptions } from "./runtime.ts";
@@ -280,6 +281,39 @@ describe("one pass of the runtime", () => {
     log.close();
   });
 
+  it("checks each balance watch in each pass, gives its lines, and wakes for the next read and for its unread line (AL-42)", async () => {
+    let answer: BalanceReading = { ok: true, balance: 2, currency: "USD" };
+    let reads = 0;
+    const read = async (): Promise<BalanceReading> => {
+      reads += 1;
+      return answer;
+    };
+    const watch = balanceWatch({ provider: "provider:twilio", title: "Twilio", channels: ["twilio-call" as ChannelId], floor: 5, read, every: 60_000, retry: 60_000, maxAge: 150_000 });
+    const balanceReports = (pass: Pass) => pass.view.step.reports.filter((report) => report.kind.code.startsWith("system.balance.")).map((report) => [report.op, report.kind.code]);
+    const { clock, runtime, log } = open([], { balances: [watch] });
+    const first = await runtime.pass();
+    expect(balanceReports(first)).toEqual([["alert", "system.balance.low"]]);
+    expect(first.wakeAt).toBe(T0 + 60_000);
+    answer = { ok: false, message: "The network is down." };
+    await clock.advance(60_000);
+    expect(balanceReports(await runtime.pass())).toEqual([]);
+    await clock.advance(60_000);
+    const failing = await runtime.pass();
+    // The unread line starts at the maximum age after the last read, before the next retry.
+    expect(failing.wakeAt).toBe(T0 + 150_000);
+    await clock.advance(30_000);
+    expect(balanceReports(await runtime.pass())).toEqual([["alert", "system.balance.unread"]]);
+    answer = { ok: true, balance: 20, currency: "USD" };
+    await clock.advance(30_000);
+    expect(balanceReports(await runtime.pass())).toEqual([
+      ["cancel", "system.balance.low"],
+      ["cancel", "system.balance.unread"],
+    ]);
+    expect(reads).toBe(4);
+    expect(() => open([], { balances: [watch, watch] })).toThrow("the same provider");
+    log.close();
+  });
+
   it("records a timeout when a fetch takes longer than its limit, and ends the pass", async () => {
     const { clock, runtime, log } = open([scripted(API, () => new Promise<FetchOutcome>(() => undefined))], { fetchLimit: () => 5_000 });
     const running = runtime.pass();
@@ -481,6 +515,27 @@ describe("one pass of the runtime", () => {
     await clock.advance(1);
     slowFor = 0;
     expect((await runtime.pass()).fetched).toEqual([WEA]);
+    log.close();
+  });
+
+  it("gives a wake after the pass when a balance read comes due during the fetches of the pass (AL-42)", async () => {
+    const clock = fakeWallClock(T0);
+    let slowFor = 0;
+    const api: SourceProcedures = { describe: () => descriptor(API, MINUTE), fetch: async () => (await clock.advance(slowFor), { ok: true, observations: [], complete: true }), map };
+    let reads = 0;
+    const read = async (): Promise<BalanceReading> => ((reads += 1), { ok: true, balance: 20, currency: "USD" });
+    const watch = balanceWatch({ provider: "provider:twilio", title: "Twilio", channels: ["twilio-call" as ChannelId], floor: 5, read, every: MINUTE + 10_000 });
+    const { runtime, log } = open([api], { clock, balances: [watch] });
+    expect((await runtime.pass()).wakeAt).toBe(T0 + MINUTE);
+    await clock.advance(MINUTE);
+    slowFor = 15_000;
+    // The pass starts at T0 + 60 s, before the read is due, and fetches API until T0 + 75 s. The read comes due at T0 + 70 s.
+    const second = await runtime.pass();
+    expect([reads, second.at, second.wakeAt]).toEqual([1, T0 + 75_000, T0 + 75_001]);
+    await clock.advance(1);
+    slowFor = 0;
+    await runtime.pass();
+    expect(reads).toBe(2);
     log.close();
   });
 

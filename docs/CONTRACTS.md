@@ -168,7 +168,7 @@ The coverage has these parts:
 
 ### System reports
 
-`systemReports(lines, snapshot, at)` makes the reports of the core. Each source in `DOWN_STATES` (`failing`, `silent` and `changed`) is a condition. Each coverage that `coverageShort` finds is a condition. Each stage of the quota of a channel is a condition. Each condition is a line of CAP reports with the status `system` and the source `system`:
+`systemReports(lines, snapshot, at)` makes the reports of the core. Each source in `DOWN_STATES` (`failing`, `silent` and `changed`) is a condition. Each coverage that `coverageShort` finds is a condition. Each stage of the quota of a channel and each stage of the balance of a provider account is a condition. Each condition is a line of CAP reports with the status `system` and the source `system`:
 
 - The start of a condition gives an `alert`.
 - A change of its facts gives an `update`. The update references the last key of the line. A new count in the reason of the health is not a fact, so it gives no update.
@@ -199,6 +199,21 @@ A quota report has no area. Its subject is `{ system: "alerts.channel", id: <cha
 - The facts of a line are the channel, the stage and the end of the window. A new count gives no update. Thus each stage gives one alert in a window.
 - The message of the line `reserve` has `useReserve`. The channel sends it from the reserve, one time in each window (`PUSHOVER_RESERVE_NOTICES`). Else the reserve stops the message that tells of it.
 - A snapshot with no quotas keeps each open line of a quota. Thus a failed read of a count ends no line.
+- A quota can name its units with `unit`. The cap of the spend of a paid account counts `cents` (`spendQuota` of the runtime).
+
+A balance report has no area. Its subjects are `{ system: "alerts.channel", id: <channel id> }` for each channel that the account pays for. Its kind is `system.balance.<stage>`, and it gets `notice` at most. `balanceStages` gives the stages of a `ProviderBalance` at a time, and each stage is one line:
+
+| Stage | Condition | Severity, urgency |
+| --- | --- | --- |
+| `low` | The last read is below the floor | `moderate`, `expected` |
+| `empty` | The last read is 0 or less. The provider refuses each paid message. | `severe`, `immediate` |
+| `unread` | No read passed for the maximum age or longer (`balanceUnreadAt`) | `moderate`, `expected` |
+
+- The facts of a line are the provider and the stage. A new balance gives no update.
+- `low` and `empty` come from the last read that passed, also when the read is old. A read that passes ends `unread`.
+- A snapshot with no balances keeps each open line of a balance.
+- The runtime gives `balanceWatch` for each account. Each pass checks each watch, and a watch reads once a day. A failed read tries again after one hour.
+- The time of the next read and the time of `unread` are timers of the pass.
 
 `threats(incidents, places)` gives the watches and the warnings. A threat is a live incident with the status `actual` at a watched place. Its stage is `watch`, `warning` or absent. A report of the core has the status `system`, so it is not a threat.
 
@@ -370,9 +385,9 @@ A send that passes its time limit stays in flight, because the provider can acce
 
 Each send of a key has a new copy id: the run id, `-` and a count. It has only letters, digits, `_` and `-` (`COPY_ID`), because a stop puts it in the path of a URL. The channel can have a copy that the log does not keep:
 
-- a copy past its flight limit;
-- a copy whose send failed with no answer: a time-out, a network failure or a server failure;
-- a copy of a key that the log already has, with another receipt.
+- A copy past its flight limit.
+- A copy whose send failed with no answer: a time-out, a network failure or a server failure.
+- A copy of a key that the log already has, with another receipt.
 
 On a channel that repeats, the step stops such a copy by its copy id. The next copy goes in parallel. The step does not cancel by the delivery key here, because that cancel also stops the next copy. A failed stop goes again at a later step. A stale copy that the channel accepts later gets its stop again.
 
@@ -395,8 +410,8 @@ The log keeps each copy on a channel that repeats, and its end. Thus a restart d
 - Before each send on a channel that repeats, the step writes an `attempt` event with the delivery key, the channel and the copy id.
 - The `delivery` event of an accepted send has the copy id. It ends the copy.
 - A `refused` event ends the copy of a send that the channel refused in its time limit.
-- A `settled` event ends a copy that needs no stop: the channel refused its send after its time limit, or a stop of the copy went after the end of its send.
-- The state has the open copies: each attempt with no end. The first step after a restart stops each of them by its copy id.
+- A `settled` event ends a copy that needs no stop. Either the channel refused its send after its time limit, or a stop of the copy went after the end of its send.
+- The state has the open copies: each try with no end. The first step after a restart stops each of them by its copy id.
 - A stop of a copy whose send did not end does not end the copy. The channel can accept that copy later, and then its stop goes again.
 
 A write of the `attempt` event that fails throws, and the send does not go.
@@ -561,7 +576,7 @@ The runtime cannot tell the person that it stopped. A check of Healthchecks.io t
 - A send that a channel gave `reserved` does not ping `/fail`, and it is not overdue. The channel keeps the last units of its quota for `life-safety`, thus it still tells the person of the highest level.
 - The body of each ping also gives the state of the quota of each channel with a quota.
 - The fail of a channel holds until a send on the channel goes, or until the pass of the retry has no refusal on it. The delivery step sends a failed call again at the first pass at or after its `retryAt`. Thus the check does not go down and up at each retry.
-- The fail of a channel holds across a restart. At its first pass, the hook starts from `heldOf` of the log: each refusal with no later delivery on its channel in the log, with a retry after that pass. The order of the log decides, not the times. Thus a restart does not ping `success` while the channel refuses.
+- The fail of a channel holds across a restart. At its first pass, the hook starts from `heldOf` of the log. It gives each refusal with a retry after that pass and with no later delivery on its channel. The order of the log decides, not the times. Thus a restart does not ping `success` while the channel refuses.
 - The body of a success ping gives the state of each source. The body of a fail ping gives the channel and the kind, or the count of the overdue sends and the age of the oldest. No body holds a place, a person or the text of a failure.
 - The hook starts the ping and ends at once. One ping is in flight at a time, for 10 seconds or less. A failed ping goes to the log, and its text holds no ping URL. The next pass pings again.
 - The key `HEALTHCHECKS_PING_URL` of `secrets.env` gives the ping URL, with `https`. The profile `daemon` does not start without it.
@@ -569,7 +584,7 @@ The runtime cannot tell the person that it stopped. A check of Healthchecks.io t
 - The heartbeat sends each ping to the two checks, with one hook for each check. A slow ping to one check does not hold the other. Without the key, nothing changes.
 - The loud check has a longer grace than the first check. Thus a short stop, for example a reboot, does not make a phone call.
 - `install.ts status` also reads the loud check, when `secrets.env` has its key.
-- `heartbeatGap` gives the longest time between two success pings: the period of the pings, two pass limits, the longest wait of the loop and the ping limit. Each failed pass adds a pass limit and a wait. The check lets one failed pass go.
+- `heartbeatGap` gives the longest time between two success pings. It adds the period of the pings, two pass limits, the longest wait of the loop and the ping limit. Each failed pass adds a pass limit and a wait. The check lets one failed pass go.
 - The period plus the grace of the check must be this gap or more: 430 seconds for the instance. `install.ts status` reads the check with `HEALTHCHECKS_API_KEY`, and fails when it is shorter.
 - A new check alerts only after its first ping. Thus the first install checks that the check is up.
 
@@ -645,7 +660,7 @@ The runtime adds the codes of the zones near each place with a position (`withZo
 
 The function `sourcePlaces` gives the places for one source, with no label, and with a position only when the place shares it with that source. The function `localPlaces` gives each position for the matching on the machine of the instance.
 
-A person also watches subjects, other than places, in `PersonWatch.subjects`: a source of the system, a service or a cloud region. A watch with no id matches each subject of its system. A rule with places does not apply to a subject. The person who operates the system watches `{ system: "alerts.source" }` and `{ system: "alerts.channel" }`, and gets the health reports and the quota reports.
+A person also watches subjects, other than places, in `PersonWatch.subjects`: a source of the system, a service or a cloud region. A watch with no id matches each subject of its system. A rule with places does not apply to a subject. The person who operates the system watches `{ system: "alerts.source" }` and `{ system: "alerts.channel" }`, and gets the health reports, the quota reports and the balance reports.
 
 The positions of the places do not go to a source. A source fetches by area, for example all the alerts of a state, and the core matches the places on the machine of the instance. So a `WatchedPlace` gives an adapter region codes and a buffer, and no name, no address and no position. A source that needs a position gets it only when the owner lets that source get it.
 
