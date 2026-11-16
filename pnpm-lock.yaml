@@ -277,8 +277,8 @@ importers:
         specifier: ^0.0.6
         version: 0.0.6
       '@procedures/notify':
-        specifier: ^0.59.1
-        version: 0.59.1(@mark1russell7/rigor-testkit@0.1.7(@opentelemetry/api@1.10.0)(fast-check@4.10.2))
+        specifier: ^0.60.0
+        version: 0.60.0(@mark1russell7/rigor-testkit@0.1.7(@opentelemetry/api@1.10.0)(fast-check@4.10.2))
       esbuild:
         specifier: ^0.28.2
         version: 0.28.2
@@ -1433,8 +1433,8 @@ packages:
       express:
         optional: true
 
-  '@procedures/client@0.59.1':
-    resolution: {integrity: sha512-e4Pdmyk3npH94GIytcJKl4tnXMCMaUNNJLs7wfJTNWhAtHZ8qyVd4ksyWXfOBL8VhI7i8cCCNmCb8DgcAdCTLw==}
+  '@procedures/client@0.60.0':
+    resolution: {integrity: sha512-krciADTp5A0L9HxFKDzFVJAg7SOMUWHyWH/7w3JJ9h1xzLBGAYnK/3nKUesf+QGHyMAp7vfs/buvHXzGaimX1A==}
     engines: {node: '>=22'}
     peerDependencies:
       express: ^4.0.0 || ^5.0.0
@@ -1467,8 +1467,8 @@ packages:
       '@mark1russell7/rigor-testkit':
         optional: true
 
-  '@procedures/notify@0.59.1':
-    resolution: {integrity: sha512-oc5B/eV+4UBiVhDAaXfomVtGfzjObAUwbLV3dEWDfbVGjfO5tHGpAOzt4iW3wA0FPewXoUgWTUg0sj7flczEjQ==}
+  '@procedures/notify@0.60.0':
+    resolution: {integrity: sha512-gYWNTyutnBhEzlZgzY1PsGxK+bahd+b5aKFbwcl3jxNKN02ScTjq9Ngh6QJlpjBbmbEIjh+oMKm5m25eIMMpqQ==}
     engines: {node: '>=22'}
     peerDependencies:
       '@mark1russell7/rigor-testkit': ^0.1.7
@@ -2831,7 +2831,7 @@ snapshots:
       - pg
       - utf-8-validate
 
-  '@procedures/client@0.59.1':
+  '@procedures/client@0.60.0':
     dependencies:
       '@mark1russell7/algebra': 0.8.10(zod@4.6.7)
       '@mark1russell7/coeval': 0.34.0(zod@4.6.7)
@@ -2926,10 +2926,10 @@ snapshots:
       - pg
       - utf-8-validate
 
-  '@procedures/notify@0.59.1(@mark1russell7/rigor-testkit@0.1.7(@opentelemetry/api@1.10.0)(fast-check@4.10.2))':
+  '@procedures/notify@0.60.0(@mark1russell7/rigor-testkit@0.1.7(@opentelemetry/api@1.10.0)(fast-check@4.10.2))':
     dependencies:
       '@mark1russell7/text': 0.0.6
-      '@procedures/client': 0.59.1
+      '@procedures/client': 0.60.0
       zod: 4.6.7
     optionalDependencies:
       '@mark1russell7/rigor-testkit': 0.1.7(@opentelemetry/api@1.10.0)(fast-check@4.10.2)
