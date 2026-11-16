@@ -113,6 +113,7 @@ import {
   instantSchema,
   isContactUrl,
   kindClassSchema,
+  kindCodeSchema,
   kindSchema,
   latenessLimitSchema,
   latenessSchema,
@@ -383,7 +384,7 @@ describe("the JSON Schema of each schema", () => {
   const exported = Object.entries(schemas).filter(([name]) => name.endsWith("Schema"));
 
   it("has each exported schema", () => {
-    expect(exported.length).toBe(94);
+    expect(exported.length).toBe(95);
     for (const [name, schema] of exported) expect(schema instanceof z.ZodType, name).toBe(true);
   });
 
@@ -521,6 +522,20 @@ describe("the value rules", () => {
     fails(reportSchema, { ...WARNING, kind: { code: "met.tornadoo", label: "Tornado Warning" } });
     holds(kindSchema, { code: "other.unknown", label: "Unknown event" });
     holds(kindSchema, { code: "system.coverage.met.flood.flash", label: "Coverage" });
+  });
+
+  it("each kind that a person or an adapter names is a code of the taxonomy, or a prefix of one by its parts", () => {
+    for (const code of ["met", "met.flood", "met.flood.flash", "system.coverage.met.tornado"]) holds(kindCodeSchema, code);
+    for (const code of ["met.fl", "met.tornadoes", "hydro", "", "Met.Tornado", "toString"]) fails(kindCodeSchema, code);
+    holds(watchSchema, { places: [KANSAS], kinds: ["met.flood"] });
+    fails(watchSchema, { places: [KANSAS], kinds: ["met.fl"] });
+    fails(sourceDescriptorSchema, { ...DESCRIPTOR, kinds: ["met", "hydro"] });
+    holds(levelRuleSchema, { kinds: ["met.wind"], max: "notice" });
+    fails(levelRuleSchema, { kinds: ["met.tornadoo"], max: "notice" });
+    holds(subjectWatchSchema, { system: "topic", id: "infra.power.outage" });
+    holds(subjectWatchSchema, { system: "topic" });
+    holds(subjectWatchSchema, { system: "iptc", id: "medtop:20000137" });
+    fails(subjectWatchSchema, { system: "topic", id: "infra.power.outages" });
   });
 
   it("each id is a non-empty string", () => {

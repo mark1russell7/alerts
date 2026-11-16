@@ -103,7 +103,7 @@ The rules of each adapter:
 4. **The ids are hashes of content.** The core gives the id functions in `ids.ts`. An adapter does not make its own ids.
    - `observationId`: the SHA-256 of the source id, the content type, the request URL and the body. The fetch time is not part of it, so a poll with no change gives the same id. The URL is the part that the `map` function reads. A URL with the time of the poll gives the URL with no time, and a test holds that `map` does not read the time.
    - `reportId`: the SHA-256 of the source id, the source key and the sent time.
-   - `messageKey`: the SHA-256 of the incident report, the level, the person and the step.
+   - `messageKey`: the SHA-256 of the incident report, the level, the person and the step. An episode after the first one is also in it.
    - The hash input is a JSON array that starts with the scheme `alerts-id/1` and the kind of id. Each copy of the system gives the same id.
 5. **The fixtures are real and contain no personal data.** Each adapter keeps recorded answers of its source in `fixtures/`, with the expected reports. The places of the tests are public places, not the places of a real person.
 6. **A canary when the source has one.** For example: the national feed of the NWS has one or more active alerts. A national feed with no alert is more likely a fault than a calm country.
@@ -255,13 +255,22 @@ For `life-safety`, the system prefers a duplicate to a miss.
 
 ## The taxonomy
 
-`TAXONOMY` of the core holds each kind code and its plain name. A code is dotted, for example `met.flood.flash`.
+`TAXONOMY` of the core holds each kind code, its plain name and a summary of one sentence. A code is dotted, for example `met.flood.flash`.
 
 - The first part is a category: the 12 categories of CAP 1.2, then `cyber`, `market`, `civic` and `system`. `categoryOf` gives it.
-- The taxonomy is a tree. The parent of each code is also a code, and each category is a root.
+- The taxonomy is a tree. The parent of each code is also a code, and each category is a root. `parentKind` gives the parent.
 - The taxonomy is closed. `knownKind` tells if a code is in it. The coverage codes `system.coverage.<code>` are a family of the core.
+- A parent code is a group of its descendants. An adapter gives the leaf code of its event. A person, a rule or a class of the atlas can name a group.
 - A code with a typo does not match the life-safety class, so it can stop a wake. Thus each adapter has a gate test, and each policy names only known codes.
-- The kinds go from physical events to technical outages. A new adapter adds its new codes to `TAXONOMY` in its pull request.
+- The schemas hold the same rule with `kindCodeSchema`. It covers the kinds of a source, a watch, a rule, a mute and the priors, and each `topic` id.
+- The JSON Schema of a kind code is a plain string at this time. Only the parse checks the code against the taxonomy.
+- A code does not leave the taxonomy by a plain removal. `taxonomy.lock.json` holds each code that the taxonomy has or had, and a test holds the lock.
+- A removed code gets an entry in `KIND_ALIASES`, from the old code to its new code. The parse changes an old code to its new code before the check.
+- The source atlas uses the codes as its signal classes. Its gate needs a class for each code outside `system` and `other`.
+- The atlas has two measures. A gap is a class with fewer than 2 adopted or planned sources with no risk. The adopted cover counts the classes with 2 or more adopted sources with no risk.
+- Each round records its measures and their cause. The gap count shows the research and the plans. The adopted cover shows the alerts that arrive.
+- The gate does not let the adopted cover fall below the measure of the latest round. A real loss needs a new round whose cause names the loss.
+- The kinds go from physical events to technical outages. A new adapter adds its new codes to `TAXONOMY` in its pull request, with a class in the atlas.
 
 ## The route and the delivery step
 
@@ -270,15 +279,22 @@ The core function `route` gives the escalations at a time. Each escalation is on
 - The levels of an incident and a person are the levels of its starts and its deliveries, and the assessed level.
 - The assessed level counts only when it is higher than those levels and the person has a policy for it. So the level does not go down.
 - Only the highest level continues. A lower level ends at the start of a higher level, so its repeats stop.
-- An escalation continues until an acknowledgment or the end of the incident. An acknowledgment of a level also covers each lower level.
+- An escalation continues until an acknowledgment, the end of the incident or the end of the person. An acknowledgment of a level also covers each lower level.
 - The end of an incident is its expiry, or the time when it stops being live.
+- The end of the person: a live incident no longer reaches the person (the assessed level is `none`). Each escalation of the person ends at that time, so its repeats stop. A lower level that still reaches the person does not end the escalation.
 
 The start of an escalation is the time at which its level first applied. The runtime writes each start to its log. After a restart, each step comes at its time from the same start.
+
+The runtime also writes each end of a person to its log (`EscalationEnd`). Each end closes an episode of the person in the incident:
+
+- When the threat comes back to the person, a new episode starts. Its sends get new message keys, so a channel does not drop them as repeats.
+- An item of the log belongs to the episode of its time. An acknowledgment before the start of a new episode does not cover it.
+- An earlier episode continues only to cancel its deliveries with no cancel.
 
 The runtime does one delivery step in each pass, after the system reports:
 
 1. It polls each open receipt of a channel with the acknowledgment `poll`, one time in each interval. A receipt that the person acknowledged gives an acknowledgment.
-2. It writes the start of each new escalation.
+2. It writes the start of each new escalation and the end of each person that the incident no longer reaches.
 3. It sends each step that is due, and it cancels the repeats of each escalation that is over.
 4. It writes the result of each call to the log at once, after the call.
 
@@ -613,6 +629,8 @@ The why line is live for the match by places:
 - The runtime makes the line of each channel with `whyLine`, from the record and the labels of `placeLabels`. The labels stay in the runtime. No record and no event of the log holds them.
 - A label goes into a line only when it is plain words. A line holds no digit, no code in capitals and no colon after its prefix. Thus it holds no address, point or region code.
 - The gate test "The why fits each channel" holds each limit of `WHY_LIMITS` over seeded records and labels.
+
+The calculation over the graph is in `relevance.ts`. The routing does not read it at this time. `RELEVANCE.md` tells its functions and its gates.
 
 ## The schemas
 

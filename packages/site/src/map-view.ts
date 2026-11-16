@@ -6,7 +6,7 @@
  * the elements of that data. Thus the tests examine the map with no DOM.
  */
 
-import { MAP_VIEW, TAXONOMY, type MapIncident, type MapPlace, type MapRegion, type MapShape, type MapView, type Position } from "@mark1russell7/alerts";
+import { kindLabel, MAP_VIEW, type MapIncident, type MapPlace, type MapRegion, type MapShape, type MapView, type Position } from "@mark1russell7/alerts";
 import { h } from "@mark1russell7/site-pages/chrome";
 import { geoArea, geoCircle, geoMercator, geoPath, type ExtendedGeometryCollection, type GeoGeometryObjects, type GeoPath } from "d3-geo";
 import { LEVEL_WORDS, levelChip, s } from "./draw.ts";
@@ -77,7 +77,7 @@ function incidentClass(incident: MapIncident, selected: string | undefined): str
 
 /** This function gives the words of a place for a reader of the screen: its label, its level and its gaps. */
 function placeTitle(place: MapPlace): string {
-  const gaps = place.gaps.map((kind) => TAXONOMY[kind] ?? kind).join(", ");
+  const gaps = place.gaps.map(kindLabel).join(", ");
   return `${place.label}: ${LEVEL_WORDS[place.level]}.${gaps === "" ? "" : ` The coverage is short for: ${gaps}.`}`;
 }
 

@@ -91,6 +91,13 @@ describe("messageKey", () => {
     expect(new Set(keys).size).toBe(keys.length);
   });
 
+  it("gives new keys to each episode after the first one, and keeps the keys of the first episode", () => {
+    expect(messageKey({ ...message, episode: 0 })).toBe(GOLDEN.message);
+    expect(messageKey({ ...message, episode: undefined })).toBe(GOLDEN.message);
+    const keys = [GOLDEN.message, messageKey({ ...message, episode: 1 }), messageKey({ ...message, episode: 2 }), messageKey({ ...message, step: 1, episode: 1 })];
+    expect(new Set(keys).size).toBe(keys.length);
+  });
+
   it("keeps the kinds of id apart", () => {
     const asReport = reportId({ source: message.incident as unknown as SourceId, key: message.level, sent: 0 });
     expect(asReport).not.toBe(messageKey({ ...message, person: "0" as PersonId }));

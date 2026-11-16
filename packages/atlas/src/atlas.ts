@@ -5,9 +5,13 @@
  *
  * The data is in the folder `data`. The functions of this file read the data and check it. The gate of
  * coverage needs 2 or more sources with no risk for each class, or a reason that fewer exist.
+ *
+ * The id of each class is a code of `TAXONOMY` of the core, and the core holds its plain name and its
+ * summary. Thus the system has one id for each kind of signal. The gate also needs a class for each code
+ * of the taxonomy, so a new code of an adapter gets its sources in the atlas.
  */
 
-import { CATEGORIES, SUBJECT_SYSTEMS, type Category, type SubjectKind, type SubjectSystem } from "@mark1russell7/alerts";
+import { categoryOf, knownKind, SUBJECT_SYSTEMS, TAXONOMY, type Category, type SubjectKind, type SubjectSystem } from "@mark1russell7/alerts";
 
 /** The ways to get the data of a source. */
 export const ACCESS = ["api", "feed", "stream", "file", "page", "push", "email"] as const;
@@ -45,13 +49,11 @@ export const MIN_SOURCES = 2;
 /** One signal class: one kind of signal that can touch a person. */
 export interface SignalClass {
   /**
-   * The dotted id. Its first part is a category of the core, for example `infra.power.outage`. The parent
-   * of the class is the longest prefix of the id that is a class. `parentOf` gives it.
+   * The code of the class in `TAXONOMY` of the core, for example `infra.power.outage`. The core gives its
+   * plain name and its summary. The parent of the class is the longest prefix of the id that is a class.
+   * `parentOf` gives it.
    */
   readonly id: string;
-  readonly label: string;
-  /** One plain sentence. */
-  readonly summary: string;
   /** The kinds of subject that a signal of the class can have. */
   readonly subjectKinds: readonly SubjectKind[];
   /** Real examples of the signal. */
@@ -119,6 +121,24 @@ export interface Study {
   readonly verified: boolean;
 }
 
+/**
+ * The measures of the atlas at one time. The gap count measures the research and the plans. The adopted
+ * cover measures the signals that reach a person at this time.
+ */
+export interface Measures {
+  readonly classes: number;
+  /** The classes with fewer than `MIN_SOURCES` adopted or planned sources with no risk. */
+  readonly gaps: number;
+  /** The classes with `MIN_SOURCES` or more adopted sources with no risk. */
+  readonly adoptedCover: number;
+}
+
+/** The measures that a round records, with the cause of the change from the record before. */
+export interface RoundMeasures extends Measures {
+  /** The cause tells a gain of research or of the class list from a gain of delivery. Only a new adapter adds delivery. */
+  readonly cause: string;
+}
+
 /** The record of one research round. */
 export interface Round {
   readonly round: number;
@@ -133,6 +153,8 @@ export interface Round {
   readonly queries: readonly string[];
   readonly notes: readonly string[];
   readonly studies: readonly Study[];
+  /** The measures of the atlas at the end of the round. The adopted cover of the atlas stays at or above the measure of the latest round. */
+  readonly measures: RoundMeasures;
 }
 
 /** The whole atlas. */
@@ -156,6 +178,8 @@ export interface Coverage {
   readonly sources: readonly string[];
   /** The sources of `sources` with one or more risks. The gate does not count them. */
   readonly atRisk: readonly string[];
+  /** The sources of `sources` with the decision `adopt`: an adapter of the repository reads them at this time. */
+  readonly adopted: readonly string[];
   readonly gap: string | null;
 }
 
@@ -163,7 +187,15 @@ export interface Coverage {
 export interface AtlasContext {
   /** The names of the packages of the workspace. Each adapter must be one of them. */
   readonly packages?: ReadonlySet<string>;
+  /** The codes that the atlas must reach, for example the codes of `TAXONOMY`. `unreachedCodes` tells the rule. */
+  readonly codes?: Iterable<string>;
 }
+
+/**
+ * The categories of the codes that need no class: the messages of the system about itself, and the
+ * unknown kind. No outside source gives a signal of them.
+ */
+export const EXEMPT_CATEGORIES: readonly Category[] = ["system", "other"];
 
 const ID = /^[a-z][a-z0-9]*(\.[a-z0-9]+(-[a-z0-9]+)*)+$/;
 const SOURCE_ID = /^[a-z0-9]+(-[a-z0-9]+)*$/;
@@ -192,6 +224,16 @@ export function parentOf(id: string, classIds: ReadonlySet<string>): string | nu
 }
 
 /**
+ * This function gives each code that no class reaches, sorted. A class reaches a code when the class is the
+ * code, an ancestor of it or a descendant of it. The codes of `EXEMPT_CATEGORIES` need no class.
+ */
+export function unreachedCodes(classes: readonly Pick<SignalClass, "id">[], codes: Iterable<string> = Object.keys(TAXONOMY)): string[] {
+  const ids = classes.map((item) => item.id);
+  const reached = (code: string): boolean => ids.some((id) => isUnder(id, code) || isUnder(code, id));
+  return [...new Set(codes)].filter((code) => !EXEMPT_CATEGORIES.includes(categoryOf(code)) && !reached(code)).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+}
+
+/**
  * This function gives the block that stops a decision of `adopt` or `plan` for a source, or `null`.
  * A live source needs an auth of none, key or account, a cost of free or free-tier, and terms that do
  * not forbid automated reading. The terms of a page source must also let automated reading, with or without limits.
@@ -208,8 +250,26 @@ export function planBlock(source: Pick<Source, "access" | "auth" | "cost" | "ter
 export function coverage(atlas: Atlas): Coverage[] {
   return atlas.classes.map(({ id, gap }) => {
     const live = atlas.sources.filter((source) => LIVE_DECISIONS.includes(source.decision) && source.classes.some((name) => isUnder(name, id)));
-    return { id, sources: live.map((source) => source.id), atRisk: live.filter((source) => source.risks.length > 0).map((source) => source.id), gap };
+    const ids = (list: readonly Source[]): string[] => list.map((source) => source.id);
+    return {
+      id,
+      sources: ids(live),
+      atRisk: ids(live.filter((source) => source.risks.length > 0)),
+      adopted: ids(live.filter((source) => source.decision === "adopt")),
+      gap,
+    };
   });
+}
+
+/** This function gives the measures of the atlas: the classes, the gaps and the adopted cover. */
+export function measures(atlas: Atlas): Measures {
+  const rows = coverage(atlas);
+  const free = (list: readonly string[], atRisk: readonly string[]): number => list.filter((id) => !atRisk.includes(id)).length;
+  return {
+    classes: rows.length,
+    gaps: rows.filter((row) => free(row.sources, row.atRisk) < MIN_SOURCES).length,
+    adoptedCover: rows.filter((row) => free(row.adopted, row.atRisk) >= MIN_SOURCES).length,
+  };
 }
 
 /** This function gives each problem of the atlas. An empty list is a pass of the gate. */
@@ -222,6 +282,22 @@ export function checkAtlas(atlas: Atlas, context: AtlasContext = {}): AtlasProbl
     if (!DATE.test(round.date)) add(at, `the date ${round.date} is not YYYY-MM-DD`);
     if (round.lists.length === 0 && round.queries.length === 0) add(at, "the round has no list and no query");
     for (const study of round.studies) if (study.title.trim() === "" || !isUrl(study.url)) add(at, `the study "${study.title}" has no title or no http or https URL`);
+    // The JSON of a round is not parsed by a schema, so the gate reports a round with no measures.
+    const recorded = (round as Partial<Round>).measures;
+    if (recorded === undefined) add(at, "the round has no measures");
+    else {
+      for (const value of [recorded.classes, recorded.gaps, recorded.adoptedCover]) if (!Number.isSafeInteger(value) || value < 0) add(at, `the measure ${String(value)} is not a count`);
+      if (typeof recorded.cause !== "string" || recorded.cause.trim() === "") add(at, "the measures have no cause");
+    }
+  }
+  if (rounds.size !== atlas.rounds.length) add("atlas", "two records of rounds have one number");
+  // The adopted cover is the outcome. Its floor is the measure of the latest round. Thus a real loss of a
+  // source needs a new round whose cause names the loss, and no record of an old round changes.
+  const latest = atlas.rounds.reduce<Round | undefined>((last, round) => (last === undefined || round.round > last.round ? round : last), undefined);
+  const floor = (latest as Partial<Round> | undefined)?.measures?.adoptedCover ?? 0;
+  const { adoptedCover } = measures(atlas);
+  if (latest !== undefined && adoptedCover < floor) {
+    add("atlas", `the adopted cover is ${String(adoptedCover)} classes, below the ${String(floor)} classes of round ${String(latest.round)}`);
   }
   const classIds = new Set<string>();
   for (const item of atlas.classes) {
@@ -229,10 +305,9 @@ export function checkAtlas(atlas: Atlas, context: AtlasContext = {}): AtlasProbl
     if (classIds.has(item.id)) add(at, "the id is not unique");
     classIds.add(item.id);
     if (!ID.test(item.id)) add(at, "the id is not a dotted id in lower case");
-    if (!(CATEGORIES as readonly string[]).includes(item.id.split(".")[0] as Category)) add(at, "the first part of the id is not a category of the core");
+    if (!knownKind(item.id)) add(at, "the id is not a code of the taxonomy of the core");
     if (item.subjectKinds.length === 0) add(at, "the class has no subject kind");
     for (const kind of item.subjectKinds) if (!SUBJECT_KINDS.has(kind)) add(at, `the subject kind ${kind} is not known`);
-    if (item.summary.trim() === "" || item.label.trim() === "") add(at, "the label or the summary is empty");
     if (!rounds.has(item.round)) add(at, `the round ${String(item.round)} has no record`);
   }
   const sourceIds = new Set<string>();
@@ -265,6 +340,7 @@ export function checkAtlas(atlas: Atlas, context: AtlasContext = {}): AtlasProbl
     for (const url of source.evidence) if (!isUrl(url)) add(at, `the evidence ${url} is not an http or https URL`);
     if (!rounds.has(source.round)) add(at, `the round ${String(source.round)} has no record`);
   }
+  if (context.codes !== undefined) for (const code of unreachedCodes(atlas.classes, context.codes)) add(`code ${code}`, "no class is the code, an ancestor of it or a descendant of it");
   for (const { id, sources, atRisk, gap } of coverage(atlas)) {
     const count = sources.length - atRisk.length;
     if (count < MIN_SOURCES && (gap === null || gap.trim() === "")) add(`class ${id}`, `the class has ${String(count)} sources with no risk and no reason of a gap`);

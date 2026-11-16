@@ -74,9 +74,9 @@ The relevance does not replace the other inputs. The severity, the urgency, the 
 
 ## Topics and the levels of the taxonomy
 
-A topic node has the key `topic:<prefix of a kind code>`. The longest prefix of the kind code with an edge decides, as for the priors and for `LevelRule`.
+A topic node has the key `topic:<prefix of a kind code>`. The prefix is a code of `TAXONOMY`, and the schema refuses another prefix. The longest prefix of the kind code with an edge decides, as for the priors and for `LevelRule`.
 
-Example: a person has the edges `topic:met` and `topic:met.tornado`. An incident of the kind `met.tornado.warning` uses the edge of `topic:met.tornado`.
+Example: a person has the edges `topic:met` and `topic:met.flood`. An incident of the kind `met.flood.flash` uses the edge of `topic:met.flood`.
 
 ## The edges
 
@@ -118,9 +118,14 @@ A person has three kinds of opt-out. Each one has a scope.
 
 - Less: a lower weight on one edge. The reach goes down, and the alert can still come.
 - Off: `on: false` on one edge. The edge stays as a row, and the reach does not use it.
-- Mute: a `Mute` with kinds, subjects or both, and an optional end `until`. A matched incident does not reach the person on any path.
+- Mute: a `Mute` with kinds, subjects or both, and an optional end `until`. A mute with no subjects matches each incident of its kinds. A mute with subjects matches an incident when one of its subjects is an entry. A matched incident does not reach the person on any path.
+- Cut: a mute with subjects that does not match cuts its subjects from the graph. Each edge into or out of a muted subject is off, so no path goes through it. Thus a mute of a bank also stops an outage of its DNS provider that reaches the person through the bank.
+
+A mute with kinds and subjects has effect only on the incidents of its kinds. Thus a person can mute one kind of alert for one subject.
 
 The mandatory class is an open point. The proposal: a mute makes an imminent life-safety warning at a place where the person is silent, not absent. The top class of WEA and of EU-Alert works the same way. The field `mandatory` of `RelevancePolicy` holds the choice. The repository has no default policy until the owner decides.
+
+Under the policy `silent`, a mute does not cut an incident of the mandatory class. Then a mute of a subject between the entry and the person has no effect, and the alert keeps its sound.
 
 ## The why record
 
@@ -128,12 +133,12 @@ Each alert carries a `WhyRecord`:
 
 - `rule`: a stable id of the reason, `reach.<subject kind>.<origin>`.
 - `subject`: the subject of the incident at the start of the path.
-- `via`: the first node after the subject, when the path has more than one edge.
+- `via`: the first node after the subject, when two nodes or more are between the subject and the person.
 - `anchor`: the last node before the person.
 - `origin`: the origin of the interest edge.
 - `coverage`: the reach of the shown paths alone, divided by the full reach.
 
-The record holds only keys. The runtime gives the private labels from the configuration. The coverage keeps the why honest: a path that explains a small part of the reach does not look like the full cause.
+The record holds only keys. The runtime gives the private labels from the configuration. The coverage keeps the why honest: a path that explains a small part of the reach does not look like the full cause. When the budget ends a sum, the reach is the ceiling, so the coverage is a floor.
 
 The delivery puts the why in the text of each channel, with these limits:
 
@@ -146,6 +151,18 @@ The delivery puts the why in the text of each channel, with these limits:
 No text holds an address, a point or a region code.
 
 `WHY_LIMITS` in `why.ts` holds these values. A channel descriptor names the limit of its kind in its field `why`. The gate test "The why fits each channel" holds each limit.
+
+## The code
+
+The file `relevance.ts` of the core holds the calculation. `relevance-gates.test.ts` holds the gates.
+
+- `relevance(input, graph, policy)` gives the `Relevance` of one incident. The input holds the kind, the entries, the time and the mandatory class.
+- `muteOf` gives the matched mute and its effect. Of two matched mutes, the mute with the first id wins.
+- The cut of the mutes is in the parts of the sum. Thus `reachOf` and `relevance` use the same parts.
+- `topicEntry(kind, graph)` gives the topic entry of a kind, by the longest prefix with an edge. An edge that is off also counts, so it turns off its level only.
+- `reachOf` gives the exact sum at one end of the intervals, in a given arithmetic, with the cut of the mutes. The gates use exact rationals.
+- The calculation sorts the entries by node and the edges by id. Thus each order of the input gives the same result.
+- The option `maxSteps` limits each sum. When the budget ends a sum, the field `bound` tells it. The reach is then the ceiling, so an alert is not lost.
 
 ## The ids
 
@@ -165,15 +182,22 @@ The system `place` holds the watched places of a person, by their ids in the con
 
 | Gate | Kind | Rule |
 | --- | --- | --- |
-| An opt-out wins | Property | A mute gives 0 on each graph with each weight. The mandatory class is the only exception, and the mute makes it silent. An edge that is off does not raise the reach. No why names a removed node. |
+| An opt-out wins | Property | A matched mute gives 0 on each graph with each weight. The mandatory class is the only exception, and the mute makes it silent. A mute of a subject that is not an entry gives the reach of the graph with each edge of that subject off. No why or path names a muted subject. An edge that is off does not raise the reach. No why names a removed node. |
 | One answer in any order | Property | A shuffle of the nodes, the edges, the subjects and the paths gives the same reach, bit for bit, with exact rationals. |
 | Monotone | Property | A higher weight does not lower the reach. |
 | Inside the bounds | Property | `best ≤ R ≤ noisyOr` on each generated graph. |
 | Hop cap and cycles | Property | An edge that adds only a path longer than the hop cap, or only a cycle, changes nothing. |
 | An honest why | Property | The coverage equals the reach of the shown paths alone, divided by the full reach. |
-| Who each class reaches | Table | For each class of event and each example person, the test holds the expected tier and the expected why. |
-| Compatibility | Compat | A graph with only place edges of weight 1 gives the routing of the first releases on each recorded incident. |
+| Who each class reaches | Table | For each class of event and each example person, the test holds the expected reach and the expected why. The tier comes when the score of AL-31 reads the reach. |
+| Compatibility | Compat | A graph with only place edges of weight 1 gives a reach of 1 when the incident hits a watched place, and 0 when it does not. The check on each recorded incident comes with the routing. |
 | The why fits each channel | Limits | Each why text keeps the limits of its channel and holds no address, point or code. |
+
+## The tests of step 5
+
+Step 5 routes the alerts by the relevance. These tests come with it:
+
+- `relevance` throws a `RangeError` for an entry of the person, an edge from the person and two edges with one id. The schema refuses the two graph cases. An adapter can still give the entry `person`.
+- When `relevance` throws for one person, the alert is not lost. The routing catches the error, sends the alert by the place routing of the first releases and records a fault.
 
 ## Privacy
 
@@ -186,6 +210,6 @@ The system `place` holds the watched places of a person, by their ids in the con
 
 - The mandatory class, a decision of the owner.
 - A fast path: when the two bounds give the same level, the exact sum is not necessary.
-- A limit on the size of the exact sum, for a graph with many shared edges.
+- The size of a real graph, and the budget of steps that it needs. A check of the configuration can give a problem before a sum ends with `bound`.
 - Weights from travel time, for a place that the person visits.
 - The calibration of the default weights from the event log.

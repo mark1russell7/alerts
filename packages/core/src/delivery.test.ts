@@ -16,7 +16,7 @@ import type {
   WatchedPlace,
 } from "./contracts.ts";
 import { LEVELS } from "./contracts.ts";
-import { acknowledgmentOf, messageOf, recipientProblems, route, type EscalationStart, type Recipient, type Route, type RouteInput } from "./delivery.ts";
+import { acknowledgmentOf, messageOf, recipientProblems, route, type EscalationEnd, type EscalationStart, type Recipient, type Route, type RouteInput } from "./delivery.ts";
 import { messageKey } from "./ids.ts";
 import { placeWhy } from "./why.ts";
 
@@ -300,6 +300,138 @@ describe("route", () => {
       }
       expect(starts.length, `seed ${seed}`).toBeGreaterThan(0);
     }
+  });
+});
+
+describe("route: the end of a person and a new episode", () => {
+  // A public county in Kansas that the person does not watch.
+  const away = incident({ areas: [{ type: "code", system: "ugc", code: "KSC079" }] });
+  const first = delivery("life-safety", 0, T0);
+  const endAt = (at: number): EscalationEnd => ({ incident: anchor, person, at });
+  const keyOf = (level: Level, step: number, episode: number): string => messageKey({ incident: anchor, level, person, step, episode });
+  const ack = (at: number): Acknowledgment => ({ incident: anchor, level: "life-safety", person, at, via: pushover });
+
+  it("ends the escalation when the live incident no longer reaches the person, and cancels its deliveries", () => {
+    const routes = route(input({ incidents: [away], starts: [start("life-safety", T0)], merge: { deliveries: [first] }, now: T0 + 2 * MINUTE }));
+    expect(summary(routes)).toEqual([{ level: "life-safety", state: "ended", fresh: false, sends: [], cancels: [first.key] }]);
+    expect(routes[0]!.freshEnd).toBe(true);
+    expect(routes[0]!.end).toEqual(endAt(T0 + 2 * MINUTE));
+    expect(routes[0]!.episode).toBe(0);
+  });
+
+  it("gives no end to a person with no escalation, and none while a lower level still reaches the person", () => {
+    expect(route(input({ incidents: [away] }))).toEqual([]);
+    const kept = route(input({ incidents: [incident(WATCH)], starts: [start("life-safety", T0)], merge: { deliveries: [first] }, now: T0 + 2 * MINUTE }));
+    expect(kept.map((entry) => [entry.policy.level, entry.plan.state, entry.freshEnd, entry.end])).toEqual([["life-safety", "sent", false, undefined]]);
+  });
+
+  it("cancels again the deliveries of an earlier episode with no cancel, and then routes nothing", () => {
+    const ends = [endAt(T0 + 2 * MINUTE)];
+    const retry = route(input({ incidents: [away], starts: [start("life-safety", T0)], ends, merge: { deliveries: [first] }, now: T0 + 3 * MINUTE }));
+    expect(summary(retry)).toEqual([{ level: "life-safety", state: "ended", fresh: false, sends: [], cancels: [first.key] }]);
+    expect([retry[0]!.freshEnd, retry[0]!.end]).toEqual([false, ends[0]]);
+    const done = route(input({ incidents: [away], starts: [start("life-safety", T0)], ends, merge: { deliveries: [first] }, cancelled: new Set([first.key]), now: T0 + 4 * MINUTE }));
+    expect(done).toEqual([]);
+  });
+
+  it("starts a new episode with new keys when the threat comes back, and an acknowledgment before its start covers nothing", () => {
+    const ends = [endAt(T0 + 2 * MINUTE)];
+    const cancelled = new Set([first.key]);
+    // One acknowledgment of the first episode, and one between the end and the return.
+    const acks = [ack(T0 + MINUTE), ack(T0 + 5 * MINUTE)];
+    const back = route(input({ starts: [start("life-safety", T0)], ends, merge: { deliveries: [first], acks }, cancelled, now: T0 + 10 * MINUTE }));
+    expect(summary(back)).toEqual([{ level: "life-safety", state: "sent", fresh: true, sends: [0], cancels: [] }]);
+    expect([back[0]!.episode, back[0]!.start, back[0]!.end]).toEqual([1, start("life-safety", T0 + 10 * MINUTE), undefined]);
+    const send = back[0]!.plan.sends[0]!;
+    expect(send.episode).toBe(1);
+    expect(messageKey(send)).toBe(keyOf("life-safety", 0, 1));
+    expect(messageKey(send)).not.toBe(first.key);
+  });
+
+  it("starts a new episode at a lower level than the level of the earlier episode", () => {
+    const back = route(input({ incidents: [incident(WATCH)], starts: [start("life-safety", T0)], ends: [endAt(T0 + 2 * MINUTE)], merge: { deliveries: [first] }, cancelled: new Set([first.key]), now: T0 + 10 * MINUTE }));
+    expect(summary(back)).toEqual([{ level: "urgent", state: "last", fresh: true, sends: [0], cancels: [] }]);
+    expect(back[0]!.episode).toBe(1);
+  });
+
+  it("ends a new episode by an acknowledgment after its start", () => {
+    const again = delivery("life-safety", 0, T0 + 10 * MINUTE, { key: keyOf("life-safety", 0, 1) });
+    const routes = route(
+      input({
+        starts: [start("life-safety", T0), start("life-safety", T0 + 10 * MINUTE)],
+        ends: [endAt(T0 + 2 * MINUTE)],
+        merge: { deliveries: [first, again], acks: [ack(T0 + 11 * MINUTE)] },
+        cancelled: new Set([first.key]),
+        now: T0 + 12 * MINUTE,
+      }),
+    );
+    expect(routes.map((entry) => [entry.episode, entry.plan.state, entry.fresh, entry.plan.cancels.map((d) => d.key)])).toEqual([[1, "acknowledged", false, [again.key]]]);
+  });
+
+  it("starts a new episode after its end, also when the clock has not moved past the end", () => {
+    const at = T0 + 2 * MINUTE;
+    const routes = route(input({ starts: [start("life-safety", T0)], ends: [endAt(at)], merge: { deliveries: [first] }, cancelled: new Set([first.key]), now: at }));
+    expect(routes.map((entry) => [entry.episode, entry.fresh, entry.start.at, entry.plan.sends.length, entry.plan.wakeAt])).toEqual([[1, true, at + 1, 0, at + 1]]);
+  });
+
+  it("holds its laws over seeded histories where the threat leaves and comes back", () => {
+    let returns = 0;
+    for (const seed of SEEDS) {
+      const r = random(`route-episodes:${seed}`);
+      const starts: EscalationStart[] = [];
+      const ends: EscalationEnd[] = [];
+      const deliveries: Delivery[] = [];
+      const acks: Acknowledgment[] = [];
+      const cancelled = new Set<string>();
+      let phase: "warning" | "watch" | "away" = "warning";
+      for (let step = 0; step < 90; step += 1) {
+        const now = T0 + step * MINUTE;
+        if (r.chance(0.15)) phase = r.pick(["warning", "watch", "away"] as const);
+        const current = phase === "away" ? away : incident(phase === "warning" ? WARNING : WATCH);
+        const routes = route(input({ incidents: [current], merge: { deliveries, acks }, starts, ends, cancelled, now }));
+        const context = `seed ${seed}, minute ${step}`;
+
+        for (const entry of routes) {
+          // Each send has the episode of its escalation.
+          for (const send of entry.plan.sends) expect(send.episode ?? 0, context).toBe(entry.episode);
+          if (entry.episode < ends.length) {
+            // An earlier episode sends nothing, and it cancels each of its deliveries with no cancel.
+            expect(entry.plan.sends, context).toEqual([]);
+            expect(["ended", "acknowledged"], context).toContain(entry.plan.state);
+            expect(entry.end, context).toEqual(ends[entry.episode]);
+          }
+          // A new escalation sends its first step at once.
+          if (entry.fresh) expect(entry.plan.sends.map((send) => send.step), context).toContain(0);
+          if (entry.fresh && entry.episode > 0) returns += 1;
+        }
+        // While the threat is away, nothing sends, and each escalation of the current episode ends now.
+        if (phase === "away") {
+          expect(routes.flatMap((entry) => entry.plan.sends), context).toEqual([]);
+          for (const entry of routes.filter((item) => item.episode === ends.length)) {
+            expect([entry.freshEnd, entry.end?.at], context).toEqual([true, now]);
+            expect(["ended", "acknowledged"], context).toContain(entry.plan.state);
+          }
+        } else {
+          expect(routes.filter((entry) => entry.freshEnd), context).toEqual([]);
+        }
+
+        // The runtime: it writes the new starts and the new end, sends with some failures, cancels, and the person acknowledges at times.
+        for (const entry of routes) {
+          if (entry.fresh) starts.push(entry.start);
+          for (const send of entry.plan.sends) {
+            if (r.chance(0.2)) continue;
+            deliveries.push({ key: messageKey(send), incident: send.incident, level: send.level, person: send.person, channel: send.channel, step: send.step, at: now, receipt: { receipt: `${send.level}:${send.step}` } });
+          }
+          for (const done of entry.plan.cancels) if (r.chance(0.8)) cancelled.add(done.key);
+          if (entry.episode === ends.length && entry.deliveries.length > 0 && r.chance(0.05)) acks.push({ incident: anchor, level: entry.policy.level, person, at: now, via: pushover });
+        }
+        const ending = routes.find((entry) => entry.freshEnd)?.end;
+        if (ending !== undefined) ends.push(ending);
+      }
+      // No key goes out two times: each episode gets new keys.
+      expect(new Set(deliveries.map((item) => item.key)).size, `seed ${seed}`).toBe(deliveries.length);
+    }
+    expect(returns).toBeGreaterThan(0);
   });
 });
 

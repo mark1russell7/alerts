@@ -1,8 +1,6 @@
 [
   {
     "id": "cbrne.biological",
-    "label": "Biological agent incident",
-    "summary": "A deliberate or accidental release of a dangerous pathogen or toxin.",
     "subjectKinds": [
       "place"
     ],
@@ -17,29 +15,7 @@
     "round": 1
   },
   {
-    "id": "cbrne.chemical.release",
-    "label": "Chemical release",
-    "summary": "A release of toxic gas or liquid from a plant, a vehicle or an attack that endangers people nearby.",
-    "subjectKinds": [
-      "place"
-    ],
-    "examples": [
-      "Hazardous Materials Warning: ammonia leak, shelter in place"
-    ],
-    "references": [
-      "CAP 1.2: CBRNE",
-      "NWS/SAME: HMW",
-      "CISA sectors: Chemical",
-      "FEMA Lifelines: Hazardous Materials",
-      "EM-DAT: Technological > Industrial > Chemical spill, Gas leak, Poisoning"
-    ],
-    "gap": "Round 1 found 1 adopted or planned source with no risk: nws-alerts-api. ipaws-open has a risk, so the gate does not count it: see the risks of the record. nrc-uscg-reports is later: see the reason of each.",
-    "round": 1
-  },
-  {
     "id": "cbrne.explosion",
-    "label": "Industrial explosion",
-    "summary": "An explosion at a plant, depot or storage site, with fire, blast damage and smoke.",
     "subjectKinds": [
       "place",
       "entity"
@@ -55,9 +31,44 @@
     "round": 1
   },
   {
+    "id": "cbrne.hazardous-materials",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "Hazardous Materials Warning: ammonia leak, shelter in place",
+      "Tanker truck leak closes a highway"
+    ],
+    "references": [
+      "CAP 1.2: CBRNE",
+      "CISA sectors: Chemical",
+      "FEMA Lifelines: Hazardous Materials",
+      "EM-DAT: Technological > Industrial > Chemical spill, Gas leak, Poisoning",
+      "NWS/SAME: HMW Hazardous Materials Warning"
+    ],
+    "gap": "Round 1 found 1 adopted or planned source with no risk: nws-alerts-api. ipaws-open has a risk, so the gate does not count it: see the risks of the record. nrc-uscg-reports is later: see the reason of each.",
+    "round": 1
+  },
+  {
+    "id": "cbrne.nuclear-plant",
+    "subjectKinds": [
+      "entity",
+      "place"
+    ],
+    "examples": [
+      "NRC event notification: reactor scram at a named plant",
+      "Unusual Event declared"
+    ],
+    "references": [
+      "CISA sectors: Nuclear Reactors, Materials and Waste",
+      "UNDRR-ISC HIPs 2025: TL Nuclear Plant Failure",
+      "NWS/SAME: NUW Nuclear Power Plant Warning"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
     "id": "cbrne.radiological",
-    "label": "Radiological hazard",
-    "summary": "Raised radiation levels or loss of a radioactive source, with protective actions.",
     "subjectKinds": [
       "place"
     ],
@@ -75,8 +86,6 @@
   },
   {
     "id": "civic.court-ruling",
-    "label": "Court ruling or docket change",
-    "summary": "A court rules or a docket changes in a case that matters to the person.",
     "subjectKinds": [
       "entity",
       "topic"
@@ -92,8 +101,6 @@
   },
   {
     "id": "civic.economy",
-    "label": "Government economic actions",
-    "summary": "A government takes an economic action, such as sanctions or a fiscal step, that touches a person.",
     "subjectKinds": [
       "place",
       "topic",
@@ -110,8 +117,6 @@
   },
   {
     "id": "civic.economy.enforcement",
-    "label": "Financial enforcement action",
-    "summary": "A financial regulator takes an enforcement action against a firm.",
     "subjectKinds": [
       "entity"
     ],
@@ -126,8 +131,6 @@
   },
   {
     "id": "civic.economy.fiscal",
-    "label": "Federal fiscal stress",
-    "summary": "Federal cash or debt data shows a debt-limit squeeze or another fiscal stress.",
     "subjectKinds": [
       "topic"
     ],
@@ -142,8 +145,6 @@
   },
   {
     "id": "civic.election",
-    "label": "Election date or voting change",
-    "summary": "Election dates, registration deadlines, polling place changes and results that affect a voter.",
     "subjectKinds": [
       "place"
     ],
@@ -159,8 +160,6 @@
   },
   {
     "id": "civic.emergency-declaration",
-    "label": "Emergency or disaster declaration",
-    "summary": "A government declares an emergency or a major disaster, which opens aid and changes rules.",
     "subjectKinds": [
       "place"
     ],
@@ -176,8 +175,6 @@
   },
   {
     "id": "civic.government-operating-status",
-    "label": "Government office closure or delay",
-    "summary": "Government offices close, open late or allow telework, from weather or other events.",
     "subjectKinds": [
       "place",
       "entity"
@@ -194,8 +191,6 @@
   },
   {
     "id": "civic.government-shutdown",
-    "label": "Government shutdown",
-    "summary": "A lapse in funding stops or slows government services, payments and parks.",
     "subjectKinds": [
       "topic"
     ],
@@ -210,8 +205,6 @@
   },
   {
     "id": "civic.labor-action",
-    "label": "Strike or labor action",
-    "summary": "A strike or walkout that stops a service: transit, ports, postal, schools or hospitals.",
     "subjectKinds": [
       "place",
       "entity"
@@ -228,8 +221,6 @@
   },
   {
     "id": "civic.planned-event",
-    "label": "Large planned event",
-    "summary": "A concert, game, march or festival that brings crowds, closures and traffic to an area.",
     "subjectKinds": [
       "place"
     ],
@@ -245,8 +236,6 @@
   },
   {
     "id": "civic.public-holiday",
-    "label": "Public holiday",
-    "summary": "A public holiday that closes offices, banks and markets and changes transit schedules.",
     "subjectKinds": [
       "place"
     ],
@@ -261,8 +250,6 @@
   },
   {
     "id": "civic.regulation",
-    "label": "New rule or law",
-    "summary": "A new regulation, rule or law that changes what a person or a business must do.",
     "subjectKinds": [
       "topic"
     ],
@@ -277,8 +264,6 @@
   },
   {
     "id": "civic.sanctions",
-    "label": "Sanctions action",
-    "summary": "OFAC adds, removes or licenses sanctions on a country, bank, company or person.",
     "subjectKinds": [
       "place",
       "entity"
@@ -297,8 +282,6 @@
   },
   {
     "id": "civic.school-closure",
-    "label": "School closure or delay",
-    "summary": "Schools close, start late or go remote for weather, threats or other events.",
     "subjectKinds": [
       "place",
       "entity"
@@ -314,8 +297,6 @@
   },
   {
     "id": "civic.tax-relief",
-    "label": "Disaster tax relief",
-    "summary": "A tax authority postpones deadlines for people in a disaster area.",
     "subjectKinds": [
       "place"
     ],
@@ -330,8 +311,6 @@
   },
   {
     "id": "cyber.advisory.ics",
-    "label": "Industrial control system or medical device advisory",
-    "summary": "A government advisory on a flaw in control systems or medical devices that run plants, utilities or hospitals.",
     "subjectKinds": [
       "entity"
     ],
@@ -347,8 +326,6 @@
   },
   {
     "id": "cyber.campaign",
-    "label": "Active threat campaign advisory",
-    "summary": "A joint government advisory on an active attacker group, its methods and the steps defenders take now.",
     "subjectKinds": [
       "topic"
     ],
@@ -365,8 +342,6 @@
   },
   {
     "id": "cyber.data-breach",
-    "label": "Data breach",
-    "summary": "Personal data stolen from an organization, which can expose the accounts and identity of the people in it.",
     "subjectKinds": [
       "entity"
     ],
@@ -382,8 +357,6 @@
   },
   {
     "id": "cyber.ddos",
-    "label": "Large denial-of-service attack",
-    "summary": "A flood of traffic that takes a service, a network or a country offline for a period.",
     "subjectKinds": [
       "entity",
       "place"
@@ -399,8 +372,6 @@
   },
   {
     "id": "cyber.ransomware.victim",
-    "label": "Ransomware attack on an organization",
-    "summary": "A ransomware group claims an organization as a victim, which can stop services that people depend on.",
     "subjectKinds": [
       "entity"
     ],
@@ -416,8 +387,6 @@
   },
   {
     "id": "cyber.software.end-of-life",
-    "label": "Software end of support",
-    "summary": "A product or version that stops getting security fixes on a known date, so its users need to upgrade.",
     "subjectKinds": [
       "entity"
     ],
@@ -432,8 +401,6 @@
   },
   {
     "id": "cyber.supply-chain.malicious-package",
-    "label": "Malicious software package",
-    "summary": "A package in a public registry that contains malware, often a typo-squat or a hijacked maintainer account.",
     "subjectKinds": [
       "entity"
     ],
@@ -448,8 +415,6 @@
   },
   {
     "id": "cyber.vulnerability.exploited",
-    "label": "Vulnerability exploited in the wild",
-    "summary": "A software flaw that attackers use now, so systems that run the product need a patch or a work-around fast.",
     "subjectKinds": [
       "entity",
       "topic"
@@ -469,8 +434,6 @@
   },
   {
     "id": "cyber.vulnerability.published",
-    "label": "New vulnerability in software that a person uses",
-    "summary": "A newly published CVE or advisory for a product, library or package, with severity and fixed versions.",
     "subjectKinds": [
       "entity"
     ],
@@ -488,8 +451,6 @@
   },
   {
     "id": "env.air-quality",
-    "label": "Poor air quality",
-    "summary": "Ozone, particles or other pollutants at an unhealthy AQI level, observed or forecast.",
     "subjectKinds": [
       "place"
     ],
@@ -508,8 +469,6 @@
   },
   {
     "id": "env.air-quality.smoke",
-    "label": "Wildfire smoke",
-    "summary": "Smoke from near or distant fires that raises fine particles to unhealthy levels.",
     "subjectKinds": [
       "place"
     ],
@@ -525,9 +484,22 @@
     "round": 1
   },
   {
+    "id": "env.air-stagnation",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "NWS Air Stagnation Advisory"
+    ],
+    "references": [
+      "NWS API: Air Stagnation Advisory",
+      "NWS VTEC phenomena: AS Air Stagnation"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
     "id": "env.pest-quarantine",
-    "label": "Plant pest or animal disease quarantine",
-    "summary": "A quarantine area for an invasive pest or plant disease that limits moving plants, wood or produce.",
     "subjectKinds": [
       "place"
     ],
@@ -544,8 +516,6 @@
   },
   {
     "id": "env.pollen",
-    "label": "High pollen",
-    "summary": "A high pollen index that affects people with allergy or asthma.",
     "subjectKinds": [
       "place"
     ],
@@ -559,9 +529,22 @@
     "round": 1
   },
   {
+    "id": "env.smoke",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "NWS Dense Smoke Advisory"
+    ],
+    "references": [
+      "NWS API: Dense Smoke Advisory",
+      "NWS VTEC phenomena: MS Marine Dense Smoke, SM Dense Smoke"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
     "id": "env.spill",
-    "label": "Oil or chemical spill to the environment",
-    "summary": "A release of oil or a hazardous substance into water or land, reported to the authorities.",
     "subjectKinds": [
       "place",
       "entity"
@@ -581,8 +564,6 @@
   },
   {
     "id": "env.uv",
-    "label": "High UV index",
-    "summary": "A forecast UV index high enough to burn skin in minutes.",
     "subjectKinds": [
       "place"
     ],
@@ -597,8 +578,6 @@
   },
   {
     "id": "env.water.beach-advisory",
-    "label": "Beach advisory or closure",
-    "summary": "A beach closed or under advisory because of bacteria, sewage or toxins in the water.",
     "subjectKinds": [
       "place"
     ],
@@ -613,8 +592,6 @@
   },
   {
     "id": "env.water.drinking-advisory",
-    "label": "Drinking water advisory (boil water, do not drink)",
-    "summary": "A notice that tap water is unsafe to drink without boiling, or not at all.",
     "subjectKinds": [
       "place",
       "entity"
@@ -633,8 +610,6 @@
   },
   {
     "id": "env.water.harmful-algal-bloom",
-    "label": "Harmful algal bloom",
-    "summary": "Toxic algae or cyanobacteria in a lake or coastal water that make swimming, drinking water or shellfish unsafe.",
     "subjectKinds": [
       "place",
       "entity"
@@ -651,8 +626,6 @@
   },
   {
     "id": "env.water.sewage-overflow",
-    "label": "Sewage overflow",
-    "summary": "Untreated sewage released to rivers or the sea from a storm overflow or a failed plant.",
     "subjectKinds": [
       "place",
       "entity"
@@ -670,8 +643,6 @@
   },
   {
     "id": "fire.burn-ban",
-    "label": "Burn ban and fire restriction",
-    "summary": "A ban on open burning, fireworks or campfires from a county, state or land agency.",
     "subjectKinds": [
       "place"
     ],
@@ -687,8 +658,6 @@
   },
   {
     "id": "fire.structure",
-    "label": "Structure fire and local fire incident",
-    "summary": "A building, vehicle or local fire that fire services dispatch to, near a place of interest.",
     "subjectKinds": [
       "place"
     ],
@@ -709,8 +678,6 @@
   },
   {
     "id": "fire.weather",
-    "label": "Critical fire weather",
-    "summary": "Wind, heat and low humidity that let fires start and spread fast, as red flag warnings.",
     "subjectKinds": [
       "place"
     ],
@@ -728,8 +695,6 @@
   },
   {
     "id": "fire.wildfire",
-    "label": "Wildfire",
-    "summary": "An uncontrolled fire in vegetation, with incident location, size, containment and perimeter.",
     "subjectKinds": [
       "place",
       "entity"
@@ -751,8 +716,6 @@
   },
   {
     "id": "fire.wildfire.hotspot",
-    "label": "Satellite fire detection",
-    "summary": "A satellite hotspot that can show a new fire before any report, with no official confirmation.",
     "subjectKinds": [
       "place"
     ],
@@ -768,9 +731,37 @@
     "round": 1
   },
   {
+    "id": "geo.avalanche",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "Avalanche center danger level 4 (High) for a forecast zone",
+      "NWS Avalanche Warning"
+    ],
+    "references": [
+      "NWS/SAME: AVA, AVW",
+      "EM-DAT: Mass movement > Avalanche",
+      "UNDRR-ISC HIPs 2025: MH0801 Avalanche",
+      "MeteoAlarm label: avalanche"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
+    "id": "geo.debris-flow",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [],
+    "references": [
+      "NWS VTEC phenomena: DF Debris Flow"
+    ],
+    "gap": "Round 1 found 1 adopted or planned source with no risk: iem-vtec. usgs-landslide-program is later: see the reason of each.",
+    "round": 1
+  },
+  {
     "id": "geo.earthquake",
-    "label": "Earthquake",
-    "summary": "Ground shaking from a fault rupture, reported with a location, depth and magnitude soon after the event.",
     "subjectKinds": [
       "place"
     ],
@@ -791,8 +782,6 @@
   },
   {
     "id": "geo.earthquake.early-warning",
-    "label": "Earthquake early warning",
-    "summary": "A warning sent seconds before strong shaking arrives, issued from the first seismic waves of a rupture.",
     "subjectKinds": [
       "place"
     ],
@@ -808,8 +797,6 @@
   },
   {
     "id": "geo.fireball",
-    "label": "Fireball or airburst",
-    "summary": "A bright meteor or airburst over a region, sometimes with a sonic boom or fallen meteorites.",
     "subjectKinds": [
       "place"
     ],
@@ -825,8 +812,6 @@
   },
   {
     "id": "geo.landslide",
-    "label": "Landslide and debris flow",
-    "summary": "Movement of rock, earth or debris down a slope, often after heavy rain on a burn scar.",
     "subjectKinds": [
       "place"
     ],
@@ -843,8 +828,6 @@
   },
   {
     "id": "geo.near-earth-object",
-    "label": "Asteroid impact risk",
-    "summary": "A near-Earth object with a computed non-zero impact probability, rated on the Torino and Palermo scales.",
     "subjectKinds": [
       "entity",
       "topic"
@@ -862,8 +845,6 @@
   },
   {
     "id": "geo.space-debris.reentry",
-    "label": "Space debris re-entry",
-    "summary": "An uncontrolled re-entry of a satellite or rocket body, with a predicted time window and ground track.",
     "subjectKinds": [
       "entity",
       "place"
@@ -879,8 +860,6 @@
   },
   {
     "id": "geo.space-weather",
-    "label": "Space weather",
-    "summary": "Solar activity that disturbs the magnetosphere and ionosphere, with effects on power grids, radio, GPS and satellites.",
     "subjectKinds": [
       "topic",
       "place"
@@ -898,8 +877,6 @@
   },
   {
     "id": "geo.space-weather.geomagnetic-storm",
-    "label": "Geomagnetic storm",
-    "summary": "A disturbance of the Earth's magnetic field on the NOAA G scale that can stress grids and degrade GPS.",
     "subjectKinds": [
       "topic",
       "place"
@@ -916,8 +893,6 @@
   },
   {
     "id": "geo.space-weather.radio-blackout",
-    "label": "Radio blackout from a solar flare",
-    "summary": "An X-ray flare on the NOAA R scale that blacks out HF radio on the sunlit side of the Earth.",
     "subjectKinds": [
       "topic"
     ],
@@ -933,8 +908,6 @@
   },
   {
     "id": "geo.space-weather.solar-radiation-storm",
-    "label": "Solar radiation storm",
-    "summary": "High proton flux on the NOAA S scale that affects high-latitude flights, satellites and polar radio.",
     "subjectKinds": [
       "topic"
     ],
@@ -950,8 +923,6 @@
   },
   {
     "id": "geo.subsidence",
-    "label": "Sinkhole and ground subsidence",
-    "summary": "A sudden collapse or slow sinking of the ground that damages roads, pipes and buildings.",
     "subjectKinds": [
       "place"
     ],
@@ -967,8 +938,6 @@
   },
   {
     "id": "geo.tsunami",
-    "label": "Tsunami",
-    "summary": "A series of sea waves from an earthquake, landslide or eruption, with watches, advisories and warnings for coasts.",
     "subjectKinds": [
       "place"
     ],
@@ -988,8 +957,6 @@
   },
   {
     "id": "geo.volcano",
-    "label": "Volcanic activity",
-    "summary": "Unrest or eruption of a volcano, with alert-level and aviation colour-code changes from a volcano observatory.",
     "subjectKinds": [
       "place",
       "entity"
@@ -1010,8 +977,6 @@
   },
   {
     "id": "geo.volcano.ashfall",
-    "label": "Volcanic ash in the air or on the ground",
-    "summary": "Ash plumes that close airspace and ash fall that harms lungs, roofs, water and engines downwind of a volcano.",
     "subjectKinds": [
       "place"
     ],
@@ -1029,8 +994,6 @@
   },
   {
     "id": "health.animal-disease",
-    "label": "Animal disease event",
-    "summary": "An outbreak in animals, such as avian influenza in poultry or dairy herds, with food supply and spillover risk.",
     "subjectKinds": [
       "place",
       "topic"
@@ -1049,8 +1012,6 @@
   },
   {
     "id": "health.drug-shortage",
-    "label": "Drug or medical supply shortage",
-    "summary": "A shortage of a medicine or medical product that affects patients.",
     "subjectKinds": [
       "topic",
       "entity"
@@ -1067,8 +1028,6 @@
   },
   {
     "id": "health.drug-supply-threat",
-    "label": "Dangerous drug supply or overdose cluster",
-    "summary": "A new adulterant or potent drug in the illicit supply, or a spike in overdoses in an area.",
     "subjectKinds": [
       "place",
       "topic"
@@ -1085,8 +1044,6 @@
   },
   {
     "id": "health.hospital-capacity",
-    "label": "Hospital or emergency care strain",
-    "summary": "Hospitals in an area are full, on diversion or closed, so emergency care takes longer.",
     "subjectKinds": [
       "place",
       "entity"
@@ -1103,8 +1060,6 @@
   },
   {
     "id": "health.outbreak",
-    "label": "Disease outbreak",
-    "summary": "An unusual cluster or spread of an infectious disease, reported by a public health agency.",
     "subjectKinds": [
       "place",
       "topic"
@@ -1127,8 +1082,6 @@
   },
   {
     "id": "health.outbreak.foodborne",
-    "label": "Foodborne illness outbreak",
-    "summary": "Illnesses linked to a food product, under investigation, often before or with a recall.",
     "subjectKinds": [
       "topic",
       "entity",
@@ -1147,8 +1100,6 @@
   },
   {
     "id": "health.travel-notice",
-    "label": "Travel health notice",
-    "summary": "A health notice for travellers to a country, from usual precautions to avoid all travel.",
     "subjectKinds": [
       "place"
     ],
@@ -1164,8 +1115,6 @@
   },
   {
     "id": "health.wastewater-signal",
-    "label": "Wastewater pathogen signal",
-    "summary": "A rise in a virus or bacterium measured in sewage, an early sign of community spread.",
     "subjectKinds": [
       "place",
       "topic"
@@ -1182,8 +1131,6 @@
   },
   {
     "id": "infra.cloud.outage",
-    "label": "Cloud provider outage",
-    "summary": "A failure of a public cloud region or service that takes down the apps and sites built on it.",
     "subjectKinds": [
       "entity"
     ],
@@ -1203,8 +1150,6 @@
   },
   {
     "id": "infra.dam.failure",
-    "label": "Dam or levee failure",
-    "summary": "A dam or levee fails or is likely to fail, with fast flooding below it.",
     "subjectKinds": [
       "place",
       "entity"
@@ -1222,25 +1167,23 @@
   },
   {
     "id": "infra.fuel.shortage",
-    "label": "Fuel shortage or price spike",
-    "summary": "Stations run out of fuel, or fuel prices jump, after a refinery, pipeline or supply problem.",
     "subjectKinds": [
       "place"
     ],
     "examples": [
-      "Many stations without gasoline after a pipeline shutdown"
+      "Many stations without gasoline after a pipeline shutdown",
+      "Many stations in a city report no gasoline after a storm"
     ],
     "references": [
       "FEMA Lifelines: Energy > Fuel",
-      "UNDRR-ISC HIPs 2025: TL Supply Chain Failure"
+      "UNDRR-ISC HIPs 2025: TL Supply Chain Failure",
+      "https://tracker.gasbuddy.com/"
     ],
-    "gap": "EIA has weekly prices only. No station-outage feed was opened in round 1.",
+    "gap": "Round 1 found 1 adopted or planned source with no risk: eia-api. gasbuddy-availability-tracker is later: see the reason of each.",
     "round": 1
   },
   {
     "id": "infra.gas.pipeline-incident",
-    "label": "Gas or liquid pipeline incident",
-    "summary": "A leak, rupture or explosion of a gas or hazardous liquid pipeline.",
     "subjectKinds": [
       "place",
       "entity"
@@ -1258,8 +1201,6 @@
   },
   {
     "id": "infra.gnss.interference",
-    "label": "GPS or satellite navigation interference",
-    "summary": "GPS signals are jammed, spoofed or tested in an area, which affects aircraft, ships and phones.",
     "subjectKinds": [
       "place"
     ],
@@ -1275,8 +1216,6 @@
   },
   {
     "id": "infra.internet.bgp",
-    "label": "Route hijack or route leak",
-    "summary": "Wrong routing announcements that send traffic of a network to another network or drop it.",
     "subjectKinds": [
       "entity"
     ],
@@ -1292,8 +1231,6 @@
   },
   {
     "id": "infra.internet.dns-cdn",
-    "label": "DNS, CDN or certificate provider failure",
-    "summary": "A failure of a shared internet provider (DNS, content delivery or certificates) that breaks many sites at once.",
     "subjectKinds": [
       "entity"
     ],
@@ -1308,8 +1245,6 @@
   },
   {
     "id": "infra.internet.outage",
-    "label": "Internet outage in a region or network",
-    "summary": "A large drop in internet reachability in a country, region or provider network, from cuts, power or faults.",
     "subjectKinds": [
       "place",
       "entity"
@@ -1331,8 +1266,6 @@
   },
   {
     "id": "infra.internet.shutdown",
-    "label": "Government internet shutdown",
-    "summary": "An intentional cut or throttle of internet or platforms by an authority, often during protests or exams.",
     "subjectKinds": [
       "place"
     ],
@@ -1349,47 +1282,26 @@
     "round": 1
   },
   {
-    "id": "infra.nuclear.event",
-    "label": "Nuclear plant event",
-    "summary": "An event at a nuclear plant reported to the regulator, from a minor fault up to an emergency classification.",
-    "subjectKinds": [
-      "entity",
-      "place"
-    ],
-    "examples": [
-      "NRC event notification: reactor scram at a named plant",
-      "Unusual Event declared"
-    ],
-    "references": [
-      "CISA sectors: Nuclear Reactors, Materials and Waste",
-      "UNDRR-ISC HIPs 2025: TL Nuclear Plant Failure",
-      "NWS/SAME: NUW Nuclear Power Plant Warning"
-    ],
-    "gap": null,
-    "round": 1
-  },
-  {
     "id": "infra.payments.outage",
-    "label": "Payment or banking system outage",
-    "summary": "A failure of card, bank transfer or payment services, so people cannot pay or get paid.",
     "subjectKinds": [
       "entity"
     ],
     "examples": [
       "A card network outage at checkout",
-      "A bank's app and transfers are down"
+      "A bank's app and transfers are down",
+      "FedNow service disruption",
+      "A card processor declines payments"
     ],
     "references": [
       "FEMA Lifelines: Communications > Finance",
-      "CISA sectors: Financial Services"
+      "CISA sectors: Financial Services",
+      "https://app.frbservices.org/app/status/serviceStatus.do"
     ],
-    "gap": "Only providers that run public status pages are covered. Federal Reserve Financial Services status was not opened.",
+    "gap": null,
     "round": 1
   },
   {
     "id": "infra.postal.disruption",
-    "label": "Postal service disruption",
-    "summary": "Mail and parcel delays or suspensions from weather, facility closures or strikes.",
     "subjectKinds": [
       "place",
       "entity"
@@ -1406,8 +1318,6 @@
   },
   {
     "id": "infra.power.grid-emergency",
-    "label": "Grid emergency or conservation appeal",
-    "summary": "A grid operator warns that supply is short, asks people to save power, or orders rotating outages.",
     "subjectKinds": [
       "place",
       "entity"
@@ -1425,8 +1335,6 @@
   },
   {
     "id": "infra.power.load-shedding",
-    "label": "Scheduled load shedding",
-    "summary": "Rotating power cuts by a published schedule and stage when a national grid lacks supply.",
     "subjectKinds": [
       "place"
     ],
@@ -1441,8 +1349,6 @@
   },
   {
     "id": "infra.power.outage",
-    "label": "Power outage",
-    "summary": "Loss of electric power to customers in an area, with counts of customers out and restoration estimates.",
     "subjectKinds": [
       "place",
       "entity"
@@ -1462,8 +1368,6 @@
   },
   {
     "id": "infra.power.psps",
-    "label": "Planned power shutoff for wildfire safety",
-    "summary": "A utility turns off power in an area ahead of high wind to prevent its lines from starting fires.",
     "subjectKinds": [
       "place",
       "entity"
@@ -1480,8 +1384,6 @@
   },
   {
     "id": "infra.saas.outage",
-    "label": "Online service outage",
-    "summary": "An outage of a web service, app or platform that a person uses, from its own status page or user reports.",
     "subjectKinds": [
       "entity"
     ],
@@ -1500,8 +1402,6 @@
   },
   {
     "id": "infra.structure.collapse",
-    "label": "Building or bridge collapse",
-    "summary": "A building, bridge, tunnel or other structure fails, often with casualties and closures around it.",
     "subjectKinds": [
       "place",
       "entity"
@@ -1518,8 +1418,6 @@
   },
   {
     "id": "infra.supply-chain.disruption",
-    "label": "Supply chain or shipping chokepoint disruption",
-    "summary": "A block at a port, canal or strait, or a supplier failure, that delays goods and raises prices.",
     "subjectKinds": [
       "place",
       "entity"
@@ -1537,8 +1435,6 @@
   },
   {
     "id": "infra.telecom.911-outage",
-    "label": "911 outage",
-    "summary": "Emergency calls to 911 do not connect in an area, with an alternate number to call.",
     "subjectKinds": [
       "place"
     ],
@@ -1554,8 +1450,6 @@
   },
   {
     "id": "infra.telecom.outage",
-    "label": "Phone or mobile network outage",
-    "summary": "Loss of mobile, landline or cable service in an area, from storms, cuts or carrier faults.",
     "subjectKinds": [
       "place",
       "entity"
@@ -1574,8 +1468,6 @@
   },
   {
     "id": "infra.timekeeping",
-    "label": "Time zone or clock rule change",
-    "summary": "A change to a time zone rule or daylight saving date that breaks schedules and software clocks.",
     "subjectKinds": [
       "place",
       "topic"
@@ -1591,8 +1483,6 @@
   },
   {
     "id": "infra.water.outage",
-    "label": "Water service outage",
-    "summary": "Loss of water pressure or supply to an area after a main break, pump failure or plant fault.",
     "subjectKinds": [
       "place"
     ],
@@ -1609,8 +1499,6 @@
   },
   {
     "id": "market.bank",
-    "label": "Banks",
-    "summary": "A bank fails or its service stops, which can block a person's money.",
     "subjectKinds": [
       "entity",
       "place"
@@ -1627,8 +1515,6 @@
   },
   {
     "id": "market.bank.failure",
-    "label": "Bank failure",
-    "summary": "A regulator closes a bank and the FDIC names the acquiring bank or pays depositors.",
     "subjectKinds": [
       "entity",
       "place"
@@ -1647,8 +1533,6 @@
   },
   {
     "id": "market.bank.outage",
-    "label": "Bank service outage",
-    "summary": "A bank or neobank reports that its app, cards or transfers do not work.",
     "subjectKinds": [
       "entity"
     ],
@@ -1663,8 +1547,6 @@
   },
   {
     "id": "market.broker.outage",
-    "label": "Broker outage",
-    "summary": "A broker reports that trading, deposits or withdrawals do not work.",
     "subjectKinds": [
       "entity"
     ],
@@ -1679,8 +1561,6 @@
   },
   {
     "id": "market.credit.rating",
-    "label": "Credit rating change",
-    "summary": "A rating agency changes the rating of a country, bank or company.",
     "subjectKinds": [
       "entity",
       "place"
@@ -1694,8 +1574,6 @@
   },
   {
     "id": "market.credit.sovereign-debt",
-    "label": "Sovereign debt event",
-    "summary": "A government default, downgrade, or debt ceiling event.",
     "subjectKinds": [
       "place"
     ],
@@ -1710,8 +1588,6 @@
   },
   {
     "id": "market.crypto",
-    "label": "Crypto market events",
-    "summary": "A stablecoin, exchange or chain has a failure that can lock or lose a person's funds.",
     "subjectKinds": [
       "entity"
     ],
@@ -1729,8 +1605,6 @@
   },
   {
     "id": "market.crypto.chain-halt",
-    "label": "Blockchain halt",
-    "summary": "A blockchain stops making blocks or confirming transactions.",
     "subjectKinds": [
       "entity"
     ],
@@ -1745,8 +1619,6 @@
   },
   {
     "id": "market.crypto.depeg",
-    "label": "Stablecoin depeg",
-    "summary": "A stablecoin trades away from its peg by more than a set amount.",
     "subjectKinds": [
       "entity"
     ],
@@ -1761,8 +1633,6 @@
   },
   {
     "id": "market.crypto.exchange-outage",
-    "label": "Crypto exchange outage",
-    "summary": "A crypto exchange or custodian reports degraded trading, deposits or withdrawals.",
     "subjectKinds": [
       "entity"
     ],
@@ -1777,8 +1647,6 @@
   },
   {
     "id": "market.crypto.hack",
-    "label": "Crypto hack or exploit",
-    "summary": "A protocol, bridge or exchange loses funds to an attack.",
     "subjectKinds": [
       "entity"
     ],
@@ -1793,8 +1661,6 @@
   },
   {
     "id": "market.exchange",
-    "label": "Exchange operations",
-    "summary": "An exchange has a system problem or a closure that changes when a person can trade.",
     "subjectKinds": [
       "entity"
     ],
@@ -1810,8 +1676,6 @@
   },
   {
     "id": "market.exchange.closure",
-    "label": "Market closure or early close",
-    "summary": "An exchange closes for a holiday, an early close or an unscheduled event.",
     "subjectKinds": [
       "entity",
       "topic"
@@ -1827,8 +1691,6 @@
   },
   {
     "id": "market.exchange.outage",
-    "label": "Exchange system issue",
-    "summary": "An exchange reports that its systems are affected or down.",
     "subjectKinds": [
       "entity"
     ],
@@ -1843,8 +1705,6 @@
   },
   {
     "id": "market.halt",
-    "label": "Trading halts",
-    "summary": "Trading stops in a whole market or in one security.",
     "subjectKinds": [
       "entity",
       "topic"
@@ -1863,8 +1723,6 @@
   },
   {
     "id": "market.halt.marketwide",
-    "label": "Market-wide circuit breaker",
-    "summary": "US equity trading stops across all markets after a large index fall (codes MWC1, MWC2, MWC3).",
     "subjectKinds": [
       "topic"
     ],
@@ -1879,8 +1737,6 @@
   },
   {
     "id": "market.halt.security",
-    "label": "Single-security halt",
-    "summary": "Trading stops in one security for news, volatility (LULD) or a regulatory reason.",
     "subjectKinds": [
       "entity"
     ],
@@ -1895,8 +1751,6 @@
   },
   {
     "id": "market.halt.suspension",
-    "label": "Regulatory trading suspension",
-    "summary": "The SEC suspends trading in a security, mostly for doubts about its information.",
     "subjectKinds": [
       "entity"
     ],
@@ -1911,8 +1765,6 @@
   },
   {
     "id": "market.indicator.recession",
-    "label": "Recession indicator",
-    "summary": "A recession indicator crosses its trigger level.",
     "subjectKinds": [
       "topic"
     ],
@@ -1929,8 +1781,6 @@
   },
   {
     "id": "market.investor.alert",
-    "label": "Investor fraud or enforcement alert",
-    "summary": "A regulator warns of a fraud or acts against a firm a person may use.",
     "subjectKinds": [
       "entity",
       "topic"
@@ -1945,26 +1795,7 @@
     "round": 1
   },
   {
-    "id": "market.payments.outage",
-    "label": "Payment network outage",
-    "summary": "A payment network or processor stops or slows, so payments or transfers fail.",
-    "subjectKinds": [
-      "entity"
-    ],
-    "examples": [
-      "FedNow service disruption",
-      "A card processor declines payments"
-    ],
-    "references": [
-      "https://app.frbservices.org/app/status/serviceStatus.do"
-    ],
-    "gap": "Round 1 found 1 adopted or planned source with no risk: statuspage-payments. frbservices-status is later: see the reason of each.",
-    "round": 1
-  },
-  {
     "id": "market.prediction",
-    "label": "Prediction market signals",
-    "summary": "A forecast market or crowd forecast changes in a way that tells of a coming event.",
     "subjectKinds": [
       "topic",
       "entity",
@@ -1984,8 +1815,6 @@
   },
   {
     "id": "market.prediction.move",
-    "label": "Sudden probability move",
-    "summary": "The probability of an outcome changes by a large amount in a short window.",
     "subjectKinds": [
       "topic",
       "entity",
@@ -2004,8 +1833,6 @@
   },
   {
     "id": "market.prediction.new",
-    "label": "New market with activity",
-    "summary": "A new market opens on a topic the person follows and gets real volume.",
     "subjectKinds": [
       "topic",
       "entity",
@@ -2022,8 +1849,6 @@
   },
   {
     "id": "market.prediction.resolution",
-    "label": "Market resolution",
-    "summary": "A market closes and resolves to an outcome, which confirms an event.",
     "subjectKinds": [
       "topic",
       "entity",
@@ -2040,8 +1865,6 @@
   },
   {
     "id": "market.prediction.threshold",
-    "label": "Probability crosses a set level",
-    "summary": "The probability of an outcome passes a level that the person chose.",
     "subjectKinds": [
       "topic",
       "place"
@@ -2058,8 +1881,6 @@
   },
   {
     "id": "market.prediction.volume",
-    "label": "Volume surge",
-    "summary": "Trading volume in a market rises far above its normal rate, which can tell of private information.",
     "subjectKinds": [
       "topic",
       "entity"
@@ -2075,8 +1896,6 @@
   },
   {
     "id": "market.price",
-    "label": "Price and rate moves",
-    "summary": "A price that touches a person's costs or savings moves sharply.",
     "subjectKinds": [
       "topic",
       "place",
@@ -2094,8 +1913,6 @@
   },
   {
     "id": "market.price.commodity",
-    "label": "Commodity price shock",
-    "summary": "The price of crude oil, natural gas or another commodity moves sharply.",
     "subjectKinds": [
       "topic"
     ],
@@ -2112,8 +1929,6 @@
   },
   {
     "id": "market.price.fuel",
-    "label": "Fuel price change",
-    "summary": "Retail gasoline or diesel prices in a region rise past a level or by a set amount.",
     "subjectKinds": [
       "place"
     ],
@@ -2127,25 +1942,7 @@
     "round": 1
   },
   {
-    "id": "market.price.fuel-shortage",
-    "label": "Fuel shortage",
-    "summary": "Fuel stations in an area run out of fuel or close.",
-    "subjectKinds": [
-      "place"
-    ],
-    "examples": [
-      "Many stations in a city report no gasoline after a storm"
-    ],
-    "references": [
-      "https://tracker.gasbuddy.com/"
-    ],
-    "gap": "Only the GasBuddy crowd tracker, with no API and unread terms.",
-    "round": 1
-  },
-  {
     "id": "market.price.fx",
-    "label": "Sharp currency move",
-    "summary": "An exchange rate moves more than a set percent, which changes the cost of travel or transfers.",
     "subjectKinds": [
       "topic",
       "place"
@@ -2163,8 +1960,6 @@
   },
   {
     "id": "market.price.move",
-    "label": "Sharp asset or index move",
-    "summary": "A stock index, stock or crypto asset moves more than a set percent in a set window.",
     "subjectKinds": [
       "entity",
       "topic"
@@ -2183,8 +1978,6 @@
   },
   {
     "id": "market.price.volatility",
-    "label": "Volatility spike",
-    "summary": "A volatility index such as VIX rises sharply, which marks market stress.",
     "subjectKinds": [
       "topic"
     ],
@@ -2199,8 +1992,6 @@
   },
   {
     "id": "market.rates.mortgage",
-    "label": "Mortgage rate change",
-    "summary": "Average mortgage rates pass a level or move by a set amount in a week.",
     "subjectKinds": [
       "topic"
     ],
@@ -2215,8 +2006,6 @@
   },
   {
     "id": "market.release",
-    "label": "Scheduled economic releases",
-    "summary": "A scheduled economic release or central bank decision is due or is out.",
     "subjectKinds": [
       "topic"
     ],
@@ -2232,8 +2021,6 @@
   },
   {
     "id": "market.release.fomc",
-    "label": "FOMC decision or minutes",
-    "summary": "The Federal Open Market Committee publishes a rate decision, statement or minutes.",
     "subjectKinds": [
       "topic"
     ],
@@ -2250,8 +2037,6 @@
   },
   {
     "id": "market.release.macro",
-    "label": "Macro data release",
-    "summary": "A government agency publishes a scheduled economic number such as CPI, jobs or GDP.",
     "subjectKinds": [
       "topic"
     ],
@@ -2271,29 +2056,37 @@
     "round": 1
   },
   {
-    "id": "met.avalanche",
-    "label": "Avalanche",
-    "summary": "Snow avalanche danger for backcountry zones, and avalanche warnings for roads and towns.",
+    "id": "met.beach-hazards",
     "subjectKinds": [
       "place"
     ],
     "examples": [
-      "Avalanche center danger level 4 (High) for a forecast zone",
-      "NWS Avalanche Warning"
+      "NWS Beach Hazards Statement"
     ],
     "references": [
-      "NWS/SAME: AVA, AVW",
-      "EM-DAT: Mass movement > Avalanche",
-      "UNDRR-ISC HIPs 2025: MH0801 Avalanche",
-      "MeteoAlarm label: avalanche"
+      "NWS API: Beach Hazards Statement"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
+    "id": "met.blowing-dust",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "NWS Blowing Dust Advisory",
+      "NWS Blowing Dust Warning"
+    ],
+    "references": [
+      "NWS API: Blowing Dust Advisory, Blowing Dust Warning",
+      "NWS VTEC phenomena: DU Blowing Dust"
     ],
     "gap": null,
     "round": 1
   },
   {
     "id": "met.cold",
-    "label": "Extreme cold, freeze and frost",
-    "summary": "Dangerous cold or a freeze that harms people, pipes and crops.",
     "subjectKinds": [
       "place"
     ],
@@ -2312,8 +2105,6 @@
   },
   {
     "id": "met.drought",
-    "label": "Drought",
-    "summary": "A long dry period, rated weekly by drought category, that leads to water limits, crop loss and fire risk.",
     "subjectKinds": [
       "place"
     ],
@@ -2330,8 +2121,6 @@
   },
   {
     "id": "met.dust-storm",
-    "label": "Dust storm",
-    "summary": "Blowing dust or sand that drops visibility to near zero on roads.",
     "subjectKinds": [
       "place"
     ],
@@ -2350,8 +2139,6 @@
   },
   {
     "id": "met.flood",
-    "label": "Flood",
-    "summary": "Water over normally dry land from rain, rivers, snowmelt, ice jams or dam releases.",
     "subjectKinds": [
       "place"
     ],
@@ -2371,8 +2158,6 @@
   },
   {
     "id": "met.flood.coastal",
-    "label": "Coastal flood and storm surge",
-    "summary": "Sea water over coastal land from storm surge, high tides or waves.",
     "subjectKinds": [
       "place"
     ],
@@ -2392,8 +2177,6 @@
   },
   {
     "id": "met.flood.flash",
-    "label": "Flash flood",
-    "summary": "A flood that rises within hours of heavy rain, a dam failure or a debris jam.",
     "subjectKinds": [
       "place"
     ],
@@ -2412,8 +2195,6 @@
   },
   {
     "id": "met.flood.river",
-    "label": "River flood",
-    "summary": "A river above flood stage at a gauge, with observed and forecast stages.",
     "subjectKinds": [
       "place",
       "entity"
@@ -2431,8 +2212,6 @@
   },
   {
     "id": "met.fog",
-    "label": "Dense fog",
-    "summary": "Fog that cuts visibility enough to cause road crashes and flight delays.",
     "subjectKinds": [
       "place"
     ],
@@ -2450,9 +2229,38 @@
     "round": 1
   },
   {
+    "id": "met.freeze",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "NWS Freeze Warning",
+      "NWS Freeze Watch"
+    ],
+    "references": [
+      "NWS API: Freeze Warning, Freeze Watch",
+      "NWS VTEC phenomena: FZ Freeze, HZ Hard Freeze"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
+    "id": "met.frost",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "NWS Frost Advisory"
+    ],
+    "references": [
+      "NWS API: Frost Advisory",
+      "NWS VTEC phenomena: FR Frost"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
     "id": "met.heat",
-    "label": "Extreme heat",
-    "summary": "Dangerous heat that harms health, with heat warnings and heat risk levels.",
     "subjectKinds": [
       "place"
     ],
@@ -2472,8 +2280,6 @@
   },
   {
     "id": "met.lightning",
-    "label": "Lightning",
-    "summary": "Cloud-to-ground lightning near a place, a direct risk to people outdoors and a common cause of fires and outages.",
     "subjectKinds": [
       "place"
     ],
@@ -2490,8 +2296,6 @@
   },
   {
     "id": "met.marine",
-    "label": "Marine weather hazard",
-    "summary": "Gales, hazardous seas, freezing spray and special marine warnings for boats and coastal waters.",
     "subjectKinds": [
       "place"
     ],
@@ -2509,9 +2313,36 @@
     "round": 1
   },
   {
+    "id": "met.outlook",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "NWS Hazardous Weather Outlook"
+    ],
+    "references": [
+      "NWS API: Hazardous Weather Outlook",
+      "NWS/SAME: HWO Hazardous Weather Outlook"
+    ],
+    "gap": "Round 1 found 1 adopted or planned source with no risk: nws-alerts-api. ipaws-open has a risk, so the gate does not count it: see the risks of the record. Round 1 found no other source.",
+    "round": 1
+  },
+  {
+    "id": "met.rip-current",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "NWS Rip Current Statement"
+    ],
+    "references": [
+      "NWS API: Rip Current Statement"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
     "id": "met.severe-weather",
-    "label": "Severe weather warning",
-    "summary": "An official weather watch, warning or advisory from a national meteorological service for an area.",
     "subjectKinds": [
       "place"
     ],
@@ -2532,27 +2363,55 @@
     "round": 1
   },
   {
-    "id": "met.surf-and-rip-current",
-    "label": "Rip current and high surf",
-    "summary": "Dangerous beach conditions: rip currents, sneaker waves and high surf.",
+    "id": "met.special",
     "subjectKinds": [
       "place"
     ],
     "examples": [
-      "NWS Rip Current Statement, high risk",
+      "NWS Special Weather Statement"
+    ],
+    "references": [
+      "NWS API: Special Weather Statement",
+      "NWS/SAME: SPS Special Weather Statement"
+    ],
+    "gap": "Round 1 found 1 adopted or planned source with no risk: nws-alerts-api. ipaws-open has a risk, so the gate does not count it: see the risks of the record. Round 1 found no other source.",
+    "round": 1
+  },
+  {
+    "id": "met.surf",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "NWS High Surf Advisory",
       "NWS High Surf Warning"
     ],
     "references": [
-      "NWS API: Rip Current Statement, Beach Hazards Statement, High Surf Advisory, High Surf Warning",
+      "NWS API: High Surf Advisory, High Surf Warning",
       "UNDRR-ISC HIPs 2025: MH0701 Rogue Wave"
     ],
     "gap": null,
     "round": 1
   },
   {
+    "id": "met.surge",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "NWS Storm Surge Warning",
+      "NWS Storm Surge Watch"
+    ],
+    "references": [
+      "NWS API: Storm Surge Warning, Storm Surge Watch",
+      "NWS/SAME: SSW Storm Surge Warning, SSA Storm Surge Watch",
+      "NWS VTEC phenomena: SS Storm Surge"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
     "id": "met.thunderstorm",
-    "label": "Severe thunderstorm, hail and derecho",
-    "summary": "A storm with damaging wind, large hail or a long-lived wind event, with watches and warnings.",
     "subjectKinds": [
       "place"
     ],
@@ -2570,8 +2429,6 @@
   },
   {
     "id": "met.tornado",
-    "label": "Tornado",
-    "summary": "A rotating column of air in contact with the ground, with watches and radar-indicated or observed warnings.",
     "subjectKinds": [
       "place"
     ],
@@ -2589,9 +2446,7 @@
     "round": 1
   },
   {
-    "id": "met.tropical-cyclone",
-    "label": "Tropical cyclone",
-    "summary": "A hurricane, typhoon or tropical storm, with forecasts, watches and warnings for coasts in its path.",
+    "id": "met.tropical",
     "subjectKinds": [
       "place",
       "entity"
@@ -2613,8 +2468,6 @@
   },
   {
     "id": "met.wind",
-    "label": "High wind",
-    "summary": "Damaging non-thunderstorm wind, extreme wind in a hurricane eyewall, or a gale.",
     "subjectKinds": [
       "place"
     ],
@@ -2632,9 +2485,7 @@
     "round": 1
   },
   {
-    "id": "met.winter-storm",
-    "label": "Winter storm, blizzard and ice storm",
-    "summary": "Heavy snow, blowing snow, freezing rain or snow squalls that close roads and break power lines.",
+    "id": "met.winter",
     "subjectKinds": [
       "place"
     ],
@@ -2652,27 +2503,7 @@
     "round": 1
   },
   {
-    "id": "other.test-message",
-    "label": "Test or demonstration message",
-    "summary": "A test of an alert system, which must never wake a person but proves the path works.",
-    "subjectKinds": [
-      "place"
-    ],
-    "examples": [
-      "Required Monthly Test",
-      "NWS alert type Test"
-    ],
-    "references": [
-      "NWS/SAME: RMT, RWT, DMO, ADR",
-      "CAP 1.2 status: Test, Exercise"
-    ],
-    "gap": null,
-    "round": 1
-  },
-  {
     "id": "rescue.disaster-assistance",
-    "label": "Disaster recovery center or aid open",
-    "summary": "Aid becomes available after a disaster: recovery centers, assistance programs, food and water points.",
     "subjectKinds": [
       "place"
     ],
@@ -2688,8 +2519,6 @@
   },
   {
     "id": "rescue.search-and-rescue",
-    "label": "Search and rescue operation",
-    "summary": "A search for missing people at sea, in the mountains or after a collapse, with a request to watch.",
     "subjectKinds": [
       "place"
     ],
@@ -2705,8 +2534,6 @@
   },
   {
     "id": "rescue.shelter-open",
-    "label": "Emergency shelter open",
-    "summary": "Shelters open for people who leave their homes in a disaster, with location and capacity.",
     "subjectKinds": [
       "place"
     ],
@@ -2721,79 +2548,36 @@
     "round": 1
   },
   {
-    "id": "safety.active-threat",
-    "label": "Active shooter or attack in progress",
-    "summary": "An attack is under way at a place, and people near it need to run, hide or avoid the area.",
+    "id": "safety.civil-danger",
     "subjectKinds": [
       "place"
     ],
     "examples": [
-      "Police report an active shooter at a mall"
+      "NWS Civil Danger Warning"
     ],
     "references": [
-      "Dataminr: first alerts",
-      "Everbridge",
-      "Citizen",
-      "MAX Security: Shooting"
-    ],
-    "gap": "No open machine source. Police social posts, Citizen and commercial products report these first.",
-    "round": 1
-  },
-  {
-    "id": "safety.blue-alert",
-    "label": "Blue Alert (officer attacked)",
-    "summary": "Police ask the public for help after an officer is killed or badly injured and the suspect is at large.",
-    "subjectKinds": [
-      "place"
-    ],
-    "examples": [
-      "Blue Alert with a suspect vehicle"
-    ],
-    "references": [
-      "NWS/SAME: BLU Blue Alert"
+      "NWS API: Civil Danger Warning",
+      "NWS/SAME: CDW Civil Danger Warning"
     ],
     "gap": "Round 1 found 1 adopted or planned source with no risk: nws-alerts-api. ipaws-open has a risk, so the gate does not count it: see the risks of the record. Round 1 found no other source.",
     "round": 1
   },
   {
     "id": "safety.civil-emergency",
-    "label": "Civil emergency message",
-    "summary": "A local or state authority warns of a non-weather emergency such as a water contamination or a civil danger.",
     "subjectKinds": [
       "place"
     ],
     "examples": [
-      "Civil Danger Warning",
-      "Local Area Emergency"
+      "NWS Civil Emergency Message"
     ],
     "references": [
-      "NWS/SAME: CEM Civil Emergency Message, CDW Civil Danger Warning, LAE Local Area Emergency"
+      "NWS/SAME: CEM Civil Emergency Message"
     ],
     "gap": "Round 1 found 1 adopted or planned source with no risk: nws-alerts-api. ipaws-open has a risk, so the gate does not count it: see the risks of the record. Round 1 found no other source.",
     "round": 1
   },
   {
-    "id": "safety.crime",
-    "label": "Crime near a place",
-    "summary": "Reported crimes or police incidents near a place, for awareness rather than immediate danger.",
-    "subjectKinds": [
-      "place"
-    ],
-    "examples": [
-      "City open data: burglary reports this week"
-    ],
-    "references": [
-      "Citizen",
-      "Crisis24: crime risk",
-      "Riskline: crime"
-    ],
-    "gap": "Only city open data portals, each with its own format and delay. Not opened in round 1.",
-    "round": 1
-  },
-  {
     "id": "safety.crowd-crush",
-    "label": "Crowd crush or stampede",
-    "summary": "Dangerous crowd density at an event or transit point that can cause a crush.",
     "subjectKinds": [
       "place"
     ],
@@ -2808,8 +2592,6 @@
   },
   {
     "id": "safety.evacuation",
-    "label": "Evacuation order",
-    "summary": "Authorities order or advise people to leave an area now, with zones and routes.",
     "subjectKinds": [
       "place"
     ],
@@ -2825,43 +2607,36 @@
     "round": 1
   },
   {
-    "id": "safety.law-enforcement-warning",
-    "label": "Law enforcement warning",
-    "summary": "Police warn an area of a danger such as an armed person, a manhunt or a bomb threat.",
+    "id": "safety.local-emergency",
     "subjectKinds": [
       "place"
     ],
     "examples": [
-      "Law Enforcement Warning: stay indoors, armed suspect"
+      "NWS Local Area Emergency"
     ],
     "references": [
-      "NWS/SAME: LEW Law Enforcement Warning",
-      "CAP 1.2: Security"
+      "NWS API: Local Area Emergency",
+      "NWS/SAME: LAE Local Area Emergency"
     ],
     "gap": "Round 1 found 1 adopted or planned source with no risk: nws-alerts-api. ipaws-open has a risk, so the gate does not count it: see the risks of the record. Round 1 found no other source.",
     "round": 1
   },
   {
-    "id": "safety.missing-person.child",
-    "label": "Child abduction (AMBER Alert)",
-    "summary": "Police ask the public to look for an abducted child, with a description of the child, the suspect and the vehicle.",
+    "id": "safety.national-emergency",
     "subjectKinds": [
       "place"
     ],
     "examples": [
-      "NWS alert type Child Abduction Emergency for a state"
+      "SAME EAN Emergency Action Notification"
     ],
     "references": [
-      "NWS/SAME: CAE Child Abduction Emergency",
-      "CAP 1.2: Rescue"
+      "NWS/SAME: EAN Emergency Action Notification"
     ],
-    "gap": "Round 1 found 1 adopted or planned source with no risk: nws-alerts-api. ipaws-open has a risk, so the gate does not count it: see the risks of the record. amber-alert-ojp is later: see the reason of each.",
+    "gap": "Round 1 found 0 adopted or planned sources with no risk. ipaws-open has a risk, so the gate does not count it: see the risks of the record. Round 1 found no other source.",
     "round": 1
   },
   {
     "id": "safety.public-lands-closure",
-    "label": "Park or public land closure",
-    "summary": "A park, trail or recreation area closes or posts a danger notice.",
     "subjectKinds": [
       "place"
     ],
@@ -2876,8 +2651,6 @@
   },
   {
     "id": "safety.recall",
-    "label": "Product recall",
-    "summary": "A maker or regulator withdraws a product that can hurt people, with the product, the hazard and the remedy.",
     "subjectKinds": [
       "entity",
       "topic"
@@ -2897,8 +2670,6 @@
   },
   {
     "id": "safety.recall.consumer-product",
-    "label": "Consumer product recall",
-    "summary": "A household product, toy or appliance is recalled for fire, injury, choking or other hazards.",
     "subjectKinds": [
       "entity"
     ],
@@ -2913,8 +2684,6 @@
   },
   {
     "id": "safety.recall.drug",
-    "label": "Drug recall or falsified medicine alert",
-    "summary": "A medicine is recalled for contamination, wrong strength or bad labels, or a falsified version is found.",
     "subjectKinds": [
       "entity"
     ],
@@ -2930,8 +2699,6 @@
   },
   {
     "id": "safety.recall.food",
-    "label": "Food recall or public health alert",
-    "summary": "A food is recalled or flagged for contamination, undeclared allergens or foreign objects.",
     "subjectKinds": [
       "entity"
     ],
@@ -2949,8 +2716,6 @@
   },
   {
     "id": "safety.recall.medical-device",
-    "label": "Medical device recall",
-    "summary": "A medical device is removed or corrected because it can fail or harm the patient.",
     "subjectKinds": [
       "entity"
     ],
@@ -2965,8 +2730,6 @@
   },
   {
     "id": "safety.recall.vehicle",
-    "label": "Vehicle recall",
-    "summary": "A vehicle or part is recalled for a safety defect, sometimes with a do-not-drive or park-outside notice.",
     "subjectKinds": [
       "entity"
     ],
@@ -2983,8 +2746,6 @@
   },
   {
     "id": "safety.scam",
-    "label": "Scam or fraud wave",
-    "summary": "A scam that targets many people now, such as fake government calls, text tolls or disaster charities.",
     "subjectKinds": [
       "topic"
     ],
@@ -2999,8 +2760,6 @@
   },
   {
     "id": "safety.shelter-in-place",
-    "label": "Shelter in place",
-    "summary": "People in an area are told to go indoors, close windows and stay, from a release, a fire or a threat.",
     "subjectKinds": [
       "place"
     ],
@@ -3016,8 +2775,6 @@
   },
   {
     "id": "safety.wildlife",
-    "label": "Dangerous wildlife activity",
-    "summary": "A bear, cougar, shark or other dangerous animal is active near people, or an area closes for it.",
     "subjectKinds": [
       "place"
     ],
@@ -3031,9 +2788,24 @@
     "round": 1
   },
   {
+    "id": "security.active-threat",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "Police report an active shooter at a mall"
+    ],
+    "references": [
+      "Dataminr: first alerts",
+      "Everbridge",
+      "Citizen",
+      "MAX Security: Shooting"
+    ],
+    "gap": "Round 1 found 0 adopted or planned sources with no risk. Round 1 found no other source.",
+    "round": 1
+  },
+  {
     "id": "security.air-raid",
-    "label": "Air raid or missile alert",
-    "summary": "A siren-level alert for missiles, drones or aircraft over a region, telling people to take cover now.",
     "subjectKinds": [
       "place"
     ],
@@ -3050,8 +2822,6 @@
   },
   {
     "id": "security.armed-conflict",
-    "label": "Armed conflict event",
-    "summary": "Battles, strikes, shelling or violence against civilians in an area of armed conflict.",
     "subjectKinds": [
       "place"
     ],
@@ -3069,9 +2839,36 @@
     "round": 1
   },
   {
+    "id": "security.blue-alert",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "Blue Alert with a suspect vehicle"
+    ],
+    "references": [
+      "NWS/SAME: BLU Blue Alert"
+    ],
+    "gap": "Round 1 found 1 adopted or planned source with no risk: nws-alerts-api. ipaws-open has a risk, so the gate does not count it: see the risks of the record. Round 1 found no other source.",
+    "round": 1
+  },
+  {
+    "id": "security.child-abduction",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "NWS alert type Child Abduction Emergency for a state"
+    ],
+    "references": [
+      "NWS/SAME: CAE Child Abduction Emergency",
+      "CAP 1.2: Rescue"
+    ],
+    "gap": "Round 1 found 1 adopted or planned source with no risk: nws-alerts-api. ipaws-open has a risk, so the gate does not count it: see the risks of the record. amber-alert-ojp is later: see the reason of each.",
+    "round": 1
+  },
+  {
     "id": "security.civil-unrest",
-    "label": "Protest, riot or civil unrest",
-    "summary": "Demonstrations, riots or strikes that close roads, cause violence or bring curfews.",
     "subjectKinds": [
       "place"
     ],
@@ -3089,9 +2886,23 @@
     "round": 1
   },
   {
+    "id": "security.crime",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "City open data: burglary reports this week"
+    ],
+    "references": [
+      "Citizen",
+      "Crisis24: crime risk",
+      "Riskline: crime"
+    ],
+    "gap": "Round 1 found 0 adopted or planned sources with no risk. Round 1 found no other source.",
+    "round": 1
+  },
+  {
     "id": "security.curfew",
-    "label": "Curfew or movement restriction",
-    "summary": "An authority orders people to stay home or limits movement in an area for a period.",
     "subjectKinds": [
       "place"
     ],
@@ -3107,8 +2918,6 @@
   },
   {
     "id": "security.explosive-ordnance",
-    "label": "Unexploded ordnance or mine hazard",
-    "summary": "Unexploded bombs, mines or shells found or present in an area, with closures and danger to people.",
     "subjectKinds": [
       "place"
     ],
@@ -3123,8 +2932,6 @@
   },
   {
     "id": "security.kidnap",
-    "label": "Kidnap risk",
-    "summary": "Kidnaps of residents or travelers in an area, often for ransom.",
     "subjectKinds": [
       "place"
     ],
@@ -3140,9 +2947,22 @@
     "round": 1
   },
   {
+    "id": "security.law-enforcement",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "Law Enforcement Warning: stay indoors, armed suspect"
+    ],
+    "references": [
+      "NWS/SAME: LEW Law Enforcement Warning",
+      "CAP 1.2: Security"
+    ],
+    "gap": "Round 1 found 1 adopted or planned source with no risk: nws-alerts-api. ipaws-open has a risk, so the gate does not count it: see the risks of the record. Round 1 found no other source.",
+    "round": 1
+  },
+  {
     "id": "security.maritime-threat",
-    "label": "Attack or threat to shipping",
-    "summary": "Piracy, armed robbery, missile or drone attacks and boarding of ships in a sea area.",
     "subjectKinds": [
       "place"
     ],
@@ -3159,9 +2979,21 @@
     "round": 1
   },
   {
+    "id": "security.missing-person",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "SAME MEP Missing and Endangered Persons"
+    ],
+    "references": [
+      "NWS/SAME: MEP Missing and Endangered Persons"
+    ],
+    "gap": "Round 1 found 0 adopted or planned sources with no risk. ipaws-open has a risk, so the gate does not count it: see the risks of the record. Round 1 found no other source.",
+    "round": 1
+  },
+  {
     "id": "security.terrorism",
-    "label": "Terrorism threat or attack",
-    "summary": "A government warning of a terrorist threat, or a terrorist attack that has happened.",
     "subjectKinds": [
       "place",
       "topic"
@@ -3181,8 +3013,6 @@
   },
   {
     "id": "security.travel-advisory",
-    "label": "Government travel advisory",
-    "summary": "A government changes its advice on travel to a country or region for safety, health or security reasons.",
     "subjectKinds": [
       "place"
     ],
@@ -3199,9 +3029,23 @@
     "round": 1
   },
   {
+    "id": "system.test",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "Required Monthly Test",
+      "NWS alert type Test"
+    ],
+    "references": [
+      "NWS/SAME: RMT, RWT, DMO",
+      "CAP 1.2 status: Test, Exercise"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
     "id": "transport.air.accident",
-    "label": "Aircraft accident",
-    "summary": "A crash or serious incident of an aircraft, with the operator, place and casualties.",
     "subjectKinds": [
       "place",
       "entity"
@@ -3218,8 +3062,6 @@
   },
   {
     "id": "transport.air.conflict-zone",
-    "label": "Conflict zone airspace warning",
-    "summary": "A regulator warns airlines of a risk to aircraft over a conflict zone.",
     "subjectKinds": [
       "place"
     ],
@@ -3234,8 +3076,6 @@
   },
   {
     "id": "transport.air.disruption",
-    "label": "Airport delay, ground stop or closure",
-    "summary": "Flights at an airport are held, delayed by a program or stopped, or the airport closes.",
     "subjectKinds": [
       "place",
       "entity"
@@ -3254,8 +3094,6 @@
   },
   {
     "id": "transport.air.hazard-weather",
-    "label": "Aviation weather hazard",
-    "summary": "SIGMETs and advisories for turbulence, icing, convection, volcanic ash or low ceilings along air routes.",
     "subjectKinds": [
       "place"
     ],
@@ -3271,8 +3109,6 @@
   },
   {
     "id": "transport.air.notam",
-    "label": "Airspace restriction (NOTAM or TFR)",
-    "summary": "A notice that closes or restricts airspace, a runway or a navigation aid, including temporary flight restrictions.",
     "subjectKinds": [
       "place"
     ],
@@ -3287,27 +3123,7 @@
     "round": 1
   },
   {
-    "id": "transport.hazmat-incident",
-    "label": "Hazardous materials transport incident",
-    "summary": "A release from a truck, train, pipeline or ship that carries hazardous materials.",
-    "subjectKinds": [
-      "place"
-    ],
-    "examples": [
-      "Tanker truck leak closes a highway"
-    ],
-    "references": [
-      "NWS/SAME: HMW Hazardous Materials Warning",
-      "FEMA Lifelines: Hazardous Materials",
-      "EM-DAT: Technological > Industrial > Chemical spill"
-    ],
-    "gap": "Round 1 found 1 adopted or planned source with no risk: nws-alerts-api. ipaws-open has a risk, so the gate does not count it: see the risks of the record. nrc-uscg-reports is later: see the reason of each.",
-    "round": 1
-  },
-  {
     "id": "transport.rail.accident",
-    "label": "Train accident or derailment",
-    "summary": "A derailment, collision or grade crossing crash, sometimes with a hazardous materials release.",
     "subjectKinds": [
       "place",
       "entity"
@@ -3325,8 +3141,6 @@
   },
   {
     "id": "transport.road.border-wait",
-    "label": "Border crossing delay",
-    "summary": "Long waits or closure at a land border crossing.",
     "subjectKinds": [
       "place"
     ],
@@ -3341,8 +3155,6 @@
   },
   {
     "id": "transport.road.incident",
-    "label": "Road closure, crash or work zone",
-    "summary": "A road is closed or slowed by a crash, works, weather or an event.",
     "subjectKinds": [
       "place"
     ],
@@ -3360,8 +3172,6 @@
   },
   {
     "id": "transport.sea.navigational-warning",
-    "label": "Navigational warning",
-    "summary": "A warning to ships of hazards such as drifting objects, firing exercises or failed lights.",
     "subjectKinds": [
       "place"
     ],
@@ -3377,8 +3187,6 @@
   },
   {
     "id": "transport.space.launch",
-    "label": "Rocket launch or reentry hazard area",
-    "summary": "A launch with closures of airspace, sea and roads, and possible debris or sonic booms.",
     "subjectKinds": [
       "place",
       "entity"
@@ -3394,8 +3202,6 @@
   },
   {
     "id": "transport.transit.service-alert",
-    "label": "Public transit disruption",
-    "summary": "A bus, train or ferry line is suspended, rerouted or delayed.",
     "subjectKinds": [
       "entity",
       "place"

@@ -53,6 +53,18 @@ export interface EscalationStart {
   readonly at: Instant;
 }
 
+/**
+ * The end of the escalations of a person in a live incident. The incident no longer reaches the person, for example
+ * after a cancel of the area of the person. The runtime keeps each end in its log. A later match of the person starts
+ * a new episode, and the sends of the new episode get new message keys.
+ */
+export interface EscalationEnd {
+  /** A report of the incident: its anchor at the end. */
+  readonly incident: ReportId;
+  readonly person: PersonId;
+  readonly at: Instant;
+}
+
 /** The input of `route`. */
 export interface RouteInput {
   /** The merge state. Its deliveries and its acknowledgments go to each escalation. */
@@ -65,6 +77,8 @@ export interface RouteInput {
   readonly assess?: AssessPolicy | undefined;
   /** The starts that the log has. */
   readonly starts: readonly EscalationStart[];
+  /** The ends that the log has. The default is none. */
+  readonly ends?: readonly EscalationEnd[] | undefined;
   /** The delivery keys with no more repeats. */
   readonly cancelled: ReadonlySet<string>;
   /** The descriptor of each channel. A delivery of a channel with the acknowledgment `poll` gets a poll. */
@@ -88,6 +102,14 @@ export interface Route {
   /** The deliveries that need a poll for an acknowledgment: each one with a receipt, no cancel and a channel that polls. */
   readonly polls: readonly Delivery[];
   readonly plan: EscalationPlan;
+  /** The episode of the escalation: the count of the earlier ends of the person in the incident. Its sends have it. */
+  readonly episode: number;
+  /**
+   * The end of the episode: the end in the log, or the end at `now` when the live incident no longer reaches the
+   * person. When `freshEnd` is true, the log does not have the end, and the runtime writes it.
+   */
+  readonly end?: EscalationEnd;
+  readonly freshEnd: boolean;
   /**
    * Why the incident reaches the person: today the watched place of the match with the first id (`placeWhy`). A route
    * of an incident that is not live, or of a match by subjects, has no why.
@@ -96,14 +118,19 @@ export interface Route {
 }
 
 /**
- * This function gives the escalations at `now`, in the order of the anchor, the person and the level.
+ * This function gives the escalations at `now`, in the order of the anchor, the person, the episode and the level.
  *
  * - The levels of an incident and a person are each level of a start or a delivery, and the assessed level.
  *   The assessed level counts only when it is higher than those levels and the person has a policy for it.
  *   An incident that is not live has no assessed level.
  * - Only the highest level continues. A lower level ends at the start of a higher level, thus its repeats stop.
  *   An acknowledgment of the higher level also covers each lower level.
- * - Thus the level does not go down. An escalation continues until an acknowledgment or the end of the incident.
+ * - Thus the level does not go down. An escalation continues until an acknowledgment, the end of the incident or the end of the person.
+ * - The end of the person: when a live incident no longer reaches a person (the assessed level is `none`), each
+ *   escalation of the person ends at `now`. The route gives that end (`freshEnd`), and the runtime writes it to the log.
+ * - Each end of the log closes an episode of the person. A later match starts a new episode with new message keys. Its starts,
+ *   its deliveries and its acknowledgments come after the end. An acknowledgment between the end and the new start covers nothing.
+ * - An earlier episode gets an escalation only when one of its deliveries has no cancel. Its end is its end in the log.
  * - An incident that is not live gets an escalation only when one of its deliveries has no cancel. Its end is its expiry, or `now`.
  * - The start of an escalation is the start in the log. A new escalation starts at `now`, or earlier when the ledger shows an earlier start.
  */
@@ -119,54 +146,95 @@ export function route(input: RouteInput): Route[] {
     const open = deliveries.some((delivery) => !input.cancelled.has(delivery.key));
     if (!incident.live && !open) continue;
     const starts = input.starts.filter(ofIncident);
+    const acks = state.acks.filter(ofIncident);
+    const ends = (input.ends ?? []).filter(ofIncident);
     const end = endOf(incident, now);
     for (const recipient of input.recipients) {
       const person = recipient.watch.person;
       const policyOf = (level: Level): EscalationPolicy | undefined => recipient.policies.find((entry) => entry.level === level);
-      const levels = new Set<Level>();
-      for (const item of [...starts, ...deliveries]) if (item.person === person) levels.add(item.level);
-      // The level does not go down: an assessed level below a level of the log starts nothing.
-      const top = Math.max(-1, ...[...levels].map((level) => LEVELS.indexOf(level)));
+      const mine = <T extends { readonly person: PersonId }>(items: readonly T[]): T[] => items.filter((item) => item.person === person);
+      // The ends of the person in time order. Each one closes an episode.
+      const closes = mine(ends)
+        .filter((item) => Number.isFinite(item.at))
+        .sort((a, b) => a.at - b.at || compare(a.incident, b.incident));
+      // The episode of a time: the count of the ends before it. A time that is not a number is in the first episode.
+      const episodeOf = (at: Instant): number => closes.filter((close) => close.at < at).length;
       const assessment = incident.live ? assess(incident, recipient.watch, input.places, policy) : undefined;
-      if (assessment !== undefined) {
-        const assessed = assessment.level;
-        if (assessed !== "none" && LEVELS.indexOf(assessed) > top && policyOf(assessed) !== undefined) levels.add(assessed);
-      }
-      const why = assessment === undefined ? undefined : placeWhy(assessment.places);
-      const ordered = LEVELS.filter((level) => levels.has(level));
-      // The start in the log of each level, or `undefined`.
-      const logged = ordered.map((level) => earliestStart(starts, person, level));
-      // A higher level that has no start starts at `now`.
-      const startAt = ordered.map((_, index) => logged[index]?.at ?? now);
-      ordered.forEach((level, index) => {
-        const endsAt = earliest([end, ...startAt.slice(index + 1)]);
-        // A level of the log with no policy now gets a policy with no step: it sends nothing, and its end still stops its repeats.
-        const chosen = policyOf(level) ?? { level, steps: [], exhaustedAfter: 0 };
-        const plan = escalate({
-          policy: chosen,
-          person,
-          incident,
-          since: startAt[index]!,
-          ...(endsAt === undefined ? {} : { endsAt }),
-          deliveries: state.deliveries,
-          acknowledgments: state.acks,
-          cancelled: input.cancelled,
-          rank: input.rank,
-          rankDelay: input.rankDelay,
-          quiet: recipient.watch.quiet,
-          now,
+      for (let episode = 0; episode <= closes.length; episode += 1) {
+        const closed = closes[episode];
+        const current = closed === undefined;
+        const ownStarts = mine(starts).filter((item) => episodeOf(item.at) === episode);
+        const ownDeliveries = mine(deliveries).filter((item) => episodeOf(item.at) === episode);
+        // An earlier episode continues only to cancel its deliveries with no cancel.
+        if (!current && ownDeliveries.every((delivery) => input.cancelled.has(delivery.key))) continue;
+        const levels = new Set<Level>();
+        for (const item of [...ownStarts, ...ownDeliveries]) levels.add(item.level);
+        // The level does not go down: an assessed level below a level of the episode starts nothing.
+        const top = Math.max(-1, ...[...levels].map((level) => LEVELS.indexOf(level)));
+        if (current && assessment !== undefined) {
+          const assessed = assessment.level;
+          if (assessed !== "none" && LEVELS.indexOf(assessed) > top && policyOf(assessed) !== undefined) levels.add(assessed);
+        }
+        // The live incident no longer reaches the person: the episode ends now, and the log keeps the end.
+        const freshEnd = current && assessment?.level === "none" && levels.size > 0;
+        const closing = closed ?? (freshEnd ? { incident: incident.anchor, person, at: now } : undefined);
+        const why = current && assessment !== undefined ? placeWhy(assessment.places) : undefined;
+        // The first time of the episode. A later episode keeps only the acknowledgments from it.
+        const first = Math.min(now, ...[...ownStarts, ...ownDeliveries].map((item) => item.at).filter(Number.isFinite));
+        const ownAcks = mine(acks).filter((ack) => episodeOf(ack.at) === episode && (episode === 0 || ack.at >= first));
+        const ordered = LEVELS.filter((level) => levels.has(level));
+        // The start in the log of each level, or `undefined`.
+        const logged = ordered.map((level) => earliestStart(ownStarts, person, level));
+        // A higher level that has no start starts at `now`. A start of a later episode comes after the end before it, also
+        // when the clock has not moved past that end. Thus the start is in its own episode.
+        const after = closes[episode - 1]?.at;
+        const startAt = ordered.map((_, index) => logged[index]?.at ?? (after === undefined ? now : Math.max(now, after + 1)));
+        ordered.forEach((level, index) => {
+          const endsAt = earliest([end, closing?.at, ...startAt.slice(index + 1)]);
+          // A level of the log with no policy now gets a policy with no step: it sends nothing, and its end still stops its repeats.
+          const chosen = policyOf(level) ?? { level, steps: [], exhaustedAfter: 0 };
+          const plan = escalate({
+            policy: chosen,
+            person,
+            incident,
+            since: startAt[index]!,
+            ...(endsAt === undefined ? {} : { endsAt }),
+            deliveries: ownDeliveries,
+            acknowledgments: ownAcks,
+            cancelled: input.cancelled,
+            rank: input.rank,
+            rankDelay: input.rankDelay,
+            quiet: recipient.watch.quiet,
+            episode,
+            now,
+          });
+          const ours = ownDeliveries.filter((delivery) => delivery.level === level);
+          const active = plan.state === "sent" || plan.state === "last" || plan.state === "exhausted";
+          const polls = active ? ours.filter((delivery) => delivery.receipt !== undefined && !input.cancelled.has(delivery.key) && polling.has(delivery.channel)) : [];
+          const found = logged[index];
+          const fresh = found === undefined;
+          const start: EscalationStart = { incident: found?.incident ?? incident.anchor, level, person, at: plan.start };
+          routes.push({
+            incident,
+            person,
+            policy: chosen,
+            start,
+            fresh,
+            deliveries: ours,
+            polls,
+            plan,
+            episode,
+            ...(closing === undefined ? {} : { end: closing }),
+            freshEnd,
+            ...(why === undefined ? {} : { why }),
+          });
         });
-        const ours = deliveries.filter((delivery) => delivery.person === person && delivery.level === level);
-        const active = plan.state === "sent" || plan.state === "last" || plan.state === "exhausted";
-        const polls = active ? ours.filter((delivery) => delivery.receipt !== undefined && !input.cancelled.has(delivery.key) && polling.has(delivery.channel)) : [];
-        const found = logged[index];
-        const fresh = found === undefined;
-        const start: EscalationStart = { incident: found?.incident ?? incident.anchor, level, person, at: plan.start };
-        routes.push({ incident, person, policy: chosen, start, fresh, deliveries: ours, polls, plan, ...(why === undefined ? {} : { why }) });
-      });
+      }
     }
   }
-  return routes.sort((a, b) => compare(a.incident.anchor, b.incident.anchor) || compare(a.person, b.person) || LEVELS.indexOf(a.policy.level) - LEVELS.indexOf(b.policy.level));
+  return routes.sort(
+    (a, b) => compare(a.incident.anchor, b.incident.anchor) || compare(a.person, b.person) || a.episode - b.episode || LEVELS.indexOf(a.policy.level) - LEVELS.indexOf(b.policy.level),
+  );
 }
 
 /** The codes that can reach `life-safety`: the life-safety kinds, and the coverage of each of them. */

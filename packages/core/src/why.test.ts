@@ -18,8 +18,12 @@ const PLAIN = ["Home", "Office", "Mom's house", "Lake cabin", "Smith & Sons", "F
 // Labels that a channel text must not show: an address, a point, a region code, a code in capitals, other characters.
 const UNSAFE = ["12 Main St", "Apt 4B", "KSZ083", "020173", "KSC173", "31.97, -99.90", "31.9N 99.9W", "DFW", "TX", "home: 5th floor", "Café", "", "   ", "\u{1F600} home", "Route 66", "Home\nKSZ083"];
 
+// The id of a topic is a code of the taxonomy, so the schema refuses each other id.
+const TOPIC_IDS = ["met", "met.tornado", "infra.power.outage"];
+
 function randomKey(r: Random): NodeKey {
-  return `${r.pick(SYSTEMS)}:${r.pick(IDS)}`;
+  const system = r.pick(SYSTEMS);
+  return `${system}:${r.pick(system === "topic" ? TOPIC_IDS : IDS)}`;
 }
 
 function randomRecord(r: Random): WhyRecord {

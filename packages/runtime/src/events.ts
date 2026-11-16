@@ -3,7 +3,7 @@
  * events and the configuration, and of nothing else. Thus a restart reads the log and gets the same
  * state as a run with no restart.
  */
-import type { Acknowledgment, ChannelId, Cursor, Delivery, EscalationStart, FetchRecord, Instant, MapProblem, Observation, Report, ReportId, SendOutcome, SourceId } from "@mark1russell7/alerts";
+import type { Acknowledgment, ChannelId, Cursor, Delivery, EscalationEnd, EscalationStart, FetchRecord, Instant, MapProblem, Observation, Report, ReportId, SendOutcome, SourceId } from "@mark1russell7/alerts";
 
 /** The kind of a failed call of a channel. */
 export type ChannelFailureKind = Extract<SendOutcome, { readonly ok: false }>["kind"];
@@ -115,6 +115,14 @@ export interface EscalationEvent extends Envelope<"escalation"> {
   readonly start: EscalationStart;
 }
 
+/**
+ * The escalations of a person in a live incident ended: the incident no longer reaches the person. A later match of
+ * the person starts a new episode.
+ */
+export interface EscalationEndEvent extends Envelope<"escalation-end"> {
+  readonly end: EscalationEnd;
+}
+
 /** One event of the log of the runtime. */
 export type RuntimeEvent =
   | StartedEvent
@@ -124,6 +132,7 @@ export type RuntimeEvent =
   | BackEvent
   | SystemEvent
   | EscalationEvent
+  | EscalationEndEvent
   | DeliveryEvent
   | AcknowledgmentEvent
   | CancelledEvent
@@ -132,7 +141,22 @@ export type RuntimeEvent =
   | RefusedEvent;
 
 /** The types of the events. */
-export const EVENT_TYPES: readonly RuntimeEvent["type"][] = ["started", "observation", "fetch", "ended", "back", "system", "escalation", "delivery", "acknowledgment", "cancelled", "attempt", "settled", "refused"];
+export const EVENT_TYPES: readonly RuntimeEvent["type"][] = [
+  "started",
+  "observation",
+  "fetch",
+  "ended",
+  "back",
+  "system",
+  "escalation",
+  "escalation-end",
+  "delivery",
+  "acknowledgment",
+  "cancelled",
+  "attempt",
+  "settled",
+  "refused",
+];
 
 /** This function gives the fields of the envelope of an event at a time. */
 export function envelope<T extends RuntimeEvent["type"]>(type: T, id: string, time: Instant): Envelope<T> {
