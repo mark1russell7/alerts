@@ -2,8 +2,8 @@
  * The settings of the copy of this runtime: the file `copy.json` of the private folder. The design is in the section
  * "The copies of the system" of `docs/CONTRACTS.md`.
  *
- * Each copy has its own file. Without the file, the runtime is the only copy, `ONLY_COPY`, with rank 0. A change of
- * the file needs `install.ts restart`, because the reload hook watches only `config.json` and `secrets.env`.
+ * Each copy has its own file. Without the file, the runtime is the only copy, `ONLY_COPY`, with rank 0. The reload hook
+ * of `reload.ts` watches the file, and a change that passes the check restarts the runtime.
  */
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";

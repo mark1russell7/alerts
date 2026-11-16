@@ -377,7 +377,7 @@ Each copy loads the same `config.json` and `secrets.env`. The file `copy.json` o
 
 Without `copy.json`, the runtime is the only copy. It has rank 0 and no exchange. The key `COPY_TOKEN` of `secrets.env` gives the token of the exchange, the same for each copy. The check of the profile `daemon` needs it when the copy has other copies.
 
-The runtime reads `copy.json` only at its start. The reload hook watches only `config.json` and `secrets.env`. Thus, after a change of `copy.json`, start `node src/install.ts restart`. A problem of the file stops the start, and the problem holds no address and no URL.
+The runtime reads `copy.json` at its start, and the reload hook watches it with `config.json` and `secrets.env`. A change that passes the check restarts the runtime. A file with problems gives way to the last good set of the private files, and a problem holds no address and no URL.
 
 ### The rank wait
 
@@ -940,12 +940,18 @@ The runtime reads two private files in the folder `ALERTS_HOME`, or in `~/.alert
 
 The function `checkTexts` checks the texts of the two files, as the start does. It reads no file. The keys go through `parseEnvFile` of `@mark1russell7/service/host`, and `envSecrets` gives them as the secret store. The keys do not go into `process.env`, because each child process gets that environment. A read error gives only its code, because the path can hold a user name.
 
-The start keeps the last good configuration, and a change of the files restarts the runtime (`reload.ts`):
+The start keeps the last good set of the private files, and a change of the files restarts the runtime (`reload.ts`). The private files of a start are `config.json`, `secrets.env` and `copy.json`.
 
-- When `config.json` passes the check, the start uses it and writes it as the last good copy `config.good.json`. The write is atomic.
-- When `config.json` has problems, the start uses the last good copy and gives the problems. Thus a bad edit does not stop the alerts.
-- When the two copies have problems, `startConfig` throws `ConfigRefused`, and the process does not start.
-- In the profile `daemon`, the hook of each pass reads the two files again. A change that passes the check stops the runtime, and the supervisor starts it again.
+- When the three files pass the check, the start uses them. A ready runtime writes them as the last good set `start.good.json`. The write is atomic, with the permissions 0600, because the set holds the keys.
+- The runtime is ready when its service operates and one pass ended. Thus a start that throws, or a startup that fails, does not write the set.
+- When the files have problems, the start uses the last good set and gives the problems. Thus a bad edit does not stop the alerts.
+- Before a start uses the files, it writes the start marker `start.pending`. The marker holds the key of the start: the SHA-256 of the three texts and of the restart request. A ready runtime removes the marker.
+- A start that finds the marker with its own key knows that the last start with these files stopped before it was ready. Then it uses the last good set, and it keeps the marker. Thus each later start with the same files uses the set at once.
+- A new restart request or a change of a file gives a new key. Then the next start uses the private files again.
+- When the last good set has the same texts as the files, the start uses the files again. Its note tells that the fault is not in the private files, for example new code that stops at each start.
+- When the files and the last good set both have problems, `startConfig` throws `ConfigRefused`, and the process does not start.
+- The marker does not find a stop after the runtime is ready. A runtime that stops later gives no way back to an older set.
+- In the profile `daemon`, the hook of each pass reads the three files again. A change that passes the check stops the runtime, and the supervisor starts it again.
 - A change with problems gives its problems one time, and the runtime keeps the files of its start.
 - A new text of the restart request `restart.request` in the folder stops the runtime with no check. Then the supervisor starts it again.
 - A read error of the request gives no restart. The start reads the request too, thus the new runtime does not restart for the same request.
@@ -954,8 +960,8 @@ A deploy of new code to the live checkout does these steps, with no elevated she
 
 1. Check out the new code, and install its dependencies.
 2. Start `node src/install.ts restart` in the runtime package. It checks the private files with the new code. A problem stops it before the request.
-3. The command writes a new request. Then it waits for a new process ID in `host/runtime.json`, and for the readiness of the new runtime.
-4. Code 0 tells that the new runtime is ready. Code 1 gives the problem, and code 2 gives a wrong command.
+3. The command writes a new request. Then it waits for a new process ID in `host/runtime.json`, for the readiness of the new runtime, and for the end of its start marker.
+4. Code 0 tells that the new runtime is ready with the private files. Code 1 gives the problem, for example a new runtime on the last good set. Code 2 gives a wrong command.
 
 The check of the profile `daemon` also needs the key `HEALTHCHECKS_PING_URL`, because the live instance needs its outside heartbeat.
 
