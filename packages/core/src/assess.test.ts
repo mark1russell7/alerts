@@ -5,6 +5,7 @@ import type {
   Area,
   AssessedLevel,
   Incident,
+  IncidentLine,
   LevelRule,
   LevelTable,
   PersonId,
@@ -26,13 +27,14 @@ import {
   classOf,
   hasKind,
   higherLevel,
+  linesAt,
   matchPlaces,
   matchSubjects,
   regionContains,
   regionCovers,
   tableLevel,
 } from "./assess.ts";
-import { assessmentSchema } from "./schemas.ts";
+import { assessmentSchema, incidentSchema } from "./schemas.ts";
 import { areasWithoutBlocks } from "./shapes.ts";
 
 const SEEDS = seedsFrom(process.env["SEED"], [1, 2, 3, 4, 5, 6, 7, 8]);
@@ -547,6 +549,105 @@ describe("the properties of the assessment", () => {
       expect(rank(fewer.level)).toBeLessThanOrEqual(rank(result.level));
       // The level is the highest of the levels at each place alone.
       const alone = [home, other].map((place) => assess(subject, person(rules, [place]), places).level);
+      expect(result.level).toBe(alone.reduce(higherLevel, "none"));
+    }
+  });
+});
+
+describe("the level at each place (AL-14)", () => {
+  // A made-up earthquake at 0, 0 in the ocean, with one line for each band of the shaking. No position is a real place.
+  const east = (km: number): Position => [km / ((6371.0088 * Math.PI) / 180), 0];
+  const quake = { code: "geo.earthquake", label: "geo.earthquake" };
+  const idOf = (digit: number): ReportId => String(digit).repeat(64) as ReportId;
+  const band = (digit: number, severity: Severity, radiusKm: number): IncidentLine => ({
+    report: idOf(digit),
+    kind: quake,
+    severity,
+    urgency: "immediate",
+    certainty: "observed",
+    areas: [{ type: "circle", center: [0, 0], radiusKm, block: `${idOf(digit)}/band` }],
+  });
+  const bands = [band(1, "extreme", 40), band(2, "severe", 76), band(3, "moderate", 137), band(4, "minor", 522)];
+  const shaken = incident({
+    kind: quake.code,
+    anchor: idOf(1),
+    reports: bands.map((line) => line.report),
+    areas: bands.flatMap((line) => line.areas),
+    lines: bands,
+  });
+  const placeAt = (km: number): WatchedPlace => ({ id: home, codes: [], at: east(km), bufferKm: 0 });
+  const tableOf = (line: IncidentLine): AssessedLevel => tableLevel(DEFAULT_ASSESS_POLICY, line).level;
+
+  it("gives each place the highest level of the bands that hold it", () => {
+    expect(incidentSchema.safeParse(shaken).success).toBe(true);
+    const levelAt = (km: number): AssessedLevel => assess(shaken, person([], [home]), [placeAt(km)]).level;
+    expect(levelAt(20)).toBe(tableLevel(DEFAULT_ASSESS_POLICY, shaken).level);
+    expect(levelAt(100)).toBe(tableOf(bands[2] as IncidentLine));
+    expect(levelAt(300)).toBe(tableOf(bands[3] as IncidentLine));
+    expect(levelAt(600)).toBe("none");
+    // The far places get lower levels than the center.
+    expect(rank(levelAt(300))).toBeLessThan(rank(levelAt(100)));
+    expect(rank(levelAt(100))).toBeLessThan(rank(levelAt(20)));
+  });
+
+  it("tells the bands that gave the level of a place", () => {
+    const result = assess(shaken, person([], [home]), [placeAt(100)]);
+    expect(result.reasons.filter((reason) => reason.kind === "place-table")).toEqual([
+      { kind: "place-table", place: home, reports: [idOf(3), idOf(4)], level: tableOf(bands[2] as IncidentLine) },
+    ]);
+    expect(assessmentSchema.safeParse(result).success).toBe(true);
+    // At the center, the level is the level of the incident, so no reason tells it again.
+    expect(assess(shaken, person([], [home]), [placeAt(20)]).reasons.some((reason) => reason.kind === "place-table")).toBe(false);
+    expect(linesAt(shaken, placeAt(100)).map((line) => line.report)).toEqual([idOf(3), idOf(4)]);
+    expect(linesAt(incident(), placeAt(100))).toEqual([]);
+  });
+
+  it("applies a rule of the person to the level of the place", () => {
+    const low = tableOf(bands[3] as IncidentLine);
+    const result = assess(shaken, person([{ places: [home], max: low }]), [placeAt(20)]);
+    expect(result.level).toBe(low);
+    // A rule above the level of the place does not raise it.
+    expect(assess(shaken, person([{ max: "life-safety" }], [home]), [placeAt(300)]).level).toBe(low);
+  });
+
+  it.each(SEEDS)("gives the level of the incident as the highest level of its lines alone (seed %i)", (seed) => {
+    const r = random(seed);
+    const kinds = ["met.tornado", "met.flood.flash", "geo.earthquake", "met.wind.high"];
+    for (let round = 0; round < 200; round += 1) {
+      const kind = r.pick(kinds);
+      const count = r.int(2, 4);
+      const lines: IncidentLine[] = Array.from({ length: count }, (_, index) => {
+        const areas = [...(r.chance(0.5) ? atHome : []), ...(r.chance(0.5) ? atOther : [])];
+        return {
+          report: idOf(index + 1),
+          kind: { code: kind, label: kind },
+          severity: r.pick([...SEVERITIES, "unknown"] as const),
+          urgency: r.pick([...URGENCIES, "unknown"] as const),
+          certainty: "observed",
+          areas: areas.length === 0 ? atHome : areas,
+        };
+      });
+      const status = r.chance(0.8) ? "actual" : r.pick(STATUSES);
+      const whole = incident({
+        kind,
+        status,
+        severity: r.pick([...SEVERITIES, "unknown"] as const),
+        urgency: r.pick([...URGENCIES, "unknown"] as const),
+        anchor: idOf(1),
+        reports: lines.map((line) => line.report),
+        areas: [...new Map(lines.flatMap((line) => line.areas).map((area) => [JSON.stringify(area), area])).values()],
+        lines,
+      });
+      expect(incidentSchema.safeParse(whole).success).toBe(true);
+      const rules: LevelRule[] = Array.from({ length: r.int(0, 2) }, () => ({
+        ...(r.chance(0.5) ? { places: [r.pick([home, other])] } : {}),
+        max: r.pick(ASSESSED_LEVELS),
+      }));
+      const result = assess(whole, person(rules), places);
+      expect(assessmentSchema.safeParse(result).success).toBe(true);
+      const alone = lines.map(
+        (line) => assess(incident({ kind, status, severity: line.severity, urgency: line.urgency, areas: line.areas }), person(rules), places).level,
+      );
       expect(result.level).toBe(alone.reduce(higherLevel, "none"));
     }
   });

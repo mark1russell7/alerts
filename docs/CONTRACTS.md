@@ -487,6 +487,10 @@ Each lookup only grows with the severity and with the urgency. So a more severe 
 
 The level for a person is the highest level at the places of the person. A rule of the person can lower the level of some kinds at some places. For example, warnings at the places of other people can come as `urgent`. At each place, the first rule that matches applies, and a rule does not raise the level.
 
+An incident can have lines (`Incident.lines`): one for each report that gives its values, with the areas of that report. The merge gives the lines only when their values differ. Then the table level at a place comes from the lines whose areas hold the place. It is the highest level of those lines.
+
+For example, an earthquake has one line for each band of its shaking. A place in the outer band gets the level of that band, not the level of the center. The reason `place-table` tells the reports of the lines at the place. A rule of the person then applies to that level. A seeded gate holds the rule: the level of an incident is the highest level of each of its lines alone.
+
 The assessment reads no clock, because the level is about the incident. The escalation reads `now`, so it holds the night rule:
 
 - Each person can have a quiet window (`PersonWatch.quiet`): a time zone, and a start and an end in local times, for example `22:00` to `07:00`. An equal start and end give the full day.

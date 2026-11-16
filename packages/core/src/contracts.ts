@@ -499,6 +499,27 @@ export interface Incident {
   readonly live: boolean;
   /** The count of different origins that report the event. */
   readonly corroboration: number;
+  /**
+   * The lines of the incident: one for each report that gives its values, with the values and the areas of that
+   * report. The merge gives them only when the values of two lines differ. The assessment gives each place the
+   * level of the lines whose areas hold that place. Without lines, each place gets the level of the incident.
+   */
+  readonly lines?: readonly IncidentLine[];
+}
+
+/**
+ * One line of an incident: a report that gives the values of the incident, with its own values and areas. For
+ * example, each band of the shaking of an earthquake is one line, with its severity and its circle.
+ */
+export interface IncidentLine {
+  readonly report: ReportId;
+  readonly kind: Kind;
+  readonly severity: Severity;
+  readonly urgency: Urgency;
+  readonly certainty: Certainty;
+  readonly onset?: Instant;
+  /** The live areas of the report, with the keys of the blocks of the incident. */
+  readonly areas: readonly Area[];
 }
 
 // =============================================================================
@@ -1021,6 +1042,11 @@ export type AssessReason =
     }
   /** The person watches a subject of the incident. */
   | { readonly kind: "subject"; readonly subject: SubjectWatch }
+  /**
+   * The level of the table at this place is not the level of the incident. The lines of these reports hold the
+   * place, and the highest table of those lines gives the level.
+   */
+  | { readonly kind: "place-table"; readonly place: PlaceId; readonly reports: readonly ReportId[]; readonly level: AssessedLevel }
   /** The table gave this level. The class is absent for the table `otherwise`. */
   | {
       readonly kind: "table";
