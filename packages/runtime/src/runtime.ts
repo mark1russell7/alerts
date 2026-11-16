@@ -67,7 +67,10 @@ export interface Pass {
   readonly view: SystemView;
   /** The delivery step of the pass, when the runtime has a delivery. */
   readonly delivery?: DeliveryStep;
-  /** The time of the next pass: the next fetch of a source, the next timer of a fold or the next time of the delivery. */
+  /**
+   * The time of the next pass: the next fetch of a source, the next timer of a fold or the next time of the delivery.
+   * It is after `at`. A source that came due during the pass gives `at + 1`, thus the next pass starts at once and fetches it.
+   */
   readonly wakeAt?: Instant;
   /** The ids of the events that are different from the events of the log with the same ids. The log kept its events. */
   readonly conflicts: readonly string[];
@@ -187,7 +190,10 @@ export function openRuntime(options: RuntimeOptions): Runtime {
       const delivery = await dispatcher?.step(at);
       if (delivery !== undefined) conflicts.push(...delivery.conflicts);
 
-      const wakeAt = earliest([...config.sources.map((descriptor) => nextFetch(state, descriptor)), view.wakeAt, delivery?.wakeAt]);
+      // A source can come due after `start`, while the fetches of the pass run. A fetch that runs to its limit of one
+      // interval also ends at its next fetch. Such a source is due work, not a fault: its wake is the first instant after the pass.
+      const sources = earliest(config.sources.map((descriptor) => nextFetch(state, descriptor)));
+      const wakeAt = earliest([sources === undefined ? undefined : Math.max(sources, at + 1), view.wakeAt, delivery?.wakeAt]);
       const pass: Pass = {
         at,
         fetched: due.map(({ descriptor }) => descriptor.id),

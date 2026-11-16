@@ -463,6 +463,63 @@ describe("one pass of the runtime", () => {
     log.close();
   });
 
+  it("gives a wake after the pass when a source comes due during the fetches of the pass, and fetches it in the next pass", async () => {
+    const clock = fakeWallClock(T0);
+    const fast = async (): Promise<FetchOutcome> => ({ ok: true, observations: [], complete: true });
+    let slowFor = 0;
+    // The fetch of API takes `slowFor` on the clock. WEA has a longer interval, thus it comes due in a slow fetch of API.
+    const api: SourceProcedures = { describe: () => descriptor(API, MINUTE), fetch: async () => (await clock.advance(slowFor), fast()), map };
+    const wea: SourceProcedures = { describe: () => descriptor(WEA, MINUTE + 10_000), fetch: fast, map };
+    const { runtime, log } = open([api, wea], { clock });
+    const first = await runtime.pass();
+    expect([first.fetched, first.wakeAt]).toEqual([[API, WEA], T0 + MINUTE]);
+    await clock.advance(MINUTE);
+    slowFor = 15_000;
+    // The pass starts at T0 + 60 s and fetches API until T0 + 75 s. WEA comes due at T0 + 70 s.
+    const second = await runtime.pass();
+    expect([second.fetched, second.at, second.wakeAt]).toEqual([[API], T0 + 75_000, T0 + 75_001]);
+    await clock.advance(1);
+    slowFor = 0;
+    expect((await runtime.pass()).fetched).toEqual([WEA]);
+    log.close();
+  });
+
+  it("gives a wake after the pass when a fetch runs to its limit of one interval", async () => {
+    const clock = fakeWallClock(T0);
+    // The fetch never ends. The runtime stops the wait at the limit, one interval, which is the next fetch of the source.
+    const stuck: SourceProcedures = { describe: () => descriptor(API, MINUTE), fetch: () => new Promise<FetchOutcome>(() => undefined), map };
+    const { runtime, log } = open([stuck], { clock });
+    const work = runtime.pass();
+    await clock.advance(MINUTE);
+    const pass = await work;
+    expect([pass.at, pass.wakeAt]).toEqual([T0 + MINUTE, T0 + MINUTE + 1]);
+    log.close();
+  });
+
+  it("gives each pass a wake after it, over seeded fetch times up to two intervals", async () => {
+    for (const seed of SEEDS) {
+      const r = random(seed).fork("slow-fetches");
+      const clock = fakeWallClock(T0);
+      const intervals = [MINUTE, MINUTE + r.int(1, 30) * 1000, 2 * MINUTE + r.int(1, 30) * 1000];
+      const ids = [API, WEA, "iem" as SourceId];
+      const sources = ids.map(
+        (id, at): SourceProcedures => ({
+          describe: () => descriptor(id, intervals[at]!),
+          // Each fetch takes 0 to 2 intervals. A fetch over its interval stops at the limit.
+          fetch: async () => (await clock.advance(r.int(0, 2 * intervals[at]!)), { ok: true, observations: [], complete: true }),
+          map,
+        }),
+      );
+      const { runtime, log } = open(sources, { clock });
+      for (let step = 0; step < 40; step++) {
+        const pass = await runtime.pass();
+        expect(pass.wakeAt! > pass.at, `seed ${seed}, pass ${step}`).toBe(true);
+        await clock.advance(Math.max(0, pass.wakeAt! - clock.now()));
+      }
+      log.close();
+    }
+  });
+
   it("refuses two sources with the same id", () => {
     const source = scripted(API, async () => ({ ok: true, observations: [], complete: true }));
     expect(() => open([source, source])).toThrow("Two sources have the id api.");
