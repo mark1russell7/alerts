@@ -48,7 +48,7 @@ export const CASE_11_SOURCE = "case-11";
 export const CASE_11_WORD = "caseeleven";
 
 /** The start of each arm: the instant and the monotonic time of the first pass. */
-export const CASE_11_START = Date.UTC(2026, 3, 1, 18);
+export const CASE_11_START: number = Date.UTC(2026, 3, 1, 18);
 
 /** The source, the person and the test values of the case. */
 const FIXTURE = deliveryFixture(CASE_11_SOURCE, CASE_11_WORD);
