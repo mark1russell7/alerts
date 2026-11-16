@@ -5,7 +5,7 @@
  * that it gets.
  */
 import type { WallClock } from "@mark1russell7/algebra/clock";
-import type { ChannelQuota, Duration, FetchOutcome, Instant, ReportId, SourceDescriptor, SourceId, SourceProcedures, Watch } from "@mark1russell7/alerts";
+import type { ChannelQuota, Duration, FetchOutcome, Instant, LatenessFolds, ReportId, SourceDescriptor, SourceId, SourceProcedures, Watch } from "@mark1russell7/alerts";
 import { errorMessage } from "@mark1russell7/text";
 import type { BalanceWatch } from "./balance.ts";
 import { createDispatcher, type DeliveryOptions, type DeliveryStep } from "./delivery.ts";
@@ -136,6 +136,9 @@ export function openRuntime(options: RuntimeOptions): Runtime {
 
   const dispatcher = options.delivery === undefined ? undefined : createDispatcher(options.delivery, { clock, run: options.run, places: config.places, link: config.link, state: () => state, append, wake: options.wake });
 
+  // The folds of the lateness of the last view, in memory only. A pass folds only the new checks. A restart folds each check again, with the same result.
+  let folds: LatenessFolds | undefined;
+
   // The misses of the reports of each snapshot source, in memory only. A restart starts them at 0.
   const misses = new Map<SourceId, ReadonlyMap<ReportId, number>>();
   const limit = options.snapshotMisses ?? SNAPSHOT_MISSES;
@@ -223,7 +226,8 @@ export function openRuntime(options: RuntimeOptions): Runtime {
       const conflicts = [...stepped.conflicts, ...settled.flatMap((result) => (result.status === "fulfilled" ? result.value : []))];
 
       const at = clock.now();
-      const view = systemView(state, config, at, readQuotas(), watches.flatMap((watch) => watch.balance() ?? []));
+      const view = systemView(state, config, at, readQuotas(), watches.flatMap((watch) => watch.balance() ?? []), folds);
+      folds = view.folds;
       const event = systemEvent(view);
       if (event !== undefined) conflicts.push(...append([event]));
 
