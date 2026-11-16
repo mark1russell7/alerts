@@ -1,0 +1,8 @@
+# The fixtures of the USGS source
+
+- `feed-2.5_day-20261116T0327Z.geojson` is a real answer of the USGS feed of the earthquakes of magnitude 2.5 or more of the past day. The USGS made it at 2026-11-16 03:27:30 UTC.
+- The request asked for the whole feed, with no filter. The fixture holds each of the 48 events, from 6 networks.
+- The feed holds 5 events with an intensity map. The tests use the M5.5 event `us7000tyek` in the Philippines (depth 9.971 km, MMI 6.399).
+- The M3.5 event `aka2026wqrlbd` in Alaska has two ids: the id of the Alaska network and the id of the national network.
+- `query-us6000jllz.geojson` is a real answer of the event query of the USGS, in the format of the feed. It holds the M7.8 event `us6000jllz` in Turkey on 2023-02-06 (depth 10 km, MMI 9.537). The request asked for the events of magnitude 7 or more from 01:17 to 01:18 UTC.
+- The USGS data is in the U.S. public domain. Credit: U.S. Geological Survey.
