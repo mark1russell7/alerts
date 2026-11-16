@@ -112,12 +112,15 @@ import {
   type AlertConfig,
   type ContactConfig,
   type ExpectationConfig,
+  type OutageConfig,
+  type OutagePersonConfig,
   type PersonConfig,
   type PlaceConfig,
   type SecretLookup,
   type SpendConfig,
   type SecretRef,
 } from "./config.ts";
+import type { TryChain } from "./chain.ts";
 import type { Recipient } from "./delivery.ts";
 import type { Lateness, LatenessLimit, LatenessState } from "./lateness.ts";
 import type { LinkFamily, LinkPolicy } from "./link.ts";
@@ -1263,10 +1266,25 @@ export const linkPolicySchema: z.ZodType<LinkPolicy, LinkPolicy> = schemaOf<Link
   z.strictObject({ families: z.array(linkFamilySchema).readonly() }).readonly(),
 );
 
+/** This schema checks a chain of tries: the channel of each try, in order. */
+export const tryChainSchema: z.ZodType<TryChain, TryChain> = schemaOf<TryChain>()(
+  z.strictObject({ steps: z.array(channelIdSchema).readonly() }).readonly(),
+);
+
+/** This schema checks one person of the outage call. `loadConfig` checks the person and the channel of each step. */
+export const outagePersonConfigSchema: z.ZodType<OutagePersonConfig, OutagePersonConfig> = schemaOf<OutagePersonConfig>()(
+  z.strictObject({ person: personIdSchema, chain: tryChainSchema }).readonly(),
+);
+
+/** This schema checks the outage call: the people and their chains. */
+export const outageConfigSchema: z.ZodType<OutageConfig, OutageConfig> = schemaOf<OutageConfig>()(
+  z.strictObject({ people: z.array(outagePersonConfigSchema).readonly() }).readonly(),
+);
+
 /**
  * This schema checks the JSON of the private configuration at the load. It checks the form of each
- * value. Then `loadConfig` checks the references: the ids, the places of each person, the contacts and
- * the secrets.
+ * value. Then `loadConfig` checks the references: the ids, the places of each person, the contacts,
+ * the secrets and the outage call.
  */
 export const alertConfigSchema: z.ZodType<AlertConfig, AlertConfig> = schemaOf<AlertConfig>()(
   z
@@ -1280,6 +1298,7 @@ export const alertConfigSchema: z.ZodType<AlertConfig, AlertConfig> = schemaOf<A
       expectations: z.array(expectationConfigSchema).readonly().exactOptional(),
       spend: z.array(spendConfigSchema).readonly().exactOptional(),
       link: linkPolicySchema.exactOptional(),
+      outage: outageConfigSchema.exactOptional(),
     })
     .readonly(),
 );

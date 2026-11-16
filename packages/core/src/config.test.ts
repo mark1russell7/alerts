@@ -151,6 +151,38 @@ describe("loadConfig", () => {
     ]);
   });
 
+  it("checks the outage call: a known person, one time each, a chain with steps, and a contact on each channel of a step", () => {
+    const people = [person(p1), person(p2, [work])];
+    const good: AlertConfig["outage"] = { people: [{ person: p1, chain: { steps: [sms, sms, pushover] } }] };
+    expect(loadConfig(config({ people, outage: good }), CHANNELS, store).problems).toEqual([]);
+    expect(loadConfig(config({ people, outage: { people: [] } }), CHANNELS, store).problems).toEqual([]);
+    const fax = "fax" as ChannelId;
+    const problems = loadConfig(
+      config({
+        people,
+        contacts: [...contacts(p1), contacts(p2)[0]!],
+        outage: {
+          people: [
+            { person: p1, chain: { steps: [sms, fax, fax] } },
+            { person: p1, chain: { steps: [] } },
+            { person: p2, chain: { steps: [pushover, sms] } },
+            { person: "person-9" as PersonId, chain: { steps: [sms] } },
+          ],
+        },
+      }),
+      CHANNELS,
+      store,
+    ).problems;
+    expect(problems).toEqual([
+      "The outage chain of the person person-1 uses the channel fax, and the instance has no such channel.",
+      "The outage call has the person person-1 two times.",
+      "The outage chain of the person person-1 has no step, so no outage call reaches the person.",
+      "The outage chain of the person person-2 uses the channel sms, and the person has no contact on it.",
+      "The outage call names the person person-9, and the configuration has no such person.",
+      "The person person-2: Step 1 of life-safety uses the channel sms, and the person has no address on it.",
+    ]);
+  });
+
   it("reads an id or a field such as constructor as a plain key", () => {
     const odd = "constructor" as ChannelId;
     const loaded = loadConfig(config({ contacts: [...contacts(p1), { person: p1, channel: odd, address: { ["__proto__"]: "x", constructor: "y" } }] }), CHANNELS, store);

@@ -6,6 +6,7 @@
 import { localTime } from "@mark1russell7/algebra/clock";
 import type { Address, ChannelDescriptor, ChannelId, EscalationPolicy, Instant, NodeKey, PersonId, PersonWatch, PlaceId, Position, RegionCode, SourceId, WatchedPlace } from "./contracts.ts";
 import { recipientProblems, type Recipient } from "./delivery.ts";
+import type { TryChain } from "./chain.ts";
 import type { Expectation } from "./lateness.ts";
 import type { LinkPolicy } from "./link.ts";
 import type { WhyLabels } from "./why.ts";
@@ -72,6 +73,22 @@ export interface SpendConfig {
   readonly timeZone: string;
 }
 
+/** One person of the outage call, with the chain of the tries of the person. */
+export interface OutagePersonConfig {
+  readonly person: PersonId;
+  /** The channel of each try, in order. The address of a try is the contact of the person on its channel. */
+  readonly chain: TryChain;
+}
+
+/**
+ * The outage call: the calls to people when the outside check finds the instance down. The provider of
+ * the calls makes them, so they work while the instance is down. A deploy copies the list to the provider.
+ */
+export interface OutageConfig {
+  /** The people of the outage call, in the order of the first calls. */
+  readonly people: readonly OutagePersonConfig[];
+}
+
 /** The private configuration of the people and the places. Each copy of the system loads the same configuration. */
 export interface AlertConfig {
   readonly format: typeof CONFIG_FORMAT;
@@ -91,6 +108,8 @@ export interface AlertConfig {
   readonly spend?: readonly SpendConfig[];
   /** The policy of the link rule of the merge. Without it, the instance uses `DEFAULT_LINK_POLICY`. */
   readonly link?: LinkPolicy;
+  /** The outage call. Without it, an outage of the instance calls no person. */
+  readonly outage?: OutageConfig;
 }
 
 /** The settings of one expectation of the instance, for example the WEA check of a copy source. */
@@ -149,6 +168,7 @@ export interface LoadedConfig {
  * - two settings of one expectation
  * - two spend entries of one provider, and a provider that no channel depends on
  * - a reserve of a spend entry that is not below its cap, and a time zone that is not an IANA name
+ * - an unknown person of the outage call, a person two times, a chain with no step, and a step on a channel with no contact of the person
  * - each problem of `recipientProblems` for each person.
  */
 export function loadConfig(config: AlertConfig, channels: readonly ChannelDescriptor[], secret: SecretLookup): LoadedConfig {
@@ -217,6 +237,21 @@ export function loadConfig(config: AlertConfig, channels: readonly ChannelDescri
     if (!channels.some((channel) => channel.dependsOn.includes(provider))) problems.push(`The spend entry of ${provider} names a provider that no channel depends on.`);
     if (!((spend.reserveUsd ?? 0) < spend.monthlyUsd)) problems.push(`The reserve of the spend of ${provider} is not below its monthly cap.`);
     if (localTime(0, spend.timeZone) === undefined) problems.push(`The time zone of the spend of ${provider} is not an IANA name.`);
+  }
+
+  const called = new Set<string>();
+  for (const { person, chain } of config.outage?.people ?? []) {
+    if (called.has(person)) problems.push(`The outage call has the person ${person} two times.`);
+    called.add(person);
+    if (!people.has(person)) {
+      problems.push(`The outage call names the person ${person}, and the configuration has no such person.`);
+      continue;
+    }
+    if (chain.steps.length === 0) problems.push(`The outage chain of the person ${person} has no step, so no outage call reaches the person.`);
+    for (const channel of new Set(chain.steps)) {
+      if (!channels.some((known) => known.id === channel)) problems.push(`The outage chain of the person ${person} uses the channel ${channel}, and the instance has no such channel.`);
+      else if (addresses.get(person)?.has(channel) !== true) problems.push(`The outage chain of the person ${person} uses the channel ${channel}, and the person has no contact on it.`);
+    }
   }
 
   const recipients = config.people.map((entry): Recipient => {

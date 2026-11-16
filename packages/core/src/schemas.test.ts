@@ -85,7 +85,10 @@ import {
   addressValueSchema,
   alertConfigSchema,
   expectationConfigSchema,
+  outageConfigSchema,
+  outagePersonConfigSchema,
   spendConfigSchema,
+  tryChainSchema,
   areaSchema,
   assessedLevelSchema,
   assessmentSchema,
@@ -454,6 +457,8 @@ const SCHEMA_NAMES = [
   "observationIdSchema",
   "observationSchema",
   "operationSchema",
+  "outageConfigSchema",
+  "outagePersonConfigSchema",
   "personConfigSchema",
   "personIdSchema",
   "personWatchSchema",
@@ -487,6 +492,7 @@ const SCHEMA_NAMES = [
   "subjectSchema",
   "subjectWatchSchema",
   "transportSchema",
+  "tryChainSchema",
   "urgencySchema",
   "watchSchema",
   "watchedPlaceSchema",
@@ -839,6 +845,18 @@ describe("the private configuration", () => {
     for (const bad of [{ monthlyUsd: 0 }, { monthlyUsd: -1 }, { reserveUsd: -1 }, { floor: "5" }, { timeZone: "" }, { provider: "" }, { currency: "USD" }]) fails(spendConfigSchema, { ...spend, ...bad });
     // A reserve above the cap and a bad zone are problems of the load, with the names of the fields.
     holds(spendConfigSchema, { ...spend, reserveUsd: 20, timeZone: "Mars/Olympus" });
+  });
+
+  it("checks the form of the outage call, and leaves the people and the channels to the load", () => {
+    const outage = { people: [{ person: PERSON, chain: { steps: ["twilio-call", "twilio-call"] } }] };
+    holds(alertConfigSchema, { ...CONFIG, outage });
+    holds(outageConfigSchema, { people: [] });
+    holds(tryChainSchema, { steps: [] });
+    fails(alertConfigSchema, { ...CONFIG, outage: undefined });
+    fails(outageConfigSchema, { people: [{ person: PERSON }] });
+    fails(outageConfigSchema, { people: [{ person: PERSON, chain: { steps: ["twilio-call"] }, to: "x" }] });
+    fails(outagePersonConfigSchema, { person: PERSON, chain: { steps: [7] } });
+    fails(tryChainSchema, { steps: "twilio-call" });
   });
 
   it("checks the form of the link policy of the merge", () => {
