@@ -868,10 +868,22 @@ export interface EndMark {
 }
 
 /**
- * The merge state: four grow-only sets. The join of two states is their union, so each copy of
+ * The mark of a report that left the merge state after the horizon of its incident (`retirements`). A copy
+ * of the report that arrives later stays out until the time `until`. Then `pruneTombstones` drops the mark.
+ */
+export interface Tombstone {
+  readonly report: ReportId;
+  readonly until: Instant;
+}
+
+/**
+ * The merge state: five grow-only sets. The join of two states is their union, so each copy of
  * the system that gets the same parts gets the same state. `normalize` gives the one form of a
  * state. It has one report for each id, in the order of the ids. It has each delivery, each
  * acknowledgment and each end mark one time, in the order of their canonical JSON.
+ *
+ * The tombstones remove parts: a state has no report with a tombstone, and no delivery,
+ * acknowledgment or end mark of such a report. The removal reads only the union, so the join keeps its laws.
  */
 export interface MergeState {
   readonly reports: readonly Report[];
@@ -879,6 +891,8 @@ export interface MergeState {
   readonly acks: readonly Acknowledgment[];
   /** The end marks of the reports of the snapshot sources. */
   readonly ends: readonly EndMark[];
+  /** The tombstones of the retired reports: one for each report, with the latest `until`, in the order of the report ids. */
+  readonly retired: readonly Tombstone[];
 }
 
 // =============================================================================

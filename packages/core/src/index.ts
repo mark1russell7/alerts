@@ -10,6 +10,7 @@
 export * from "./contracts.ts";
 export * from "./ids.ts";
 export * from "./merge.ts";
+export * from "./retention.ts";
 export * from "./assess.ts";
 export * from "./score.ts";
 export * from "./escalation.ts";

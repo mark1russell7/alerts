@@ -1,7 +1,7 @@
 /**
  * The merge of the alert system: the join of two merge states, and the incidents of a state.
  *
- * The join is the union of three grow-only sets, so it is idempotent, commutative and
+ * The join is the union of five grow-only sets, so it is idempotent, commutative and
  * associative. The incidents are a function of the state and a time. So each copy of the system
  * that gets the same reports gets the same incidents, in any order of arrival.
  */
@@ -23,12 +23,13 @@ import type {
   Report,
   ReportId,
   Severity,
+  Tombstone,
   Urgency,
 } from "./contracts.ts";
 import { LEVELS } from "./contracts.ts";
 
 /** The merge state with no part. */
-export const EMPTY_STATE: MergeState = { reports: [], deliveries: [], acks: [], ends: [] };
+export const EMPTY_STATE: MergeState = { reports: [], deliveries: [], acks: [], ends: [], retired: [] };
 
 /** The parts of a merge state, in any order and with duplicates. */
 export interface MergeParts {
@@ -36,25 +37,36 @@ export interface MergeParts {
   readonly deliveries?: readonly Delivery[];
   readonly acks?: readonly Acknowledgment[];
   readonly ends?: readonly EndMark[];
+  readonly retired?: readonly Tombstone[];
 }
 
 /**
  * This function gives the one form of a merge state. It keeps one report for each id: for two
  * contents of one id, the content with the smaller canonical JSON. It keeps each delivery, each
- * acknowledgment and each end mark one time.
+ * acknowledgment and each end mark one time. It keeps one tombstone for each report, with the
+ * latest `until`. Then it removes each report with a tombstone, and each delivery, acknowledgment
+ * and end mark of such a report.
  */
 export function normalize(parts: MergeParts): MergeState {
+  const tombstones = new Map<ReportId, Tombstone>();
+  for (const tombstone of parts.retired ?? []) {
+    const held = tombstones.get(tombstone.report);
+    if (held === undefined || tombstone.until > held.until) tombstones.set(tombstone.report, { report: tombstone.report, until: tombstone.until });
+  }
+  const kept = (report: ReportId): boolean => !tombstones.has(report);
   const reports = new Map<ReportId, { readonly report: Report; readonly text: string }>();
   for (const report of parts.reports ?? []) {
+    if (!kept(report.id)) continue;
     const text = canonical(report);
     const held = reports.get(report.id);
     if (held === undefined || text < held.text) reports.set(report.id, { report, text });
   }
   return {
     reports: [...reports.entries()].sort(([a], [b]) => compareCodeUnits(a, b)).map(([, held]) => held.report),
-    deliveries: uniqueByText(parts.deliveries ?? []),
-    acks: uniqueByText(parts.acks ?? []),
-    ends: uniqueByText(parts.ends ?? []),
+    deliveries: uniqueByText((parts.deliveries ?? []).filter((delivery) => kept(delivery.incident))),
+    acks: uniqueByText((parts.acks ?? []).filter((ack) => kept(ack.incident))),
+    ends: uniqueByText((parts.ends ?? []).filter((mark) => kept(mark.report))),
+    retired: [...tombstones.entries()].sort(([a], [b]) => compareCodeUnits(a, b)).map(([, tombstone]) => tombstone),
   };
 }
 
@@ -65,6 +77,7 @@ export function join(a: MergeState, b: MergeState): MergeState {
     deliveries: [...a.deliveries, ...b.deliveries],
     acks: [...a.acks, ...b.acks],
     ends: [...a.ends, ...b.ends],
+    retired: [...a.retired, ...b.retired],
   });
 }
 
@@ -75,6 +88,7 @@ export function add(state: MergeState, parts: MergeParts): MergeState {
     deliveries: [...state.deliveries, ...(parts.deliveries ?? [])],
     acks: [...state.acks, ...(parts.acks ?? [])],
     ends: [...state.ends, ...(parts.ends ?? [])],
+    retired: [...state.retired, ...(parts.retired ?? [])],
   });
 }
 

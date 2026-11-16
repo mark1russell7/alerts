@@ -103,7 +103,7 @@ function start(level: Level, at: number, incidentId: ReportId = anchor): Escalat
 function input(extra: Partial<RouteInput> & { readonly merge?: Partial<MergeState> } = {}): RouteInput {
   const { merge, ...rest } = extra;
   return {
-    state: { reports: [], deliveries: [], acks: [], ends: [], ...merge },
+    state: { reports: [], deliveries: [], acks: [], ends: [], retired: [], ...merge },
     incidents: [incident()],
     recipients: [recipient()],
     places,
