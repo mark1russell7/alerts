@@ -39,7 +39,8 @@ export function createEmscSource(options: EmscFetchOptions): SourceProcedures {
   const fetch = createEmscFetch(options);
   return {
     describe: () => EMSC_DESCRIPTOR,
-    fetch: (input) => fetch(input),
+    // The signal of the caller stops the fetch at its limit, also in the wait of the pace.
+    fetch: (input, signal) => fetch(input, signal),
     map: ({ observation }) => mapObservation(observation),
   };
 }
