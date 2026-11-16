@@ -84,6 +84,7 @@ import {
   addressValueSchema,
   alertConfigSchema,
   expectationConfigSchema,
+  spendConfigSchema,
   areaSchema,
   assessedLevelSchema,
   assessmentSchema,
@@ -385,7 +386,7 @@ describe("the JSON Schema of each schema", () => {
   const exported = Object.entries(schemas).filter(([name]) => name.endsWith("Schema"));
 
   it("has each exported schema", () => {
-    expect(exported.length).toBe(97);
+    expect(exported.length).toBe(98);
     for (const [name, schema] of exported) expect(schema instanceof z.ZodType, name).toBe(true);
   });
 
@@ -688,6 +689,17 @@ describe("the private configuration", () => {
     holds(alertConfigSchema, { ...CONFIG, expectations: [{ id: "api-to-wea", since: 1_794_700_000_000 }] });
     // A person who watches a place that the configuration does not have is a problem of the load, not of the form.
     holds(alertConfigSchema, { ...CONFIG, people: [{ watch: { person: PERSON, places: ["place:z"], rules: [] } }] });
+  });
+
+  it("checks the form of a spend entry, and leaves the provider, the reserve and the time zone to the load", () => {
+    const spend = { provider: "provider:pushover", monthlyUsd: 10, reserveUsd: 3, floor: 5, timeZone: "America/Chicago" };
+    holds(alertConfigSchema, { ...CONFIG, spend: [spend] });
+    const { reserveUsd: _reserve, ...noReserve } = spend;
+    holds(spendConfigSchema, { ...noReserve, floor: -1 });
+    fails(spendConfigSchema, { ...spend, reserveUsd: undefined });
+    for (const bad of [{ monthlyUsd: 0 }, { monthlyUsd: -1 }, { reserveUsd: -1 }, { floor: "5" }, { timeZone: "" }, { provider: "" }, { currency: "USD" }]) fails(spendConfigSchema, { ...spend, ...bad });
+    // A reserve above the cap and a bad zone are problems of the load, with the names of the fields.
+    holds(spendConfigSchema, { ...spend, reserveUsd: 20, timeZone: "Mars/Olympus" });
   });
 
   const store = (name: string): string | undefined => (name === "PUSHOVER_USER" ? "user-test" : undefined);

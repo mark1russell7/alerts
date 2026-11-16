@@ -5,10 +5,10 @@
  * - A failed read keeps the last read that passed. The core gives the line `unread` when the last read is too old.
  * - The watch keeps no record. After a restart, the first check reads again.
  */
-import type { BalanceRead, ChannelId, Duration, Instant, ProviderBalance } from "@mark1russell7/alerts";
+import type { BalanceRead, ChannelId, Duration, Instant, ProviderBalance, SpendConfig } from "@mark1russell7/alerts";
 import type { WallClock } from "@mark1russell7/algebra/clock";
 import { errorMessage } from "@mark1russell7/text";
-import type { Quota } from "polite-crawler/api";
+import { quotaGate, type Quota, type QuotaGate, type QuotaGateOptions } from "polite-crawler/api";
 import { limited } from "./limit.ts";
 
 const MINUTE = 60_000;
@@ -124,16 +124,10 @@ export function balanceWatch(options: BalanceWatchOptions): BalanceWatch {
   };
 }
 
-/** A monthly cap of the spend of a provider account, in US dollars. */
-export interface SpendCap {
+/** A monthly cap of the spend of a provider account: the fields of a `SpendConfig` of the configuration, and a name. */
+export interface SpendCap extends Pick<SpendConfig, "monthlyUsd" | "reserveUsd" | "timeZone"> {
   /** The name of the quota in a message: for example `Twilio spend`. */
   readonly name: string;
-  /** The most that the account spends in one calendar month. */
-  readonly monthlyUsd: number;
-  /** The last part of the cap that only `life-safety` messages use. The default is 0. */
-  readonly reserveUsd?: number;
-  /** The time zone of the start of the month, as an IANA name: for example `America/New_York`. */
-  readonly timeZone: string;
 }
 
 /** The unit of a quota of the spend, for the texts of the core. */
@@ -162,6 +156,24 @@ export function spendQuota(cap: SpendCap): Quota {
 export function spendUnits(costUsd: number): number {
   if (!(Number.isFinite(costUsd) && costUsd >= 0)) throw new Error("The cost of a send is not 0 or more US dollars.");
   return Math.ceil(Math.round(costUsd * 1_000_000) / 10_000);
+}
+
+/** The two gates of one cap of the spend. They count the same units. */
+export interface SpendGates {
+  /** The gate of each message below `life-safety`. It keeps the reserve of the cap. */
+  readonly gate: QuotaGate;
+  /** The gate of a `life-safety` message. It has no reserve. */
+  readonly lifeSafety: QuotaGate;
+}
+
+/**
+ * This function makes the two gates of one quota of the spend. The gates have one name, one key and one store,
+ * thus they keep one record. Only the gate of `life-safety` takes the units of the reserve.
+ *
+ * @throws Error when the quota is not valid.
+ */
+export function spendGates(quota: Quota, options: QuotaGateOptions): SpendGates {
+  return { gate: quotaGate(quota, options), lifeSafety: quotaGate({ ...quota, reserve: 0 }, options) };
 }
 
 function cents(usd: number): number {

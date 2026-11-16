@@ -200,6 +200,7 @@ A quota report has no area. Its subject is `{ system: "alerts.channel", id: <cha
 - The message of the line `reserve` has `useReserve`. The channel sends it from the reserve, one time in each window (`PUSHOVER_RESERVE_NOTICES`). Else the reserve stops the message that tells of it.
 - A snapshot with no quotas keeps each open line of a quota. Thus a failed read of a count ends no line.
 - A quota can name its units with `unit`. The cap of the spend of a paid account counts `cents` (`spendQuota` of the runtime).
+- `spendGates` of the runtime gives two gates of one cap, on one count. The gate of `life-safety` has no reserve. Thus only `life-safety` uses the reserve.
 
 A balance report has no area. Its subjects are `{ system: "alerts.channel", id: <channel id> }` for each channel that the account pays for. Its kind is `system.balance.<stage>`, and it gets `notice` at most. `balanceStages` gives the stages of a `ProviderBalance` at a time, and each stage is one line:
 
@@ -625,6 +626,7 @@ The core gives the format of the private configuration, `AlertConfig` (`alerts-c
 - `people`: the `PersonWatch` of each person, a label, and the escalation policies of the person.
 - `contacts`: the address of a person on a channel. A value of an address is a text, or a reference `{ secret: "NAME" }` to a key of the secret store.
 - `policies`: the escalation policies of each person with no policies of their own.
+- `spend`: the money rules of each paid provider account. An entry has the monthly cap and its reserve in US dollars, the floor of the balance and the time zone of the month.
 
 The times of the delivery and the rank of a copy are not in `AlertConfig`. They are settings of each copy.
 
@@ -633,6 +635,8 @@ The schema `alertConfigSchema` checks the JSON of the configuration first. Then 
 - two places or two people with one id, and a place with no region code
 - a place of a person or of a rule that the configuration or the person does not have
 - a contact of an unknown person, two contacts of a person on one channel, and a secret with no value
+- two spend entries of one provider, and a provider that no channel depends on
+- a reserve of a spend entry that is not below its cap, and a time zone that is not an IANA name
 - each problem of `recipientProblems`
 
 A problem names ids, fields and the names of secrets. It does not hold the value of a secret, a label or a position.

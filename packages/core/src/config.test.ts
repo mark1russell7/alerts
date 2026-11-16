@@ -132,6 +132,25 @@ describe("loadConfig", () => {
     ]);
   });
 
+  it("checks each spend entry: one for each provider, a provider of a channel, a reserve below the cap, and an IANA time zone", () => {
+    const paid = [{ ...channel(pushover), dependsOn: ["provider:pushover"] }, channel(sms)];
+    const spend = { provider: "provider:pushover", monthlyUsd: 10, reserveUsd: 3, floor: 5, timeZone: "America/Chicago" };
+    expect(loadConfig(config({ spend: [spend] }), paid, store).problems).toEqual([]);
+    const { reserveUsd: _reserve, ...noReserve } = spend;
+    expect(loadConfig(config({ spend: [{ ...noReserve, monthlyUsd: 0.01 }] }), paid, store).problems).toEqual([]);
+    const problems = loadConfig(
+      config({ spend: [spend, { ...spend, reserveUsd: 10 }, { ...spend, provider: "provider:pushoverr", timeZone: "Mars/Olympus" }] }),
+      paid,
+      store,
+    ).problems;
+    expect(problems).toEqual([
+      "Two spend entries are for the provider provider:pushover.",
+      "The reserve of the spend of provider:pushover is not below its monthly cap.",
+      "The spend entry of provider:pushoverr names a provider that no channel depends on.",
+      "The time zone of the spend of provider:pushoverr is not an IANA name.",
+    ]);
+  });
+
   it("reads an id or a field such as constructor as a plain key", () => {
     const odd = "constructor" as ChannelId;
     const loaded = loadConfig(config({ contacts: [...contacts(p1), { person: p1, channel: odd, address: { ["__proto__"]: "x", constructor: "y" } }] }), CHANNELS, store);
