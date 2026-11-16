@@ -124,6 +124,9 @@ export function hostGroup(options: HostOptions): GroupSpec {
 /**
  * This function gives the boot task. It starts the supervisor at the start of the computer, before a
  * logon, and again 1 minute after it stops. The task gets the folder of the private files as its argument.
+ *
+ * On Linux, only the supervisor gets the stop signal of systemd. The supervisor stops the runtime in stages.
+ * After `SUPERVISOR_GRACE`, systemd stops each process of the unit with `SIGKILL`. On Windows, these two fields change nothing.
  */
 export function hostTask(options: HostOptions): ServiceSpec {
   return {
@@ -136,6 +139,8 @@ export function hostTask(options: HostOptions): ServiceSpec {
     restart: { after: { value: 1, unit: "min" } },
     background: true,
     stateDir: hostFolder(options.home),
+    stopsChildren: true,
+    stopGrace: SUPERVISOR_GRACE,
   };
 }
 
@@ -144,6 +149,12 @@ export const SUPERVISOR_PROFILE: Profile = {
   ...daemon,
   phases: daemon.phases?.map((phase) => (phase.name === "tear down dependencies" ? { ...phase, cap: add(phase.cap, RUNTIME_GRACE) } : phase)),
 };
+
+/**
+ * The stop grace of the supervisor: its longest shutdown, plus 2 s for the exit of the process. The longest
+ * shutdown holds the stop grace of the runtime. Thus a stop of systemd does not cut a pass.
+ */
+export const SUPERVISOR_GRACE: Quantity = add(shutdownCap(SUPERVISOR_PROFILE), s(2));
 
 /** The group of the supervisor, as its service sees it. The entry adds the discovery file to the start and the stop of the group. */
 export interface HostedGroup {
