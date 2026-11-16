@@ -153,9 +153,10 @@ describe("loadConfig", () => {
 
   it("checks the outage call: a known person, one time each, a chain with steps, and a contact on each channel of a step", () => {
     const people = [person(p1), person(p2, [work])];
+    const both = [...contacts(p1), ...contacts(p2)];
     const good: AlertConfig["outage"] = { people: [{ person: p1, chain: { steps: [sms, sms, pushover] } }] };
-    expect(loadConfig(config({ people, outage: good }), CHANNELS, store).problems).toEqual([]);
-    expect(loadConfig(config({ people, outage: { people: [] } }), CHANNELS, store).problems).toEqual([]);
+    expect(loadConfig(config({ people, contacts: both, outage: good }), CHANNELS, store).problems).toEqual([]);
+    expect(loadConfig(config({ people, contacts: both, outage: { people: [] } }), CHANNELS, store).problems).toEqual([]);
     const fax = "fax" as ChannelId;
     const problems = loadConfig(
       config({
