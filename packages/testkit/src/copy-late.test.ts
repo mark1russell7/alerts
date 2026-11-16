@@ -1,7 +1,7 @@
 import { carriages, incidents, normalize, type Observation, type ObservationId, type Report } from "@mark1russell7/alerts";
 import { COPY_SUFFIX, FEED_PATH, mapObservation as mapIpaws, readAnswer as readFeed, SOURCE_ID as IPAWS_ID, WEA_EXPECTATION } from "@mark1russell7/alerts-source-ipaws";
 import { mapObservation as mapNws, NWS_DESCRIPTOR, SOURCE_ID as NWS_ID, WEA_PATH } from "@mark1russell7/alerts-source-nws-api";
-import { checkFaultPlan, faultPlanOf } from "@mark1russell7/rigor-chaos";
+import { checkFaultPlan, type Fault, faultPlanOf } from "@mark1russell7/rigor-chaos";
 import type { Exchange, Reply, Transport } from "polite-crawler/api";
 import { describe, expect, it } from "vitest";
 import {
@@ -42,6 +42,9 @@ import {
 } from "./copy-late.ts";
 
 const PAIR = readPair();
+const SIGNAL = new AbortController().signal;
+/** This function gives the body of an answer fault, or undefined for another fault. */
+const answerBody = (fault: Fault | undefined): unknown => (fault?.kind === "answer" ? fault.body : undefined);
 const SMALL = { ...CASE_8_SETTINGS, fetches: 4 };
 const INTERVAL = NWS_DESCRIPTOR.interval;
 
@@ -179,8 +182,8 @@ describe("the faults of each arm", () => {
         if (answers.length > 0) expect(checkFaultPlan(faultPlanOf(answers))).toEqual([]);
       }
     }
-    expect(answersOf(bodies, "feed", copyFaultsOf("copy-stopped").feed)[0]?.body).toBe(PAIR.emptyFeed);
-    expect(answersOf(bodies, "zone", copyFaultsOf("nws-lag").zone)[0]?.body).toBe(bodies.zone[WINDOW.from - LAG]);
+    expect(answerBody(answersOf(bodies, "feed", copyFaultsOf("copy-stopped").feed)[0])).toBe(PAIR.emptyFeed);
+    expect(answerBody(answersOf(bodies, "zone", copyFaultsOf("nws-lag").zone)[0])).toBe(bodies.zone[WINDOW.from - LAG]);
   });
 
   it("gives the EXT message to the NWS list at EXT_FROM, and LAG fetches later in the arm nws-lag", () => {
@@ -218,12 +221,12 @@ describe("the transport of the case", () => {
     const { inner, urls } = recorder();
     const counts = zero();
     const transport = copyTransport({ inner, direct: "http://server", proxies: { feed: "http://proxy" }, faulted: { zone: none, wea: none, canary: none, feed: new Set([1]) }, counts });
-    for (let at = 0; at < 3; at += 1) await transport({ method: "GET", url: `${CASE_8_IPAWS}${FEED_PATH}/2026-11-09T00:0${String(at)}:00Z`, headers: {} } as unknown as Exchange);
-    await transport({ method: "GET", url: `${CASE_8_NWS}${ZONE_PATH}`, headers: {} } as unknown as Exchange);
+    for (let at = 0; at < 3; at += 1) await transport({ method: "GET", url: `${CASE_8_IPAWS}${FEED_PATH}/2026-11-09T00:0${String(at)}:00Z`, headers: {} } as unknown as Exchange, SIGNAL);
+    await transport({ method: "GET", url: `${CASE_8_NWS}${ZONE_PATH}`, headers: {} } as unknown as Exchange, SIGNAL);
     expect(urls).toEqual([`http://server${FEED_PATH}`, `http://proxy${FEED_PATH}`, `http://server${FEED_PATH}`, `http://server${ZONE_PATH}`]);
     expect(counts.feed).toEqual({ direct: 2, proxied: 1 });
     expect(counts.zone).toEqual({ direct: 1, proxied: 0 });
-    await expect(transport({ method: "GET", url: "http://other.test/", headers: {} } as unknown as Exchange)).rejects.toThrow(TypeError);
+    await expect(transport({ method: "GET", url: "http://other.test/", headers: {} } as unknown as Exchange, SIGNAL)).rejects.toThrow(TypeError);
   });
 });
 
@@ -239,7 +242,7 @@ const passAt = (minute: number, nws: number, state: CopyPass["state"], dropped =
   missed: state === "late" ? 1 : 0,
 });
 
-/** This function gives the passes of an arm: one pass at each fetch, `met` but in the late fetches, and the EXT message at its fetch. */
+/** This function gives one pass of an arm at each fetch. A late fetch is late, and the place `dropped` ends at the EXT fetch. */
 const passesOf = (arm: (typeof COPY_ARMS)[number], late: (fetch: number) => boolean): CopyPass[] => {
   const ext = extFetchOf(arm, CASE_8_SETTINGS.fetches);
   return Array.from({ length: CASE_8_SETTINGS.fetches }, (_, fetch) => passAt(fetch, fetch + 1, late(fetch) ? "late" : "met", fetch < ext ? 1 : 0));
