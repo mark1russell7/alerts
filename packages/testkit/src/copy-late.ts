@@ -244,13 +244,13 @@ export function featureOf(message: WeaMessage, template: Readonly<Record<string,
 }
 
 /** This function replaces the first match of `pattern` in `text`. It throws when there is no match, because then the template changed. */
-function swap(text: string, pattern: RegExp, value: string): string {
+export function swap(text: string, pattern: RegExp, value: string): string {
   if (!pattern.test(text)) throw new Error(`The template of the IPAWS copy has no match of ${String(pattern)}.`);
   return text.replace(pattern, () => value);
 }
 
 /** This function replaces the value of the parameter `name` of a CAP message. */
-function swapParameter(text: string, name: string, value: string): string {
+export function swapParameter(text: string, name: string, value: string): string {
   return swap(text, new RegExp(`<valueName>${name}</valueName><value>[^<]*</value>`), `<valueName>${name}</valueName><value>${value}</value>`);
 }
 
@@ -746,7 +746,7 @@ export interface KnownFault {
 }
 
 const AL_8 = "AL-8: the limit of the delay learns the delay of a late copy, and a late copy clears the misses.";
-const BURST = "AL-39: the runtime does not stop a fetch at its limit. The fetches that wait for a parked host go out together.";
+const BURST = "The runtime does not stop a fetch at its limit. The fetches that wait for a parked host go out together.";
 
 /**
  * The gates that fail because of a known fault of the core. The verdict expects each one to fail. The fix of a fault

@@ -30,6 +30,19 @@ import {
   runCopyLate,
   WINDOW,
 } from "../src/copy-late.ts";
+import {
+  expectationOf,
+  type GateKey,
+  ORDER_ARMS,
+  ORDER_GATES,
+  ORDER_KNOWN_FAULTS,
+  ORDER_PLACES,
+  type OrderArm,
+  orderKnownFaultOf,
+  runOutOfOrder,
+  sendLabel,
+  STEP_GAP,
+} from "../src/out-of-order.ts";
 import { OLD_LISTS, R2_FROM, R3_UNTIL, runStaleList, STALE_ARMS, STALE_GATES } from "../src/stale-list.ts";
 
 const at = process.argv.indexOf("--out");
@@ -244,4 +257,43 @@ report(copy.id, { ...copy.verdict, problems: [...copy.verdict.problems, ...copy.
   `Known faults: ${KNOWN_FAULTS.map((fault) => `${fault.arm} ${fault.gate}`).join(", ")}. ${[...new Set(KNOWN_FAULTS.map((fault) => fault.reason))].join(" ")}`,
   "",
   `Read: ${yes(copy.verdict.read)}. Pass: **${yes(copy.verdict.pass)}**.`,
+]);
+
+const order = await runOutOfOrder();
+write("case-9.json", order);
+// A gate of a known fault shows "no (known)" when it fails, and "YES (fixed)" when it passes.
+const orderGate = (arm: OrderArm, gate: GateKey, value: boolean | undefined): string => {
+  if (value === undefined) return "-";
+  if (orderKnownFaultOf(arm, gate) === undefined) return yes(value);
+  return value ? "YES (fixed)" : "no (known)";
+};
+const labels = (list: readonly string[]): string => list.join(" ") || "none";
+report(order.id, { ...order.verdict, problems: [...order.verdict.problems, ...order.verdict.fixed] }, [
+  `## ${order.id}: reports out of order, and duplicates`,
+  "",
+  `Each arm has ${String(order.settings.fetches)} fetches of the NWS source and of the IPAWS source. The case clock moves ${String(order.settings.speed)} times faster than real time.`,
+  `One event line comes as NWS messages and as their IPAWS copies. Each arm changes the order or the count of the messages. Each policy has a step at 0 and a step at ${min(STEP_GAP)} min.`,
+  "A send is the level (u or ls), the step and the episode, with c for a send with a cancel. The values in brackets are the expected values.",
+  "",
+  `| Arm | Place | Expected sends | Sends | Ends | Live | Sends while away (s) | Passes | ${ORDER_GATES.join(" | ")} |`,
+  `| --- | --- | --- | --- | --- | --- | --- | --- | ${ORDER_GATES.map(() => "---").join(" | ")} |`,
+  ...ORDER_ARMS.flatMap((arm) => {
+    const record = order.records.find((one) => one.arm === arm);
+    const result = order.verdict.results[arm];
+    const expected = expectationOf(arm);
+    return ORDER_PLACES.map((place) => {
+      const want = expected[place];
+      const gates = ORDER_GATES.map((gate) => {
+        const key: GateKey = `${place}:${gate}`;
+        return orderGate(arm, key, result?.gates[key]);
+      }).join(" | ");
+      const away = result?.awaySends[place].map((ms) => s(ms)).join(", ") || "none";
+      const live = record === undefined ? "-" : `${yes(record.live[place])} (${yes(want.live)})`;
+      return `| ${arm} | ${place} | ${labels(want.sends.map((send) => sendLabel(send)))} | ${labels(result?.sends[place] ?? [])} | ${String(result?.ends[place] ?? "-")} (${String(want.ends)}) | ${live} | ${away} | ${String(record?.passes ?? 0)} | ${gates} |`;
+    });
+  }),
+  "",
+  `Known faults: ${ORDER_KNOWN_FAULTS.length === 0 ? "none" : ORDER_KNOWN_FAULTS.map((fault) => `${fault.arm} ${fault.gate}`).join(", ")}.`,
+  "",
+  `Read: ${yes(order.verdict.read)}. Pass: **${yes(order.verdict.pass)}**.`,
 ]);
