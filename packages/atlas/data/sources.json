@@ -1695,6 +1695,57 @@
     "round": 1
   },
   {
+    "id": "emsc-seismicportal-fdsn",
+    "name": "EMSC seismic portal FDSN event service",
+    "classes": [
+      "geo.earthquake"
+    ],
+    "url": "https://www.seismicportal.eu/fdsnws/event/1/",
+    "access": "api",
+    "auth": "none",
+    "terms": {
+      "url": "https://www.seismicportal.eu/terms.html",
+      "automated": "allowed",
+      "redistribution": "allowed",
+      "note": "The terms page puts the data under CC BY 4.0, with the credit EMSC-CSEM SeismicPortal. The site and its databases are not under CC BY, so a mirror or a bulk copy needs written permission. The page tells nothing of automated reading or of a rate."
+    },
+    "cost": "free",
+    "delay": "near real time (no figure given). The answers have Cache-Control max-age=15.",
+    "history": "The adapter asks for the events of the past day. A query of the service takes a start time and an end time.",
+    "rateLimit": "No published limit. The answers have a weak ETag, Cache-Control max-age=15 and no Last-Modified. The adapter asks once a minute with If-None-Match.",
+    "calibration": null,
+    "coverage": "World earthquakes, with insert and update messages. The author of each solution is a network or an agency of the region of the event.",
+    "origins": [
+      "emsc",
+      "usgs"
+    ],
+    "regionalOrigins": [
+      {
+        "region": "us",
+        "origins": [
+          "usgs"
+        ],
+        "note": "One read of the event service at 2026-11-16 05:28 UTC: each event in the areas of the US networks had the solution of a network of the ANSS as its author. The link gate of the adapter holds it."
+      }
+    ],
+    "path": [
+      "www.seismicportal.eu"
+    ],
+    "subjectIds": [
+      "point"
+    ],
+    "risks": [],
+    "decision": "adopt",
+    "adapter": "@mark1russell7/alerts-source-emsc",
+    "reason": "A second path of the earthquakes, on other hosts than the USGS, with no key. In the US it gives the solutions of the US networks, and the link rule of the core joins its reports with the reports of the USGS.",
+    "evidence": [
+      "https://www.seismicportal.eu/fdsnws/event/1/",
+      "https://www.seismicportal.eu/terms.html",
+      "https://www.seismicportal.eu/fdsnws/event/1/query?format=json&minmag=2.5&limit=500"
+    ],
+    "round": 4
+  },
+  {
     "id": "emsc-seismicportal-ws",
     "name": "EMSC seismic portal real-time websocket",
     "classes": [
@@ -1733,15 +1784,15 @@
     ],
     "subjectIds": null,
     "risks": [],
-    "decision": "plan",
+    "decision": "later",
     "adapter": null,
-    "reason": "A push stream on other hosts than USGS, so it is a second path. In the United States it gives the solutions of the US networks, so there it is not a second origin.",
+    "reason": "The adapter of the event service reads the same events from the same host each minute. The stream gives an event up to one minute sooner, but no second path and no second origin.",
     "evidence": [
       "https://www.seismicportal.eu/realtime.html",
       "https://www.seismicportal.eu/terms.html",
       "https://www.seismicportal.eu/fdsnws/event/1/query?format=json&minmag=2.5&limit=500"
     ],
-    "round": 3
+    "round": 4
   },
   {
     "id": "endoflife-date-api",

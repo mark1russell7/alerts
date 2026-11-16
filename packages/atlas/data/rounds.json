@@ -294,5 +294,42 @@
       "unknownPaths": 4,
       "cause": "Round 3 plans ODIN for infra.power.outage. The class has one live source and stays a gap. Round 3 gives the origins of EMSC in each region, and EMSC is a planned source. The round adopts no source, so the measures do not change."
     }
+  },
+  {
+    "round": 4,
+    "date": "2026-11-16",
+    "by": "One session, for the adapter of the EMSC event service (AL-14), then a check of each fact in the tests of the adapter.",
+    "method": "The check of one planned source before its adapter. It read one answer of the event service with its headers and event types. The link rule of the core matched each event of the answer to the USGS feed of the same day.",
+    "lists": [
+      "EMSC seismic portal, the FDSN event service: https://www.seismicportal.eu/fdsnws/event/1/",
+      "EMSC seismic portal, the terms: https://www.seismicportal.eu/terms.html"
+    ],
+    "queries": [],
+    "notes": [
+      "The answer of 2026-11-16 05:28 UTC held 183 events of M2.5 or more of the past day. Its headers had a weak ETag, Cache-Control max-age=15 and no Last-Modified.",
+      "The answer also set a cookie of the load balancer. The adapter does not keep it.",
+      "The answer has explosions and landslides too, with the event types of the ISC. The adapter makes no report of them.",
+      "The link rule of the core (merge rule 3: 30 seconds, 100 km and a magnitude difference of 1.0) joins 30 events of the USGS feed of 03:27 UTC with their events in EMSC. It joins no two events of one source.",
+      "For 22 of the 30 events, EMSC gave the solution of a network of the ANSS, so the incident has one origin. The other 8 have a second origin.",
+      "The event service and the stream of EMSC have one host. So the round moves the stream to later."
+    ],
+    "studies": [],
+    "measures": {
+      "classes": 200,
+      "gaps": 132,
+      "cover": {
+        "adopted": 25,
+        "paths": 25,
+        "origins": 1
+      },
+      "total": {
+        "adopted": 78,
+        "paths": 78,
+        "origins": 52
+      },
+      "unknownOrigins": 3,
+      "unknownPaths": 4,
+      "cause": "Round 4 adopts the EMSC event service for geo.earthquake. The class now has 3 adopted sources on 3 paths with no shared part, so the adopted and path totals each gain 1. In the US, EMSC gives the solutions of the US networks, so the origin count of the class stays 2."
+    }
   }
 ]
