@@ -4,7 +4,7 @@
  * come from `@procedures/notify/pushover`.
  */
 
-import { COPY_ID, WHY_LIMITS, type ChannelDescriptor, type ChannelId, type ChannelProcedures, type Instant, type SendOutcome } from "@mark1russell7/alerts";
+import { COPY_ID, WHY_LIMITS, type AddressField, type ChannelDescriptor, type ChannelId, type ChannelProcedures, type Instant, type SendOutcome } from "@mark1russell7/alerts";
 import { isQuotaError, type Quota, type QuotaError, type QuotaGate, type QuotaReading, type QuotaState } from "polite-crawler/api";
 import {
   callPushover,
@@ -122,6 +122,15 @@ export interface PushoverChannelOptions extends PushoverMapOptions {
   readonly now?: (() => Instant) | undefined;
 }
 
+/**
+ * The fields of the address of a person on Pushover. The user key has the key form of `@procedures/notify`. A device
+ * name of Pushover has up to 25 letters, digits, `_` and `-`. An empty device name sends to each device of the person.
+ */
+export const PUSHOVER_ADDRESS: readonly AddressField[] = [
+  { name: "user", required: true, pattern: PUSHOVER_KEY.source, form: "a key of Pushover: 30 letters and digits" },
+  { name: "device", required: false, pattern: "[A-Za-z0-9_-]{0,25}", form: "a device name of Pushover: up to 25 letters, digits, _ and -" },
+];
+
 /** This function gives the descriptor of the channel for a platform. */
 export function pushoverDescriptor(platform?: "ios" | "android"): ChannelDescriptor {
   const push = platform === "ios" ? ["provider:apns"] : platform === "android" ? ["provider:fcm"] : [];
@@ -138,6 +147,7 @@ export function pushoverDescriptor(platform?: "ios" | "android"): ChannelDescrip
     maxBody: PUSHOVER_LIMITS.message,
     maxInFlight: PUSHOVER_MAX_IN_FLIGHT,
     why: WHY_LIMITS.push,
+    address: PUSHOVER_ADDRESS,
   };
 }
 

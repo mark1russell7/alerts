@@ -384,7 +384,7 @@ describe("the JSON Schema of each schema", () => {
   const exported = Object.entries(schemas).filter(([name]) => name.endsWith("Schema"));
 
   it("has each exported schema", () => {
-    expect(exported.length).toBe(95);
+    expect(exported.length).toBe(96);
     for (const [name, schema] of exported) expect(schema instanceof z.ZodType, name).toBe(true);
   });
 
@@ -415,6 +415,13 @@ describe("the round trip of real values", () => {
     fails(channelDescriptorSchema, { ...CHANNEL, maxInFlight: 1.5 });
     holds(channelDescriptorSchema, { ...CHANNEL, why: { chars: 80 } });
     fails(channelDescriptorSchema, { ...CHANNEL, why: { chars: 0 } });
+    const user = { name: "user", required: true, pattern: "[A-Za-z0-9]{30}", form: "30 letters and digits" };
+    holds(channelDescriptorSchema, { ...CHANNEL, address: [user, { ...user, name: "device", required: false }] });
+    holds(channelDescriptorSchema, { ...CHANNEL, address: [] });
+    fails(channelDescriptorSchema, { ...CHANNEL, address: [{ ...user, pattern: "[A-Z" }] });
+    fails(channelDescriptorSchema, { ...CHANNEL, address: [{ ...user, name: "" }] });
+    fails(channelDescriptorSchema, { ...CHANNEL, address: [{ ...user, form: "" }] });
+    fails(channelDescriptorSchema, { ...CHANNEL, address: [{ ...user, extra: true }] });
     holds(whyLimitSchema, { chars: 40 });
     holds(whyLimitSchema, { words: 12 });
     holds(whyLimitSchema, { chars: 80, words: 12 });

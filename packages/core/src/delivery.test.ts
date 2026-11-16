@@ -2,6 +2,7 @@ import { random, seedsFrom } from "@mark1russell7/rigor-generators";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type {
   Acknowledgment,
+  Address,
   ChannelDescriptor,
   ChannelId,
   Delivery,
@@ -17,7 +18,7 @@ import type {
   WatchedPlace,
 } from "./contracts.ts";
 import { LEVELS } from "./contracts.ts";
-import { acknowledgmentOf, messageOf, recipientProblems, route, type EscalationEnd, type EscalationStart, type Recipient, type Route, type RouteInput } from "./delivery.ts";
+import { acknowledgmentOf, addressProblems, messageOf, recipientProblems, route, type EscalationEnd, type EscalationStart, type Recipient, type Route, type RouteInput } from "./delivery.ts";
 import { messageKey } from "./ids.ts";
 import { placeWhy } from "./why.ts";
 
@@ -712,6 +713,34 @@ describe("recipientProblems", () => {
     const problems = recipientProblems(quiet("America/Chicagoo", "22:00", "7:00"), CHANNELS);
     expect(problems.length).toBeGreaterThanOrEqual(2);
     for (const problem of problems) expect(problem).toMatch(/^The quiet window: /);
+  });
+
+  it("finds an address that does not have the fields of its channel, and names no value", () => {
+    const to = { name: "to", required: true, pattern: "\\+[1-9][0-9]{7,14}", form: "a phone number in E.164 form" } as const;
+    const label = { name: "label", required: false, pattern: "[a-z]{1,10}", form: "1 to 10 small letters" } as const;
+    const texts: ChannelDescriptor = { ...channel(sms, "none"), address: [to, label] };
+    const base = recipient();
+    const at = (address: Address): string[] => recipientProblems({ ...base, addresses: { ...base.addresses, sms: address } }, [channel(pushover, "poll"), texts]);
+    expect(at({ to: "+99900000002" })).toEqual([]);
+    expect(at({ to: "+99900000002", label: "home" })).toEqual([]);
+    expect(at({})).toEqual(["The address on sms has no field to. The channel needs a phone number in E.164 form."]);
+    expect(at({ to: "99900000002" })).toEqual(["The field to of the address on sms is not a phone number in E.164 form."]);
+    // The pattern holds the whole value, not a part of it.
+    expect(at({ to: "+99900000002 and more" })).toEqual(["The field to of the address on sms is not a phone number in E.164 form."]);
+    expect(at({ to: "+99900000002", label: "Home 2" })).toEqual(["The field label of the address on sms is not 1 to 10 small letters."]);
+    expect(at({ to: "+99900000002", numbr: "+1" })).toEqual(["The address on sms has the field numbr, and the channel reads no such field."]);
+    // Own fields only: the field constructor of a plain object is not a field of the address.
+    expect(addressProblems({}, { ...texts, address: [{ name: "constructor", required: true, pattern: ".*", form: "any text" }] })).toEqual([
+      "The address on sms has no field constructor. The channel needs any text.",
+    ]);
+    // A bad pattern of a channel is a problem, not a throw.
+    expect(addressProblems({ to: "+99900000002" }, { ...texts, address: [{ ...to, pattern: "[0-9" }] })).toEqual([
+      "The channel sms gives the field to a pattern that is not a regular expression.",
+    ]);
+    // A channel with no fields accepts each address. An address on a channel that the system does not know is not a problem.
+    expect(addressProblems({ any: "value" }, channel(pushover, "poll"))).toEqual([]);
+    expect(recipientProblems({ ...base, addresses: { ...base.addresses, fax: { to: "x" } } }, CHANNELS)).toEqual([]);
+    for (const problem of [...at({ to: "bad-value-1" }), ...at({ numbr: "bad-value-2" })]) expect(problem).not.toMatch(/bad-value/);
   });
 });
 
