@@ -243,16 +243,61 @@ const LIFE_SAFETY_CODES: readonly string[] = [...LIFE_SAFETY_KINDS, ...LIFE_SAFE
 /** This function tells if two prefixes of the taxonomy share a kind: one of them has the other. */
 const overlap = (a: string, b: string): boolean => hasKind([a], b) || hasKind([b], a);
 
+/** This function gives the regular expression of the whole value of a pattern, or `undefined` for a bad pattern. */
+function patternOf(source: string): RegExp | undefined {
+  try {
+    return new RegExp(`^(?:${source})$`, "u");
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * This function gives the problems of an address on a channel, from the fields of its descriptor. A problem
+ * names the field and its form, and not its value, because a value can be a secret.
+ *
+ * - A channel with no list of fields accepts each address.
+ * - The address has each necessary field, and each value has the form of its field.
+ * - The address has no field that the channel does not read. Thus a typo of a field name is a problem, not a silent default.
+ * - A pattern that is not a regular expression is a problem of the channel. The function does not throw.
+ */
+export function addressProblems(address: Address, channel: ChannelDescriptor): string[] {
+  if (channel.address === undefined) return [];
+  const problems: string[] = [];
+  // Own fields only: a field such as `constructor` is not a field of a plain object.
+  const valueOf = (name: string): string | undefined => (Object.hasOwn(address, name) ? address[name] : undefined);
+  for (const field of channel.address) {
+    const value = valueOf(field.name);
+    if (value === undefined) {
+      if (field.required) problems.push(`The address on ${channel.id} has no field ${field.name}. The channel needs ${field.form}.`);
+      continue;
+    }
+    const form = patternOf(field.pattern);
+    if (form === undefined) problems.push(`The channel ${channel.id} gives the field ${field.name} a pattern that is not a regular expression.`);
+    else if (!form.test(value)) problems.push(`The field ${field.name} of the address on ${channel.id} is not ${field.form}.`);
+  }
+  const names = new Set(channel.address.map((field) => field.name));
+  for (const name of Object.keys(address)) if (!names.has(name)) problems.push(`The address on ${channel.id} has the field ${name}, and the channel reads no such field.`);
+  return problems;
+}
+
 /**
  * This function gives the problems of a recipient. `route` accepts each recipient, but a recipient with
  * a problem does not get what its author meant. A kind with a typo matches no alert, so it can stop a wake.
  *
  * A life-safety alert always gets its escalation. Thus a person who watches a place or a subject has a
  * `life-safety` policy, and no rule keeps a life-safety kind below `life-safety`.
+ *
+ * Each address on a known channel has the fields of its channel (`addressProblems`). An address on a channel that the
+ * system does not know is not a problem: no step can use it.
  */
 export function recipientProblems(recipient: Recipient, channels: readonly ChannelDescriptor[]): string[] {
   const problems: string[] = [];
-  const known = new Set(channels.map((channel) => channel.id as string));
+  const known = new Map(channels.map((channel) => [channel.id as string, channel]));
+  for (const [id, address] of Object.entries(recipient.addresses)) {
+    const channel = known.get(id);
+    if (channel !== undefined) problems.push(...addressProblems(address, channel));
+  }
   const seen = new Set<Level>();
   for (const policy of recipient.policies) {
     if (seen.has(policy.level)) problems.push(`Two policies have the level ${policy.level}. Only the first one applies.`);

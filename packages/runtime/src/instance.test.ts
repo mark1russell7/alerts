@@ -419,11 +419,33 @@ describe("openInstance", () => {
   });
 
   it("does not start with a key that is not a key of Pushover, and no message holds the bad value", () => {
-    const bad = { PUSHOVER_APP_TOKEN: "bad-token-value", PUSHOVER_USER_KEY: "bad-user-value" };
-    const message = messageOf(() => open(store(bad)));
-    expect(message).toContain("The value of PUSHOVER_APP_TOKEN is not a key of Pushover");
-    expect(message).toContain("The Pushover user key of person-1 is not 30 letters and digits.");
-    expect(message).not.toMatch(/bad-token-value|bad-user-value/);
+    // The load of the configuration checks the user key with the address fields of the channel. The instance checks the token.
+    const badUser = messageOf(() => open(store({ ...SECRETS, PUSHOVER_USER_KEY: "bad-user-value" })));
+    expect(badUser).toContain("The person person-1: The field user of the address on pushover is not a key of Pushover: 30 letters and digits.");
+    const badToken = messageOf(() => open(store({ ...SECRETS, PUSHOVER_APP_TOKEN: "bad-token-value" })));
+    expect(badToken).toContain("The value of PUSHOVER_APP_TOKEN is not a key of Pushover");
+    for (const message of [badUser, badToken]) expect(message).not.toMatch(/bad-token-value|bad-user-value/);
+  });
+
+  it("does not start with a phone number with a missing digit, or a step on the call channel before its sender", () => {
+    const call = "twilio-call" as ChannelId;
+    const withPhone = (steps: EscalationPolicy["steps"]): AlertConfig => ({
+      ...CONFIG,
+      contacts: [...CONFIG.contacts, { person, channel: call, address: { to: { secret: "PHONE" } } }],
+      policies: [{ ...policy("life-safety"), steps }, policy("urgent"), policy("notice")],
+    });
+    // Fake numbers: the area code 555 of the plan has no phones.
+    const phone = (to: string): SecretLookup => store({ ...SECRETS, PHONE: to });
+    const pushOnly = [{ channel: pushover, at: 0 }];
+    const missing = messageOf(() => open(phone("+1555555012"), withPhone(pushOnly)));
+    expect(missing).toContain("The person person-1: The field to of the address on twilio-call is not a phone number in E.164 form");
+    expect(missing).not.toContain("+1555555012");
+    // A good number on a step loads. The instance has no sender on the channel until AL-15, thus it does not start.
+    const steps = [...pushOnly, { channel: call, at: 5 * MINUTE }];
+    expect(parseConfig(JSON.stringify(withPhone(steps)), INSTANCE_CHANNELS, phone("+15555550123")).tag).toBe("ok");
+    expect(messageOf(() => open(phone("+15555550123"), withPhone(steps)))).toContain("Step 1 of life-safety of person-1 uses the channel twilio-call, and the instance has no sender on it.");
+    // A number with no step only waits for its sender. The instance starts.
+    expect(() => open(phone("+15555550123"), withPhone(pushOnly))).not.toThrow();
   });
 });
 
@@ -491,13 +513,9 @@ describe("the check of the instance", () => {
   it("finds each problem that stops the start, and no message holds a value of a secret", () => {
     const place = CONFIG.places[0]!;
     const uncovered: AlertConfig = { ...CONFIG, places: [{ ...place, codes: place.codes.filter((code) => code.system !== "iso3166") }] };
-    const bad = store({ PUSHOVER_APP_TOKEN: "bad-token-value", PUSHOVER_USER_KEY: "bad-user-value" });
+    const bad = store({ ...SECRETS, PUSHOVER_APP_TOKEN: "bad-token-value" });
     const problems = INSTANCE_CHECK.problems(parse(uncovered, bad), bad);
-    expect(problems).toEqual([
-      expect.stringContaining("The value of PUSHOVER_APP_TOKEN is not a key of Pushover"),
-      "The Pushover user key of person-1 is not 30 letters and digits.",
-      expect.stringContaining("No source covers the place place-1."),
-    ]);
+    expect(problems).toEqual([expect.stringContaining("The value of PUSHOVER_APP_TOKEN is not a key of Pushover"), expect.stringContaining("No source covers the place place-1.")]);
     expect(problems.join("\n")).not.toMatch(/bad-token-value|bad-user-value/);
     expect(messageOf(() => open(bad, uncovered))).toContain(problems.join("\n- "));
   });

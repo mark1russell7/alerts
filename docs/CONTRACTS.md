@@ -235,6 +235,13 @@ Each channel package registers four procedures under `alerts.channel.<id>`:
 | `status` | reads `network` | It gives the state of a receipt: accepted, delivered, acknowledged, expired or failed. |
 | `cancel` | writes `network` | It stops the repeats of a message: each copy of a receipt, or one copy by its copy id. It is idempotent. |
 
+A descriptor with `address` tells the fields of the address of a person on the channel: the name, the need and the form of each field.
+
+- The load of the configuration checks each address on a known channel with `addressProblems`. A problem stops the start, before the first alert.
+- An address has each required field, and each value has the form of its field. It has no field that the channel does not read.
+- A problem names the field and its form, and never its value, because a value can be a secret.
+- The form is a regular expression of the whole value. Pushover takes the key form of `@procedures/notify`. The Twilio call takes a phone number in E.164 form.
+
 The channel does not escalate. The core does:
 
 - An `EscalationPolicy` gives the steps of a level: a channel and a time for each step. The first step of `life-safety` is Pushover at emergency priority. It repeats until acknowledged, and sounds through silent mode with iOS Critical Alerts.
@@ -496,8 +503,9 @@ The function `openInstance` makes the instance of the owner from the private con
 
 The instance does not start when it finds one of these problems:
 
-- a missing secret, or a key that does not have the form of a Pushover key (30 letters and digits)
-- each problem of `parseConfig`: the JSON, the schema and the references
+- a missing secret, or an API token that does not have the form of a Pushover key (30 letters and digits)
+- each problem of `parseConfig`: the JSON, the schema, the references and the fields of each address on its channel
+- a step of a policy on a channel that the instance has no sender for. The Twilio call channel has no sender until AL-15.
 - a place that no source covers. Usually the place does not have a code of each level: the zone, the county, SAME, the state and the country.
 
 The environment gives `PORT` (8080), `PROBE_PORT` (9090) and `SERVICE_PROFILE` (`local`, `daemon` or `pod`). The folder `ALERTS_HOME` (`.alerts` in the home folder) holds the private files: `config.json`, `secrets.env`, the log `runtime.sqlite` and the outlines of the zones `shapes.sqlite`. No repository holds them. A problem of `secrets.env` names its line and its key, and no value. The output of a failed pass shows no value of `secrets.env`.

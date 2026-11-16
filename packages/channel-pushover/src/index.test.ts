@@ -1,4 +1,4 @@
-import { WHY_LIMITS, type Level, type Message, type PersonId, type ReportId } from "@mark1russell7/alerts";
+import { addressProblems, WHY_LIMITS, type Level, type Message, type PersonId, type ReportId } from "@mark1russell7/alerts";
 import type { PushoverFetch } from "@procedures/notify/pushover";
 import { quotaGate, type QuotaGate } from "polite-crawler/api";
 import { describe, expect, it } from "vitest";
@@ -142,6 +142,19 @@ describe("the descriptor", () => {
     expect(pushoverDescriptor().why).toEqual(WHY_LIMITS.push);
     const fake = server();
     expect(createPushoverChannel({ token: TOKEN, fetch: fake.fetch, platform: "ios" }).describe().dependsOn).toContain("provider:apns");
+  });
+
+  it("checks the user key and the device name of an address, and names no value", () => {
+    const descriptor = pushoverDescriptor();
+    expect(addressProblems(ADDRESS, descriptor)).toEqual([]);
+    expect(addressProblems({ user: USER, device: "iphone-15_pro" }, descriptor)).toEqual([]);
+    expect(addressProblems({ user: USER, device: "" }, descriptor)).toEqual([]);
+    expect(addressProblems({}, descriptor)).toEqual(["The address on pushover has no field user. The channel needs a key of Pushover: 30 letters and digits."]);
+    expect(addressProblems({ user: "bad-user-value" }, descriptor)).toEqual(["The field user of the address on pushover is not a key of Pushover: 30 letters and digits."]);
+    expect(addressProblems({ user: USER, device: "my phone" }, descriptor)).toEqual(["The field device of the address on pushover is not a device name of Pushover: up to 25 letters, digits, _ and -."]);
+    expect(addressProblems({ user: USER, devise: "phone" }, descriptor)).toEqual(["The address on pushover has the field devise, and the channel reads no such field."]);
+    // The form of the user key is the form of each key of Pushover.
+    expect(isPushoverKey(USER)).toBe(true);
   });
 });
 

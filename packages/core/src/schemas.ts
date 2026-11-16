@@ -17,6 +17,7 @@ import {
   LEVELS,
   type Acknowledgment,
   type Address,
+  type AddressField,
   type Area,
   type AssessedLevel,
   type AssessPolicy,
@@ -562,6 +563,28 @@ export const whyLimitSchema: z.ZodType<WhyLimit, WhyLimit> = schemaOf<WhyLimit>(
 );
 
 /** This schema checks the facts of a channel. Its `dependsOn` holds no resource of the cell. */
+/** This function tells if a text is the source of a regular expression with the flag `u`. */
+const isPattern = (source: string): boolean => {
+  try {
+    new RegExp(source, "u");
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+/** This schema checks one field of the address of a channel. Its pattern is a regular expression with the flag `u`. */
+export const addressFieldSchema: z.ZodType<AddressField, AddressField> = schemaOf<AddressField>()(
+  z
+    .strictObject({
+      name: z.string().min(1, "The name of an address field is a non-empty string."),
+      required: z.boolean(),
+      pattern: z.string().refine(isPattern, "The pattern of an address field is a regular expression with the flag u."),
+      form: z.string().min(1, "The form of an address field is a non-empty text."),
+    })
+    .readonly(),
+);
+
 export const channelDescriptorSchema: z.ZodType<ChannelDescriptor, ChannelDescriptor> = schemaOf<ChannelDescriptor>()(
   z
     .strictObject({
@@ -577,6 +600,7 @@ export const channelDescriptorSchema: z.ZodType<ChannelDescriptor, ChannelDescri
       costUsd: z.number().exactOptional(),
       maxInFlight: z.number().int().min(1).exactOptional(),
       why: whyLimitSchema.exactOptional(),
+      address: z.array(addressFieldSchema).readonly().exactOptional(),
     })
     .readonly(),
 );

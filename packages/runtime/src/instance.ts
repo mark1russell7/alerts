@@ -4,7 +4,8 @@
  * clocks and the transports. This module reads no file, no environment variable and no clock.
  */
 import { delay, type Clock, type WallClock } from "@mark1russell7/algebra/clock";
-import { localPlaces, placeLabels, sourceCovers, sourcePlaces, type ChannelDescriptor, type Duration, type ParsedConfig, type SecretLookup, type SourceDescriptor } from "@mark1russell7/alerts";
+import { localPlaces, placeLabels, sourceCovers, sourcePlaces, type ChannelDescriptor, type ChannelId, type Duration, type ParsedConfig, type SecretLookup, type SourceDescriptor } from "@mark1russell7/alerts";
+import { twilioCallDescriptor } from "@mark1russell7/alerts-channel-twilio";
 import { CHANNEL_ID, createPushoverChannel, isPushoverKey, pushoverDescriptor, PUSHOVER_REPEAT_MS, PUSHOVER_TIMEOUT_MS, type PushoverChannelOptions } from "@mark1russell7/alerts-channel-pushover";
 import { createIpawsSource, IPAWS_DESCRIPTOR, WEA_EXPECTATION } from "@mark1russell7/alerts-source-ipaws";
 import { createShapeStore, type ShapeCache, type ShapeStore } from "@mark1russell7/alerts-shapes-nws";
@@ -95,9 +96,16 @@ export { DELAY_LIMITS };
 
 /**
  * The descriptors of the channels of the instance. The loader of the configuration checks each
- * recipient against this list. Thus the loader and the instance agree on the channels.
+ * recipient against this list: the channel of each step, and the fields of each address. Thus the loader
+ * and the instance agree on the channels.
  */
-export const INSTANCE_CHANNELS: readonly ChannelDescriptor[] = [pushoverDescriptor()];
+export const INSTANCE_CHANNELS: readonly ChannelDescriptor[] = [pushoverDescriptor(), twilioCallDescriptor()];
+
+/**
+ * The channels that the instance sends on. The Twilio call channel has a descriptor and no sender until AL-15.
+ * Thus the configuration can hold a phone number and its check, and a step on the channel stops the start.
+ */
+export const INSTANCE_SENDERS: readonly ChannelId[] = [CHANNEL_ID];
 
 /** The descriptors of the sources of the instance. The function `describe` of each source gives the same descriptor. */
 export const INSTANCE_SOURCES: readonly SourceDescriptor[] = [NWS_DESCRIPTOR, IPAWS_DESCRIPTOR];
@@ -144,9 +152,15 @@ export const DELIVERY_TIMES: Pick<DeliveryOptions, "pollEvery" | "retry" | "call
 };
 
 /**
- * This function gives the problems of a configuration that stop the start of the instance. A problem
- * is a missing token, a key with a bad form, or a place that no source covers. The message names ids,
- * fields and the names of secrets, and no value.
+ * This function gives the problems of a configuration that stop the start of the instance:
+ *
+ * - a missing token, or a token with a bad form
+ * - a step of a policy on a channel with no sender
+ * - a place that no source covers.
+ *
+ * The message names ids, fields and the names of secrets, and no value.
+ *
+ * The function `parseConfig` checks the fields of each address with the descriptors of `INSTANCE_CHANNELS`.
  */
 export function instanceProblems(parsed: ParsedConfig, secret: SecretLookup, descriptors: readonly SourceDescriptor[]): string[] {
   const token = secret(PUSHOVER_TOKEN) ?? "";
@@ -157,10 +171,16 @@ export function instanceProblems(parsed: ParsedConfig, secret: SecretLookup, des
       : isPushoverKey(token)
         ? []
         : [`The value of ${PUSHOVER_TOKEN} is not a key of Pushover: 30 letters and digits.`];
-  const userProblems = parsed.recipients.flatMap((recipient) => {
-    const user = recipient.addresses[CHANNEL_ID]?.["user"];
-    return user === undefined || isPushoverKey(user) ? [] : [`The Pushover user key of ${recipient.watch.person} is not 30 letters and digits.`];
-  });
+  // A step on a channel with no sender fails each send of the step. Thus it stops the start.
+  const senderProblems = parsed.recipients.flatMap((recipient) =>
+    recipient.policies.flatMap((policy) =>
+      policy.steps.flatMap((step, index) =>
+        INSTANCE_SENDERS.includes(step.channel)
+          ? []
+          : [`Step ${index} of ${policy.level} of ${recipient.watch.person} uses the channel ${step.channel}, and the instance has no sender on it.`],
+      ),
+    ),
+  );
   // A place that no source covers gets no alert. The usual cause is a missing code of a level.
   const kinds = [...new Set(descriptors.flatMap((descriptor) => descriptor.kinds))];
   const placeProblems = localPlaces(parsed.config).flatMap((place) =>
@@ -168,7 +188,7 @@ export function instanceProblems(parsed: ParsedConfig, secret: SecretLookup, des
       ? []
       : [`No source covers the place ${place.id}. Give the place its codes at each level: the NWS zone and county, SAME, the state and the country (iso3166).`],
   );
-  return [...tokenProblems, ...userProblems, ...placeProblems];
+  return [...tokenProblems, ...senderProblems, ...placeProblems];
 }
 
 /** The check of a configuration file for the live instance: its channels and the problems that stop its start. */

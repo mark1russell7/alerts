@@ -499,6 +499,24 @@ export type Level = "life-safety" | "urgent" | "notice" | "digest";
 /** The order of the levels, from the lowest. */
 export const LEVELS: readonly Level[] = ["digest", "notice", "urgent", "life-safety"];
 
+/**
+ * One field of the address of a person on a channel, for example the user key of Pushover. The load of the
+ * configuration checks each address with the fields of its channel.
+ */
+export interface AddressField {
+  /** The name of the field in the address, for example `user` or `to`. */
+  readonly name: string;
+  /** True: each address on the channel has the field. */
+  readonly required: boolean;
+  /**
+   * The form of the whole value: the source of a regular expression with the flag `u`. The check adds the anchors
+   * `^` and `$`. Write a pattern with no nested repeats, because the check runs it on each address.
+   */
+  readonly pattern: string;
+  /** The form in words, for the text of a problem, for example `a phone number in E.164 form`. It tells no value. */
+  readonly form: string;
+}
+
 /** The facts of a channel. The core uses them for the escalation and the coverage of delivery. */
 export interface ChannelDescriptor {
   readonly id: ChannelId;
@@ -534,6 +552,11 @@ export interface ChannelDescriptor {
    * When it is absent, the messages of the channel have no why line.
    */
   readonly why?: WhyLimit;
+  /**
+   * The fields of the address of a person on the channel. The load of the configuration refuses an address that
+   * does not agree with this list. With no list, each address passes. The function `addressProblems` tells the rules.
+   */
+  readonly address?: readonly AddressField[];
 }
 
 /** The limit of a why line: the most characters, the most words, or both. */
