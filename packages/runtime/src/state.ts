@@ -21,6 +21,7 @@ import {
   type Acknowledgment,
   type ChannelId,
   type ClockStep,
+  type LogRecovery,
   type Cursor,
   type Delivery,
   type Duration,
@@ -83,6 +84,8 @@ export interface RuntimeState {
    * moves each own instant of the state.
    */
   readonly steps: readonly ClockStep[];
+  /** The recoveries of the log from a broken file, in the order of the log. A later step of the wall clock moves their times. */
+  readonly recoveries: readonly LogRecovery[];
 }
 
 /** The last refusal of a delivery key. */
@@ -121,6 +124,7 @@ export const EMPTY_RUNTIME: RuntimeState = {
   refusals: {},
   delivered: {},
   steps: [],
+  recoveries: [],
 };
 
 /** This function adds one event to the state. */
@@ -229,6 +233,8 @@ function foldRest(state: RuntimeState, event: RuntimeEvent, context: FoldContext
       const shifted = shiftState(state, event.size);
       return { ...shifted, time: Math.max(shifted.time, event.time), steps: [...shifted.steps, { at: event.time, size: event.size }] };
     }
+    case "recovered":
+      return { ...base, recoveries: [...state.recoveries, { at: event.time, quarantine: event.quarantine, kept: event.added, lost: event.lost, whole: event.whole }] };
     default:
       return base;
   }
@@ -254,6 +260,7 @@ export function shiftState(state: RuntimeState, size: Duration): RuntimeState {
     starts: state.starts.map((start) => shiftEscalationStart(start, size)),
     escalationEnds: state.escalationEnds.map((end) => shiftEscalationEnd(end, size)),
     steps: state.steps.map((step) => ({ ...step, at: step.at + size })),
+    recoveries: state.recoveries.map((recovery) => ({ ...recovery, at: recovery.at + size })),
   };
 }
 

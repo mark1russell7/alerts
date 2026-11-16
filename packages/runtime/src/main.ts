@@ -37,7 +37,7 @@ import { heartbeat, heldOf, type PassSummary } from "./heartbeat.ts";
 import { quotaNote } from "./quota.ts";
 import { PROFILES, declare } from "./index.ts";
 import { DAEMON_CHECK, INSTANCE_CHECK, LOUD_PING_URL_KEY, openInstance, PING_URL_KEY, pingTargets, userAgent } from "./instance.ts";
-import { openRuntimeLog } from "./log.ts";
+import { openCheckedRuntimeLog } from "./log.ts";
 import { GOOD_CONFIG_FILE, privateFiles, reloadHook, startConfig } from "./reload.ts";
 import { shapeReport, zoneCodesText } from "./shapes.ts";
 import { supervisor } from "./supervise.ts";
@@ -120,7 +120,9 @@ async function runtime(): Promise<ServiceBuilder> {
           reload?.onPass();
         };
 
-  const log = openRuntimeLog(join(home, "runtime.sqlite"));
+  // A broken log file goes into quarantine. The new file gets each event that the salvage reads, and a system report tells the loss.
+  const { log, recovered } = openCheckedRuntimeLog(join(home, "runtime.sqlite"), { now: () => wall.now() });
+  if (recovered !== undefined) console.error(`The log file was broken. It is in the quarantine folder ${recovered.quarantine}. The new log kept ${String(recovered.added)} events and lost ${String(recovered.lost)}.`);
   // A broken file of shapes goes into quarantine, and the store starts empty. Then the outlines come again from the NWS API.
   const shapes = openShapeCache(join(home, SHAPES_FILE));
   if (shapes.quarantined !== undefined) console.error(`The file ${SHAPES_FILE} was broken. It is in quarantine, and the store of shapes starts empty.`);

@@ -13,14 +13,19 @@ import {
   CLOCK_STEP_WINDOW,
   CLOCK_SUBJECT,
   gapGrade,
+  latestIn,
+  LOG_RECOVERY_WINDOW,
+  LOG_SUBJECT,
   NO_SYSTEM_LINES,
   quotaStages,
+  recentRecovery,
   recentStep,
   SOURCE_SUBJECT,
   stepSizeText,
   SYSTEM_SOURCE,
   systemReports,
   threats,
+  type LogRecovery,
   type SystemLines,
   type SystemSnapshot,
 } from "./system-reports.ts";
@@ -441,6 +446,67 @@ describe("the clock reports", () => {
     const step = systemReports(NO_SYSTEM_LINES, snapshot({ steps: [{ at: START, size: HOUR }] }), START);
     expect(levels(step.reports, WATCHER, START)).toEqual(["digest"]);
     expect(levels(step.reports, OPERATOR, START)).toEqual(["none"]);
+  });
+});
+
+describe("the log reports", () => {
+  const DAY = 24 * 3_600_000;
+  const START = Date.UTC(2026, 10, 16, 12);
+  const WATCHER: PersonWatch = { ...NEIGHBOR, subjects: [{ system: LOG_SUBJECT }] };
+  const FOLDER = "runtime.sqlite.broken-20261116T120000Z";
+  const whole: LogRecovery = { at: START, quarantine: FOLDER, kept: 40, lost: 0, whole: true };
+  const lossy: LogRecovery = { at: START + 1_000, quarantine: `${FOLDER}-2`, kept: 30, lost: 3, whole: false };
+  const unread: LogRecovery = { at: START, quarantine: FOLDER, kept: 0, lost: 0, whole: false };
+  const codes = (reports: readonly Report[]) => reports.map((report) => [report.op, report.kind.code]);
+
+  it("finds the latest recovery at the time or before it, in the window, with the rule of the steps of the clock", () => {
+    expect(LOG_RECOVERY_WINDOW).toBe(DAY);
+    expect(unknownKinds(["system.log", "system.log.recovered"])).toEqual([]);
+    expect(recentRecovery([whole, lossy], START - 1)).toBeUndefined();
+    expect(recentRecovery([whole, lossy], START)).toEqual(whole);
+    expect(recentRecovery([whole, lossy], START + 1_000)).toEqual(lossy);
+    expect(recentRecovery([whole, lossy], START + 1_000 + DAY)).toBeUndefined();
+    expect(latestIn([whole, { ...whole, kept: 1 }], START, 1)).toEqual({ ...whole, kept: 1 });
+    expect(latestIn([whole], START + 1, 1)).toBeUndefined();
+  });
+
+  it("gives an alert that names the quarantine, an update for a second recovery, and a cancel at the end of the window", () => {
+    const first = systemReports(NO_SYSTEM_LINES, snapshot({ recoveries: [whole] }), START);
+    expect(first.reports).toMatchObject([
+      {
+        op: "alert",
+        status: "system",
+        kind: { code: "system.log.recovered", label: "Recovery of the log" },
+        severity: "minor",
+        urgency: "past",
+        onset: START,
+        areas: [],
+        about: [{ system: LOG_SUBJECT, id: "runtime" }],
+        headline: "The log file of the alert system was broken.",
+        parameters: { quarantine: [FOLDER], kept: ["40"], lost: ["0"], whole: ["true"] },
+      },
+    ]);
+    expect(first.reports[0]!.description).toBe(`The alert system moved the broken file into the quarantine folder ${FOLDER}, and it started a new log. It kept each of the 40 events.`);
+    expect(Object.keys(first.lines.open)).toEqual(["log"]);
+    expect(systemReports(first.lines, snapshot({ recoveries: [whole] }), START + 500).reports).toEqual([]);
+    const second = systemReports(first.lines, snapshot({ recoveries: [whole, lossy] }), START + 1_000);
+    expect(second.reports).toMatchObject([{ op: "update", references: [first.reports[0]!.key], severity: "moderate", urgency: "expected" }]);
+    expect(second.reports[0]!.description).toContain("It kept 30 events, and it could not read each part of the file (3 positions).");
+    expect(codes(systemReports(second.lines, snapshot({ recoveries: [whole, lossy] }), START + 1_000 + DAY).reports)).toEqual([["cancel", "system.log.recovered"]]);
+    expect(addSystemReports(NO_SYSTEM_LINES, [...first.reports, ...second.reports], [...first.observations, ...second.observations])).toEqual(second.lines);
+  });
+
+  it("goes to the digest of the person who watches the log with no loss, to the notice with a loss, and to no other person", () => {
+    const quiet = systemReports(NO_SYSTEM_LINES, snapshot({ recoveries: [whole] }), START);
+    expect(levels(quiet.reports, WATCHER, START)).toEqual(["digest"]);
+    expect(levels(quiet.reports, OPERATOR, START)).toEqual(["none"]);
+    const loud = systemReports(NO_SYSTEM_LINES, snapshot({ recoveries: [lossy] }), START + 1_000);
+    expect(levels(loud.reports, WATCHER, START + 1_000)).toEqual(["notice"]);
+    // A file that the salvage cannot read gives no count of the lost positions. It is a loss all the same.
+    const none = systemReports(NO_SYSTEM_LINES, snapshot({ recoveries: [unread] }), START);
+    expect(none.reports).toMatchObject([{ severity: "moderate", urgency: "expected" }]);
+    expect(none.reports[0]!.description).toContain("It kept 0 events, and it could not read each part of the file. A lost event");
+    expect(levels(none.reports, WATCHER, START)).toEqual(["notice"]);
   });
 });
 

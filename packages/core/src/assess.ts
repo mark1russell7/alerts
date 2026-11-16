@@ -125,6 +125,12 @@ export const BALANCE_KIND = "system.balance";
  */
 export const CLOCK_KIND = "system.clock";
 
+/**
+ * The prefix of the kinds of the log reports of the core: `system.log.recovered`, a broken log file that went into
+ * quarantine. An adapter does not map a message to this prefix.
+ */
+export const LOG_KIND = "system.log";
+
 /** The table of the coverage of the kinds that can reach `life-safety`. */
 const COVERAGE_TABLE: LevelTable = {
   severity: { extreme: "life-safety", severe: "urgent", moderate: "notice", minor: "digest", unknown: "urgent" },
@@ -156,7 +162,7 @@ export const DEFAULT_ASSESS_POLICY: AssessPolicy = {
     { id: "life-safety", kinds: [...LIFE_SAFETY_KINDS.filter((kind) => !EARTHQUAKE_KINDS.includes(kind)), "geo.earthquake.early-warning"], ...LIFE_SAFETY_TABLE },
     { id: "earthquake", kinds: EARTHQUAKE_KINDS, ...EARTHQUAKE_TABLE },
     { id: "system-coverage", kinds: LIFE_SAFETY_KINDS.map((kind) => `${COVERAGE_KIND}.${kind}`), statuses: ["system"], ...COVERAGE_TABLE },
-    { id: "system", kinds: [HEALTH_KIND, COVERAGE_KIND, QUOTA_KIND, BALANCE_KIND, CLOCK_KIND], statuses: ["system"], ...SYSTEM_TABLE },
+    { id: "system", kinds: [HEALTH_KIND, COVERAGE_KIND, QUOTA_KIND, BALANCE_KIND, CLOCK_KIND, LOG_KIND], statuses: ["system"], ...SYSTEM_TABLE },
   ],
   otherwise: OTHER_TABLE,
 };
