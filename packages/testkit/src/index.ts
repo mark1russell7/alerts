@@ -108,6 +108,7 @@ export {
   CASE_5_SETTINGS,
   canaryAnswer,
   caseClock,
+  caseDeliveryTimes,
   caseTransport,
   DOWN_ARMS,
   downGatesOf,

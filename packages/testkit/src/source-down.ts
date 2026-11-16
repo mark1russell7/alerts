@@ -27,7 +27,7 @@
  */
 import { DEFAULT_COVERAGE_POLICY, type HealthState } from "@mark1russell7/alerts";
 import { delay, platformClock, wallClock } from "@mark1russell7/algebra/clock";
-import { openRuntime, openRuntimeLog, SOURCE_POLICY, sourcePace, type RuntimeOptions } from "@mark1russell7/alerts-runtime";
+import { DELIVERY_TIMES, openRuntime, openRuntimeLog, overdueLimit, SOURCE_POLICY, sourcePace, type RuntimeOptions } from "@mark1russell7/alerts-runtime";
 import { CANARY_PATH, createNwsSource, NWS_DESCRIPTOR, SOURCE_ID } from "@mark1russell7/alerts-source-nws-api";
 import { type FaultPlan, type FaultWindow, faultPlanOf, type HealthSample, type WindowFault, type WindowResponse, windowResponse } from "@mark1russell7/rigor-chaos";
 import { random } from "@mark1russell7/rigor-generators";
@@ -136,6 +136,28 @@ export function caseClock(start: number, speed: number): CaseClock {
     // The function `delay` rejects when the signal aborts. A sleep of `polite-crawler` ends early with no error.
     sleep: (ms, signal) => delay(wall, ms, signal).catch(() => undefined),
   };
+}
+
+/**
+ * The least real time of one call of a channel on a case clock, in milliseconds. A fetch of a source at the speed 60
+ * gets the same real time from its limit of one interval.
+ */
+export const REAL_CALL_FLOOR_MS = 1000;
+
+/**
+ * This function gives the delivery times of production (`DELIVERY_TIMES`) for a case clock at `speed`. The call limit
+ * gets `REAL_CALL_FLOOR_MS` of real time or more, and the flight limit is two call limits, as in production. The poll
+ * time and the retry do not change. At the speed 30, the call limit of production is 333 ms of real time, and a loaded
+ * runner passes it.
+ */
+export function caseDeliveryTimes(speed: number): typeof DELIVERY_TIMES {
+  const callLimit = Math.max(DELIVERY_TIMES.callLimit, REAL_CALL_FLOOR_MS * speed);
+  if (callLimit === DELIVERY_TIMES.callLimit) return DELIVERY_TIMES;
+  const flightLimit = 2 * callLimit;
+  const { retry } = DELIVERY_TIMES;
+  // The function overdueLimit adds the pass limit to the time of two tries. Thus the overdue time of production gives its pass limit.
+  const passLimit = DELIVERY_TIMES.overdueAfter - overdueLimit({ passLimit: 0, flightLimit: DELIVERY_TIMES.flightLimit, retry });
+  return { ...DELIVERY_TIMES, callLimit, flightLimit, overdueAfter: overdueLimit({ passLimit, flightLimit, retry }) };
 }
 
 /** The options of the transport of the case. */

@@ -53,7 +53,7 @@ import {
   type Watch,
 } from "@mark1russell7/alerts";
 import { createPushoverChannel } from "@mark1russell7/alerts-channel-pushover";
-import { DELAY_LIMITS, DELIVERY_TIMES, openRuntime, openRuntimeLog, type RuntimeLog, type RuntimeOptions, sourcePace } from "@mark1russell7/alerts-runtime";
+import { DELAY_LIMITS, openRuntime, openRuntimeLog, type RuntimeLog, type RuntimeOptions, sourcePace } from "@mark1russell7/alerts-runtime";
 import { COPY_SUFFIX, createIpawsSource, IPAWS_DESCRIPTOR } from "@mark1russell7/alerts-source-ipaws";
 import { createNwsSource, NWS_DESCRIPTOR } from "@mark1russell7/alerts-source-nws-api";
 import { random, sha256Hex } from "@mark1russell7/rigor-generators";
@@ -80,7 +80,7 @@ import {
 } from "./copy-late.ts";
 import { PUSHOVER, testKey } from "./delivery-fixture.ts";
 import { caseBodies } from "./nws.ts";
-import { caseClock } from "./source-down.ts";
+import { caseClock, caseDeliveryTimes } from "./source-down.ts";
 
 /** The id and the seed of the case. The ids of the messages and the jitter of each arm come from this seed. */
 export const CASE_9_ID = "al-13-case-9";
@@ -647,7 +647,8 @@ export async function runOrderArm(arm: OrderArm, settings: OrderSettings = CASE_
       watch: () => WATCH,
       view: VIEW,
       run: `${CASE_9_ID}-${arm}`,
-      delivery: { recipients: orderRecipientsOf(), channels: [channel], ...DELIVERY_TIMES },
+      // The times of production, with a call limit of 1 s of real time or more on the fast case clock.
+      delivery: { recipients: orderRecipientsOf(), channels: [channel], ...caseDeliveryTimes(settings.speed) },
     });
     const end = settings.start + settings.fetches * NWS_DESCRIPTOR.interval;
     const done = (): boolean => records.nws.length >= settings.fetches && records.ipaws.length >= settings.fetches && clock.now() >= end;
