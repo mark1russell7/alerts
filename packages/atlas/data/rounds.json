@@ -227,6 +227,23 @@
         "finding": "The 2014 laws revise the 2007 laws, which give too much shaking for large events at short distances. The round did not find the coefficients.",
         "verified": false
       }
-    ]
+    ],
+    "measures": {
+      "classes": 200,
+      "gaps": 132,
+      "cover": {
+        "adopted": 25,
+        "paths": 25,
+        "origins": 1
+      },
+      "total": {
+        "adopted": 77,
+        "paths": 77,
+        "origins": 52
+      },
+      "unknownOrigins": 3,
+      "unknownPaths": 4,
+      "cause": "Round 2 adopts the USGS feed for geo.earthquake. The class now has 2 adopted sources on 2 paths with no shared part, and 2 origins: the USGS and the US alerting authorities of the NWS API. So the adopted cover is 25 and the origin cover is 1. The second origin is weak: the NWS API carries only the rare earthquake alerts of the authorities, not each event. The layers do not measure the share of the events that each source carries."
+    }
   }
 ]

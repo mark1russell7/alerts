@@ -69,7 +69,7 @@ const FIELD_TYPES: Readonly<Record<(typeof EVENT_FIELDS)[number], (value: unknow
 
 /**
  * This function gives the fields of one feature of the feed that the fetch keeps, in the order of
- * `EVENT_FIELDS`: the id of the feature, the properties, and the coordinates of the point. A field that
+ * `EVENT_FIELDS`. The fields are the id of the feature, the properties and the coordinates of the point. A field that
  * the feature does not have is absent. A value that is not a feature gives `undefined`.
  */
 export function eventFields(feature: unknown): Fields | undefined {
@@ -110,7 +110,7 @@ interface Read {
  * is not a feature collection gives one observation of the whole body. Then the answer is not complete,
  * and the map tells of the change.
  *
- * The feed is complete when its body parses, it has at least one feature, its count is the count of its
+ * The feed is complete when its body parses and it has one feature or more. Also, its count is the count of its
  * features, and each feature has the structure of `isFeedEvent`. The core ends the events that leave a
  * complete feed, so a change of the format must end no event. A body that does not parse gives
  * `undefined`, and the fetch fails. The feed had 51 or more events in each day of 12 days of one year,

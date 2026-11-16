@@ -1,6 +1,6 @@
 /**
- * The shaking of an earthquake at a distance. The two laws of Atkinson and Wald (2007) give the Modified
- * Mercalli Intensity (MMI) from the magnitude and the hypocentral distance. The DYFI service of the USGS
+ * The shaking of an earthquake at a distance. The two laws of Atkinson and Wald (2007) give the intensity
+ * on the Mercalli scale (MMI) from the magnitude and the hypocentral distance. The DYFI service of the USGS
  * draws these two laws for older events, and the tests hold the laws against those curves.
  *
  * Atkinson, G. M. and Wald, D. J. (2007). "Did You Feel It?" intensity data: a surprisingly good measure
@@ -11,7 +11,7 @@
  * hold this difference. The 2014 laws replace the 2007 laws when their coefficients match the curves of the fixture
  * `dyfi-atten-us7000ki5u.json`.
  *
- * The laws also treat the event as a point. A large event breaks a fault of tens or hundreds of kilometers, so a place
+ * The laws also treat the event as a point. A large event breaks a fault of tens or hundreds of kilometers. A place
  * near the far end of the fault gets more shaking than the law gives. The intensity contours of the ShakeMap product
  * of the USGS replace the law for the events that have them.
  */

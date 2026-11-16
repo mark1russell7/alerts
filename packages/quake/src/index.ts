@@ -1,6 +1,6 @@
 /**
  * The shaking of an earthquake at each distance, for the alert system. The package gives the intensity laws of
- * Atkinson and Wald (2007), the felt radius of an event and the nested discs of the bands of the shaking.
+ * Atkinson and Wald (2007) and the felt radius of an event. It also gives the nested discs of the bands of the shaking.
  */
 
 export {
