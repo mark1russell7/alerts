@@ -3,6 +3,7 @@ import type { Instant, MapPayload, SourceId } from "@mark1russell7/alerts";
 import type { ServiceBuilder } from "@mark1russell7/service";
 import { handle, httpTransport } from "@mark1russell7/service/http";
 import type { RuntimeLoop } from "./loop.ts";
+import type { OutageDeployState } from "./outage.ts";
 
 /** The address of each server of the service. Only this computer reaches the API and the probes. */
 export const LOOPBACK = "127.0.0.1";
@@ -18,6 +19,8 @@ export interface ApiOptions {
    * thus only the loopback address serves it. Without the function, the API has no map route.
    */
   readonly map?: (() => MapPayload) | undefined;
+  /** The worker of the deploy of the outage call. The route `GET /status` reads its state. */
+  readonly outage?: { state(): OutageDeployState };
 }
 
 /**
@@ -37,10 +40,12 @@ export interface Status {
   readonly conflicts: number;
   /** The reason that the loop is stuck, or `null`. */
   readonly stuck: string | null;
+  /** The state of the deploy of the outage call. An instance with no outage call has no field. */
+  readonly outage?: OutageDeployState;
 }
 
-/** This function gives the status of the loop at the time of the request. */
-export function statusOf(loop: RuntimeLoop): Status {
+/** This function gives the status of the loop, and of the deploy of the outage call, at the time of the request. */
+export function statusOf(loop: RuntimeLoop, outage?: { state(): OutageDeployState }): Status {
   const last = loop.last();
   return {
     at: last?.at ?? null,
@@ -49,6 +54,7 @@ export function statusOf(loop: RuntimeLoop): Status {
     sent: last?.delivery?.sent.length ?? 0,
     conflicts: last?.conflicts.length ?? 0,
     stuck: loop.stuck() ?? null,
+    ...(outage === undefined ? {} : { outage: outage.state() }),
   };
 }
 
@@ -66,7 +72,7 @@ export const attachApi = (svc: ServiceBuilder, options: ApiOptions): ServiceBuil
     { listen: { port: options.port, host: LOOPBACK } },
   );
   // Each request of a route goes through the service. Thus the drain waits for it, and the shutdown can cut it.
-  http.mount(handle("api", "GET /status", () => statusOf(options.loop)));
+  http.mount(handle("api", "GET /status", () => statusOf(options.loop, options.outage)));
   // Each route declares if a client can send it again.
   const api = svc.controller("api").route("GET /status", { idempotent: true });
   const map = options.map;

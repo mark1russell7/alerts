@@ -568,6 +568,24 @@ describe("the Twilio call channel of the instance", () => {
     expect(messageOf(() => open(keys, calling([SPEND]), undefined, undefined, { spendStore: memoryQuotaStore() }))).toContain("no fetch for the call channel");
     expect(messageOf(() => open(keys, calling([SPEND]), undefined, undefined, { twilio: twilioServer().fetch }))).toContain("no store for its count");
   });
+
+  it("makes the worker of the deploy of the outage call, bound by the pass limit, and its problems hold no value", () => {
+    const config: AlertConfig = { ...calling([SPEND]), outage: { people: [{ person, chain: { steps: [call, call] } }] } };
+    const keys = (extra: Readonly<Record<string, string>> = {}): SecretLookup => store({ ...SECRETS, ...TWILIO, OUTAGE_TOKEN: "o".repeat(40), ...extra });
+    const more = () => ({ twilio: twilioServer().fetch, spendStore: memoryQuotaStore() });
+    const { instance } = open(keys(), config, undefined, undefined, more());
+    expect(instance.outage?.state()).toEqual({ state: "pending" });
+    expect(instance.outage?.worker.knobs.unit_processing_time).toEqual({ value: instance.loop.times.passLimit, unit: "ms" });
+    // Without an outage call, the instance has no worker of the deploy.
+    expect(open(keys(), calling([SPEND]), undefined, undefined, more()).instance.outage).toBeUndefined();
+    const noToken = messageOf(() => open(keys({ OUTAGE_TOKEN: "" }), config, undefined, undefined, more()));
+    expect(noToken).toContain("the secret store has no value for OUTAGE_TOKEN");
+    const badToken = messageOf(() => open(keys({ OUTAGE_TOKEN: "bad-value" }), config, undefined, undefined, more()));
+    expect(badToken).toContain("The value of OUTAGE_TOKEN is not 32 to 128");
+    const noKeys = messageOf(() => open(store({ ...SECRETS, OUTAGE_TOKEN: "o".repeat(40), PHONE: TWILIO.PHONE }), config));
+    expect(noKeys).toContain("the secret store has no keys of Twilio that pass the check");
+    for (const problem of [noToken, badToken, noKeys]) expect(problem).not.toMatch(/bad-value|o{40}|s{32}|\+999/u);
+  });
 });
 
 describe("the keys of the status check", () => {

@@ -5,6 +5,7 @@ import type { Profile, ServiceBuilder, Timing } from "@mark1russell7/service";
 import { probeServer } from "@mark1russell7/service/http";
 import { LOOPBACK, attachApi } from "./api.ts";
 import type { RuntimeLoop } from "./loop.ts";
+import type { OutageDeployWorker } from "./outage.ts";
 
 export { LOOPBACK, attachApi, statusOf, type ApiOptions, type Status } from "./api.ts";
 export * from "./balance.ts";
@@ -19,6 +20,7 @@ export * from "./frame.ts";
 export * from "./limit.ts";
 export * from "./log.ts";
 export * from "./loop.ts";
+export * from "./outage.ts";
 export * from "./runtime.ts";
 export * from "./snapshot.ts";
 export * from "./snapshot-measure.ts";
@@ -69,6 +71,8 @@ export interface Options {
   readonly quotas?: { close(): void };
   /** This function gives the payload of the route `GET /map`. Without it, the API has no map route. */
   readonly map?: (() => MapPayload) | undefined;
+  /** The worker of the deploy of the outage call. The service runs it as the worker `outage`, beside the passes. */
+  readonly outage?: OutageDeployWorker;
 }
 
 /**
@@ -80,16 +84,23 @@ export const holdingPasses = (profile: Profile, passLimit: Duration): Profile =>
   phases: profile.phases?.map((phase) => (phase.name === "drain" ? { ...phase, cap: add(phase.cap, { value: passLimit, unit: "ms" }) } : phase)),
 });
 
+/** This function adds the worker of the deploy of the outage call, when the instance has one. */
+const withOutage = (svc: ServiceBuilder, outage: OutageDeployWorker | undefined): ServiceBuilder =>
+  outage === undefined ? svc : svc.worker("outage", outage.worker.knobs, outage.worker);
+
 /**
  * This function declares the one service of the process. It starts nothing. `describe()` gives the
  * declaration as data, and `lint()` examines it. Only the entry (`main.ts`) uses `run()`.
  */
 export const declare = (options: Options): ServiceBuilder =>
-  attachApi(service("runtime"), { port: options.port, loop: options.loop, map: options.map })
-    .dependency("log", { system: null, knobs: {}, operations: {} }, { connect: () => undefined, close: () => options.log.close() })
-    .dependency("shapes", { system: null, knobs: {}, operations: {} }, { connect: () => undefined, close: () => options.shapes?.close() })
-    .dependency("quotas", { system: null, knobs: {}, operations: {} }, { connect: () => undefined, close: () => options.quotas?.close() })
-    .worker("passes", options.loop.worker.knobs, options.loop.worker)
+  withOutage(
+    attachApi(service("runtime"), { port: options.port, loop: options.loop, map: options.map, ...(options.outage === undefined ? {} : { outage: options.outage }) })
+      .dependency("log", { system: null, knobs: {}, operations: {} }, { connect: () => undefined, close: () => options.log.close() })
+      .dependency("shapes", { system: null, knobs: {}, operations: {} }, { connect: () => undefined, close: () => options.shapes?.close() })
+      .dependency("quotas", { system: null, knobs: {}, operations: {} }, { connect: () => undefined, close: () => options.quotas?.close() })
+      .worker("passes", options.loop.worker.knobs, options.loop.worker),
+    options.outage,
+  )
     // A stuck loop fails liveness. Then the supervisor stops the process and starts it again.
     .check(
       { name: "passes.progress", dependency: null, step: "progress", ownConnection: true, gates: "liveness", poll: { interval: s(5), jitter: 0.1, timeout: s(1) } },

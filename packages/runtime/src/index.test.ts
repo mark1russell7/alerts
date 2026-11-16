@@ -5,7 +5,7 @@ import type { Rule, Scenario } from "@mark1russell7/service";
 import { realClock, wallClock } from "@mark1russell7/algebra/clock";
 import { MAP_FORMAT, type MapPayload, type SourceId } from "@mark1russell7/alerts";
 import { describe, expect, it } from "vitest";
-import { PROFILES, STOP_MESSAGE, createLoop, declare, type Pass, type Status } from "./index.ts";
+import { PROFILES, STOP_MESSAGE, createLoop, declare, outageDeployWorker, statusOf, type Pass, type Status } from "./index.ts";
 
 const s = (value: number) => ({ value, unit: "s" });
 
@@ -123,6 +123,23 @@ describe("the declaration of the service", () => {
         .controllers.map((controller) => [controller.name, Object.keys(controller.routes)]);
     expect(routes()).toEqual([["api", ["GET /status"]]]);
     expect(routes(() => EMPTY_MAP)).toEqual([["api", ["GET /status", "GET /map"]]]);
+  });
+
+  it("declares the worker of the deploy of the outage call beside the passes, and each rule still holds", () => {
+    const loop = loopOf();
+    const outage = outageDeployWorker({ deploy: async () => ({ ok: false, stage: "service", errors: ["The test makes no deploy."] }), clock: realClock, wall: wallClock(), limit: loop.times.passLimit });
+    const description = declare({ port: 0, probePort: 0, profile: PROFILES["pod"]!, loop, log: { close: () => undefined }, outage }).describe();
+    expect(description.transports.map((transport) => [transport.kind, transport.name])).toEqual([
+      ["server", "http"],
+      ["worker", "passes"],
+      ["worker", "outage"],
+    ]);
+    const findings = lint(description, POD, [O10, O16]);
+    expect(findings.map((finding) => finding.rule)).toContain("unit-bound");
+    expect(findings.filter((finding) => finding.verdict !== "holds")).toEqual([]);
+    // The status shows the state of the deploy only for an instance with an outage call.
+    expect(statusOf(loop, outage).outage).toEqual({ state: "pending" });
+    expect("outage" in statusOf(loop)).toBe(false);
   });
 });
 

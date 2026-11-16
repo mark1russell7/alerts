@@ -168,6 +168,7 @@ export function createTwilioCallChannel(options: TwilioCallChannelOptions): Chan
 
 export * from "./outage.ts";
 export * from "./list.ts";
+export * from "./deploy.ts";
 export * from "./function.ts";
 export * from "./twilio-runtime.ts";
 
