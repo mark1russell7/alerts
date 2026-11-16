@@ -251,7 +251,7 @@ describe("runClockStep", () => {
 
   beforeAll(async () => {
     run = await runClockStep();
-    // The record goes to the log of CI. The prediction wirelab-al13-case11 reads it.
+    // The record goes to the log of CI. The predictions wirelab-al13-case11 and wirelab-al13-case11-frame read it.
     console.log(`${CASE_11_ID} ${JSON.stringify(run)}`);
   }, 600_000);
 
@@ -267,22 +267,26 @@ describe("runClockStep", () => {
     for (const gate of ARM_STEP_GATES["forward-poll"].filter((g) => g !== "stepSeen")) expect(gateOf("forward-poll", gate), gate).toBe(true);
   });
 
+  it("passes each gate of each arm", () => {
+    expect(run?.verdict.pass, run?.verdict.problems.join("\n")).toBe(true);
+  });
+
   for (const arm of ["back-poll", "back-retry", "back-fetch"] as const) {
     it(`${arm}: delivers once and stops, with no pass that throws`, () => {
       for (const gate of ["delivered", "single", "stopped", "copyOnce", "noThrow"] as const) expect(gateOf(arm, gate), gate).toBe(true);
     });
 
-    // AL-49: after a step back, the loop and the delivery hold each due action by the size of the step. The
-    // prediction wirelab-al13-case11 states this failure. The fix of AL-49 changes this test to `it`.
-    it.fails(`${arm}: prompt (AL-49)`, () => {
+    // AL-49: the runtime moves its own times by the step, thus each due action comes on time. The prediction
+    // wirelab-al13-case11-frame states this pass.
+    it(`${arm}: prompt (AL-49)`, () => {
       expect(gateOf(arm, "prompt")).toBe(true);
     });
   }
 
   for (const arm of ["back-poll", "forward-poll", "back-retry", "back-fetch"] as const) {
-    // AL-49: the runtime has no report of a step of the wall clock. The prediction wirelab-al13-case11 states this
-    // failure. The fix of AL-49 changes this test to `it`.
-    it.fails(`${arm}: stepSeen (AL-49)`, () => {
+    // AL-49: the log has one system report of the step, with its size. The prediction wirelab-al13-case11-frame
+    // states this pass.
+    it(`${arm}: stepSeen (AL-49)`, () => {
       expect(gateOf(arm, "stepSeen")).toBe(true);
     });
   }
