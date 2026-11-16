@@ -1,7 +1,7 @@
 import { random, seedsFrom } from "@mark1russell7/rigor-generators";
 import { describe, expect, it } from "vitest";
 import { CONFIG_FORMAT, configuredExpectations, expectationProblems, loadConfig, localPlaces, placeLabels, sourcePlaces, type AlertConfig, type ContactConfig, type PersonConfig, type PlaceConfig, type SecretLookup } from "./config.ts";
-import type { ChannelDescriptor, ChannelId, EscalationPolicy, PersonId, PlaceId, Position, SourceId } from "./contracts.ts";
+import type { ChannelDescriptor, ChannelId, EscalationPolicy, InterestEdge, InterestGraph, NodeKey, PersonId, PlaceId, Position, SourceId } from "./contracts.ts";
 import type { Expectation } from "./lateness.ts";
 
 const SEEDS = seedsFrom(process.env["SEED"], [1, 2, 3, 4, 5, 6, 7, 8]);
@@ -113,6 +113,33 @@ describe("loadConfig", () => {
       "The person person-1 watches the place place-9, and the configuration has no such place.",
       "Rule 0 of the person person-1 names the place place-2, and the person does not watch it. The rule matches no incident there.",
     ]);
+  });
+
+  it("finds an interest graph of another person, and a place of the graph or of a mandatory rule that the person does not watch", () => {
+    const edge = (id: string, from: NodeKey): InterestEdge => ({ id, from, to: "person", kind: "geographic", weight: { value: 1, low: 1, high: 1 }, origin: "places", on: true });
+    const interests: InterestGraph = {
+      format: "alerts-interest/1",
+      person: p2,
+      edges: [edge("e1", `place:${home}`), edge("e2", `place:${work}`)],
+      mutes: [{ id: "m1", subjects: [`place:${work}`, "topic:met.tornado"], date: "2026-11-16" }],
+    };
+    const watched = person(p1, [home]);
+    const graphed: PersonConfig = { watch: { ...watched.watch, interests, mandatory: [{ place: home, on: true, rangeKm: 5 }, { place: work, on: true, rangeKm: 5 }] } };
+    expect(loadConfig(config({ people: [graphed] }), CHANNELS, store).problems).toEqual([
+      "The interest graph of the person person-1 is of the person person-2. The relevance fails, and the places decide.",
+      "The interest graph of the person person-1 names the place place-2, and the person does not watch it.",
+      "The rule of the life-safety warnings of the person person-1 names the place place-2, and the person does not watch it.",
+    ]);
+  });
+
+  it("finds a mandatory rule with no interest graph, and takes a graph of the person at its own places", () => {
+    const watched = person(p1, [home]);
+    const ruled: PersonConfig = { watch: { ...watched.watch, mandatory: [{ place: home, on: false, rangeKm: 5 }] } };
+    expect(loadConfig(config({ people: [ruled] }), CHANNELS, store).problems).toEqual([
+      "The person person-1 has rules of the life-safety warnings and no interest graph. The rules have no effect without a graph.",
+    ]);
+    const interests: InterestGraph = { format: "alerts-interest/1", person: p1, edges: [], mutes: [{ id: "m1", subjects: [`place:${home}`], date: "2026-11-16" }] };
+    expect(loadConfig(config({ people: [{ watch: { ...ruled.watch, interests } }] }), CHANNELS, store).problems).toEqual([]);
   });
 
   it("finds a contact of an unknown person and two contacts of a person on one channel", () => {

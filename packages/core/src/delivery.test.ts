@@ -8,6 +8,7 @@ import type {
   Delivery,
   EscalationPolicy,
   Incident,
+  InterestGraph,
   Level,
   MergeState,
   MuteEffect,
@@ -22,8 +23,8 @@ import { acknowledgmentOf, addressProblems, messageOf, recipientProblems, route,
 import { messageKey } from "./ids.ts";
 import { placeWhy } from "./why.ts";
 
-// The mute of each assessment. Step 5 of AL-35 gives `Assessment.muted` from the graph of the person. Until then, the
-// mock adds the mute of the test to the assessment of `assess`. With no mute, it gives the assessment as it is.
+// The mute of each assessment. `assess` gives `Assessment.muted` from the graph of the person. The mock adds the mute
+// of the test to the assessment, so a test sets the effect with no graph. With no mute, it gives the assessment as it is.
 const mutes = vi.hoisted(() => ({ effect: undefined as MuteEffect | undefined }));
 vi.mock("./assess.ts", async (importOriginal) => {
   const real = await importOriginal<typeof import("./assess.ts")>();
@@ -155,7 +156,7 @@ describe("route", () => {
     const routes = route(input({ incidents: [outage], recipients: [follower] }));
     expect(summary(routes)).toEqual([{ level: "urgent", state: "last", fresh: true, sends: [0], cancels: [] }]);
     expect(routes[0]!.start).toEqual(start("urgent", T0));
-    // The why of a topic comes with the relevance step of AL-35. A match by a topic alone has no why at this time.
+    // A match by the subjects of the watch has no why. The why of a topic comes from the interest graph.
     expect(routes[0]!.why).toBeUndefined();
     // A topic of a life-safety kind escalates as a place does: the first step at once, the second step after 5 minutes.
     const storm: Recipient = { ...base, watch: { ...base.watch, subjects: [{ system: "topic", id: "met.tornado" }] } };
@@ -189,6 +190,23 @@ describe("route", () => {
     expect(route(input({ incidents: [elsewhere] }))).toEqual([]);
     const near = route(input({ incidents: [incident({ about: [{ system: "topic", id: "met.tornado" }] })], recipients: [follower] }));
     expect(near[0]!.why).toEqual(placeWhy([home]));
+  });
+
+  it("gives the why of the interest graph before the why of a watched place", () => {
+    const base = recipient();
+    const interests: InterestGraph = {
+      format: "alerts-interest/1",
+      person: base.watch.person,
+      edges: [{ id: "e1", from: "topic:met.tornado", to: "person", kind: "interest", weight: { value: 1, low: 1, high: 1 }, origin: "person", on: true }],
+      mutes: [],
+    };
+    const follower: Recipient = { ...base, watch: { ...base.watch, interests } };
+    const tornado = incident({ about: [{ system: "topic", id: "met.tornado" }] });
+    const routes = route(input({ incidents: [tornado], recipients: [follower] }));
+    expect(routes).toHaveLength(1);
+    expect(routes[0]!.why).toEqual({ rule: "reach.topic.person", subject: "topic:met.tornado", kind: "topic", anchor: "topic:met.tornado", origin: "person", coverage: 1 });
+    // Without the graph, the watched place gives the why.
+    expect(route(input({ incidents: [tornado] }))[0]!.why).toEqual(placeWhy([home]));
   });
 
   it("keeps the start of the log, thus a step comes at its time after a restart", () => {

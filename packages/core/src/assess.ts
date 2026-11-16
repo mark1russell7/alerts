@@ -35,6 +35,7 @@ import { hasKind } from "./kind-prefix.ts";
 import type { MapShape } from "./map.ts";
 import { DEFAULT_ENTRY_MAX, DEFAULT_RELEVANCE_POLICY, canReach, relevance, topicEntry } from "./relevance.ts";
 import { isShape, shapeDistanceKm } from "./shapes.ts";
+import { placeNode } from "./why.ts";
 
 export { hasKind } from "./kind-prefix.ts";
 
@@ -466,9 +467,6 @@ interface RelevancePlan {
 
 // The message of a fault with no text of its own.
 const RELEVANCE_FAULT = "The relevance failed with no message.";
-
-// The node of a watched place in an interest graph.
-const placeNode = (place: PlaceId): NodeKey => `place:${place}`;
 
 // The hit of an entry that the incident names: a place in its areas, a code, a subject or the topic of its kind.
 const FULL_HIT = { value: 1, low: 1, high: 1 } as const;
