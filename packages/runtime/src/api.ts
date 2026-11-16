@@ -1,7 +1,9 @@
 import { createServer } from "node:http";
+import { join } from "node:path";
 import type { Instant, MapPayload, SourceId } from "@mark1russell7/alerts";
 import type { ServiceBuilder } from "@mark1russell7/service";
 import { handle, httpTransport } from "@mark1russell7/service/http";
+import { folderHandler } from "@mark1russell7/service/http-folder";
 import type { RuntimeLoop } from "./loop.ts";
 import type { OutageDeployState } from "./outage.ts";
 
@@ -19,6 +21,11 @@ export interface ApiOptions {
    * thus only the loopback address serves it. Without the function, the API has no map route.
    */
   readonly map?: (() => MapPayload) | undefined;
+  /**
+   * The folder of the built local page (`pageFolder`). The path `/` gives its file `PAGE_INDEX`. The page and the route
+   * `GET /map` have one origin. Thus the policy of the folder lets the page read the map. Without the folder, the API serves no page.
+   */
+  readonly page?: string | undefined;
   /** The worker of the deploy of the outage call. The route `GET /status` reads its state. */
   readonly outage?: { state(): OutageDeployState };
 }
@@ -43,6 +50,12 @@ export interface Status {
   /** The state of the deploy of the outage call. An instance with no outage call has no field. */
   readonly outage?: OutageDeployState;
 }
+
+/** The file of the built local page that the path `/` gives. */
+export const PAGE_INDEX = "local.html";
+
+/** This function gives the folder of the built local page in a checkout, from the folder of the package `runtime`. */
+export const pageFolder = (root: string): string => join(root, "..", "site", "dist");
 
 /** This function gives the status of the loop, and of the deploy of the outage call, at the time of the request. */
 export function statusOf(loop: RuntimeLoop, outage?: { state(): OutageDeployState }): Status {
@@ -80,5 +93,7 @@ export const attachApi = (svc: ServiceBuilder, options: ApiOptions): ServiceBuil
     http.mount(handle("api", "GET /map", () => map()));
     api.route("GET /map", { idempotent: true });
   }
+  // The files of the page come after the routes. A path of no file goes to the next handler, thus it gets 404.
+  if (options.page !== undefined) http.mount(folderHandler(options.page, { index: PAGE_INDEX }));
   return svc.server("http", http.knobs, http);
 };

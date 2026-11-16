@@ -7,7 +7,7 @@ import { LOOPBACK, attachApi } from "./api.ts";
 import type { RuntimeLoop } from "./loop.ts";
 import type { OutageDeployWorker } from "./outage.ts";
 
-export { LOOPBACK, attachApi, statusOf, type ApiOptions, type Status } from "./api.ts";
+export { LOOPBACK, PAGE_INDEX, attachApi, pageFolder, statusOf, type ApiOptions, type Status } from "./api.ts";
 export * from "./balance.ts";
 export * from "./config.ts";
 export * from "./delivery.ts";
@@ -72,6 +72,8 @@ export interface Options {
   readonly quotas?: { close(): void };
   /** This function gives the payload of the route `GET /map`. Without it, the API has no map route. */
   readonly map?: (() => MapPayload) | undefined;
+  /** The folder of the built local page. The API serves its files after its routes (`ApiOptions.page`). */
+  readonly page?: string | undefined;
   /** The worker of the deploy of the outage call. The service runs it as the worker `outage`, beside the passes. */
   readonly outage?: OutageDeployWorker;
   /** The exchange with the other copies of the system. */
@@ -114,7 +116,7 @@ export const declare = (options: Options): ServiceBuilder => {
 // The parts of the service of each runtime: the API, the dependencies, the workers of the passes and of the outage call, the checks and the policies.
 const parts = (options: Options): ServiceBuilder =>
   withOutage(
-    attachApi(service("runtime"), { port: options.port, loop: options.loop, map: options.map, ...(options.outage === undefined ? {} : { outage: options.outage }) })
+    attachApi(service("runtime"), { port: options.port, loop: options.loop, map: options.map, page: options.page, ...(options.outage === undefined ? {} : { outage: options.outage }) })
       .dependency("log", { system: null, knobs: {}, operations: {} }, { connect: () => undefined, close: () => options.log.close() })
       .dependency("shapes", { system: null, knobs: {}, operations: {} }, { connect: () => undefined, close: () => options.shapes?.close() })
       .dependency("quotas", { system: null, knobs: {}, operations: {} }, { connect: () => undefined, close: () => options.quotas?.close() })

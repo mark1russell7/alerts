@@ -58,4 +58,19 @@ describe("the local page", () => {
     for (const text of [entry, read("map-read.ts"), read("map-view.ts"), local]) expect(text).not.toMatch(/https?:|\/\/[a-z0-9.-]+[.:]/i);
     for (const call of ["XMLHttpRequest", "WebSocket", "EventSource", "sendBeacon", "import("]) expect(entry).not.toContain(call);
   });
+
+  it("has no inline script and no inline style, because the runtime serves each page with a policy that refuses them", () => {
+    for (const html of [page, local]) {
+      const scripts = [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/g)];
+      expect(scripts.length).toBeGreaterThan(1);
+      for (const [, attributes, body] of scripts) {
+        expect(attributes).toMatch(/\ssrc="/);
+        expect(body?.trim()).toBe("");
+      }
+      expect(html).not.toMatch(/\sstyle="|\son[a-z]+="|<style/i);
+      // The theme before the first paint is a classic script in the folder public.
+      expect(html).toContain('<script src="/theme.js"></script>');
+    }
+    expect(readFileSync(new URL("../public/theme.js", import.meta.url), "utf8")).toContain('localStorage.getItem("theme")');
+  });
 });

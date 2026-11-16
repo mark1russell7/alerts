@@ -1,11 +1,14 @@
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:net";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { AddressInfo } from "node:net";
 import { embeddedProcess, lint, localDev } from "@mark1russell7/service";
 import type { Rule, Scenario } from "@mark1russell7/service";
 import { realClock, wallClock } from "@mark1russell7/algebra/clock";
 import { MAP_FORMAT, type MapPayload, type SourceId } from "@mark1russell7/alerts";
 import { describe, expect, it } from "vitest";
-import { PROFILES, STOP_MESSAGE, createLoop, declare, outageDeployWorker, statusOf, type Pass, type Status } from "./index.ts";
+import { PAGE_INDEX, PROFILES, STOP_MESSAGE, createLoop, declare, outageDeployWorker, statusOf, type Pass, type Status } from "./index.ts";
 
 const s = (value: number) => ({ value, unit: "s" });
 
@@ -151,7 +154,10 @@ describe("the lifecycle of the service", () => {
     const loop = loopOf();
     let closes = 0;
     const log = { close: () => (closes += 1) };
-    const life = await declare({ port, probePort, profile: localDev, loop, log, map: () => EMPTY_MAP }).run({ process: embeddedProcess() });
+    // A built page with one file. The path / gives it.
+    const page = await mkdtemp(join(tmpdir(), "alerts-page-"));
+    await writeFile(join(page, PAGE_INDEX), "<!doctype html><title>the map</title>");
+    const life = await declare({ port, probePort, profile: localDev, loop, log, map: () => EMPTY_MAP, page }).run({ process: embeddedProcess() });
     try {
       // The probe answers after the start of each transport. The worker starts the first pass at the start of the service.
       await waitUntil(() => answers(`http://127.0.0.1:${probePort}/readiness`), "the readiness probe");
@@ -163,6 +169,12 @@ describe("the lifecycle of the service", () => {
       const map = await fetch(`http://127.0.0.1:${port}/map`);
       expect(map.status).toBe(200);
       expect(await map.json()).toEqual(EMPTY_MAP);
+      // The path / gives the page with the policy of the folder. The routes come first, and a path of no file gets 404.
+      const home = await fetch(`http://127.0.0.1:${port}/`);
+      expect(home.status).toBe(200);
+      expect(home.headers.get("content-type")).toContain("text/html");
+      expect(home.headers.get("content-security-policy")).toContain("script-src 'self'");
+      expect(await home.text()).toContain("<title>the map</title>");
       expect((await fetch(`http://127.0.0.1:${port}/hello`)).status).toBe(404);
       expect((await fetch(`http://127.0.0.1:${probePort}/readiness`)).status).toBe(200);
       expect((await fetch(`http://127.0.0.1:${probePort}/liveness`)).status).toBe(200);
@@ -170,6 +182,7 @@ describe("the lifecycle of the service", () => {
       expect(closes).toBe(0);
     } finally {
       await life.shutdown("the test ended");
+      await rm(page, { recursive: true, force: true });
     }
     expect(await life.done).toBe(0);
     expect(life.errors).toEqual([]);

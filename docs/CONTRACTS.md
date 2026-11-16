@@ -1017,6 +1017,13 @@ The route `GET /map` of the runtime gives the `MapPayload` of `mapPayload`:
 
 Thus the level on the map is the level that the delivery gives. A mute with the effect `absent` gives `none`, as in `route` (`reachedAssessment`).
 
+The API also serves the built local page (`packages/site/dist`) on the same address. The path `/` gives `local.html`, and the page reads `GET /map` on its own origin.
+
+- The files come after the routes. A path of no file gets 404.
+- Each file gets the policy of the folder: no inline script, no inline style and no connection to another origin.
+- The theme before the first paint is the classic script `public/theme.js`, not an inline script.
+- Build the page before the start of the runtime: `pnpm --filter ./packages/site build`. Without the build, the path `/` gives 404.
+
 ## Relevance
 
 The relevance of an incident for one person is a calculation over the interest graph of the person (AL-35). The types are in the section "Relevance" of `contracts.ts`.
