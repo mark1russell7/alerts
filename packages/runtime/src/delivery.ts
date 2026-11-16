@@ -23,6 +23,7 @@ import {
   type Delivery,
   type DeliveryStatus,
   type Duration,
+  type EscalationEnd,
   type Instant,
   type Recipient,
   type Route,
@@ -318,6 +319,7 @@ export function createDispatcher(options: DeliveryOptions, context: DeliveryCont
           places: context.places,
           assess: options.assess,
           starts: state.starts,
+          ends: state.escalationEnds,
           cancelled: new Set(state.cancelled),
           channels: descriptors,
           rank: options.rank,
@@ -425,8 +427,12 @@ export function createDispatcher(options: DeliveryOptions, context: DeliveryCont
       const acknowledged = acks.map((event) => event.acknowledgment);
       const routes = acknowledged.length === 0 ? first : routesNow();
 
-      // 2. The start of each new escalation, before its first send.
+      // 2. The start of each new escalation, before its first send. The end of each person that the incident no longer
+      // reaches, before its cancels: the routes of each level of the person give the same end, and the log keeps it once.
       write(routes.filter((entry) => entry.fresh).map((entry) => ({ ...envelope("escalation", startId(entry), at), start: entry.start })));
+      const ending = new Map<string, EscalationEnd>();
+      for (const entry of routes) if (entry.freshEnd && entry.end !== undefined) ending.set(endId(entry), entry.end);
+      write([...ending].map(([id, end]) => ({ ...envelope("escalation-end", id, at), end })));
 
       // 3. The sends and the cancels. Each result goes to the log at once, thus a crash loses the fewest results.
       const cancelled: string[] = [];
@@ -722,6 +728,13 @@ function deliveryEvent(delivery: Delivery, copy: string, time: Instant): Runtime
 }
 
 // The id of the event of a start: one start for each anchor, level and person.
+// The id of the start of an escalation. An episode after the first one is in the id, thus its start is a new event of the log.
 function startId(entry: Route): string {
-  return `escalation:${entry.start.incident}:${entry.start.level}:${entry.start.person}`;
+  const id = `escalation:${entry.start.incident}:${entry.start.level}:${entry.start.person}`;
+  return entry.episode === 0 ? id : `${id}:${String(entry.episode)}`;
+}
+
+// The id of the end of an episode of a person in an incident.
+function endId(entry: Route): string {
+  return `escalation-end:${entry.end?.incident ?? entry.incident.anchor}:${entry.person}:${String(entry.episode)}`;
 }
