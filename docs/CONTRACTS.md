@@ -1000,6 +1000,7 @@ The area `{ type: "place" }` covers that watched place only. Only the reports of
 The function `mapView` of the core gives the view of the map from the state of one pass. It takes the incidents, the assessments, the places, the coverage and a `ShapeLookup`. The view is a pure calculation, and the order of its inputs does not change it.
 
 - Incidents: each live incident, from the highest level, then the highest severity, then the anchor. The level is the highest level over each person.
+- Status: each incident keeps its status: `actual`, `exercise`, `system`, `test` or `draft`. A renderer gives each status other than `actual` a look and a legend entry of its own. Thus a test does not look like a real alert.
 - Shapes: each polygon and circle of an incident, and the shapes of each region code from the store. A code with no shape goes to `unshaped`, and the renderer lists it as text.
 - Places: the label, the position and the shapes of the smallest region with a shape. Each place also has its highest level, its live incidents and its gaps of coverage.
 

@@ -48,6 +48,7 @@ export const MAP_FIXTURE: MapPayload = {
     incidents: [
       {
         anchor: ANCHORS.tornado,
+        status: "actual",
         kind: { code: "met.tornado", label: "Tornado warning" },
         level: "life-safety",
         severity: "extreme",
@@ -71,6 +72,7 @@ export const MAP_FIXTURE: MapPayload = {
       },
       {
         anchor: ANCHORS.flood,
+        status: "actual",
         kind: { code: "met.flood.flash", label: "Flash flood warning" },
         level: "urgent",
         severity: "severe",
@@ -81,6 +83,7 @@ export const MAP_FIXTURE: MapPayload = {
       },
       {
         anchor: ANCHORS.wind,
+        status: "actual",
         kind: { code: "met.wind", label: "Wind advisory" },
         level: "notice",
         severity: "moderate",
@@ -90,6 +93,7 @@ export const MAP_FIXTURE: MapPayload = {
       },
       {
         anchor: ANCHORS.statement,
+        status: "actual",
         kind: { code: "met.special", label: "Special weather statement" },
         level: "digest",
         severity: "minor",
@@ -99,6 +103,7 @@ export const MAP_FIXTURE: MapPayload = {
       },
       {
         anchor: ANCHORS.air,
+        status: "actual",
         kind: { code: "env.air-quality", label: "Air quality alert" },
         level: "none",
         severity: "unknown",
