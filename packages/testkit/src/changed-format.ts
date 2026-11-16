@@ -22,6 +22,7 @@ import {
   add,
   assess,
   type AssessedLevel,
+  DEFAULT_ASSESS_POLICY,
   EMPTY_STATE,
   type FetchOutcome,
   type FetchRecord,
@@ -236,7 +237,7 @@ export function watchOf(reports: readonly Report[]): { readonly person: PersonWa
 export function levelsOf(reports: readonly Report[], at: Instant, person: PersonWatch, places: readonly WatchedPlace[]): ReadonlyMap<string, AssessedLevel> {
   const levels = new Map<string, AssessedLevel>();
   for (const incident of incidents(add(EMPTY_STATE, { reports }), at)) {
-    const { level } = assess(incident, person, places);
+    const { level } = assess(incident, person, places, DEFAULT_ASSESS_POLICY, at);
     for (const id of incident.reports) levels.set(id, level);
   }
   return levels;

@@ -4,8 +4,11 @@ import { describe, expect, it } from "vitest";
 import type {
   Area,
   AssessedLevel,
+  AssessPolicy,
+  AssessReason,
   Incident,
   IncidentLine,
+  KindClass,
   LevelRule,
   LevelTable,
   PersonId,
@@ -21,6 +24,7 @@ import type {
 import { ASSESSED_LEVELS } from "./contracts.ts";
 import {
   DEFAULT_ASSESS_POLICY,
+  EARTHQUAKE_PAST_WITHIN,
   LIFE_SAFETY_KINDS,
   admits,
   assess,
@@ -624,6 +628,7 @@ describe("the level at each place (AL-14)", () => {
           severity: r.pick([...SEVERITIES, "unknown"] as const),
           urgency: r.pick([...URGENCIES, "unknown"] as const),
           certainty: "observed",
+          ...(r.chance(0.7) ? { onset: r.int(0, 2 * EARTHQUAKE_PAST_WITHIN) } : {}),
           areas: areas.length === 0 ? atHome : areas,
         };
       });
@@ -643,12 +648,100 @@ describe("the level at each place (AL-14)", () => {
         ...(r.chance(0.5) ? { places: [r.pick([home, other])] } : {}),
         max: r.pick(ASSESSED_LEVELS),
       }));
-      const result = assess(whole, person(rules), places);
+      const at = r.chance(0.8) ? r.int(0, 3 * EARTHQUAKE_PAST_WITHIN) : undefined;
+      const result = assess(whole, person(rules), places, DEFAULT_ASSESS_POLICY, at);
       expect(assessmentSchema.safeParse(result).success).toBe(true);
-      const alone = lines.map(
-        (line) => assess(incident({ kind, status, severity: line.severity, urgency: line.urgency, areas: line.areas }), person(rules), places).level,
-      );
+      const alone = lines.map((line) => {
+        const onset = line.onset === undefined ? {} : { onset: line.onset };
+        return assess(incident({ kind, status, severity: line.severity, urgency: line.urgency, areas: line.areas, ...onset }), person(rules), places, DEFAULT_ASSESS_POLICY, at).level;
+      });
       expect(result.level).toBe(alone.reduce(higherLevel, "none"));
+    }
+  });
+});
+
+describe("the urgency past of a recent event (AL-31)", () => {
+  // A made-up earthquake. Its report tells of shaking that occurred, so its urgency is `past`.
+  const onset = 1_800_000_000_000;
+  const quake = (fields: Draft = {}): Incident => incident({ kind: "geo.earthquake", urgency: "past", onset, ...fields });
+  const after = (minutes: number): number => onset + minutes * 60_000;
+  const levelAt = (draft: Incident, at?: number): AssessedLevel => assess(draft, person(), places, DEFAULT_ASSESS_POLICY, at).level;
+  const tableReason = (draft: Incident, at?: number): AssessReason | undefined => assess(draft, person(), places, DEFAULT_ASSESS_POLICY, at).reasons.find((reason) => reason.kind === "table");
+
+  it("counts a recent past as immediate, and then the severity decides", () => {
+    expect(levelAt(quake(), after(10))).toBe("life-safety");
+    expect(levelAt(quake({ severity: "severe" }), after(10))).toBe("urgent");
+    expect(levelAt(quake({ severity: "moderate" }), after(10))).toBe("notice");
+    expect(levelAt(quake({ severity: "minor" }), after(10))).toBe("digest");
+    // The window holds its end. After the window, the report is a digest.
+    expect(levelAt(quake(), onset + EARTHQUAKE_PAST_WITHIN)).toBe("life-safety");
+    expect(levelAt(quake(), onset + EARTHQUAKE_PAST_WITHIN + 1)).toBe("digest");
+  });
+
+  it("counts a past of unknown age as recent", () => {
+    expect(levelAt(quake())).toBe("life-safety");
+    expect(levelAt(incident({ kind: "geo.earthquake", urgency: "past" }), after(600))).toBe("life-safety");
+  });
+
+  it("tells the window in the reason of the table", () => {
+    expect(tableReason(quake(), after(10))).toMatchObject({ class: "earthquake", byUrgency: "life-safety", recentPast: true });
+    expect(tableReason(quake(), after(120))).not.toHaveProperty("recentPast");
+    expect(tableReason(quake({ urgency: "immediate" }), after(10))).not.toHaveProperty("recentPast");
+    expect(assessmentSchema.safeParse(assess(quake(), person(), places, DEFAULT_ASSESS_POLICY, after(10))).success).toBe(true);
+  });
+
+  it("keeps the past of a table with no window, and keeps an early warning in the life-safety class", () => {
+    expect(levelAt(incident({ kind: "met.tornado", urgency: "past", onset }), after(10))).toBe("digest");
+    expect(classOf(DEFAULT_ASSESS_POLICY, "geo.earthquake")?.id).toBe("earthquake");
+    const warning = { kind: { code: "geo.earthquake.early-warning", label: "" }, severity: "severe", urgency: "immediate" } as const;
+    expect(tableLevel(DEFAULT_ASSESS_POLICY, warning)).toMatchObject({ class: "life-safety", level: "life-safety" });
+  });
+
+  it("gives an earthquake life-safety exactly as the rule of docs/CONTRACTS.md tells", () => {
+    const ages = [undefined, 0, EARTHQUAKE_PAST_WITHIN, EARTHQUAKE_PAST_WITHIN + 1, 10 * EARTHQUAKE_PAST_WITHIN];
+    for (const status of STATUSES) {
+      for (const severity of [...SEVERITIES, "unknown"] as const) {
+        for (const urgency of [...URGENCIES, "unknown"] as const) {
+          for (const age of ages) {
+            const level = levelAt(quake({ status, severity, urgency }), age === undefined ? undefined : onset + age);
+            const recent = urgency === "past" && (age === undefined || age <= EARTHQUAKE_PAST_WITHIN);
+            const expected = status === "actual" && ["extreme", "unknown"].includes(severity) && (["immediate", "expected", "unknown"].includes(urgency) || recent);
+            expect([status, severity, urgency, age, level === "life-safety"]).toEqual([status, severity, urgency, age, expected]);
+          }
+        }
+      }
+    }
+  });
+
+  // The gate of the window: it raises only a report with the urgency `past`, only in the window, and the level does not rise with the age.
+  it.each(SEEDS)("raises only a recent past report, and the level does not rise with the age (seed %i)", (seed) => {
+    const r = random(seed);
+    const noWindow = (table: KindClass): KindClass => ({
+      id: table.id,
+      kinds: table.kinds,
+      ...(table.statuses === undefined ? {} : { statuses: table.statuses }),
+      severity: table.severity,
+      urgency: table.urgency,
+    });
+    const without: AssessPolicy = { ...DEFAULT_ASSESS_POLICY, classes: DEFAULT_ASSESS_POLICY.classes.map(noWindow) };
+    const kinds = ["geo.earthquake", "geo.earthquake.early-warning", "met.tornado", "geo.tsunami", "met.wind.high"];
+    for (let round = 0; round < 300; round += 1) {
+      const draft = incident({
+        kind: r.pick(kinds),
+        status: r.chance(0.8) ? "actual" : r.pick(STATUSES),
+        severity: r.pick([...SEVERITIES, "unknown"] as const),
+        urgency: r.chance(0.5) ? "past" : r.pick([...URGENCIES, "unknown"] as const),
+        ...(r.chance(0.8) ? { onset } : {}),
+      });
+      const rules: LevelRule[] = Array.from({ length: r.int(0, 2) }, () => ({ max: r.pick(ASSESSED_LEVELS) }));
+      const [early, late] = [r.int(0, 3 * EARTHQUAKE_PAST_WITHIN), r.int(0, 3 * EARTHQUAKE_PAST_WITHIN)].sort((a, b) => a - b) as [number, number];
+      const at = (age: number): number => onset + age;
+      const level = (age: number, policy: AssessPolicy = DEFAULT_ASSESS_POLICY): AssessedLevel => assess(draft, person(rules), places, policy, at(age)).level;
+      const old = level(early, without);
+      const found = tableLevel(DEFAULT_ASSESS_POLICY, draft, at(early));
+      expect(rank(level(early))).toBeGreaterThanOrEqual(rank(old));
+      if (found.recentPast !== true) expect(level(early)).toBe(old);
+      expect(rank(level(early))).toBeGreaterThanOrEqual(rank(level(late)));
     }
   });
 });

@@ -12,6 +12,7 @@ import type {
   Certainty,
   Estimate,
   Incident,
+  Instant,
   KindPrior,
   PersonWatch,
   ScoreFactor,
@@ -92,8 +93,9 @@ export function assessWithShadow(
   places: readonly WatchedPlace[],
   priors: ScorePriors,
   policy: AssessPolicy = DEFAULT_ASSESS_POLICY,
+  at?: Instant,
 ): Assessment {
-  const assessment = assess(incident, person, places, policy);
+  const assessment = assess(incident, person, places, policy, at);
   if (!assessment.reasons.some((reason) => reason.kind === "table")) return assessment;
   return { ...assessment, reasons: [...assessment.reasons, { kind: "shadow", score: shadowScore(incident, priors) }] };
 }
