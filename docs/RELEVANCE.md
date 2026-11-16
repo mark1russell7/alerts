@@ -123,7 +123,7 @@ A person has three kinds of opt-out. Each one has a scope.
 
 A mute with kinds and subjects has effect only on the incidents of its kinds. Thus a person can mute one kind of alert for one subject.
 
-The mandatory class is an open point. The proposal: a mute makes an imminent life-safety warning at a place where the person is silent, not absent. The top class of WEA and of EU-Alert works the same way. The field `mandatory` of `RelevancePolicy` holds the choice. The repository has no default policy until the owner decides.
+The mandatory class is decided: a mute makes a life-safety warning at a watched place silent, not absent. The top class of WEA and of EU-Alert works the same way. The field `mandatory` of `RelevancePolicy` holds the choice, and `DEFAULT_RELEVANCE_POLICY` gives `silent`.
 
 Under the policy `silent`, a mute does not cut an incident of the mandatory class. Then a mute of a subject between the entry and the person has no effect, and the alert keeps its sound.
 
@@ -165,6 +165,9 @@ No text holds an address, a point or a region code.
 The file `relevance.ts` of the core holds the calculation. `relevance-gates.test.ts` holds the gates.
 
 - `relevance(input, graph, policy)` gives the `Relevance` of one incident. The input holds the kind, the entries, the time and the mandatory class.
+- `canReach(input, graph, policy)` tells if the reach at the high ends is more than 0. The routing uses it for each entry.
+- `DEFAULT_RELEVANCE_POLICY` gives the hop cap 4, the top 3 paths, the mandatory class `silent` and the level `urgent` for the other entries.
+- `assess` in `assess.ts` holds the routing. A fault of the relevance gives the reason `relevance-fault`, and the places decide.
 - `muteOf` gives the matched mute and its effect. Of two matched mutes, the mute with the first id wins.
 - The cut of the mutes is in the parts of the sum. Thus `reachOf` and `relevance` use the same parts.
 - `topicEntry(kind, graph)` gives the topic entry of a kind, by the longest prefix with an edge. An edge that is off also counts, so it turns off its level only.
@@ -197,12 +200,34 @@ The system `place` holds the watched places of a person, by their ids in the con
 | Hop cap and cycles | Property | An edge that adds only a path longer than the hop cap, or only a cycle, changes nothing. |
 | An honest why | Property | The coverage equals the reach of the shown paths alone, divided by the full reach. |
 | Who each class reaches | Table | For each class of event and each example person, the test holds the expected reach and the expected why. The tier comes when the score of AL-31 reads the reach. |
-| Compatibility | Compat | A graph with only place edges of weight 1 gives a reach of 1 when the incident hits a watched place, and 0 when it does not. The check on each recorded incident comes with the routing. |
+| Compatibility | Compat | A graph with only place edges of weight 1 gives a reach of 1 when the incident hits a watched place, and 0 when it does not. The routing test holds the old levels and places of nine incidents. A replay of the recorded incidents comes with the runtime configuration. |
 | The why fits each channel | Limits | Each why text keeps the limits of its channel and holds no address, point or code. |
+
+## The routing
+
+Step 5 routes the alerts by the relevance. `assess` uses the graph in `PersonWatch.interests`, and `AssessPolicy.relevance` gives the policy. With no graph, the routing of the first releases stays.
+
+- The entries are the matched places (`place:<id>`), the code areas, the place areas, the subjects of a known system and the topic of the kind. Each entry has a hit of 1.
+- A matched place counts only when its entry alone reaches the person: the reach at the high ends is more than 0. The cut of the mutes applies.
+- An entry that is not a watched place gives the level of the table, up to `entryMax` of the policy. The default is `urgent`, because `life-safety` needs a place of the person.
+- The reason `reach` tells the reach, the entries that count, the places of the rule and the why.
+- `Assessment.muted` holds the matched mute. The level stays the level before the mute, and the delivery uses the effect.
+- With no time, a mute with an end has no effect, so the alert is not lost.
+
+### The rule of the life-safety warnings
+
+`PersonWatch.mandatory` holds a rule for each place: a switch `on` and a range `rangeKm`. A place with no rule has the rule on, and its range is the buffer of the place.
+
+- A matched place is under the rule when each of these conditions is true:
+  - The switch is on.
+  - The table gives `life-safety` at the place.
+  - The match is in the range.
+- A match by the codes or by the id of the place is in each range. A match by a shape is in the range when its distance is `rangeKm` or less.
+- A place under the rule always counts, also with an edge that is off. Then the incident is of the mandatory class, and a mute has the effect `policy.mandatory`.
 
 ## The tests of step 5
 
-Step 5 routes the alerts by the relevance. These tests come with it:
+These tests come with the routing:
 
 - `relevance` throws a `RangeError` for an entry of the person, an edge from the person and two edges with one id. The schema refuses the two graph cases. An adapter can still give the entry `person`.
 - When `relevance` throws for one person, the alert is not lost. The routing catches the error, sends the alert by the place routing of the first releases and records a fault.
@@ -216,7 +241,6 @@ Step 5 routes the alerts by the relevance. These tests come with it:
 
 ## Open points
 
-- The mandatory class, a decision of the owner.
 - A fast path: when the two bounds give the same level, the exact sum is not necessary.
 - The size of a real graph, and the budget of steps that it needs. A check of the configuration can give a problem before a sum ends with `bound`.
 - Weights from travel time, for a place that the person visits.

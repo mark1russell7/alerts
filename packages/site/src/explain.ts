@@ -145,7 +145,25 @@ export function reasonText(reason: AssessReason, incident: Pick<Incident, "sever
       return `Rule ${String(reason.index + 1)} of the person sets ${reason.max} as the highest level${reason.place === undefined ? "" : ` at ${nameOf(reason.place)}`}.`;
     case "shadow":
       return shadowText(reason.score);
+    case "reach":
+      return reachText(reason);
+    case "relevance-fault":
+      return `The relevance failed, so the places in the areas decided: ${reason.message}`;
   }
+}
+
+// The name of a node of an interest graph: the name of a watched place, or the key of each other node.
+function nodeName(node: string): string {
+  return node.startsWith("place:") ? nameOf(node.slice("place:".length)) : node;
+}
+
+// The text of the relevance: the reach, the entries that reach the person, the rule of the life-safety warnings and the level of the other entries.
+function reachText(reason: Extract<AssessReason, { readonly kind: "reach" }>): string {
+  const reach = `The interest graph gives a reach of ${estimateText(reason.reach)}.`;
+  const reached = reason.reached.length === 0 ? " No subject of the incident reaches the person." : ` These subjects reach the person: ${reason.reached.map(nodeName).join(", ")}.`;
+  const kept = reason.mandatory.length === 0 ? "" : ` The rule of the life-safety warnings keeps the level at ${reason.mandatory.map(nameOf).join(", ")}.`;
+  const others = reason.entryLevel === undefined ? "" : ` A subject that is not a watched place gives the level ${reason.entryLevel}.`;
+  return `${reach}${reached}${kept}${others}`;
 }
 
 /** A fact that joins a report to an earlier report of its incident. */

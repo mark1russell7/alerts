@@ -890,6 +890,8 @@ export interface AssessPolicy {
   readonly classes: readonly KindClass[];
   /** The table of each kind that no class has. */
   readonly otherwise: LevelTable;
+  /** The policy of the relevance for a person with an interest graph. When it is absent, the assessment uses `DEFAULT_RELEVANCE_POLICY`. */
+  readonly relevance?: RelevancePolicy;
 }
 
 /**
@@ -943,6 +945,32 @@ export interface PersonWatch {
   readonly rules: readonly LevelRule[];
   /** The quiet window of the person. When it is absent, no message is quiet. */
   readonly quiet?: QuietWindow;
+  /**
+   * The interest graph of the person (`docs/RELEVANCE.md`). With a graph, a place or another entry of an incident
+   * counts only when the entry reaches the person. With no graph, each place in the areas counts.
+   */
+  readonly interests?: InterestGraph;
+  /**
+   * The rules of the life-safety warnings at the places of the person, one rule for each place at most. A place
+   * with no rule has the rule on, and its range is the buffer of the place.
+   */
+  readonly mandatory?: readonly MandatoryRule[];
+}
+
+/**
+ * The rule of the life-safety warnings at one place of a person. When the rule is on, a warning of the level
+ * `life-safety` at the place in the range always counts. An edge that is off does not stop it, and a mute makes it
+ * silent under the policy `silent` of the relevance.
+ */
+export interface MandatoryRule {
+  readonly place: PlaceId;
+  /** False when the person turned the rule off at this place. */
+  readonly on: boolean;
+  /**
+   * The range in kilometers. A match by a shape at this distance from the place or nearer is in the range. A match by
+   * the codes or by the id of the place is always in the range.
+   */
+  readonly rangeKm: number;
 }
 
 /** A measured value with its interval. The interval holds the value: `low <= value <= high`. */
@@ -1069,7 +1097,23 @@ export type AssessReason =
    */
   | { readonly kind: "rule"; readonly place?: PlaceId; readonly index: number; readonly max: AssessedLevel }
   /** The shadow score of the incident. It does not change the level. */
-  | { readonly kind: "shadow"; readonly score: ShadowScore };
+  | { readonly kind: "shadow"; readonly score: ShadowScore }
+  /**
+   * The relevance of the incident over the interest graph of the person. `reached` holds the entries that reach the
+   * person alone: the places, the areas, the subjects and the topic, in this order. `mandatory` holds the places
+   * where the rule of the life-safety warnings keeps the level. `entryLevel` is present when an entry that is not a
+   * watched place reaches the person. It is the level of the table, up to `entryMax` of the policy, before the rules. The why comes from the strongest path.
+   */
+  | {
+      readonly kind: "reach";
+      readonly reach: Estimate;
+      readonly reached: readonly NodeKey[];
+      readonly mandatory: readonly PlaceId[];
+      readonly entryLevel?: AssessedLevel;
+      readonly why?: WhyRecord;
+    }
+  /** The relevance failed, so the places in the areas decided, as for a person with no graph. The message tells the fault. */
+  | { readonly kind: "relevance-fault"; readonly message: string };
 
 /** The level of one incident for one person, with its reasons. */
 export interface Assessment {
@@ -1279,6 +1323,11 @@ export interface RelevancePolicy {
   readonly topPaths: number;
   /** The effect of a mute on an incident of the mandatory class. A mute removes each other incident that it matches. */
   readonly mandatory: MuteEffect;
+  /**
+   * The highest level of an incident that reaches the person only through entries that are not watched places. The
+   * level `life-safety` needs a place of the person. When it is absent, the assessment uses `DEFAULT_ENTRY_MAX`.
+   */
+  readonly entryMax?: AssessedLevel;
 }
 
 /** The relevance of an incident for one person. */

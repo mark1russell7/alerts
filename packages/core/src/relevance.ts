@@ -7,8 +7,9 @@ import {
   type OrderedRing,
   type TwoTerminalReliability,
 } from "@mark1russell7/collections/graph";
-import { hasKind } from "./assess.ts";
+import { hasKind } from "./kind-prefix.ts";
 import type {
+  AssessedLevel,
   Estimate,
   Instant,
   InterestEdge,
@@ -49,6 +50,15 @@ export interface ReachArithmetic<N> {
 
 /** The arithmetic of production: floats. */
 export const FLOAT_REACH: ReachArithmetic<number> = { ring: NUMBER_RING, of: (chance) => chance };
+
+/** The highest level of an incident that reaches a person only through entries that are not watched places, when the policy gives none. */
+export const DEFAULT_ENTRY_MAX: AssessedLevel = "urgent";
+
+/**
+ * The first policy of the relevance. A path has 4 edges or fewer, and a relevance shows the 3 strongest paths. A mute
+ * makes a life-safety warning at a watched place silent, not absent. The top class of WEA and of EU-Alert works the same way.
+ */
+export const DEFAULT_RELEVANCE_POLICY: RelevancePolicy = { hopCap: 4, topPaths: 3, mandatory: "silent", entryMax: DEFAULT_ENTRY_MAX };
 
 /** One end of the intervals of the weights and of the hits. */
 export type ReachEnd = "low" | "value" | "high";
@@ -180,6 +190,15 @@ function lowOf(result: TwoTerminalReliability<number>): number {
 
 function highOf(result: TwoTerminalReliability<number>): number {
   return result.kind === "exact" ? result.value : result.kind === "bounds" ? result.noisyOr : 1;
+}
+
+/**
+ * This function tells if the entries of an input can reach the person. Then the reach at the high ends of the weights
+ * and the hits is more than 0. It applies the cut of the mutes, as `reachOf`. When the budget ends the sum, the ceiling
+ * decides, so an alert is not lost.
+ */
+export function canReach(input: RelevanceInput, graph: InterestGraph, policy: RelevancePolicy, options: RelevanceOptions = {}): boolean {
+  return highOf(reachOf(input, graph, policy, FLOAT_REACH, "high", options)) > 0;
 }
 
 /**
