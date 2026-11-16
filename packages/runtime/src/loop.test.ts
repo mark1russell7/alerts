@@ -16,8 +16,8 @@ const settle = (): Promise<void> => new Promise((resolve) => setImmediate(resolv
 /** A pass of the test: only its time and its wake time count for the loop. */
 const pass = (at: Instant, wakeAt?: Instant): Pass => ({ at, fetched: [], view: {} as Pass["view"], conflicts: [], ...(wakeAt === undefined ? {} : { wakeAt }) });
 
-/** A script gives the pass of each start. It gets the clock, because the first pass starts before `start` ends. */
-type Script = (at: Instant, count: number, clock: FakeClock) => Promise<Pass> | Pass;
+/** A script gives the pass of each start. It gets the clock, because the first pass starts before `start` ends. It also gets the signal of the pass. */
+type Script = (at: Instant, count: number, clock: FakeClock, stop: AbortSignal) => Promise<Pass> | Pass;
 
 const running: { loop: RuntimeLoop; stop: () => Promise<void> }[] = [];
 
@@ -33,9 +33,9 @@ async function start(script: Script, times = TIMES) {
     times,
     random: () => 0,
     onError: (error) => errors.push(error instanceof Error ? error.message : String(error)),
-    pass: async () => {
+    pass: async (stop) => {
       starts.push(clock.now());
-      return script(clock.now(), starts.length, clock);
+      return script(clock.now(), starts.length, clock, stop);
     },
   });
   const signal = new AbortController().signal;
@@ -158,6 +158,22 @@ describe("createLoop", () => {
     running.splice(0);
     await stop();
     expect(clock.pending).toBe(0);
+  });
+
+  it("gives each pass the signal of its iteration, and the stop of the loop aborts it", async () => {
+    let seen: AbortSignal | undefined;
+    const { clock, stop } = await start(async (at, _count, _clock, signal) => {
+      seen = signal;
+      // The pass waits for a fetch that ends only at the abort of its signal.
+      await new Promise<void>((resolve) => signal.addEventListener("abort", () => resolve(), { once: true }));
+      return pass(at, at + MINUTE);
+    });
+    expect(seen?.aborted).toBe(false);
+    running.splice(0);
+    const stopping = stop();
+    await walk(clock, TIMES.passLimit);
+    await stopping;
+    expect(seen?.aborted).toBe(true);
   });
 });
 

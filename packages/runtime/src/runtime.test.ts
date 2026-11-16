@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fakeWallClock, type WallClock } from "@mark1russell7/algebra/clock";
-import { reportId, type ChannelId, type ChannelQuota, type Expectation, type FetchOutcome, type Observation, type ObservationId, type PlaceId, type Report, type SourceDescriptor, type SourceId, type SourceProcedures, type Watch, type WatchedPlace } from "@mark1russell7/alerts";
+import { reportId, type ChannelId, type ChannelQuota, type Expectation, type FetchOutcome, type FetchSignal, type Observation, type ObservationId, type PlaceId, type Report, type SourceDescriptor, type SourceId, type SourceProcedures, type Watch, type WatchedPlace } from "@mark1russell7/alerts";
 import { random, seedsFrom } from "@mark1russell7/rigor-generators";
 import { afterEach, describe, expect, it } from "vitest";
 import type { RuntimeEvent } from "./events.ts";
@@ -287,6 +287,73 @@ describe("one pass of the runtime", () => {
     const pass = await running;
     expect(pass.fetched).toEqual([API]);
     expect(runtime.state().health[API]?.lastFailure?.failure.kind).toBe("timeout");
+    log.close();
+  });
+
+  // The fetches of the log, by source and outcome.
+  const fetchesOf = (log: RuntimeLog): string[] =>
+    [...log.read()].flatMap((event) => (event.type === "fetch" ? [`${event.record.source} ${event.record.failure?.kind ?? "ok"}`] : []));
+
+  it("aborts the signal of a fetch at its limit, and the outcome stays one timeout of the source (AL-39)", async () => {
+    let seen: FetchSignal | undefined;
+    const hanging = scripted(API, (_input, signal) => {
+      seen = signal;
+      return new Promise<FetchOutcome>(() => undefined);
+    });
+    const { clock, runtime, log } = open([hanging], { fetchLimit: () => 5_000 });
+    const running = runtime.pass();
+    await clock.advance(4_999);
+    expect(seen?.aborted).toBe(false);
+    await clock.advance(1);
+    await running;
+    // A request of the fetch that waits behind the park of its host now ends, and it never goes.
+    expect(seen?.aborted).toBe(true);
+    expect(fetchesOf(log)).toEqual([`${API} timeout`]);
+    log.close();
+  });
+
+  it("aborts each fetch at the stop, writes no fetch for it, and fetches the source again at the next pass (AL-39)", async () => {
+    const seen: (FetchSignal | undefined)[] = [];
+    const source = scripted(API, (_input, signal) => {
+      seen.push(signal);
+      if (seen.length > 1) return Promise.resolve({ ok: true, observations: [], complete: true });
+      // A fetch in the manner of polite-crawler: it throws the reason of the signal at the abort.
+      return new Promise<FetchOutcome>((_resolve, reject) => {
+        if (signal?.aborted === true) reject(signal.reason as Error);
+        signal?.addEventListener("abort", () => reject(signal.reason as Error), { once: true });
+      });
+    });
+    const { clock, runtime, log } = open([source], { fetchLimit: () => 5_000 });
+    const stop = new AbortController();
+    const running = runtime.pass(stop.signal);
+    await clock.advance(1_000);
+    expect(seen[0]?.aborted).toBe(false);
+    stop.abort(new Error("The runtime stops."));
+    const pass = await running;
+    // No fetch runs on after the stop. The stop is not a fault of the source, thus its health has no failure.
+    expect(seen[0]?.aborted).toBe(true);
+    expect(pass.fetched).toEqual([API]);
+    expect(fetchesOf(log)).toEqual([]);
+    expect(runtime.state().health[API]?.lastFailure).toBeUndefined();
+    // The log has no fetch of the source, thus the next pass fetches it at once.
+    expect((await runtime.pass()).fetched).toEqual([API]);
+    expect(fetchesOf(log)).toEqual([`${API} ok`]);
+    expect(seen[1]?.aborted).toBe(true);
+    log.close();
+  });
+
+  it("gives an aborted signal to each fetch of a pass that starts after the stop (AL-39)", async () => {
+    let seen: FetchSignal | undefined;
+    const source = scripted(API, (_input, signal) => {
+      seen = signal;
+      return signal?.aborted === true ? Promise.reject(signal.reason as Error) : Promise.resolve({ ok: true, observations: [], complete: true });
+    });
+    const { runtime, log } = open([source]);
+    const stop = new AbortController();
+    stop.abort(new Error("The runtime stops."));
+    await runtime.pass(stop.signal);
+    expect(seen?.aborted).toBe(true);
+    expect(fetchesOf(log)).toEqual([]);
     log.close();
   });
 

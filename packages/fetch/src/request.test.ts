@@ -1,9 +1,9 @@
-import type { SourceId } from "@mark1russell7/alerts";
+import type { FetchSignal, SourceId } from "@mark1russell7/alerts";
 import type { Condition, Exchange, Reply, Transport } from "polite-crawler/api";
 import { HostScheduler } from "polite-crawler/politeness";
 import { describe, expect, it } from "vitest";
 import { problemDetail } from "./failure.ts";
-import { createRequester, DEFAULT_TIMEOUT_MS, type RequesterOptions } from "./request.ts";
+import { abortSignalOf, createRequester, DEFAULT_TIMEOUT_MS, type RequesterOptions } from "./request.ts";
 
 const START = Date.parse("2026-11-15T00:00:00.000Z");
 
@@ -134,5 +134,47 @@ describe("createRequester", () => {
       });
     const { requester } = requesterWith([hangs]);
     await expect(requester.get({ path: "/a", what: "a" }, controller.signal)).rejects.toThrow("the caller stops");
+  });
+});
+
+describe("abortSignalOf", () => {
+  // A signal of the contract that is not an `AbortSignal`.
+  const foreign = () => {
+    const listeners: (() => void)[] = [];
+    const signal: FetchSignal & { reason?: unknown } = {
+      aborted: false,
+      addEventListener: (_type, listener) => listeners.push(listener),
+      removeEventListener: () => undefined,
+    };
+    const abort = (reason: unknown): void => {
+      Object.assign(signal, { aborted: true, reason });
+      for (const listener of listeners) listener();
+    };
+    return { signal, abort };
+  };
+
+  it("keeps an AbortSignal as it is, and keeps no signal as no signal", () => {
+    const controller = new AbortController();
+    expect(abortSignalOf(controller.signal)).toBe(controller.signal);
+    expect(abortSignalOf(undefined)).toBeUndefined();
+  });
+
+  it("links a signal of another kind: the AbortSignal aborts at its abort, with the same reason", () => {
+    const { signal, abort } = foreign();
+    const linked = abortSignalOf(signal);
+    expect(linked?.aborted).toBe(false);
+    const reason = new Error("The fetch ended at its limit.");
+    abort(reason);
+    expect(linked?.aborted).toBe(true);
+    expect(linked?.reason).toBe(reason);
+  });
+
+  it("gives an aborted AbortSignal for a signal of another kind that aborted before", () => {
+    const { signal, abort } = foreign();
+    const reason = new Error("The runtime stops.");
+    abort(reason);
+    const linked = abortSignalOf(signal);
+    expect(linked?.aborted).toBe(true);
+    expect(linked?.reason).toBe(reason);
   });
 });
