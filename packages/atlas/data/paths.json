@@ -253,9 +253,9 @@
   },
   {
     "id": "cloudfront",
-    "name": "Amazon CloudFront, the content network in front of earthquake.usgs.gov",
+    "name": "Amazon CloudFront, the content network in front of earthquake.usgs.gov and services.swpc.noaa.gov",
     "kind": "provider",
-    "note": "The answers of the USGS feed on 2026-11-16 had the header x-cache: Hit from cloudfront."
+    "note": "The answers of the USGS feed on 2026-11-16 had the header x-cache: Hit from cloudfront. The answers of the SWPC list on 2026-11-16 had the same header and a Via header of CloudFront."
   },
   {
     "id": "coastalscience.noaa.gov",
@@ -573,7 +573,7 @@
     "id": "services.swpc.noaa.gov",
     "name": "services.swpc.noaa.gov",
     "kind": "host",
-    "note": "The host of the feed of swpc-products-json."
+    "note": "The host of the list of the space weather messages of the SWPC: swpc-products-json."
   },
   {
     "id": "ssd-api.jpl.nasa.gov",
