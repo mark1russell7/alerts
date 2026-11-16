@@ -9,7 +9,7 @@ import { add, sum, type Quantity } from "@mark1russell7/quantity";
 import { daemon, service, type Profile, type ServiceBuilder } from "@mark1russell7/service";
 import type { GroupSpec, ServiceSpec } from "@mark1russell7/service/host";
 import { holdingPasses, READINESS, STARTUP_BUDGET, STOP_MESSAGE } from "./index.ts";
-import { alertsHome, HOME_VARIABLE } from "./config.ts";
+import { alertsHome, HOME_VARIABLE, type FileText } from "./config.ts";
 import { INSTANCE_TIMES } from "./instance.ts";
 
 const ms = (value: number): Quantity => ({ value, unit: "ms" });
@@ -71,6 +71,24 @@ export const hostFolder = (home: string): string => join(home, "host");
 /** The discovery file of the supervisor. Each program of the group has its own file in the same folder, by its name. */
 export const supervisorDiscovery = (home: string): string => join(hostFolder(home), "supervisor.json");
 
+/** The name of the runtime in the group of the supervisor. */
+export const RUNTIME_PROGRAM = "runtime";
+
+/** The discovery file of the runtime. The supervisor writes the process ID of each start of the runtime into it. */
+export const runtimeDiscovery = (home: string): string => join(hostFolder(home), `${RUNTIME_PROGRAM}.json`);
+
+/** This function gives the process ID in the text of a discovery file, or `undefined` when the text has no process ID. */
+export function discoveryPid(text: FileText): number | undefined {
+  if ("code" in text) return undefined;
+  try {
+    const record: unknown = JSON.parse(text.text);
+    const pid = typeof record === "object" && record !== null && "pid" in record ? record.pid : undefined;
+    return typeof pid === "number" && Number.isSafeInteger(pid) && pid > 0 ? pid : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /**
  * This function gives the group of the supervisor: one program, the runtime.
  *
@@ -88,7 +106,7 @@ export function hostGroup(options: HostOptions): GroupSpec {
     stateDir: hostFolder(options.home),
     programs: [
       {
-        name: "runtime",
+        name: RUNTIME_PROGRAM,
         program: options.node,
         args: ["src/main.ts"],
         cwd: options.root,

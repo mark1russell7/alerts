@@ -654,6 +654,15 @@ The start keeps the last good configuration, and a change of the files restarts 
 - When the two copies have problems, `startConfig` throws `ConfigRefused`, and the process does not start.
 - In the profile `daemon`, the hook of each pass reads the two files again. A change that passes the check stops the runtime, and the supervisor starts it again.
 - A change with problems gives its problems one time, and the runtime keeps the files of its start.
+- A new text of the restart request `restart.request` in the folder stops the runtime with no check. Then the supervisor starts it again.
+- A read error of the request gives no restart. The start reads the request too, thus the new runtime does not restart for the same request.
+
+A deploy of new code to the live checkout does these steps, with no elevated shell:
+
+1. Check out the new code, and install its dependencies.
+2. Start `node src/install.ts restart` in the runtime package. It checks the private files with the new code. A problem stops it before the request.
+3. The command writes a new request. Then it waits for a new process ID in `host/runtime.json`, and for the readiness of the new runtime.
+4. Code 0 tells that the new runtime is ready. Code 1 gives the problem, and code 2 gives a wrong command.
 
 The check of the profile `daemon` also needs the key `HEALTHCHECKS_PING_URL`, because the live instance needs its outside heartbeat.
 
