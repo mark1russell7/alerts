@@ -8,9 +8,10 @@
  * The end of the condition gives a cancel. The fold reads no clock.
  */
 import { canonicalJson } from "@mark1russell7/rigor-generators";
-import { COVERAGE_KIND, hasKind, HEALTH_KIND, matchPlaces, QUOTA_KIND } from "./assess.ts";
+import { BALANCE_KIND, COVERAGE_KIND, hasKind, HEALTH_KIND, matchPlaces, QUOTA_KIND } from "./assess.ts";
 import type {
   Area,
+  BalanceStage,
   ChannelQuota,
   Coverage,
   HealthState,
@@ -20,6 +21,7 @@ import type {
   Observation,
   Operation,
   PlaceId,
+  ProviderBalance,
   QuotaStage,
   Report,
   ResponseType,
@@ -48,6 +50,9 @@ export const CHANNEL_SUBJECT = "alerts.channel";
 
 /** The stages of a quota, from the first to the last. */
 export const QUOTA_STAGES: readonly QuotaStage[] = ["low", "reserve", "spent"];
+
+/** The stages of a balance. `empty` holds `low`. `unread` comes from the time of the last read. */
+export const BALANCE_STAGES: readonly BalanceStage[] = ["low", "empty", "unread"];
 
 /** The health states that start a line of health reports. */
 export const DOWN_STATES: readonly HealthState[] = ["failing", "silent", "changed"];
@@ -99,6 +104,11 @@ export interface SystemSnapshot {
    * open line of a quota stays open: a failed read of a count ends no line.
    */
   readonly quotas?: readonly ChannelQuota[];
+  /**
+   * The balances of the provider accounts. Each stage that `balanceStages` gives is a condition. With no
+   * balances, each open line of a balance stays open.
+   */
+  readonly balances?: readonly ProviderBalance[];
 }
 
 /** The result of one step of the fold. */
@@ -135,6 +145,28 @@ export function quotaStages(quota: ChannelQuota): QuotaStage[] {
 }
 
 /**
+ * This function gives the stages of a balance at the time `at`, in the order of `BALANCE_STAGES`.
+ *
+ * - `low` and `empty` come from the last read that passed, also when the read is old.
+ * - `unread` starts at `balanceUnreadAt`. A read that passes ends it.
+ */
+export function balanceStages(balance: ProviderBalance, at: Instant): BalanceStage[] {
+  const read = balance.read;
+  const empty = read !== undefined && read.balance <= 0;
+  const reached: Readonly<Record<BalanceStage, boolean>> = {
+    low: empty || (read !== undefined && read.balance < balance.floor),
+    empty,
+    unread: at >= balanceUnreadAt(balance),
+  };
+  return BALANCE_STAGES.filter((stage) => reached[stage]);
+}
+
+/** This function gives the time when a balance reaches `unread`: the maximum age after the last read, or after the start with no read. */
+export function balanceUnreadAt(balance: ProviderBalance): Instant {
+  return (balance.read?.at ?? balance.since) + balance.maxAge;
+}
+
+/**
  * This function gives the CAP severity and urgency of a gap of the coverage. The assessment policy
  * gives the level from them:
  *
@@ -149,9 +181,12 @@ export function gapGrade(entry: Coverage, threatened: boolean): { readonly sever
 }
 
 /**
- * This function adds one snapshot to the fold at the time `at`. Each source in `DOWN_STATES`, each
- * late expectation, each coverage that is short and each stage of a quota is a condition. An open line with no condition in the snapshot ends
- * with a cancel. Equal snapshots give no new report.
+ * This function adds one snapshot to the fold at the time `at`. Each of these is a condition:
+ *
+ * - Each source in `DOWN_STATES`, each late expectation and each coverage that is short.
+ * - Each stage of a quota and each stage of a balance.
+ *
+ * An open line with no condition in the snapshot ends with a cancel. Equal snapshots give no new report.
  */
 export function systemReports(lines: SystemLines, snapshot: SystemSnapshot, at: Instant): SystemStep {
   const conditions = new Map<string, Condition>();
@@ -170,6 +205,9 @@ export function systemReports(lines: SystemLines, snapshot: SystemSnapshot, at: 
   for (const quota of snapshot.quotas ?? []) {
     for (const stage of quotaStages(quota)) conditions.set(quotaName(quota.channel, stage), quotaCondition(quota, stage));
   }
+  for (const balance of snapshot.balances ?? []) {
+    for (const stage of balanceStages(balance, at)) conditions.set(balanceName(balance.provider, stage), balanceCondition(balance, stage, at));
+  }
   const names = [...new Set([...Object.keys(lines.open), ...conditions.keys()])].sort(compare);
   let count = lines.count;
   const open = new Map(Object.entries(lines.open));
@@ -179,6 +217,7 @@ export function systemReports(lines: SystemLines, snapshot: SystemSnapshot, at: 
     const line = lines.open[name];
     const condition = conditions.get(name);
     if (condition === undefined && snapshot.quotas === undefined && name.startsWith(QUOTA_LINE)) continue;
+    if (condition === undefined && snapshot.balances === undefined && name.startsWith(BALANCE_LINE)) continue;
     const draft = condition === undefined ? (line === undefined ? undefined : cancelOf(line)) : condition;
     if (draft === undefined) continue;
     const facts = canonicalJson(draft.facts, { form: "json" });
@@ -260,6 +299,13 @@ function quotaName(channel: string, stage: QuotaStage): string {
   return `${QUOTA_LINE}${encodeURIComponent(channel)}/${stage}`;
 }
 
+// The start of the name of each line of a balance.
+const BALANCE_LINE = "balance/";
+
+function balanceName(provider: string, stage: BalanceStage): string {
+  return `${BALANCE_LINE}${encodeURIComponent(provider)}/${stage}`;
+}
+
 function coverageName(place: PlaceId, kind: string): string {
   return `coverage/${encodeURIComponent(place)}/${encodeURIComponent(kind)}`;
 }
@@ -333,16 +379,17 @@ function coverageCondition(entry: Coverage, threatened: boolean): Condition {
 
 function quotaCondition(quota: ChannelQuota, stage: QuotaStage): Condition {
   const { channel, limit, reserve, used } = quota;
+  const unit = quota.unit ?? "units";
   const until = stage === "spent" ? (quota.blockedUntil ?? quota.resetAt) : quota.resetAt;
   const end = until === undefined ? "" : ` until ${new Date(until).toISOString()}`;
   const text: Readonly<Record<QuotaStage, { readonly headline: string; readonly description: string }>> = {
     low: {
-      headline: `${channel}: ${Math.max(0, limit - used)} of ${limit} units of the window are left.`,
-      description: `At ${reserve} units left, the channel sends only life-safety messages${end}. The other messages then wait for the reset.`,
+      headline: `${channel}: ${Math.max(0, limit - used)} of ${limit} ${unit} of the window are left.`,
+      description: `At ${reserve} ${unit} left, the channel sends only life-safety messages${end}. The other messages then wait for the reset.`,
     },
     reserve: {
       headline: `${channel} sends only life-safety messages${end}.`,
-      description: `The channel keeps its last ${reserve} of ${limit} units for life-safety. The other messages wait for the reset.`,
+      description: `The channel keeps its last ${reserve} of ${limit} ${unit} for life-safety. The other messages wait for the reset.`,
     },
     spent: {
       headline: `${channel} sends no message${end}.`,
@@ -361,6 +408,44 @@ function quotaCondition(quota: ChannelQuota, stage: QuotaStage): Condition {
     about: [{ system: CHANNEL_SUBJECT, id: channel, label: channel }],
     ...text[stage],
     parameters: { stage: [stage], used: [String(used)], limit: [String(limit)], reserve: [String(reserve)] },
+  };
+}
+
+function balanceCondition(balance: ProviderBalance, stage: BalanceStage, at: Instant): Condition {
+  const { provider, title, floor, read } = balance;
+  const amount = read === undefined ? "" : `${read.balance.toFixed(2)} ${read.currency}`;
+  const last = read === undefined ? `the start of the watch at ${new Date(balance.since).toISOString()}` : new Date(read.at).toISOString();
+  const text: Readonly<Record<BalanceStage, { readonly headline: string; readonly description: string }>> = {
+    low: {
+      headline: `${title}: the balance is ${amount}, below the floor of ${floor.toFixed(2)}.`,
+      description: "Add money to the account. At 0, the provider refuses each paid message, also a life-safety message.",
+    },
+    empty: {
+      headline: `${title} refuses each paid message: the balance is ${amount}.`,
+      description: "Add money to the account. Until then, only the other channels carry the alerts.",
+    },
+    unread: {
+      headline: `The balance of ${title} has no read since ${last}.`,
+      description: "The watch cannot see a low balance. Examine the key of the account and the network.",
+    },
+  };
+  const code = `${BALANCE_KIND}.${stage}`;
+  return {
+    // A new balance is not a fact. Thus each stage gives one alert, and no update.
+    facts: { provider, stage },
+    kind: { code, label: kindLabel(code) },
+    severity: stage === "empty" ? "severe" : "moderate",
+    urgency: stage === "empty" ? "immediate" : "expected",
+    response: ["assess"],
+    areas: [],
+    about: balance.channels.map((channel) => ({ system: CHANNEL_SUBJECT, id: channel, label: channel })),
+    ...text[stage],
+    parameters: {
+      stage: [stage],
+      floor: [String(floor)],
+      ...(read === undefined ? {} : { balance: [String(read.balance)], currency: [read.currency] }),
+      age: [String(at - (read?.at ?? balance.since))],
+    },
   };
 }
 

@@ -648,6 +648,44 @@ export interface ChannelQuota {
   readonly resetAt?: Instant;
   /** The provider refuses each message until this time. */
   readonly blockedUntil?: Instant;
+  /** The name of the units in a text, in the plural: for example `cents` for a cap of the spend. The default is `units`. */
+  readonly unit?: string;
+}
+
+/**
+ * The stages of the balance of a provider account. Each stage is a line of system reports:
+ *
+ * - `low`: the balance is below the floor.
+ * - `empty`: the balance is 0 or less. The provider then refuses each paid message.
+ * - `unread`: no read passed for the maximum age or longer. Then the watch cannot see a low balance.
+ */
+export type BalanceStage = "low" | "empty" | "unread";
+
+/** One read of the balance of a provider account that passed. */
+export interface BalanceRead {
+  /** The balance in the currency of the account. It is below 0 when the account owes money. */
+  readonly balance: number;
+  /** The currency of the account, as a code of ISO 4217: for example `USD`. */
+  readonly currency: string;
+  readonly at: Instant;
+}
+
+/** The watch of the balance of one provider account, at one time. */
+export interface ProviderBalance {
+  /** The provider, as an id in the `dependsOn` of its channels: for example `provider:twilio`. */
+  readonly provider: string;
+  /** The name of the provider in a text: for example `Twilio`. */
+  readonly title: string;
+  /** The channels that the account pays for. The reports have their subjects. */
+  readonly channels: readonly ChannelId[];
+  /** Below this balance, in the currency of the account, the stage is `low`. */
+  readonly floor: number;
+  /** The longest time with no read that passed. After it, the stage is `unread`. */
+  readonly maxAge: Duration;
+  /** The start of the watch. With no read, the time of `unread` counts from it. */
+  readonly since: Instant;
+  /** The last read that passed. */
+  readonly read?: BalanceRead;
 }
 
 /**
@@ -870,7 +908,7 @@ export interface PersonWatch {
   readonly places: readonly PlaceId[];
   /**
    * The subjects that the person watches. The health reports of the sources have the subjects of
-   * the system `alerts.source`, and the quota reports have the subjects of the system `alerts.channel`. So the
+   * the system `alerts.source`. The quota and balance reports have the subjects of the system `alerts.channel`. So the
    * person who operates the system watches `{ system: "alerts.source" }` and `{ system: "alerts.channel" }`.
    */
   readonly subjects?: readonly SubjectWatch[];

@@ -7,6 +7,7 @@
 import type { WallClock } from "@mark1russell7/algebra/clock";
 import type { ChannelQuota, Duration, FetchOutcome, Instant, ReportId, SourceDescriptor, SourceId, SourceProcedures, Watch } from "@mark1russell7/alerts";
 import { errorMessage } from "@mark1russell7/text";
+import type { BalanceWatch } from "./balance.ts";
 import { createDispatcher, type DeliveryOptions, type DeliveryStep } from "./delivery.ts";
 import { envelope, type RuntimeEvent } from "./events.ts";
 import { fetchEvents } from "./fetch.ts";
@@ -54,6 +55,11 @@ export interface RuntimeOptions {
    * line of system reports. A throw keeps each open line of a quota as it is.
    */
   readonly quotas?: () => readonly ChannelQuota[];
+  /**
+   * The watches of the balances of the paid provider accounts. Each pass starts `check` of each watch, next to
+   * its fetches. Each stage of a balance is a line of system reports.
+   */
+  readonly balances?: readonly BalanceWatch[];
   /** The runtime starts this hook at the end of each pass with no error. The outside heartbeat goes here. */
   readonly onPass?: (pass: Pass) => void | Promise<void>;
 }
@@ -156,6 +162,10 @@ export function openRuntime(options: RuntimeOptions): Runtime {
     return [...conflicts, ...more];
   };
 
+  const watches = options.balances ?? [];
+  const providers = watches.map((watch) => watch.provider);
+  if (new Set(providers).size !== providers.length) throw new Error("Two balance watches have the same provider. Give one watch to each account.");
+
   // A fault of the store of a gate ends no line of a quota. The notes of the heartbeat tell of the fault.
   const readQuotas = (): readonly ChannelQuota[] | undefined => {
     if (options.quotas === undefined) return [];
@@ -175,14 +185,17 @@ export function openRuntime(options: RuntimeOptions): Runtime {
         const descriptor = config.sources[at]!;
         return nextFetch(state, descriptor) <= start ? [{ source, descriptor }] : [];
       });
+      // A watch reads only when it is due, and its check does not throw. It runs next to the fetches.
+      const checks = Promise.all(watches.map((watch) => watch.check(clock, stop)));
       // Each fetch ends before the pass ends, also when one of them fails. Thus no fetch of a pass runs on in the next pass.
       const settled = await Promise.allSettled(due.map(({ source, descriptor }) => fetchOne(source, descriptor, stop)));
+      await checks;
       const failed = settled.find((result) => result.status === "rejected");
       if (failed !== undefined) throw failed.reason;
       const conflicts = settled.flatMap((result) => (result.status === "fulfilled" ? result.value : []));
 
       const at = clock.now();
-      const view = systemView(state, config, at, readQuotas());
+      const view = systemView(state, config, at, readQuotas(), watches.flatMap((watch) => watch.balance() ?? []));
       const event = systemEvent(view);
       if (event !== undefined) conflicts.push(...append([event]));
 
@@ -190,10 +203,10 @@ export function openRuntime(options: RuntimeOptions): Runtime {
       const delivery = await dispatcher?.step(at);
       if (delivery !== undefined) conflicts.push(...delivery.conflicts);
 
-      // A source can come due after `start`, while the fetches of the pass run. A fetch that runs to its limit of one
-      // interval also ends at its next fetch. Such a source is due work, not a fault: its wake is the first instant after the pass.
-      const sources = earliest(config.sources.map((descriptor) => nextFetch(state, descriptor)));
-      const wakeAt = earliest([sources === undefined ? undefined : Math.max(sources, at + 1), view.wakeAt, delivery?.wakeAt]);
+      // A source or a balance watch can come due after `start`, while the fetches of the pass run. A fetch that runs to its
+      // limit of one interval also ends at its next fetch. Such work is due, not a fault: its wake is the first instant after the pass.
+      const nextWork = earliest([...config.sources.map((descriptor) => nextFetch(state, descriptor)), ...watches.map((watch) => watch.nextReadAt())]);
+      const wakeAt = earliest([nextWork === undefined ? undefined : Math.max(nextWork, at + 1), view.wakeAt, delivery?.wakeAt]);
       const pass: Pass = {
         at,
         fetched: due.map(({ descriptor }) => descriptor.id),

@@ -2,10 +2,10 @@ import { random, seedsFrom } from "@mark1russell7/rigor-generators";
 import { describe, expect, it } from "vitest";
 import { assess } from "./assess.ts";
 import { messageOf } from "./delivery.ts";
-import type { ChannelId, ChannelQuota, Coverage, HealthState, Incident, Observation, PersonId, PersonWatch, PlaceId, Report, ReportId, SourceDescriptor, SourceHealth, SourceId, WatchedPlace } from "./contracts.ts";
+import type { ChannelId, ChannelQuota, Coverage, HealthState, Incident, Observation, PersonId, PersonWatch, PlaceId, ProviderBalance, Report, ReportId, SourceDescriptor, SourceHealth, SourceId, WatchedPlace } from "./contracts.ts";
 import type { Lateness } from "./lateness.ts";
 import { incidents, normalize } from "./merge.ts";
-import { addSystemReports, CHANNEL_SUBJECT, gapGrade, NO_SYSTEM_LINES, quotaStages, SOURCE_SUBJECT, SYSTEM_SOURCE, systemReports, threats, type SystemLines, type SystemSnapshot } from "./system-reports.ts";
+import { addSystemReports, balanceStages, balanceUnreadAt, CHANNEL_SUBJECT, gapGrade, NO_SYSTEM_LINES, quotaStages, SOURCE_SUBJECT, SYSTEM_SOURCE, systemReports, threats, type SystemLines, type SystemSnapshot } from "./system-reports.ts";
 import { unknownKinds } from "./taxonomy.ts";
 
 const SEEDS = seedsFrom(process.env["SEED"], [1, 2, 3, 4, 5, 6, 7, 8]);
@@ -268,6 +268,97 @@ describe("the quota reports", () => {
       return [incident.kind.code, messageOf(incident, step.reports, send).useReserve ?? false];
     });
     expect(Object.fromEntries(uses)).toEqual({ "system.quota.low": false, "system.quota.reserve": true });
+  });
+
+  it("names the units of the quota in the texts", () => {
+    const step = systemReports(NO_SYSTEM_LINES, snapshot({ quotas: [quota(8_000, { unit: "cents" })] }), 100);
+    expect(step.reports[0]).toMatchObject({ headline: "pushover: 2000 of 10000 cents of the window are left." });
+    expect(step.reports[0]?.description).toContain("At 1000 cents left");
+  });
+});
+
+describe("the balance reports", () => {
+  const DAY = 86_400_000;
+  const START = Date.UTC(2026, 10, 15, 12);
+  const CALL = "twilio-call" as ChannelId;
+  const WATCHER: PersonWatch = { ...NEIGHBOR, subjects: [{ system: CHANNEL_SUBJECT }] };
+  const codes = (reports: readonly Report[]) => reports.map((report) => [report.op, report.kind.code]);
+  const balance = (read?: { readonly balance: number; readonly at?: number }, fields: Partial<ProviderBalance> = {}): ProviderBalance => ({
+    provider: "provider:twilio",
+    title: "Twilio",
+    channels: [CALL],
+    floor: 5,
+    maxAge: 2 * DAY,
+    since: START,
+    ...(read === undefined ? {} : { read: { balance: read.balance, currency: "USD", at: read.at ?? START } }),
+    ...fields,
+  });
+
+  it("reaches low below the floor, empty at 0 or less, and unread at the maximum age", () => {
+    expect(balanceStages(balance({ balance: 5 }), START)).toEqual([]);
+    expect(balanceStages(balance({ balance: 4.99 }), START)).toEqual(["low"]);
+    expect(balanceStages(balance({ balance: 0 }), START)).toEqual(["low", "empty"]);
+    expect(balanceStages(balance({ balance: -0.5 }), START)).toEqual(["low", "empty"]);
+    expect(balanceStages(balance({ balance: 0 }, { floor: 0 }), START)).toEqual(["low", "empty"]);
+    // The age counts from the last read, or from the start of the watch with no read.
+    expect(balanceStages(balance({ balance: 20 }), START + 2 * DAY - 1)).toEqual([]);
+    expect(balanceStages(balance({ balance: 20 }), START + 2 * DAY)).toEqual(["unread"]);
+    expect(balanceStages(balance({ balance: 1 }), START + 3 * DAY)).toEqual(["low", "unread"]);
+    expect(balanceStages(balance(), START + DAY)).toEqual([]);
+    expect(balanceStages(balance(), START + 2 * DAY)).toEqual(["unread"]);
+    expect(balanceUnreadAt(balance({ balance: 1, at: START + DAY }))).toBe(START + 3 * DAY);
+    expect(unknownKinds(["system.balance", "system.balance.low", "system.balance.empty", "system.balance.unread"])).toEqual([]);
+  });
+
+  it("gives one alert for each stage, no update for a new balance, and a cancel when money comes", () => {
+    const low = systemReports(NO_SYSTEM_LINES, snapshot({ balances: [balance({ balance: 1.83164 })] }), START);
+    expect(low.reports).toMatchObject([
+      {
+        op: "alert",
+        status: "system",
+        kind: { code: "system.balance.low", label: "Low balance of a provider" },
+        severity: "moderate",
+        urgency: "expected",
+        areas: [],
+        about: [{ system: CHANNEL_SUBJECT, id: CALL }],
+        headline: "Twilio: the balance is 1.83 USD, below the floor of 5.00.",
+      },
+    ]);
+    expect(Object.keys(low.lines.open)).toEqual(["balance/provider%3Atwilio/low"]);
+    expect(systemReports(low.lines, snapshot({ balances: [balance({ balance: 1.2, at: START + DAY })] }), START + DAY).reports).toEqual([]);
+    const empty = systemReports(low.lines, snapshot({ balances: [balance({ balance: -0.04, at: START + DAY })] }), START + DAY);
+    expect(empty.reports).toMatchObject([{ op: "alert", kind: { code: "system.balance.empty" }, severity: "severe", urgency: "immediate", headline: "Twilio refuses each paid message: the balance is -0.04 USD." }]);
+    const paid = systemReports(empty.lines, snapshot({ balances: [balance({ balance: 20, at: START + DAY + 1 })] }), START + DAY + 1);
+    expect(codes(paid.reports)).toEqual([
+      ["cancel", "system.balance.empty"],
+      ["cancel", "system.balance.low"],
+    ]);
+    expect(paid.lines.open).toEqual({});
+  });
+
+  it("gives the unread line when no read passes, and ends it at the next read", () => {
+    const unread = systemReports(NO_SYSTEM_LINES, snapshot({ balances: [balance()] }), START + 2 * DAY);
+    expect(unread.reports).toMatchObject([
+      { op: "alert", kind: { code: "system.balance.unread" }, severity: "moderate", headline: `The balance of Twilio has no read since the start of the watch at ${new Date(START).toISOString()}.` },
+    ]);
+    const old = systemReports(NO_SYSTEM_LINES, snapshot({ balances: [balance({ balance: 9, at: START })] }), START + 2 * DAY);
+    expect(old.reports[0]).toMatchObject({ headline: `The balance of Twilio has no read since ${new Date(START).toISOString()}.` });
+    const read = systemReports(unread.lines, snapshot({ balances: [balance({ balance: 9, at: START + 2 * DAY })] }), START + 2 * DAY);
+    expect(codes(read.reports)).toEqual([["cancel", "system.balance.unread"]]);
+  });
+
+  it("keeps each open line of a balance when the snapshot has no balances, and ends the lines of a provider that the snapshot does not have", () => {
+    const low = systemReports(NO_SYSTEM_LINES, snapshot({ balances: [balance({ balance: 1 })], quotas: [] }), START);
+    expect(systemReports(low.lines, snapshot(), START + 1).reports).toEqual([]);
+    expect(codes(systemReports(low.lines, snapshot({ balances: [] }), START + 1).reports)).toEqual([["cancel", "system.balance.low"]]);
+  });
+
+  it("goes at notice to the person who watches the channels of the account, and rebuilds from its reports", () => {
+    const step = systemReports(NO_SYSTEM_LINES, snapshot({ balances: [balance({ balance: 0 }, { channels: [CALL, "twilio-sms" as ChannelId] })] }), START);
+    expect(step.reports[0]?.about.map((subject) => subject.id)).toEqual([CALL, "twilio-sms"]);
+    expect(levels(step.reports, WATCHER, START)).toEqual(["notice", "notice"]);
+    expect(levels(step.reports, OPERATOR, START)).toEqual(["none", "none"]);
+    expect(addSystemReports(NO_SYSTEM_LINES, step.reports, step.observations)).toEqual(step.lines);
   });
 });
 

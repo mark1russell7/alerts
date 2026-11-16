@@ -10,8 +10,8 @@
  * The source atlas (`@mark1russell7/alerts-atlas`) uses these codes as its signal classes. Each code has
  * its plain name and its summary here, and in no other place. A new code comes here first, in its pull request.
  */
-import { COVERAGE_KIND, HEALTH_KIND, QUOTA_KIND } from "./assess.ts";
-import type { Category, HealthState, QuotaStage } from "./contracts.ts";
+import { BALANCE_KIND, COVERAGE_KIND, HEALTH_KIND, QUOTA_KIND } from "./assess.ts";
+import type { BalanceStage, Category, HealthState, QuotaStage } from "./contracts.ts";
 
 /** One code of the taxonomy: its plain name and one plain sentence about it. */
 export interface KindEntry {
@@ -65,6 +65,13 @@ const QUOTA_ENTRIES: Readonly<Record<QuotaStage, KindEntry>> = {
   low: entry("Low quota of a channel", "The window of a channel has 2 reserves of units or fewer left."),
   reserve: entry("Quota of a channel in its reserve", "The window of a channel has its reserve or fewer units left, so the channel sends only life-safety messages."),
   spent: entry("Spent quota of a channel", "The provider of a channel refuses each message, also a life-safety message."),
+};
+
+// The balance kinds of the core: one for each stage of the balance of a provider account.
+const BALANCE_ENTRIES: Readonly<Record<BalanceStage, KindEntry>> = {
+  low: entry("Low balance of a provider", "The balance of a paid provider account is below its floor."),
+  empty: entry("Empty balance of a provider", "The balance of a paid provider account is 0 or less, so the provider refuses each paid message."),
+  unread: entry("Balance of a provider not read", "No read of the balance of a paid provider account passed for the maximum age, so a low balance is not seen."),
 };
 
 // The health kinds of the core: one for each health state, and `late` for the lateness against another source.
@@ -379,6 +386,8 @@ export const TAXONOMY: Readonly<Record<string, KindEntry>> = {
   [COVERAGE_KIND]: entry("Coverage of a kind", "A report that too few healthy sources cover a kind at a place. The covered code follows the prefix."),
   [QUOTA_KIND]: entry("Quota of a channel", "The quota of a channel: the units that it can send in one window of its provider."),
   ...Object.fromEntries(Object.entries(QUOTA_ENTRIES).map(([stage, value]) => [`${QUOTA_KIND}.${stage}`, value])),
+  [BALANCE_KIND]: entry("Balance of a provider", "The balance of a paid provider account: the money that its channels can spend."),
+  ...Object.fromEntries(Object.entries(BALANCE_ENTRIES).map(([stage, value]) => [`${BALANCE_KIND}.${stage}`, value])),
 };
 
 /**
