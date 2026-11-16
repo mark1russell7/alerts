@@ -1,8 +1,12 @@
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { fakeWallClock } from "@mark1russell7/algebra/clock";
 import type { ChannelId } from "@mark1russell7/alerts";
+import { SqliteHostStateStore } from "polite-crawler";
 import { memoryQuotaStore, quotaGate } from "polite-crawler/api";
 import { describe, expect, it } from "vitest";
-import { balanceWatch, spendQuota, spendUnits, type BalanceReading, type BalanceWatchOptions } from "./balance.ts";
+import { balanceWatch, spendGates, spendQuota, spendUnits, type BalanceReading, type BalanceWatchOptions } from "./balance.ts";
 
 const T0 = Date.UTC(2026, 10, 15, 12);
 const HOUR = 3_600_000;
@@ -124,6 +128,30 @@ describe("the quota of the spend", () => {
   it("rounds the cost of a send up to whole cents, after a round to a millionth of a dollar", () => {
     expect([0, 0.0075, 0.01, 0.04, 0.07, 0.1, 0.123, 1.5].map(spendUnits)).toEqual([0, 1, 1, 4, 7, 10, 13, 150]);
     for (const cost of [-0.01, Number.NaN, Number.POSITIVE_INFINITY]) expect(() => spendUnits(cost)).toThrow();
+  });
+
+  it("gives two gates on one count: the reserve is only for life-safety, and the file keeps the count across a restart", () => {
+    const quota = spendQuota({ name: "Twilio spend", monthlyUsd: 0.2, reserveUsd: 0.08, timeZone: "America/Chicago" });
+    const folder = mkdtempSync(join(tmpdir(), "alerts-spend-"));
+    try {
+      const open = () => new SqliteHostStateStore(join(folder, "quotas.sqlite"));
+      const first = open();
+      const gates = spendGates(quota, { key: "twilio:account", store: first, now: () => T0 });
+      for (let call = 0; call < 3; call += 1) gates.gate.take(4);
+      expect(() => gates.gate.take(4)).toThrow();
+      gates.lifeSafety.take(4);
+      expect([gates.gate.state().used, gates.lifeSafety.state().used]).toEqual([16, 16]);
+      first.close();
+      // A restart opens the file again. The new gates see the 16 cents, so life-safety has one call left.
+      const second = open();
+      const again = spendGates(quota, { key: "twilio:account", store: second, now: () => T0 });
+      again.lifeSafety.take(4);
+      expect(() => again.lifeSafety.take(4)).toThrow();
+      expect(again.gate.state()).toMatchObject({ used: 20, left: 0 });
+      second.close();
+    } finally {
+      rmSync(folder, { recursive: true, force: true });
+    }
   });
 
   it("refuses a cap of 0 or less, and a reserve that is not below the cap", () => {

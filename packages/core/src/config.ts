@@ -3,6 +3,7 @@
  * the owner, and the load that checks it and makes the recipients. The repository holds no
  * configuration. The functions are pure, and the caller gives the secrets.
  */
+import { localTime } from "@mark1russell7/algebra/clock";
 import type { Address, ChannelDescriptor, ChannelId, EscalationPolicy, Instant, NodeKey, PersonId, PersonWatch, PlaceId, Position, RegionCode, SourceId, WatchedPlace } from "./contracts.ts";
 import { recipientProblems, type Recipient } from "./delivery.ts";
 import type { Expectation } from "./lateness.ts";
@@ -53,6 +54,23 @@ export interface ContactConfig {
   readonly address: Readonly<Record<string, AddressValue>>;
 }
 
+/**
+ * The money rules of one paid provider account: the cap of the spend of its channels, and the floor of its balance.
+ * The values are private. Only the configuration holds them.
+ */
+export interface SpendConfig {
+  /** The provider, as an id in the `dependsOn` of its channels: for example `provider:twilio`. */
+  readonly provider: string;
+  /** The most that the channels of the account spend in one calendar month, in US dollars. */
+  readonly monthlyUsd: number;
+  /** The last part of the monthly cap that only `life-safety` messages use, in US dollars. The default is 0. */
+  readonly reserveUsd?: number;
+  /** Below this balance of the account, in the currency of the account, the system reports the line `low`. */
+  readonly floor: number;
+  /** The time zone of the start of the month, as an IANA name: for example `America/New_York`. */
+  readonly timeZone: string;
+}
+
 /** The private configuration of the people and the places. Each copy of the system loads the same configuration. */
 export interface AlertConfig {
   readonly format: typeof CONFIG_FORMAT;
@@ -68,6 +86,8 @@ export interface AlertConfig {
   readonly contact?: string;
   /** The settings of the expectations of the instance. Each entry names an expectation by its id. */
   readonly expectations?: readonly ExpectationConfig[];
+  /** The money rules of each paid provider account. A provider with no entry has no cap and no watch of its balance. */
+  readonly spend?: readonly SpendConfig[];
 }
 
 /** The settings of one expectation of the instance, for example the WEA check of a copy source. */
@@ -124,6 +144,8 @@ export interface LoadedConfig {
  * - a place of a person or of a rule that the configuration or the person does not have
  * - a contact of an unknown person, two contacts of a person on one channel, and a secret that the store does not have
  * - two settings of one expectation
+ * - two spend entries of one provider, and a provider that no channel depends on
+ * - a reserve of a spend entry that is not below its cap, and a time zone that is not an IANA name
  * - each problem of `recipientProblems` for each person.
  */
 export function loadConfig(config: AlertConfig, channels: readonly ChannelDescriptor[], secret: SecretLookup): LoadedConfig {
@@ -181,6 +203,17 @@ export function loadConfig(config: AlertConfig, channels: readonly ChannelDescri
       else fields.push([field, found]);
     }
     ofPerson.set(channel, Object.fromEntries(fields));
+  }
+
+  const providers = new Set<string>();
+  for (const spend of config.spend ?? []) {
+    const { provider } = spend;
+    if (providers.has(provider)) problems.push(`Two spend entries are for the provider ${provider}.`);
+    providers.add(provider);
+    // A typo of a provider gives a cap that no send takes from.
+    if (!channels.some((channel) => channel.dependsOn.includes(provider))) problems.push(`The spend entry of ${provider} names a provider that no channel depends on.`);
+    if (!((spend.reserveUsd ?? 0) < spend.monthlyUsd)) problems.push(`The reserve of the spend of ${provider} is not below its monthly cap.`);
+    if (localTime(0, spend.timeZone) === undefined) problems.push(`The time zone of the spend of ${provider} is not an IANA name.`);
   }
 
   const recipients = config.people.map((entry): Recipient => {

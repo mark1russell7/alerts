@@ -114,6 +114,7 @@ import {
   type PersonConfig,
   type PlaceConfig,
   type SecretLookup,
+  type SpendConfig,
   type SecretRef,
 } from "./config.ts";
 import type { Recipient } from "./delivery.ts";
@@ -1189,6 +1190,19 @@ export const contactConfigSchema: z.ZodType<ContactConfig, ContactConfig> = sche
   z.strictObject({ person: personIdSchema, channel: channelIdSchema, address: z.record(z.string(), addressValueSchema).readonly() }).readonly(),
 );
 
+/** This schema checks the money rules of one paid provider account. `loadConfig` checks the provider, the reserve and the time zone. */
+export const spendConfigSchema: z.ZodType<SpendConfig, SpendConfig> = schemaOf<SpendConfig>()(
+  z
+    .strictObject({
+      provider: z.string().min(1),
+      monthlyUsd: z.number().positive(),
+      reserveUsd: z.number().nonnegative().exactOptional(),
+      floor: z.number(),
+      timeZone: z.string().min(1),
+    })
+    .readonly(),
+);
+
 /**
  * This schema checks the JSON of the private configuration at the load. It checks the form of each
  * value. Then `loadConfig` checks the references: the ids, the places of each person, the contacts and
@@ -1204,6 +1218,7 @@ export const alertConfigSchema: z.ZodType<AlertConfig, AlertConfig> = schemaOf<A
       policies: z.array(escalationPolicySchema).readonly(),
       contact: z.string().refine(isContactUrl, "The contact is not an https URL or a mailto URL.").exactOptional(),
       expectations: z.array(expectationConfigSchema).readonly().exactOptional(),
+      spend: z.array(spendConfigSchema).readonly().exactOptional(),
     })
     .readonly(),
 );
