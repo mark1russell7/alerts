@@ -156,6 +156,20 @@ export interface RecoveredEvent extends Envelope<"recovered"> {
   readonly problems: readonly string[];
 }
 
+/**
+ * Old incidents leave the state of the runtime (AL-47). Each report of the event gets a tombstone until `until`. The fold
+ * removes the parts of the reports, the starts and ends of their escalations, and their cancelled keys. The log keeps
+ * each event of the reports. The event stays in its copy: each copy finds its retirements from the shared parts.
+ */
+export interface RetiredEvent extends Envelope<"retired"> {
+  /** The reports of the retired incidents, in the order of their ids. */
+  readonly reports: readonly ReportId[];
+  /** The end of the tombstones. A tombstone keeps a late copy of a report out of the state until this time. */
+  readonly until: Instant;
+  /** The keys of `cancelled` of the deliveries of the retired incidents, sorted. A delivery key does not name its incident. */
+  readonly cancelled: readonly string[];
+}
+
 /** The reports of one fetch of another copy. It has no fetch record and no cursor: each copy has its own health and cursors. */
 export interface SharedFetchEvent extends Envelope<"fetch"> {
   readonly reports: readonly Report[];
@@ -213,7 +227,8 @@ export type RuntimeEvent =
   | ClockEvent
   | RecoveredEvent
   | ImportEvent
-  | ExchangeEvent;
+  | ExchangeEvent
+  | RetiredEvent;
 
 /** The types of the events. */
 export const EVENT_TYPES: readonly RuntimeEvent["type"][] = [
@@ -235,6 +250,7 @@ export const EVENT_TYPES: readonly RuntimeEvent["type"][] = [
   "recovered",
   "import",
   "exchange",
+  "retired",
 ];
 
 /**
