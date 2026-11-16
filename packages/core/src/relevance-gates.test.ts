@@ -1,6 +1,6 @@
 // The gates of the relevance (AL-35, `docs/RELEVANCE.md`, the section "The gates"). Each graph here is made up.
 
-import { ONE, ZERO, add, compare, fromFloat, mul, sub, type Rational } from "@mark1russell7/rational";
+import { RATIONAL_RING, fromFloat, type Rational } from "@mark1russell7/rational";
 import { random, seedsFrom, type Random } from "@mark1russell7/rigor-generators";
 import { describe, expect, it } from "vitest";
 import type { Estimate, InterestEdge, InterestGraph, Mute, NodeKey, PersonId, RelevancePolicy, SubjectEntry, SubjectKind } from "./contracts.ts";
@@ -9,9 +9,8 @@ import { relevanceSchema } from "./schemas.ts";
 
 const SEEDS = seedsFrom(process.env["SEED"], [1, 2, 3, 4, 5, 6, 7, 8]);
 
-// The exact arithmetic of the gates. This literal ends when `@mark1russell7/rational` 0.1.3 is on npm with RATIONAL_RING
-// (mark1russell7/algebra PR 179). Then the gates import RATIONAL_RING, and this literal goes.
-const EXACT: ReachArithmetic<Rational> = { ring: { zero: ZERO, one: ONE, add, sub, mul, compare }, of: fromFloat };
+// The exact arithmetic of the gates: the ring of the rationals, and each float weight as its exact rational.
+const EXACT: ReachArithmetic<Rational> = { ring: RATIONAL_RING, of: fromFloat };
 
 const POLICY: RelevancePolicy = { hopCap: 4, topPaths: 2, mandatory: "silent" };
 const AT = Date.UTC(2026, 10, 20);
@@ -81,7 +80,7 @@ function randomCase(r: Random): Case {
   }
   const entries = r.shuffle(SUBJECTS).slice(0, r.int(0, 3)).map(([node, kind]) => entry(node, kind, weight(r)));
   const policy: RelevancePolicy = { hopCap: r.int(1, 4), topPaths: r.int(1, 3), mandatory: r.pick(["absent", "silent"] as const) };
-  return { graph: graphOf(edges), input: input(r.pick(["met.tornado.warning", "infra.telecom", "other.unknown"]), entries), policy };
+  return { graph: graphOf(edges), input: input(r.pick(["met.tornado", "infra.telecom", "other.unknown"]), entries), policy };
 }
 
 // The edges of the problem: one edge from the event to each entry, then each edge that is on.
@@ -305,21 +304,21 @@ describe("the gate: who each class reaches", () => {
   }[] = [
     {
       name: "a tornado warning near the home, after the mute ends",
-      input: { ...input("met.tornado.warning", TORNADO), at: Date.UTC(2026, 11, 2) },
+      input: { ...input("met.tornado", TORNADO), at: Date.UTC(2026, 11, 2) },
       reach: { value: 0.66, low: 0.636, high: 0.684 },
       why: { rule: "reach.place.base", anchor: "place:home", coverage: 1 },
     },
-    { name: "a tornado warning in the mute", input: input("met.tornado.warning", TORNADO), reach: { value: 0, low: 0, high: 0 }, muted: "absent" },
+    { name: "a tornado warning in the mute", input: input("met.tornado", TORNADO), reach: { value: 0, low: 0, high: 0 }, muted: "absent" },
     {
       name: "a tornado warning of the mandatory class in the mute, with the policy silent",
-      input: input("met.tornado.warning", TORNADO, true),
+      input: input("met.tornado", TORNADO, true),
       reach: { value: 0.66, low: 0.636, high: 0.684 },
       why: { rule: "reach.place.base", anchor: "place:home", coverage: 1 },
       muted: "silent",
     },
     {
       name: "a tornado warning of the mandatory class in the mute, with the policy absent",
-      input: input("met.tornado.warning", TORNADO, true),
+      input: input("met.tornado", TORNADO, true),
       policy: { ...POLICY, mandatory: "absent" },
       reach: { value: 0, low: 0, high: 0 },
       muted: "absent",
@@ -339,10 +338,10 @@ describe("the gate: who each class reaches", () => {
       // The path region -> DNS -> bank -> person has two nodes between the subject and the person.
       why: { rule: "reach.entity.person", anchor: "domain:bank.example", via: "domain:dns.example", coverage: 0.315 / 0.3446 },
     },
-    { name: "an event in a state with its edge off", input: input("met.flood.warning", [entry("iso3166:US-KS", "place")]), reach: { value: 0, low: 0, high: 0 } },
+    { name: "an event in a state with its edge off", input: input("met.flood.flash", [entry("iso3166:US-KS", "place")]), reach: { value: 0, low: 0, high: 0 } },
     {
       name: "an event at the work place",
-      input: input("met.flood.warning", [entry("place:work", "place")]),
+      input: input("met.flood.flash", [entry("place:work", "place")]),
       reach: { value: 0.6, low: 0.5, high: 0.7 },
       why: { rule: "reach.place.places", anchor: "place:work", coverage: 1 },
     },
@@ -371,7 +370,7 @@ describe("the gate: who each class reaches", () => {
   });
 
   it("gives the weakest edge and the next question of the tornado warning", () => {
-    const result = relevance({ ...input("met.tornado.warning", TORNADO), at: Date.UTC(2026, 11, 2) }, PERSON_GRAPH, POLICY);
+    const result = relevance({ ...input("met.tornado", TORNADO), at: Date.UTC(2026, 11, 2) }, PERSON_GRAPH, POLICY);
     expect(result.paths).toEqual([
       { subject: "place:home", edges: ["i1"], chance: 0.6 },
       { subject: "wikidata:Q123", edges: ["e3", "i1"], chance: 0.15 },
@@ -392,7 +391,7 @@ describe("the gate: compatibility", () => {
       const watched = r.shuffle(places).slice(0, r.int(0, 4));
       const graph = graphOf(watched.map((node, at) => ({ id: `p${at}`, from: node, to: "person", kind: "interest", weight: point(1), origin: "places", on: true })));
       const hit = r.shuffle(places).slice(0, r.int(0, 4));
-      const result = relevance(input("met.tornado.warning", hit.map((node) => entry(node, "place"))), graph, POLICY);
+      const result = relevance(input("met.tornado", hit.map((node) => entry(node, "place"))), graph, POLICY);
       const matched = hit.some((node) => watched.includes(node));
       expect(result.reach).toEqual(matched ? { value: 1, low: 1, high: 1 } : { value: 0, low: 0, high: 0 });
       expect(result.why?.rule).toBe(matched ? "reach.place.places" : undefined);
@@ -427,8 +426,8 @@ describe("relevance", () => {
 
   it("counts two entries of one node as one, with the larger hit", () => {
     const graph = graphOf(EDGES);
-    const one = relevance(input("met.flood.warning", [entry("place:work", "place", point(0.5))]), graph, POLICY);
-    const two = relevance(input("met.flood.warning", [entry("place:work", "place", point(0.25)), entry("place:work", "place", point(0.5))]), graph, POLICY);
+    const one = relevance(input("met.flood.flash", [entry("place:work", "place", point(0.5))]), graph, POLICY);
+    const two = relevance(input("met.flood.flash", [entry("place:work", "place", point(0.25)), entry("place:work", "place", point(0.5))]), graph, POLICY);
     expect(two).toEqual(one);
   });
 
@@ -449,8 +448,8 @@ describe("muteOf", () => {
   const graph = graphOf([], mutes);
 
   it("matches a kind by its prefix at a dot, and needs both lists when a mute has both", () => {
-    expect(muteOf(input("met.tornado.warning", [entry("place:home", "place")]), graph, POLICY)).toEqual({ mute: "m1", effect: "absent" });
-    expect(muteOf(input("met.tornado.warning", [entry("place:work", "place")]), graph, POLICY)).toEqual({ mute: "m2", effect: "absent" });
+    expect(muteOf(input("met.tornado", [entry("place:home", "place")]), graph, POLICY)).toEqual({ mute: "m1", effect: "absent" });
+    expect(muteOf(input("met.tornado", [entry("place:work", "place")]), graph, POLICY)).toEqual({ mute: "m2", effect: "absent" });
     expect(muteOf(input("metro.closure", [entry("place:home", "place")]), graph, POLICY)).toBeUndefined();
   });
 });
@@ -459,7 +458,7 @@ describe("topicEntry", () => {
   it("gives the node of the longest prefix with an edge, also an edge that is off", () => {
     expect(topicEntry("infra.telecom.911-outage", PERSON_GRAPH)?.node).toBe("topic:infra.telecom");
     expect(topicEntry("infra.power.outage", PERSON_GRAPH)?.node).toBe("topic:infra");
-    expect(topicEntry("met.tornado.warning", PERSON_GRAPH)).toBeUndefined();
+    expect(topicEntry("met.tornado", PERSON_GRAPH)).toBeUndefined();
     const off = graphOf(PERSON_GRAPH.edges.map((e) => (e.id === "t2" ? { ...e, on: false } : e)));
     expect(topicEntry("infra.telecom", off)?.node).toBe("topic:infra.telecom");
     expect(relevance(input("infra.telecom", [topicEntry("infra.telecom", off)!]), off, POLICY).reach.value).toBe(0);
