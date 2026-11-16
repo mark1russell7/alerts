@@ -104,7 +104,7 @@ describe("the declaration of the service", () => {
     it(`passes describe() and lint() with the profile ${name}`, () => {
       // describe() throws when the declaration lacks a policy, the startup budget, the phases or the effect of a second signal
       const description = declare({ port: 0, probePort: 0, profile, loop: loopOf(), log: { close: () => undefined } }).describe();
-      expect(description.dependencies.map((dependency) => dependency.name)).toEqual(["log", "shapes", "quotas"]);
+      expect(description.dependencies.map((dependency) => dependency.name)).toEqual(["log", "shapes", "quotas", "sources"]);
       expect(description.transports.map((transport) => [transport.kind, transport.name])).toEqual([
         ["server", "http"],
         ["worker", "passes"],
@@ -184,6 +184,8 @@ describe("the lifecycle of the service", () => {
     const loop = loopOf();
     let closes = 0;
     const log = { close: () => (closes += 1) };
+    let sessions = 0;
+    const sources = { close: async () => void (sessions += 1) };
     // A built page with one file. The path / gives it.
     const page = await mkdtemp(join(tmpdir(), "alerts-page-"));
     await writeFile(join(page, PAGE_INDEX), "<!doctype html><title>the map</title>");
@@ -193,7 +195,7 @@ describe("the lifecycle of the service", () => {
       asked.push(since);
       return historyOf(since);
     };
-    const life = await declare({ port, probePort, profile: localDev, loop, log, map: () => EMPTY_MAP, health: () => EMPTY_HEALTH, history, page }).run({ process: embeddedProcess() });
+    const life = await declare({ port, probePort, profile: localDev, loop, log, sources, map: () => EMPTY_MAP, health: () => EMPTY_HEALTH, history, page }).run({ process: embeddedProcess() });
     try {
       // The probe answers after the start of each transport. The worker starts the first pass at the start of the service.
       await waitUntil(() => answers(`http://127.0.0.1:${probePort}/readiness`), "the readiness probe");
@@ -229,8 +231,9 @@ describe("the lifecycle of the service", () => {
       expect((await fetch(`http://127.0.0.1:${port}/hello`)).status).toBe(404);
       expect((await fetch(`http://127.0.0.1:${probePort}/readiness`)).status).toBe(200);
       expect((await fetch(`http://127.0.0.1:${probePort}/liveness`)).status).toBe(200);
-      // The log stays open while the service operates.
+      // The log and the sessions of the sources stay open while the service operates.
       expect(closes).toBe(0);
+      expect(sessions).toBe(0);
     } finally {
       await life.shutdown("the test ended");
       await rm(page, { recursive: true, force: true });
@@ -238,5 +241,6 @@ describe("the lifecycle of the service", () => {
     expect(await life.done).toBe(0);
     expect(life.errors).toEqual([]);
     expect(closes).toBe(1);
+    expect(sessions).toBe(1);
   }, 3 * WAIT_LIMIT_MS);
 });

@@ -415,6 +415,8 @@ export interface FetchSignal {
  * - `check`: a pure function. It examines the observations of a fetch against the canary.
  * - `locate`: optional. It reads `network` and is idempotent. It gives the region codes of a
  *   position, for a source that has a lookup: the `/points` query of the NWS API.
+ * - `close`: optional. It ends the resources of the source, for example the session of a stream. The runtime starts
+ *   it one time, at the stop, after the last fetch. It does not throw.
  */
 export interface SourceProcedures {
   describe(): SourceDescriptor;
@@ -422,6 +424,7 @@ export interface SourceProcedures {
   map(input: { readonly observation: Observation }): MapResult;
   check?(input: { readonly observations: readonly Observation[] }): CanaryResult;
   locate?(input: { readonly at: Position }): Promise<LocateOutcome>;
+  close?(): Promise<void>;
 }
 
 /** The result of a lookup of the region codes of a position. */

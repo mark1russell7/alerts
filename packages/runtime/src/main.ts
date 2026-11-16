@@ -56,7 +56,7 @@ import { EXCHANGE_TOKEN_LENGTH, exchangeCall, exchangeHost } from "./exchange-ht
 import { heartbeat, heldOf, type PassSummary } from "./heartbeat.ts";
 import { quotaNote } from "./quota.ts";
 import { PROFILES, declare } from "./index.ts";
-import { daemonCheck, INSTANCE_CHECK, LOUD_PING_URL_KEY, openInstance, pingKeyOf, pingTargets, userAgent } from "./instance.ts";
+import { daemonCheck, instanceCheck, LOUD_PING_URL_KEY, openInstance, pingKeyOf, pingTargets, userAgent } from "./instance.ts";
 import { openCheckedRuntimeLog } from "./log.ts";
 import type { ExchangeRound } from "./peers.ts";
 import { GOOD_FILE, privateFiles, reloadHook, startConfig, type CheckOf } from "./reload.ts";
@@ -83,7 +83,7 @@ async function runtime(): Promise<ServiceBuilder> {
   // of a start that stopped before it was ready, give way to the last good set. A problem names the line and the key of a
   // bad line, or the code of a read error. It holds no value, no address, no URL and no path.
   // The last good set holds the keys, thus each file that the start writes has the permissions 0600.
-  const checkOf: CheckOf = name === "daemon" ? daemonCheck : () => INSTANCE_CHECK;
+  const checkOf: CheckOf = name === "daemon" ? daemonCheck : instanceCheck;
   const files = privateFiles(home, configPath(process.env, process.cwd()));
   const loaded = await startConfig(files, checkOf, { write: (path, text) => writeFileAtomic(path, text, { mode: 0o600 }), remove: (path) => rm(path, { force: true }) });
   if (loaded.use === "good") console.error(`The runtime uses the last good set ${GOOD_FILE} of the private files:\n- ${loaded.fallback.join("\n- ")}`);
@@ -235,7 +235,7 @@ async function runtime(): Promise<ServiceBuilder> {
   );
   console.log(built ? "The API serves the local page at the path /." : "The local page is not built, thus the path / gives 404. Build it: pnpm --filter ./packages/site build");
 
-  // The service closes the log and the store of shapes in its shutdown.
+  // The service closes the log, the store of shapes and the sessions of the sources in its shutdown.
   const service = declare({
     port: port("PORT", 8080),
     probePort: port("PROBE_PORT", 9090),
@@ -244,6 +244,7 @@ async function runtime(): Promise<ServiceBuilder> {
     log,
     shapes: instance.shapes,
     quotas,
+    sources: instance.runtime,
     map: instance.map,
     health: instance.health,
     history: instance.history,
