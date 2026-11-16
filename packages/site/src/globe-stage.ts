@@ -1,7 +1,7 @@
 /**
- * The globe of the local page: a stage of `@mark1russell7/visuals` with the parts of `globe-view.ts`. A person turns
- * the globe with a drag, and goes nearer with the wheel. The name of each place is a text of the page next to its dot.
- * A browser with no WebGL 2 gets no globe. Then the page shows the flat map of `map-view.ts`.
+ * The globe of the local page and of the demo: a stage of `@mark1russell7/visuals` with the parts of `globe-view.ts`.
+ * A person turns the globe with a drag, and goes nearer with the wheel. The name of each place is a text of the page
+ * next to its dot. A browser with no WebGL 2 gets no globe. Then the page shows the flat map of `map-view.ts`.
  */
 
 import { ASSESSED_LEVELS, type AssessedLevel, type MapPayload } from "@mark1russell7/alerts";
@@ -10,7 +10,7 @@ import type { StageView } from "@mark1russell7/visuals";
 import { createGlobe, GLOBE_POLAR, globePoint, inSight, pointRadius, regionView, type GlobeContent, type GlobeStyle, type GlobeTheme } from "@mark1russell7/visuals/globe";
 import { createLabels, type StageLabel } from "@mark1russell7/visuals/labels";
 import { createStage, stackContents, type Stage } from "@mark1russell7/visuals/three";
-import { areaKind, GAP_KIND, globeParts, incidentRecord, outlineKind, pinKind, ZONE_KIND, type GlobeName, type GlobeParts, type GlobeValue } from "./globe-view.ts";
+import { areaKind, GAP_KIND, globeParts, incidentRecord, outlineKind, pinKind, ZONE_KIND, type GlobeName, type GlobeParts, type GlobePartsOptions, type GlobeValue } from "./globe-view.ts";
 import { mapSummary } from "./map-view.ts";
 
 /** The elements of the page that the globe uses. */
@@ -25,7 +25,7 @@ export interface GlobeElements {
   readonly whole: HTMLButtonElement;
 }
 
-/** The globe of the local page. */
+/** The globe of a page: of the demo, or of the local page. */
 export interface LiveGlobe {
   /**
    * This function shows a map payload on the globe, with the selected incident. With `move`, the camera goes to the
@@ -118,10 +118,11 @@ function onThemeChange(change: () => void): void {
 }
 
 /**
- * This function starts the globe of the local page. It makes the stage at the first payload that the globe can show.
+ * This function starts the globe of a page. It makes the stage at the first payload that the globe can show.
  * `select` gets the anchor of the incident that a person selects on the globe, or `undefined` for no incident.
+ * `options` tells which names the globe shows.
  */
-export function startGlobe(elements: GlobeElements, select: (anchor: string | undefined) => void): LiveGlobe {
+export function startGlobe(elements: GlobeElements, select: (anchor: string | undefined) => void, options: GlobePartsOptions = {}): LiveGlobe {
   let stage: Stage<GlobeValue, GlobeTheme> | undefined;
   /** This value is true after the browser gave no WebGL 2. Then each payload goes to the flat map. */
   let none = false;
@@ -163,7 +164,7 @@ export function startGlobe(elements: GlobeElements, select: (anchor: string | un
     let next: GlobeParts;
     let globe: GlobeContent<GlobeValue>;
     try {
-      next = globeParts(payload);
+      next = globeParts(payload, options);
       // A payload with no shape has no picture. The flat map tells it in words.
       if (next.areas.length === 0 && next.points.length === 0) return false;
       globe = createGlobe({ areas: next.areas, points: next.points, grid: next.grid, nearest: NEAREST, lineWidth: 1.5, highlightWidth: 3 });

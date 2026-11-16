@@ -1,12 +1,12 @@
 /**
- * The view of the demo. It draws one frame of the replay: the map, the view by level, the sources,
- * the incidents and the message of the step. The view only draws: the frames hold each decision.
+ * The view of the demo. It draws one frame of the replay: the view by level, the sources, the incidents and the
+ * message of the step. The view only draws: the frames hold each decision. The map of a frame is in `demo-map.ts`.
  */
 
-import { areasWithoutBlocks, type Assessment, type HealthState, type Incident, type Report, type Position } from "@mark1russell7/alerts";
+import type { Assessment, HealthState, Incident, Report } from "@mark1russell7/alerts";
 import { h } from "@mark1russell7/site-pages/chrome";
-import { LEVEL_WORDS, levelChip, s } from "./draw.ts";
-import { COUNTIES, PEOPLE, PLACES, RIVER, SOURCES, ZONES, type Zone } from "./demo.ts";
+import { LEVEL_WORDS, levelChip } from "./draw.ts";
+import { SOURCES } from "./demo.ts";
 import {
   changeText,
   clock,
@@ -22,26 +22,6 @@ import {
 } from "./explain.ts";
 import { LEVELS_DOWN, topLevel, type Frame } from "./replay.ts";
 
-// The map puts the longitude 0 to 1 on x and the latitude 0.6 to 0 on y. The sea is below the latitude 0.
-const X = (position: Position): number => Math.round(position[0] * 1000);
-const Y = (position: Position): number => Math.round((0.6 - position[1]) * 1000);
-const path = (ring: readonly Position[]): string => `M${ring.map((point) => `${String(X(point))},${String(Y(point))}`).join("L")}Z`;
-const line = (points: readonly Position[]): string => `M${points.map((point) => `${String(X(point))},${String(Y(point))}`).join("L")}`;
-
-/** This function gives the zones that the code areas of an incident cover. */
-export function zonesOf(incident: Pick<Incident, "areas">): Zone[] {
-  const codes = new Set(incident.areas.flatMap((area) => (area.type === "code" ? [`${area.system}:${area.code}`] : [])));
-  return ZONES.filter((zone) => {
-    const county = COUNTIES.find((one) => one.code === zone.county);
-    return codes.has(`ugc:${zone.code}`) || codes.has(`ugc:${zone.county}`) || (county !== undefined && codes.has(`same:${county.same}`));
-  });
-}
-
-const centroid = (ring: readonly Position[]): Position => [
-  ring.reduce((sum, point) => sum + point[0], 0) / ring.length,
-  ring.reduce((sum, point) => sum + point[1], 0) / ring.length,
-];
-
 /** This function gives the assessments of one incident. */
 const of = (frame: Frame, incident: Incident): Assessment[] => frame.assessments.filter((assessment) => assessment.incident === incident.anchor);
 
@@ -50,63 +30,6 @@ const allIncidents = (frame: Frame): Incident[] => [...frame.incidents, ...frame
 
 /** This function gives each assessment of a frame: the assessments of the source and of the system reports. */
 const allAssessments = (frame: Frame): Assessment[] => [...frame.assessments, ...frame.sources.assessments];
-
-/** This function gives the incident level class of the map: the highest level of a person, or `test`. */
-function levelClass(frame: Frame, incident: Incident): string {
-  if (incident.status !== "actual") return "test";
-  return `level-${topLevel(of(frame, incident))}`;
-}
-
-/** This function draws the map of one frame. */
-export function drawMap(frame: Frame, selected: string | undefined, select: (anchor: string) => void): SVGElement {
-  const map = s("svg", { viewBox: "-10 -10 1020 690", role: "img", "aria-labelledby": "map-title", class: "map" });
-  map.append(s("title", { id: "map-title" }, "A map of the made-up region: four zones, the river, the two homes and the areas of the live incidents."));
-  map.append(s("rect", { class: "sea", x: -10, y: 600, width: 1020, height: 80 }));
-  map.append(s("text", { class: "sea-label", x: 930, y: 655 }, "Sea"));
-  for (const zone of ZONES) map.append(s("path", { class: "zone", d: path(zone.ring) }));
-
-  const live = frame.incidents.filter((incident) => incident.live);
-  for (const incident of live) {
-    const chosen = selected === incident.anchor;
-    const group = s("g", {
-      class: `incident ${levelClass(frame, incident)}${chosen ? " selected" : ""}${selected !== undefined && !chosen ? " dim" : ""}`,
-      "data-anchor": incident.anchor,
-    });
-    for (const zone of zonesOf(incident)) group.append(s("path", { class: "area", d: path(zone.ring) }));
-    for (const area of areasWithoutBlocks(incident.areas)) {
-      if (area.type === "polygon") for (const ring of area.rings) group.append(s("path", { class: "shape", d: path(ring) }));
-    }
-    group.addEventListener("click", () => select(incident.anchor));
-    map.append(group);
-  }
-
-  map.append(s("path", { class: "river", d: line(RIVER) }));
-  for (const zone of ZONES) {
-    const [x, y] = centroid(zone.ring);
-    const label = s("text", { class: "zone-label", x: X([x, y]), y: Y([x, y]) - 40 }, zone.name);
-    label.append(s("tspan", { class: "zone-code", x: X([x, y]), dy: 26 }, zone.code));
-    map.append(label);
-  }
-  // A ring marks each home that a live system report names as its area: a gap of the coverage.
-  for (const incident of frame.sources.incidents.filter((one) => one.live)) {
-    for (const area of incident.areas) {
-      const place = area.type === "place" ? PLACES.find((one) => one.id === area.place) : undefined;
-      if (place?.at === undefined) continue;
-      const level = topLevel(frame.sources.assessments.filter((assessment) => assessment.incident === incident.anchor));
-      map.append(s("circle", { class: `gap level-${level}`, "data-place": place.id, cx: X(place.at), cy: Y(place.at), r: 42 }));
-    }
-  }
-  for (const place of PLACES) {
-    if (place.at === undefined) continue;
-    const person = PEOPLE.find((one) => one.places.includes(place.id));
-    const level = person === undefined ? "none" : topLevel(allAssessments(frame).filter((assessment) => assessment.person === person.person));
-    const letter = person === undefined ? "?" : nameOf(person.person).slice(-1);
-    const pin = s("g", { class: `pin level-${level}`, transform: `translate(${String(X(place.at))},${String(Y(place.at))})` });
-    pin.append(s("circle", { r: 22 }), s("text", { y: 8 }, letter));
-    map.append(pin);
-  }
-  return map;
-}
 
 /**
  * This function draws the view by level: a lane for each level, with each person and incident in it.

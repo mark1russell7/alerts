@@ -10,7 +10,6 @@
   --sea: #dbe7f0;
   --grid: #c2d3e0;
   --rim: #58768c;
-  --water: #3b7bbf;
   --ls: #c3262b;
   --urgent: #c25700;
   --notice: #8f6a00;
@@ -31,7 +30,6 @@
     --sea: #1b2630;
     --grid: #2a3a47;
     --rim: #05090c;
-    --water: #6fa8e0;
     --ls: #ff6b6b;
     --urgent: #ff9a52;
     --notice: #e6c04a;
@@ -51,7 +49,6 @@
   --sea: #1b2630;
   --grid: #2a3a47;
   --rim: #05090c;
-  --water: #6fa8e0;
   --ls: #ff6b6b;
   --urgent: #ff9a52;
   --notice: #e6c04a;
@@ -376,7 +373,7 @@ summary:focus-visible,
   height: auto;
 }
 
-/* The globe of the local page. Its box has the shape of the flat map, so the page keeps its layout. */
+/* The globe of the demo and of the local page. Its box has the shape of the flat map, so the page keeps its layout. */
 
 .globe-box {
   /* The names of the places are in a layer that fills the box. */
@@ -387,6 +384,12 @@ summary:focus-visible,
   background: var(--sea);
   --labels-ink: var(--ink);
   --labels-halo: var(--page);
+}
+
+/* The name of a region is quiet and italic, so the name of a place is the first text that the eye finds. */
+.globe-box .visuals-label[data-kind="zone"] {
+  color: var(--quiet);
+  font-style: italic;
 }
 
 .globe-box canvas:focus-visible {
@@ -418,40 +421,20 @@ summary:focus-visible,
   margin: 0;
 }
 
-.map .sea {
-  fill: var(--sea);
-}
-
-.map .sea-label {
-  fill: var(--water);
-  font: italic 26px system-ui, sans-serif;
-}
-
 .map .zone {
   fill: var(--panel);
   stroke: var(--line);
   stroke-width: 3;
 }
 
-.map .zone-label {
-  fill: var(--ink);
-  font: 600 26px system-ui, sans-serif;
-  text-anchor: middle;
-  pointer-events: none;
-}
-
-.map .zone-code {
+.map .region-label {
   fill: var(--quiet);
-  font: 400 20px ui-monospace, Consolas, monospace;
-}
-
-.map .river {
-  fill: none;
-  stroke: var(--water);
-  stroke-width: 8;
-  stroke-linecap: round;
+  font: italic 500 24px system-ui, sans-serif;
+  text-anchor: middle;
+  paint-order: stroke;
+  stroke: var(--panel);
+  stroke-width: 6px;
   stroke-linejoin: round;
-  opacity: 0.8;
   pointer-events: none;
 }
 
@@ -473,25 +456,9 @@ summary:focus-visible,
   stroke-dasharray: 10 8;
 }
 
-.map .incident.test .area {
-  fill-opacity: 0.05;
-}
-
-.map .incident .shape {
-  fill: var(--tone);
-  fill-opacity: 0.32;
-  stroke: var(--tone);
-  stroke-width: 5;
-  stroke-linejoin: round;
-}
-
 .map .incident.selected .area {
   fill-opacity: 0.26;
   stroke-width: 4;
-}
-
-.map .incident.selected .shape {
-  stroke-width: 8;
 }
 
 .map .incident.dim {
@@ -504,18 +471,10 @@ summary:focus-visible,
   stroke-width: 6;
 }
 
-.map .pin text {
-  fill: var(--ink);
-  font: 700 24px system-ui, sans-serif;
-  text-anchor: middle;
-  pointer-events: none;
-}
-
 .map .pin.level-life-safety circle { fill: var(--ls); stroke: var(--page); }
 .map .pin.level-urgent circle { fill: var(--urgent); stroke: var(--page); }
 .map .pin.level-notice circle { fill: var(--notice); stroke: var(--page); }
 .map .pin.level-digest circle { fill: var(--digest); stroke: var(--page); }
-.map .pin:not(.level-none) text { fill: var(--page); }
 
 .legend {
   display: flex;
@@ -939,10 +898,6 @@ summary:focus-visible,
   pointer-events: none;
 }
 
-.map .gap.level-life-safety { stroke: var(--ls); }
-.map .gap.level-urgent { stroke: var(--urgent); }
-.map .gap.level-notice { stroke: var(--notice); }
-
 .swatch.gap {
   border-style: dashed;
   border-color: var(--urgent);
@@ -1060,6 +1015,11 @@ main.local {
   .map .place-label {
     font-size: 44px;
     stroke-width: 10px;
+  }
+
+  .map .region-label {
+    font-size: 38px;
+    stroke-width: 9px;
   }
 
   .live-map .pin circle {

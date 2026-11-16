@@ -56,8 +56,14 @@
   <div class="board">
     <section class="panel map-panel" aria-labelledby="map-h">
       <h3 id="map-h">Map</h3>
+      <div id="globe" class="globe-box" hidden></div>
       <div id="map" class="map-box"></div>
-      <ul class="legend" aria-label="The colors of the levels">
+      <div id="globe-tools" class="globe-tools" hidden>
+        <p id="words" class="map-words"></p>
+        <button id="whole" type="button">Show all</button>
+        <p class="hint">Drag the map to move it. Select the map, then turn the wheel to go nearer or farther.</p>
+      </div>
+      <ul class="legend" aria-label="The parts of the map">
         <li><span class="swatch level-life-safety"></span>Life-safety</li>
         <li><span class="swatch level-urgent"></span>Urgent</li>
         <li><span class="swatch level-notice"></span>Notice</li>

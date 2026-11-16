@@ -25,7 +25,7 @@ describe("the home page", () => {
   });
 
   it("has each part of the demo", () => {
-    for (const id of ["demo", "clock", "back", "play", "next", "rail", "story", "map", "levels", "sources", "incidents", "message"]) {
+    for (const id of ["demo", "clock", "back", "play", "next", "rail", "story", "globe", "map", "globe-tools", "words", "whole", "levels", "sources", "incidents", "message"]) {
       expect(page).toContain(`id="${id}"`);
     }
   });

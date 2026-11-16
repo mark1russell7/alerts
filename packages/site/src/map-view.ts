@@ -44,6 +44,8 @@ export interface MapOptions {
   readonly selected?: string;
   /** The function that selects an incident. Without it, the incidents do not take clicks. */
   readonly select?: (anchor: string) => void;
+  /** This value is true for a map that shows the name of each region of the basemap. The default is false. */
+  readonly regionNames?: boolean;
 }
 
 const node = (tag: string, attrs: MapNode["attrs"], ...children: (MapNode | string)[]): MapNode => ({ tag, attrs, children });
@@ -141,6 +143,14 @@ export function mapNodes(view: MapView, options: Omit<MapOptions, "select"> & { 
     );
     children.push(options.selectable === true ? { ...group, select: incident.anchor } : group);
   }
+  // The name of a region is above the incidents, and below the places and their labels.
+  if (options.regionNames === true) {
+    for (const region of basemap) {
+      const text = region.name.trim();
+      const [x, y] = path.centroid(collection(region.shapes.map(geometryOf)));
+      if (text !== "" && Number.isFinite(x) && Number.isFinite(y)) children.push(node("text", { class: "region-label", x: round(x), y: round(y) }, text));
+    }
+  }
 
   const labels: MapNode[] = [];
   for (const place of outlined) {
@@ -181,6 +191,7 @@ export function drawMapView(view: MapView, options: MapOptions = {}): SVGElement
   const data = mapNodes(view, {
     ...(options.basemap === undefined ? {} : { basemap: options.basemap }),
     ...(options.selected === undefined ? {} : { selected: options.selected }),
+    ...(options.regionNames === undefined ? {} : { regionNames: options.regionNames }),
     selectable: options.select !== undefined,
   });
   return build(data, options.select);

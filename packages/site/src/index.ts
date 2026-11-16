@@ -1,8 +1,11 @@
 import { byId, copyText, h, setupTheme } from "@mark1russell7/site-pages/chrome";
 import { COVERAGE_KINDS, FETCHES, FIRST_FETCH, PEOPLE, PLACES, SOURCES, STEPS } from "./demo.ts";
+import { frameMap } from "./demo-map.ts";
 import { clock, stepLabel } from "./explain.ts";
+import { startGlobe } from "./globe-stage.ts";
+import { drawMapView } from "./map-view.ts";
 import { replay } from "./replay.ts";
-import { counts, drawIncidents, drawLevels, drawMap, drawMessage, drawSources } from "./view.ts";
+import { counts, drawIncidents, drawLevels, drawMessage, drawSources } from "./view.ts";
 
 setupTheme(byId<HTMLButtonElement>("theme"), "theme");
 
@@ -14,6 +17,8 @@ copy.addEventListener("click", () => {
 // The replay runs once, at the load of the page. Each step then only draws its frame.
 // The labels count the steps from 1 for the reader. The indexes and `data-step` count from 0.
 const frames = replay(STEPS, PEOPLE, PLACES, { sources: SOURCES, fetches: FETCHES, start: FIRST_FETCH, kinds: COVERAGE_KINDS });
+// The map of each frame is the payload that the map route of the runtime gives: the core makes it, and the page only draws it.
+const maps = frames.map(frameMap);
 const last = frames.length - 1;
 let index = 0;
 let selected: string | undefined;
@@ -23,6 +28,18 @@ const rail = byId<HTMLOListElement>("rail");
 const back = byId<HTMLButtonElement>("back");
 const next = byId<HTMLButtonElement>("next");
 const play = byId<HTMLButtonElement>("play");
+const mapBox = byId("map");
+
+// The map is a globe when the browser has WebGL 2. A pick on the globe selects its incident, and a pick on no incident selects nothing.
+// The made-up world has only four zones, so the map also shows the name of each zone.
+const globe = startGlobe(
+  { box: byId("globe"), tools: byId("globe-tools"), words: byId("words"), whole: byId<HTMLButtonElement>("whole") },
+  (anchor) => {
+    selected = anchor;
+    draw(false);
+  },
+  { regionNames: true },
+);
 
 frames.forEach((frame, at) => {
   const button = h(
@@ -38,10 +55,10 @@ frames.forEach((frame, at) => {
   rail.append(h("li", {}, button));
 });
 
-/** This function selects an incident and draws the page again. */
+/** This function selects an incident and draws the page again. A second selection of the same incident removes the selection. The camera of the globe goes to the incident. */
 function select(anchor: string): void {
   selected = selected === anchor ? undefined : anchor;
-  draw();
+  draw(true);
 }
 
 /** This function goes to a step. It selects the incident of the new message of the step. */
@@ -52,11 +69,14 @@ function go(at: number): void {
   const holder = fresh === undefined ? undefined : frame.incidents.find((incident) => incident.reports.includes(fresh));
   if (holder !== undefined) selected = holder.anchor;
   else if (!frame.incidents.some((incident) => incident.anchor === selected)) selected = undefined;
-  draw();
+  // A step does not move the camera, so the eye can follow a change from step to step.
+  draw(false);
 }
 
-function draw(): void {
+/** This function draws the frame of the step. With `move`, the camera of the globe goes to the selected incident. */
+function draw(move: boolean): void {
   const frame = frames[index]!;
+  const payload = maps[index]!;
   byId("clock").textContent = clock(frame.step.at);
   byId("step-title").textContent = `${stepLabel(index, frames.length)}: ${frame.step.title}`;
   byId("story").textContent = frame.step.story;
@@ -72,7 +92,10 @@ function draw(): void {
   byId("count-reports").textContent = String(count.reports);
   byId("count-incidents").textContent = String(count.incidents);
   byId("count-levels").textContent = String(count.levels);
-  byId("map").replaceChildren(drawMap(frame, selected, select));
+  // A browser with no WebGL 2 gets the flat map of the same payload.
+  const onGlobe = globe.show(payload, selected, move);
+  mapBox.hidden = onGlobe;
+  mapBox.replaceChildren(...(onGlobe ? [] : [drawMapView(payload.view, { basemap: payload.basemap, regionNames: true, ...(selected === undefined ? {} : { selected }), select })]));
   byId("levels").replaceChildren(drawLevels(frame));
   byId("sources").replaceChildren(drawSources(frame));
   byId("incidents").replaceChildren(drawIncidents(frame, selected, select));

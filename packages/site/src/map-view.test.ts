@@ -106,6 +106,25 @@ describe("the classes of the map", () => {
     expect(shop?.children[0]).toEqual({ tag: "title", attrs: {}, children: ["Shop: Urgent. The coverage is short for: Flash flood."] });
   });
 
+  it("names no region by default, and each region of the basemap with `regionNames`: above the incidents and below the places", () => {
+    expect(byClass(map, "region-label")).toEqual([]);
+    const named = mapNodes(MAP_FIXTURE.view, { basemap: MAP_FIXTURE.basemap, regionNames: true });
+    const labels = byClass(named, "region-label");
+    expect(labels.map((one) => one.children[0])).toEqual(MAP_FIXTURE.basemap.map((region) => region.name));
+    for (const label of labels) expect(inside([Number(label.attrs["x"]), Number(label.attrs["y"])])).toBe(true);
+    const order = named.children.flatMap((child) => (typeof child === "string" ? [] : [classOf(child).split(" ")[0]]));
+    expect(order.lastIndexOf("incident")).toBeLessThan(order.indexOf("region-label"));
+    expect(order.lastIndexOf("region-label")).toBeLessThan(order.indexOf("place"));
+    // The names change no other part of the map.
+    expect(named.children.filter((child) => typeof child === "string" || classOf(child) !== "region-label")).toEqual(map.children);
+  });
+
+  it("names no region with no name", () => {
+    const basemap = MAP_FIXTURE.basemap.map((region, index) => (index === 0 ? { ...region, name: "" } : region));
+    const labels = byClass(mapNodes(MAP_FIXTURE.view, { basemap, regionNames: true }), "region-label");
+    expect(labels.map((one) => one.children[0])).toEqual(MAP_FIXTURE.basemap.slice(1).map((region) => region.name));
+  });
+
   it("marks the selected incident and dims the others", () => {
     const chosen = byClass(mapNodes(MAP_FIXTURE.view, { selected: ANCHORS.flood }), "incident");
     expect(chosen.filter((one) => classOf(one).includes(" selected")).map((one) => one.attrs["data-anchor"])).toEqual([ANCHORS.flood]);
