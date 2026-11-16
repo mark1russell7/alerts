@@ -975,7 +975,7 @@
     "id": "www.tsunami.gov",
     "name": "www.tsunami.gov",
     "kind": "host",
-    "note": "The host of the feed of tsunami-gov-feeds."
+    "note": "The host of the CAP files of the two tsunami warning centers of the NWS: tsunami-gov-feeds."
   },
   {
     "id": "www.ukmto.org",

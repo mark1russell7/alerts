@@ -6466,15 +6466,15 @@
     "access": "feed",
     "auth": "none",
     "terms": {
-      "url": null,
-      "automated": "unclear",
-      "redistribution": "unclear",
-      "note": "Terms page not opened. The page offers the feeds for monitoring."
+      "url": "https://www.weather.gov/disclaimer",
+      "automated": "allowed",
+      "redistribution": "allowed",
+      "note": "The site has no terms page. Its footer links to the disclaimer of the NWS. The disclaimer puts the information in the public domain, free for each lawful purpose. It asks for request cycles that fit the refresh frequency of the data, and retries at 1-minute intervals at most. The NWS can block IP addresses."
     },
     "cost": "free",
-    "delay": "unknown",
-    "history": "unknown",
-    "rateLimit": "unknown",
+    "delay": "near real time. The file of each center holds its latest message, so the delay is the interval of the poll.",
+    "history": "The site keeps each bulletin of each past event at /events/<center>/<date>/<event>/<n>/<WMO header>/<center>CAP.xml. The list of the past events is at /php/previousEvents.php.",
+    "rateLimit": "No published limit. The answers have Last-Modified and no ETag. The adapter asks once a minute for the file of each center, with If-Modified-Since.",
     "calibration": null,
     "coverage": "NTWC (US mainland, Alaska, Canada) and PTWC (Hawaii, Pacific, Caribbean) products.",
     "origins": [
@@ -6483,15 +6483,23 @@
     "path": [
       "www.tsunami.gov"
     ],
-    "subjectIds": null,
-    "risks": [],
-    "decision": "plan",
-    "adapter": null,
-    "reason": "The issuing centres themselves, in CAP and Atom.",
-    "evidence": [
-      "https://www.tsunami.gov/?page=productRetrieval"
+    "subjectIds": [
+      "ugc",
+      "point"
     ],
-    "round": 1
+    "risks": [],
+    "decision": "adopt",
+    "adapter": "@mark1russell7/alerts-source-tsunami",
+    "reason": "The warning centers themselves, on their own host. A bulletin gives the warning, the advisory and the watch of the coast zones, each in its own info block with its VTEC. Each center is a source of its own, with its own health.",
+    "evidence": [
+      "https://www.tsunami.gov/?page=productRetrieval",
+      "https://www.tsunami.gov/?page=help",
+      "https://www.tsunami.gov/?page=cap",
+      "https://www.weather.gov/disclaimer",
+      "https://www.tsunami.gov/events/xml/PAAQCAP.xml",
+      "https://www.tsunami.gov/events/xml/PHEBCAP.xml"
+    ],
+    "round": 5
   },
   {
     "id": "ucdp-api",
