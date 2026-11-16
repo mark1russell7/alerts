@@ -991,6 +991,7 @@ export const relevanceSchema: z.ZodType<Relevance, Relevance> = schemaOf<Relevan
       weakest: z.strictObject({ edge: z.string().min(1, "The id of an edge is a non-empty string."), importance: unit }).readonly().exactOptional(),
       next: z.strictObject({ edge: z.string().min(1, "The id of an edge is a non-empty string."), gain: unit }).readonly().exactOptional(),
       muted: z.strictObject({ mute: z.string().min(1, "The id of a mute is a non-empty string."), effect: muteEffectSchema }).readonly().exactOptional(),
+      bound: z.enum(["bounds", "partial"]).exactOptional(),
     })
     .refine((relevance) => (relevance.why === undefined) === (relevance.paths.length === 0), "A relevance has a why when it has a path, and only then.")
     .refine(

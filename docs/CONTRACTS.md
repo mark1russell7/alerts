@@ -614,6 +614,8 @@ The why line is live for the match by places:
 - A label goes into a line only when it is plain words. A line holds no digit, no code in capitals and no colon after its prefix. Thus it holds no address, point or region code.
 - The gate test "The why fits each channel" holds each limit of `WHY_LIMITS` over seeded records and labels.
 
+The calculation over the graph is in `relevance.ts`. The routing does not read it at this time. `RELEVANCE.md` tells its functions and its gates.
+
 ## The schemas
 
 The file `schemas.ts` of the core has one zod 4 schema for each data type of the contracts and of the configuration. A schema checks data at a trust boundary. The boundaries are the output of a map function, the event log, the private configuration and the procedure tools.
