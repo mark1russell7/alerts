@@ -1,11 +1,13 @@
 /**
  * The local page. It reads the map from the alert runtime on this computer every 30 seconds, and when the page
  * comes back into view. It draws the map, the list of the incidents and the region codes with no shape.
+ * The map is a globe that a person can move. A browser with no WebGL 2 gets the flat map.
  * It sends each request to the origin of the page only.
  */
 
 import type { MapPayload } from "@mark1russell7/alerts";
 import { byId, setupTheme } from "@mark1russell7/site-pages/chrome";
+import { startGlobe } from "./globe-stage.ts";
 import { readLine, readMap, READ_EVERY_MS } from "./map-read.ts";
 import { drawIncidentList, drawMapView, drawUnshaped } from "./map-view.ts";
 
@@ -24,19 +26,31 @@ let reading = false;
 
 const time = (at: number): string => new Date(at).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
 
+// A pick on the globe selects its incident. The camera stays, because the person looks at the incident.
+// The draw also puts the mark of the selection on the incident, when the pick was a place or a region.
+const globe = startGlobe({ box: byId("globe"), tools: byId("globe-tools"), words: byId("words"), whole: byId<HTMLButtonElement>("whole") }, (anchor) => {
+  selected = anchor;
+  draw(false);
+});
+
+/** This function selects an incident of the list or of the flat map. A second selection of the incident removes the selection. */
 function select(anchor: string): void {
   // A focused incident keeps the focus after the new draw, in the same part of the page.
   const box = document.activeElement?.closest("#map, #incidents");
   selected = selected === anchor ? undefined : anchor;
-  draw();
+  draw(true);
   if (box instanceof HTMLElement) box.querySelector<HTMLElement | SVGElement>(`[data-anchor="${CSS.escape(anchor)}"]`)?.focus();
 }
 
-function draw(): void {
+/** This function draws the page. With `move`, the camera of the globe goes to the selected incident. */
+function draw(move: boolean): void {
   if (payload === undefined) return;
   const view = payload.view;
   if (selected !== undefined && !view.incidents.some((incident) => incident.anchor === selected)) selected = undefined;
-  mapBox.replaceChildren(drawMapView(view, { basemap: payload.basemap, ...(selected === undefined ? {} : { selected }), select }));
+  // The globe shows the payload when it can. If not, the flat map shows it.
+  const onGlobe = globe.show(payload, selected, move);
+  mapBox.hidden = onGlobe;
+  mapBox.replaceChildren(...(onGlobe ? [] : [drawMapView(view, { basemap: payload.basemap, ...(selected === undefined ? {} : { selected }), select })]));
   list.replaceChildren(drawIncidentList(view, selected, select));
   const codes = drawUnshaped(view);
   unshaped.replaceChildren(...(codes === null ? [] : [codes]));
@@ -50,7 +64,7 @@ async function refresh(): Promise<void> {
     if (result.ok) {
       payload = result.payload;
       lastGood = Date.now();
-      draw();
+      draw(false);
     }
     problem.textContent = result.ok ? "" : result.text;
     problem.hidden = result.ok;
