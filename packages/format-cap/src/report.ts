@@ -215,9 +215,10 @@ function blockReport(alert: CapAlert, message: Message, block: Block | undefined
     op: message.op,
     kind: resolved.kind,
     categories,
-    severity: capValue<Severity>(info?.severity, CAP_SEVERITY, "unknown", `${at}.severity`, problems),
-    urgency: capValue<Urgency>(info?.urgency, CAP_URGENCY, "unknown", `${at}.urgency`, problems),
-    certainty: capCertainty(info?.certainty, `${at}.certainty`, problems),
+    // The problem at `info` tells of a message with no info block, so its absent values give no more problems.
+    severity: info === undefined ? "unknown" : capValue<Severity>(info.severity, CAP_SEVERITY, "unknown", `${at}.severity`, problems),
+    urgency: info === undefined ? "unknown" : capValue<Urgency>(info.urgency, CAP_URGENCY, "unknown", `${at}.urgency`, problems),
+    certainty: info === undefined ? "unknown" : capCertainty(info.certainty, `${at}.certainty`, problems),
     response,
     sent: message.sent,
     received: observation.fetched,
