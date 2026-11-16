@@ -1,7 +1,8 @@
 /**
  * AL-13, case 11: a step of the wall clock under the runtime. The loop of the runtime and the runtime go on two fake
  * clocks. The monotonic clock is a `fakeClock`. The wall clock is the monotonic time plus an offset. A step changes
- * only the offset, as a correction of the system time does. Thus no timer moves.
+ * only the offset, as a correction of the system time does. Thus no timer moves. The runtime, the loop and the channel
+ * read the wall clock through one `frameClock`, as the instance of the runtime does.
  *
  * The runtime sends a `life-safety` alert through the Pushover channel to the scripted Pushover API of
  * `@procedures/notify/testing`, behind the fault proxy of `@mark1russell7/rigor-proxy`. The case drives the real loop
@@ -22,13 +23,13 @@
  * - `stepSeen`: after a step, the log has one system event with one report that names the size of the step.
  * - `oneCopy` and `noOverdue`, in `control` and `forward-poll`: the API gets one send, and no pass has a failed request or an overdue send.
  *
- * Known fault AL-49: a step back holds each due action by the size of the step, and the log has no report of the step.
- * The tests of the case mark these gates with `it.fails`. The fix of AL-49 changes each of them to `it`.
+ * Before AL-49, a step back held each due action by the size of the step, and the log had no report of the step. The
+ * frame clock of AL-49 gives each step to the runtime at the start of the next pass.
  */
 import { fakeClock, type WallClock } from "@mark1russell7/algebra/clock";
 import type { SourceProcedures } from "@mark1russell7/alerts";
 import { createPushoverChannel } from "@mark1russell7/alerts-channel-pushover";
-import { createLoop, DELIVERY_TIMES, type DeliveryOptions, loopTimes, openRuntime, openRuntimeLog, type Pass } from "@mark1russell7/alerts-runtime";
+import { createLoop, DELIVERY_TIMES, type DeliveryOptions, frameClock, loopTimes, openRuntime, openRuntimeLog, type Pass } from "@mark1russell7/alerts-runtime";
 import { type Fault, faultPlanOf } from "@mark1russell7/rigor-chaos";
 import { startFaultProxy } from "@mark1russell7/rigor-proxy";
 import { startScriptedServer } from "@mark1russell7/rigor-testkit/http";
@@ -266,9 +267,12 @@ export async function runStepArm(arm: StepArm, settings: StepSettings = CASE_11_
   // The loop and the runtime share one queue of timers. `fakeWallClock` of algebra keeps its monotonic clock inside,
   // thus the case makes this wall clock. The end: an option of `fakeWallClock` that takes a monotonic clock.
   const wall: WallClock = { time: "wall", now: () => mono.now() + offset, after: (ms, run) => mono.after(ms, run) };
+  // The instance of the runtime puts a frame clock on its wall clock. The case does the same, thus a step comes to the
+  // runtime at the start of the next pass.
+  const frame = frameClock(wall, mono);
   const since = (): number => mono.now() - CASE_11_START;
   // The channel requests the address of the Pushover API. This fetch sends each request to the proxy, with the same path and query.
-  const channel = createPushoverChannel({ token: FIXTURE.token, fetch: pushoverFetchTo(`http://${proxy.host}:${String(proxy.port)}`), now: () => wall.now() });
+  const channel = createPushoverChannel({ token: FIXTURE.token, fetch: pushoverFetchTo(`http://${proxy.host}:${String(proxy.port)}`), now: () => frame.now() });
   const inner = FIXTURE.sourceOf(CASE_11_START);
   const fetches: number[] = [];
   const source: SourceProcedures = {
@@ -310,7 +314,7 @@ export async function runStepArm(arm: StepArm, settings: StepSettings = CASE_11_
     let wake = (): void => undefined;
     const runtime = openRuntime({
       log,
-      clock: wall,
+      clock: frame,
       sources: [source],
       watch: () => ({ places: [FIXTURE_PLACE], kinds: ["met"] }),
       view: FIXTURE.view,
@@ -327,7 +331,7 @@ export async function runStepArm(arm: StepArm, settings: StepSettings = CASE_11_
           }),
         ),
       clock: mono,
-      wall,
+      wall: frame,
       times: loopTimes(runtime.config.sources, { delivery }),
       random: () => 0,
       onError: (thrown) => {
