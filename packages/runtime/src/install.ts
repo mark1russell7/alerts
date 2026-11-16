@@ -1,6 +1,10 @@
 /**
  * This file installs, removes or reads the boot task of the supervisor on this computer. Start it
- * from the checkout that the task runs. A boot task needs an elevated shell for its install.
+ * from the checkout that the task runs.
+ *
+ * - On Windows, the install of a boot task needs an elevated shell.
+ * - On Linux, the install needs no elevated shell. It writes a user unit of systemd. `loginctl enable-linger`
+ *   starts the user manager at boot, before a logon. If the system refuses the linger, an admin enables it one time.
  *
  * - `node src/install.ts install` installs the task and starts it.
  * - `node src/install.ts remove` stops the supervisor and removes the task.
