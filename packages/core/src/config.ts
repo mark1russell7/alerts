@@ -168,7 +168,8 @@ export interface LoadedConfig {
  * - two settings of one expectation
  * - two spend entries of one provider, and a provider that no channel depends on
  * - a reserve of a spend entry that is not below its cap, and a time zone that is not an IANA name
- * - an unknown person of the outage call, a person two times, a chain with no step, and a step on a channel with no contact of the person
+ * - an unknown person of the outage call, a person two times in it, and a chain with no step
+ * - a step of the outage call on a channel with no contact of the person
  * - each problem of `recipientProblems` for each person.
  */
 export function loadConfig(config: AlertConfig, channels: readonly ChannelDescriptor[], secret: SecretLookup): LoadedConfig {
