@@ -29,6 +29,7 @@ import {
   type EscalationEnd,
   type Instant,
   type LinkPolicy,
+  type RankDelays,
   type Recipient,
   type Route,
   type SendOutcome,
@@ -70,7 +71,10 @@ export interface DeliveryOptions {
   readonly overdueAfter?: Duration;
   /** The rank of this copy of the system, and the wait of each rank. */
   readonly rank?: number;
+  /** The default wait of one rank: the wait of each level with no entry in `rankDelays`. */
   readonly rankDelay?: Duration;
+  /** The wait of one rank for each level, from the configuration. */
+  readonly rankDelays?: RankDelays;
   /**
    * The longest wait between two stop probes of a down channel. The wait starts at `retry` and doubles after each
    * failed probe, up to this time. The default is `PROBE_LIMIT` or `retry`, the longer one.
@@ -355,6 +359,7 @@ export function createDispatcher(options: DeliveryOptions, context: DeliveryCont
           channels: descriptors,
           rank: options.rank,
           rankDelay: options.rankDelay,
+          rankDelays: options.rankDelays,
           now: at,
         });
       };

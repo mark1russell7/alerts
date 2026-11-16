@@ -261,7 +261,7 @@ export const DELIVERY_TIMES: Pick<DeliveryOptions, "pollEvery" | "retry" | "call
 };
 
 /**
- * The wait of each rank of a copy: 30 s. A copy with rank 1 sends a step 30 s after the copy with rank 0. In that
+ * The default wait of each rank of a copy: 30 s. The table `rankDelay` of the configuration can give another wait for a level. A copy with rank 1 sends a step 30 s after the copy with rank 0. In that
  * time, the send of rank 0 ends, and its delivery comes to rank 1 by the exchange:
  *
  * - the flight limit of one send, 20 s
@@ -570,6 +570,7 @@ export function openInstance(options: InstanceOptions): Instance {
     ...DELIVERY_TIMES,
     rank: copy.rank,
     rankDelay: RANK_DELAY,
+    ...(config.rankDelay === undefined ? {} : { rankDelays: config.rankDelay }),
   };
 
   // The last pass of the runtime, from the loop or from a direct call of `pass`. The map reads it.

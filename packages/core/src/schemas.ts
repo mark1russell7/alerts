@@ -128,6 +128,7 @@ import {
 } from "./config.ts";
 import type { TryChain } from "./chain.ts";
 import type { EscalationEnd, Recipient } from "./delivery.ts";
+import type { RankDelays } from "./escalation.ts";
 import type { Lateness, LatenessLimit, LatenessState } from "./lateness.ts";
 import type { LinkFamily, LinkPolicy } from "./link.ts";
 import { COVERAGE_KIND } from "./assess.ts";
@@ -1325,6 +1326,11 @@ export const outageConfigSchema: z.ZodType<OutageConfig, OutageConfig> = schemaO
   z.strictObject({ people: z.array(outagePersonConfigSchema).readonly() }).readonly(),
 );
 
+/** This schema checks a table of rank delays: a duration for some levels. `loadConfig` checks the bounds of each value. */
+export const rankDelaysSchema: z.ZodType<RankDelays, RankDelays> = schemaOf<RankDelays>()(
+  z.strictObject({ digest: durationSchema.exactOptional(), notice: durationSchema.exactOptional(), urgent: durationSchema.exactOptional(), "life-safety": durationSchema.exactOptional() }).readonly(),
+);
+
 /**
  * This schema checks the JSON of the private configuration at the load. It checks the form of each
  * value. Then `loadConfig` checks the references: the ids, the places of each person, the contacts,
@@ -1343,6 +1349,7 @@ export const alertConfigSchema: z.ZodType<AlertConfig, AlertConfig> = schemaOf<A
       spend: z.array(spendConfigSchema).readonly().exactOptional(),
       link: linkPolicySchema.exactOptional(),
       outage: outageConfigSchema.exactOptional(),
+      rankDelay: rankDelaysSchema.exactOptional(),
       assess: assessPolicySchema.exactOptional(),
     })
     .readonly(),

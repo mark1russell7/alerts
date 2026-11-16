@@ -9,6 +9,7 @@ import type { Address, AssessPolicy, ChannelDescriptor, ChannelId, EscalationPol
 import { recipientProblems, type Recipient } from "./delivery.ts";
 import type { TryChain } from "./chain.ts";
 import type { Expectation } from "./lateness.ts";
+import { rankDelayProblems, type RankDelays } from "./escalation.ts";
 import type { LinkPolicy } from "./link.ts";
 import { placeNode, placeOfNode, type WhyLabels } from "./why.ts";
 
@@ -111,6 +112,11 @@ export interface AlertConfig {
   readonly link?: LinkPolicy;
   /** The outage call. Without it, an outage of the instance calls no person. */
   readonly outage?: OutageConfig;
+  /**
+   * The wait of one rank of a copy, for each level. A level with no entry takes the default of the runtime. Each copy
+   * loads the same table. With 0 for `life-safety`, each copy sends each life-safety step at once.
+   */
+  readonly rankDelay?: RankDelays;
   /**
    * The policy of the assessment: the statuses, the tables of the levels and the relevance policy. When it is absent,
    * the default policy of the core applies. A policy here replaces the full default policy.
@@ -243,6 +249,7 @@ export interface LoadedConfig {
  * - a reserve of a spend entry that is not below its cap, and a time zone that is not an IANA name
  * - an unknown person of the outage call, a person two times in it, and a chain with no step
  * - a step of the outage call on a channel with no contact of the person
+ * - a rank delay that is not a whole number of milliseconds up to `RANK_DELAY_LIMIT`
  * - each problem of `recipientProblems` for each person.
  */
 export function loadConfig(config: AlertConfig, channels: readonly ChannelDescriptor[], secret: SecretLookup): LoadedConfig {
@@ -313,6 +320,8 @@ export function loadConfig(config: AlertConfig, channels: readonly ChannelDescri
     if (!((spend.reserveUsd ?? 0) < spend.monthlyUsd)) problems.push(`The reserve of the spend of ${provider} is not below its monthly cap.`);
     if (localTime(0, spend.timeZone) === undefined) problems.push(`The time zone of the spend of ${provider} is not an IANA name.`);
   }
+
+  problems.push(...rankDelayProblems(config.rankDelay ?? {}));
 
   const called = new Set<string>();
   for (const { person, chain } of config.outage?.people ?? []) {

@@ -2,7 +2,9 @@ import { random, seedsFrom } from "@mark1russell7/rigor-generators";
 import { describe, expect, it } from "vitest";
 import { CONFIG_FORMAT, configHash, configuredExpectations, expectationProblems, loadConfig, localPlaces, placeLabels, sourcePlaces, type AlertConfig, type ContactConfig, type PersonConfig, type PlaceConfig, type SecretLookup } from "./config.ts";
 import type { ChannelDescriptor, ChannelId, EscalationPolicy, InterestEdge, InterestGraph, NodeKey, PersonId, PlaceId, Position, SourceId } from "./contracts.ts";
+import { RANK_DELAY_LIMIT } from "./escalation.ts";
 import type { Expectation } from "./lateness.ts";
+import { rankDelaysSchema } from "./schemas.ts";
 
 const SEEDS = seedsFrom(process.env["SEED"], [1, 2, 3, 4, 5, 6, 7, 8]);
 const MINUTE = 60_000;
@@ -176,6 +178,16 @@ describe("loadConfig", () => {
       "The spend entry of provider:pushoverr names a provider that no channel depends on.",
       "The time zone of the spend of provider:pushoverr is not an IANA name.",
     ]);
+  });
+
+  it("checks the table of rank delays: the schema refuses an unknown level, and the load refuses a value out of its bounds", () => {
+    expect(loadConfig(config({ rankDelay: { "life-safety": 0, urgent: 30_000 } }), CHANNELS, store).problems).toEqual([]);
+    expect(loadConfig(config({ rankDelay: { notice: 2.5 } }), CHANNELS, store).problems).toEqual([
+      `The rank delay of the level notice is not a whole number of milliseconds from 0 to ${RANK_DELAY_LIMIT}.`,
+    ]);
+    expect(rankDelaysSchema.safeParse({ "life-safety": 0 }).success).toBe(true);
+    expect(rankDelaysSchema.safeParse({ lifesafety: 0 }).success).toBe(false);
+    expect(rankDelaysSchema.safeParse({ urgent: -1 }).success).toBe(false);
   });
 
   it("checks the outage call: a known person, one time each, a chain with steps, and a contact on each channel of a step", () => {
