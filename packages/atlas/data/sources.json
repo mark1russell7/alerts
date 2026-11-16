@@ -20,6 +20,12 @@
     "rateLimit": "unknown",
     "calibration": "not applicable",
     "coverage": "US national and state averages for regular, mid-grade, premium, diesel and E85; on 2026-11-15 regular $3.8242 and diesel $6.0198, with a diesel all-time high of $6.5276 on 2026-09-22.",
+    "origins": [
+      "aaa"
+    ],
+    "path": [
+      "gasprices.aaa.com"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "later",
@@ -51,6 +57,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "World: verified shutdowns, throttling and platform blocks.",
+    "origins": [
+      "accessnow"
+    ],
+    "path": [
+      "www.accessnow.org"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "later",
@@ -83,6 +95,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "World: political violence and protest events.",
+    "origins": [
+      "acled"
+    ],
+    "path": [
+      "acleddata.com"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "later",
@@ -115,6 +133,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "US, Canada, Mexico: observations from 2,500+ monitors and forecasts for 500+ cities (AQI).",
+    "origins": [
+      "epa"
+    ],
+    "path": [
+      "www.airnowapi.org"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "plan",
@@ -146,6 +170,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "Ukraine: air raid and other alerts by oblast, raion and hromada.",
+    "origins": [
+      "ua"
+    ],
+    "path": [
+      "api.alerts.in.ua"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "plan",
@@ -177,6 +207,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "US.",
+    "origins": [
+      "us-alerting-authorities"
+    ],
+    "path": [
+      "amberalert.ojp.gov"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "later",
@@ -208,6 +244,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "US: commercial and backyard flocks, wild birds, dairy herds, mammals.",
+    "origins": [
+      "usda-aphis"
+    ],
+    "path": [
+      "www.aphis.usda.gov"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "later",
@@ -239,6 +281,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "US drug shortages (ASHP list, often wider than FDA's).",
+    "origins": [
+      "ashp"
+    ],
+    "path": [
+      "www.ashp.org"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "later",
@@ -268,6 +316,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "US avalanche forecast zones (off-season zones show no rating).",
+    "origins": [
+      "us-avalanche-centers"
+    ],
+    "path": [
+      "api.avalanche.org"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "plan",
@@ -299,6 +353,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "unknown",
+    "origins": [
+      "aviation-safety-network"
+    ],
+    "path": [
+      "aviation-safety.net"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "later",
@@ -328,6 +388,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "Worldwide SIGMET, METAR, TAF; US G-AIRMET, CWA, PIREP.",
+    "origins": [
+      "nws"
+    ],
+    "path": [
+      "aviationweather.gov"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "plan",
@@ -359,6 +425,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "Public AWS events, not specific to an account.",
+    "origins": [
+      "aws"
+    ],
+    "path": [
+      "health.aws.amazon.com"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "plan",
@@ -390,6 +462,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "Widespread Azure incidents.",
+    "origins": [
+      "microsoft"
+    ],
+    "path": [
+      "rssfeed.azure.status.microsoft"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "plan",
@@ -421,6 +499,12 @@
     "rateLimit": "unknown",
     "calibration": "not applicable",
     "coverage": "ICS https://www.bea.gov/news/schedule/ics/online-calendar-subscription.ics, JSON https://apps.bea.gov/API/signup/release_dates.json, news release RSS https://apps.bea.gov/rss/rss.xml. GDP, Personal Income and Outlays (PCE) and trade releases at 8:30 AM; for example GDP second estimate and PCE on 2026-11-25, trade on 2026-12-08.",
+    "origins": [
+      "bea"
+    ],
+    "path": [
+      "www.bea.gov"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "plan",
@@ -452,6 +536,12 @@
     "rateLimit": "unknown",
     "calibration": "not applicable",
     "coverage": "Exchange system maintenance status and market data.",
+    "origins": [
+      "binance"
+    ],
+    "path": [
+      "api.binance.com"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "reject",
@@ -483,6 +573,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "World, dense in Europe and North America.",
+    "origins": [
+      "blitzortung"
+    ],
+    "path": [
+      "www.blitzortung.org"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "reject",
@@ -514,6 +610,12 @@
     "rateLimit": "v1: 25 series and 10 years per query. v2 (key): 500 queries a day, 50 series and 20 years per query.",
     "calibration": "not applicable",
     "coverage": "All BLS series (CPI, payrolls, unemployment, PPI and others).",
+    "origins": [
+      "bls"
+    ],
+    "path": [
+      "api.bls.gov"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "plan",
@@ -545,6 +647,12 @@
     "rateLimit": "unknown",
     "calibration": "not applicable",
     "coverage": "All BLS releases, Eastern times: CPI, Employment Situation and PPI at 8:30 AM; JOLTS at 10:00 AM.",
+    "origins": [
+      "bls"
+    ],
+    "path": [
+      "www.bls.gov"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "plan",
@@ -581,6 +689,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "Canada: food, health products, consumer products.",
+    "origins": [
+      "canada-government"
+    ],
+    "path": [
+      "recalls-rappels.canada.ca"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "plan",
@@ -612,6 +726,12 @@
     "rateLimit": "unknown",
     "calibration": "not applicable",
     "coverage": "VIX daily open, high, low and close since 1990.",
+    "origins": [
+      "cboe"
+    ],
+    "path": [
+      "cdn-api.cboe.com"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "plan",
@@ -643,6 +763,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "US land borders (from the agency).",
+    "origins": [
+      "cbp"
+    ],
+    "path": [
+      "bwt.cbp.gov"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "later",
@@ -674,6 +800,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "US: Health Alerts, Health Advisories and Health Updates for clinicians and public health.",
+    "origins": [
+      "cdc"
+    ],
+    "path": [
+      "www.cdc.gov"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "plan",
@@ -706,6 +838,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "US sewersheds.",
+    "origins": [
+      "cdc"
+    ],
+    "path": [
+      "data.cdc.gov"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "later",
@@ -738,6 +876,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "World destinations, levels 1 to 4.",
+    "origins": [
+      "cdc"
+    ],
+    "path": [
+      "wwwnc.cdc.gov"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "plan",
@@ -769,6 +913,12 @@
     "rateLimit": "unknown",
     "calibration": "not applicable",
     "coverage": "Retail sales (8:30 AM), housing starts (8:30 AM), durable goods advance (8:30 AM) and full report (10:00 AM), construction spending (10:00 AM), new home sales (10:00 AM).",
+    "origins": [
+      "census"
+    ],
+    "path": [
+      "www.census.gov"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "later",
@@ -800,6 +950,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "US: new psychoactive substances and adulterants found in drug testing.",
+    "origins": [
+      "cfsre"
+    ],
+    "path": [
+      "www.cfsre.org"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "later",
@@ -831,6 +987,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "Alerts, cybersecurity advisories, malware analysis reports, ICS and ICS medical advisories.",
+    "origins": [
+      "cisa"
+    ],
+    "path": [
+      "www.cisa.gov"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "plan",
@@ -863,6 +1025,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "World software, CVEs that CISA confirms are exploited; CSV and JSON with a schema.",
+    "origins": [
+      "cisa"
+    ],
+    "path": [
+      "www.cisa.gov"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "plan",
@@ -899,6 +1067,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "World: BGP origin hijacks and route leaks with confidence scores; outage and attack data not verified in round 1.",
+    "origins": [
+      "cloudflare"
+    ],
+    "path": [
+      "api.cloudflare.com"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "plan",
@@ -931,6 +1105,12 @@
     "rateLimit": "Demo: 100 requests per minute and 10k call credits a month.",
     "calibration": "not applicable",
     "coverage": "Crypto asset prices, including stablecoins.",
+    "origins": [
+      "coingecko"
+    ],
+    "path": [
+      "api.coingecko.com"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "later",
@@ -963,6 +1143,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "US coastal and Great Lakes stations: water levels, predictions, meteorology, currents.",
+    "origins": [
+      "noaa-nos"
+    ],
+    "path": [
+      "api.tidesandcurrents.noaa.gov"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "plan",
@@ -994,6 +1180,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "US strikes (from the Report a Strike link).",
+    "origins": [
+      "cornell-ilr"
+    ],
+    "path": [
+      "striketracker.ilr.cornell.edu"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "later",
@@ -1025,6 +1217,13 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "unknown",
+    "origins": [
+      "us-courts"
+    ],
+    "path": [
+      "www.courtlistener.com",
+      "pacer"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "later",
@@ -1055,6 +1254,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "US consumer product recalls; XML or JSON.",
+    "origins": [
+      "cpsc"
+    ],
+    "path": [
+      "www.saferproducts.gov"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "plan",
@@ -1086,6 +1291,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "California investor-owned utilities.",
+    "origins": [
+      "us-electric-utilities"
+    ],
+    "path": [
+      "www.cpuc.ca.gov"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "later",
@@ -1117,6 +1328,12 @@
     "rateLimit": "unknown",
     "calibration": "not applicable",
     "coverage": "Hacks with date, name, classification, technique, amount, chain, bridge flag and returned funds.",
+    "origins": [
+      "defillama"
+    ],
+    "path": [
+      "unknown"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "later",
@@ -1149,6 +1366,12 @@
     "rateLimit": "unknown for the free API (the Pro tier has higher limits)",
     "calibration": "not applicable",
     "coverage": "452 pegged assets with peg type, peg mechanism and current price (for example USDT 0.99943, USDC 0.99977 on 2026-11-15); circulating supply by chain.",
+    "origins": [
+      "defillama"
+    ],
+    "path": [
+      "stablecoins.llama.fi"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "plan",
@@ -1183,6 +1406,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "US: Alerts and Bulletins; none current at the read.",
+    "origins": [
+      "dhs"
+    ],
+    "path": [
+      "www.dhs.gov"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "plan",
@@ -1216,6 +1445,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "unknown",
+    "origins": [
+      "downdetector"
+    ],
+    "path": [
+      "downdetector.com"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "later",
@@ -1245,6 +1480,13 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "The customers without power in each US county, from the public outage maps of the utilities.",
+    "origins": [
+      "us-electric-utilities"
+    ],
+    "path": [
+      "www.osti.gov",
+      "utility-outage-maps"
+    ],
     "subjectIds": [
       "fips",
       "state"
@@ -1280,6 +1522,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "16 active bulletins at the read, each with issue and valid-until dates.",
+    "origins": [
+      "easa"
+    ],
+    "path": [
+      "www.easa.europa.eu"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "plan",
@@ -1311,6 +1559,12 @@
     "rateLimit": "unknown",
     "calibration": "not applicable",
     "coverage": "29 currencies against the euro (USD, JPY, GBP, CHF, CNY, INR and others); the rouble rate is suspended. XML daily file /stats/eurofxref/eurofxref-daily.xml, zipped CSV history /stats/eurofxref/eurofxref-hist.zip.",
+    "origins": [
+      "ecb"
+    ],
+    "path": [
+      "www.ecb.europa.eu"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "plan",
@@ -1347,6 +1601,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "Canada: all ECCC weather warnings, watches and statements in CAP.",
+    "origins": [
+      "eccc"
+    ],
+    "path": [
+      "dd.weather.gc.ca"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "plan",
@@ -1378,6 +1638,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "EU/EEA and global threats relevant to Europe.",
+    "origins": [
+      "ecdc"
+    ],
+    "path": [
+      "www.ecdc.europa.eu"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "later",
@@ -1411,6 +1677,12 @@
     "rateLimit": "unknown (none stated on the opened page)",
     "calibration": "not applicable",
     "coverage": "Petroleum prices (/petroleum/pri): retail gasoline and diesel prices (daily, weekly, monthly, annual series) and spot and futures prices; natural gas prices (/natural-gas/pri).",
+    "origins": [
+      "eia"
+    ],
+    "path": [
+      "api.eia.gov"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "plan",
@@ -1443,6 +1715,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "World earthquakes, with insert and update messages.",
+    "origins": [
+      "emsc"
+    ],
+    "path": [
+      "www.seismicportal.eu"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "plan",
@@ -1474,6 +1752,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "489 products with end-of-life dates; iCalendar also offered.",
+    "origins": [
+      "endoflife-date"
+    ],
+    "path": [
+      "endoflife.date"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "plan",
@@ -1505,6 +1789,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "US coastal and Great Lakes beaches, state-reported advisories and closures.",
+    "origins": [
+      "epa"
+    ],
+    "path": [
+      "www.epa.gov"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "later",
@@ -1536,6 +1826,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "US: 2,000+ large lakes and reservoirs, satellite cyanobacteria index; weekly experimental forecasts.",
+    "origins": [
+      "epa"
+    ],
+    "path": [
+      "www.epa.gov"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "later",
@@ -1567,6 +1863,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "About 140 US monitors: gamma gross count rate and exposure rate.",
+    "origins": [
+      "epa"
+    ],
+    "path": [
+      "www.epa.gov"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "plan",
@@ -1598,6 +1900,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "US, by ZIP code or city and state; daily value with a UV alert flag.",
+    "origins": [
+      "epa"
+    ],
+    "path": [
+      "data.epa.gov"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "plan",
@@ -1629,6 +1937,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "ERCOT region: Weather Watch, Voluntary Conservation Notice, Conservation Appeal, EEA 1 to 3.",
+    "origins": [
+      "ercot"
+    ],
+    "path": [
+      "www.ercot.com"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "plan",
@@ -1661,6 +1975,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "All near-Earth asteroids with non-zero impact probability (2,215 on the day opened), plus a special risk list.",
+    "origins": [
+      "esa"
+    ],
+    "path": [
+      "neo.ssa.esa.int"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "plan",
@@ -1692,6 +2012,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "Re-entry predictions for objects that ESA follows.",
+    "origins": [
+      "esa"
+    ],
+    "path": [
+      "reentry.esoc.esa.int"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "later",
@@ -1723,6 +2049,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "South Africa (from the name; not confirmed).",
+    "origins": [
+      "eskom"
+    ],
+    "path": [
+      "developer.sepush.co.za"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "later",
@@ -1752,6 +2084,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "EU: dangerous non-food products (from the title).",
+    "origins": [
+      "eu-commission"
+    ],
+    "path": [
+      "ec.europa.eu"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "later",
@@ -1781,6 +2119,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "39 countries, about 5,000 gamma dose rate stations.",
+    "origins": [
+      "eu-jrc"
+    ],
+    "path": [
+      "remon.jrc.ec.europa.eu"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "later",
@@ -1812,6 +2156,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "US airports: ground delay programs, arrival and departure delays, closures (ground stops appear when active).",
+    "origins": [
+      "faa"
+    ],
+    "path": [
+      "nasstatus.faa.gov"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "plan",
@@ -1843,6 +2193,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "unknown",
+    "origins": [
+      "faa"
+    ],
+    "path": [
+      "portal.apic4e.faa.gov"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "later",
@@ -1873,6 +2229,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "US areas where the FCC activates DIRS (not confirmed).",
+    "origins": [
+      "fcc"
+    ],
+    "path": [
+      "www.fcc.gov"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "later",
@@ -1903,6 +2265,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "World: UK travel advice for each country.",
+    "origins": [
+      "uk-fcdo"
+    ],
+    "path": [
+      "www.gov.uk"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "plan",
@@ -1935,6 +2303,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "US outbreak investigations: pathogen, product, case count, recall and traceback status.",
+    "origins": [
+      "fda"
+    ],
+    "path": [
+      "www.fda.gov"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "later",
@@ -1966,6 +2340,12 @@
     "rateLimit": "unknown (none stated)",
     "calibration": "not applicable",
     "coverage": "Datasets include failures, institutions and history; JSON or CSV output.",
+    "origins": [
+      "fdic"
+    ],
+    "path": [
+      "api.fdic.gov"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "plan",
@@ -1997,6 +2377,12 @@
     "rateLimit": "unknown",
     "calibration": "not applicable",
     "coverage": "US insured bank failures since 2000-10-01, with bank, city, state, certificate number, acquiring institution and closing date. CSV at https://www.fdic.gov/bank-failures/download-data.csv. No RSS.",
+    "origins": [
+      "fdic"
+    ],
+    "path": [
+      "www.fdic.gov"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "plan",
@@ -2029,6 +2415,12 @@
     "rateLimit": "unknown",
     "calibration": "not applicable",
     "coverage": "2026 meetings: Jan 27-28, Mar 17-18, Apr 28-29, Jun 16-17, Jul 28-29, Sep 15-16, Oct 27-28, Dec 8-9. 2027 (tentative): Jan 26-27, Mar 16-17, Apr 27-28, Jun 8-9, Jul 27-28, Sep 14-15, Oct 26-27, Nov 16-17. Minutes three weeks after each decision. No ICS file.",
+    "origins": [
+      "federal-reserve-board"
+    ],
+    "path": [
+      "www.federalreserve.gov"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "later",
@@ -2061,6 +2453,12 @@
     "rateLimit": "unknown",
     "calibration": "not applicable",
     "coverage": "press_all.xml, press_monetary.xml (FOMC statements and monetary policy), press_enforcement.xml, press_bcreg.xml, press_orders.xml, press_other.xml, speeches.xml, testimony.xml. No FOMC-only feed.",
+    "origins": [
+      "federal-reserve-board"
+    ],
+    "path": [
+      "www.federalreserve.gov"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "plan",
@@ -2093,6 +2491,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "US federal rules, notices and presidential documents.",
+    "origins": [
+      "us-federal-agencies"
+    ],
+    "path": [
+      "www.federalregister.gov"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "later",
@@ -2122,6 +2526,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "unknown",
+    "origins": [
+      "fema"
+    ],
+    "path": [
+      "gis.fema.gov"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "later",
@@ -2151,6 +2561,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "A daily probability of exploitation for each CVE.",
+    "origins": [
+      "first"
+    ],
+    "path": [
+      "api.first.org"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "plan",
@@ -2182,6 +2598,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "US rail accidents, crossing incidents, casualties.",
+    "origins": [
+      "fra"
+    ],
+    "path": [
+      "safetydata.fra.dot.gov"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "later",
@@ -2213,6 +2635,13 @@
     "rateLimit": "No quotas; abuse is rate limited (no number).",
     "calibration": "not applicable",
     "coverage": "Reference rates from 111 central banks and official sources, including the ECB. GET https://api.frankfurter.dev/v1/latest?base=USD returned rates dated 2026-11-13.",
+    "origins": [
+      "ecb"
+    ],
+    "path": [
+      "api.frankfurter.dev",
+      "www.ecb.europa.eu"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "plan",
@@ -2245,6 +2674,12 @@
     "rateLimit": "unknown",
     "calibration": "not applicable",
     "coverage": "Status of Account Services, Central Bank, Check 21, Check Adjustments, FedACH, FedCash, FedNow, Fedwire Funds, Fedwire Securities, National Settlement, and the FedLine access solutions; legend Normal Operations, Service Issue, Service Disruption; General Notifications ('There are no notifications at this time' on 2026-11-15).",
+    "origins": [
+      "federal-reserve-financial-services"
+    ],
+    "path": [
+      "app.frbservices.org"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "later",
@@ -2281,6 +2716,12 @@
     "rateLimit": "unknown (the terms page gives no number)",
     "calibration": "not applicable",
     "coverage": "Economic series from many owners, including VIX, yields, FX, commodity and mortgage rate series.",
+    "origins": [
+      "unknown"
+    ],
+    "path": [
+      "api.stlouisfed.org"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "plan",
@@ -2312,6 +2753,12 @@
     "rateLimit": "unknown",
     "calibration": "not applicable",
     "coverage": "US average 30-year and 15-year fixed mortgage rates (7.11% and 6.45% on 2026-11-12). History since 1971 as an Excel file.",
+    "origins": [
+      "freddie-mac"
+    ],
+    "path": [
+      "www.freddiemac.com"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "later",
@@ -2344,6 +2791,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "US meat, poultry and egg product recalls and public health alerts.",
+    "origins": [
+      "usda-fsis"
+    ],
+    "path": [
+      "www.fsis.usda.gov"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "later",
@@ -2373,6 +2826,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "US scams and consumer protection.",
+    "origins": [
+      "ftc"
+    ],
+    "path": [
+      "consumer.ftc.gov"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "plan",
@@ -2404,6 +2863,12 @@
     "rateLimit": "unknown",
     "calibration": "not applicable (crowd reports)",
     "coverage": "Crowd reports of stations open, closed or out of fuel (page description); used in fuel emergencies.",
+    "origins": [
+      "gasbuddy"
+    ],
+    "path": [
+      "tracker.gasbuddy.com"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "later",
@@ -2435,6 +2900,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "Public Google Cloud incidents with products, severity and affected locations.",
+    "origins": [
+      "google"
+    ],
+    "path": [
+      "status.cloud.google.com"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "plan",
@@ -2470,6 +2941,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "World: earthquakes, tropical cyclones, floods (feed page). The site also covers other hazards.",
+    "origins": [
+      "gdacs"
+    ],
+    "path": [
+      "www.gdacs.org"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "plan",
@@ -2503,6 +2980,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "World: machine-coded events from news.",
+    "origins": [
+      "news-media"
+    ],
+    "path": [
+      "data.gdeltproject.org"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "plan",
@@ -2537,6 +3020,12 @@
     "rateLimit": "unknown (no values on the opened pages)",
     "calibration": "none found",
     "coverage": "GET https://api.gemini.com/v1/prediction-markets/events?status=active returned 916 active events on 2026-11-15: Crypto 102, Politics 21, Commodities 18, Economics 11, Tech 3, Culture 3, plus Sports. The Weather category query returned an error.",
+    "origins": [
+      "gemini"
+    ],
+    "path": [
+      "unknown"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "plan",
@@ -2571,6 +3060,13 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "Advisories for the ecosystems GitHub supports, including malware advisories.",
+    "origins": [
+      "github",
+      "cve-program"
+    ],
+    "path": [
+      "api.github.com"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "later",
@@ -2603,6 +3099,12 @@
     "rateLimit": "unknown",
     "calibration": "The FAQ defines Brier and relative Brier scores per user; no platform-level calibration found.",
     "coverage": "Geopolitics, economy, elections, health and technology questions.",
+    "origins": [
+      "good-judgment"
+    ],
+    "path": [
+      "www.gjopen.com"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "reject",
@@ -2636,6 +3138,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "65+ countries at 1 km resolution; pollen index by plant type.",
+    "origins": [
+      "google"
+    ],
+    "path": [
+      "pollen.googleapis.com"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "later",
@@ -2667,6 +3175,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "Agencies that publish GTFS Realtime alerts.",
+    "origins": [
+      "transit-agencies"
+    ],
+    "path": [
+      "transit-agency-hosts"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "later",
@@ -2696,6 +3210,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "US health data breaches (HIPAA and 42 CFR Part 2) reported to OCR.",
+    "origins": [
+      "hhs-ocr"
+    ],
+    "path": [
+      "ocrportal.hhs.gov"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "later",
@@ -2727,6 +3247,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "World: breaches loaded into HIBP.",
+    "origins": [
+      "hibp"
+    ],
+    "path": [
+      "haveibeenpwned.com"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "plan",
@@ -2758,6 +3284,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "World time zone rules.",
+    "origins": [
+      "iana"
+    ],
+    "path": [
+      "www.iana.org"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "later",
@@ -2813,6 +3345,13 @@
     "rateLimit": "No published limit. The adapter asks once each two minutes.",
     "calibration": null,
     "coverage": "Each VTEC event of the NWS in effect in the US, by county and zone.",
+    "origins": [
+      "nws"
+    ],
+    "path": [
+      "mesonet.agron.iastate.edu",
+      "noaaport"
+    ],
     "subjectIds": [
       "ugc"
     ],
@@ -2848,6 +3387,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "unknown",
+    "origins": [
+      "imf"
+    ],
+    "path": [
+      "portwatch.imf.org"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "later",
@@ -2877,6 +3422,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "US incidents: wildfire, prescribed fire, burned area response. Summaries, news and KML points.",
+    "origins": [
+      "us-wildland-fire-agencies"
+    ],
+    "path": [
+      "inciweb.wildfire.gov"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "plan",
@@ -2909,6 +3460,12 @@
     "rateLimit": "unknown",
     "calibration": "none found",
     "coverage": "Topics listed: US politics, sports, world, current events, economics, science, crypto. The featured section showed no markets on 2026-11-15.",
+    "origins": [
+      "insight-prediction"
+    ],
+    "path": [
+      "insightprediction.com"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "reject",
@@ -2942,6 +3499,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "World: outage signals by country, region and network.",
+    "origins": [
+      "ioda"
+    ],
+    "path": [
+      "api.ioda.inetintel.cc.gatech.edu"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "later",
@@ -3005,6 +3568,14 @@
     "rateLimit": "No published number. The fact sheet forbids excessive requests. The adapter asks once a minute.",
     "calibration": null,
     "coverage": "Each public alert that IPAWS gets: the WEA and EAS messages of the NWS and of the other alerting authorities of the US. The NWS WEA types: tsunami, tornado, destructive severe thunderstorm, considerable or catastrophic flash flood, hurricane, typhoon, storm surge, extreme wind, dust storm and snow squall.",
+    "origins": [
+      "nws",
+      "us-alerting-authorities"
+    ],
+    "path": [
+      "apps.fema.gov",
+      "ipaws-open"
+    ],
     "subjectIds": [
       "same",
       "ugc",
@@ -3043,6 +3614,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "US states, counties, tribes and territories.",
+    "origins": [
+      "irs"
+    ],
+    "path": [
+      "www.irs.gov"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "later",
@@ -3074,6 +3651,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "World fireballs and airbursts with location, altitude and energy.",
+    "origins": [
+      "nasa-jpl"
+    ],
+    "path": [
+      "ssd-api.jpl.nasa.gov"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "later",
@@ -3105,6 +3688,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "All objects with potential Earth impacts in the next 100+ years, with Torino and Palermo scales, and removed objects.",
+    "origins": [
+      "nasa-jpl"
+    ],
+    "path": [
+      "ssd-api.jpl.nasa.gov"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "plan",
@@ -3139,6 +3728,12 @@
     "rateLimit": "Token buckets: Basic tier 200 read tokens/s, most requests cost 10 tokens (about 20 req/s); unauthenticated public requests have separate, unpublished limits.",
     "calibration": "Kalshi blog 2026-08-20 https://news.kalshi.com/p/prediction-market-calibration-how-accurate-is-kalshi (2.2 million data points; values only in charts; self-published). Federal Reserve FEDS 2026-010 'Kalshi and the Rise of Macro Markets': the modal fed funds outcome was right on the eve of every FOMC meeting since 2022 and headline CPI errors were significantly smaller than the Bloomberg consensus (as reported by natlawreview.com).",
     "coverage": "CFTC-regulated event contracts: economics (CPI, Fed rate, jobs, GDP), daily high temperature by city (for example series KXHIGHNY), climate and hurricanes, politics, companies, crypto, sports.",
+    "origins": [
+      "kalshi"
+    ],
+    "path": [
+      "api.elections.kalshi.com"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "later",
@@ -3179,6 +3774,12 @@
     "rateLimit": "unknown",
     "calibration": "See kalshi-api.",
     "coverage": "wss://external-api-ws.kalshi.com channels: ticker, trade, orderbook_delta, market_lifecycle_v2 (open, close, settle), communications and others.",
+    "origins": [
+      "kalshi"
+    ],
+    "path": [
+      "api.elections.kalshi.com"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "reject",
@@ -3211,6 +3812,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "World orbital launches and some suborbital, pads and events; ICS calendar.",
+    "origins": [
+      "the-space-devs"
+    ],
+    "path": [
+      "ll.thespacedevs.com"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "plan",
@@ -3242,6 +3849,12 @@
     "rateLimit": "unknown",
     "calibration": "none found",
     "coverage": "Hourly and daily crypto and stock price markets, REST and websocket.",
+    "origins": [
+      "limitless"
+    ],
+    "path": [
+      "api.limitless.exchange"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "reject",
@@ -3275,6 +3888,12 @@
     "rateLimit": "500 requests per minute per IP.",
     "calibration": "https://manifold.markets/calibration: Brier score 0.17425 on a 100k-trade sample of resolved binary markets with 15 or more traders, trade-weighted, updated hourly.",
     "coverage": "Play-money (mana) markets created by users on any topic: politics, AI, science, economy, culture, some disasters and outages.",
+    "origins": [
+      "manifold"
+    ],
+    "path": [
+      "api.manifold.markets"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "plan",
@@ -3310,6 +3929,12 @@
     "rateLimit": "unknown (no number in the spec)",
     "calibration": "Track record page https://www.metaculus.com/questions/track-record/ exists but returned HTTP 403 to my fetches; values not read.",
     "coverage": "Forecast questions on geopolitics, AI, science, health (pandemics), economy and climate, with community and Metaculus aggregates.",
+    "origins": [
+      "metaculus"
+    ],
+    "path": [
+      "www.metaculus.com"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "later",
@@ -3358,6 +3983,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "39 European countries. Types seen in labels: wind, storm, tornado, snow, freezing rain, thunderstorm, lightning, fog, heat, cold, frost, coastal flood, high waves, forest fire, avalanche, rain, flood, flash flood, dam break.",
+    "origins": [
+      "eumetnet-members"
+    ],
+    "path": [
+      "feeds.meteoalarm.org"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "plan",
@@ -3390,6 +4021,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "6,000+ GTFS, GTFS Realtime and GBFS feeds in 100+ countries.",
+    "origins": [
+      "mobilitydata"
+    ],
+    "path": [
+      "api.mobilitydatabase.org"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "plan",
@@ -3421,6 +4058,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "unknown",
+    "origins": [
+      "nager-date"
+    ],
+    "path": [
+      "date.nager.at"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "later",
@@ -3451,6 +4094,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "World satellite fire hotspots by area or country, near real time and standard products.",
+    "origins": [
+      "nasa"
+    ],
+    "path": [
+      "firms.modaps.eosdis.nasa.gov"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "plan",
@@ -3484,6 +4133,12 @@
     "rateLimit": "Do not query more than once a minute.",
     "calibration": "not applicable (official record)",
     "coverage": "Fetched feed had 23 items with Market NASDAQ and AMEX; fields HaltDate, HaltTime, IssueSymbol, Market, ReasonCode, Resumption dates and times. Reason codes include MWC1, MWC2, MWC3 (market-wide circuit breaker levels), MWC0 (carry-over), LUDP (volatility pause), T1 (news pending), H10 (SEC trading suspension).",
+    "origins": [
+      "nasdaq"
+    ],
+    "path": [
+      "www.nasdaqtrader.com"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "plan",
@@ -3519,6 +4174,12 @@
     "rateLimit": "unknown",
     "calibration": "not applicable",
     "coverage": "System status of NASDAQ, NTX, Post-Trade, PSX, NASDAQ Options, NTX Options, PHLX, NASDAQ Futures, ISE, GEMX, MRX; regulatory, IPO and self-help messages.",
+    "origins": [
+      "nasdaq"
+    ],
+    "path": [
+      "www.nasdaqtrader.com"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "later",
@@ -3551,6 +4212,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "unknown",
+    "origins": [
+      "nga"
+    ],
+    "path": [
+      "msi.nga.mil"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "later",
@@ -3583,6 +4250,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "Atlantic, Eastern and Central Pacific: outlooks, advisories, storm surge and wind products, offshore and high seas forecasts.",
+    "origins": [
+      "nws"
+    ],
+    "path": [
+      "www.nhc.noaa.gov"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "plan",
@@ -3614,6 +4287,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "US vehicle recalls by make, model and year, with park-it and park-outside flags.",
+    "origins": [
+      "nhtsa"
+    ],
+    "path": [
+      "api.nhtsa.gov"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "plan",
@@ -3645,6 +4324,13 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "US wildland fire incidents from IRWIN and their perimeters.",
+    "origins": [
+      "us-wildland-fire-agencies"
+    ],
+    "path": [
+      "data-nifc.opendata.arcgis.com",
+      "arcgis-online"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "plan",
@@ -3676,6 +4362,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "Americas and Atlantic/Pacific under the GOES field of view: lightning flashes, groups, events.",
+    "origins": [
+      "noaa-nesdis"
+    ],
+    "path": [
+      "noaa-open-data-buckets"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "plan",
@@ -3708,6 +4400,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "Lake Erie, Florida and Texas, Gulf of Maine; Pacific Northwest through NANOOS.",
+    "origins": [
+      "noaa-nos"
+    ],
+    "path": [
+      "coastalscience.noaa.gov"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "later",
@@ -3740,6 +4438,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "North America, Hawaii, Caribbean: analyst-reviewed fires and smoke plumes (KML, shapefile, WFS).",
+    "origins": [
+      "noaa-nesdis"
+    ],
+    "path": [
+      "www.ospo.noaa.gov"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "plan",
@@ -3771,6 +4475,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "US and some international oil spills and other incidents where NOAA gave scientific support.",
+    "origins": [
+      "noaa-nos"
+    ],
+    "path": [
+      "incidentnews.noaa.gov"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "plan",
@@ -3804,6 +4514,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "US national parks: alerts by park code (closures, dangers, fire restrictions).",
+    "origins": [
+      "nps"
+    ],
+    "path": [
+      "developer.nps.gov"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "plan",
@@ -3836,6 +4552,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "US licensees: reactors, materials, fuel cycle.",
+    "origins": [
+      "us-nrc"
+    ],
+    "path": [
+      "www.nrc.gov"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "plan",
@@ -3870,6 +4592,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "US: pollution and railroad incident reports (oil, chemical and other releases) from 1990.",
+    "origins": [
+      "uscg"
+    ],
+    "path": [
+      "nrc.uscg.mil"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "later",
@@ -3901,6 +4629,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "unknown",
+    "origins": [
+      "ntsb"
+    ],
+    "path": [
+      "my.ntsb.gov"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "later",
@@ -3930,6 +4664,13 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "All CVEs with CVSS and product data (CPE).",
+    "origins": [
+      "nist",
+      "cve-program"
+    ],
+    "path": [
+      "services.nvd.nist.gov"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "plan",
@@ -3962,6 +4703,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "US river gauges with flood stages and forecasts (to verify).",
+    "origins": [
+      "nws"
+    ],
+    "path": [
+      "api.water.noaa.gov"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "later",
@@ -4043,6 +4790,14 @@
     "rateLimit": "No published limit. The adapter asks once a minute.",
     "calibration": null,
     "coverage": "US states and territories, coastal and offshore waters. About 120 event types, weather and non-weather (civil, law enforcement, hazmat, 911 outage).",
+    "origins": [
+      "nws",
+      "us-alerting-authorities"
+    ],
+    "path": [
+      "api.weather.gov",
+      "akamai"
+    ],
     "subjectIds": [
       "ugc",
       "same",
@@ -4081,6 +4836,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "Continental US and Alaska, 7-day heat risk levels 0-4.",
+    "origins": [
+      "nws"
+    ],
+    "path": [
+      "www.wpc.ncep.noaa.gov"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "later",
@@ -4113,6 +4874,12 @@
     "rateLimit": "unknown",
     "calibration": "not applicable",
     "coverage": "Current halts on NYSE, NYSE American and Nasdaq-listed securities (seen in the fetched CSV).",
+    "origins": [
+      "nyse"
+    ],
+    "path": [
+      "www.nyse.com"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "reject",
@@ -4146,6 +4913,12 @@
     "rateLimit": "not applicable",
     "calibration": "not applicable",
     "coverage": "2026 closed: Jan 1, Jan 19, Feb 16, Apr 3, May 25, Jun 19, Jul 3, Sep 7, Nov 26, Dec 25; early close 1:00 p.m. ET on Nov 27 and Dec 24. 2027 closed: Jan 1, Jan 18, Feb 15, Mar 26, May 31, Jun 18, Jul 5, Sep 6, Nov 25, Dec 24; early close Nov 26. A Trading_Days PDF is linked (not opened). No ICS.",
+    "origins": [
+      "nyse"
+    ],
+    "path": [
+      "www.nyse.com"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "later",
@@ -4178,6 +4951,12 @@
     "rateLimit": "unknown",
     "calibration": "not applicable",
     "coverage": "Notifications typed Informational Message, Normal, Systems Affected and Critical Issue, with date filters.",
+    "origins": [
+      "nyse"
+    ],
+    "path": [
+      "www.nyse.com"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "reject",
@@ -4210,6 +4989,13 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "unknown",
+    "origins": [
+      "us-electric-utilities"
+    ],
+    "path": [
+      "ornl.opendatasoft.com",
+      "opendatasoft"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "later",
@@ -4242,6 +5028,12 @@
     "rateLimit": "unknown",
     "calibration": "not applicable",
     "coverage": "Enforcement actions, general licenses, miscellaneous, regulations and guidance, sanctions list updates (designations by program and country).",
+    "origins": [
+      "ofac"
+    ],
+    "path": [
+      "ofac.treasury.gov"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "later",
@@ -4273,6 +5065,12 @@
     "rateLimit": "unknown",
     "calibration": "not applicable",
     "coverage": "SDN list, non-SDN consolidated list, customized datasets, delta file archive by year, Advanced Sanctions Data Model docs.",
+    "origins": [
+      "ofac"
+    ],
+    "path": [
+      "ofac.treasury.gov"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "plan",
@@ -4304,6 +5102,13 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "World: public monitors of PM2.5, PM10, O3, NO2, SO2, CO and more that OpenAQ has found.",
+    "origins": [
+      "air-quality-agencies",
+      "epa"
+    ],
+    "path": [
+      "api.openaq.org"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "later",
@@ -4335,6 +5140,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "US FDA drug shortages from 2012.",
+    "origins": [
+      "fda"
+    ],
+    "path": [
+      "api.fda.gov"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "plan",
@@ -4370,6 +5181,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "US FDA recalls from 2004 (Recall Enterprise System).",
+    "origins": [
+      "fda"
+    ],
+    "path": [
+      "api.fda.gov"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "later",
@@ -4405,6 +5222,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "US: FEMA datasets including IPAWS Archived Alerts and disaster declarations.",
+    "origins": [
+      "fema"
+    ],
+    "path": [
+      "www.fema.gov"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "plan",
@@ -4436,6 +5259,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "Federal offices inside the Washington Capital Beltway.",
+    "origins": [
+      "opm"
+    ],
+    "path": [
+      "www.opm.gov"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "later",
@@ -4467,6 +5296,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "Israel (from the agency).",
+    "origins": [
+      "israel-home-front-command"
+    ],
+    "path": [
+      "www.oref.org.il"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "later",
@@ -4497,6 +5332,14 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "40 ecosystems (npm, PyPI, Maven, Go, crates.io, distros and more), aggregated from GitHub, PyPA, RustSec, GSD and others.",
+    "origins": [
+      "open-source-vulnerability-databases",
+      "github",
+      "cve-program"
+    ],
+    "path": [
+      "api.osv.dev"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "plan",
@@ -4529,6 +5372,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "US pipeline incidents.",
+    "origins": [
+      "phmsa"
+    ],
+    "path": [
+      "www.phmsa.dot.gov"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "later",
@@ -4560,6 +5409,12 @@
     "rateLimit": "Hosted API: 25k credits a month on the free tier; local mode: the limits of each venue.",
     "calibration": "none",
     "coverage": "Polymarket, Kalshi, Limitless, Smarkets, Opinion, Myriad, Probable, Metaculus, Hyperliquid, Gemini Titan.",
+    "origins": [
+      "unknown"
+    ],
+    "path": [
+      "unknown"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "later",
@@ -4592,6 +5447,13 @@
     "rateLimit": "CLOB general 9,000 req/10 s; /book, /price, /midpoint 1,500 req/10 s; /prices-history 1,000 req/10 s (IP based).",
     "calibration": "See polymarket-gamma-api (https://polymarket.com/accuracy).",
     "coverage": "Best bid and ask, midpoint, last trade and order book of each Polymarket outcome token.",
+    "origins": [
+      "polymarket"
+    ],
+    "path": [
+      "clob.polymarket.com",
+      "polymarket-clob"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "plan",
@@ -4627,6 +5489,12 @@
     "rateLimit": "Cloudflare sliding windows by IP: general 4,000 req/10 s; /events 500 req/10 s; /markets 300 req/10 s; /public-search 350 req/10 s (excess is throttled, not rejected).",
     "calibration": "Polymarket accuracy page https://polymarket.com/accuracy: Brier score 0.0605; leading outcome correct 98.7% at 4 h, 97.3% at 12 h, 96.6% at 1 day, 94.1% at 1 week, 90.4% at 1 month before resolution; self-published, market count not stated.",
     "coverage": "All Polymarket events and markets: politics, geopolitics, economy, crypto, sports, culture, weather and science questions; tags, volume, liquidity, open and closed state, resolution.",
+    "origins": [
+      "polymarket"
+    ],
+    "path": [
+      "gamma-api.polymarket.com"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "plan",
@@ -4664,6 +5532,13 @@
     "rateLimit": "No websocket limit published; PING every 10 s expected.",
     "calibration": "See polymarket-gamma-api.",
     "coverage": "wss://ws-subscriptions-clob.polymarket.com/ws/market: book, price_change, last_trade_price, tick_size_change; with custom_feature_enabled also best_bid_ask, new_market and market_resolved (with the winning outcome).",
+    "origins": [
+      "polymarket"
+    ],
+    "path": [
+      "ws-subscriptions-clob.polymarket.com",
+      "polymarket-clob"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "plan",
@@ -4695,6 +5570,13 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "unknown",
+    "origins": [
+      "us-electric-utilities"
+    ],
+    "path": [
+      "poweroutage.us",
+      "utility-outage-maps"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "later",
@@ -4725,6 +5607,12 @@
     "rateLimit": "unknown (a search result said 1,000 requests a month on the free tier; not verified on an opened page)",
     "calibration": "none",
     "coverage": "Aggregates Kalshi, Polymarket, PredictIt and ProphetX.",
+    "origins": [
+      "unknown"
+    ],
+    "path": [
+      "unknown"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "later",
@@ -4757,6 +5645,12 @@
     "rateLimit": "unknown",
     "calibration": "none found",
     "coverage": "US politics and elections, some economy and world events; contracts with lastTradePrice and best bid and ask on a 0 to 1 scale.",
+    "origins": [
+      "predictit"
+    ],
+    "path": [
+      "www.predictit.org"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "later",
@@ -4790,6 +5684,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "World: 5-20 expert-verified health event posts a day.",
+    "origins": [
+      "isid"
+    ],
+    "path": [
+      "promedmail.org"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "later",
@@ -4821,6 +5721,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "Participating US fire and EMS agencies: CPR calls, fires, collisions, wildland fire, flooding, utility emergencies.",
+    "origins": [
+      "public-safety-agencies"
+    ],
+    "path": [
+      "www.pulsepoint.org"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "later",
@@ -4852,6 +5758,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "Victims posted on ransomware leak sites; groups and their victims.",
+    "origins": [
+      "ransomware-groups"
+    ],
+    "path": [
+      "api.ransomware.live"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "plan",
@@ -4883,6 +5795,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "unknown",
+    "origins": [
+      "ripe-ncc"
+    ],
+    "path": [
+      "ris-live.ripe.net"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "later",
@@ -4913,6 +5831,12 @@
     "rateLimit": "10 requests per second, declared User-Agent.",
     "calibration": "not applicable",
     "coverage": "Press releases, litigation releases and administrative proceedings, which include actions against frauds and firms.",
+    "origins": [
+      "sec"
+    ],
+    "path": [
+      "www.sec.gov"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "plan",
@@ -4945,6 +5869,12 @@
     "rateLimit": "10 requests per second, declared User-Agent.",
     "calibration": "not applicable",
     "coverage": "SEC orders that suspend trading in a security, mostly small issuers.",
+    "origins": [
+      "sec"
+    ],
+    "path": [
+      "www.sec.gov"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "plan",
@@ -4980,6 +5910,12 @@
     "rateLimit": "Default 1,200 requests per 60 s per account; /v3/markets/{ids}/quotes/ without a token 50 requests per 60 s for API users and lower for others.",
     "calibration": "none found",
     "coverage": "Betting exchange events: politics, current affairs and sports. GET https://api.smarkets.com/v3/events/ worked with no auth.",
+    "origins": [
+      "smarkets"
+    ],
+    "path": [
+      "api.smarkets.com"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "later",
@@ -5012,6 +5948,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "World: predicted and historical decay of tracked objects, TIP messages from USSPACECOM.",
+    "origins": [
+      "us-space-force"
+    ],
+    "path": [
+      "www.space-track.org"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "plan",
@@ -5043,6 +5985,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "Each state runs its own system.",
+    "origins": [
+      "state-dots"
+    ],
+    "path": [
+      "state-511-hosts"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "later",
@@ -5072,6 +6020,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "World.",
+    "origins": [
+      "us-state-department"
+    ],
+    "path": [
+      "travel.state.gov"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "later",
@@ -5101,6 +6055,13 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "12,750+ services; crowdsourced early warning signals.",
+    "origins": [
+      "service-vendors"
+    ],
+    "path": [
+      "statusgator.com",
+      "vendor-status-pages"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "later",
@@ -5133,6 +6094,13 @@
     "rateLimit": "unknown",
     "calibration": "not applicable (self-reported)",
     "coverage": "Exchange outages and degraded trading or withdrawals; the Solana page covers network halts.",
+    "origins": [
+      "service-vendors"
+    ],
+    "path": [
+      "vendor-status-pages",
+      "atlassian-statuspage"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "plan",
@@ -5170,6 +6138,13 @@
     "rateLimit": "unknown",
     "calibration": "not applicable (self-reported)",
     "coverage": "Company-declared incidents and component status; /api/v2/status.json gives an indicator (none, minor, major, critical).",
+    "origins": [
+      "service-vendors"
+    ],
+    "path": [
+      "vendor-status-pages",
+      "atlassian-statuspage"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "plan",
@@ -5208,6 +6183,13 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "Every service that hosts its status page on Statuspage.",
+    "origins": [
+      "service-vendors"
+    ],
+    "path": [
+      "vendor-status-pages",
+      "atlassian-statuspage"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "plan",
@@ -5243,6 +6225,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "SWPC alerts, warnings, watches and summaries for the G, S and R scales and electron flux.",
+    "origins": [
+      "nws"
+    ],
+    "path": [
+      "www.spaceweather.gov"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "later",
@@ -5277,6 +6265,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "Global space weather: alerts, warnings, watches, NOAA G/S/R scales, planetary Kp and its forecast.",
+    "origins": [
+      "nws"
+    ],
+    "path": [
+      "services.swpc.noaa.gov"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "plan",
@@ -5309,6 +6303,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "unknown",
+    "origins": [
+      "thousandeyes"
+    ],
+    "path": [
+      "www.thousandeyes.com"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "later",
@@ -5338,6 +6338,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "230K+ events in North America, Europe, Australia and New Zealand.",
+    "origins": [
+      "ticketmaster"
+    ],
+    "path": [
+      "app.ticketmaster.com"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "plan",
@@ -5369,6 +6375,12 @@
     "rateLimit": "unknown (none stated)",
     "calibration": "not applicable",
     "coverage": "Daily Treasury Statement, Debt to the Penny, average interest rates, Treasury reporting rates of exchange and other federal finance datasets.",
+    "origins": [
+      "us-treasury"
+    ],
+    "path": [
+      "api.fiscaldata.treasury.gov"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "plan",
@@ -5400,6 +6412,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "NTWC (US mainland, Alaska, Canada) and PTWC (Hawaii, Pacific, Caribbean) products.",
+    "origins": [
+      "nws"
+    ],
+    "path": [
+      "www.tsunami.gov"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "plan",
@@ -5431,6 +6449,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "World: organized violence events (GED candidate).",
+    "origins": [
+      "ucdp"
+    ],
+    "path": [
+      "ucdp.uu.se"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "later",
@@ -5462,6 +6486,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "unknown",
+    "origins": [
+      "ukmto"
+    ],
+    "path": [
+      "www.ukmto.org"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "later",
@@ -5491,6 +6521,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "unknown",
+    "origins": [
+      "uscg"
+    ],
+    "path": [
+      "www.navcen.uscg.gov"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "later",
@@ -5520,6 +6556,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "US drought categories D0-D4 by county, state and many other areas.",
+    "origins": [
+      "us-drought-monitor"
+    ],
+    "path": [
+      "droughtmonitor.unl.edu"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "plan",
@@ -5551,6 +6593,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "World, with dense US coverage. Past hour to past 30 days, by magnitude or significance.",
+    "origins": [
+      "usgs"
+    ],
+    "path": [
+      "earthquake.usgs.gov"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "plan",
@@ -5583,6 +6631,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "US volcano observatory notices: VONA, alert levels, daily summaries.",
+    "origins": [
+      "usgs"
+    ],
+    "path": [
+      "volcanoes.usgs.gov"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "later",
@@ -5613,6 +6667,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "US post-fire debris-flow assessments, monitoring stations, event summaries, inventories.",
+    "origins": [
+      "usgs"
+    ],
+    "path": [
+      "www.usgs.gov"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "later",
@@ -5644,6 +6704,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "US monitored volcanoes.",
+    "origins": [
+      "usgs"
+    ],
+    "path": [
+      "www.usgs.gov"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "plan",
@@ -5676,6 +6742,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "US monitoring locations: latest streamflow and gage height.",
+    "origins": [
+      "usgs"
+    ],
+    "path": [
+      "api.waterdata.usgs.gov"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "plan",
@@ -5709,6 +6781,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "US: weather, facility closures, suspended ZIP codes, international suspensions.",
+    "origins": [
+      "usps"
+    ],
+    "path": [
+      "about.usps.com"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "later",
@@ -5742,6 +6820,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "Volcanic ash advisories for the Americas and Hawaii (8 volcanoes listed on the day opened). Other VAACs cover other regions.",
+    "origins": [
+      "noaa-nesdis"
+    ],
+    "path": [
+      "www.ospo.noaa.gov"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "plan",
@@ -5773,6 +6857,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "About 150 US sites in 40 states; a dozen+ pathogens including influenza, RSV, SARS-CoV-2, norovirus, measles, mpox, H5.",
+    "origins": [
+      "wastewaterscan"
+    ],
+    "path": [
+      "www.wastewaterscan.org"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "later",
@@ -5806,6 +6896,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "World: WHO-verified outbreak reports with assessment and advice.",
+    "origins": [
+      "who"
+    ],
+    "path": [
+      "www.who.int"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "plan",
@@ -5837,6 +6933,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "World: immediate notifications of listed and emerging animal diseases, from 2005.",
+    "origins": [
+      "woah"
+    ],
+    "path": [
+      "www.woah.org"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "later",
@@ -5868,6 +6970,12 @@
     "rateLimit": "unknown",
     "calibration": null,
     "coverage": "US states and cities that publish WZDx (not confirmed).",
+    "origins": [
+      "state-dots"
+    ],
+    "path": [
+      "state-dot-feed-hosts"
+    ],
     "subjectIds": null,
     "risks": [],
     "decision": "later",

@@ -1600,7 +1600,7 @@
       "https://stablecoins.llama.fi/stablecoins?includePrices=true",
       "Owner request"
     ],
-    "gap": null,
+    "gap": "The two planned sources give different children: the status pages give exchange outages and chain halts, and DefiLlama gives depegs. No leaf code has 2 sources.",
     "round": 1
   },
   {
