@@ -273,7 +273,7 @@ describe("the retirement in the pass", () => {
     // The warning expires at T0 + 1 h. The last change is the expiry, thus it retires at T0 + 3 h.
     await clock.advance(3 * HOUR);
     await runtime.pass();
-    const retirements = [...log.entries({ types: ["retired"] })].map((entry) => entry.event);
+    const retirements = [...log.entries({ after: 0, types: ["retired"], limit: 100 })].map((entry) => entry.event);
     expect(retirements).toMatchObject([{ type: "retired", reports: [W1], until: T0 + 9 * HOUR, cancelled: [] }]);
     expect(runtime.state().merge.reports).toEqual([]);
     // The feed lists the report again. The tombstone keeps it out.
@@ -296,10 +296,10 @@ describe("the retirement in the pass", () => {
     await runtime.pass();
     await clock.advance(2 * MINUTE);
     await runtime.pass();
-    expect([...log.entries({ types: ["retired"] })]).toEqual([]);
+    expect([...log.entries({ after: 0, types: ["retired"], limit: 100 })]).toEqual([]);
     await clock.advance(HOUR);
     await runtime.pass();
-    expect([...log.entries({ types: ["retired"] })]).toHaveLength(1);
+    expect([...log.entries({ after: 0, types: ["retired"], limit: 100 })]).toHaveLength(1);
     log.close();
   });
 });
