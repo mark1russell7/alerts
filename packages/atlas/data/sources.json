@@ -4974,38 +4974,40 @@
     "classes": [
       "infra.power.outage"
     ],
-    "url": "https://ornl.opendatasoft.com/p/odin-dashboard/",
-    "access": "page",
+    "url": "https://odin.ornl.gov/odi",
+    "access": "api",
     "auth": "none",
     "terms": {
       "url": null,
       "automated": "unclear",
       "redistribution": "unclear",
-      "note": "The pages named the dashboard only. Users without an account can browse datasets."
+      "note": "The OpenAPI document of the ODIN Web API (v1) states no license and no terms of service. The public paths under /odi need no token."
     },
     "cost": "free",
-    "delay": "unknown",
-    "history": "unknown",
-    "rateLimit": "unknown",
+    "delay": "Each utility sends its active outages to ODIN. At 2026-11-16 06:45 UTC, 158 of the 159 utilities of the status list had a report of the past 24 hours, and 136 had one of the past hour.",
+    "history": "The public paths give only the active outages. The path of the history needs a token.",
+    "rateLimit": "unknown: the API document states no limit. The answers have Cache-Control max-age=60 and a weak ETag.",
     "calibration": null,
-    "coverage": "unknown",
+    "coverage": "Partial: the 159 utilities that report to ODIN. 133 report by county, 11 by point, 10 by ZIP code, 4 by polygon and 1 by H3 cell. The public paths give each outage by county, with its FIPS code.",
     "origins": [
       "us-electric-utilities"
     ],
     "path": [
-      "ornl.opendatasoft.com",
-      "opendatasoft"
+      "odin.ornl.gov"
     ],
-    "subjectIds": null,
+    "subjectIds": [
+      "fips"
+    ],
     "risks": [],
-    "decision": "later",
+    "decision": "plan",
     "adapter": null,
-    "reason": "A federal effort to share utility outage data; details for round 2. The decision is later because a page source needs terms that let automated reading.",
+    "reason": "A free public API of the active outages by county, with pages and If-None-Match. It is the only live source of the class with no fee. The terms are not stated, so a question to ODIN about automated reading comes before an adapter.",
     "evidence": [
-      "https://ornl.opendatasoft.com/p/odin-dashboard/",
-      "https://ornl.opendatasoft.com/explore/"
+      "https://odin.ornl.gov/v3/api-docs",
+      "https://odin.ornl.gov/odi/status",
+      "https://odin.ornl.gov/downloadables/ODIN_Developer_Guide.pdf"
     ],
-    "round": 1
+    "round": 3
   },
   {
     "id": "ofac-recent-actions",

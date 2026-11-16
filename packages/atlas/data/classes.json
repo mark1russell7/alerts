@@ -1363,7 +1363,7 @@
       "FEMA Lifelines: Energy > Power Grid",
       "EM-DAT: Technological > Miscellaneous"
     ],
-    "gap": "Round 1 found no national free live feed. EAGLE-I gives only a historic release each year (eagle-i-history). PowerOutage.us returned 403, and the ODIN pages showed no detail. Each utility has its own outage map.",
+    "gap": "Round 3 plans ODIN (odin-ornl): a free public API of the active outages by county, from 159 utilities. No second live source is found. The map of each utility has the same origin, and PowerOutage.us returned 403. EAGLE-I gives only a historic release each year (eagle-i-history).",
     "round": 1
   },
   {

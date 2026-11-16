@@ -243,7 +243,49 @@
       },
       "unknownOrigins": 3,
       "unknownPaths": 4,
-      "cause": "Round 2 adopts the USGS feed for geo.earthquake. The class now has 2 adopted sources on 2 paths with no shared part, and 2 origins: the USGS and the US alerting authorities of the NWS API. So the adopted cover is 25 and the origin cover is 1. The second origin is weak: the NWS API carries only the rare earthquake alerts of the authorities, not each event. The layers do not measure the share of the events that each source carries. The earthquake alerts of the authorities can come from ShakeAlert, a system of the USGS. Then the class has one origin. Round 3 examines it."
+      "cause": "Round 2 adopts the USGS feed for geo.earthquake. The class now has 2 adopted sources on 2 paths with no shared part, and 2 origins: the USGS and the US alerting authorities of the NWS API. So the adopted cover is 25 and the origin cover is 1. The second origin is weak: the NWS API carries only the rare earthquake alerts of the authorities, not each event. The layers do not measure the share of the events that each source carries. The earthquake alerts of the authorities can come from ShakeAlert, a system of the USGS. Then the class has one origin. A later round examines it."
+    }
+  },
+  {
+    "round": 3,
+    "date": "2026-11-16",
+    "by": "One research session, for the power-outage class of the atlas (AL-36), then a count of each fact in the raw answers.",
+    "method": "A search for a live power-outage source with no fee. It read the OpenAPI document of the ODIN Web API, the status list of the reporting utilities and one answer of the county path. It also searched for the terms of the outage maps of KUBRA.",
+    "lists": [
+      "ODIN Web API, the OpenAPI document: https://odin.ornl.gov/v3/api-docs",
+      "ODIN, the status list of the reporting utilities: https://odin.ornl.gov/odi/status",
+      "ODIN Real-time Outages (County) on the Open Energy Data Portal of ORNL: https://ornl.opendatasoft.com/explore/assets/odin-real-time-outages-county/",
+      "KUBRA Storm Center: https://kubra.com/solutions/utility-maps/storm-center-outage-mapping/"
+    ],
+    "queries": [
+      "ODIN Outage Data Initiative Nationwide ORNL API utility outage data public access",
+      "Kubra Storm Center outage map JSON API currentState terms of use",
+      "\"odin.ornl.gov\" api outages county swagger endpoint json"
+    ],
+    "notes": [
+      "The public paths of the ODIN Web API are /odi, /odi/{utilityId}, /odi/map, /odi/status and /odi/data/{dataId}. The paths under /odin need a token of OAuth 2.0 client credentials.",
+      "The path /odi gives the active outages. With view=county it gives one total for each county. It has the filters stateCd and countyCd, and pages of up to 1000 records.",
+      "At 2026-11-16 06:45 UTC the status list had 159 utilities: 158 with a report of the past 24 hours, 136 with one of the past hour, and 9 with an error. The county path gave 86 counties.",
+      "The county dataset of ODIN on the Open Energy Data Portal had 220 records and states no license. Its last change was 7 hours before the read, so it is not the live path.",
+      "The outage maps of KUBRA Storm Center read JSON from the servers of KUBRA. The round found no documentation and no terms for automated reading of it."
+    ],
+    "studies": [],
+    "measures": {
+      "classes": 200,
+      "gaps": 132,
+      "cover": {
+        "adopted": 25,
+        "paths": 25,
+        "origins": 1
+      },
+      "total": {
+        "adopted": 77,
+        "paths": 77,
+        "origins": 52
+      },
+      "unknownOrigins": 3,
+      "unknownPaths": 4,
+      "cause": "Round 3 plans ODIN for infra.power.outage. The class has one live source and stays a gap, and the round adopts no source. So the measures do not change."
     }
   }
 ]
