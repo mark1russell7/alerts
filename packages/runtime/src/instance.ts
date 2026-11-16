@@ -53,7 +53,7 @@ import { err, ok, type Result } from "@mark1russell7/optional";
 import type { WorkerLoop } from "@mark1russell7/service";
 import type { Pace, QuotaStore, Transport } from "polite-crawler/api";
 import { DEFAULT_POLICY, HostScheduler, type PolitenessPolicy } from "polite-crawler/politeness";
-import { balanceWatch, SPEND_UNIT, spendGates, spendQuota, spendUnits, type BalanceWatch, type SpendGates } from "./balance.ts";
+import { balanceWatch, SPEND_UNIT, spendEntryOf, spendGates, spendQuota, spendUnits, type BalanceWatch, type SpendGates } from "./balance.ts";
 import { parseSecrets, requireKey, SECRETS_FILE, type FileText, type InstanceCheck } from "./config.ts";
 import { CLOCK_SKEW_LIMIT, COPY_FILE, COPY_TOKEN_KEY, EXCHANGE_EVERY, EXCHANGE_LIMIT } from "./copy.ts";
 import { overdueLimit, type DeliveryOptions } from "./delivery.ts";
@@ -192,14 +192,6 @@ export function twilioSetup(secret: SecretLookup): Result<TwilioSetup | undefine
 export function instanceSenders(secret: SecretLookup): readonly ChannelId[] {
   const twilio = twilioSetup(secret);
   return twilio.tag === "ok" && twilio.value !== undefined ? [CHANNEL_ID, TWILIO_CHANNEL] : [CHANNEL_ID];
-}
-
-/**
- * This function gives the spend entry of a channel with a cost: the first entry for a provider in the `dependsOn` of the
- * channel. The cap of the entry counts each send of the channel.
- */
-export function spendEntryOf(descriptor: ChannelDescriptor, spend: readonly SpendConfig[] | undefined): SpendConfig | undefined {
-  return spend?.find((entry) => descriptor.dependsOn.includes(entry.provider));
 }
 
 /** The tsunami warning centers of the NWS. Each center is a source of its own, with its own health. */

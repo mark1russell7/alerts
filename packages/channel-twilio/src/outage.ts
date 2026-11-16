@@ -26,6 +26,7 @@ import {
   type TryChain,
   type TryEnd,
 } from "@mark1russell7/alerts";
+import { firstInstantOf, localTime } from "@mark1russell7/algebra/clock";
 import { z } from "zod";
 // The descriptor module, not `index.ts`: the bundle of each Function then holds no send code of the channel.
 import { CHANNEL_ID, twilioCallDescriptor } from "./descriptor.ts";
@@ -58,6 +59,20 @@ export const OUTAGE_TEXTS: OutageTexts = {
   unrecorded: "The system did not record the confirmation. The next call follows.",
 };
 
+/**
+ * The monthly cap of the outage call: the most calls of the Twilio number in one calendar month. Each call of the number
+ * counts, also a call of the instance. Thus a call of the outage call does not take the calls of the month above the cap.
+ */
+export interface OutageMonthCap {
+  /** The most calls in one calendar month. */
+  readonly maxCalls: number;
+  /** The IANA time zone of the start of the month, as in the spend entry of the provider: for example `America/Chicago`. */
+  readonly timeZone: string;
+}
+
+/** The highest monthly cap of calls. One read of the calls list gives at most this count of calls. */
+export const OUTAGE_MONTH_MAX = 1000;
+
 /** The list of the outage call. The deploy of the Function copies it from the private configuration. */
 export interface OutageList {
   /** The version of the list, for example the content hash of the list. A callback of another version starts no try. */
@@ -73,6 +88,8 @@ export interface OutageList {
   /** The most calls in the time `capWindow`. A try above the cap makes no call. */
   readonly maxCalls: number;
   readonly capWindow: Duration;
+  /** The monthly cap of the calls of the Twilio number. A try above the cap makes no call. */
+  readonly month: OutageMonthCap;
   /** The voice of the text, for example `Polly.Joanna`. Without it, Twilio uses its default voice. */
   readonly voice?: string;
   /** The language of the text, for example `en-US`. */
@@ -96,6 +113,7 @@ export const outageListSchema: z.ZodType<OutageList, OutageList> = schemaOf<Outa
     ringSeconds: z.number(),
     maxCalls: z.number(),
     capWindow: durationSchema,
+    month: z.strictObject({ maxCalls: z.number(), timeZone: z.string() }).readonly(),
     voice: z.string().exactOptional(),
     language: z.string().exactOptional(),
     texts: z
@@ -154,13 +172,13 @@ export type OutageAction =
 
 /**
  * A note of a handler for the log of the Function.
- * - `capped`: the cap stopped a try of the person.
+ * - `capped`: a cap stopped a try of the person. The cap `window` is the cap of `capWindow`, and the cap `month` is the monthly cap.
  * - `acked` and `exhausted`: the chain of the person ended.
  * - `stale`: the callback has no valid cursor, or the cursor has another version of the list.
  * - `open`: the status is not the end of a call, so no step follows.
  */
 export type OutageNote =
-  | { readonly kind: "capped"; readonly person: PersonId }
+  | { readonly kind: "capped"; readonly person: PersonId; readonly cap: "window" | "month" }
   | { readonly kind: "acked"; readonly person: PersonId; readonly step: number }
   | { readonly kind: "exhausted"; readonly person: PersonId }
   | { readonly kind: "stale" }
@@ -176,10 +194,10 @@ export interface OutageStep {
 /**
  * This function gives the result of the webhook of the outside check: the first call of each person.
  * `recent` holds the times of the calls of the Twilio number, from the calls list of Twilio. A call in
- * the time `capWindow` before `at` counts against the cap.
+ * the time `capWindow` before `at` counts against the cap. A call in the calendar month of `at` counts against the monthly cap.
  */
 export function outageStart(list: OutageList, base: string, at: Instant, recent: readonly Instant[]): OutageStep {
-  let calls = countRecent(list, at, recent);
+  let calls = callCounts(list, at, recent);
   const actions: OutageAction[] = [];
   const notes: OutageNote[] = [];
   list.people.forEach((person, index) => {
@@ -189,7 +207,7 @@ export function outageStart(list: OutageList, base: string, at: Instant, recent:
       notes.push(tried.note);
       return;
     }
-    calls += 1;
+    calls = { window: calls.window + 1, month: calls.month + 1 };
     actions.push(tried.action);
   });
   return { actions, notes };
@@ -227,7 +245,7 @@ export function outageEnded(list: OutageList, base: string, params: Readonly<Rec
   const end = callEnd(status, params["acked"] === "1");
   if (end === undefined) return { actions: [], notes: [{ kind: "open", status }] };
   const state = chainNext(person.chain, cursor.step, end);
-  const tried = tryOf(list, base, person, { ...cursor, round: 0 }, state, countRecent(list, at, recent));
+  const tried = tryOf(list, base, person, { ...cursor, round: 0 }, state, callCounts(list, at, recent));
   return tried.kind === "note" ? { actions: [], notes: [tried.note] } : { actions: [tried.action], notes: [] };
 }
 
@@ -253,7 +271,8 @@ export function callEnd(status: string, acked: boolean): TryEnd | undefined {
  * - an empty version or message, or a text that a call cannot say
  * - a bad phone number, or a step on another channel
  * - two entries of one person
- * - a bad count, or a cap below the calls of one outage.
+ * - a bad count, or a cap below the calls of one outage
+ * - a monthly cap with a time zone that is not an IANA time zone.
  *
  * Each problem names ids and fields, and no number.
  */
@@ -284,6 +303,10 @@ export function outageListProblems(list: OutageList): string[] {
   if (!(list.capWindow > 0)) problems.push("The time of the cap is not more than 0.");
   const perOutage = list.people.reduce((sum, person) => sum + person.chain.steps.length, 0);
   if (list.maxCalls < perOutage) problems.push(`The cap of ${list.maxCalls} calls is below the ${perOutage} calls of one outage, so the cap stops tries of one outage.`);
+  // The monthly cap comes from the private cap of the spend. Thus its problems name no count.
+  if (!isCount(list.month.maxCalls, 1, OUTAGE_MONTH_MAX)) problems.push(`The monthly cap of calls is not a whole number from 1 to ${OUTAGE_MONTH_MAX}.`);
+  else if (list.month.maxCalls < perOutage) problems.push("The monthly cap of calls is below the calls of one outage, so the cap stops tries of one outage.");
+  if (localTime(0, list.month.timeZone) === undefined) problems.push("The time zone of the monthly cap is not an IANA time zone.");
   return problems;
 }
 
@@ -347,17 +370,41 @@ function urlOf(base: string, path: string, cursor: OutageCursor, version: string
   return url.toString();
 }
 
-function countRecent(list: OutageList, at: Instant, recent: readonly Instant[]): number {
-  return recent.filter((time) => time > at - list.capWindow && time <= at).length;
+const DAY = 24 * 60 * 60_000;
+
+/**
+ * This function gives the start of the calendar month of `at` in the time zone `zone`: the first instant of its first day.
+ * A name that is not a time zone gives the instant 31 days before `at`. Thus the cap then counts more calls, not fewer.
+ */
+export function monthStartOf(at: Instant, zone: string): Instant {
+  const local = localTime(at, zone);
+  const start = local === undefined ? undefined : firstInstantOf(Date.UTC(local.year, local.month - 1, 1), zone);
+  return start ?? at - 31 * DAY;
+}
+
+/** The counts of the recent calls for the two caps. */
+interface CallCounts {
+  readonly window: number;
+  readonly month: number;
+}
+
+// A call in the time `capWindow` before `at` counts for the cap of the window. A call from the start of the month counts for the monthly cap.
+function callCounts(list: OutageList, at: Instant, recent: readonly Instant[]): CallCounts {
+  const from = monthStartOf(at, list.month.timeZone);
+  return {
+    window: recent.filter((time) => time > at - list.capWindow && time <= at).length,
+    month: recent.filter((time) => time >= from && time <= at).length,
+  };
 }
 
 type Tried = { readonly kind: "call"; readonly action: OutageAction } | { readonly kind: "note"; readonly note: OutageNote };
 
 // The try of the state: a call when the chain tries and the cap permits it, else a note.
-function tryOf(list: OutageList, base: string, person: OutagePerson, cursor: OutageCursor, state: ChainState, calls: number): Tried {
+function tryOf(list: OutageList, base: string, person: OutagePerson, cursor: OutageCursor, state: ChainState, calls: CallCounts): Tried {
   if (state.kind === "acked") return { kind: "note", note: { kind: "acked", person: person.person, step: state.step } };
   if (state.kind === "exhausted") return { kind: "note", note: { kind: "exhausted", person: person.person } };
-  if (calls >= list.maxCalls) return { kind: "note", note: { kind: "capped", person: person.person } };
+  if (calls.window >= list.maxCalls) return { kind: "note", note: { kind: "capped", person: person.person, cap: "window" } };
+  if (calls.month >= list.month.maxCalls) return { kind: "note", note: { kind: "capped", person: person.person, cap: "month" } };
   const at = { ...cursor, step: state.step };
   return {
     kind: "call",

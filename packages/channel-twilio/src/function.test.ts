@@ -22,6 +22,7 @@ const LIST: OutageList = {
   ringSeconds: 45,
   maxCalls: 10,
   capWindow: 60 * MINUTE,
+  month: { maxCalls: 250, timeZone: "America/Chicago" },
 };
 const AT = 1_000 * MINUTE;
 
@@ -119,6 +120,24 @@ describe("entryFunction", () => {
     await entryFunction(f.ports, { base: BASE, params: { token: TOKEN } }, TOKEN);
     expect(f.placed.map((call) => call.to)).toEqual(["+15555550123"]);
     expect(f.lines).toContain(`The cap stopped a call of the person ${p2}.`);
+  });
+
+  it("reads the calls of the larger cap, and the monthly cap stops a call", async () => {
+    const counts: number[] = [];
+    // Each call of the list is in the month, and none is in the hour of the cap window.
+    const recent = async (count: number): Promise<readonly Instant[]> => {
+      counts.push(count);
+      return Array.from({ length: Math.min(count, 3) }, (_, i): Instant => AT - (90 + i) * MINUTE);
+    };
+    const f = fake({ list: async () => ({ ...LIST, month: { maxCalls: 4, timeZone: "UTC" } }), recent });
+    await entryFunction(f.ports, { base: BASE, params: { token: TOKEN } }, TOKEN);
+    expect(counts).toEqual([10]);
+    expect(f.placed.map((call) => call.to)).toEqual(["+15555550123"]);
+    expect(f.lines).toContain(`The monthly cap stopped a call of the person ${p2}.`);
+    const big = fake({ list: async () => ({ ...LIST, month: { maxCalls: 250, timeZone: "UTC" } }), recent });
+    counts.length = 0;
+    await entryFunction(big.ports, { base: BASE, params: { token: TOKEN } }, TOKEN);
+    expect(counts).toEqual([250]);
   });
 
   it("continues with the next person when a call fails, and the log line has no number", async () => {
@@ -247,7 +266,8 @@ describe("tokenMatches", () => {
 describe("noteLine", () => {
   it("names the kind and the person of each note", () => {
     const notes: OutageNote[] = [
-      { kind: "capped", person: p1 },
+      { kind: "capped", person: p1, cap: "window" },
+      { kind: "capped", person: p1, cap: "month" },
       { kind: "acked", person: p1, step: 1 },
       { kind: "exhausted", person: p1 },
       { kind: "stale" },
@@ -255,6 +275,7 @@ describe("noteLine", () => {
     ];
     expect(notes.map(noteLine)).toEqual([
       `The cap stopped a call of the person ${p1}.`,
+      `The monthly cap stopped a call of the person ${p1}.`,
       `The person ${p1} confirmed at step 1.`,
       `The chain of the person ${p1} ended with no confirmation.`,
       "The request has no valid cursor of this list, so no call starts.",

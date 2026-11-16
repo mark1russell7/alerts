@@ -17,6 +17,7 @@ const LIST: OutageList = {
   ringSeconds: 45,
   maxCalls: 10,
   capWindow: 3_600_000,
+  month: { maxCalls: 250, timeZone: "America/Chicago" },
 };
 
 interface Loaded {

@@ -6,7 +6,7 @@
 import type { Duration, OutageConfig, Recipient } from "@mark1russell7/alerts";
 import { canonicalHash } from "@mark1russell7/rigor-generators";
 import { CHANNEL_ID } from "./descriptor.ts";
-import { outageListProblems, type OutageList, type OutageTexts } from "./outage.ts";
+import { outageListProblems, type OutageList, type OutageMonthCap, type OutageTexts } from "./outage.ts";
 
 /** The default message of the outage call. It names no person and no place. */
 export const OUTAGE_MESSAGE = "The alert system is down. The outside check gets no sign from it.";
@@ -50,12 +50,13 @@ export interface OutageListResult {
  * This function gives the list of the outage call from the configuration and the recipients of `loadConfig`.
  *
  * - The number of each person is the address `to` of the person on the channel of the calls.
+ * - The monthly cap `month` comes from the cap of the spend of Twilio. The list has no default for it.
  * - The version is the start of the content hash of the rest of the list. Thus a change of the list gives a new version.
  * - The problems are the problems of `outageListProblems`, and a person with no recipient.
  *
  * The list holds the phone numbers. Do not log it, and keep its version out of public text.
  */
-export function outageListOf(outage: OutageConfig, recipients: readonly Recipient[], options: OutageListOptions = {}): OutageListResult {
+export function outageListOf(outage: OutageConfig, recipients: readonly Recipient[], month: OutageMonthCap, options: OutageListOptions = {}): OutageListResult {
   const problems: string[] = [];
   const byPerson = new Map(recipients.map((recipient) => [recipient.watch.person, recipient] as const));
   const people = outage.people.map(({ person, chain }) => {
@@ -71,6 +72,7 @@ export function outageListOf(outage: OutageConfig, recipients: readonly Recipien
     ringSeconds: options.ringSeconds ?? OUTAGE_RING_SECONDS,
     maxCalls: options.maxCalls ?? Math.max(1, OUTAGE_CAP_OUTAGES * perOutage),
     capWindow: options.capWindow ?? OUTAGE_CAP_WINDOW,
+    month: { maxCalls: month.maxCalls, timeZone: month.timeZone },
     ...(options.voice === undefined ? {} : { voice: options.voice }),
     ...(options.language === undefined ? {} : { language: options.language }),
     ...(options.texts === undefined ? {} : { texts: options.texts }),

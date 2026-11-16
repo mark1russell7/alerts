@@ -1,10 +1,10 @@
 import { fakeClock, type FakeClock, type WallClock } from "@mark1russell7/algebra/clock";
-import { CONFIG_FORMAT, parseConfig, type AlertConfig, type ChannelId, type EscalationPolicy, type PersonId, type PlaceId, type SecretLookup } from "@mark1russell7/alerts";
+import { CONFIG_FORMAT, parseConfig, type AlertConfig, type ChannelId, type EscalationPolicy, type PersonId, type PlaceId, type SecretLookup, type SpendConfig } from "@mark1russell7/alerts";
 import type { TwilioFetch, TwilioServerlessDeployResult } from "@mark1russell7/alerts-channel-twilio";
 import { detachedLifecycle } from "@mark1russell7/service/testing";
 import { afterEach, describe, expect, it } from "vitest";
 import { INSTANCE_CHANNELS } from "./instance.ts";
-import { OUTAGE_TOKEN_KEY, outageDeploy, outageDeployWorker, outageSetup, type OutageDeployOptions, type OutageDeployWorker, type OutageKeys } from "./outage.ts";
+import { OUTAGE_TOKEN_KEY, outageDeploy, outageDeployWorker, outageMonthCapOf, outageSetup, type OutageDeployOptions, type OutageDeployWorker, type OutageKeys } from "./outage.ts";
 
 const SECOND = 1000;
 const MINUTE = 60 * SECOND;
@@ -47,7 +47,9 @@ const CONFIG: AlertConfig = {
   ],
   policies: [policy("life-safety"), policy("urgent"), policy("notice")],
 };
-const withOutage = (steps: readonly ChannelId[]): AlertConfig => ({ ...CONFIG, outage: { people: [{ person, chain: { steps } }] } });
+// A fake cap of the spend. The monthly cap of the Functions comes from it.
+const SPEND: SpendConfig = { provider: "provider:twilio", monthlyUsd: 10, reserveUsd: 3, floor: 5, timeZone: "America/Chicago" };
+const withOutage = (steps: readonly ChannelId[], spend: readonly SpendConfig[] = [SPEND]): AlertConfig => ({ ...CONFIG, outage: { people: [{ person, chain: { steps } }] }, spend });
 
 const parse = (config: AlertConfig, secret: SecretLookup) => {
   const parsed = parseConfig(JSON.stringify(config), INSTANCE_CHANNELS, secret);
@@ -66,6 +68,26 @@ describe("outageSetup", () => {
     if (setup.tag === "err" || setup.value === undefined) throw new Error("The setup has problems.");
     expect(setup.value).toMatchObject({ credentials: KEYS.credentials, from: KEYS.from, token: TOKEN });
     expect(setup.value.list.people).toEqual([{ person, to: SECRETS.PHONE, chain: { steps: [call, call] } }]);
+    // 10 US dollars at 4 cents a call give 250 calls in the calendar month of the time zone of the spend.
+    expect(setup.value.list.month).toEqual({ maxCalls: 250, timeZone: "America/Chicago" });
+  });
+
+  it("gives the problem of an outage call with no spend entry for Twilio", () => {
+    const secret = store(SECRETS);
+    const setup = outageSetup(parse(withOutage([call], []), secret), secret, KEYS);
+    expect(setup.tag === "err" ? setup.error : []).toEqual([expect.stringContaining("no spend entry for the provider of the calls")]);
+  });
+
+  it("gives the monthly cap from the cap of the spend: whole calls of 4 cents, at most the highest cap", () => {
+    expect(outageMonthCapOf({ monthlyUsd: 10, timeZone: "UTC" })).toEqual({ maxCalls: 250, timeZone: "UTC" });
+    // The cents of a part of a call do not make a call.
+    expect(outageMonthCapOf({ monthlyUsd: 0.11, timeZone: "UTC" }).maxCalls).toBe(2);
+    expect(outageMonthCapOf({ monthlyUsd: 1000, timeZone: "UTC" }).maxCalls).toBe(1000);
+    // A cap below one call gives 0 calls. The list then gives a problem, and no Function deploys.
+    expect(outageMonthCapOf({ monthlyUsd: 0.03, timeZone: "UTC" }).maxCalls).toBe(0);
+    const secret = store(SECRETS);
+    const low = outageSetup(parse(withOutage([call], [{ ...SPEND, monthlyUsd: 0.03, reserveUsd: 0, floor: 0 }]), secret), secret, KEYS);
+    expect(low.tag === "err" ? low.error : []).toContain("The monthly cap of calls is not a whole number from 1 to 1000.");
   });
 
   it("gives the problems of no keys of Twilio, no token, a token of a bad form and a bad list, and no problem holds a value", () => {
