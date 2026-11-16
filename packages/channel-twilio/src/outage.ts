@@ -169,8 +169,8 @@ export function outagePress(list: OutageList, base: string, params: Readonly<Rec
 }
 
 /**
- * This function gives the result of the status callback at the end of a call: the next call of the
- * chain of the person, or no call. A `completed` call with `acked=1` is confirmed. A `completed`
+ * This function gives the result of the status callback at the end of a call. The result is the next
+ * call of the chain of the person, or no call. A `completed` call with `acked=1` is confirmed. A `completed`
  * call with no press, `busy` and `no-answer` are unconfirmed. `failed` and `canceled` are failed.
  */
 export function outageEnded(list: OutageList, base: string, params: Readonly<Record<string, unknown>>, at: Instant, recent: readonly Instant[]): OutageStep {
@@ -202,9 +202,14 @@ export function callEnd(status: string, acked: boolean): TryEnd | undefined {
 }
 
 /**
- * This function checks a list of the outage call. It finds an empty version or message, a text that a
- * call cannot say, a bad phone number, a step on another channel, two entries of one person, a bad
- * count, and a cap below the calls of one outage. Each problem names ids and fields, and no number.
+ * This function checks a list of the outage call. It finds these problems:
+ *
+ * - an empty version or message, or a text that a call cannot say
+ * - a bad phone number, or a step on another channel
+ * - two entries of one person
+ * - a bad count, or a cap below the calls of one outage.
+ *
+ * Each problem names ids and fields, and no number.
  */
 export function outageListProblems(list: OutageList): string[] {
   const problems: string[] = [];
