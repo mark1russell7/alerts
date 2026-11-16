@@ -384,6 +384,9 @@ importers:
       '@mark1russell7/alerts':
         specifier: workspace:*
         version: link:../core
+      '@mark1russell7/alerts-format-nws':
+        specifier: workspace:*
+        version: link:../format-nws
       '@nodable/entities':
         specifier: ^3.1.0
         version: 3.1.0
@@ -391,9 +394,6 @@ importers:
         specifier: ^5.12.1
         version: 5.12.1
     devDependencies:
-      '@mark1russell7/alerts-format-nws':
-        specifier: workspace:*
-        version: link:../format-nws
       '@mark1russell7/cue':
         specifier: ^2.0.0
         version: 2.1.4
