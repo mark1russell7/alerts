@@ -11,6 +11,7 @@ export * from "./balance.ts";
 export * from "./config.ts";
 export * from "./delivery.ts";
 export * from "./events.ts";
+export * from "./exchange.ts";
 export * from "./heartbeat.ts";
 export { DELIVERY_TIMES, SOURCE_POLICY, sourcePace } from "./instance.ts";
 export * from "./fetch.ts";

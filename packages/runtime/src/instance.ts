@@ -504,6 +504,7 @@ export function openInstance(options: InstanceOptions): Instance {
       ...(config.link === undefined ? {} : { link: config.link }),
     },
     run: options.run,
+    copy: (options.copy ?? ONLY_COPY).id,
     delivery,
     // The loop exists before the first pass, and only a pass starts a wake.
     wake: () => loop.wake(),

@@ -5,17 +5,18 @@
  * that it gets.
  */
 import type { WallClock } from "@mark1russell7/algebra/clock";
-import type { ChannelQuota, Duration, FetchOutcome, Instant, LatenessFolds, ReportId, SourceDescriptor, SourceId, SourceProcedures, Watch } from "@mark1russell7/alerts";
+import { ONLY_COPY, type ChannelQuota, type Duration, type FetchOutcome, type Instant, type LatenessFolds, type ReportId, type SourceDescriptor, type SourceId, type SourceProcedures, type Watch } from "@mark1russell7/alerts";
 import { errorMessage } from "@mark1russell7/text";
 import type { BalanceWatch } from "./balance.ts";
 import { createDispatcher, type DeliveryOptions, type DeliveryStep } from "./delivery.ts";
-import { envelope, type RuntimeEvent } from "./events.ts";
+import { envelope, EVENT_TYPES, type RuntimeEvent } from "./events.ts";
+import { importPage, sharePage, type ExchangePage, type ReceivedPage } from "./exchange.ts";
 import { fetchEvents } from "./fetch.ts";
 import { isFrameClock } from "./frame.ts";
 import { limited } from "./limit.ts";
 import type { RuntimeLog } from "./log.ts";
 import { SNAPSHOT_MISSES, snapshotStep } from "./snapshot.ts";
-import { fold, rebuild, type RuntimeState } from "./state.ts";
+import { fold, rebuild, type ExchangeCursor, type RuntimeState } from "./state.ts";
 import { earliest, nextFetch, systemEvent, systemView, type SystemView, type ViewConfig } from "./view.ts";
 
 /** The options of `openRuntime`. */
@@ -40,6 +41,8 @@ export interface RuntimeOptions {
   readonly view: Omit<ViewConfig, "sources">;
   /** The id of this run. Each start of the process has a new id. */
   readonly run: string;
+  /** The id of this copy of the system (AL-16). The default is the id of `ONLY_COPY`. */
+  readonly copy?: string;
   /** This function gives the longest time of one fetch of a source. The default is the interval of the source. */
   readonly fetchLimit?: (source: SourceDescriptor) => Duration;
   /**
@@ -91,6 +94,21 @@ export interface Pass {
   readonly stepped?: Duration;
 }
 
+/** The result of `take`: the import of one page of another copy. */
+export interface PageTake {
+  /** The count of the imports of the page. An import that the log has already changes nothing. */
+  readonly imports: number;
+  /** The position of the next read of the copy. */
+  readonly next: number;
+  /** The problems of the page, with no value of an event. */
+  readonly problems: readonly string[];
+  /**
+   * The ids of the imports with the id of a different event of the log. The log kept its event: a step of the ledger
+   * that this copy also did.
+   */
+  readonly conflicts: readonly string[];
+}
+
 /** The runtime: its state and its pass. */
 export interface Runtime {
   /** The configuration of the views, with the descriptor of each source. */
@@ -106,6 +124,15 @@ export interface Runtime {
    * ends at its own time limit.
    */
   pass(stop?: AbortSignal): Promise<Pass>;
+  /** This function gives the page of the shared events of the log after a position (AL-16). */
+  share(after: number, limit?: number): ExchangePage;
+  /** This function gives the position after which the next read of another copy starts. */
+  position(copy: string): number;
+  /**
+   * This function adds the shared events of a page of another copy to the log, as events `import`. It throws when the
+   * write fails. Then the position stays, and the next read gets the page again.
+   */
+  take(page: ReceivedPage): PageTake;
 }
 
 /**
@@ -133,6 +160,12 @@ export function openRuntime(options: RuntimeOptions): Runtime {
   };
 
   append([{ ...envelope("started", `started:${options.run}`, clock.now()), run: options.run }]);
+
+  // The id of this copy and of its log: the id of the first event. A new log has a new first event.
+  const self = options.copy ?? ONLY_COPY.id;
+  const logId = [...log.entries({ after: 0, types: EVENT_TYPES, limit: 1 })][0]?.event.id ?? `started:${options.run}`;
+  // The position of the next read of each other copy. It starts at the position of the log, and it moves at each page.
+  const positions = new Map<string, ExchangeCursor>();
 
   const dispatcher = options.delivery === undefined ? undefined : createDispatcher(options.delivery, { clock, run: options.run, places: config.places, link: config.link, state: () => state, append, wake: options.wake });
 
@@ -167,8 +200,9 @@ export function openRuntime(options: RuntimeOptions): Runtime {
     const ended = clock.now();
     const conflicts = append(fetchEvents({ source: descriptor.id, procedures: source, started, ended, outcome, known: (id) => log.has(id), frame: state.steps.length }));
     if (descriptor.listing !== "snapshot") return conflicts;
-    // The step reads the merge state after the fetch, thus a new report of the fetch has no miss.
-    const step = snapshotStep({ source: descriptor.id, started, ended, outcome, merge: state.merge, misses: misses.get(descriptor.id) ?? new Map(), limit, frame: state.steps.length });
+    // The step reads the merge state after the fetch, thus a new report of the fetch has no miss. It reads only the own
+    // merge state: a report that only another copy sees does not end or come back in this copy.
+    const step = snapshotStep({ source: descriptor.id, started, ended, outcome, merge: state.own.merge, misses: misses.get(descriptor.id) ?? new Map(), limit, frame: state.steps.length });
     const more = append(step.events);
     // The counts change only after the write. A failed write leaves the old counts, thus the end comes later.
     misses.set(descriptor.id, step.misses);
@@ -250,6 +284,15 @@ export function openRuntime(options: RuntimeOptions): Runtime {
       };
       await options.onPass?.(pass);
       return pass;
+    },
+    share: (after, limit) => sharePage(log, { copy: self, log: logId }, after, limit),
+    position: (copy) => (positions.get(copy) ?? state.exchanges[copy])?.next ?? 0,
+    take(page) {
+      const logged = state.exchanges[page.copy];
+      const result = importPage(page, { self, position: positions.get(page.copy) ?? logged, logged, now: clock.now() });
+      const conflicts = result.events.length === 0 ? [] : append(result.events);
+      positions.set(page.copy, result.position);
+      return { imports: result.imports, next: result.position.next, problems: result.problems, conflicts };
     },
   };
 }

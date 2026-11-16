@@ -152,6 +152,8 @@ function crashing(inner: RuntimeLog, at: number): RuntimeLog {
   return {
     read: () => inner.read(),
     has: (id) => inner.has(id),
+    entries: (options) => inner.entries(options),
+    head: () => inner.head(),
     close: () => inner.close(),
     appendAll(events, accept) {
       if (gone) throw new Crash("The process is gone.");

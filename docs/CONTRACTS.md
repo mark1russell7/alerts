@@ -383,16 +383,20 @@ A copy with a higher rank sends first when it sees the incident `RANK_DELAY` or 
 
 Each copy reads the log of each other copy, and adds the shared events to its own log:
 
-- The procedure `alerts.log.entries` gives the shared events of the log after a sequence number, one page at a time. It also gives the head of the log, the time of the copy and the hash of its configuration.
+- The procedure `alerts.log.entries` gives the shared events of the log after a position, one page at a time. It also gives the time of the copy and the hash of its configuration.
+- A page has the format `alerts-exchange/1`. It examines 500 entries of the log or fewer. It gives the head of the log and the position of the next page.
+- Each page gives the id of the log: the id of its first event. A new log has a new id. Then the worker starts again from 0.
 - The procedures host of `@procedures/peer` serves the procedure on the address `listen`. The host checks the token. The runtime has no route and no token check of its own.
-- A worker of each copy reads each other copy each 5 seconds, with a time limit of 3 seconds. It keeps the last sequence number of each copy.
-- When the head of another copy is below that number, the log of that copy is new. Then the worker starts again from 0.
+- A worker of each copy reads each other copy each 5 seconds, with a time limit of 3 seconds. It keeps the read position of each copy in memory.
+- The worker refuses a page that starts after its position, because the page skips entries. The position does not move back at any time.
+- The event `exchange` writes the position to the log with the imports of a page, or after 10,000 entries with no import. Thus a restart reads 10,000 entries again or fewer.
 - At its start, a copy reads each other copy before its first delivery step, for one time limit or less. Thus a restart does not repeat the sends of another copy.
 
 The shared events are the parts of the merge state and of the delivery ledger:
 
 - the reports of each `fetch` event, with no fetch record and no cursor
-- the events `ended`, `back`, `delivery`, `acknowledgment`, `cancelled` and `escalation-end`
+- the events `delivery`, with no copy id, because a copy id names the tries of a send in one copy
+- the events `ended`, `back`, `acknowledgment`, `cancelled` and `escalation-end`
 
 The other events stay in their copy, because each copy has its own sources, health and channels:
 
@@ -401,10 +405,14 @@ The other events stay in their copy, because each copy has its own sources, heal
 
 The rules of an import:
 
-- An imported event keeps its id, and it gets the field `from`: the id of the copy that wrote it. The log keeps one event for each id, thus the same delivery of two copies is one event.
+- A copy writes each shared event of another copy as an event `import`. Its field `from` holds the id of the copy that wrote the event, and its field `event` holds the event.
+- An import of a step of the ledger keeps the id of its event. The log keeps one event for each id, thus the same delivery of two copies is one event.
+- An import of a `fetch`, `ended` or `back` event gets the id of its copy before its id. Each copy gives its own ids to these events.
+- The import checks each item of a page with the schemas of the core. A bad item gives a problem with no value of the event, and the other items go in.
 - The fold of an imported event changes only the shared state. It is the merge, the cancels, the ends of the escalations and the refusals of a delivered key.
+- The state keeps the own parts of the merge apart from the imported parts. The views join the two sides. The snapshot step of a source reads only the own parts.
 - The health, the cursors and the counts of the deliveries of each channel stay with their copy.
-- A copy also gives the events that it imported. Thus three copies agree when only two pairs of them can reach each other.
+- A copy also gives the events that it imported. Thus three copies agree when only two pairs of them can reach each other. A copy skips the events that it wrote.
 - The instants of an imported event come from the clock of another copy. Thus a step of the clock of this copy does not move them.
 - An acknowledgment goes to each copy. Each copy polls the receipts of each delivery in the ledger, thus an acknowledgment comes also when the copy of the send is down.
 

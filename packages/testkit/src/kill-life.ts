@@ -36,6 +36,8 @@ function killingLog(log: RuntimeLog, point: KillPoint | "none"): RuntimeLog {
   return {
     read: () => log.read(),
     has: (id) => log.has(id),
+    entries: (options) => log.entries(options),
+    head: () => log.head(),
     close: () => log.close(),
     appendAll(events, accept) {
       const types = new Set(events.map((event) => event.type));
