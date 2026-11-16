@@ -9,6 +9,7 @@ import {
   measures,
   MIN_SOURCES,
   mostDisjoint,
+  originsAt,
   pairClaims,
   parentOf,
   planBlock,
@@ -16,6 +17,8 @@ import {
   unreachedCodes,
   type Atlas,
   type Layers,
+  type Region,
+  type RegionalOrigins,
   type Round,
   type SignalClass,
   type Source,
@@ -71,16 +74,20 @@ const source = (id: string, classes: readonly string[], decision: Source["decisi
   round: 1,
 });
 
+const WORLD: Region = { id: "world", name: "The whole Earth", parent: null, note: "a test" };
+const US: Region = { id: "us", name: "The United States", parent: "world", note: "a test" };
+
 // The atlas of a test lists each origin and each part of a path that its sources name. A first part is a host.
-const atlas = (classes: readonly SignalClass[], sources: readonly Source[]): Atlas => {
+const atlas = (classes: readonly SignalClass[], sources: readonly Source[], regions: readonly Region[] = [WORLD]): Atlas => {
   const named = (pick: (source: Source) => readonly string[]): string[] => [...new Set(sources.flatMap(pick))].filter((id) => id !== UNKNOWN);
   const hosts = new Set(sources.map((source) => source.path[0]));
   return {
     classes,
     sources,
     rounds: [round],
-    origins: named((source) => source.origins).map((id) => ({ id, name: id, issues: null, note: "a test" })),
+    origins: named((source) => [...source.origins, ...(source.regionalOrigins ?? []).flatMap((entry) => entry.origins)]).map((id) => ({ id, name: id, issues: null, note: "a test" })),
     paths: named((source) => source.path).map((id) => ({ id, name: id, kind: hosts.has(id) ? ("host" as const) : ("carrier" as const), note: "a test" })),
+    regions,
   };
 };
 
@@ -237,6 +244,41 @@ describe("the layers of the cover", () => {
     expect(coverage(issuing(["geo.volcano.ashfall"], ["geo.volcano"]))[0]?.layers).toEqual(layers(1, 1, 2));
   });
 
+  it("counts the origins in the part of the Earth with the fewest: a relay of a network adds no origin in its region", () => {
+    const at = (id: string, origins: string[], regionalOrigins?: RegionalOrigins[]): Source => ({
+      ...source(id, ["geo.earthquake"], "adopt"),
+      origins,
+      ...(regionalOrigins === undefined ? {} : { regionalOrigins }),
+    });
+    const network = at("network", ["network"]);
+    const relay = at("relay", ["relay", "network"], [{ region: "us", origins: ["network"], note: "a test" }]);
+    const world = atlas([klass("geo.earthquake")], [network, relay], [WORLD, US]);
+    // In the United States both sources give the solutions of the network. In the rest of the Earth the relay adds its own.
+    expect(coverage(world)[0]?.layers).toEqual(layers(2, 2, 1));
+    expect(checkAtlas(world)).toEqual([]);
+    expect(pairClaims(world)).toEqual([{ a: "network", b: "relay", classes: ["geo.earthquake"], origins: ["network"], path: [] }]);
+    // With no regional entry, the relay counts as a second origin.
+    expect(coverage(atlas([klass("geo.earthquake")], [network, at("relay", ["relay", "network"])]))[0]?.layers).toEqual(layers(2, 2, 2));
+    // An origin in each part of the Earth makes the fewest 2.
+    const withThird = atlas([klass("geo.earthquake")], [network, relay, at("authorities", ["authorities"])], [WORLD, US]);
+    expect(coverage(withThird)[0]?.layers).toEqual(layers(3, 3, 2));
+    expect(measures(withThird).total.origins).toBe(2);
+  });
+
+  it("gives the origins of the smallest region that holds a part of the Earth, else the field origins", () => {
+    const region = (id: string, parent: string): Region => ({ id, name: id, parent, note: "a test" });
+    const regions = [WORLD, region("americas", "world"), region("us", "americas"), region("europe", "world")];
+    const relay = {
+      origins: ["relay"],
+      regionalOrigins: [
+        { region: "americas", origins: ["continent"], note: "a test" },
+        { region: "us", origins: ["network"], note: "a test" },
+      ],
+    };
+    expect(["world", "americas", "us", "europe"].map((id) => originsAt(relay, id, regions))).toEqual([["relay"], ["continent"], ["network"], ["relay"]]);
+    expect(originsAt({ origins: ["relay"] }, "us", regions)).toEqual(["relay"]);
+  });
+
   it("gives the most sets with no shared item by an exact search", () => {
     expect(mostDisjoint([])).toBe(0);
     expect(mostDisjoint([["a"], ["a"], ["b"]])).toBe(2);
@@ -356,6 +398,50 @@ describe("the layers of the cover", () => {
     expect(coverage(world)[0]?.layers).toEqual(layers(1, 1, 0));
     expect(measures(world).unknownOrigins).toBe(1);
     expect(checkAtlas(world)).toEqual([{ at: "source a", problem: "the source has no origins: give the ids, or unknown" }]);
+  });
+
+  it("stops a tree of regions with two roots, a lost parent or a cycle, and a region that no source names", () => {
+    const region = (id: string, parent: string | null): Region => ({ id, name: id, parent, note: "a test" });
+    const entry = (id: string): RegionalOrigins => ({ region: id, origins: ["test-origin"], note: "a test" });
+    const regions = [WORLD, region("moon", null), region("loop-a", "loop-b"), region("loop-b", "loop-a"), region("lost", "nowhere"), region("child", "loop-a"), region("spare", "world")];
+    const named = { ...source("a", ["met.flood"], "adopt"), regionalOrigins: ["loop-a", "loop-b", "lost", "child"].map(entry) };
+    expect(checkAtlas(atlas([klass("met.flood", "one source")], [named], regions))).toEqual([
+      { at: "regions", problem: "the tree has 2 roots, not 1" },
+      { at: "region loop-a", problem: "the chain of parents of the region has a cycle" },
+      { at: "region loop-b", problem: "the chain of parents of the region has a cycle" },
+      { at: "region lost", problem: "the parent nowhere is not a region" },
+      { at: "region child", problem: "the chain of parents of the region has a cycle" },
+      { at: "region spare", problem: "no source names the region" },
+    ]);
+  });
+
+  it("stops a regional entry with no shape, the root, a second entry, a lost region, no note, or a bad list", () => {
+    const entry = (id: string, origins: string[], note = "a test"): RegionalOrigins => ({ region: id, origins, note });
+    const bad = {
+      ...source("a", ["met.flood"], "adopt"),
+      regionalOrigins: [
+        entry("world", ["test-origin"]),
+        entry("us", ["test-origin"]),
+        entry("us", ["nowhere", "test-origin", "test-origin"]),
+        entry("mars", [], " "),
+        { region: "eu" } as unknown as RegionalOrigins,
+      ],
+    };
+    const plain = atlas([klass("met.flood", "one source")], [bad], [WORLD, US]);
+    const world: Atlas = { ...plain, origins: plain.origins.filter((origin) => origin.id === "test-origin") };
+    expect(checkAtlas(world).map((item) => `${item.at}: ${item.problem}`)).toEqual([
+      "source a: each regional origin needs a region, a list of origins and a note",
+      "source a: the region world is the root: give its origins in the field origins",
+      "source a: the region us has two entries",
+      "source a: the region mars is not a region of the tree",
+      "source a: the entry of the region mars has no note",
+      "source a: the origins in us have a duplicate",
+      "source a: the id nowhere of the origins in us is not in its list",
+      "source a: the source has no origins in mars: give the ids, or unknown",
+    ]);
+    // An unknown origin in a regional entry counts as an unknown origin of the source.
+    const unknownThere = { ...source("b", ["met.flood"], "adopt"), regionalOrigins: [entry("us", [UNKNOWN])] };
+    expect(measures(atlas([klass("met.flood", "one source")], [unknownThere], [WORLD, US])).unknownOrigins).toBe(1);
   });
 
   it("has the layers of the committed atlas at or above the last round", () => {

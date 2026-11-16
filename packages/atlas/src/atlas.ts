@@ -13,6 +13,10 @@
  * Each source names its origins and its path. The cover of a class has layers: the adopted sources, the
  * paths with no shared part, and the origins. Each layer is a measure, not a filter.
  *
+ * An origin of a source can hold only in a region. For example, an aggregator of earthquakes gives the solutions
+ * of the US networks for the events in the United States. Each region of `regions.json` less its children is one
+ * part of the Earth, and the origin layer counts the part with the fewest origins.
+ *
  * A parent class counts its sources at each of its leaf codes, and each count takes the leaf code with the
  * most. Thus two sources of two different children are not a pair of the parent.
  */
@@ -66,6 +70,29 @@ export interface Origin {
   /** The codes that the origin issues, or `null` for each class of the sources that carry it. */
   readonly issues: readonly string[] | null;
   /** The basis of the record. */
+  readonly note: string;
+}
+
+/**
+ * One region of the Earth: a node of the tree of `regions.json`. The root is the whole Earth. The measures take
+ * each region less its children as one part of the Earth, so each region holds a part outside its children.
+ */
+export interface Region {
+  readonly id: string;
+  readonly name: string;
+  /** The region that holds this region, or `null` for the root. */
+  readonly parent: string | null;
+  /** The basis of the record. */
+  readonly note: string;
+}
+
+/** The origins of the signals of a source in one region. In the region, they replace the field `origins` of the source. */
+export interface RegionalOrigins {
+  /** The id of a region of `regions.json` that is not the root. */
+  readonly region: string;
+  /** The ids of the origins in `origins.json`, or `unknown`. */
+  readonly origins: readonly string[];
+  /** The basis of the record, for example a measure of the authors of the solutions. */
   readonly note: string;
 }
 
@@ -136,6 +163,11 @@ export interface Source {
   readonly subjectIds: readonly SubjectSystem[] | null;
   /** The ids of the origins of the signals in `origins.json`, or `unknown`. */
   readonly origins: readonly string[];
+  /**
+   * The origins of the signals in some regions, when they are not `origins`. A part of the Earth gets the entry of
+   * the smallest region that holds it. The field `origins` holds in the rest of the Earth.
+   */
+  readonly regionalOrigins?: readonly RegionalOrigins[];
   /** The path from the origin to the adapter: the ids of `paths.json`, the host first, or `unknown`. */
   readonly path: readonly string[];
   /** Each known event that can stop the source. The coverage does not count a source with a risk. */
@@ -169,7 +201,7 @@ export interface Layers {
   readonly adopted: number;
   /** The most of these sources with a known path and no shared part of a path. */
   readonly paths: number;
-  /** The known origins of these sources that issue the class. */
+  /** The known origins of these sources that issue the class, in the part of the Earth with the fewest. */
   readonly origins: number;
 }
 
@@ -225,6 +257,8 @@ export interface Atlas {
   readonly rounds: readonly Round[];
   readonly origins: readonly Origin[];
   readonly paths: readonly PathPart[];
+  /** The tree of the regions. An empty list is the whole Earth as one part. */
+  readonly regions: readonly Region[];
 }
 
 /** One problem of the atlas. */
@@ -305,6 +339,46 @@ const reachesLeaf = (source: Pick<Source, "classes">, id: string, leaf: string):
 const known =(list: readonly string[]): string[] => list.filter((id) => id !== UNKNOWN);
 // The JSON of a source is not parsed by a schema. A source with no list counts as a source with an unknown list.
 const listOf = (list: readonly string[] | undefined): readonly string[] => list ?? [UNKNOWN];
+// The measures skip a regional entry with no region, no list of origins or no note. The gate tells of it.
+const isEntry = (value: unknown): value is RegionalOrigins => {
+  const entry = value as Partial<RegionalOrigins> | null;
+  return typeof value === "object" && entry !== null && typeof entry.region === "string" && Array.isArray(entry.origins) && typeof entry.note === "string";
+};
+const entriesOf = (source: { readonly regionalOrigins?: unknown }): RegionalOrigins[] =>
+  Array.isArray(source.regionalOrigins) ? (source.regionalOrigins as unknown[]).filter(isEntry) : [];
+// Each origin that a source names, in each region.
+const allOrigins = (source: Pick<Source, "origins" | "regionalOrigins">): string[] => [
+  ...new Set([...listOf(source.origins), ...entriesOf(source).flatMap((entry) => entry.origins)]),
+];
+const parentsOf = (regions: readonly Region[]): Map<string, string | null> => new Map(regions.map((region) => [region.id, region.parent]));
+// The walk up the tree stops at a region that it saw before, so a cycle of parents does not stop the measures.
+const originsWithin = (source: Pick<Source, "origins" | "regionalOrigins">, region: string | null, parents: ReadonlyMap<string, string | null>): readonly string[] => {
+  const entries = entriesOf(source);
+  const seen = new Set<string>();
+  for (let at = region; at !== null && !seen.has(at); at = parents.get(at) ?? null) {
+    seen.add(at);
+    const entry = entries.find((each) => each.region === at);
+    if (entry !== undefined) return entry.origins;
+  }
+  return listOf(source.origins);
+};
+// A region reaches the root when its chain of parents has no cycle. A lost parent ends the chain, and the gate tells of it apart.
+const reachesRoot = (id: string, parents: ReadonlyMap<string, string | null>): boolean => {
+  const seen = new Set<string>();
+  for (let at: string | null | undefined = id; at !== null && at !== undefined; at = parents.get(at)) {
+    if (seen.has(at)) return false;
+    seen.add(at);
+  }
+  return true;
+};
+
+/**
+ * This function gives the origins of a source in a region. The entry of the region or of the nearest region that
+ * holds it gives them. With no entry, the field `origins` gives them.
+ */
+export function originsAt(source: Pick<Source, "origins" | "regionalOrigins">, region: string, regions: readonly Region[]): readonly string[] {
+  return originsWithin(source, region, parentsOf(regions));
+}
 
 /**
  * This function gives the most sets of the list with no shared item. The search is exact. A class has few
@@ -370,10 +444,14 @@ const leavesOfClasses = (atlas: Atlas): Map<string, string[]> => {
 
 /**
  * This function gives the coverage of each class: the adopted and planned sources of the class and of its
- * descendants, and the counts. Each count is the most at one leaf code of the class.
+ * descendants, and the counts. Each count is the most at one leaf code of the class. At a leaf code, the origin
+ * count is the fewest in one part of the Earth.
  */
 export function coverage(atlas: Atlas): Coverage[] {
   const origins = new Map(atlas.origins.map((origin) => [origin.id, origin]));
+  const parents = parentsOf(atlas.regions);
+  // Each region less its children is one part of the Earth. With no region, the whole Earth is one part.
+  const earthParts: readonly (string | null)[] = atlas.regions.length > 0 ? atlas.regions.map((region) => region.id) : [null];
   const leaves = leavesOfClasses(atlas);
   return atlas.classes.map(({ id, gap }) => {
     const live = atlas.sources.filter((source) => LIVE_DECISIONS.includes(source.decision) && source.classes.some((name) => isUnder(name, id)));
@@ -387,9 +465,10 @@ export function coverage(atlas: Atlas): Coverage[] {
       };
       // A path with an unknown part cannot show that it is apart, so the path layer does not count it.
       const knownPaths = counted.map((source) => listOf(source.path)).filter((path) => !path.includes(UNKNOWN));
+      const originsIn = (part: string | null): number => new Set(counted.flatMap((source) => originsWithin(source, part, parents).filter(issues))).size;
       return {
         shared: here.filter((source) => source.risks.length === 0).length,
-        layers: { adopted: counted.length, paths: mostDisjoint(knownPaths), origins: new Set(counted.flatMap((source) => listOf(source.origins).filter(issues))).size },
+        layers: { adopted: counted.length, paths: mostDisjoint(knownPaths), origins: Math.min(...earthParts.map(originsIn)) },
       };
     };
     const counts = (leaves.get(id) ?? [id]).map(at);
@@ -424,7 +503,7 @@ export function pairClaims(atlas: Atlas, decisions: readonly Decision[] = LIVE_D
       const classes = atlas.classes.filter(({ id }) => (leaves.get(id) ?? [id]).some((leaf) => both(id, leaf))).map(({ id }) => id);
       if (classes.length === 0) continue;
       const shared = (pick: (source: Source) => readonly string[] | undefined): string[] => known(listOf(pick(a))).filter((id) => listOf(pick(b)).includes(id));
-      claims.push({ a: a.id, b: b.id, classes, origins: shared((source) => source.origins), path: shared((source) => source.path) });
+      claims.push({ a: a.id, b: b.id, classes, origins: shared(allOrigins), path: shared((source) => source.path) });
     }
   }
   return claims;
@@ -443,7 +522,7 @@ export function measures(atlas: Atlas): Measures {
     gaps: rows.filter((row) => row.shared < MIN_SOURCES).length,
     cover: per((value) => (value >= MIN_SOURCES ? 1 : 0)),
     total: per((value) => value),
-    unknownOrigins: kept.filter((source) => listOf(source.origins).includes(UNKNOWN)).length,
+    unknownOrigins: kept.filter((source) => allOrigins(source).includes(UNKNOWN)).length,
     unknownPaths: kept.filter((source) => listOf(source.path).includes(UNKNOWN)).length,
   };
 }
@@ -481,6 +560,22 @@ export function checkAtlas(atlas: Atlas, context: AtlasContext = {}): AtlasProbl
     if (origin.name.trim() === "" || origin.note.trim() === "") add(at, "the origin has no name or no note");
     for (const code of origin.issues ?? []) if (!knownKind(code)) add(at, `the code ${code} is not in the taxonomy`);
   }
+  const regions = new Map<string, Region>();
+  for (const region of atlas.regions) {
+    const at = `region ${region.id}`;
+    if (regions.has(region.id)) add(at, "the id is not unique");
+    regions.set(region.id, region);
+    if (!PART_ID.test(region.id) || region.id === UNKNOWN) add(at, "the id is not in lower case with hyphens and dots, or it is unknown");
+    if (region.name.trim() === "" || region.note.trim() === "") add(at, "the region has no name or no note");
+  }
+  const roots = atlas.regions.filter((region) => region.parent === null).length;
+  if (atlas.regions.length > 0 && roots !== 1) add("regions", `the tree has ${String(roots)} roots, not 1`);
+  const parents = parentsOf(atlas.regions);
+  for (const region of regions.values()) {
+    const at = `region ${region.id}`;
+    if (region.parent !== null && !regions.has(region.parent)) add(at, `the parent ${region.parent} is not a region`);
+    else if (!reachesRoot(region.id, parents)) add(at, "the chain of parents of the region has a cycle");
+  }
   const parts = new Map<string, PathPart>();
   for (const part of atlas.paths) {
     const at = `path ${part.id}`;
@@ -494,7 +589,9 @@ export function checkAtlas(atlas: Atlas, context: AtlasContext = {}): AtlasProbl
   const listed = atlas.sources.every((source) => Array.isArray(source.origins) && Array.isArray(source.path));
   if (listed) {
     const named = (pick: (source: Source) => readonly string[]): Set<string> => new Set(atlas.sources.flatMap(pick));
-    const usedOrigins = named((source) => source.origins);
+    const usedOrigins = named(allOrigins);
+    const usedRegions = named((source) => entriesOf(source).map((entry) => entry.region));
+    for (const region of regions.values()) if (region.parent !== null && !usedRegions.has(region.id)) add(`region ${region.id}`, "no source names the region");
     const usedParts = named((source) => source.path);
     for (const id of originIds) if (!usedOrigins.has(id)) add(`origin ${id}`, "no source names the origin");
     for (const id of parts.keys()) if (!usedParts.has(id)) add(`path ${id}`, "no source names the part");
@@ -548,8 +645,21 @@ export function checkAtlas(atlas: Atlas, context: AtlasContext = {}): AtlasProbl
     if (LIVE_DECISIONS.includes(source.decision) && source.evidence.length === 0) add(at, "an adopted or planned source has no evidence");
     for (const url of source.evidence) if (!isUrl(url)) add(at, `the evidence ${url} is not an http or https URL`);
     if (!rounds.has(source.round)) add(at, `the round ${String(source.round)} has no record`);
+    const regional: unknown = (source as Partial<Source>).regionalOrigins;
+    const entries = entriesOf(source);
+    if (regional !== undefined && (!Array.isArray(regional) || entries.length !== regional.length)) add(at, "each regional origin needs a region, a list of origins and a note");
+    const seenRegions = new Set<string>();
+    for (const entry of entries) {
+      if (seenRegions.has(entry.region)) add(at, `the region ${entry.region} has two entries`);
+      seenRegions.add(entry.region);
+      const region = regions.get(entry.region);
+      if (region === undefined) add(at, `the region ${entry.region} is not a region of the tree`);
+      else if (region.parent === null) add(at, `the region ${entry.region} is the root: give its origins in the field origins`);
+      if (entry.note.trim() === "") add(at, `the entry of the region ${entry.region} has no note`);
+    }
     const lists = [
       { field: "origins", list: (source as Partial<Source>).origins, ids: originIds },
+      ...entries.map((entry) => ({ field: `origins in ${entry.region}`, list: entry.origins, ids: originIds })),
       { field: "path", list: (source as Partial<Source>).path, ids: new Set(parts.keys()) },
     ];
     for (const { field, list, ids } of lists) {
