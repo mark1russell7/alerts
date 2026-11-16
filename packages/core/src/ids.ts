@@ -41,6 +41,11 @@ export interface MessageKeyInput {
   readonly person: PersonId;
   /** The index of the step in the escalation of the person, from 0. */
   readonly step: number;
+  /**
+   * The count of the ends of the escalations of the person in the incident before this escalation (`EscalationEnd`).
+   * When the threat comes back to the person after an end, the new escalation gets new keys.
+   */
+  readonly episode?: number | undefined;
 }
 
 /**
@@ -69,9 +74,14 @@ export const COPY_ID: RegExp = /^[A-Za-z0-9_-]+$/;
 /**
  * This function gives the key of a message. A channel that can drop a repeated key does so. A
  * repeat of the same step gets the same key, and the next step gets a new key.
+ *
+ * - An episode after the first one is in the key. Thus a new escalation after an end gets new keys.
+ * - The key of the first episode has no episode field. Thus the keys of a log from before the episodes do not change.
  */
 export function messageKey(input: MessageKeyInput): string {
-  return digest(["message", input.incident, input.level, input.person, input.step]);
+  const episode = input.episode ?? 0;
+  const fields = ["message", input.incident, input.level, input.person, input.step];
+  return digest(episode === 0 ? fields : [...fields, episode]);
 }
 
 // The form "json" writes NaN and an infinite number as null, and escapes a lone surrogate. So the

@@ -16,6 +16,7 @@ import {
   type Cursor,
   type Delivery,
   type EndMark,
+  type EscalationEnd,
   type EscalationStart,
   type HealthOptions,
   type HealthTrack,
@@ -54,6 +55,8 @@ export interface RuntimeState {
   readonly cancelled: readonly string[];
   /** The start of each escalation, in the order of the log. */
   readonly starts: readonly EscalationStart[];
+  /** The end of the escalations of a person in a live incident that no longer reaches the person, in the order of the log. */
+  readonly escalationEnds: readonly EscalationEnd[];
   /**
    * The open copies, by copy id: each send on a channel that repeats with no delivery of its copy and no
    * `settled` event. The channel can repeat them. After a restart, the delivery step stops them.
@@ -99,6 +102,7 @@ export const EMPTY_RUNTIME: RuntimeState = {
   lines: NO_SYSTEM_LINES,
   cancelled: [],
   starts: [],
+  escalationEnds: [],
   copies: {},
   refusals: {},
   delivered: {},
@@ -181,6 +185,8 @@ function foldRest(state: RuntimeState, event: RuntimeEvent, context: FoldContext
       return { ...base, lines: addSystemReports(state.lines, event.reports, event.observations) };
     case "escalation":
       return { ...base, starts: [...state.starts, event.start] };
+    case "escalation-end":
+      return { ...base, escalationEnds: [...state.escalationEnds, event.end] };
     case "cancelled":
       return state.cancelled.includes(event.delivery) ? base : { ...base, cancelled: [...state.cancelled, event.delivery].sort(compare) };
     case "attempt":

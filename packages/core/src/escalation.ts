@@ -133,6 +133,11 @@ export interface EscalationInput {
   readonly rankDelay?: Duration | undefined;
   /** The quiet window of the person, from `PersonWatch.quiet`. A send below `life-safety` in the window is quiet. */
   readonly quiet?: QuietWindow | undefined;
+  /**
+   * The episode of the escalation: the count of the earlier ends of the escalations of the person in the incident.
+   * The default is 0. Each send has it, thus `messageKey` gives new keys after an end.
+   */
+  readonly episode?: number | undefined;
   readonly now: Instant;
 }
 
@@ -226,7 +231,9 @@ export function escalate(input: EscalationInput): EscalationPlan {
   if (input.endsAt !== undefined && Number.isFinite(input.endsAt)) events.push({ at: input.endsAt, on: ESCALATION_EVENTS.end, order: 1, step: -1 });
   events.sort((a, b) => a.at - b.at || a.order - b.order || a.step - b.step);
 
-  const instance = `${incident.anchor} ${level} ${person}`;
+  // An episode that is not a whole number above 0 counts as 0.
+  const episode = input.episode !== undefined && Number.isSafeInteger(input.episode) && input.episode > 0 ? input.episode : 0;
+  const instance = `${incident.anchor} ${level} ${person}${episode === 0 ? "" : ` ${episode}`}`;
   const transitions: Transition[] = [];
   const due: number[] = [];
   let state: EscalationState = "idle";
@@ -261,7 +268,7 @@ export function escalate(input: EscalationInput): EscalationPlan {
         const offset = offsets[index] ?? 0;
         return step === undefined || delivered.has(index)
           ? []
-          : [{ incident: incident.anchor, level, person, step: index, channel: step.channel, due: start + offset + wait, quiet }];
+          : [{ incident: incident.anchor, level, person, step: index, ...(episode === 0 ? {} : { episode }), channel: step.channel, due: start + offset + wait, quiet }];
       })
     : [];
 

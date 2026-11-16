@@ -25,6 +25,7 @@ The repo is public. It holds the general framework only. People, places, keys an
 | AL-12 | Outside heartbeat | in progress | The running system pings Healthchecks.io after each pass with no error, and pings `/fail` when a channel refuses a send. When the pings stop, Healthchecks.io alerts the owner. The hook is done. Next: the first live install with the check up. |
 | AL-13 | Fault tests of the pipeline | blocked | Fault plans from rigor: a source down, slow, duplicated, out of order or with a changed format, a channel down, a copy stopped. A gate holds each case. |
 | AL-37 | The call rules of each channel | done | A channel declares the most calls in progress at the same time. Pushover sets 2. The stop probe of a down channel backs off, up to 60 seconds. Fault case 7 measured 12 failed probes in a 10 minute outage, not 175. |
+| AL-38 | The end of an alert when the threat leaves a place | in progress | When a live incident no longer reaches a person, the escalation of the person ends, and the repeats stop. The log keeps that end. When the threat comes back, a new escalation starts with new message keys. An acknowledgment before the end does not stop the new escalation. |
 | AL-29 | A standalone weather radio | waiting | The owner sets up a SAME weather radio at the bed. It needs no internet and no part of this system. |
 | AL-30 | NWWS-OI, the push feed of the NWS | waiting | Each NWS product in CAP within 10 seconds, over XMPP, from servers apart from the NWS API. It is the second path for NWS warnings. The owner asks the NWS for two accounts. |
 

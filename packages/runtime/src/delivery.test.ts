@@ -2,6 +2,7 @@ import { fakeWallClock } from "@mark1russell7/algebra/clock";
 import {
   COPY_ID,
   WHY_LIMITS,
+  messageKey,
   reportId,
   type ChannelDescriptor,
   type ChannelId,
@@ -230,6 +231,43 @@ describe("the delivery step of a pass", () => {
     await runtime.pass();
     expect(sms.send).toEqual([]);
     expect(pushover.status).toHaveLength(1);
+    log.close();
+  });
+
+  it("ends the escalation of a person that the incident no longer reaches, and starts a new one with new keys when it comes back", async () => {
+    const clock = fakeWallClock(T0);
+    const log = openRuntimeLog(":memory:");
+    const first = open({}, log, clock);
+    await first.runtime.pass();
+    const anchor = first.runtime.state().merge.deliveries[0]!.incident;
+    const key = first.pushover.send[0]!.key;
+    const ends = () => [...log.read()].flatMap((event) => (event.type === "escalation-end" ? [[event.id, event.end]] : []));
+    const starts = () => [...log.read()].flatMap((event) => (event.type === "escalation" ? [event.id] : []));
+
+    // The person no longer watches the place, thus the incident no longer reaches the person.
+    await clock.advance(MINUTE);
+    const gone = open({}, log, clock, { recipients: [{ ...RECIPIENT, watch: { ...RECIPIENT.watch, places: [] } }] });
+    await gone.runtime.pass();
+    expect(gone.pushover.send).toEqual([]);
+    expect(gone.pushover.cancel).toEqual([{ receipt: "pushover-1" }]);
+    expect(ends()).toEqual([[`escalation-end:${anchor}:${PERSON}:0`, { incident: anchor, person: PERSON, at: T0 + MINUTE }]]);
+    expect(types(log)).toEqual(["started", "escalation", "attempt", "delivery", "started", "escalation-end", "cancelled"]);
+    expect(gone.runtime.state().escalationEnds).toEqual([{ incident: anchor, person: PERSON, at: T0 + MINUTE }]);
+    expect(gone.runtime.state()).toEqual(rebuild(log.read(), gone.runtime.config));
+
+    // A later pass cancels nothing again and writes no second end.
+    await clock.advance(MINUTE);
+    await gone.runtime.pass();
+    expect(gone.pushover.cancel).toHaveLength(1);
+    expect(ends()).toHaveLength(1);
+
+    // The person watches the place again: a new escalation with a new start and a new key.
+    await clock.advance(MINUTE);
+    const back = open({}, log, clock);
+    await back.runtime.pass();
+    expect(back.pushover.send.map((message) => message.key)).toEqual([messageKey({ incident: anchor, level: "life-safety", person: PERSON, step: 0, episode: 1 })]);
+    expect(back.pushover.send[0]!.key).not.toBe(key);
+    expect(starts()).toEqual([`escalation:${anchor}:life-safety:${PERSON}`, `escalation:${anchor}:life-safety:${PERSON}:1`]);
     log.close();
   });
 
