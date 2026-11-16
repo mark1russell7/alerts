@@ -160,7 +160,7 @@
     "id": "amber-alert-ojp",
     "name": "AMBER Alert program (OJP)",
     "classes": [
-      "safety.missing-person.child"
+      "security.child-abduction"
     ],
     "url": "https://amberalert.ojp.gov/",
     "access": "page",
@@ -251,7 +251,7 @@
     "id": "avalanche-org-api",
     "name": "avalanche.org public map layer (US avalanche centers)",
     "classes": [
-      "met.avalanche"
+      "geo.avalanche"
     ],
     "url": "https://api.avalanche.org/v2/public/products/map-layer",
     "access": "api",
@@ -1328,7 +1328,7 @@
       "met.severe-weather",
       "met.tornado",
       "met.thunderstorm",
-      "met.winter-storm",
+      "met.winter",
       "met.cold",
       "met.wind"
     ],
@@ -2228,7 +2228,7 @@
     "id": "frbservices-status",
     "name": "Federal Reserve Financial Services service status",
     "classes": [
-      "market.payments.outage"
+      "infra.payments.outage"
     ],
     "url": "https://app.frbservices.org/app/status/serviceStatus.do",
     "access": "page",
@@ -2387,7 +2387,7 @@
     "id": "gasbuddy-availability-tracker",
     "name": "GasBuddy gasoline availability tracker",
     "classes": [
-      "market.price.fuel-shortage"
+      "infra.fuel.shortage"
     ],
     "url": "https://tracker.gasbuddy.com/",
     "access": "page",
@@ -2450,7 +2450,7 @@
     "name": "GDACS RSS feeds",
     "classes": [
       "geo.earthquake",
-      "met.tropical-cyclone",
+      "met.tropical",
       "met.flood",
       "met.flood.river",
       "met.drought"
@@ -2774,8 +2774,8 @@
     "classes": [
       "met.tornado",
       "met.thunderstorm",
-      "met.tropical-cyclone",
-      "met.winter-storm",
+      "met.tropical",
+      "met.winter",
       "met.flood",
       "met.flood.flash",
       "met.flood.river",
@@ -2786,8 +2786,17 @@
       "met.fog",
       "met.dust-storm",
       "met.marine",
-      "met.surf-and-rip-current",
-      "fire.weather"
+      "met.surf",
+      "met.rip-current",
+      "met.beach-hazards",
+      "fire.weather",
+      "env.air-stagnation",
+      "env.smoke",
+      "geo.debris-flow",
+      "met.blowing-dust",
+      "met.freeze",
+      "met.frost",
+      "met.surge"
     ],
     "url": "https://mesonet.agron.iastate.edu/api/",
     "access": "api",
@@ -2951,21 +2960,32 @@
       "met.tornado",
       "met.thunderstorm",
       "met.flood.flash",
-      "met.tropical-cyclone",
+      "met.tropical",
       "met.flood.coastal",
       "met.wind",
       "met.dust-storm",
-      "safety.missing-person.child",
-      "safety.blue-alert",
-      "safety.law-enforcement-warning",
+      "security.child-abduction",
+      "security.blue-alert",
+      "security.law-enforcement",
       "safety.shelter-in-place",
       "safety.evacuation",
       "safety.civil-emergency",
       "infra.telecom.911-outage",
-      "cbrne.chemical.release",
-      "transport.hazmat-incident",
+      "cbrne.hazardous-materials",
       "cbrne.radiological",
-      "other.test-message"
+      "system.test",
+      "env.air-stagnation",
+      "env.smoke",
+      "met.blowing-dust",
+      "met.freeze",
+      "met.frost",
+      "met.outlook",
+      "met.special",
+      "met.surge",
+      "safety.civil-danger",
+      "safety.local-emergency",
+      "safety.national-emergency",
+      "security.missing-person"
     ],
     "url": "https://www.fema.gov/emergency-managers/practitioners/integrated-public-alert-warning-system/technology-developers/all-hazards-information-feed",
     "access": "feed",
@@ -3310,7 +3330,7 @@
       "met.severe-weather",
       "met.tornado",
       "met.thunderstorm",
-      "met.winter-storm",
+      "met.winter",
       "met.flood.flash",
       "met.flood.coastal",
       "met.heat",
@@ -3318,8 +3338,8 @@
       "met.wind",
       "met.fog",
       "met.marine",
-      "met.surf-and-rip-current",
-      "met.avalanche",
+      "met.surf",
+      "geo.avalanche",
       "fire.wildfire",
       "fire.weather"
     ],
@@ -3543,9 +3563,10 @@
     "id": "nhc-rss",
     "name": "NOAA National Hurricane Center RSS and GIS feeds",
     "classes": [
-      "met.tropical-cyclone",
+      "met.tropical",
       "met.flood.coastal",
-      "met.marine"
+      "met.marine",
+      "met.surge"
     ],
     "url": "https://www.nhc.noaa.gov/aboutrss.shtml",
     "access": "feed",
@@ -3798,7 +3819,7 @@
     "id": "nrc-event-reports",
     "name": "NRC Event Notification Reports",
     "classes": [
-      "infra.nuclear.event"
+      "cbrne.nuclear-plant"
     ],
     "url": "https://www.nrc.gov/reading-rm/doc-collections/event-status/event/",
     "access": "file",
@@ -3832,8 +3853,7 @@
       "env.spill",
       "infra.gas.pipeline-incident",
       "transport.rail.accident",
-      "transport.hazmat-incident",
-      "cbrne.chemical.release"
+      "cbrne.hazardous-materials"
     ],
     "url": "https://nrc.uscg.mil/",
     "access": "file",
@@ -3964,8 +3984,8 @@
       "met.severe-weather",
       "met.tornado",
       "met.thunderstorm",
-      "met.tropical-cyclone",
-      "met.winter-storm",
+      "met.tropical",
+      "met.winter",
       "met.flood",
       "met.flood.flash",
       "met.flood.river",
@@ -3976,26 +3996,37 @@
       "met.fog",
       "met.dust-storm",
       "met.marine",
-      "met.surf-and-rip-current",
-      "met.avalanche",
+      "met.surf",
+      "met.rip-current",
+      "met.beach-hazards",
+      "geo.avalanche",
       "fire.wildfire",
       "fire.weather",
       "fire.structure",
       "env.air-quality",
       "env.air-quality.smoke",
-      "infra.nuclear.event",
+      "cbrne.nuclear-plant",
       "infra.dam.failure",
       "infra.telecom.911-outage",
-      "safety.missing-person.child",
-      "safety.blue-alert",
-      "safety.law-enforcement-warning",
+      "security.child-abduction",
+      "security.blue-alert",
+      "security.law-enforcement",
       "safety.shelter-in-place",
       "safety.evacuation",
       "safety.civil-emergency",
-      "transport.hazmat-incident",
-      "cbrne.chemical.release",
+      "cbrne.hazardous-materials",
       "cbrne.radiological",
-      "other.test-message"
+      "system.test",
+      "env.air-stagnation",
+      "env.smoke",
+      "met.blowing-dust",
+      "met.freeze",
+      "met.frost",
+      "met.outlook",
+      "met.special",
+      "met.surge",
+      "safety.civil-danger",
+      "safety.local-emergency"
     ],
     "url": "https://www.weather.gov/documentation/services-web-api",
     "access": "api",
@@ -4357,7 +4388,7 @@
     "classes": [
       "rescue.disaster-assistance",
       "civic.emergency-declaration",
-      "other.test-message"
+      "system.test"
     ],
     "url": "https://www.fema.gov/about/openfema/api",
     "access": "api",
@@ -5120,7 +5151,7 @@
     "id": "statuspage-payments",
     "name": "Statuspage JSON of payment, bank and broker services",
     "classes": [
-      "market.payments.outage",
+      "infra.payments.outage",
       "market.bank.outage",
       "market.broker.outage"
     ],
@@ -5564,7 +5595,8 @@
     "id": "usgs-landslide-program",
     "name": "USGS Landslide Hazards Program products",
     "classes": [
-      "geo.landslide"
+      "geo.landslide",
+      "geo.debris-flow"
     ],
     "url": "https://www.usgs.gov/programs/landslide-hazards",
     "access": "page",

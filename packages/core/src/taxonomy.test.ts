@@ -1,22 +1,24 @@
 import { describe, expect, it } from "vitest";
 import { COVERAGE_KIND, DEFAULT_ASSESS_POLICY, HEALTH_KIND, LIFE_SAFETY_KINDS } from "./assess.ts";
 import { DEFAULT_COVERAGE_POLICY } from "./coverage.ts";
-import { CATEGORIES, CATEGORY_LABELS, categoryOf, knownKind, TAXONOMY, UNKNOWN_KIND, unknownKinds } from "./taxonomy.ts";
+import { CATEGORIES, CATEGORY_LABELS, categoryOf, kindLabel, knownKind, parentKind, TAXONOMY, UNKNOWN_KIND, unknownKinds } from "./taxonomy.ts";
 
 const CODE = /^[a-z0-9]+(?:-[a-z0-9]+)*(?:\.[a-z0-9]+(?:-[a-z0-9]+)*)*$/;
 
 describe("the taxonomy", () => {
   const codes = Object.keys(TAXONOMY);
 
-  it("is a tree: each code has the form of a code, a category as its root, a parent in the taxonomy and a plain name", () => {
+  it("is a tree: each code has the form of a code, a category as its root, a parent in the taxonomy, a plain name and a summary", () => {
     for (const code of codes) {
       expect(code, code).toMatch(CODE);
       const parts = code.split(".");
       expect(Object.hasOwn(CATEGORY_LABELS, parts[0]!), code).toBe(true);
       for (let end = 1; end < parts.length; end += 1) expect(Object.hasOwn(TAXONOMY, parts.slice(0, end).join(".")), code).toBe(true);
-      const label = TAXONOMY[code]!;
+      const { label, summary } = TAXONOMY[code]!;
       expect(label.trim(), code).toBe(label);
       expect(label.length, code).toBeGreaterThan(0);
+      // The summary is plain text that starts with a capital letter or a number and ends with a full stop.
+      expect(summary, code).toMatch(/^[A-Z0-9][^\n]*\.$/);
     }
   });
 
@@ -57,6 +59,22 @@ describe("the taxonomy", () => {
   it("gives the unknown codes sorted and each one time", () => {
     expect(unknownKinds(["met.x", "met.tornado", "geo.y", "met.x"])).toEqual(["geo.y", "met.x"]);
     expect(unknownKinds([])).toEqual([]);
+  });
+
+  it("gives the parent of a code from its parts, and null for a category", () => {
+    expect(parentKind("met.flood.flash")).toBe("met.flood");
+    expect(parentKind("met")).toBeNull();
+    for (const code of codes) {
+      const parent = parentKind(code);
+      expect(parent === null ? CATEGORIES.includes(code as never) : Object.hasOwn(TAXONOMY, parent), code).toBe(true);
+    }
+  });
+
+  it("gives the plain name of a code, and the code itself for a code that it does not have", () => {
+    expect(kindLabel("met.flood.flash")).toBe("Flash flood");
+    expect(kindLabel("met")).toBe(CATEGORY_LABELS.met);
+    expect(kindLabel("system.coverage.met.tornado")).toBe("system.coverage.met.tornado");
+    expect(kindLabel("toString")).toBe("toString");
   });
 
   it("knows each kind that the first policies name", () => {

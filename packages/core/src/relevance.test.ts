@@ -125,7 +125,17 @@ describe("the rules of the relevance values", () => {
       holds(nodeKeySchema, key);
     }
     for (const key of ["", "home", "place:", ":home", "zone:KSZ083", "Place:home", "person:", "place:home\nugc:KSC173"]) fails(nodeKeySchema, key);
-    for (const system of Object.keys(SUBJECT_SYSTEMS)) holds(nodeKeySchema, `${system}:x`);
+    for (const system of Object.keys(SUBJECT_SYSTEMS)) holds(nodeKeySchema, `${system}:${system === "topic" ? "met" : "x"}`);
+  });
+
+  it("a topic key and the kinds of a mute name codes of the taxonomy, so a typo does not give silence", () => {
+    for (const key of ["topic:x", "topic:met.fl", "topic:infra.power.outages"]) fails(nodeKeySchema, key);
+    const mute = { id: "m1", kinds: ["met.flood"], date: "2026-11-15" };
+    holds(muteSchema, mute);
+    fails(muteSchema, { ...mute, kinds: ["met.floods"] });
+    const { kinds: _kinds, ...bySubject } = mute;
+    holds(muteSchema, { ...bySubject, subjects: ["topic:met.flood"] });
+    fails(muteSchema, { ...bySubject, subjects: ["topic:met.floods"] });
   });
 
   it("each kind of subject has a system", () => {

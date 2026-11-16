@@ -148,6 +148,12 @@ describe("scorePriorsSchema", () => {
     expect(scorePriorsSchema.safeParse(PRIORS).success).toBe(true);
   });
 
+  it("refuses a key that is not a code of the taxonomy, because a typo matches no kind", () => {
+    const prior: KindPrior = { deaths: estimate(0.01, 0.005, 0.02) };
+    expect(scorePriorsSchema.safeParse({ ...PRIORS, kinds: { "met.tornadoes": prior } }).success).toBe(false);
+    expect(scorePriorsSchema.safeParse({ ...PRIORS, kinds: { "met.fl": prior } }).success).toBe(false);
+  });
+
   it("refuses an interval that does not hold its value, a probability above 1 and an unknown field", () => {
     const withKind = (prior: KindPrior): unknown => ({ ...PRIORS, kinds: { met: prior } });
     expect(scorePriorsSchema.safeParse(withKind({ deaths: estimate(0.5, 0.6, 0.7) })).success).toBe(false);

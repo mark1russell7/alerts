@@ -213,11 +213,22 @@ export const significanceSchema: z.ZodType<Significance, Significance> = schemaO
   z.enum(["warning", "watch", "advisory", "statement", "outlook", "observation"]),
 );
 
+/**
+ * This schema checks a code of the taxonomy, or a prefix of a code by its parts. `knownKind` is the one rule:
+ * a prefix by parts is also a code, so `met` and `met.flood` pass and `met.fl` does not. A kind with a typo
+ * matches no alert, so this rule holds for each kind that a person or an adapter names.
+ */
+export const kindCodeSchema: z.ZodType<string, string> = z.string().refine(knownKind, "The kind code is not in the taxonomy.");
+
+// The prefix of a topic key, and the problem of a topic id that is not a code of the taxonomy.
+const TOPIC_PREFIX = "topic:";
+const TOPIC_PROBLEM = "The id of a topic is a code of the taxonomy, or a prefix of one by its parts.";
+
 /** This schema checks a kind. Its code must be in the taxonomy: `knownKind` gives true. This rule is the runtime gate of the closed taxonomy. */
 export const kindSchema: z.ZodType<Kind, Kind> = schemaOf<Kind>()(
   z
     .strictObject({
-      code: z.string().refine(knownKind, "The kind code is not in the taxonomy."),
+      code: kindCodeSchema,
       significance: significanceSchema.exactOptional(),
       label: z.string(),
     })
@@ -352,7 +363,7 @@ export const sourceDescriptorSchema: z.ZodType<SourceDescriptor, SourceDescripto
       origins: z.array(z.string()).readonly(),
       dependsOn: outsideDomains,
       uses: z.array(cellResourceSchema).readonly(),
-      kinds: z.array(z.string()).readonly(),
+      kinds: z.array(kindCodeSchema).readonly(),
       coverage: z.union([z.array(areaSchema).readonly(), z.literal("global")]),
       transport: transportSchema,
       interval: durationSchema,
@@ -379,7 +390,7 @@ export const watchedPlaceSchema: z.ZodType<WatchedPlace, WatchedPlace> = schemaO
 
 /** This schema checks what a fetch asks for. */
 export const watchSchema: z.ZodType<Watch, Watch> = schemaOf<Watch>()(
-  z.strictObject({ places: z.array(watchedPlaceSchema).readonly(), kinds: z.array(z.string()).readonly().exactOptional() }).readonly(),
+  z.strictObject({ places: z.array(watchedPlaceSchema).readonly(), kinds: z.array(kindCodeSchema).readonly().exactOptional() }).readonly(),
 );
 
 /** This schema checks the state that a source keeps between two fetches. */
@@ -703,7 +714,7 @@ export const kindClassSchema: z.ZodType<KindClass, KindClass> = schemaOf<KindCla
   z
     .strictObject({
       id: z.string(),
-      kinds: z.array(z.string().refine(knownKind, "A policy names only known codes of the taxonomy.")).readonly(),
+      kinds: z.array(kindCodeSchema).readonly(),
       statuses: z.array(statusSchema).readonly().exactOptional(),
       severity: severityLookup,
       urgency: urgencyLookup,
@@ -727,7 +738,7 @@ export const levelRuleSchema: z.ZodType<LevelRule, LevelRule> = schemaOf<LevelRu
   z
     .strictObject({
       places: z.array(placeIdSchema).readonly().exactOptional(),
-      kinds: z.array(z.string()).readonly().exactOptional(),
+      kinds: z.array(kindCodeSchema).readonly().exactOptional(),
       max: assessedLevelSchema,
     })
     .readonly(),
@@ -742,9 +753,12 @@ export const quietWindowSchema: z.ZodType<QuietWindow, QuietWindow> = schemaOf<Q
   z.strictObject({ zone: z.string(), start: z.string(), end: z.string() }).readonly(),
 );
 
-/** This schema checks a subject that a person watches. */
+/** This schema checks a subject that a person watches. The id of a subject of the system `topic` is a code of the taxonomy. */
 export const subjectWatchSchema: z.ZodType<SubjectWatch, SubjectWatch> = schemaOf<SubjectWatch>()(
-  z.strictObject({ system: z.string(), id: z.string().exactOptional() }).readonly(),
+  z
+    .strictObject({ system: z.string(), id: z.string().exactOptional() })
+    .refine((subject) => subject.system !== "topic" || subject.id === undefined || knownKind(subject.id), TOPIC_PROBLEM)
+    .readonly(),
 );
 
 /** This schema checks the places and the rules of one person. */
@@ -796,7 +810,7 @@ export const scorePriorsSchema: z.ZodType<ScorePriors, ScorePriors> = schemaOf<S
   z
     .strictObject({
       format: z.literal("alerts-priors/1"),
-      kinds: z.record(z.string().min(1, "A prefix of a kind is a non-empty string."), kindPriorSchema).readonly(),
+      kinds: z.record(kindCodeSchema, kindPriorSchema).readonly(),
       certainty: z
         .strictObject({
           observed: probabilitySchema.exactOptional(),
@@ -856,7 +870,10 @@ export const subjectKindSchema: z.ZodType<SubjectKind, SubjectKind> = schemaOf<S
 
 // The key `person`, or `<system>:<id>` with a system of SUBJECT_SYSTEMS and an id that is not empty.
 const NODE_KEY = new RegExp(`^(?:person|(?:${Object.keys(SUBJECT_SYSTEMS).join("|")}):.+)$`);
-const nodeKeyText = z.string().regex(NODE_KEY, "A node key is `person`, or `<system>:<id>` with a system of SUBJECT_SYSTEMS and an id that is not empty.");
+const nodeKeyText = z
+  .string()
+  .regex(NODE_KEY, "A node key is `person`, or `<system>:<id>` with a system of SUBJECT_SYSTEMS and an id that is not empty.")
+  .refine((key) => !key.startsWith(TOPIC_PREFIX) || knownKind(key.slice(TOPIC_PREFIX.length)), TOPIC_PROBLEM);
 
 /** This schema checks the key of a node of an interest graph (`contracts.ts`, `NodeKey`). */
 export const nodeKeySchema: z.ZodType<NodeKey, NodeKey> = schemaOf<NodeKey>()(nodeKeyText);
@@ -904,7 +921,7 @@ export const muteSchema: z.ZodType<Mute, Mute> = schemaOf<Mute>()(
     .strictObject({
       id: z.string().min(1, "The id of a mute is a non-empty string."),
       kinds: z
-        .array(z.string().min(1, "A prefix of a kind is a non-empty string."))
+        .array(kindCodeSchema)
         .min(1, "A list of a mute has one item or more.")
         .readonly()
         .exactOptional(),

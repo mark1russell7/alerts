@@ -35,7 +35,7 @@ import type {
 import { coverageShort } from "./coverage.ts";
 import { observationId, reportId } from "./ids.ts";
 import type { Lateness } from "./lateness.ts";
-import { TAXONOMY } from "./taxonomy.ts";
+import { kindLabel } from "./taxonomy.ts";
 
 /** The source of each report of the core. No adapter has this id. */
 export const SYSTEM_SOURCE = "system" as SourceId;
@@ -353,7 +353,7 @@ function quotaCondition(quota: ChannelQuota, stage: QuotaStage): Condition {
   return {
     // A new count is not a fact. Thus each stage gives one alert in a window, and no update.
     facts: { channel, stage, ...(until === undefined ? {} : { until }) },
-    kind: { code, label: TAXONOMY[code] ?? code },
+    kind: { code, label: kindLabel(code) },
     severity: stage === "low" ? "moderate" : "severe",
     urgency: stage === "spent" ? "immediate" : "expected",
     response: ["assess"],
