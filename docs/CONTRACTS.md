@@ -51,9 +51,32 @@ The groups of reports are a function of the merge state alone, with no clock. Tw
 
 1. one report references the other (the CAP references), or
 2. they share a correlation key (an NWS VTEC event, a USGS event id), or
-3. the link rule of their kinds matches: the same family of kind, areas that overlap and times that overlap.
+3. the link rule of their kinds matches: the same family of kind, two onsets near in time and two points near on the ground (below).
 
 The links are transitive: when A links to B and B links to C, the three reports are in one incident. A link rule gives the blocks of a report, for example its family of kind and its day. The merge tests only two reports that share a block. So the cost grows with the size of the blocks, not with the square of the count of reports.
+
+### The link rule (rule 3)
+
+Two sources can report one real event with different ids. Then no reference and no correlation key joins their reports, and the person gets two alerts for one event. The link rule joins them.
+
+The rule comes from a policy, `LinkPolicy`. The function `linkRule` makes the rule of a policy. The first policy, `DEFAULT_LINK_POLICY`, has one family: `geo.earthquake`. Two reports of this family link when:
+
+- their onsets are 30 s apart or less
+- the centers of their circle areas are 100 km apart or less, on the great circle
+- the values of their parameter `magnitude` are 1.0 apart or less.
+
+The rule is on the safe side. A false join can hide a second event after an acknowledgment, but a false split gives only a second alert. Thus:
+
+- A report with no onset, no circle area or no magnitude links to no report. The magnitude counts only when the family has a limit of the magnitude.
+- Two reports of one source do not link. A source that gives two ids tells of two events, for example a shock and its aftershock.
+
+The field `link` of the private configuration replaces the policy, and `linkPolicySchema` checks it. A family is a code of the taxonomy or a prefix of codes. The blocks of a report are the slot of its onset and the slot before it. A slot is as long as the window of the family.
+
+The chain is a known limit. The rule compares two reports at a time, and the incidents are the connected components. Two events of one source 25 s apart stay apart. A report of another source between them links to each of them, and the three reports are then one incident. A gate case of `link.test.ts` holds this limit.
+
+A pairwise rule only joins incidents when a report comes. It does not split an incident, so a sent alert stays with its incident. The severity of the incident is the highest of its live heads.
+
+### The lines and the heads
 
 A line is a report and the reports of its source that update or cancel it. The head of a line is its last report: no report of the same source references it. A cancel of a part is the one exception (below). An incident is live at a time when one or more heads are not cancelled, not expired and not ended at that time. Its corroboration is the count of the different origins of its reports.
 
@@ -631,6 +654,7 @@ The core gives the format of the private configuration, `AlertConfig` (`alerts-c
 - `contacts`: the address of a person on a channel. A value of an address is a text, or a reference `{ secret: "NAME" }` to a key of the secret store.
 - `policies`: the escalation policies of each person with no policies of their own.
 - `spend`: the money rules of each paid provider account. An entry has the monthly cap and its reserve in US dollars, the floor of the balance and the time zone of the month.
+- `link`: the policy of the link rule of the merge (rule 3). Without it, the instance uses `DEFAULT_LINK_POLICY`.
 
 The times of the delivery and the rank of a copy are not in `AlertConfig`. They are settings of each copy.
 
@@ -764,7 +788,7 @@ The file `schemas.ts` of the core has one zod 4 schema for each data type of the
 ## Open points
 
 - The procedure tools take the schema of each input and output from `schemas.ts`.
-- The link rule of each family of kind, for rule 3 of the merge.
+- The link rule has one family, the earthquakes. Each other kind with two sources of different ids gets its family with its second source.
 - The calculation of the level from probabilities and costs (AL-31), with the base rates from the event log.
 - The count of misses that ends a report of a snapshot source is 2 (`SNAPSHOT_MISSES`). This value is a shortcut. A measure of the flap rate of the IEM list replaces it (AL-8).
 - The merge state grows with each report. A compaction of the incidents that ended before a horizon keeps it small. It must keep the three laws.

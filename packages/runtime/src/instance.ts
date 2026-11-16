@@ -340,6 +340,7 @@ export function openInstance(options: InstanceOptions): Instance {
       kinds,
       expectations: configuredExpectations(INSTANCE_EXPECTATIONS, config.expectations),
       delay: DELAY_LIMITS,
+      ...(config.link === undefined ? {} : { link: config.link }),
     },
     run: options.run,
     delivery,

@@ -8,9 +8,11 @@ import type { WallClock } from "@mark1russell7/algebra/clock";
 import { backoffDelay, type Backoff } from "@mark1russell7/service/backoff";
 import {
   COPY_ID,
+  DEFAULT_LINK_POLICY,
   NO_LABELS,
   acknowledgmentOf,
   incidents,
+  linkRule,
   messageKey,
   messageOf,
   route,
@@ -25,6 +27,7 @@ import {
   type Duration,
   type EscalationEnd,
   type Instant,
+  type LinkPolicy,
   type Recipient,
   type Route,
   type SendOutcome,
@@ -159,6 +162,8 @@ export interface DeliveryContext {
   /** The id of the run. Its characters match `COPY_ID`. Each copy id starts with it, thus two runs do not give the same copy id. */
   readonly run: string;
   readonly places: readonly WatchedPlace[];
+  /** The policy of the link rule of the merge, the policy of the view. The default is `DEFAULT_LINK_POLICY`. */
+  readonly link?: LinkPolicy | undefined;
   state(): RuntimeState;
   /**
    * This function writes events to the log and folds them. It gives the ids of the events that are
@@ -242,6 +247,7 @@ const thrownFailure = (thrown: unknown, otherwise: string): CallFailure => ({ ki
  */
 export function createDispatcher(options: DeliveryOptions, context: DeliveryContext): Dispatcher {
   const { clock } = context;
+  const link = linkRule(context.link ?? DEFAULT_LINK_POLICY);
   const byId = new Map<string, ChannelProcedures>();
   const descriptors: ChannelDescriptor[] = [];
   for (const channel of options.channels) {
@@ -309,7 +315,7 @@ export function createDispatcher(options: DeliveryOptions, context: DeliveryCont
       }
       // A wait that is over keeps nothing. Thus the map holds only the waits of the last retry time.
       for (const [call, until] of waits) if (until <= at) waits.delete(call);
-      const found = incidents(context.state().merge, at);
+      const found = incidents(context.state().merge, at, { link });
       const routesNow = (): Route[] => {
         const state = context.state();
         return route({

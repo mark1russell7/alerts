@@ -120,6 +120,7 @@ import {
 } from "./config.ts";
 import type { Recipient } from "./delivery.ts";
 import type { Lateness, LatenessLimit, LatenessState } from "./lateness.ts";
+import type { LinkFamily, LinkPolicy } from "./link.ts";
 import { canonicalKind, CATEGORIES, knownKind } from "./taxonomy.ts";
 
 // =============================================================================
@@ -1225,6 +1226,23 @@ export const spendConfigSchema: z.ZodType<SpendConfig, SpendConfig> = schemaOf<S
     .readonly(),
 );
 
+/** This schema checks the link of one family of kinds: its code, its window, its distance and its limit of the magnitude. */
+export const linkFamilySchema: z.ZodType<LinkFamily, LinkFamily> = schemaOf<LinkFamily>()(
+  z
+    .strictObject({
+      family: kindCodeSchema,
+      windowMs: z.int().positive("The window is an integer count of milliseconds, 1 or more."),
+      distanceKm: z.number().nonnegative("The distance is 0 km or more."),
+      magnitude: z.number().nonnegative("The limit of the magnitude is 0 or more.").exactOptional(),
+    })
+    .readonly(),
+);
+
+/** This schema checks the policy of the link rule. The configuration can give it in place of `DEFAULT_LINK_POLICY`. */
+export const linkPolicySchema: z.ZodType<LinkPolicy, LinkPolicy> = schemaOf<LinkPolicy>()(
+  z.strictObject({ families: z.array(linkFamilySchema).readonly() }).readonly(),
+);
+
 /**
  * This schema checks the JSON of the private configuration at the load. It checks the form of each
  * value. Then `loadConfig` checks the references: the ids, the places of each person, the contacts and
@@ -1241,6 +1259,7 @@ export const alertConfigSchema: z.ZodType<AlertConfig, AlertConfig> = schemaOf<A
       contact: z.string().refine(isContactUrl, "The contact is not an https URL or a mailto URL.").exactOptional(),
       expectations: z.array(expectationConfigSchema).readonly().exactOptional(),
       spend: z.array(spendConfigSchema).readonly().exactOptional(),
+      link: linkPolicySchema.exactOptional(),
     })
     .readonly(),
 );
