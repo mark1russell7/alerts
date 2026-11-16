@@ -9,9 +9,9 @@ import {
   carriages,
   coverage,
   incidents,
-  lateLimits,
   lateness,
   lateSources,
+  limitRule,
   startHealth,
   systemReports,
   threats,
@@ -72,8 +72,7 @@ export function systemView(state: RuntimeState, config: ViewConfig, at: Instant,
   const health = steps.map((step) => step.health);
   const found = incidents(state.merge, at);
   const checks = carriages(state.merge, found, config.expectations);
-  const limits = lateLimits(checks, config.expectations, at, config.delay);
-  const late = lateness(checks, config.expectations, limits, at);
+  const late = lateness(checks, config.expectations, at, limitRule(config.delay));
   const covered = coverage({ sources: config.sources, health, late: lateSources(late), places: config.places, kinds: config.kinds }, config.coverage);
   const step = systemReports(state.lines, { sources: config.sources, health, coverage: covered, threats: threats(found, config.places), lateness: late, ...(quotas === undefined ? {} : { quotas }) }, at);
   // An incident that expires changes the threats, thus its end is a timer too.

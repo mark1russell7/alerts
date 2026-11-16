@@ -74,7 +74,7 @@ import { coverage } from "./coverage.ts";
 import { escalate } from "./escalation.ts";
 import { observeFetch, startHealth } from "./health.ts";
 import { messageKey, observationId, reportId } from "./ids.ts";
-import { lateness, type Lateness, type LatenessLimit, type LatenessState } from "./lateness.ts";
+import { lateness, limitRule, type Lateness, type LatenessLimit, type LatenessState } from "./lateness.ts";
 import { incidents, normalize } from "./merge.ts";
 import * as schemas from "./schemas.ts";
 import {
@@ -510,9 +510,9 @@ describe("the round trip of real values", () => {
       { expectation: expectation.id, report: reportId({ source: API, key: "k2", sent: T0 }), started: T0 + 60_000 },
     ];
     for (const at of [T0, T0 + HOUR]) {
-      for (const entry of lateness(checks, [expectation], { [expectation.id]: limit }, at)) holds(latenessSchema, entry);
+      for (const entry of lateness(checks, [expectation], at, { delay: () => limit.delay, misses: () => limit.misses })) holds(latenessSchema, entry);
     }
-    for (const entry of lateness(checks, [expectation], {}, T0)) holds(latenessSchema, entry);
+    for (const entry of lateness(checks, [expectation], T0, limitRule({ quantile: 0.99, level: 0.95 }))) holds(latenessSchema, entry);
   });
 });
 

@@ -213,13 +213,21 @@ Some sources carry a copy of the messages of another source. FEMA IPAWS carries 
 - `carriages(state, incidents, expectations)` gives one check for each expectation and each message of `from`. A message is the reports of `from` in one incident with one sent time that pass the filter. Its copy is the first report of `to` in the incident with the same sent time. Thus an extension has its own check. The result is a function of the set of reports.
 - `delayLimit(delays, { quantile, level })` gives the limit of the delay. It is the distribution-free upper bound of the quantile of the measured delays, from `quantileInterval` of `@mark1russell7/rigor-statistics`. No person sets a time.
 - A small sample has no upper bound. Then the expectation has no limit, and the check only measures.
-- A check is a miss when it passes its limit with no copy. In normal work, some copies come late and some copies do not come. So one miss is not a proof.
-- `missRecord(checks, expectation, delay, at)` counts the misses of the past. Only a check after a met check is a trial, so a long stop of the source counts as one miss.
+- `decide(checks, expectation, at, limitOf)` gives the record of one expectation: one decision for each check that started by `at`, in the order of the start. The record is a fold over the time.
+- The deadline of a check is fixed at its start: `started + limit`, with the limit in force at that time. A later change of the limit does not move it.
+- A check is `met` when its copy comes by the deadline, and `missed` when the deadline passes first. A copy after the deadline is a miss. A check before its deadline with no copy is `open`.
+- A met check gives its delay to the sample of the delays. A missed check gives its limit, because its delay is only known to be more than the limit. Thus a lag or a backlog of the copies does not raise the limit.
+- In the warm-up, no limit is in force. A check is `measured` when its copy comes, and `waiting` before that. A warm-up check is not a miss.
+- With the measured rule, each limit after the first limit is at most the first limit. The rank of the bound grows by 1 or less for each sample, and each new sample is at most the limit at its start. Two gates of `lateness.test.ts` hold these rules.
+- Thus a lasting rise of the normal delay shows as a lasting late state. A person ends it with a new baseline: the policy of the delay gets a start time.
+- In normal work, some copies come late and some copies do not come. So one miss is not a proof.
+- `missRecord(record)` counts the misses of the past. Only a decided check after a met check is a trial, so a long stop of the source counts as one miss.
 - `missLimit(record, level)` gives the count of misses in a row that makes the source late. It is the smallest k with `high ** k <= 1 - level`. `high` is the upper bound of the rate of the misses, from `clopperPearson` of `@mark1russell7/rigor-statistics`. No person sets a count.
-- `lateLimits(checks, expectations, at, { quantile, level })` gives the two limits of each expectation: the delay and the count of misses.
-- `lateness(checks, expectations, limits, at)` gives the state of each expectation: `no-limit`, `no-data`, `met` or `late`. The source is late when the misses after the last check that came reach the count.
-- A copy that comes after a miss ends the misses, because it shows that the source carries the reports again.
-- `wakeAt` is the next time when a check passes its limit. The runtime starts `lateLimits` and `lateness` again at that time.
+- `limitRule({ quantile, level })` gives the measured rule: `delayLimit` for the delay and `missLimit` for the count.
+- `lateness(checks, expectations, at, rule)` gives the state of each expectation: `no-limit`, `no-data`, `met` or `late`. The source is late when the misses after the last met check reach the count.
+- A lag keeps the source late: each copy after its deadline is a miss. The first met check ends the misses, because it shows that the source carries the reports in time again.
+- `wakeAt` is the next deadline of an open check. The runtime starts `lateness` again at that time.
+- Each decision calculates the limit again, so the cost is O(n²) for n checks.
 
 A late source has two effects:
 
