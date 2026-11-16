@@ -702,8 +702,7 @@ ${PING_URL_KEY}=${URL_OF_CHECK}
 
   it("needs the first check of the copy, the token of the exchange with other copies, and its own first check", () => {
     const parsed = parseConfig(JSON.stringify(CONFIG), INSTANCE_CHECK.channels, store(SECRETS));
-    if (parsed.tag === "err") throw new Error(parsed.error.join("
-"));
+    if (parsed.tag === "err") throw new Error(parsed.error.join("\n"));
     const check = daemonCheck(CLOUD);
     expect(check.channels).toBe(INSTANCE_CHECK.channels);
     expect(check.problems(parsed.value, store({ ...SECRETS, [PING_URL_KEY]: URL_OF_CHECK }))).toEqual([

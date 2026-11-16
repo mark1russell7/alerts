@@ -150,9 +150,7 @@ if (action === "install") {
   const files = privateFiles(home, configPath(process.env, process.cwd()));
   // The check of the restart uses the settings of the copy, as the start does. A bad copy.json stops the restart.
   const copy = await readCopySettings(home);
-  if (copy.tag === "err") throw new Error(`The restart does not start. The file copy.json has problems:
-- ${copy.error.join("
-- ")}`);
+  if (copy.tag === "err") throw new Error(`The restart does not start. The file copy.json has problems:\n- ${copy.error.join("\n- ")}`);
   const outcome = await requestRestart(
     { files, check: daemonCheck(copy.value), waitMs: RESTART_WAIT_MS, pollMs: 2000 },
     {
