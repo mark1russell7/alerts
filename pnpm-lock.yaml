@@ -604,7 +604,7 @@ importers:
         version: 5.1.0(vitest@5.1.0)
       d3-geo:
         specifier: ^3.1.1
-        version: 3.1.1
+        version: 3.1.2
       typescript:
         specifier: ^7.0.2
         version: 7.0.2
@@ -1733,8 +1733,8 @@ packages:
     resolution: {integrity: sha512-Th8qGXoBalmWsstpkuhmBuTsBQIFqYOJtjlBvNVvBfJ8E3uYusBUwUR8HU20U0qKKQkgCvKyR1YjiozWadk5QA==}
     engines: {node: '>=12'}
 
-  d3-geo@3.1.1:
-    resolution: {integrity: sha512-637ln3gXKXOwhalDzinUgY83KzNWZRKbYubaG+fGVuc/dxO64RRljtCTnf5ecMyE1RIdtqpkVcq0IbtU2S8j2Q==}
+  d3-geo@3.1.2:
+    resolution: {integrity: sha512-5R8ZgDQorIxmauv7R6gpE/ndz+Z0qAZssigq0aXFdvPHdY41RqtW02jrRUQAL724NdPABYXo1+gQEGBBr7uKNg==}
     engines: {node: '>=12'}
 
   dependency-cruiser@18.7.2:
@@ -3011,7 +3011,7 @@ snapshots:
     dependencies:
       internmap: 2.0.3
 
-  d3-geo@3.1.1:
+  d3-geo@3.1.2:
     dependencies:
       d3-array: 3.2.5
 
