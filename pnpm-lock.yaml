@@ -1454,15 +1454,6 @@ packages:
       express:
         optional: true
 
-  '@procedures/client@0.60.0':
-    resolution: {integrity: sha512-krciADTp5A0L9HxFKDzFVJAg7SOMUWHyWH/7w3JJ9h1xzLBGAYnK/3nKUesf+QGHyMAp7vfs/buvHXzGaimX1A==}
-    engines: {node: '>=22'}
-    peerDependencies:
-      express: ^4.0.0 || ^5.0.0
-    peerDependenciesMeta:
-      express:
-        optional: true
-
   '@procedures/compiler@0.57.0':
     resolution: {integrity: sha512-awkSHJHUqBL/r1652rHfzWX5GtSayzQXLu4S6YgusHEC1v7HFuPloiKY/e1x+tmb+fCSVY0Ge16jXKPahaPwWg==}
     engines: {node: '>=22'}
@@ -2859,26 +2850,6 @@ snapshots:
   '@procedures/client@0.60.0':
     dependencies:
       '@mark1russell7/algebra': 0.8.10(zod@4.6.7)
-      '@mark1russell7/coeval': 0.34.0(zod@4.6.7)
-      '@mark1russell7/collections': 0.10.2(zod@4.6.7)
-      '@mark1russell7/quantity': 0.4.0(zod@4.6.7)
-      '@mark1russell7/service': 0.8.16(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
-      '@opentelemetry/api': 1.10.0
-      '@types/ws': 8.18.2
-      ws: 8.23.0
-      zod: 4.6.7
-    transitivePeerDependencies:
-      - '@grpc/grpc-js'
-      - amqplib
-      - bufferutil
-      - ioredis
-      - mongodb
-      - pg
-      - utf-8-validate
-
-  '@procedures/client@0.60.0':
-    dependencies:
-      '@mark1russell7/algebra': 0.8.9(zod@4.6.7)
       '@mark1russell7/coeval': 0.34.0(zod@4.6.7)
       '@mark1russell7/collections': 0.10.2(zod@4.6.7)
       '@mark1russell7/quantity': 0.4.0(zod@4.6.7)
