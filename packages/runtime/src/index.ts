@@ -1,7 +1,7 @@
 import type { Duration, MapPayload } from "@mark1russell7/alerts";
 import { add, type Quantity } from "@mark1russell7/quantity";
 import { daemon, kubernetes, localDev, service } from "@mark1russell7/service";
-import type { Profile, ServiceBuilder, Timing } from "@mark1russell7/service";
+import type { Profile, ServiceBuilder, Timing, WorkerLoop } from "@mark1russell7/service";
 import { probeServer } from "@mark1russell7/service/http";
 import { LOOPBACK, attachApi } from "./api.ts";
 import type { RuntimeLoop } from "./loop.ts";
@@ -13,6 +13,7 @@ export * from "./config.ts";
 export * from "./delivery.ts";
 export * from "./events.ts";
 export * from "./exchange.ts";
+export * from "./exchange-http.ts";
 export * from "./heartbeat.ts";
 export { DELIVERY_TIMES, SOURCE_POLICY, sourcePace } from "./instance.ts";
 export * from "./fetch.ts";
@@ -74,6 +75,16 @@ export interface Options {
   readonly map?: (() => MapPayload) | undefined;
   /** The worker of the deploy of the outage call. The service runs it as the worker `outage`, beside the passes. */
   readonly outage?: OutageDeployWorker;
+  /** The exchange with the other copies of the system. */
+  readonly exchange?: ServiceExchange;
+}
+
+/** The parts of the exchange in the service. */
+export interface ServiceExchange {
+  /** The loop of the worker of the exchange. The service runs it as the worker `exchange`. */
+  readonly loop?: WorkerLoop;
+  /** The procedures host of the exchange (`exchangeHost`). It declares its server and its listener on the service. */
+  readonly host?: { declare(svc: ServiceBuilder): ServiceBuilder };
 }
 
 /**
@@ -93,7 +104,16 @@ const withOutage = (svc: ServiceBuilder, outage: OutageDeployWorker | undefined)
  * This function declares the one service of the process. It starts nothing. `describe()` gives the
  * declaration as data, and `lint()` examines it. Only the entry (`main.ts`) uses `run()`.
  */
-export const declare = (options: Options): ServiceBuilder =>
+export const declare = (options: Options): ServiceBuilder => {
+  const svc = parts(options);
+  const exchange = options.exchange;
+  // The worker of the exchange stops before the log closes, because the service closes each worker before its dependencies.
+  const withWorker = exchange?.loop === undefined ? svc : svc.worker("exchange", exchange.loop.knobs, exchange.loop);
+  return exchange?.host === undefined ? withWorker : exchange.host.declare(withWorker);
+};
+
+// The parts of the service of each runtime: the API, the dependencies, the workers of the passes and of the outage call, the checks and the policies.
+const parts = (options: Options): ServiceBuilder =>
   withOutage(
     attachApi(service("runtime"), { port: options.port, loop: options.loop, map: options.map, ...(options.outage === undefined ? {} : { outage: options.outage }) })
       .dependency("log", { system: null, knobs: {}, operations: {} }, { connect: () => undefined, close: () => options.log.close() })

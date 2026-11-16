@@ -29,8 +29,11 @@
     "@mark1russell7/service": "^0.8.16",
     "@mark1russell7/sqlite": "^0.3.2",
     "@mark1russell7/text": "^0.0.6",
+    "@procedures/client": "^0.60.0",
     "@procedures/fs": "^0.57.0",
-    "polite-crawler": "^0.7.3"
+    "@procedures/peer": "^0.60.0",
+    "polite-crawler": "^0.7.3",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@mark1russell7/cue": "^2.0.0",

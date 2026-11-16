@@ -47,6 +47,7 @@ import { createNwsSource, NWS_DESCRIPTOR } from "@mark1russell7/alerts-source-nw
 import { createTsunamiSource, descriptorOf as tsunamiDescriptor, TSUNAMI_CENTERS, type TsunamiCenter, type TsunamiFetchOptions } from "@mark1russell7/alerts-source-tsunami";
 import { createUsgsSource, USGS_DESCRIPTOR } from "@mark1russell7/alerts-source-usgs";
 import { err, ok, type Result } from "@mark1russell7/optional";
+import type { WorkerLoop } from "@mark1russell7/service";
 import type { Pace, QuotaStore, Transport } from "polite-crawler/api";
 import { DEFAULT_POLICY, HostScheduler, type PolitenessPolicy } from "polite-crawler/politeness";
 import { balanceWatch, SPEND_UNIT, spendGates, spendQuota, spendUnits, type BalanceWatch, type SpendGates } from "./balance.ts";
@@ -57,6 +58,7 @@ import { frameClock } from "./frame.ts";
 import type { RuntimeLog } from "./log.ts";
 import { createLoop, loopTimes, type LoopTimes, type RuntimeLoop } from "./loop.ts";
 import { outageDeploy, outageDeployWorker, outageSetup, type OutageDeployWorker } from "./outage.ts";
+import { exchangeLoop, exchangeWorker, type EntriesSource, type ExchangeCall, type ExchangeRound, type ExchangeWorker } from "./peers.ts";
 import { channelQuota } from "./quota.ts";
 import { openRuntime, type Pass, type Runtime, type RuntimeOptions } from "./runtime.ts";
 import { addZoneCodes, keepShapes, placeCodesKey, type InstanceShapes, type ShapeOutcome, type ZoneCodeCounts } from "./shapes.ts";
@@ -397,6 +399,13 @@ export interface InstanceOptions {
   readonly run: string;
   /** The settings of this copy of the system. The default is `ONLY_COPY`, with rank 0. A copy waits its rank times `RANK_DELAY` before each send. */
   readonly copy?: CopySettings;
+  /**
+   * The exchange with the other copies: the call over HTTP (`exchangeCall`) and the hash of the configuration (`configHash`
+   * of the core). Without it, the instance has no worker of the exchange. The entry refuses a copy with other copies and no token.
+   */
+  readonly exchange?: InstanceExchange;
+  /** The instance gives each round of the worker of the exchange to this function. */
+  readonly onExchange?: (round: ExchangeRound) => void;
   /** The runtime starts this hook at the end of each pass with no error. */
   readonly onPass?: (pass: Pass) => void | Promise<void>;
   /** The loop gives each failed pass to this function. */
@@ -424,6 +433,24 @@ export interface InstanceOptions {
   readonly onOutageLog?: (line: string) => void;
 }
 
+/** The parts of the exchange that the entry gives to the instance. */
+export interface InstanceExchange {
+  /** The call of the procedure `alerts.log.entries` of another copy. */
+  readonly call: ExchangeCall;
+  /** The hash of the configuration of this copy. */
+  readonly configHash: string;
+}
+
+/** The exchange of an instance with the other copies. */
+export interface InstanceCopies {
+  /** The parts of the runtime that serve the procedure `alerts.log.entries` to the other copies. */
+  readonly source: EntriesSource;
+  /** The worker that reads each other copy. A copy with no other copies has none. */
+  readonly worker?: ExchangeWorker;
+  /** The loop of the worker. The service runs it as the worker `exchange`. */
+  readonly loop?: WorkerLoop;
+}
+
 /** The instance: the runtime, its loop and the outlines of the regions. */
 export interface Instance {
   readonly runtime: Runtime;
@@ -443,6 +470,8 @@ export interface Instance {
   readonly map: () => MapPayload;
   /** The worker of the deploy of the outage call, when the configuration has an outage call. The service declares it. */
   readonly outage?: OutageDeployWorker;
+  /** The exchange with the other copies, when the options give it. */
+  readonly copies?: InstanceCopies;
 }
 
 /**
@@ -513,6 +542,19 @@ export function openInstance(options: InstanceOptions): Instance {
     ...(options.pushoverReserveNotices === undefined ? {} : { reserveNotices: options.pushoverReserveNotices }),
   });
   const twilio = twilioChannel(options, config.spend);
+  // The worker of the exchange reads the runtime only in its rounds, after the start of the service. Thus it gets the runtime through a function.
+  const copy = options.copy ?? ONLY_COPY;
+  const peers = copy.peers ?? [];
+  const worker =
+    peers.length === 0 || options.exchange === undefined
+      ? undefined
+      : exchangeWorker({
+          runtime: { position: (id) => runtime.position(id), take: (page) => runtime.take(page) },
+          peers,
+          call: options.exchange.call,
+          clock: wall,
+          configHash: options.exchange.configHash,
+        });
   const quotas = (): readonly ChannelQuota[] => [
     ...(options.pushoverQuota === undefined ? [] : [channelQuota(CHANNEL_ID, options.pushoverQuota)]),
     ...(twilio?.gates === undefined ? [] : [channelQuota(TWILIO_CHANNEL, twilio.gates.gate, SPEND_UNIT)]),
@@ -526,7 +568,7 @@ export function openInstance(options: InstanceOptions): Instance {
     labels: placeLabels(placed),
     ...(config.assess === undefined ? {} : { assess: config.assess }),
     ...DELIVERY_TIMES,
-    rank: (options.copy ?? ONLY_COPY).rank,
+    rank: copy.rank,
     rankDelay: RANK_DELAY,
   };
 
@@ -545,13 +587,15 @@ export function openInstance(options: InstanceOptions): Instance {
       ...(config.link === undefined ? {} : { link: config.link }),
     },
     run: options.run,
-    copy: (options.copy ?? ONLY_COPY).id,
+    copy: copy.id,
     delivery,
     // The loop exists before the first pass, and only a pass starts a wake.
     wake: () => loop.wake(),
     // Each stage of a quota is a line of system reports, and so is each stage of a balance.
     quotas,
     balances,
+    // Each pass waits for the first round of the exchange, and its view has a line for each fault of another copy.
+    ...(worker === undefined ? {} : { copies: worker }),
     // After each pass, the store of shapes gets the outlines that are due, and it ends before the next fetch of a source.
     onPass: async (pass) => {
       latest = pass;
@@ -581,8 +625,34 @@ export function openInstance(options: InstanceOptions): Instance {
       basemap: shapes.basemap(),
     });
   };
+  // A round that imports an event or changes the stage of a copy starts a pass soon.
+  const rounds =
+    worker === undefined
+      ? undefined
+      : exchangeLoop({
+          worker,
+          clock,
+          onRound: (round) => {
+            if (round.changed) loop.wake();
+            options.onExchange?.(round);
+          },
+        });
+  const copies: InstanceCopies | undefined =
+    options.exchange === undefined
+      ? undefined
+      : { source: { runtime, clock: wall, configHash: options.exchange.configHash }, ...(worker === undefined || rounds === undefined ? {} : { worker, loop: rounds }) };
   const outage = outageWorker(options, loop.times.passLimit);
-  return { runtime, loop, shapes, ...(start === undefined ? {} : { zones: start.counts }), quotas, balances, map, ...(outage === undefined ? {} : { outage }) };
+  return {
+    runtime,
+    loop,
+    shapes,
+    ...(start === undefined ? {} : { zones: start.counts }),
+    quotas,
+    balances,
+    map,
+    ...(outage === undefined ? {} : { outage }),
+    ...(copies === undefined ? {} : { copies }),
+  };
 }
 
 /**

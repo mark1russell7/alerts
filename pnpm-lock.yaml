@@ -562,12 +562,21 @@ importers:
       '@mark1russell7/text':
         specifier: ^0.0.6
         version: 0.0.6
+      '@procedures/client':
+        specifier: ^0.60.0
+        version: 0.60.0
       '@procedures/fs':
         specifier: ^0.57.0
         version: 0.57.0
+      '@procedures/peer':
+        specifier: ^0.60.0
+        version: 0.60.0(@opentelemetry/api@1.10.0)(ws@8.23.0)
       polite-crawler:
         specifier: ^0.7.3
         version: 0.7.4(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
+      zod:
+        specifier: ^4.6.7
+        version: 4.6.7
     devDependencies:
       '@mark1russell7/cue':
         specifier: ^2.0.0
@@ -1445,6 +1454,15 @@ packages:
       express:
         optional: true
 
+  '@procedures/client@0.60.0':
+    resolution: {integrity: sha512-krciADTp5A0L9HxFKDzFVJAg7SOMUWHyWH/7w3JJ9h1xzLBGAYnK/3nKUesf+QGHyMAp7vfs/buvHXzGaimX1A==}
+    engines: {node: '>=22'}
+    peerDependencies:
+      express: ^4.0.0 || ^5.0.0
+    peerDependenciesMeta:
+      express:
+        optional: true
+
   '@procedures/compiler@0.57.0':
     resolution: {integrity: sha512-awkSHJHUqBL/r1652rHfzWX5GtSayzQXLu4S6YgusHEC1v7HFuPloiKY/e1x+tmb+fCSVY0Ge16jXKPahaPwWg==}
     engines: {node: '>=22'}
@@ -1478,6 +1496,10 @@ packages:
     peerDependenciesMeta:
       '@mark1russell7/rigor-testkit':
         optional: true
+
+  '@procedures/peer@0.60.0':
+    resolution: {integrity: sha512-NaY6EvtRVDfYxRwEaiLWkk6VMTNPPKinuwjvBETmJr9vB5tzg/4Ew8BSeCMGFrNIIEmhQkMbpmklqsPmz7PcTA==}
+    engines: {node: '>=22'}
 
   '@publint/pack@0.1.7':
     resolution: {integrity: sha512-4EDEmvxWtgsCnnVeBvtFIFZtUhPPt1+bA9JrSwU4Sa//6oKtzCSlGGXYJr44OD9aGISymbieJ4mCKHUygUDU+g==}
@@ -2854,6 +2876,26 @@ snapshots:
       - pg
       - utf-8-validate
 
+  '@procedures/client@0.60.0':
+    dependencies:
+      '@mark1russell7/algebra': 0.8.9(zod@4.6.7)
+      '@mark1russell7/coeval': 0.34.0(zod@4.6.7)
+      '@mark1russell7/collections': 0.10.2(zod@4.6.7)
+      '@mark1russell7/quantity': 0.4.0(zod@4.6.7)
+      '@mark1russell7/service': 0.8.16(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
+      '@opentelemetry/api': 1.10.0
+      '@types/ws': 8.18.2
+      ws: 8.23.0
+      zod: 4.6.7
+    transitivePeerDependencies:
+      - '@grpc/grpc-js'
+      - amqplib
+      - bufferutil
+      - ioredis
+      - mongodb
+      - pg
+      - utf-8-validate
+
   '@procedures/compiler@0.57.0':
     dependencies:
       '@mark1russell7/coeval': 0.34.0(zod@4.6.7)
@@ -2945,6 +2987,24 @@ snapshots:
       - mongodb
       - pg
       - utf-8-validate
+
+  '@procedures/peer@0.60.0(@opentelemetry/api@1.10.0)(ws@8.23.0)':
+    dependencies:
+      '@mark1russell7/files': 0.0.3
+      '@mark1russell7/service': 0.8.16(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
+      '@procedures/client': 0.60.0
+      zod: 4.6.7
+    transitivePeerDependencies:
+      - '@grpc/grpc-js'
+      - '@opentelemetry/api'
+      - amqplib
+      - bufferutil
+      - express
+      - ioredis
+      - mongodb
+      - pg
+      - utf-8-validate
+      - ws
 
   '@publint/pack@0.1.7':
     dependencies:
