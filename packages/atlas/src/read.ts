@@ -1,11 +1,12 @@
 /**
- * The reader of the committed atlas. The data is in three files of the folder `data`: `classes.json`,
- * `sources.json` and `rounds.json`. A data change is a change of these files, not of the code.
+ * The reader of the committed atlas. The data is in five files of the folder `data`: `classes.json`,
+ * `sources.json`, `rounds.json`, `origins.json` and `paths.json`. A data change is a change of these
+ * files, not of the code.
  */
 
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 
-import type { Atlas, Round, SignalClass, Source } from "./atlas.ts";
+import type { Atlas, Origin, PathPart, Round, SignalClass, Source } from "./atlas.ts";
 
 /** The folder of the committed data of the atlas. */
 export const DATA_FOLDER: URL = new URL("../data/", import.meta.url);
@@ -23,12 +24,14 @@ export function workspacePackages(folder: URL = PACKAGES_FOLDER): Set<string> {
   return names;
 }
 
-/** This function reads the atlas from the three files of a folder. */
+/** This function reads the atlas from the five files of a folder. */
 export function readAtlas(folder: URL = DATA_FOLDER): Atlas {
   const read = (name: string): unknown => JSON.parse(readFileSync(new URL(name, folder), "utf8"));
   return {
     classes: read("classes.json") as SignalClass[],
     sources: read("sources.json") as Source[],
     rounds: read("rounds.json") as Round[],
+    origins: read("origins.json") as Origin[],
+    paths: read("paths.json") as PathPart[],
   };
 }
