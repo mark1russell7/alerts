@@ -23,7 +23,7 @@
  */
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
-import { CHANNEL_ID as PUSHOVER_CHANNEL, PUSHOVER_QUOTA, PUSHOVER_RESERVE_NOTICES } from "@mark1russell7/alerts-channel-pushover";
+import { PUSHOVER_QUOTA, PUSHOVER_RESERVE_NOTICES } from "@mark1russell7/alerts-channel-pushover";
 import { openShapeCache, SHAPES_FILE } from "@mark1russell7/alerts-shapes-nws";
 import { realClock, wallClock } from "@mark1russell7/algebra/clock";
 import type { ServiceBuilder } from "@mark1russell7/service";
@@ -34,7 +34,7 @@ import { fetchTransport, quotaGate } from "polite-crawler/api";
 import { writeFileAtomic } from "@procedures/fs/files";
 import { alertsHome, configPath, envSecrets } from "./config.ts";
 import { heartbeat, heldOf, type PassSummary } from "./heartbeat.ts";
-import { channelQuota, quotaNote } from "./quota.ts";
+import { quotaNote } from "./quota.ts";
 import { PROFILES, declare } from "./index.ts";
 import { DAEMON_CHECK, INSTANCE_CHECK, LOUD_PING_URL_KEY, openInstance, PING_URL_KEY, pingTargets, userAgent } from "./instance.ts";
 import { openRuntimeLog } from "./log.ts";
@@ -90,8 +90,8 @@ async function runtime(): Promise<ServiceBuilder> {
       clock: wall,
       userAgent: agent,
       held: (at) => heldOf(instance.runtime.state(), at),
-      // The body of each ping tells the state of the quota. Thus the check shows the reserve.
-      notes: () => [quotaNote(channelQuota(PUSHOVER_CHANNEL, pushoverQuota))],
+      // The body of each ping tells the state of each quota. Thus the check shows the reserve.
+      notes: () => instance.quotas().map(quotaNote),
       onError: (message) => console.error(redactSecrets(target.key === LOUD_PING_URL_KEY ? `The loud check: ${message}` : message, values)),
     }),
   );
@@ -134,6 +134,9 @@ async function runtime(): Promise<ServiceBuilder> {
     pushover: fetch,
     pushoverQuota,
     pushoverReserveNotices,
+    // The Twilio calls and the read of the balance. The cap of the spend counts in quotas.sqlite.
+    twilio: fetch,
+    spendStore: quotas,
     run: randomUUID(),
     ...(onPass === undefined ? {} : { onPass }),
     // The output gets no secret, also when an error quotes a request.

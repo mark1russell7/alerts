@@ -121,7 +121,8 @@ import {
 import type { Recipient } from "./delivery.ts";
 import type { Lateness, LatenessLimit, LatenessState } from "./lateness.ts";
 import type { LinkFamily, LinkPolicy } from "./link.ts";
-import { canonicalKind, CATEGORIES, knownKind } from "./taxonomy.ts";
+import { COVERAGE_KIND } from "./assess.ts";
+import { canonicalKind, CATEGORIES, KIND_ALIASES, knownKind, TAXONOMY } from "./taxonomy.ts";
 
 // =============================================================================
 // The gate between a schema and its type
@@ -218,13 +219,30 @@ export const significanceSchema: z.ZodType<Significance, Significance> = schemaO
   z.enum(["warning", "watch", "advisory", "statement", "outlook", "observation"]),
 );
 
+// Each code that `kindCodeSchema` takes, sorted: each code of `TAXONOMY`, each old code, and the coverage form of
+// each, when the rule of the schema takes it. The rule is the one test, so the list and the parse agree. A test
+// gives its own old codes with a mock of the taxonomy, so the list reads `KIND_ALIASES` here.
+const kindCodes = (): string[] => {
+  const codes = [...Object.keys(TAXONOMY), ...Object.keys(KIND_ALIASES)];
+  const takes = (code: string): boolean => knownKind(canonicalKind(code));
+  const all = new Set([...codes, ...codes.map((code) => `${COVERAGE_KIND}.${code}`)].filter(takes));
+  return [...all].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+};
+
 /**
  * This schema checks a code of the taxonomy, or a prefix of a code by its parts. `knownKind` is the one rule:
  * a prefix by parts is also a code, so `met` and `met.flood` pass and `met.fl` does not. A kind with a typo
  * matches no alert, so this rule holds for each kind that a person or an adapter names. The parse first
  * changes an old code to its new code (`canonicalKind`). This change is not a transform, so the JSON Schema stays.
+ *
+ * The JSON Schema is an enum of each code that the rule takes. zod puts it one time in `$defs`, with the id `KindCode`.
+ * The schema stays a string schema and not `z.enum`, because zod makes a record with enum keys need each key.
  */
-export const kindCodeSchema: z.ZodType<string, string> = z.string().overwrite((code) => canonicalKind(code)).refine(knownKind, "The kind code is not in the taxonomy.");
+export const kindCodeSchema: z.ZodType<string, string> = z
+  .string()
+  .overwrite((code) => canonicalKind(code))
+  .refine(knownKind, "The kind code is not in the taxonomy.")
+  .meta({ id: "KindCode", description: "A code of the taxonomy, an old code, or the coverage form of one of them.", enum: kindCodes() });
 
 // The prefix of a topic key, and the problem of a topic id that is not a code of the taxonomy.
 const TOPIC_PREFIX = "topic:";

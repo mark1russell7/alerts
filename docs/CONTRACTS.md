@@ -294,11 +294,11 @@ Each channel package registers four procedures under `alerts.channel.<id>`:
 | `status` | reads `network` | It gives the state of a receipt: accepted, delivered, acknowledged, expired or failed. |
 | `cancel` | writes `network` | It stops the repeats of a message: each copy of a receipt, or one copy by its copy id. It is idempotent. |
 
-A descriptor with `address` tells the fields of the address of a person on the channel: the name, the need and the form of each field.
+A descriptor with `address` tells the fields of the address of a person on the channel. Each field has a name, a need and a form.
 
 - The load of the configuration checks each address on a known channel with `addressProblems`. A problem stops the start, before the first alert.
-- An address has each required field, and each value has the form of its field. It has no field that the channel does not read.
-- A problem names the field and its form, and never its value, because a value can be a secret.
+- An address has each necessary field, and each value has the form of its field. It has no field that the channel does not read.
+- A problem names the field and its form, and not its value, because a value can be a secret.
 - The form is a regular expression of the whole value. Pushover takes the key form of `@procedures/notify`. The Twilio call takes a phone number in E.164 form.
 
 The channel does not escalate. The core does:
@@ -310,6 +310,24 @@ The channel does not escalate. The core does:
 - The core decides the silent mode. `escalate` sets `quiet` on each send, and `Message.quiet` takes it. Each channel maps it to its silent mode: Pushover priority `-1`, or a text and no call on Twilio. No channel keeps its own rule about the time of day.
 - On an iPhone, an Emergency message of Pushover sounds through silent mode only when the Pushover app has Critical Alerts on for Emergency. A reset of the iOS permission of Pushover turns that setting off.
 - A channel with `why` in its descriptor gets a why line in `Message.why`: why the message reaches the person, in the limit of the channel. `WHY_LIMITS` in `why.ts` holds the limit of each kind of channel. Pushover takes the push limit, and puts the line first in the body.
+
+The Twilio call channel makes one voice call for each send:
+
+- The call says the title, the why line and the body two times. Its last sentence tells the person to acknowledge in the app.
+- A quiet message, a message that expired and an address with a problem get no call. The outcome is `refused`.
+- An answer is `delivered`, and not `acknowledged`. The machine detection of Twilio can take a voice mailbox for a person.
+- A call that nobody answered, and a call that Twilio could not make, are `failed`. The escalation goes to its next step.
+- `cancel` ends the call in each state. Twilio refuses the end of a call that it does not know, and the cancel ends with no error.
+- `readTwilioBalance` reads the balance of the account. It gives each failure as a value.
+- `twilioSetupProblems` checks the credentials and the number that calls, with no request. A problem names the field, and no value.
+
+The cap of the spend of a call channel is two gates of `polite-crawler/api`, with one store, one key and one quota name:
+
+- The two gates count the same units. The gate of `life-safety` has no reserve. Thus only `life-safety` uses the last part of the cap.
+- A full cap gives `rate-limited`. A cap in its reserve gives `reserved` to a message below `life-safety`.
+- A call that Twilio refused, did not authorize or limited gives its units back. Twilio made no call.
+- A network fault, a time-out and a server error keep the units, because the call can have started.
+- A fault of the store of a gate does not stop a call. The call goes with no count.
 
 ## The delivery promise
 
@@ -567,7 +585,10 @@ The service keeps the loop alive and safe:
 
 The function `openInstance` makes the instance of the owner from the private configuration:
 
-- The sources are the NWS API and IPAWS. The channel is Pushover.
+- The sources are the NWS API and IPAWS. The channels are Pushover, and the Twilio call channel when `secrets.env` has its keys.
+- The keys of Twilio are `TWILIO_ACCOUNT_SID`, `TWILIO_API_KEY_SID`, `TWILIO_API_KEY_SECRET` and `TWILIO_FROM`. An API key signs each request.
+- A spend entry of a provider of a channel gives the cap of the channel. The count of the cap is in `quotas.sqlite`.
+- The spend entry of Twilio also gives the watch of the balance: one read each day, and its floor.
 - Each source gets the watch of `sourcePlaces`. Thus a source gets the region codes, and a position only when the place shares it with that source.
 - The User-Agent of each request names the project and its page. It names no person.
 - The times of the delivery come from facts of the channel. A call has a limit of 10 seconds. The poll goes at the pace of the emergency repeats, 30 seconds.
@@ -578,10 +599,12 @@ The instance does not start when it finds one of these problems:
 
 - a missing secret, or an API token that does not have the form of a Pushover key (30 letters and digits)
 - each problem of `parseConfig`: the JSON, the schema, the references and the fields of each address on its channel
-- a step of a policy on a channel that the instance has no sender for. The Twilio call channel has no sender until AL-15.
+- some keys of Twilio and not all, or a key of Twilio with a bad form
+- a step of a policy on a channel that the instance has no sender for. Without the keys of Twilio, the call channel has no sender.
+- a step on a channel with a cost, when the configuration has no spend entry for a provider of the channel
 - a place that no source covers. Usually the place does not have a code of each level: the zone, the county, SAME, the state and the country.
 
-The environment gives `PORT` (8080), `PROBE_PORT` (9090) and `SERVICE_PROFILE` (`local`, `daemon` or `pod`). The folder `ALERTS_HOME` (`.alerts` in the home folder) holds the private files: `config.json`, `secrets.env`, the log `runtime.sqlite` and the outlines of the zones `shapes.sqlite`. No repository holds them. A problem of `secrets.env` names its line and its key, and no value. The output of a failed pass shows no value of `secrets.env`.
+The environment gives `PORT` (8080), `PROBE_PORT` (9090) and `SERVICE_PROFILE` (`local`, `daemon` or `pod`). The folder `ALERTS_HOME` (`.alerts` in the home folder) holds the private files: `config.json`, `secrets.env`, the log `runtime.sqlite` and the outlines of the zones `shapes.sqlite`. It also holds the counts of the quotas, `quotas.sqlite`. No repository holds them. A problem of `secrets.env` names its line and its key, and no value. The output of a failed pass shows no value of `secrets.env`.
 
 After each pass, the runtime gets the outlines of the zones of the watched states. It stops before the next fetch of the alerts. A broken file of outlines goes into quarantine, and the runtime gets the outlines again.
 

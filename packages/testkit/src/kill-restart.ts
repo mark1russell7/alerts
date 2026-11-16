@@ -33,7 +33,7 @@ import { startScriptedServer } from "@mark1russell7/rigor-testkit/http";
 import { errorMessage } from "@mark1russell7/text";
 import { type PushoverLedger, type PushoverLedgerMessage, pushoverApi, pushoverLedgerOf } from "@procedures/notify/testing";
 import { type CallFailure, type LogSummary, logSummaryOf } from "./delivery-fixture.ts";
-import { type AcceptGate, acceptGatesOf } from "./late-accept.ts";
+import { type AcceptGate, acceptGatesOf, copyOf, copyOnceOf } from "./late-accept.ts";
 
 /** The id of the case. */
 export const CASE_10_ID = "al-13-case-10";
@@ -276,9 +276,6 @@ export async function runKillRestart(given: Partial<KillSettings> = {}): Promise
   return { id: CASE_10_ID, settings, records, verdict: killVerdictOf(records, settings) };
 }
 
-/** The copy id of a message: its second tag. */
-const copyOf = (message: PushoverLedgerMessage): string | undefined => message.tags[1];
-
 /** The delivery key of a message: its first tag. */
 const keyOf = (message: PushoverLedgerMessage): string => message.tags[0] ?? "(no tag)";
 
@@ -290,17 +287,9 @@ export function messagesOfLife(record: Pick<KillRecord, "ledger">, life: Pick<Li
 /** This function gives the gates of one record, and a problem for each gate that fails. */
 export function killGatesOf(record: KillRecord): KillResult {
   const accept = acceptGatesOf(record);
-  const problems: string[] = [...accept.problems];
+  const { copyOnce, problems: copyProblems } = copyOnceOf(record);
+  const problems: string[] = [...accept.problems, ...copyProblems];
   const { messages } = record.ledger;
-  const counts = new Map<string, number>();
-  for (const message of messages) {
-    const copy = copyOf(message);
-    if (copy === undefined) problems.push(`${record.arm}: the message ${message.receipt} has no copy id.`);
-    else counts.set(copy, (counts.get(copy) ?? 0) + 1);
-  }
-  const twice = [...counts].filter(([, count]) => count > 1);
-  for (const [copy, count] of twice) problems.push(`${record.arm}: the copy ${copy} has ${String(count)} sends, not 1.`);
-  const copyOnce = twice.length === 0 && messages.every((message) => copyOf(message) !== undefined);
 
   const logged = new Set(record.log.deliveries.flatMap((delivery) => (delivery.receipt === undefined ? [] : [delivery.receipt])));
   const last = record.lives.at(-1);

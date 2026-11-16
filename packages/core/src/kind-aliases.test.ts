@@ -9,6 +9,10 @@ vi.mock("./taxonomy.ts", async (importOriginal) => {
   return { ...original, KIND_ALIASES: aliases, canonicalKind: (code: string) => original.canonicalKind(code, aliases) };
 });
 
+// The JSON Schema of the kind code. zod puts a schema with an id in $defs, also when it is the root.
+const kindCodeJson = (): { type?: string; enum?: string[] } =>
+  (z.toJSONSchema(kindCodeSchema) as { $defs?: Record<string, { type?: string; enum?: string[] }> }).$defs?.["KindCode"] ?? {};
+
 describe("an old code of the taxonomy", () => {
   it("parses to its new code before the check of the taxonomy", () => {
     expect(kindCodeSchema.parse("met.twister")).toBe("met.tornado");
@@ -28,7 +32,14 @@ describe("an old code of the taxonomy", () => {
   });
 
   it("keeps the JSON Schema of the kind code, because the change of the code is not a transform", () => {
-    expect(z.toJSONSchema(kindCodeSchema)).toMatchObject({ type: "string" });
+    expect(kindCodeJson()).toMatchObject({ type: "string" });
     expect(z.toJSONSchema(nodeKeySchema)).toMatchObject({ type: "string" });
+  });
+
+  it("puts each old code and its coverage form in the enum of the JSON Schema", () => {
+    const list = kindCodeJson().enum ?? [];
+    for (const code of ["met.twister", "system.coverage.met.twister", "met.tornado", "system.coverage.met.tornado"]) expect(list).toContain(code);
+    expect(list).not.toContain("met.twisters");
+    for (const code of list) expect(kindCodeSchema.safeParse(code).success, code).toBe(true);
   });
 });
