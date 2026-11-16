@@ -281,6 +281,10 @@ The owner of the project decided this rule on 2026-11-15. The target is the most
   - `paths` counts the most of these sources with a known path and no shared part. A second path to the same origin counts in full at this layer.
   - `origins` counts the known origins of these sources that issue the class.
   - The distinct channels of delivery are a later layer.
+- A parent class counts at each leaf code. A leaf code of a class is a code of the taxonomy under it with no code under it.
+  - A source reaches a leaf code through the class, the leaf code or a code between them.
+  - An origin counts at a leaf code when it issues the code or an ancestor of it.
+  - Each layer and the gap count take the leaf code with the most. Thus two sources of two different children are not a pair.
 - No layer replaces another one. Each round records two measures of each layer: the cover and the total.
 - The cover of a layer counts the classes with 2 or more. The total is the sum over the classes, so it shows each gain above 2.
 - The gate stops a change that makes the cover or the total of a layer fall below the measure of the latest round. A real loss needs a new round whose cause names the loss.
@@ -295,7 +299,7 @@ The origins and the paths are data:
 
 The claims of the pairs:
 
-- A shared origin or a shared part of a path is a claim that two sources fail together. `pairClaims` gives the claim of each pair with a shared class.
+- A shared origin or a shared part of a path is a claim that two sources fail together. `pairClaims` gives the claim of each pair that reaches one leaf code of a class.
 - A claim is data with its evidence, and it can be wrong. A later check compares each claim with the joint outages of the health log.
 - Each source of a pair with a claim stays in each layer. The claim changes only the count of distinct paths or origins.
 

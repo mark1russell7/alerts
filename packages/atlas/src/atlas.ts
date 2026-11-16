@@ -12,6 +12,9 @@
  *
  * Each source names its origins and its path. The cover of a class has layers: the adopted sources, the
  * paths with no shared part, and the origins. Each layer is a measure, not a filter.
+ *
+ * A parent class counts its sources at each of its leaf codes, and each count takes the leaf code with the
+ * most. Thus two sources of two different children are not a pair of the parent.
  */
 
 import { categoryOf, knownKind, SUBJECT_SYSTEMS, TAXONOMY, type Category, type SubjectKind, type SubjectSystem } from "@mark1russell7/alerts";
@@ -231,7 +234,10 @@ export interface AtlasProblem {
   readonly problem: string;
 }
 
-/** The coverage of one class. */
+/**
+ * The coverage of one class. The lists hold each source of the class and of its descendants. The counts
+ * take the leaf code of the class with the most sources, so they count only sources that reach one code.
+ */
 export interface Coverage {
   readonly id: string;
   /** The sources of the class and of its descendants, with a decision of `LIVE_DECISIONS`. */
@@ -240,6 +246,9 @@ export interface Coverage {
   readonly atRisk: readonly string[];
   /** The sources of `sources` with the decision `adopt`: an adapter of the repository reads them at this time. */
   readonly adopted: readonly string[];
+  /** The most sources of `sources` with no risk at one leaf code of the class. The gate compares it with `MIN_SOURCES`. */
+  readonly shared: number;
+  /** For each layer, the most at one leaf code of the class. */
   readonly layers: Layers;
   readonly gap: string | null;
 }
@@ -252,7 +261,7 @@ export interface Coverage {
 export interface PairClaim {
   readonly a: string;
   readonly b: string;
-  /** The classes whose cover counts the two sources. */
+  /** The classes whose cover counts the two sources: the two sources reach one leaf code of each. */
   readonly classes: readonly string[];
   readonly origins: readonly string[];
   readonly path: readonly string[];
@@ -288,7 +297,12 @@ const isUrl = (text: string): boolean => {
 };
 
 const isUnder = (name: string, id: string): boolean => name === id || name.startsWith(`${id}.`);
-const known = (list: readonly string[]): string[] => list.filter((id) => id !== UNKNOWN);
+const byText = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
+// The ancestors of a code: for `a.b.c` they are `a` and `a.b`.
+const ancestors = (code: string): string[] => code.split(".").slice(0, -1).map((_, index, parts) => parts.slice(0, index + 1).join("."));
+// A source reaches a leaf code of a class through one of its classes: the class, the leaf code or a code between them.
+const reachesLeaf = (source: Pick<Source, "classes">, id: string, leaf: string): boolean => source.classes.some((name) => isUnder(name, id) && isUnder(leaf, name));
+const known =(list: readonly string[]): string[] => list.filter((id) => id !== UNKNOWN);
 // The JSON of a source is not parsed by a schema. A source with no list counts as a source with an unknown list.
 const listOf = (list: readonly string[] | undefined): readonly string[] => list ?? [UNKNOWN];
 
@@ -321,7 +335,18 @@ export function parentOf(id: string, classIds: ReadonlySet<string>): string | nu
 export function unreachedCodes(classes: readonly Pick<SignalClass, "id">[], codes: Iterable<string> = Object.keys(TAXONOMY)): string[] {
   const ids = classes.map((item) => item.id);
   const reached = (code: string): boolean => ids.some((id) => isUnder(id, code) || isUnder(code, id));
-  return [...new Set(codes)].filter((code) => !EXEMPT_CATEGORIES.includes(categoryOf(code)) && !reached(code)).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+  return [...new Set(codes)].filter((code) => !EXEMPT_CATEGORIES.includes(categoryOf(code)) && !reached(code)).sort(byText);
+}
+
+/**
+ * This function gives the leaf codes of a class, sorted: each code of the list under the class with no code
+ * under it. A class with no code under it is its own leaf code.
+ */
+export function leafCodes(id: string, codes: Iterable<string> = Object.keys(TAXONOMY)): string[] {
+  const list = [...new Set(codes)];
+  const inner = new Set(list.flatMap(ancestors));
+  const leaves = list.filter((code) => isUnder(code, id) && !inner.has(code)).sort(byText);
+  return leaves.length > 0 ? leaves : [id];
 }
 
 /**
@@ -337,28 +362,48 @@ export function planBlock(source: Pick<Source, "access" | "auth" | "cost" | "ter
   return null;
 }
 
-/** This function gives the coverage of each class: the adopted and planned sources of the class and of its descendants, and the layers. */
+// The leaf codes of each class of the atlas. The codes are the taxonomy and the class ids.
+const leavesOfClasses = (atlas: Atlas): Map<string, string[]> => {
+  const codes = [...Object.keys(TAXONOMY), ...atlas.classes.map((item) => item.id)];
+  return new Map(atlas.classes.map(({ id }) => [id, leafCodes(id, codes)]));
+};
+
+/**
+ * This function gives the coverage of each class: the adopted and planned sources of the class and of its
+ * descendants, and the counts. Each count is the most at one leaf code of the class.
+ */
 export function coverage(atlas: Atlas): Coverage[] {
   const origins = new Map(atlas.origins.map((origin) => [origin.id, origin]));
+  const leaves = leavesOfClasses(atlas);
   return atlas.classes.map(({ id, gap }) => {
     const live = atlas.sources.filter((source) => LIVE_DECISIONS.includes(source.decision) && source.classes.some((name) => isUnder(name, id)));
     const ids = (list: readonly Source[]): string[] => list.map((source) => source.id);
-    const counted = live.filter((source) => source.decision === "adopt" && source.risks.length === 0);
-    const issues = (origin: string): boolean => {
-      const codes = origins.get(origin)?.issues;
-      return codes === null || (codes !== undefined && codes.some((code) => isUnder(id, code) || isUnder(code, id)));
+    const at = (leaf: string): { shared: number; layers: Layers } => {
+      const here = live.filter((source) => reachesLeaf(source, id, leaf));
+      const counted = here.filter((source) => source.decision === "adopt" && source.risks.length === 0);
+      const issues = (origin: string): boolean => {
+        const issued = origins.get(origin)?.issues;
+        return issued === null || (issued !== undefined && issued.some((code) => isUnder(leaf, code) || isUnder(code, leaf)));
+      };
+      // A path with an unknown part cannot show that it is apart, so the path layer does not count it.
+      const knownPaths = counted.map((source) => listOf(source.path)).filter((path) => !path.includes(UNKNOWN));
+      return {
+        shared: here.filter((source) => source.risks.length === 0).length,
+        layers: { adopted: counted.length, paths: mostDisjoint(knownPaths), origins: new Set(counted.flatMap((source) => listOf(source.origins).filter(issues))).size },
+      };
     };
-    // A path with an unknown part cannot show that it is apart, so the path layer does not count it.
-    const knownPaths = counted.map((source) => listOf(source.path)).filter((path) => !path.includes(UNKNOWN));
+    const counts = (leaves.get(id) ?? [id]).map(at);
+    const most = (pick: (count: { shared: number; layers: Layers }) => number): number => Math.max(0, ...counts.map(pick));
     return {
       id,
       sources: ids(live),
       atRisk: ids(live.filter((source) => source.risks.length > 0)),
       adopted: ids(live.filter((source) => source.decision === "adopt")),
+      shared: most((count) => count.shared),
       layers: {
-        adopted: counted.length,
-        paths: mostDisjoint(knownPaths),
-        origins: new Set(counted.flatMap((source) => listOf(source.origins).filter(issues))).size,
+        adopted: most((count) => count.layers.adopted),
+        paths: most((count) => count.layers.paths),
+        origins: most((count) => count.layers.origins),
       },
       gap,
     };
@@ -366,16 +411,17 @@ export function coverage(atlas: Atlas): Coverage[] {
 }
 
 /**
- * This function gives the claim of each pair of sources with a shared class, for the sources of the
- * decisions. The measures do not remove a source because of a claim.
+ * This function gives the claim of each pair of sources that reach one leaf code of a class, for the
+ * sources of the decisions. The measures do not remove a source because of a claim.
  */
 export function pairClaims(atlas: Atlas, decisions: readonly Decision[] = LIVE_DECISIONS): PairClaim[] {
   const chosen = atlas.sources.filter((source) => decisions.includes(source.decision));
+  const leaves = leavesOfClasses(atlas);
   const claims: PairClaim[] = [];
   for (const [index, a] of chosen.entries()) {
     for (const b of chosen.slice(index + 1)) {
-      const reaches = (source: Source, id: string): boolean => source.classes.some((name) => isUnder(name, id));
-      const classes = atlas.classes.filter(({ id }) => reaches(a, id) && reaches(b, id)).map(({ id }) => id);
+      const both = (id: string, leaf: string): boolean => reachesLeaf(a, id, leaf) && reachesLeaf(b, id, leaf);
+      const classes = atlas.classes.filter(({ id }) => (leaves.get(id) ?? [id]).some((leaf) => both(id, leaf))).map(({ id }) => id);
       if (classes.length === 0) continue;
       const shared = (pick: (source: Source) => readonly string[] | undefined): string[] => known(listOf(pick(a))).filter((id) => listOf(pick(b)).includes(id));
       claims.push({ a: a.id, b: b.id, classes, origins: shared((source) => source.origins), path: shared((source) => source.path) });
@@ -387,15 +433,14 @@ export function pairClaims(atlas: Atlas, decisions: readonly Decision[] = LIVE_D
 /** This function gives the measures of the atlas: the classes, the gaps, the cover and the total of each layer, and the unknowns. */
 export function measures(atlas: Atlas): Measures {
   const rows = coverage(atlas);
-  const free = (row: Coverage): number => row.sources.filter((id) => !row.atRisk.includes(id)).length;
-  const per = (pick: (value: number) => number): Layers => {
+  const per =(pick: (value: number) => number): Layers => {
     const sum = (name: keyof Layers): number => rows.reduce((total, row) => total + pick(row.layers[name]), 0);
     return { adopted: sum("adopted"), paths: sum("paths"), origins: sum("origins") };
   };
   const kept = atlas.sources.filter((source) => source.decision !== "reject");
   return {
     classes: rows.length,
-    gaps: rows.filter((row) => free(row) < MIN_SOURCES).length,
+    gaps: rows.filter((row) => row.shared < MIN_SOURCES).length,
     cover: per((value) => (value >= MIN_SOURCES ? 1 : 0)),
     total: per((value) => value),
     unknownOrigins: kept.filter((source) => listOf(source.origins).includes(UNKNOWN)).length,
@@ -518,10 +563,10 @@ export function checkAtlas(atlas: Atlas, context: AtlasContext = {}): AtlasProbl
     if (first !== undefined && first.kind !== "host") add(at, "the first part of the path is not a host");
   }
   if (context.codes !== undefined) for (const code of unreachedCodes(atlas.classes, context.codes)) add(`code ${code}`, "no class is the code, an ancestor of it or a descendant of it");
-  for (const { id, sources, atRisk, gap } of coverage(atlas)) {
-    const count = sources.length - atRisk.length;
-    if (count < MIN_SOURCES && (gap === null || gap.trim() === "")) add(`class ${id}`, `the class has ${String(count)} sources with no risk and no reason of a gap`);
-    if (count >= MIN_SOURCES && gap !== null) add(`class ${id}`, `the class has ${String(count)} sources with no risk, so its reason of a gap is out of date`);
+  for (const { id, shared, gap } of coverage(atlas)) {
+    const count = String(shared);
+    if (shared < MIN_SOURCES && (gap === null || gap.trim() === "")) add(`class ${id}`, `the class has ${count} sources with no risk at one leaf code and no reason of a gap`);
+    if (shared >= MIN_SOURCES && gap !== null) add(`class ${id}`, `the class has ${count} sources with no risk at one leaf code, so its reason of a gap is out of date`);
   }
   return problems;
 }

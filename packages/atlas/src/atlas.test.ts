@@ -5,6 +5,7 @@ import {
   checkAtlas,
   coverage,
   LAYERS,
+  leafCodes,
   measures,
   MIN_SOURCES,
   mostDisjoint,
@@ -92,7 +93,7 @@ describe("the committed atlas", () => {
 
   it("has prediction markets as a class with 2 or more sources", () => {
     const markets = coverage(committed).find((row) => row.id === "market.prediction");
-    expect(markets?.sources.length).toBeGreaterThanOrEqual(MIN_SOURCES);
+    expect(markets?.shared).toBeGreaterThanOrEqual(MIN_SOURCES);
   });
 
   it("has a record of each round", () => {
@@ -102,7 +103,7 @@ describe("the committed atlas", () => {
 
   it("names the risk of the IPAWS feed in the gap of each class that counts on it", () => {
     for (const row of coverage(committed)) {
-      if (!row.atRisk.includes("ipaws-open") || row.sources.length - row.atRisk.length >= MIN_SOURCES) continue;
+      if (!row.atRisk.includes("ipaws-open") || row.shared >= MIN_SOURCES) continue;
       expect(row.gap, row.id).toContain("ipaws-open");
     }
   });
@@ -113,18 +114,18 @@ describe("the gate of coverage", () => {
     const classes = [klass("infra.power"), klass("infra.power.outage")];
     const sources = [source("a", ["infra.power.outage"], "adopt"), source("b", ["infra.power"]), source("c", ["infra.power.outage"], "reject"), source("d", ["infra.power.outage"], "later")];
     expect(coverage(atlas(classes, sources))).toEqual([
-      { id: "infra.power", sources: ["a", "b"], atRisk: [], adopted: ["a"], layers: layers(1, 1, 1), gap: null },
-      { id: "infra.power.outage", sources: ["a"], atRisk: [], adopted: ["a"], layers: layers(1, 1, 1), gap: null },
+      { id: "infra.power", sources: ["a", "b"], atRisk: [], adopted: ["a"], shared: 2, layers: layers(1, 1, 1), gap: null },
+      { id: "infra.power.outage", sources: ["a"], atRisk: [], adopted: ["a"], shared: 1, layers: layers(1, 1, 1), gap: null },
     ]);
   });
 
   it("stops a class with fewer than 2 sources and no reason, and a reason that is out of date", () => {
     const sources = [source("a", ["infra.power.outage"]), source("b", ["infra.power"])];
     expect(checkAtlas(atlas([klass("infra.power"), klass("infra.power.outage")], sources))).toEqual([
-      { at: "class infra.power.outage", problem: "the class has 1 sources with no risk and no reason of a gap" },
+      { at: "class infra.power.outage", problem: "the class has 1 sources with no risk at one leaf code and no reason of a gap" },
     ]);
     const withGap = [klass("infra.power", "an old reason"), klass("infra.power.outage", "Only one operator publishes the data.")];
-    expect(checkAtlas(atlas(withGap, sources))).toEqual([{ at: "class infra.power", problem: "the class has 2 sources with no risk, so its reason of a gap is out of date" }]);
+    expect(checkAtlas(atlas(withGap, sources))).toEqual([{ at: "class infra.power", problem: "the class has 2 sources with no risk at one leaf code, so its reason of a gap is out of date" }]);
   });
 
   it("does not count a source with a risk", () => {
@@ -132,7 +133,7 @@ describe("the gate of coverage", () => {
     const classes = [klass("safety.evacuation")];
     const sources = [source("a", ["safety.evacuation"]), risky];
     expect(coverage(atlas(classes, sources))[0]?.atRisk).toEqual(["b"]);
-    expect(checkAtlas(atlas(classes, sources))).toEqual([{ at: "class safety.evacuation", problem: "the class has 1 sources with no risk and no reason of a gap" }]);
+    expect(checkAtlas(atlas(classes, sources))).toEqual([{ at: "class safety.evacuation", problem: "the class has 1 sources with no risk at one leaf code and no reason of a gap" }]);
     expect(checkAtlas(atlas([klass("safety.evacuation", "b has a risk.")], sources))).toEqual([]);
   });
 
@@ -206,6 +207,34 @@ describe("the layers of the cover", () => {
     expect(measures(world)).toMatchObject({ unknownOrigins: 1, unknownPaths: 1 });
     expect(checkAtlas(world)).toEqual([]);
     expect(coverage(plain)[0]?.layers).toEqual(layers(4, 2, 2));
+  });
+
+  it("counts a parent class at one leaf code: two sources of two different children are not a pair", () => {
+    const classes = [klass("market.crypto"), klass("market.crypto.depeg", "one source"), klass("market.crypto.hack", "one source")];
+    const apart = [source("a", ["market.crypto.depeg"], "adopt"), source("b", ["market.crypto.hack"], "adopt")];
+    expect(coverage(atlas(classes, apart))[0]).toMatchObject({ sources: ["a", "b"], shared: 1, layers: layers(1, 1, 1) });
+    expect(checkAtlas(atlas(classes, apart))).toEqual([{ at: "class market.crypto", problem: "the class has 1 sources with no risk at one leaf code and no reason of a gap" }]);
+    expect(pairClaims(atlas(classes, apart))).toEqual([]);
+    // A source of the parent itself reaches each leaf code, so it makes a pair with each child.
+    const withParent = atlas(classes, [...apart, source("c", ["market.crypto"], "adopt")]);
+    expect(coverage(withParent)[0]).toMatchObject({ shared: 2, layers: layers(2, 2, 1) });
+    expect(checkAtlas(withParent)).toEqual([]);
+    expect(pairClaims(withParent).map((claim) => `${claim.a} ${claim.b} ${claim.classes.join(",")}`)).toEqual(["a c market.crypto", "b c market.crypto"]);
+  });
+
+  it("counts an origin at a leaf code only when it issues the code or an ancestor of it", () => {
+    // One source carries two origins, and each origin issues a different child. No leaf code has 2 origins.
+    const plain = atlas([klass("geo.volcano", "one source")], [{ ...source("a", ["geo.volcano"], "adopt"), origins: ["ash-center", "observatory"] }]);
+    const issuing = (ash: string[], observatory: string[]): Atlas => ({
+      ...plain,
+      origins: [
+        { id: "ash-center", name: "ash-center", issues: ash, note: "a test" },
+        { id: "observatory", name: "observatory", issues: observatory, note: "a test" },
+      ],
+    });
+    expect(coverage(issuing(["geo.volcano.ashfall"], ["geo.volcano.eruption"]))[0]?.layers).toEqual(layers(1, 1, 1));
+    // An origin of the parent code issues each leaf code of it.
+    expect(coverage(issuing(["geo.volcano.ashfall"], ["geo.volcano"]))[0]?.layers).toEqual(layers(1, 1, 2));
   });
 
   it("gives the most sets with no shared item by an exact search", () => {
@@ -388,6 +417,14 @@ describe("the calculations", () => {
     expect(parentOf("market.price.fuel.diesel", ids)).toBe("market.price.fuel");
     expect(parentOf("infra.power.outage", ids)).toBeNull();
     expect(parentOf("market.price", ids)).toBeNull();
+  });
+
+  it("gives the leaf codes of a class", () => {
+    const codes = ["market.crypto", "market.crypto.depeg", "market.crypto.hack", "market.cryptography", "infra.power"];
+    expect(leafCodes("market.crypto", codes)).toEqual(["market.crypto.depeg", "market.crypto.hack"]);
+    expect(leafCodes("market.crypto.hack", codes)).toEqual(["market.crypto.hack"]);
+    expect(leafCodes("infra.water", codes)).toEqual(["infra.water"]);
+    expect(leafCodes("geo.volcano")).toEqual(["geo.volcano.ashfall", "geo.volcano.ashfall-marine", "geo.volcano.eruption"]);
   });
 
   it("gives the block of a plan from the facts of the source", () => {
