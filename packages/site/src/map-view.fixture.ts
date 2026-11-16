@@ -4,7 +4,7 @@
  * rough boxes, not the real outlines.
  */
 
-import type { MapPayload, MapRegion, MapShape, PlaceId, Position, ReportId } from "@mark1russell7/alerts";
+import { MAP_FORMAT, type MapPayload, type MapRegion, type MapShape, type PlaceId, type Position, type ReportId } from "@mark1russell7/alerts";
 
 /** This function gives a box as a polygon. The ring goes counterclockwise (RFC 7946), or clockwise with `clockwise`. */
 export function box(west: number, south: number, east: number, north: number, clockwise = false): MapShape {
@@ -41,6 +41,8 @@ const COUNTY = box(-97.83, 37.39, -97.13, 37.83);
 
 /** The map payload: three regions, an incident at each level, three places and one region code with no shape. */
 export const MAP_FIXTURE: MapPayload = {
+  format: MAP_FORMAT,
+  at: Date.parse("2026-11-15T21:00:00Z"),
   basemap: BASEMAP,
   view: {
     incidents: [
@@ -115,4 +117,4 @@ export const MAP_FIXTURE: MapPayload = {
 };
 
 /** The map payload with no incident, no place and no basemap: the empty state of the page. */
-export const EMPTY_FIXTURE: MapPayload = { basemap: [], view: { incidents: [], places: [], unshaped: [] } };
+export const EMPTY_FIXTURE: MapPayload = { format: MAP_FORMAT, at: null, basemap: [], view: { incidents: [], places: [], unshaped: [] } };

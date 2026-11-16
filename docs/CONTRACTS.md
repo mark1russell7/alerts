@@ -681,6 +681,7 @@ The service keeps the loop alive and safe:
 - The drain holds the pass in flight. Its cap is the cap of the profile, plus the bound of a pass. Thus a shutdown does not cut a pass.
 - The service closes the log in the phase `tear down dependencies`, after the close of the worker. Thus no pass writes to a closed log.
 - The API on the loopback address gives `GET /status`: the time, the wake time, the sources, the sends and the conflicts of the last pass. It also gives the reason when the loop is stuck. The probes have a port of their own.
+- The API also gives `GET /map`, the `MapPayload` of the last pass. The section "The map" tells its parts.
 
 The function `openInstance` makes the instance of the owner from the private configuration:
 
@@ -940,6 +941,15 @@ The level of a place is an upper bound. An assessment keeps only the highest lev
 The store of shapes fetches each zone and county of a state, not one code. A fetch of the code of a place names the place to the server. The map has no tiles from an outside server, because the tiles around a place also name the place. The renderer draws the outlines of the states, the counties and the zones.
 
 The view holds labels and positions. Only a route on the loopback address gives it, and `GET /status` does not hold it.
+
+The route `GET /map` of the runtime gives the `MapPayload` of `mapPayload`:
+
+- `format`: `alerts-map/1` (`MAP_FORMAT`). A change that breaks a reader gets a new name.
+- `at`: the time of the last pass, or `null` before the first pass.
+- `view`: the view of the last pass. The payload assesses each live incident for each person, with the policy of the delivery.
+- `basemap`: the regions under the view, simplified for the view box of the page.
+
+Thus the level on the map is the level that the delivery gives. A mute with the effect `absent` gives `none`, as in `route` (`reachedAssessment`).
 
 ## Relevance
 

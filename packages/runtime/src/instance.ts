@@ -8,6 +8,7 @@ import {
   configuredExpectations,
   expectationProblems,
   localPlaces,
+  mapPayload,
   ONLY_COPY,
   placeLabels,
   sourceCovers,
@@ -20,6 +21,7 @@ import {
   type Duration,
   type Expectation,
   type Instant,
+  type MapPayload,
   type ParsedConfig,
   type SecretLookup,
   type SourceDescriptor,
@@ -405,6 +407,11 @@ export interface Instance {
   readonly quotas: () => readonly ChannelQuota[];
   /** The watches of the balances of the paid provider accounts. */
   readonly balances: readonly BalanceWatch[];
+  /**
+   * This function gives the map payload of the last pass: the live incidents with the level of each person, the places and
+   * the basemap. The first read after a change of the store simplifies the basemap of the watched states.
+   */
+  readonly map: () => MapPayload;
 }
 
 /**
@@ -491,6 +498,8 @@ export function openInstance(options: InstanceOptions): Instance {
     rankDelay: RANK_DELAY,
   };
 
+  // The last pass of the runtime, from the loop or from a direct call of `pass`. The map reads it.
+  let latest: Pass | undefined;
   const runtime: Runtime = openRuntime({
     log: options.log,
     clock: wall,
@@ -512,6 +521,7 @@ export function openInstance(options: InstanceOptions): Instance {
     balances,
     // After each pass, the store of shapes gets the outlines that are due, and it ends before the next fetch of a source.
     onPass: async (pass) => {
+      latest = pass;
       shapes.afterPass(pass.view.incidents, earliest(runtime.config.sources.map((descriptor) => nextFetch(runtime.state(), descriptor))));
       await options.onPass?.(pass);
     },
@@ -524,7 +534,21 @@ export function openInstance(options: InstanceOptions): Instance {
     times: loopTimes(runtime.config.sources, { delivery }),
     ...(options.onError === undefined ? {} : { onError: options.onError }),
   });
-  return { runtime, loop, shapes, ...(start === undefined ? {} : { zones: start.counts }), quotas, balances };
+  // The map assesses each live incident with the policy of the delivery. Thus the level on the map is the level of the person.
+  const people = recipients.map((recipient) => recipient.watch);
+  const map = (): MapPayload => {
+    return mapPayload({
+      at: latest?.at ?? null,
+      incidents: latest?.view.incidents ?? [],
+      coverage: latest?.view.coverage ?? [],
+      people,
+      places: placed.places,
+      ...(delivery.assess === undefined ? {} : { policy: delivery.assess }),
+      shape: shapes.lookup,
+      basemap: shapes.basemap(),
+    });
+  };
+  return { runtime, loop, shapes, ...(start === undefined ? {} : { zones: start.counts }), quotas, balances, map };
 }
 
 /** The Twilio call channel of an instance, its gates of the spend and the watch of its balance. */

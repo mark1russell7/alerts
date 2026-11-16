@@ -3,7 +3,7 @@ import type { AddressInfo } from "node:net";
 import { embeddedProcess, lint, localDev } from "@mark1russell7/service";
 import type { Rule, Scenario } from "@mark1russell7/service";
 import { realClock, wallClock } from "@mark1russell7/algebra/clock";
-import type { SourceId } from "@mark1russell7/alerts";
+import { MAP_FORMAT, type MapPayload, type SourceId } from "@mark1russell7/alerts";
 import { describe, expect, it } from "vitest";
 import { PROFILES, STOP_MESSAGE, createLoop, declare, type Pass, type Status } from "./index.ts";
 
@@ -63,6 +63,9 @@ const loopOf = () => {
   });
 };
 
+// A map before the first pass: no incident, no place and no region.
+const EMPTY_MAP: MapPayload = { format: MAP_FORMAT, at: null, view: { incidents: [], places: [], unshaped: [] }, basemap: [] };
+
 /** This function gives a free TCP port of the loopback interface. */
 const freePort = (): Promise<number> =>
   new Promise((resolve, reject) => {
@@ -97,6 +100,15 @@ describe("the declaration of the service", () => {
       ]);
     });
   }
+
+  it("declares the route GET /map only with a function of the map", () => {
+    const routes = (map?: () => MapPayload) =>
+      declare({ port: 0, probePort: 0, profile: localDev, loop: loopOf(), log: { close: () => undefined }, map })
+        .describe()
+        .controllers.map((controller) => [controller.name, Object.keys(controller.routes)]);
+    expect(routes()).toEqual([["api", ["GET /status"]]]);
+    expect(routes(() => EMPTY_MAP)).toEqual([["api", ["GET /status", "GET /map"]]]);
+  });
 });
 
 describe("the lifecycle of the service", () => {
@@ -107,7 +119,7 @@ describe("the lifecycle of the service", () => {
     const loop = loopOf();
     let closes = 0;
     const log = { close: () => (closes += 1) };
-    const life = await declare({ port, probePort, profile: localDev, loop, log }).run({ process: embeddedProcess() });
+    const life = await declare({ port, probePort, profile: localDev, loop, log, map: () => EMPTY_MAP }).run({ process: embeddedProcess() });
     try {
       // The worker starts the first pass at the start of the service.
       for (let tries = 0; loop.last() === undefined && tries < 100; tries += 1) await new Promise((resolve) => setTimeout(resolve, 10));
@@ -115,6 +127,9 @@ describe("the lifecycle of the service", () => {
       expect(status.status).toBe(200);
       const body = (await status.json()) as Status;
       expect(body).toEqual({ at: loop.last()?.at, wakeAt: loop.last()?.wakeAt, fetched: ["nws-api"], sent: 0, conflicts: 0, stuck: null });
+      const map = await fetch(`http://127.0.0.1:${port}/map`);
+      expect(map.status).toBe(200);
+      expect(await map.json()).toEqual(EMPTY_MAP);
       expect((await fetch(`http://127.0.0.1:${port}/hello`)).status).toBe(404);
       expect((await fetch(`http://127.0.0.1:${probePort}/readiness`)).status).toBe(200);
       expect((await fetch(`http://127.0.0.1:${probePort}/liveness`)).status).toBe(200);

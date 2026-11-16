@@ -330,6 +330,14 @@ export function matchSubjects(incident: Pick<Incident, "about">, watches: readon
 }
 
 /**
+ * This function gives the assessment as it reaches the person. A mute with the effect `absent` keeps the incident from the
+ * person, thus the level is `none`. A mute with the effect `silent` keeps the level. Each other assessment stays the same.
+ */
+export function reachedAssessment(assessment: Assessment): Assessment {
+  return assessment.muted?.effect === "absent" ? { ...assessment, level: "none" } : assessment;
+}
+
+/**
  * This function gives the level of an incident for a person, with its reasons. The level is `none`
  * when the incident ended, or when the policy does not send its status for its kind. It is also
  * `none` when the incident has no place and no subject that the person watches.

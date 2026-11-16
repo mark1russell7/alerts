@@ -1,5 +1,5 @@
 import { createServer } from "node:http";
-import type { Instant, SourceId } from "@mark1russell7/alerts";
+import type { Instant, MapPayload, SourceId } from "@mark1russell7/alerts";
 import type { ServiceBuilder } from "@mark1russell7/service";
 import { handle, httpTransport } from "@mark1russell7/service/http";
 import type { RuntimeLoop } from "./loop.ts";
@@ -13,6 +13,11 @@ export interface ApiOptions {
   readonly port: number;
   /** The loop of the runtime. The route `GET /status` reads it. */
   readonly loop: RuntimeLoop;
+  /**
+   * This function gives the payload of the route `GET /map`. The payload holds the labels and the positions of the places,
+   * thus only the loopback address serves it. Without the function, the API has no map route.
+   */
+  readonly map?: (() => MapPayload) | undefined;
 }
 
 /**
@@ -63,6 +68,11 @@ export const attachApi = (svc: ServiceBuilder, options: ApiOptions): ServiceBuil
   // Each request of a route goes through the service. Thus the drain waits for it, and the shutdown can cut it.
   http.mount(handle("api", "GET /status", () => statusOf(options.loop)));
   // Each route declares if a client can send it again.
-  svc.controller("api").route("GET /status", { idempotent: true });
+  const api = svc.controller("api").route("GET /status", { idempotent: true });
+  const map = options.map;
+  if (map !== undefined) {
+    http.mount(handle("api", "GET /map", () => map()));
+    api.route("GET /map", { idempotent: true });
+  }
   return svc.server("http", http.knobs, http);
 };

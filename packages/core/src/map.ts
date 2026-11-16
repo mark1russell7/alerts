@@ -3,8 +3,24 @@
  * shapes. The view also gives each watched place with its highest level and its gaps of coverage. The view is a pure
  * calculation. A renderer draws it, and a store of shapes gives the outline of each region code.
  */
-import { higherLevel, matchPlaces } from "./assess.ts";
-import { ASSESSED_LEVELS, type Area, type AssessedLevel, type Assessment, type Coverage, type Incident, type Kind, type PlaceId, type Position, type RegionCode, type ReportId, type Severity, type Instant } from "./contracts.ts";
+import { assess, higherLevel, matchPlaces, reachedAssessment } from "./assess.ts";
+import {
+  ASSESSED_LEVELS,
+  type Area,
+  type AssessedLevel,
+  type Assessment,
+  type AssessPolicy,
+  type Coverage,
+  type Incident,
+  type Kind,
+  type PersonWatch,
+  type PlaceId,
+  type Position,
+  type RegionCode,
+  type ReportId,
+  type Severity,
+  type Instant,
+} from "./contracts.ts";
 import { coverageShort } from "./coverage.ts";
 import { areasWithoutBlocks } from "./shapes.ts";
 
@@ -98,9 +114,39 @@ export interface MapRegion {
  * address only, because the view holds the labels and the positions of the places. The local page draws this answer.
  */
 export interface MapPayload {
+  /** The format of the payload. A page of another format tells the reader to start the runtime of its own version. */
+  readonly format: typeof MAP_FORMAT;
+  /** The time of the view: the time of the last pass, or `null` before the first pass. */
+  readonly at: Instant | null;
   readonly view: MapView;
   /** The regions under the view: the zones and the counties of each watched state, from the store of shapes. */
   readonly basemap: readonly MapRegion[];
+}
+
+/** The name of the format of the map payload. A change that breaks a reader gets a new name. */
+export const MAP_FORMAT = "alerts-map/1";
+
+/** These are the inputs of the payload of the map route. */
+export interface MapPayloadInput extends Omit<MapInput, "assessments"> {
+  /** The time of the view: the time of the last pass, or `null` before the first pass. */
+  readonly at: Instant | null;
+  /** The watches of the people. The payload assesses each live incident for each person at `at`. */
+  readonly people: readonly PersonWatch[];
+  /** The policy of the assessment: the policy of the delivery. The default is the policy of the core. */
+  readonly policy?: AssessPolicy;
+  /** The regions under the view, from the store of shapes. */
+  readonly basemap: readonly MapRegion[];
+}
+
+/**
+ * This function gives the payload of the map route. It assesses each live incident for each person with the policy of the
+ * delivery. Thus the level on the map is the level that reaches the person. A mute with the effect `absent` gives `none`.
+ */
+export function mapPayload(input: MapPayloadInput): MapPayload {
+  const { at, people, policy, basemap, ...view } = input;
+  const live = view.incidents.filter((incident) => incident.live);
+  const assessments = live.flatMap((incident) => people.map((person) => reachedAssessment(assess(incident, person, view.places, policy, at ?? undefined))));
+  return { format: MAP_FORMAT, at, view: mapView({ ...view, assessments }), basemap };
 }
 
 /** The severities, from the highest. */

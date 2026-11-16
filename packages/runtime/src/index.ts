@@ -1,4 +1,4 @@
-import type { Duration } from "@mark1russell7/alerts";
+import type { Duration, MapPayload } from "@mark1russell7/alerts";
 import { add, type Quantity } from "@mark1russell7/quantity";
 import { daemon, kubernetes, localDev, service } from "@mark1russell7/service";
 import type { Profile, ServiceBuilder, Timing } from "@mark1russell7/service";
@@ -66,6 +66,8 @@ export interface Options {
   readonly shapes?: { close(): Promise<void> };
   /** The store of the counts of the quotas of the channels. The service closes it in the phase `tear down dependencies`. */
   readonly quotas?: { close(): void };
+  /** This function gives the payload of the route `GET /map`. Without it, the API has no map route. */
+  readonly map?: (() => MapPayload) | undefined;
 }
 
 /**
@@ -82,7 +84,7 @@ export const holdingPasses = (profile: Profile, passLimit: Duration): Profile =>
  * declaration as data, and `lint()` examines it. Only the entry (`main.ts`) uses `run()`.
  */
 export const declare = (options: Options): ServiceBuilder =>
-  attachApi(service("runtime"), { port: options.port, loop: options.loop })
+  attachApi(service("runtime"), { port: options.port, loop: options.loop, map: options.map })
     .dependency("log", { system: null, knobs: {}, operations: {} }, { connect: () => undefined, close: () => options.log.close() })
     .dependency("shapes", { system: null, knobs: {}, operations: {} }, { connect: () => undefined, close: () => options.shapes?.close() })
     .dependency("quotas", { system: null, knobs: {}, operations: {} }, { connect: () => undefined, close: () => options.quotas?.close() })

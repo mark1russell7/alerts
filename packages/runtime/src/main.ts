@@ -172,7 +172,7 @@ async function runtime(): Promise<ServiceBuilder> {
   if (instance.zones !== undefined) console.log(zoneCodesText(instance.zones));
 
   // The service closes the log and the store of shapes in its shutdown.
-  const service = declare({ port: port("PORT", 8080), probePort: port("PROBE_PORT", 9090), profile, loop: instance.loop, log, shapes: instance.shapes, quotas });
+  const service = declare({ port: port("PORT", 8080), probePort: port("PROBE_PORT", 9090), profile, loop: instance.loop, log, shapes: instance.shapes, quotas, map: instance.map });
   return service;
 }
 
