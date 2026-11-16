@@ -329,8 +329,8 @@ export function missLimit(record: MissRecord, level: number): number | undefined
 export function lateness(checks: readonly Carriage[], expectations: readonly Expectation[], at: Instant, rule: LimitRule): Lateness[] {
   return expectations.map((expectation) => {
     const base = { expectation: expectation.id, from: expectation.from, to: expectation.to };
-    const since = expectation.since;
-    const record = decide(since === undefined ? checks : checks.filter((check) => check.started >= since), expectation.id, at, rule.delay);
+    const start = expectation.since;
+    const record = decide(start === undefined ? checks : checks.filter((check) => check.started >= start), expectation.id, at, rule.delay);
     const deadlines = record.flatMap((entry) => (entry.outcome === "open" && entry.limit !== undefined ? [entry.check.started + entry.limit] : []));
     const wake = deadlines.length === 0 ? {} : { wakeAt: deadlines.reduce((a, b) => Math.min(a, b)) };
     const delay = rule.delay(record.flatMap((entry) => (entry.sample === undefined ? [] : [entry.sample])));
