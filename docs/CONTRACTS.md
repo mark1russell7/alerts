@@ -322,6 +322,16 @@ The runtime also writes each end of a person to its log (`EscalationEnd`). Each 
 - An item of the log belongs to the episode of its time. An acknowledgment before the start of a new episode does not cover it.
 - An earlier episode continues only to cancel its deliveries with no cancel.
 
+Each end has a reason (`EndReason`). The runtime sends no message for an end of either reason.
+
+- `ended`: the threat left the person. An end with no reason is an end `ended`.
+- `muted`: a mute of the person changed. The assessment gives the mute in its field `muted`.
+- A mute with the effect `absent` gives the level `none`, thus the escalation of the person ends.
+- A mute with the effect `silent` keeps the level and puts the episode in the silent mode. The start of a silent episode has `silent: true`.
+- A change between loud and silent ends the episode at once. The next episode starts in the new mode in the same pass.
+- A silent episode sends one quiet message at most. It sends its step 0 only when the person has no delivery of the incident. It does not exhaust.
+- An acknowledgment before an end `muted` still covers the next episode. Thus a change of a mute does not alert the person again.
+
 The runtime does one delivery step in each pass, after the system reports:
 
 1. It polls each open receipt of a channel with the acknowledgment `poll`, one time in each interval. A receipt that the person acknowledged gives an acknowledgment.

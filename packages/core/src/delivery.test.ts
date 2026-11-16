@@ -1,5 +1,5 @@
 import { random, seedsFrom } from "@mark1russell7/rigor-generators";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type {
   Acknowledgment,
   ChannelDescriptor,
@@ -9,6 +9,7 @@ import type {
   Incident,
   Level,
   MergeState,
+  MuteEffect,
   PersonId,
   PlaceId,
   Report,
@@ -19,6 +20,20 @@ import { LEVELS } from "./contracts.ts";
 import { acknowledgmentOf, messageOf, recipientProblems, route, type EscalationEnd, type EscalationStart, type Recipient, type Route, type RouteInput } from "./delivery.ts";
 import { messageKey } from "./ids.ts";
 import { placeWhy } from "./why.ts";
+
+// The mute of each assessment. Step 5 of AL-35 gives `Assessment.muted` from the graph of the person. Until then, the
+// mock adds the mute of the test to the assessment of `assess`. With no mute, it gives the assessment as it is.
+const mutes = vi.hoisted(() => ({ effect: undefined as MuteEffect | undefined }));
+vi.mock("./assess.ts", async (importOriginal) => {
+  const real = await importOriginal<typeof import("./assess.ts")>();
+  return {
+    ...real,
+    assess: (...args: Parameters<typeof real.assess>) => {
+      const result = real.assess(...args);
+      return mutes.effect === undefined ? result : { ...result, muted: { mute: "mute-1", effect: mutes.effect } };
+    },
+  };
+});
 
 const SEEDS = seedsFrom(process.env["SEED"], [1, 2, 3, 4, 5, 6, 7, 8]);
 const MINUTE = 60_000;
@@ -432,6 +447,184 @@ describe("route: the end of a person and a new episode", () => {
       expect(new Set(deliveries.map((item) => item.key)).size, `seed ${seed}`).toBe(deliveries.length);
     }
     expect(returns).toBeGreaterThan(0);
+  });
+});
+
+describe("route: a mute of the person (AL-35)", () => {
+  // A public county in Kansas that the person does not watch.
+  const away = incident({ areas: [{ type: "code", system: "ugc", code: "KSC079" }] });
+  const first = delivery("life-safety", 0, T0);
+  const endAt = (at: number, reason?: "muted"): EscalationEnd => ({ incident: anchor, person, at, ...(reason === undefined ? {} : { reason }) });
+  const silentStart = (level: Level, at: number): EscalationStart => ({ ...start(level, at), silent: true });
+  const keyOf = (level: Level, step: number, episode: number): string => messageKey({ incident: anchor, level, person, step, episode });
+  const ack = (at: number): Acknowledgment => ({ incident: anchor, level: "life-safety", person, at, via: pushover });
+  const mute = (effect: MuteEffect | undefined): void => {
+    mutes.effect = effect;
+  };
+  const sends = (routes: readonly Route[]) => routes.flatMap((entry) => entry.plan.sends.map((send) => ({ episode: entry.episode, level: send.level, step: send.step, quiet: send.quiet })));
+
+  beforeEach(() => mute(undefined));
+
+  it("gives one quiet step 0 under a mute that was there before the incident, also at life-safety, and no exhaustion", () => {
+    mute("silent");
+    const routes = route(input());
+    expect(sends(routes)).toEqual([{ episode: 0, level: "life-safety", step: 0, quiet: true }]);
+    expect([routes[0]!.fresh, routes[0]!.start]).toEqual([true, silentStart("life-safety", T0)]);
+    // Later, the policy has a step at 5 minutes and an exhaustion at 25 minutes. The silent mode sends no more and does not exhaust.
+    const later = route(input({ starts: [silentStart("life-safety", T0)], merge: { deliveries: [first] }, now: T0 + 40 * MINUTE }));
+    expect(summary(later)).toEqual([{ level: "life-safety", state: "last", fresh: false, sends: [], cancels: [] }]);
+    expect([later[0]!.plan.exhaustedAt, later[0]!.plan.wakeAt, later[0]!.freshEnd]).toEqual([undefined, undefined, false]);
+  });
+
+  it("ends a loud episode at a silent mute with the reason muted, cancels its repeats, and sends no copy", () => {
+    mute("silent");
+    const at = T0 + 2 * MINUTE;
+    const routes = route(input({ starts: [start("life-safety", T0)], merge: { deliveries: [first] }, now: at }));
+    expect(routes.map((entry) => [entry.episode, entry.plan.state, entry.freshEnd, entry.fresh, entry.plan.cancels.map((item) => item.key)])).toEqual([
+      [0, "ended", true, false, [first.key]],
+      [1, "idle", false, true, []],
+    ]);
+    expect(routes[0]!.end).toEqual(endAt(at, "muted"));
+    // The next episode starts at once in the silent mode. The person has a delivery of the incident, thus it sends nothing.
+    expect(routes[1]!.start).toEqual(silentStart("life-safety", at + 1));
+    expect(sends(routes)).toEqual([]);
+    const later = route(
+      input({ starts: [start("life-safety", T0), silentStart("life-safety", at + 1)], ends: [endAt(at, "muted")], merge: { deliveries: [first] }, cancelled: new Set([first.key]), now: T0 + 30 * MINUTE }),
+    );
+    expect(summary(later)).toEqual([{ level: "life-safety", state: "idle", fresh: false, sends: [], cancels: [] }]);
+  });
+
+  it("starts a loud episode at once with new keys when a silent mute ends with no acknowledgment", () => {
+    const at = T0 + 3 * MINUTE;
+    const routes = route(input({ starts: [silentStart("life-safety", T0)], merge: { deliveries: [first] }, now: at }));
+    expect(routes.map((entry) => [entry.episode, entry.plan.state, entry.freshEnd, entry.fresh, entry.plan.wakeAt])).toEqual([
+      [0, "ended", true, false, undefined],
+      [1, "idle", false, true, at + 1],
+    ]);
+    expect([routes[0]!.end, routes[1]!.start]).toEqual([endAt(at, "muted"), start("life-safety", at + 1)]);
+    const loud = route(input({ starts: [silentStart("life-safety", T0), start("life-safety", at + 1)], ends: [endAt(at, "muted")], merge: { deliveries: [first] }, cancelled: new Set([first.key]), now: at + MINUTE }));
+    expect(sends(loud)).toEqual([{ episode: 1, level: "life-safety", step: 0, quiet: false }]);
+    expect(messageKey(loud[0]!.plan.sends[0]!)).toBe(keyOf("life-safety", 0, 1));
+  });
+
+  it("does not alert again after an acknowledgment when a mute starts and ends", () => {
+    // The person acknowledged the loud alert, then muted it, then ended the mute.
+    const muteAt = T0 + 2 * MINUTE;
+    const routes = route(
+      input({
+        starts: [start("life-safety", T0), silentStart("life-safety", muteAt + 1)],
+        ends: [endAt(muteAt, "muted")],
+        merge: { deliveries: [first], acks: [ack(T0 + MINUTE)] },
+        cancelled: new Set([first.key]),
+        now: T0 + 5 * MINUTE,
+      }),
+    );
+    expect(routes.map((entry) => [entry.episode, entry.plan.state, entry.fresh, entry.freshEnd])).toEqual([
+      [1, "acknowledged", false, true],
+      [2, "acknowledged", true, false],
+    ]);
+    expect(sends(routes)).toEqual([]);
+  });
+
+  it("ends the escalation at a mute with the effect absent, and alerts again with new keys when the mute ends", () => {
+    mute("absent");
+    const at = T0 + 2 * MINUTE;
+    const routes = route(input({ starts: [start("life-safety", T0)], merge: { deliveries: [first] }, now: at }));
+    expect(summary(routes)).toEqual([{ level: "life-safety", state: "ended", fresh: false, sends: [], cancels: [first.key] }]);
+    expect([routes[0]!.freshEnd, routes[0]!.end]).toEqual([true, endAt(at, "muted")]);
+    mute(undefined);
+    const back = route(input({ starts: [start("life-safety", T0)], ends: [endAt(at, "muted")], merge: { deliveries: [first] }, cancelled: new Set([first.key]), now: T0 + 10 * MINUTE }));
+    expect(sends(back)).toEqual([{ episode: 1, level: "life-safety", step: 0, quiet: false }]);
+  });
+
+  it("gives an end with no reason when the threat leaves, also under a silent mute", () => {
+    mute("silent");
+    const routes = route(input({ incidents: [away], starts: [silentStart("life-safety", T0)], merge: { deliveries: [first] }, now: T0 + 2 * MINUTE }));
+    expect([routes[0]!.freshEnd, routes[0]!.end]).toEqual([true, endAt(T0 + 2 * MINUTE)]);
+  });
+
+  it("sends nothing for a higher level of a silent episode after the quiet message of a lower level", () => {
+    mute("silent");
+    const watch = delivery("urgent", 0, T0);
+    const routes = route(input({ starts: [silentStart("urgent", T0)], merge: { deliveries: [watch] }, now: T0 + 5 * MINUTE }));
+    expect(summary(routes)).toEqual([
+      { level: "urgent", state: "ended", fresh: false, sends: [], cancels: [watch.key] },
+      { level: "life-safety", state: "idle", fresh: true, sends: [], cancels: [] },
+    ]);
+    expect(routes[1]!.start).toEqual(silentStart("life-safety", T0 + 5 * MINUTE));
+  });
+
+  it("holds its laws over seeded histories of mutes, returns and acknowledgments", () => {
+    const counts = { silentSends: 0, modeEnds: 0, quietAfterAck: 0 };
+    for (const seed of SEEDS) {
+      const r = random(`route-mutes:${seed}`);
+      const starts: EscalationStart[] = [];
+      const ends: EscalationEnd[] = [];
+      const deliveries: Delivery[] = [];
+      const acks: Acknowledgment[] = [];
+      const cancelled = new Set<string>();
+      let phase: "loud" | "silent" | "absent" | "away" = "loud";
+      // The highest level that the person acknowledged since the last end `ended`, or -1.
+      let acked = -1;
+      for (let step = 0; step < 120; step += 1) {
+        const now = T0 + step * MINUTE;
+        if (r.chance(0.12)) phase = r.pick(["loud", "silent", "absent", "away"] as const);
+        mute(phase === "silent" ? "silent" : phase === "absent" ? "absent" : undefined);
+        const current = phase === "away" ? away : incident(r.chance(0.5) ? WARNING : WATCH);
+        const routes = route(input({ incidents: [current], merge: { deliveries, acks }, starts, ends, cancelled, now }));
+        const context = `seed ${seed}, minute ${step}, ${phase}`;
+        const before = deliveries.length;
+        for (const entry of routes) {
+          for (const send of entry.plan.sends) {
+            // A silent episode sends one quiet step 0, and only when the person has no delivery of the incident.
+            if (entry.start.silent === true) {
+              expect([send.step, send.quiet, before], context).toEqual([0, true, 0]);
+              counts.silentSends += 1;
+            }
+            // An acknowledgment covers its level and each lower level until the threat leaves. A change of a mute does not alert again.
+            expect(LEVELS.indexOf(send.level) > acked, context).toBe(true);
+          }
+          if (entry.freshEnd) {
+            // An end of a mute has the reason muted. An end of a threat that left has no reason.
+            expect(entry.end?.reason, context).toBe(phase === "away" ? undefined : "muted");
+            if (entry.end?.reason === "muted") counts.modeEnds += 1;
+          }
+          // An escalation that starts at `now` in the loud mode sends its first step at once.
+          if (entry.fresh && entry.start.silent !== true && entry.start.at <= now && entry.plan.state !== "acknowledged") {
+            expect(entry.plan.sends.map((send) => send.step), context).toContain(0);
+          }
+        }
+        // Nothing sends while the threat is away or under a mute with the effect absent.
+        if (phase === "away" || phase === "absent") expect(routes.flatMap((entry) => entry.plan.sends), context).toEqual([]);
+
+        // The runtime: it writes the new starts and the new ends, sends with some failures, cancels, and the person acknowledges at times.
+        for (const entry of routes) {
+          if (entry.fresh) starts.push(entry.start);
+          for (const send of entry.plan.sends) {
+            if (r.chance(0.2)) continue;
+            deliveries.push({ key: messageKey(send), incident: send.incident, level: send.level, person: send.person, channel: send.channel, step: send.step, at: now, receipt: { receipt: `${send.level}:${send.step}` } });
+          }
+          for (const done of entry.plan.cancels) if (r.chance(0.8)) cancelled.add(done.key);
+        }
+        const ending = new Map<number, EscalationEnd>();
+        for (const entry of routes) if (entry.freshEnd && entry.end !== undefined) ending.set(entry.episode, entry.end);
+        for (const end of [...ending.values()]) {
+          ends.push(end);
+          if (end.reason === undefined) acked = -1;
+        }
+        const open = routes.find((entry) => entry.episode === ends.length && entry.deliveries.length > 0);
+        if (open !== undefined && r.chance(0.08)) {
+          acks.push({ incident: anchor, level: open.policy.level, person, at: now, via: pushover });
+          acked = Math.max(acked, LEVELS.indexOf(open.policy.level));
+          if (phase === "silent") counts.quietAfterAck += 1;
+        }
+      }
+      // No key goes out two times: each episode gets new keys.
+      expect(new Set(deliveries.map((item) => item.key)).size, `seed ${seed}`).toBe(deliveries.length);
+    }
+    // The histories reach each case of the laws.
+    expect(counts.silentSends).toBeGreaterThan(0);
+    expect(counts.modeEnds).toBeGreaterThan(0);
   });
 });
 

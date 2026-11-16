@@ -1066,6 +1066,7 @@ export const assessmentSchema: z.ZodType<Assessment, Assessment> = schemaOf<Asse
       level: assessedLevelSchema,
       places: z.array(placeIdSchema).readonly(),
       reasons: z.array(assessReasonSchema).readonly(),
+      muted: z.strictObject({ mute: z.string().min(1, "The id of a mute is a non-empty string."), effect: muteEffectSchema }).readonly().exactOptional(),
     })
     .readonly(),
 );

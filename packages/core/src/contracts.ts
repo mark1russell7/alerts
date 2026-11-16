@@ -563,7 +563,8 @@ export interface Message {
   /**
    * True: the channel sends the message in its silent mode, for example Pushover priority `-1`, or a
    * text and no call. The escalation sets it in the quiet window of the person. A `life-safety`
-   * message is not quiet at any time. The channel keeps no rule of its own about the time of day.
+   * message is not quiet in the window. A mute with the effect `silent` makes each message quiet,
+   * also at `life-safety`. The channel keeps no rule of its own about the time of day.
    */
   readonly quiet: boolean;
   /**
@@ -966,6 +967,12 @@ export interface Assessment {
   /** The places of the person that the areas of the incident contain. */
   readonly places: readonly PlaceId[];
   readonly reasons: readonly AssessReason[];
+  /**
+   * The mute of the person that matches the incident, and its effect: the field `muted` of the relevance. With the
+   * effect `absent`, the incident does not reach the person. With `silent`, the level stays, and `route` sends one quiet
+   * message at most.
+   */
+  readonly muted?: { readonly mute: string; readonly effect: MuteEffect };
 }
 
 // =============================================================================

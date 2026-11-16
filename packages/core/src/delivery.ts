@@ -8,6 +8,7 @@ import {
   LEVELS,
   type Acknowledgment,
   type Address,
+  type AssessedLevel,
   type AssessPolicy,
   type ChannelDescriptor,
   type Delivery,
@@ -51,18 +52,35 @@ export interface EscalationStart {
   readonly level: Level;
   readonly person: PersonId;
   readonly at: Instant;
+  /**
+   * True: the escalation is in the silent mode of a mute with the effect `silent`. Its episode sends one quiet message
+   * at most: its step 0, when the person has no delivery of the incident.
+   */
+  readonly silent?: true;
 }
 
 /**
+ * The reason of an end of a person.
+ * - `ended`: the threat left the person, for example after a cancel of the area of the person.
+ * - `muted`: a mute of the person changed. A mute with the effect `absent` started, or the mode of the escalation
+ *   changed between loud and silent.
+ *
+ * The runtime sends no message for an end. An acknowledgment before an end `muted` still covers the next episode.
+ */
+export type EndReason = "ended" | "muted";
+
+/**
  * The end of the escalations of a person in a live incident. The incident no longer reaches the person, for example
- * after a cancel of the area of the person. The runtime keeps each end in its log. A later match of the person starts
- * a new episode, and the sends of the new episode get new message keys.
+ * after a cancel of the area of the person, or a mute changed. The runtime keeps each end in its log. A later match of
+ * the person starts a new episode, and the sends of the new episode get new message keys.
  */
 export interface EscalationEnd {
   /** A report of the incident: its anchor at the end. */
   readonly incident: ReportId;
   readonly person: PersonId;
   readonly at: Instant;
+  /** The reason of the end. An end with no reason is an end `ended`. */
+  readonly reason?: EndReason;
 }
 
 /** The input of `route`. */
@@ -130,6 +148,12 @@ export interface Route {
  *   escalation of the person ends at `now`. The route gives that end (`freshEnd`), and the runtime writes it to the log.
  * - Each end of the log closes an episode of the person. A later match starts a new episode with new message keys. Its starts,
  *   its deliveries and its acknowledgments come after the end. An acknowledgment between the end and the new start covers nothing.
+ * - A mute of the assessment (`Assessment.muted`) with the effect `absent` gives the level `none`. Its end has the reason `muted`.
+ * - A mute with the effect `silent` keeps the level and sets the silent mode. A change between loud and silent ends the
+ *   episode at `now` with the reason `muted`. The next episode starts in the new mode at once.
+ * - A silent episode sends one quiet step 0 at most, only when the person has no delivery of the incident. Thus a mute
+ *   after a loud alert sends no copy, and a mute before the incident still gives one quiet message.
+ * - An end `muted` keeps the acknowledgments of the episode before it. Thus a change of a mute does not alert again.
  * - An earlier episode gets an escalation only when one of its deliveries has no cancel. Its end is its end in the log.
  * - An incident that is not live gets an escalation only when one of its deliveries has no cancel. Its end is its expiry, or `now`.
  * - The start of an escalation is the start in the log. A new escalation starts at `now`, or earlier when the ledger shows an earlier start.
@@ -153,13 +177,20 @@ export function route(input: RouteInput): Route[] {
       const person = recipient.watch.person;
       const policyOf = (level: Level): EscalationPolicy | undefined => recipient.policies.find((entry) => entry.level === level);
       const mine = <T extends { readonly person: PersonId }>(items: readonly T[]): T[] => items.filter((item) => item.person === person);
-      // The ends of the person in time order. Each one closes an episode.
-      const closes = mine(ends)
+      // The ends of the person in time order. Each one closes an episode. A change of the mode adds its end at `now`.
+      const closes: EscalationEnd[] = mine(ends)
         .filter((item) => Number.isFinite(item.at))
         .sort((a, b) => a.at - b.at || compare(a.incident, b.incident));
       // The episode of a time: the count of the ends before it. A time that is not a number is in the first episode.
       const episodeOf = (at: Instant): number => closes.filter((close) => close.at < at).length;
+      // The first time of an episode: its earliest start or delivery, or `now`.
+      const firstOf = (episode: number): Instant =>
+        Math.min(now, ...[...mine(starts), ...mine(deliveries)].filter((item) => episodeOf(item.at) === episode).map((item) => item.at).filter(Number.isFinite));
       const assessment = incident.live ? assess(incident, recipient.watch, input.places, policy) : undefined;
+      // A mute with the effect `absent` keeps the incident from the person. With `silent`, the level stays and the mode changes.
+      const muted = assessment?.muted;
+      const assessed: AssessedLevel | undefined = assessment === undefined ? undefined : muted?.effect === "absent" ? "none" : assessment.level;
+      const silentNow = muted?.effect === "silent";
       for (let episode = 0; episode <= closes.length; episode += 1) {
         const closed = closes[episode];
         const current = closed === undefined;
@@ -171,17 +202,30 @@ export function route(input: RouteInput): Route[] {
         for (const item of [...ownStarts, ...ownDeliveries]) levels.add(item.level);
         // The level does not go down: an assessed level below a level of the episode starts nothing.
         const top = Math.max(-1, ...[...levels].map((level) => LEVELS.indexOf(level)));
-        if (current && assessment !== undefined) {
-          const assessed = assessment.level;
+        // The mode of the episode: silent when each of its starts is silent. With no start, a delivery tells a loud
+        // episode, and an episode with neither has the mode of now.
+        const known = ownStarts.length > 0 ? ownStarts.every((item) => item.silent === true) : ownDeliveries.length > 0 ? false : undefined;
+        const silent = known ?? (current && silentNow);
+        // A change of the mode between loud and silent ends the episode now. The next episode starts in the new mode.
+        const changed = current && assessed !== undefined && assessed !== "none" && known !== undefined && known !== silentNow;
+        if (current && assessed !== undefined && !changed) {
           if (assessed !== "none" && LEVELS.indexOf(assessed) > top && policyOf(assessed) !== undefined) levels.add(assessed);
         }
-        // The live incident no longer reaches the person: the episode ends now, and the log keeps the end.
-        const freshEnd = current && assessment?.level === "none" && levels.size > 0;
-        const closing = closed ?? (freshEnd ? { incident: incident.anchor, person, at: now } : undefined);
+        // The live incident no longer reaches the person, or the mode changed: the episode ends now, and the log keeps the end.
+        const freshEnd = current && ((assessed === "none" && levels.size > 0) || changed);
+        const reason: EndReason = changed || muted?.effect === "absent" ? "muted" : "ended";
+        const closing = closed ?? (freshEnd ? { incident: incident.anchor, person, at: now, ...(reason === "ended" ? {} : { reason }) } : undefined);
+        if (changed && closing !== undefined) closes.push(closing);
         const why = current && assessment !== undefined ? placeWhy(assessment.places) : undefined;
-        // The first time of the episode. A later episode keeps only the acknowledgments from it.
-        const first = Math.min(now, ...[...ownStarts, ...ownDeliveries].map((item) => item.at).filter(Number.isFinite));
-        const ownAcks = mine(acks).filter((ack) => episodeOf(ack.at) === episode && (episode === 0 || ack.at >= first));
+        // A later episode keeps only the acknowledgments from its first time. An end `muted` joins two episodes: the
+        // acknowledgments of the episode before it still count, thus a change of a mute does not alert again.
+        let from = episode;
+        while (from > 0 && closes[from - 1]?.reason === "muted") from -= 1;
+        const since = from === 0 ? undefined : firstOf(from);
+        const ownAcks = mine(acks).filter((ack) => {
+          const at = episodeOf(ack.at);
+          return at >= from && at <= episode && (since === undefined || ack.at >= since);
+        });
         const ordered = LEVELS.filter((level) => levels.has(level));
         // The start in the log of each level, or `undefined`.
         const logged = ordered.map((level) => earliestStart(ownStarts, person, level));
@@ -193,8 +237,10 @@ export function route(input: RouteInput): Route[] {
           const endsAt = earliest([end, closing?.at, ...startAt.slice(index + 1)]);
           // A level of the log with no policy now gets a policy with no step: it sends nothing, and its end still stops its repeats.
           const chosen = policyOf(level) ?? { level, steps: [], exhaustedAfter: 0 };
+          // The silent mode sends step 0 only, and only when the person has no other delivery of the incident.
+          const others = silent && mine(deliveries).some((item) => item.level !== level || episodeOf(item.at) !== episode);
           const plan = escalate({
-            policy: chosen,
+            policy: silent ? { ...chosen, steps: others ? [] : chosen.steps.slice(0, 1) } : chosen,
             person,
             incident,
             since: startAt[index]!,
@@ -206,6 +252,7 @@ export function route(input: RouteInput): Route[] {
             rankDelay: input.rankDelay,
             quiet: recipient.watch.quiet,
             episode,
+            silent,
             now,
           });
           const ours = ownDeliveries.filter((delivery) => delivery.level === level);
@@ -213,7 +260,7 @@ export function route(input: RouteInput): Route[] {
           const polls = active ? ours.filter((delivery) => delivery.receipt !== undefined && !input.cancelled.has(delivery.key) && polling.has(delivery.channel)) : [];
           const found = logged[index];
           const fresh = found === undefined;
-          const start: EscalationStart = { incident: found?.incident ?? incident.anchor, level, person, at: plan.start };
+          const start: EscalationStart = { incident: found?.incident ?? incident.anchor, level, person, at: plan.start, ...(silent ? { silent: true } : {}) };
           routes.push({
             incident,
             person,

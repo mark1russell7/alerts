@@ -127,6 +127,14 @@ The mandatory class is an open point. The proposal: a mute makes an imminent lif
 
 Under the policy `silent`, a mute does not cut an incident of the mandatory class. Then a mute of a subject between the entry and the person has no effect, and the alert keeps its sound.
 
+The field `muted` of the relevance goes into the assessment as `Assessment.muted`. The delivery uses each effect as follows:
+
+- `absent`: the escalation of the person ends with the reason `muted`. Its repeats and its receipts stop, and no message tells of the end.
+- `silent`: the level stays. The episode sends one quiet message at most, and only when the person has no message of the incident. Thus a mute after a loud alert sends no copy.
+- An acknowledgment before a change of a mute still counts. When a mute ends before an acknowledgment, a loud episode starts again.
+
+[`CONTRACTS.md`](CONTRACTS.md) tells the episodes and the reasons of an end.
+
 ## The why record
 
 Each alert carries a `WhyRecord`:
