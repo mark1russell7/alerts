@@ -17,6 +17,7 @@ import {
   unreachedCodes,
   type Atlas,
   type Layers,
+  type PathKind,
   type Region,
   type RegionalOrigins,
   type Round,
@@ -86,7 +87,7 @@ const atlas = (classes: readonly SignalClass[], sources: readonly Source[], regi
     sources,
     rounds: [round],
     origins: named((source) => [...source.origins, ...(source.regionalOrigins ?? []).flatMap((entry) => entry.origins)]).map((id) => ({ id, name: id, issues: null, note: "a test" })),
-    paths: named((source) => source.path).map((id) => ({ id, name: id, kind: hosts.has(id) ? ("host" as const) : ("carrier" as const), note: "a test" })),
+    paths: named((source) => source.path).map((id) => ({ id, name: id, kind: hosts.has(id) ? "host" : (id.slice(0, id.indexOf(":")) as PathKind), note: "a test" })),
     regions,
   };
 };
@@ -202,8 +203,8 @@ describe("the layers of the cover", () => {
   it("counts the most paths with no shared part, the origins that issue the class, and the unknowns apart", () => {
     const at = (id: string, origins: string[], path: string[]): Source => ({ ...source(id, ["met.flood"], "adopt"), origins, path });
     const sources = [
-      at("a", ["nws"], ["api.example.org", "cdn"]),
-      at("b", ["nws"], ["mirror.example.org", "cdn"]),
+      at("a", ["nws"], ["api.example.org", "cdn:edge"]),
+      at("b", ["nws"], ["mirror.example.org", "cdn:edge"]),
       at("c", ["county"], ["c.example.org"]),
       at("d", [UNKNOWN], [UNKNOWN]),
     ];
@@ -354,7 +355,7 @@ describe("the layers of the cover", () => {
   it("stops a bad origin, a bad part of a path and a bad list of a source", () => {
     const classes = [klass("met.flood", "a test")];
     const empty = { ...source("empty", ["met.flood"]), origins: [], path: [] };
-    const twice = { ...source("twice", ["met.flood"]), origins: ["nws", "nws"], path: ["cdn"] };
+    const twice = { ...source("twice", ["met.flood"]), origins: ["nws", "nws"], path: ["cdn:edge"] };
     const ghost = { ...source("ghost", ["met.flood"]), origins: ["nowhere"], path: ["no.example.org"] };
     const world: Atlas = {
       ...atlas(classes, [source("a", ["met.flood"])]),
@@ -368,7 +369,10 @@ describe("the layers of the cover", () => {
       ],
       paths: [
         { id: "a.example.org", name: "a test", kind: "host", note: "a test" },
-        { id: "cdn", name: "a test", kind: "carrier", note: "a test" },
+        { id: "cdn:edge", name: "a test", kind: "cdn", note: "a test" },
+        { id: "cdn:b.example.org", name: "a test", kind: "host", note: "a test" },
+        { id: "noaaport", name: "a test", kind: "carrier", note: "a test" },
+        { id: "provider:x", name: "a test", kind: "cdn", note: "a test" },
         { id: "cable", name: "a test", kind: "cable" as string as "host", note: "" },
       ],
     };
@@ -380,6 +384,9 @@ describe("the layers of the cover", () => {
         "origin unused: no source names the origin",
         "origin Bad Id: the id is not in lower case with hyphens and dots, or it is unknown",
         "path cable: the kind cable is not known",
+        "path cdn:b.example.org: the id of a host has no prefix",
+        "path noaaport: the id of a part of the kind carrier starts with carrier:",
+        "path provider:x: the id of a part of the kind cdn starts with cdn:",
         "path cable: the part has no name or no note",
         "path cable: no source names the part",
         "source empty: the source has no origins: give the ids, or unknown",
@@ -459,8 +466,8 @@ describe("the claims of the pairs", () => {
   it("gives the shared origins and parts of each pair with a shared class, and never a shared unknown", () => {
     const at = (id: string, decision: Source["decision"], origins: string[], path: string[], classes = ["met.flood"]): Source => ({ ...source(id, classes, decision), origins, path });
     const sources = [
-      at("a", "adopt", ["nws"], ["api.example.org", "cdn"]),
-      at("b", "plan", ["nws"], ["mirror.example.org", "cdn"]),
+      at("a", "adopt", ["nws"], ["api.example.org", "cdn:edge"]),
+      at("b", "plan", ["nws"], ["mirror.example.org", "cdn:edge"]),
       at("c", "plan", [UNKNOWN], [UNKNOWN]),
       at("d", "later", ["nws"], ["api.example.org"]),
       at("e", "plan", ["nws"], ["api.example.org"], ["infra.power"]),
@@ -469,7 +476,7 @@ describe("the claims of the pairs", () => {
     const world = atlas([klass("met.flood"), klass("infra.power")], sources);
     const pair = (a: string, b: string, origins: string[], path: string[]) => ({ a, b, classes: ["met.flood"], origins, path });
     expect(pairClaims(world)).toEqual([
-      pair("a", "b", ["nws"], ["cdn"]),
+      pair("a", "b", ["nws"], ["cdn:edge"]),
       pair("a", "c", [], []),
       pair("a", "f", [], []),
       pair("b", "c", [], []),

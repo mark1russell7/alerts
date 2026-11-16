@@ -138,7 +138,7 @@ export function pushoverDescriptor(platform?: "ios" | "android"): ChannelDescrip
     id: CHANNEL_ID,
     title: "Pushover",
     dependsOn: ["provider:pushover", ...push],
-    uses: ["internet", "power"],
+    uses: ["internet", "dns", "power"],
     // A `life-safety` message at priority 2 sounds through silent mode with the Critical Alerts of the app.
     breaksThrough: true,
     repeats: true,

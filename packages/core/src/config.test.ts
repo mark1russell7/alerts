@@ -33,7 +33,7 @@ const LIFE_SAFETY: EscalationPolicy = {
 const URGENT: EscalationPolicy = { level: "urgent", steps: [{ channel: pushover, at: 0 }], exhaustedAfter: 10 * MINUTE };
 
 function channel(id: ChannelId): ChannelDescriptor {
-  return { id, title: id, dependsOn: [], uses: ["internet"], breaksThrough: true, repeats: false, ack: "none", maxTitle: 250, maxBody: 1024 };
+  return { id, title: id, dependsOn: [], uses: ["internet", "dns"], breaksThrough: true, repeats: false, ack: "none", maxTitle: 250, maxBody: 1024 };
 }
 const CHANNELS = [channel(pushover), channel(sms)];
 

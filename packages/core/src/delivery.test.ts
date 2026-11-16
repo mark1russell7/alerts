@@ -66,7 +66,7 @@ function recipient(person = "person-1", policies: readonly EscalationPolicy[] = 
 }
 
 function channel(id: ChannelId, ack: ChannelDescriptor["ack"]): ChannelDescriptor {
-  return { id, title: id, dependsOn: [], uses: ["internet"], breaksThrough: true, repeats: ack === "poll", ack, maxTitle: 250, maxBody: 1024 };
+  return { id, title: id, dependsOn: [], uses: ["internet", "dns"], breaksThrough: true, repeats: ack === "poll", ack, maxTitle: 250, maxBody: 1024 };
 }
 const CHANNELS = [channel(pushover, "poll"), channel(sms, "none")];
 

@@ -58,7 +58,7 @@ export const LIVE_DECISIONS: readonly Decision[] = ["adopt", "plan"];
 export const MIN_SOURCES = 2;
 
 /** The kinds of the parts of a path. */
-export const PATH_KINDS = ["host", "carrier", "provider"] as const;
+export const PATH_KINDS = ["host", "cdn", "carrier", "provider"] as const;
 /** One kind of a part of a path. */
 export type PathKind = (typeof PATH_KINDS)[number];
 /** The id of an origin or a part of a path that the research did not find. The measures count it apart. */
@@ -98,8 +98,11 @@ export interface RegionalOrigins {
 }
 
 /**
- * One part of the path of a signal. The first part of a path is the host that the adapter reads. A carrier
- * brings the signal to a host, and a provider operates a host or a carrier.
+ * One part of the path of a signal. The first part of a path is the host that the adapter reads. A CDN serves
+ * a host from its own network. A carrier brings the signal to a host, and a provider operates a host or a carrier.
+ *
+ * The id of a host is its name. The id of each other part is its kind, a colon and a name, for example
+ * `cdn:akamai`. The `dependsOn` of a source descriptor uses the same ids.
  */
 export interface PathPart {
   readonly id: string;
@@ -318,7 +321,7 @@ export const EXEMPT_CATEGORIES: readonly Category[] = ["system", "other"];
 
 const ID = /^[a-z][a-z0-9]*(\.[a-z0-9]+(-[a-z0-9]+)*)+$/;
 const SOURCE_ID = /^[a-z0-9]+(-[a-z0-9]+)*$/;
-const PART_ID = /^[a-z0-9]+([.-][a-z0-9]+)*$/;
+const PART_ID = /^([a-z]+:)?[a-z0-9]+([.-][a-z0-9]+)*$/;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const SUBJECT_KINDS: ReadonlySet<string> = new Set(Object.values(SUBJECT_SYSTEMS));
 
@@ -583,6 +586,8 @@ export function checkAtlas(atlas: Atlas, context: AtlasContext = {}): AtlasProbl
     parts.set(part.id, part);
     if (!PART_ID.test(part.id) || part.id === UNKNOWN) add(at, "the id is not in lower case with hyphens and dots, or it is unknown");
     if (!(PATH_KINDS as readonly string[]).includes(part.kind)) add(at, `the kind ${part.kind} is not known`);
+    else if (part.kind === "host" && part.id.includes(":")) add(at, "the id of a host has no prefix");
+    else if (part.kind !== "host" && !part.id.startsWith(`${part.kind}:`)) add(at, `the id of a part of the kind ${part.kind} starts with ${part.kind}:`);
     if (part.name.trim() === "" || part.note.trim() === "") add(at, "the part has no name or no note");
   }
   // The JSON of a source is not parsed by a schema, so the gate reads the layers only when each source has its lists.

@@ -25,7 +25,7 @@ const BASE: SourceDescriptor = {
   title: "A test source",
   origins: ["https://example.test"],
   dependsOn: ["provider:test"],
-  uses: ["internet", "power"],
+  uses: ["internet", "dns", "power"],
   kinds: ["met"],
   coverage: "global",
   transport: "poll",

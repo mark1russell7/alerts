@@ -29,7 +29,7 @@ const CHANNEL: ChannelDescriptor = {
   id: PUSHOVER,
   title: "Pushover",
   dependsOn: ["provider:pushover"],
-  uses: ["internet", "power"],
+  uses: ["internet", "dns", "power"],
   breaksThrough: true,
   repeats: true,
   ack: "poll",

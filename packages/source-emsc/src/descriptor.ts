@@ -23,7 +23,7 @@ export const EMSC_DESCRIPTOR: SourceDescriptor = {
   title: "EMSC: the earthquakes of magnitude 2.5 or more of the past day",
   origins: [EMSC_ORIGIN, ANSS_ORIGIN],
   dependsOn: ["provider:emsc", "provider:usgs"],
-  uses: ["internet", "power"],
+  uses: ["internet", "dns", "power"],
   kinds: [EARTHQUAKE_KIND],
   coverage: COVERAGE,
   transport: "poll",

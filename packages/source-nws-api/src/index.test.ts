@@ -21,7 +21,7 @@ describe("the NWS API source", () => {
   it("describes itself as the source nws-api", () => {
     expect(NWS_DESCRIPTOR).toMatchObject({ id: SOURCE_ID, origins: ["nws"], transport: "poll", auth: "none" });
     expect(NWS_DESCRIPTOR.dependsOn).toEqual(["provider:nws-api", "cdn:akamai"]);
-    expect(NWS_DESCRIPTOR.uses).toEqual(["internet", "power"]);
+    expect(NWS_DESCRIPTOR.uses).toEqual(["internet", "dns", "power"]);
     expect(NWS_DESCRIPTOR.slowAfter).toBeLessThan(NWS_DESCRIPTOR.interval);
   });
 

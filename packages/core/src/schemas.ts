@@ -399,6 +399,12 @@ const outsideDomains = z
   .array(z.string().refine((domain) => !CELL_RESOURCES.some((resource) => resource === domain), "A resource of the cell is not a failure domain outside the cell."))
   .readonly();
 
+// The internet link of the cell finds each host through the DNS resolver of the cell, so a use of `internet` needs `dns`.
+const cellUses = z
+  .array(cellResourceSchema)
+  .readonly()
+  .refine((uses) => !uses.includes("internet") || uses.includes("dns"), "A use of the internet needs the DNS resolver of the cell: add dns to uses.");
+
 /** This schema checks the facts of a source. Its `dependsOn` holds no resource of the cell. */
 export const sourceDescriptorSchema: z.ZodType<SourceDescriptor, SourceDescriptor> = schemaOf<SourceDescriptor>()(
   z
@@ -407,7 +413,7 @@ export const sourceDescriptorSchema: z.ZodType<SourceDescriptor, SourceDescripto
       title: z.string(),
       origins: z.array(z.string()).readonly(),
       dependsOn: outsideDomains,
-      uses: z.array(cellResourceSchema).readonly(),
+      uses: cellUses,
       kinds: z.array(kindCodeSchema).readonly(),
       coverage: z.union([z.array(areaSchema).readonly(), z.literal("global")]),
       transport: transportSchema,
@@ -652,7 +658,7 @@ export const channelDescriptorSchema: z.ZodType<ChannelDescriptor, ChannelDescri
       id: channelIdSchema,
       title: z.string(),
       dependsOn: outsideDomains,
-      uses: z.array(cellResourceSchema).readonly(),
+      uses: cellUses,
       breaksThrough: z.boolean(),
       repeats: z.boolean(),
       ack: z.enum(["none", "poll", "callback"]),

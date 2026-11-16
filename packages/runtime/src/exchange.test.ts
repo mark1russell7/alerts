@@ -415,7 +415,7 @@ describe("two runtimes", () => {
         title: "The source api",
         origins: ["nws"],
         dependsOn: ["provider:api"],
-        uses: ["internet", "power"],
+        uses: ["internet", "dns", "power"],
         kinds: ["met"],
         coverage: [{ type: "code", system: "ugc", code: "KSZ083" }],
         transport: "poll",

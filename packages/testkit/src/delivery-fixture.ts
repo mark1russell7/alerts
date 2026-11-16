@@ -88,7 +88,7 @@ export function deliveryFixture(source: string, word: string): DeliveryFixture {
       title: `The source of ${source}`,
       origins: ["nws"],
       dependsOn: [`provider:${source}`],
-      uses: ["internet", "power"],
+      uses: ["internet", "dns", "power"],
       kinds: ["met"],
       coverage: [{ type: "code", system: "ugc", code: "KSZ083" }],
       transport: "poll",

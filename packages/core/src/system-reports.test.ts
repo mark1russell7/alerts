@@ -55,7 +55,7 @@ const API: SourceDescriptor = {
   title: "The API",
   origins: ["nws"],
   dependsOn: ["provider:api"],
-  uses: ["internet", "power"],
+  uses: ["internet", "dns", "power"],
   kinds: ["met"],
   coverage: [{ type: "code", system: "state", code: "KS" }],
   transport: "poll",

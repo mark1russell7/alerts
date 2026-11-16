@@ -224,6 +224,27 @@ importers:
         specifier: ^0.0.10
         version: 0.0.10
     devDependencies:
+      '@mark1russell7/alerts-source-emsc':
+        specifier: workspace:*
+        version: link:../source-emsc
+      '@mark1russell7/alerts-source-iem':
+        specifier: workspace:*
+        version: link:../source-iem
+      '@mark1russell7/alerts-source-ipaws':
+        specifier: workspace:*
+        version: link:../source-ipaws
+      '@mark1russell7/alerts-source-nws-api':
+        specifier: workspace:*
+        version: link:../source-nws-api
+      '@mark1russell7/alerts-source-swpc':
+        specifier: workspace:*
+        version: link:../source-swpc
+      '@mark1russell7/alerts-source-tsunami':
+        specifier: workspace:*
+        version: link:../source-tsunami
+      '@mark1russell7/alerts-source-usgs':
+        specifier: workspace:*
+        version: link:../source-usgs
       '@mark1russell7/cue':
         specifier: ^2.0.0
         version: 2.1.4

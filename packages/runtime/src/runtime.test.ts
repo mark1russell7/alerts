@@ -44,7 +44,7 @@ function descriptor(id: SourceId, interval: number, maxQuiet?: number): SourceDe
     title: `The source ${id}`,
     origins: ["nws"],
     dependsOn: [`provider:${id}`],
-    uses: ["internet", "power"],
+    uses: ["internet", "dns", "power"],
     kinds: ["met"],
     coverage: [{ type: "code", system: "ugc", code: "KSZ083" }],
     transport: "poll",

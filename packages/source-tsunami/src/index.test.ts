@@ -34,7 +34,7 @@ describe("createTsunamiSource", () => {
         transport: "poll",
         interval: 60_000,
         auth: "none",
-        uses: ["internet", "power"],
+        uses: ["internet", "dns", "power"],
       });
       expect(descriptor.listing).toBeUndefined();
       expect(descriptor.maxQuiet).toBeUndefined();

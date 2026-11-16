@@ -20,7 +20,7 @@ export function descriptorOf(center: TsunamiCenter): SourceDescriptor {
     title: `${center.title}: the latest tsunami message`,
     origins: [NWS_ORIGIN],
     dependsOn: ["provider:tsunami-gov"],
-    uses: ["internet", "power"],
+    uses: ["internet", "dns", "power"],
     kinds: [TSUNAMI_KIND],
     coverage,
     transport: "poll",

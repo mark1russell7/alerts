@@ -20,8 +20,8 @@ export const IPAWS_DESCRIPTOR: SourceDescriptor = {
   title: "FEMA IPAWS public alert feed (IPAWS-OPEN)",
   origins: [ORIGINS.nws, ORIGINS.authority],
   // The feed answers through the Cloudflare network (apps.fema.gov)
-  dependsOn: ["provider:fema-ipaws", "cdn:cloudflare"],
-  uses: ["internet", "power"],
+  dependsOn: ["provider:fema-ipaws", "cdn:cloudflare", "carrier:ipaws-open"],
+  uses: ["internet", "dns", "power"],
   kinds: KIND_PREFIXES,
   coverage: COVERAGE,
   transport: "poll",
