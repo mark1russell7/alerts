@@ -449,7 +449,7 @@ export interface InstanceCopies {
   readonly source: EntriesSource;
   /** The worker that reads each other copy. A copy with no other copies has none. */
   readonly worker?: ExchangeWorker;
-  /** The loop of the worker. The service runs it as the worker `exchange`. */
+  /** The loop of the worker. The service operates it as the worker `EXCHANGE_WORKER` of `index.ts`. */
   readonly loop?: WorkerLoop;
 }
 

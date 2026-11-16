@@ -82,9 +82,15 @@ export interface Options {
   readonly exchange?: ServiceExchange;
 }
 
+/**
+ * The name of the worker of the exchange. The service keeps one list of names for its servers and its workers. The
+ * server of the exchange host has the name `exchange`, thus the worker has a different name.
+ */
+export const EXCHANGE_WORKER = "exchange-reads";
+
 /** The parts of the exchange in the service. */
 export interface ServiceExchange {
-  /** The loop of the worker of the exchange. The service runs it as the worker `exchange`. */
+  /** The loop of the worker of the exchange. The service operates it as the worker `EXCHANGE_WORKER`. */
   readonly loop?: WorkerLoop;
   /** The procedures host of the exchange (`exchangeHost`). It declares its server and its listener on the service. */
   readonly host?: { declare(svc: ServiceBuilder): ServiceBuilder };
@@ -111,7 +117,7 @@ export const declare = (options: Options): ServiceBuilder => {
   const svc = parts(options);
   const exchange = options.exchange;
   // The worker of the exchange stops before the log closes, because the service closes each worker before its dependencies.
-  const withWorker = exchange?.loop === undefined ? svc : svc.worker("exchange", exchange.loop.knobs, exchange.loop);
+  const withWorker = exchange?.loop === undefined ? svc : svc.worker(EXCHANGE_WORKER, exchange.loop.knobs, exchange.loop);
   return exchange?.host === undefined ? withWorker : exchange.host.declare(withWorker);
 };
 

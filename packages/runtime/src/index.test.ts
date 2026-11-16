@@ -5,10 +5,12 @@ import { join } from "node:path";
 import type { AddressInfo } from "node:net";
 import { embeddedProcess, lint, localDev } from "@mark1russell7/service";
 import type { Rule, Scenario } from "@mark1russell7/service";
-import { realClock, wallClock } from "@mark1russell7/algebra/clock";
+import { fakeWallClock, realClock, wallClock } from "@mark1russell7/algebra/clock";
 import { HEALTH_FORMAT, MAP_FORMAT, type HealthPayload, type MapPayload, type SourceId } from "@mark1russell7/alerts";
 import { describe, expect, it } from "vitest";
-import { PAGE_INDEX, PROFILES, STOP_MESSAGE, createLoop, declare, outageDeployWorker, statusOf, type Pass, type Status } from "./index.ts";
+import { EXCHANGE_FORMAT } from "./exchange.ts";
+import { EXCHANGE_TOKEN_LENGTH, exchangeHost } from "./exchange-http.ts";
+import { EXCHANGE_WORKER, PAGE_INDEX, PROFILES, STOP_MESSAGE, createLoop, declare, outageDeployWorker, statusOf, type Pass, type Status } from "./index.ts";
 
 const s = (value: number) => ({ value, unit: "s" });
 
@@ -146,6 +148,26 @@ describe("the declaration of the service", () => {
     // The status shows the state of the deploy only for an instance with an outage call.
     expect(statusOf(loop, outage).outage).toEqual({ state: "pending" });
     expect("outage" in statusOf(loop)).toBe(false);
+  });
+
+  it("declares the worker and the host of the exchange together, as a copy with peers and a listener has them", () => {
+    // A copy with peers and the address listen has the two parts. Each name of a server or a worker is unique in the service.
+    const host = exchangeHost({
+      source: {
+        runtime: { share: (after) => ({ format: EXCHANGE_FORMAT, copy: "copy-b", log: "started:run-b", after, next: after, head: after, items: [] }) },
+        clock: fakeWallClock(0),
+        configHash: "0".repeat(64),
+      },
+      token: "t".repeat(EXCHANGE_TOKEN_LENGTH),
+      listen: { host: "127.0.0.1", port: 0 },
+    });
+    const loop = loopOf();
+    const description = declare({ port: 0, probePort: 0, profile: PROFILES["pod"]!, loop, log: { close: () => undefined }, exchange: { loop: loopOf().worker, host } }).describe();
+    const names = description.transports.map((transport) => transport.name);
+    expect(new Set(names).size).toBe(names.length);
+    expect(description.transports.filter((transport) => transport.kind === "worker").map((transport) => transport.name)).toEqual(["passes", EXCHANGE_WORKER]);
+    expect(names).toContain("exchange");
+    expect(lint(description, POD, [O10, O16]).filter((finding) => finding.verdict !== "holds")).toEqual([]);
   });
 });
 
