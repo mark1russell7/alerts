@@ -4024,6 +4024,7 @@
       "met.flood.coastal",
       "met.heat",
       "met.cold",
+      "met.rain",
       "met.wind",
       "met.fog",
       "met.marine",
@@ -4038,8 +4039,8 @@
     "terms": {
       "url": "https://creativecommons.org/licenses/by/4.0/",
       "automated": "allowed",
-      "redistribution": "allowed",
-      "note": "The feed page states CC BY 4.0, data provided by EUMETNET members. WebSub is offered."
+      "redistribution": "unclear",
+      "note": "The feed page states terms equivalent to CC BY 4.0, data provided by EUMETNET members. It also names more requirements for redistribution in the Terms and Conditions. That page needs JavaScript, and round 7 did not read it. WebSub is offered."
     },
     "cost": "free",
     "delay": "unknown",
@@ -6995,6 +6996,50 @@
       "https://www.who.int/api/news/diseaseoutbreaknews"
     ],
     "round": 1
+  },
+  {
+    "id": "wmo-cap-feeds",
+    "name": "The CAP feeds of the alerting authorities in the WMO register",
+    "classes": [
+      "met.thunderstorm",
+      "met.lightning",
+      "met.wind",
+      "met.rain",
+      "met.frost",
+      "geo.earthquake",
+      "geo.tsunami"
+    ],
+    "url": "https://alertingauthority.wmo.int/rss.xml",
+    "access": "feed",
+    "auth": "none",
+    "terms": {
+      "url": null,
+      "automated": "allowed",
+      "redistribution": "unclear",
+      "note": "The register lists the feeds so that alert hubs read them. Each authority keeps its own terms. The feeds on the hub cap-sources.s3.amazonaws.com give their copyright as public domain."
+    },
+    "cost": "free",
+    "delay": "near real time. Each feed is an RSS or Atom index of the current CAP messages, so the delay is the interval of the poll.",
+    "history": "Each feed keeps only its current messages. The hub keeps each message at its own URL.",
+    "rateLimit": "No published limit. Each feed has its own host, so each host gets its own pace.",
+    "calibration": null,
+    "coverage": "The register had 303 authorities with 224 feeds on 92 hosts on 2026-11-16. The messages of round 7 had thunderstorm, lightning, wind, rain, frost, earthquake and tsunami.",
+    "origins": [
+      "wmo-alerting-authorities"
+    ],
+    "path": [
+      "unknown"
+    ],
+    "subjectIds": null,
+    "risks": [],
+    "decision": "plan",
+    "adapter": null,
+    "reason": "One register gives the official CAP feed of each country that has one. A general CAP reader covers each feed with one adapter.",
+    "evidence": [
+      "https://alertingauthority.wmo.int/rss.xml",
+      "https://docs.oasis-open.org/emergency/cap-etl/v1.2/cap-etl-v1.2.html"
+    ],
+    "round": 7
   },
   {
     "id": "woah-wahis",

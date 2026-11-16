@@ -798,5 +798,11 @@
     "name": "WOAH (the World Organisation for Animal Health)",
     "issues": null,
     "note": "The records of woah-wahis name this issuer."
+  },
+  {
+    "id": "wmo-alerting-authorities",
+    "name": "The alerting authorities of the WMO Register of Alerting Authorities",
+    "issues": null,
+    "note": "The records of wmo-cap-feeds name this issuer. Each authority is a national weather service or an agency of civil protection of one country or territory."
   }
 ]

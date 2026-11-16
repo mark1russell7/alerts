@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { carriages, incidents, normalize, reportId, unknownKinds, UNKNOWN_KIND, type Observation, type ObservationId, type Report, type SourceId } from "@mark1russell7/alerts";
+import { carriages, incidents, normalize, reportId, unknownKinds, type Observation, type ObservationId, type Report, type SourceId } from "@mark1russell7/alerts";
 import { EVENT_CODES, NAME_ALIASES, parseVtec, PHENOMENA, vtecKey } from "@mark1russell7/alerts-format-nws";
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
@@ -269,6 +269,7 @@ describe("the gate of the taxonomy", () => {
     const code = fc.oneof(fc.constantFrom(...Object.keys(EVENT_CODES)), fc.stringMatching(/^[A-Z]{3}$/));
     const name = fc.oneof(fc.constantFrom(...Object.keys(NAME_ALIASES)), fc.stringMatching(/^[A-Za-z][A-Za-z ]{0,30}$/));
     fc.assert(fc.property(code, name, (c, n) => unknownKinds([kindOf(withEvent(c, n))]).length === 0));
-    expect(kindOf(withEvent("ZZZ", "No Such Event"))).toBe(UNKNOWN_KIND);
+    // No table knows the event, so the report has the kind of its CAP category, Safety.
+    expect(kindOf(withEvent("ZZZ", "No Such Event"))).toBe("safety");
   });
 });
