@@ -517,12 +517,18 @@ importers:
       '@mark1russell7/alerts-shapes-nws':
         specifier: workspace:*
         version: link:../shapes-nws
+      '@mark1russell7/alerts-source-emsc':
+        specifier: workspace:*
+        version: link:../source-emsc
       '@mark1russell7/alerts-source-ipaws':
         specifier: workspace:*
         version: link:../source-ipaws
       '@mark1russell7/alerts-source-nws-api':
         specifier: workspace:*
         version: link:../source-nws-api
+      '@mark1russell7/alerts-source-usgs':
+        specifier: workspace:*
+        version: link:../source-usgs
       '@mark1russell7/algebra':
         specifier: ^0.8.9
         version: 0.8.9(zod@4.6.7)
