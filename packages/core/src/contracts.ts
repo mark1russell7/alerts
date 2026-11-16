@@ -691,6 +691,39 @@ export interface BalanceRead {
   readonly at: Instant;
 }
 
+/**
+ * The stages of another copy of the system (AL-16), as this copy sees it. Each stage is a line of system reports:
+ *
+ * - `skew`: the clock of the other copy differs from the clock of this copy by more than the limit.
+ * - `config`: the other copy has a different hash of the configuration. Then the copies can route an alert in two ways.
+ * - `unread`: no read of the log of the other copy passed for the maximum age. Then the two copies can both send.
+ */
+export type CopyStage = "skew" | "config" | "unread";
+
+/** One read of the log of another copy that passed. */
+export interface CopyRead {
+  /** The middle of the call, on the clock of this copy. */
+  readonly at: Instant;
+  /** The time of the other copy minus `at`. It is below 0 when the clock of the other copy is behind. */
+  readonly skew: Duration;
+  /** This value tells if the other copy has the hash of the configuration of this copy. */
+  readonly sameConfig: boolean;
+}
+
+/** The watch of another copy of the system, at one time. */
+export interface CopyWatch {
+  /** The id of the other copy. */
+  readonly copy: string;
+  /** The largest difference of the two clocks with no stage `skew`. */
+  readonly skewLimit: Duration;
+  /** The longest time with no read that passed. After it, the stage is `unread`. */
+  readonly maxAge: Duration;
+  /** The start of the watch. With no read, the time of `unread` counts from it. */
+  readonly since: Instant;
+  /** The last read that passed. */
+  readonly read?: CopyRead;
+}
+
 /** The watch of the balance of one provider account, at one time. */
 export interface ProviderBalance {
   /** The provider, as an id in the `dependsOn` of its channels: for example `provider:twilio`. */

@@ -10,6 +10,7 @@ import {
   balanceUnreadAt,
   carriages,
   CLOCK_STEP_WINDOW,
+  copyUnreadAt,
   LOG_RECOVERY_WINDOW,
   coverage,
   incidents,
@@ -24,6 +25,7 @@ import {
   threats,
   type Coverage,
   type ChannelQuota,
+  type CopyWatch,
   type ProviderBalance,
   type CoveragePolicy,
   type DelayLimitOptions,
@@ -89,26 +91,40 @@ function ruleOf(options: DelayLimitOptions): LimitRule {
   return rule;
 }
 
+/** The parts of the view that do not come from the log: the counts and the watches at the time of the view. */
+export interface SystemParts {
+  /** The counts of the channels at the time of the view. With no quotas, each open line of a quota stays open. */
+  readonly quotas?: readonly ChannelQuota[];
+  /** The watches of the provider accounts. With no balances, each open line of a balance stays open. */
+  readonly balances?: readonly ProviderBalance[];
+  /** The watches of the other copies of the system. With no copies, each open line of a copy stays open. */
+  readonly copies?: readonly CopyWatch[];
+  /** The folds of the last view (`latenessStep`). With no folds, each fold starts again. The view is the same. */
+  readonly folds?: LatenessFolds;
+}
+
 /**
  * This function gives the view of the system at the time `at`.
  *
  * - The quotas are the counts of the channels at `at`. With no quotas, each open line of a quota stays open.
  * - The balances are the watches of the provider accounts. The time when a balance reaches `unread` is a timer too.
+ * - The copies are the watches of the other copies. The time when a copy reaches `unread` is a timer too.
  * - The latest step of the wall clock in its window is a line. The end of the window is a timer too.
  * - The latest recovery of the log in its window is a line. The end of the window is a timer too.
  * - The folds are the folds of the last view (`latenessStep`). With no folds, each fold starts again. The view is the same.
  */
-export function systemView(state: RuntimeState, config: ViewConfig, at: Instant, quotas?: readonly ChannelQuota[], balances?: readonly ProviderBalance[], folds?: LatenessFolds): SystemView {
+export function systemView(state: RuntimeState, config: ViewConfig, at: Instant, parts: SystemParts = {}): SystemView {
+  const { quotas, balances, copies, folds } = parts;
   const steps = config.sources.map((source) => advanceHealth(state.health[source.id] ?? startHealth(source.id, state.start ?? at), at, source, config.health));
   const health = steps.map((step) => step.health);
   const found = incidents(state.merge, at, { link: linkRule(config.link ?? DEFAULT_LINK_POLICY) });
   const checks = carriages(state.merge, found, config.expectations);
   const { lateness: late, folds: next } = latenessStep(checks, config.expectations, at, ruleOf(config.delay), folds);
   const covered = coverage({ sources: config.sources, health, late: lateSources(late), places: config.places, kinds: config.kinds }, config.coverage);
-  const step = systemReports(state.lines, { sources: config.sources, health, coverage: covered, threats: threats(found, config.places), lateness: late, ...(quotas === undefined ? {} : { quotas }), ...(balances === undefined ? {} : { balances }), steps: state.steps, recoveries: state.recoveries }, at);
+  const step = systemReports(state.lines, { sources: config.sources, health, coverage: covered, threats: threats(found, config.places), lateness: late, ...(quotas === undefined ? {} : { quotas }), ...(balances === undefined ? {} : { balances }), ...(copies === undefined ? {} : { copies }), steps: state.steps, recoveries: state.recoveries }, at);
   // An incident that expires changes the threats, thus its end is a timer too.
   const ends = found.flatMap((incident) => (incident.live && incident.expires !== undefined && incident.expires > at ? [incident.expires] : []));
-  const unread = (balances ?? []).flatMap((balance) => (balanceUnreadAt(balance) > at ? [balanceUnreadAt(balance)] : []));
+  const unread = [...(balances ?? []).map(balanceUnreadAt), ...(copies ?? []).map(copyUnreadAt)].filter((time) => time > at);
   const stepped = recentStep(state.steps, at);
   const recovered = recentRecovery(state.recoveries, at);
   const wakeAt = earliest([...steps.map((entry) => entry.wakeAt), ...late.map((entry) => entry.wakeAt), ...ends, ...unread, stepped === undefined ? undefined : stepped.at + CLOCK_STEP_WINDOW, recovered === undefined ? undefined : recovered.at + LOG_RECOVERY_WINDOW]);

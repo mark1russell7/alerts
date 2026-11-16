@@ -26,6 +26,12 @@ export const EXCHANGE_LIMIT: Duration = 3_000;
 /** The largest difference of the clocks of two copies with no system line. A larger difference makes a line. */
 export const CLOCK_SKEW_LIMIT: Duration = 2_000;
 
+/** The longest time with no read of another copy that passed. After it, the copy has the line `unread`. */
+export const COPY_MAX_AGE: Duration = 60_000;
+
+/** The most pages of one copy in one round of the worker. A copy that is further behind gives its next pages in the next round. */
+export const EXCHANGE_ROUND_PAGES = 20;
+
 /**
  * This function gives the settings of the copy from the text of `copy.json`. A missing file gives `ONLY_COPY`. Each
  * other read error and each problem of the text stop the start. A problem holds no address, no URL and no path.

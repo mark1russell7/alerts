@@ -1,10 +1,12 @@
 import { fakeWallClock, type WallClock } from "@mark1russell7/algebra/clock";
-import { join, reportId, SYSTEM_SOURCE, type ChannelId, type Delivery, type Observation, type ObservationId, type PersonId, type PlaceId, type Report, type ReportId, type SourceId, type SourceProcedures, type WatchedPlace } from "@mark1russell7/alerts";
+import { COPY_SUBJECT, copyStages, join, reportId, SYSTEM_SOURCE, type ChannelId, type CopyPeer, type Delivery, type Observation, type ObservationId, type PersonId, type PlaceId, type Report, type ReportId, type SourceId, type SourceProcedures, type WatchedPlace } from "@mark1russell7/alerts";
 import { describe, expect, it } from "vitest";
 import { envelope, type RuntimeEvent } from "./events.ts";
-import { EXCHANGE_CHECKPOINT, EXCHANGE_FORMAT, importOf, importPage, itemProblem, parsePage, sharedItem, sharePage, type ExchangePage, type ImportInput, type ReceivedPage, type SharedItem } from "./exchange.ts";
+import { CLOCK_SKEW_LIMIT, COPY_MAX_AGE, EXCHANGE_LIMIT } from "./copy.ts";
+import { EXCHANGE_CHECKPOINT, EXCHANGE_FORMAT, EXCHANGE_PAGE, importOf, importPage, itemProblem, parsePage, sharedItem, sharePage, type ExchangePage, type ImportInput, type ReceivedPage, type SharedItem } from "./exchange.ts";
 import { openRuntimeLog, type RuntimeLog } from "./log.ts";
-import { openRuntime, type Runtime, type RuntimeOptions } from "./runtime.ts";
+import { exchangeWorker, serveEntries, type ExchangeCall, type ExchangeRound, type ExchangeWorker, type ExchangeWorkerOptions } from "./peers.ts";
+import { openRuntime, type CopyChecks, type Runtime, type RuntimeOptions } from "./runtime.ts";
 import { EMPTY_RUNTIME, fold, rebuild, type FoldContext, type RuntimeState } from "./state.ts";
 
 const T0 = Date.UTC(2026, 3, 1, 18, 0, 0);
@@ -524,5 +526,237 @@ describe("two runtimes", () => {
     expect(recovered.runtime.position("b")).toBe(0);
     expect(read(recovered.runtime, b.runtime, "b").take).toEqual({ imports: take.imports, next: take.next, problems: [], conflicts: [] });
     expect(recovered.runtime.state().imported.merge.reports.map((one) => one.key)).toEqual(["w2"]);
+  });
+  describe("the exchange worker", () => {
+    const HASH = "config-hash-1";
+    const B: CopyPeer = { id: "b", url: "http://copy-b.example.test:4751" };
+    // The answer of a call, through JSON as on the wire.
+    const wire = (value: unknown): unknown => JSON.parse(JSON.stringify(value));
+    const serve =
+      (writer: Runtime, clock: WallClock): ExchangeCall =>
+      async (_peer, input) =>
+        wire(serveEntries({ runtime: writer, clock, configHash: HASH }, input));
+    const hanging: ExchangeCall = (_peer, _input, signal) => new Promise((_resolve, reject) => signal.addEventListener("abort", () => reject(new Error("aborted"))));
+    const workerOf = (reader: Runtime, call: ExchangeCall, clock: WallClock, extra: Partial<Pick<ExchangeWorkerOptions, "pages" | "entries">> = {}): ExchangeWorker =>
+      exchangeWorker({ runtime: reader, peers: [B], call, clock, configHash: HASH, ...extra });
+    const stagesOf = (worker: ExchangeWorker, at: number) => copyStages(worker.watches()[0]!, at);
+    const quiet: ExchangeRound = { imports: 0, more: false, changed: false, problems: [], conflicts: [] };
+    // A turn of the event loop: each promise that is ready runs.
+    const settle = () => new Promise<void>((resolve) => setImmediate(resolve));
+
+    it("brings two copies to the same shared state, and a second round imports nothing", async () => {
+      const clock = fakeWallClock(T0);
+      const a = open("a", ["w1"], clock);
+      const b = open("b", ["w1", "w2"], clock);
+      await a.runtime.pass();
+      await b.runtime.pass();
+      const readsB = workerOf(a.runtime, serve(b.runtime, clock), clock);
+      const readsA = exchangeWorker({ runtime: b.runtime, peers: [{ id: "a", url: "http://copy-a.example.test:4751" }], call: serve(a.runtime, clock), clock, configHash: HASH });
+
+      const first = await readsB.round();
+      expect(first).toMatchObject({ more: false, changed: true, problems: [], conflicts: [] });
+      expect(first.imports).toBeGreaterThan(0);
+      await readsA.round();
+      expect(shared(a.runtime.state())).toEqual(shared(b.runtime.state()));
+
+      expect(await readsB.round()).toEqual(quiet);
+      expect(readsB.watches()).toEqual([{ copy: "b", skewLimit: CLOCK_SKEW_LIMIT, maxAge: COPY_MAX_AGE, since: T0, read: { at: T0, skew: 0, sameConfig: true } }]);
+      expect(stagesOf(readsB, clock.now())).toEqual([]);
+      expect(readsB.failure("b")).toBeUndefined();
+    });
+
+    it("reads a copy that is far behind over many pages, and tells that the next round goes on at once", async () => {
+      const clock = fakeWallClock(T0);
+      const a = open("a", [], clock);
+      const b = open("b", ["w1", "w2", "w3", "w4"], clock);
+      await b.runtime.pass();
+      const worker = workerOf(a.runtime, serve(b.runtime, clock), clock, { entries: 1, pages: 2 });
+      const rounds: ExchangeRound[] = [];
+      do rounds.push(await worker.round());
+      while (rounds.at(-1)!.more && rounds.length < 100);
+      expect(rounds.length).toBeGreaterThan(1);
+      expect(rounds[0]!.more).toBe(true);
+      expect(rounds.at(-1)!.more).toBe(false);
+      expect(a.runtime.position("b")).toBe(b.log.head());
+      expect(shared(a.runtime.state()).reports.map((one) => one.key).sort()).toEqual(["w1", "w2", "w3", "w4"]);
+    });
+
+    it("gives the stages skew and config, and a read with the same clock and configuration ends them", async () => {
+      const clock = fakeWallClock(T0);
+      const a = open("a", [], clock);
+      const b = open("b", [], clock);
+      let offset = 5 * SECOND;
+      let configHash = "config-hash-2";
+      const worker = workerOf(
+        a.runtime,
+        async (_peer, input) => {
+          const output = serveEntries({ runtime: b.runtime, clock, configHash }, input);
+          return wire({ ...output, time: output.time + offset });
+        },
+        clock,
+      );
+      expect(await worker.round()).toMatchObject({ imports: 0, changed: true });
+      expect(worker.watches()[0]!.read).toEqual({ at: T0, skew: 5 * SECOND, sameConfig: false });
+      expect(stagesOf(worker, clock.now())).toEqual(["skew", "config"]);
+
+      // A difference of the limit is not above the limit.
+      offset = -CLOCK_SKEW_LIMIT;
+      configHash = HASH;
+      expect((await worker.round()).changed).toBe(true);
+      expect(stagesOf(worker, clock.now())).toEqual([]);
+    });
+
+    it("gives the stage unread when no read passes for the maximum age, and a read ends it", async () => {
+      const clock = fakeWallClock(T0);
+      const a = open("a", [], clock);
+      const b = open("b", ["w1"], clock);
+      await b.runtime.pass();
+      let down = true;
+      const serving = serve(b.runtime, clock);
+      const worker = workerOf(
+        a.runtime,
+        async (peer, input, signal) => {
+          if (down) throw new Error("The copy refused the connection.");
+          return serving(peer, input, signal);
+        },
+        clock,
+      );
+      expect(await worker.round()).toEqual(quiet);
+      expect(worker.failure("b")).toBe("The read of the copy b failed: The copy refused the connection.");
+      expect(worker.watches()[0]!.read).toBeUndefined();
+      expect(stagesOf(worker, T0 + COPY_MAX_AGE - 1)).toEqual([]);
+      expect(stagesOf(worker, T0 + COPY_MAX_AGE)).toEqual(["unread"]);
+
+      await clock.advance(COPY_MAX_AGE);
+      down = false;
+      const back = await worker.round();
+      expect(back.changed).toBe(true);
+      expect(back.imports).toBeGreaterThan(0);
+      expect(worker.failure("b")).toBeUndefined();
+      expect(stagesOf(worker, clock.now())).toEqual([]);
+    });
+
+    it("fails a read past its time limit, a bad answer and a page of another copy, with no value in a message", async () => {
+      const clock = fakeWallClock(T0);
+      const a = open("a", [], clock);
+      const b = open("b", ["w1"], clock);
+      const c = open("c", ["w1"], clock);
+      await b.runtime.pass();
+      await c.runtime.pass();
+      const head = a.log.head();
+
+      const slow = workerOf(a.runtime, hanging, clock);
+      const running = slow.round();
+      await clock.advance(EXCHANGE_LIMIT);
+      expect(await running).toEqual(quiet);
+      expect(slow.failure("b")).toBe(`The read of the copy b took longer than ${EXCHANGE_LIMIT} ms.`);
+
+      const bad = workerOf(a.runtime, async (_peer, input) => wire({ ...serveEntries({ runtime: b.runtime, clock, configHash: HASH }, input), time: HIDDEN, configHash: "" }), clock);
+      await bad.round();
+      expect(bad.failure("b")).toBe("The answer of the copy b is not valid: The time of the answer is not a finite number. The hash of the configuration is not a text of 1 to 200 characters.");
+
+      const other = workerOf(a.runtime, serve(c.runtime, clock), clock);
+      await other.round();
+      expect(other.failure("b")).toBe("The page of the copy b names another copy.");
+      expect(a.log.head()).toBe(head);
+      expect(a.runtime.position("b")).toBe(0);
+    });
+
+    it("aborts its reads at the stop, and keeps no failure of them", async () => {
+      const clock = fakeWallClock(T0);
+      const a = open("a", [], clock);
+      const worker = workerOf(a.runtime, hanging, clock);
+      const stop = new AbortController();
+      const running = worker.round(stop.signal);
+      stop.abort(new Error("shutdown"));
+      expect(await running).toEqual(quiet);
+      expect(worker.failure("b")).toBeUndefined();
+      expect(worker.watches()[0]!.read).toBeUndefined();
+    });
+
+    it("moves its times at a step of the wall clock, and a read across a step keeps its imports and gives no times", async () => {
+      const clock = fakeWallClock(T0);
+      const a = open("a", [], clock);
+      const b = open("b", ["w1"], clock);
+      await b.runtime.pass();
+      const serving = serve(b.runtime, clock);
+      // The step of the wall clock comes during the first call.
+      let steps = 1;
+      const worker = workerOf(
+        a.runtime,
+        async (peer, input, signal) => {
+          if (steps > 0) {
+            steps -= 1;
+            worker.shift(10 * SECOND);
+          }
+          return serving(peer, input, signal);
+        },
+        clock,
+      );
+      expect((await worker.round()).imports).toBeGreaterThan(0);
+      expect(worker.watches()).toEqual([{ copy: "b", skewLimit: CLOCK_SKEW_LIMIT, maxAge: COPY_MAX_AGE, since: T0 + 10 * SECOND }]);
+      expect(worker.failure("b")).toBeUndefined();
+
+      await worker.round();
+      expect(worker.watches()[0]!.read).toEqual({ at: T0, skew: 0, sameConfig: true });
+      worker.shift(-4 * SECOND);
+      expect(worker.watches()[0]).toMatchObject({ since: T0 + 6 * SECOND, read: { at: T0 - 4 * SECOND, skew: 4 * SECOND } });
+    });
+
+    it("is ready after its first round, or after one time limit when no round ends", async () => {
+      const clock = fakeWallClock(T0);
+      const a = open("a", [], clock);
+      const b = open("b", [], clock);
+      await exchangeWorker({ runtime: a.runtime, peers: [], call: hanging, clock, configHash: HASH }).ready();
+
+      const quick = workerOf(a.runtime, serve(b.runtime, clock), clock);
+      await quick.round();
+      await quick.ready();
+
+      const idle = workerOf(a.runtime, hanging, clock);
+      let ready = false;
+      void idle.ready().then(() => {
+        ready = true;
+      });
+      await clock.advance(EXCHANGE_LIMIT - 1);
+      await settle();
+      expect(ready).toBe(false);
+      await clock.advance(1);
+      await settle();
+      expect(ready).toBe(true);
+    });
+
+    it("checks the input of the procedure and the options of the worker", () => {
+      const clock = fakeWallClock(T0);
+      const b = open("b", [], clock);
+      const served = { runtime: b.runtime, clock, configHash: HASH };
+      expect(serveEntries(served, { after: 0 })).toMatchObject({ time: T0, configHash: HASH, page: { format: EXCHANGE_FORMAT, copy: "b", after: 0 } });
+      for (const after of [-1, 0.5]) expect(() => serveEntries(served, { after })).toThrow("The position after is not a whole number of 0 or more.");
+      for (const limit of [0, EXCHANGE_PAGE + 1]) expect(() => serveEntries(served, { after: 0, limit })).toThrow(`The limit is not a whole number from 1 to ${EXCHANGE_PAGE}.`);
+      expect(() => exchangeWorker({ runtime: b.runtime, peers: [B, { ...B, url: "http://copy-c.example.test:4751" }], call: hanging, clock, configHash: HASH })).toThrow("Two peers of the exchange worker have the same id.");
+      expect(() => workerOf(b.runtime, hanging, clock, { pages: 0 })).toThrow("The value pages of the exchange worker is not a whole number above 0.");
+    });
+
+    it("gives a pass the line unread of a copy, and the time of the line as a wake", async () => {
+      const clock = fakeWallClock(T0);
+      const checks: CopyChecks = { watches: () => worker.watches(), shift: (size) => worker.shift(size), ready: () => worker.ready() };
+      const runtime = openRuntime({ log: openRuntimeLog(":memory:"), clock, sources: [source(["w1"], clock)], watch: () => ({ places: [KANSAS], kinds: ["met"] }), view: VIEW, run: "run-a", copy: "a", copies: checks });
+      const worker = workerOf(
+        runtime,
+        async () => {
+          throw new Error("The copy refused the connection.");
+        },
+        clock,
+      );
+      await worker.round();
+      const first = await runtime.pass();
+      expect(first.view.step.reports.map((one) => one.kind.code)).not.toContain("system.copy.unread");
+      expect(first.wakeAt).toBeLessThanOrEqual(T0 + COPY_MAX_AGE);
+
+      await clock.advance(COPY_MAX_AGE);
+      const late = (await runtime.pass()).view.step.reports.filter((one) => one.kind.code === "system.copy.unread");
+      expect(late).toHaveLength(1);
+      expect(late[0]!.about).toEqual([{ system: COPY_SUBJECT, id: "b", label: "Copy b" }]);
+    });
   });
 });

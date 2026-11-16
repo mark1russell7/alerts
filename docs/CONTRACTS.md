@@ -255,6 +255,19 @@ A log report has no area. Its subject is `{ system: "alerts.log", id: "runtime" 
 - The line stays open for the window. At the end of the window, the line ends with a cancel.
 - The description names the quarantine folder and the count of the kept events.
 
+A copy report has no area. Its subject is `{ system: "alerts.copy", id: <copy id> }` (`COPY_SUBJECT`). Its kind is `system.copy.<stage>`, with the severity `moderate` and the urgency `expected`. Thus it gets `notice` at most. `copyStages` gives the stages of a `CopyWatch` at a time, and each stage is one line:
+
+| Stage | Condition |
+| --- | --- |
+| `skew` | The clocks of the two copies differed by more than `skewLimit` at the last read |
+| `config` | The other copy had a different hash of the configuration at the last read |
+| `unread` | No read passed for the maximum age or longer (`copyUnreadAt`) |
+
+- The facts of a line are the copy and the stage. A new difference or a new age gives no update.
+- `skew` and `config` come from the last read that passed, also when the read is old. A read that passes ends `unread`.
+- A snapshot with no copies keeps each open line of a copy.
+- The time of `unread` is a timer of the pass.
+
 `latestIn(items, at, window)` gives the latest item in a window before a time. `recentStep` and `recentRecovery` use it.
 `threats(incidents, places)` gives the watches and the warnings. A threat is a live incident with the status `actual` at a watched place. Its stage is `watch`, `warning` or absent. A report of the core has the status `system`, so it is not a threat.
 
@@ -422,6 +435,18 @@ The exchange also checks the copies. Each of these faults is a line of system re
 - the time of another copy differs from the time of this copy by more than 2 seconds, at the middle of the call
 - another copy has a different hash of the configuration: then the copies can route an alert in two ways
 - the reads of another copy fail for 60 seconds: then the two copies can both send
+
+The worker of the exchange (`exchangeWorker` of the runtime) does the reads:
+
+- A round reads each other copy at the same time. It reads the pages of a copy until the copy has no more entries, or for 20 pages.
+- A copy with more entries gives `more`. Then the next round starts at once. Else the next round starts after 5 seconds.
+- A round that imports an event or changes a stage wakes the loop of the passes.
+- Each read that passes gives the watch of its copy. The time of the read is the middle of the call, on the clock of this copy.
+- The skew is the time of the other copy minus the time of the read.
+- A failed read, a bad answer or a page of another copy is a failure of the copy. The worker keeps its message, and the last read stays.
+- A step of the wall clock moves the times of the watches, as it moves the other times of the runtime. A read with a step during its call keeps its imports, but it gives no times.
+- Each pass waits for `ready` of the worker before its view. It resolves after the first round, or after one time limit.
+- The transport is a parameter (`ExchangeCall`). `serveEntries` gives the output of the procedure on the side of the other copy.
 
 ### The checks of the copies
 

@@ -8,11 +8,13 @@
  * The end of the condition gives a cancel. The fold reads no clock.
  */
 import { canonicalJson } from "@mark1russell7/rigor-generators";
-import { BALANCE_KIND, CLOCK_KIND, COVERAGE_KIND, hasKind, HEALTH_KIND, LOG_KIND, matchPlaces, QUOTA_KIND } from "./assess.ts";
+import { BALANCE_KIND, CLOCK_KIND, COPY_KIND, COVERAGE_KIND, hasKind, HEALTH_KIND, LOG_KIND, matchPlaces, QUOTA_KIND } from "./assess.ts";
 import type {
   Area,
   BalanceStage,
   ChannelQuota,
+  CopyStage,
+  CopyWatch,
   Coverage,
   Duration,
   HealthState,
@@ -55,11 +57,17 @@ export const CLOCK_SUBJECT = "alerts.clock";
 /** The system of the subject of the log reports. The id of the subject is `runtime`: the log file of the runtime. */
 export const LOG_SUBJECT = "alerts.log";
 
+/** The subject system of another copy of the system. The id of a subject is the id of the copy. */
+export const COPY_SUBJECT = "alerts.copy";
+
 /** The stages of a quota, from the first to the last. */
 export const QUOTA_STAGES: readonly QuotaStage[] = ["low", "reserve", "spent"];
 
 /** The stages of a balance. `empty` holds `low`. `unread` comes from the time of the last read. */
 export const BALANCE_STAGES: readonly BalanceStage[] = ["low", "empty", "unread"];
+
+/** The stages of another copy. `skew` and `config` come from the last read that passed. `unread` comes from its time. */
+export const COPY_STAGES: readonly CopyStage[] = ["skew", "config", "unread"];
 
 /** The health states that start a line of health reports. */
 export const DOWN_STATES: readonly HealthState[] = ["failing", "silent", "changed"];
@@ -158,6 +166,11 @@ export interface SystemSnapshot {
    * balances, each open line of a balance stays open.
    */
   readonly balances?: readonly ProviderBalance[];
+  /**
+   * The watches of the other copies of the system. Each stage that `copyStages` gives is a condition. With no copies,
+   * each open line of a copy stays open.
+   */
+  readonly copies?: readonly CopyWatch[];
   /** The steps of the wall clock. The latest step in `CLOCK_STEP_WINDOW` before the time of the snapshot is a condition. */
   readonly steps?: readonly ClockStep[];
   /** The recoveries of the log. The latest recovery in `LOG_RECOVERY_WINDOW` before the time of the snapshot is a condition. */
@@ -220,6 +233,27 @@ export function balanceUnreadAt(balance: ProviderBalance): Instant {
 }
 
 /**
+ * This function gives the stages of another copy at the time `at`, in the order of `COPY_STAGES`.
+ *
+ * - `skew` and `config` come from the last read that passed, also when the read is old.
+ * - `unread` starts at `copyUnreadAt`. A read that passes ends it.
+ */
+export function copyStages(watch: CopyWatch, at: Instant): CopyStage[] {
+  const read = watch.read;
+  const reached: Readonly<Record<CopyStage, boolean>> = {
+    skew: read !== undefined && Math.abs(read.skew) > watch.skewLimit,
+    config: read !== undefined && !read.sameConfig,
+    unread: at >= copyUnreadAt(watch),
+  };
+  return COPY_STAGES.filter((stage) => reached[stage]);
+}
+
+/** This function gives the time when a copy reaches `unread`: the maximum age after the last read, or after the start with no read. */
+export function copyUnreadAt(watch: CopyWatch): Instant {
+  return (watch.read?.at ?? watch.since) + watch.maxAge;
+}
+
+/**
  * This function gives the latest item at `at` or before it, in `window` before `at`, or `undefined`. Of two items at
  * the same time, it gives the last in the list.
  */
@@ -257,7 +291,7 @@ export function gapGrade(entry: Coverage, threatened: boolean): { readonly sever
  * This function adds one snapshot to the fold at the time `at`. Each of these is a condition:
  *
  * - Each source in `DOWN_STATES`, each late expectation and each coverage that is short.
- * - Each stage of a quota and each stage of a balance.
+ * - Each stage of a quota, each stage of a balance and each stage of another copy.
  * - The latest step of the wall clock in `CLOCK_STEP_WINDOW` before `at`.
  * - The latest recovery of the log in `LOG_RECOVERY_WINDOW` before `at`.
  *
@@ -283,6 +317,9 @@ export function systemReports(lines: SystemLines, snapshot: SystemSnapshot, at: 
   for (const balance of snapshot.balances ?? []) {
     for (const stage of balanceStages(balance, at)) conditions.set(balanceName(balance.provider, stage), balanceCondition(balance, stage, at));
   }
+  for (const watch of snapshot.copies ?? []) {
+    for (const stage of copyStages(watch, at)) conditions.set(copyName(watch.copy, stage), copyCondition(watch, stage, at));
+  }
   const step = recentStep(snapshot.steps ?? [], at);
   if (step !== undefined) conditions.set(CLOCK_LINE, clockCondition(step));
   const recovery = recentRecovery(snapshot.recoveries ?? [], at);
@@ -297,6 +334,7 @@ export function systemReports(lines: SystemLines, snapshot: SystemSnapshot, at: 
     const condition = conditions.get(name);
     if (condition === undefined && snapshot.quotas === undefined && name.startsWith(QUOTA_LINE)) continue;
     if (condition === undefined && snapshot.balances === undefined && name.startsWith(BALANCE_LINE)) continue;
+    if (condition === undefined && snapshot.copies === undefined && name.startsWith(COPY_LINE)) continue;
     const draft = condition === undefined ? (line === undefined ? undefined : cancelOf(line)) : condition;
     if (draft === undefined) continue;
     const facts = canonicalJson(draft.facts, { form: "json" });
@@ -383,6 +421,13 @@ const BALANCE_LINE = "balance/";
 
 function balanceName(provider: string, stage: BalanceStage): string {
   return `${BALANCE_LINE}${encodeURIComponent(provider)}/${stage}`;
+}
+
+// The start of the name of each line of another copy.
+const COPY_LINE = "copy/";
+
+function copyName(copy: string, stage: CopyStage): string {
+  return `${COPY_LINE}${encodeURIComponent(copy)}/${stage}`;
 }
 
 // The name of the line of the steps of the wall clock. A step in the window of an open line gives an update.
@@ -530,6 +575,46 @@ function balanceCondition(balance: ProviderBalance, stage: BalanceStage, at: Ins
       floor: [String(floor)],
       ...(read === undefined ? {} : { balance: [String(read.balance)], currency: [read.currency] }),
       age: [String(at - (read?.at ?? balance.since))],
+    },
+  };
+}
+
+function copyCondition(watch: CopyWatch, stage: CopyStage, at: Instant): Condition {
+  const { copy, read } = watch;
+  const last = read === undefined ? `the start of the watch at ${new Date(watch.since).toISOString()}` : new Date(read.at).toISOString();
+  const skew = read === undefined ? "" : `${(Math.abs(read.skew) / 1000).toFixed(1)} s`;
+  const text: Readonly<Record<CopyStage, { readonly headline: string; readonly description: string; readonly instruction: string }>> = {
+    skew: {
+      headline: `The clock of the copy ${copy} differs from the clock of this copy by ${skew}.`,
+      description: `The rank wait holds a difference of ${(watch.skewLimit / 1000).toFixed(1)} s or less. A larger difference can let two copies send the same alert.`,
+      instruction: "Examine the time settings and the time server of each computer.",
+    },
+    config: {
+      headline: `The copy ${copy} has a different configuration.`,
+      description: "The copies can route one alert in two ways. Then a person can get an alert from each copy, or on a different channel.",
+      instruction: "Give each copy the same file config.json. Then restart each copy.",
+    },
+    unread: {
+      headline: `No read of the copy ${copy} passed since ${last}.`,
+      description: "This copy cannot see the sends of the other copy. Thus the two copies can both send each alert.",
+      instruction: "Examine the other computer and the network between the copies.",
+    },
+  };
+  const code = `${COPY_KIND}.${stage}`;
+  return {
+    // A new difference or a new age is not a fact. Thus each stage gives one alert, and no update.
+    facts: { copy, stage },
+    kind: { code, label: kindLabel(code) },
+    severity: "moderate",
+    urgency: "expected",
+    response: ["assess"],
+    areas: [],
+    about: [{ system: COPY_SUBJECT, id: copy, label: `Copy ${copy}` }],
+    ...text[stage],
+    parameters: {
+      stage: [stage],
+      ...(read === undefined ? {} : { skew: [String(read.skew)], sameConfig: [String(read.sameConfig)] }),
+      age: [String(at - (read?.at ?? watch.since))],
     },
   };
 }
