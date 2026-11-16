@@ -7,6 +7,7 @@ import { localTime } from "@mark1russell7/algebra/clock";
 import type { Address, ChannelDescriptor, ChannelId, EscalationPolicy, Instant, NodeKey, PersonId, PersonWatch, PlaceId, Position, RegionCode, SourceId, WatchedPlace } from "./contracts.ts";
 import { recipientProblems, type Recipient } from "./delivery.ts";
 import type { Expectation } from "./lateness.ts";
+import type { LinkPolicy } from "./link.ts";
 import type { WhyLabels } from "./why.ts";
 
 /** The name of the format of a configuration. A change that breaks a configuration gets a new name. */
@@ -88,6 +89,8 @@ export interface AlertConfig {
   readonly expectations?: readonly ExpectationConfig[];
   /** The money rules of each paid provider account. A provider with no entry has no cap and no watch of its balance. */
   readonly spend?: readonly SpendConfig[];
+  /** The policy of the link rule of the merge. Without it, the instance uses `DEFAULT_LINK_POLICY`. */
+  readonly link?: LinkPolicy;
 }
 
 /** The settings of one expectation of the instance, for example the WEA check of a copy source. */

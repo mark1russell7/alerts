@@ -17,9 +17,11 @@ import {
   coverageShort,
   DEFAULT_ASSESS_POLICY,
   DEFAULT_COVERAGE_POLICY,
+  DEFAULT_LINK_POLICY,
   EMPTY_STATE,
   higherLevel,
   incidents,
+  linkRule,
   NO_SYSTEM_LINES,
   observationId,
   observeFetch,
@@ -114,6 +116,9 @@ export function observe(body: string, fetched: number): Observation {
 
 const end = (record: FetchRecord): number => record.at + record.took;
 
+// The merge of the replay uses the link rule of the first policy, as the runtime does.
+const link = linkRule(DEFAULT_LINK_POLICY);
+
 /** This function does the steps in order, and gives the frame after each step. */
 export function replay(steps: readonly Step[], people: readonly PersonWatch[], places: readonly WatchedPlace[], world: SourceWorld): Frame[] {
   let state: MergeState = EMPTY_STATE;
@@ -145,7 +150,7 @@ export function replay(steps: readonly Step[], people: readonly PersonWatch[], p
     previous = step.at;
 
     // The coverage and the threats come from the health and the incidents before the system reports of this step.
-    const threatened = threats(incidents(state, step.at), places);
+    const threatened = threats(incidents(state, step.at, { link }), places);
     const covered = coverage({ sources: world.sources, health, places, kinds: world.kinds }, DEFAULT_COVERAGE_POLICY);
     const system = systemReports(lines, { sources: world.sources, health, coverage: covered, threats: threatened }, step.at);
     lines = system.lines;
@@ -155,7 +160,7 @@ export function replay(steps: readonly Step[], people: readonly PersonWatch[], p
     const head = (incident: Incident): Report =>
       incident.reports.map((id) => byId.get(id)!).reduce((best, report) => (report.sent < best.sent || (report.sent === best.sent && report.key < best.key) ? report : best));
     const order = (a: Incident, b: Incident): number => head(a).sent - head(b).sent || compare(head(a).key, head(b).key) || compare(a.anchor, b.anchor);
-    const now = incidents(state, step.at).sort(order);
+    const now = incidents(state, step.at, { link }).sort(order);
     const judge = (list: readonly Incident[]): Assessment[] => list.flatMap((incident) => people.map((person) => assess(incident, person, places, DEFAULT_ASSESS_POLICY)));
     const own = now.filter((incident) => incident.status !== "system");
     const reported = now.filter((incident) => incident.status === "system");

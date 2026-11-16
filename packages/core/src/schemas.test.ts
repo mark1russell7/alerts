@@ -75,6 +75,7 @@ import { escalate } from "./escalation.ts";
 import { observeFetch, startHealth } from "./health.ts";
 import { messageKey, observationId, reportId } from "./ids.ts";
 import { lateness, limitRule, type Lateness, type LatenessLimit, type LatenessState } from "./lateness.ts";
+import { DEFAULT_LINK_POLICY, type LinkFamily, type LinkPolicy } from "./link.ts";
 import { incidents, normalize } from "./merge.ts";
 import * as schemas from "./schemas.ts";
 import {
@@ -123,6 +124,8 @@ import {
   levelRuleSchema,
   levelSchema,
   levelTableSchema,
+  linkFamilySchema,
+  linkPolicySchema,
   locateOutcomeSchema,
   mapProblemSchema,
   mapResultSchema,
@@ -349,6 +352,8 @@ describe("the type of each schema", () => {
     expectTypeOf<z.output<typeof latenessStateSchema>>().toEqualTypeOf<LatenessState>();
     expectTypeOf<z.output<typeof latenessLimitSchema>>().toEqualTypeOf<LatenessLimit>();
     expectTypeOf<z.output<typeof latenessSchema>>().toEqualTypeOf<Lateness>();
+    expectTypeOf<z.output<typeof linkFamilySchema>>().toEqualTypeOf<LinkFamily>();
+    expectTypeOf<z.output<typeof linkPolicySchema>>().toEqualTypeOf<LinkPolicy>();
   });
 
   it("is the input type too", () => {
@@ -386,7 +391,7 @@ describe("the JSON Schema of each schema", () => {
   const exported = Object.entries(schemas).filter(([name]) => name.endsWith("Schema"));
 
   it("has each exported schema", () => {
-    expect(exported.length).toBe(99);
+    expect(exported.length).toBe(101);
     for (const [name, schema] of exported) expect(schema instanceof z.ZodType, name).toBe(true);
   });
 
@@ -700,6 +705,20 @@ describe("the private configuration", () => {
     for (const bad of [{ monthlyUsd: 0 }, { monthlyUsd: -1 }, { reserveUsd: -1 }, { floor: "5" }, { timeZone: "" }, { provider: "" }, { currency: "USD" }]) fails(spendConfigSchema, { ...spend, ...bad });
     // A reserve above the cap and a bad zone are problems of the load, with the names of the fields.
     holds(spendConfigSchema, { ...spend, reserveUsd: 20, timeZone: "Mars/Olympus" });
+  });
+
+  it("checks the form of the link policy of the merge", () => {
+    holds(linkPolicySchema, DEFAULT_LINK_POLICY);
+    holds(alertConfigSchema, { ...CONFIG, link: DEFAULT_LINK_POLICY });
+    holds(alertConfigSchema, { ...CONFIG, link: { families: [] } });
+    const family = DEFAULT_LINK_POLICY.families[0]!;
+    const { magnitude: _magnitude, ...noMagnitude } = family;
+    holds(linkFamilySchema, noMagnitude);
+    holds(linkFamilySchema, { ...family, family: "geo" });
+    fails(linkFamilySchema, { ...family, magnitude: undefined });
+    for (const bad of [{ windowMs: 0 }, { windowMs: -1 }, { windowMs: 1.5 }, { distanceKm: -1 }, { magnitude: -1 }, { family: "not.a.kind" }, { family: "" }, { extra: 1 }]) fails(linkFamilySchema, { ...family, ...bad });
+    fails(linkPolicySchema, { families: [family], extra: 1 });
+    fails(alertConfigSchema, { ...CONFIG, link: { families: [{ ...family, windowMs: 0 }] } });
   });
 
   const store = (name: string): string | undefined => (name === "PUSHOVER_USER" ? "user-test" : undefined);

@@ -78,8 +78,8 @@ export function add(state: MergeState, parts: MergeParts): MergeState {
 }
 
 /**
- * The link rule of merge rule 3. The rule of each family of kind is an open point
- * (`docs/CONTRACTS.md`). The merge tests only the pairs of reports that share a block. So the
+ * The link rule of merge rule 3. The function `linkRule` makes the rule of a policy (`link.ts`,
+ * `docs/CONTRACTS.md`). The merge tests only the pairs of reports that share a block. So the
  * cost grows with the size of the blocks, not with the square of the count of reports.
  */
 export interface LinkRule {
