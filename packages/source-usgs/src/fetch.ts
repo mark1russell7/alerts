@@ -6,7 +6,7 @@
  * The feed is global. The fetch asks with no filter, so a request names no place of the watch.
  */
 
-import { observationId, type FetchOutcome, type Instant, type Observation, type Watch } from "@mark1russell7/alerts";
+import { observationId, type FetchOutcome, type FetchSignal, type Instant, type Observation, type Watch } from "@mark1russell7/alerts";
 import { createRequester } from "@mark1russell7/alerts-fetch";
 import type { Condition, Pace, Reply, Transport } from "polite-crawler/api";
 
@@ -157,7 +157,7 @@ export function readAnswer(reply: Reply, url: string, fetched: Instant, latency:
  * observations of the last full answer again, unchanged. The fetch gives no cursor: the feed holds each
  * event of the past day.
  */
-export function createUsgsFetch(options: UsgsFetchOptions): (input: UsgsFetchInput, signal?: AbortSignal) => Promise<FetchOutcome> {
+export function createUsgsFetch(options: UsgsFetchOptions): (input: UsgsFetchInput, signal?: FetchSignal) => Promise<FetchOutcome> {
   const requester = createRequester({
     source: SOURCE_ID,
     pace: options.pace,

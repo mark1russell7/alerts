@@ -72,6 +72,7 @@ function fixture(source: string, name: string): string {
 /**
  * A fake network with recorded answers. The NWS API gives the Flood Warning to the request of the
  * state, the keepalive to the canary, and no alert to the WEA request. The IPAWS feed has no alert.
+ * The USGS and EMSC give their recorded earthquakes of 2026-11-16. No disc of these earthquakes reaches the place.
  * Each exchange takes `delay` milliseconds of real time, as on a busy runner. With `Infinity`, no exchange ends.
  */
 function network(delay = 0) {
@@ -84,6 +85,8 @@ function network(delay = 0) {
     if (delay > 0) await pause(delay);
     const url = new URL(exchange.url);
     if (url.hostname === "apps.fema.gov") return { status: 200, statusText: "OK", headers: { "content-type": "application/xml" }, body: fixture("alerts-source-ipaws", "feed-empty.xml") };
+    if (url.hostname === "earthquake.usgs.gov") return { status: 200, statusText: "OK", headers: { "content-type": "application/geo+json" }, body: fixture("alerts-source-usgs", "feed-2.5_day-20261116T0327Z.geojson") };
+    if (url.hostname === "www.seismicportal.eu") return { status: 200, statusText: "OK", headers: { "content-type": "application/json" }, body: fixture("alerts-source-emsc", "query-2.5_day-20261116T0528Z.json") };
     if (url.hostname !== "api.weather.gov") throw new Error(`The fake network has no route to ${url.hostname}.`);
     const body = nws[url.pathname + url.search] ?? collection();
     return { status: 200, statusText: "OK", headers: { "content-type": "application/geo+json" }, body };
@@ -198,11 +201,13 @@ describe("openInstance", () => {
   it("sends a recorded NWS warning for a watched county to the person on Pushover", async () => {
     const { instance, clock, net, server } = await open();
     const pass = await finish(clock, instance.runtime.pass());
-    expect(pass.fetched).toEqual(["nws-api", "ipaws"]);
+    expect(pass.fetched).toEqual(["nws-api", "ipaws", "usgs", "emsc"]);
     // A fetch that ran out of time names its cause here, before the checks of the send.
     expect(pass.view?.health.map((health) => [health.source, health.state])).toEqual([
       ["nws-api", "healthy"],
       ["ipaws", "healthy"],
+      ["usgs", "healthy"],
+      ["emsc", "healthy"],
     ]);
     expect(server.calls).toHaveLength(1);
     const [call] = server.calls;
@@ -257,9 +262,10 @@ describe("openInstance", () => {
     const outside = { ...CONFIG.places[0]!, at: [LONGITUDE, 28.46] as const };
     const { instance, clock, server } = open(store(SECRETS), { ...CONFIG, places: [outside] });
     const pass = await finish(clock, instance.runtime.pass());
-    expect(pass.fetched).toEqual(["nws-api", "ipaws"]);
+    expect(pass.fetched).toEqual(["nws-api", "ipaws", "usgs", "emsc"]);
     expect(server.calls).toHaveLength(0);
-    const [incident] = pass.view.incidents;
+    // The USGS and EMSC give earthquake incidents too. The order of the incidents is the order of their anchors.
+    const incident = pass.view.incidents.find((one) => one.kind.code !== "geo.earthquake");
     expect(incident?.areas.some((area) => area.type === "polygon")).toBe(true);
     expect(matchPlaces(incident!, [outside])).toEqual([]);
     // With a buffer of 10 km, the polygon is in the buffer of the place, and the distance decides the match.
@@ -276,6 +282,8 @@ describe("openInstance", () => {
     expect(pass.view?.health.map((health) => [health.source, health.state])).toEqual([
       ["nws-api", "healthy"],
       ["ipaws", "healthy"],
+      ["usgs", "healthy"],
+      ["emsc", "healthy"],
     ]);
     expect(server.calls.map((call) => call.fields["title"])).toEqual([expect.stringContaining("Flood Warning")]);
   });
@@ -286,6 +294,8 @@ describe("openInstance", () => {
     expect(pass.view?.health.map((health) => [health.source, health.lastFailure?.failure.message])).toEqual([
       ["nws-api", "The fetch took longer than 5000 ms."],
       ["ipaws", "The fetch took longer than 5000 ms."],
+      ["usgs", "The fetch took longer than 5000 ms."],
+      ["emsc", "The fetch took longer than 5000 ms."],
     ]);
   });
 
@@ -293,7 +303,7 @@ describe("openInstance", () => {
     const { instance, clock, net } = await open();
     await finish(clock, instance.runtime.pass());
     const hosts = new Set(net.exchanges.map((exchange) => new URL(exchange.url).hostname));
-    expect(hosts).toEqual(new Set(["api.weather.gov", "apps.fema.gov"]));
+    expect(hosts).toEqual(new Set(["api.weather.gov", "apps.fema.gov", "earthquake.usgs.gov", "www.seismicportal.eu"]));
     for (const exchange of net.exchanges) {
       expect(exchange.headers["user-agent"]).toBe(USER_AGENT_NAME);
       const text = JSON.stringify(exchange);
@@ -317,7 +327,7 @@ describe("openInstance", () => {
     // The refresh starts after the pass, and it starts no request that can end after the next fetch of a source.
     const next = Math.min(...instance.runtime.config.sources.map((source) => nextFetch(instance.runtime.state(), source)));
     expect(clock.now()).toBeLessThanOrEqual(next);
-    expect(pass.fetched).toEqual(["nws-api", "ipaws"]);
+    expect(pass.fetched).toEqual(["nws-api", "ipaws", "usgs", "emsc"]);
     expect(outcomes).toHaveLength(1);
     expect(outcomes[0]?.ok).toBe(true);
     await instance.shapes.close();
@@ -394,7 +404,7 @@ describe("openInstance", () => {
   it("gives the loop the times of the sources and of the channel", async () => {
     const { instance } = await open();
     const intervals = instance.runtime.config.sources.map((source) => source.interval);
-    expect(instance.runtime.config.sources.map((source) => source.id)).toEqual(["nws-api" as SourceId, "ipaws" as SourceId]);
+    expect(instance.runtime.config.sources.map((source) => source.id)).toEqual(["nws-api" as SourceId, "ipaws" as SourceId, "usgs" as SourceId, "emsc" as SourceId]);
     expect(instance.loop.times).toEqual({
       passLimit: Math.max(...intervals) + 2 * PUSHOVER_TIMEOUT_MS,
       retryBase: Math.min(PUSHOVER_TIMEOUT_MS, ...intervals),
