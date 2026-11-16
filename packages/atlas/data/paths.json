@@ -951,7 +951,7 @@
     "id": "www.seismicportal.eu",
     "name": "www.seismicportal.eu",
     "kind": "host",
-    "note": "The host of the feed of emsc-seismicportal-ws."
+    "note": "The host of the event service and the stream of EMSC: emsc-seismicportal-fdsn and emsc-seismicportal-ws."
   },
   {
     "id": "www.space-track.org",
