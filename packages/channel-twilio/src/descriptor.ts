@@ -42,7 +42,7 @@ export function twilioCallDescriptor(): ChannelDescriptor {
     id: CHANNEL_ID,
     title: "Twilio voice call",
     dependsOn: ["provider:twilio", "provider:carrier"],
-    uses: ["internet", "power"],
+    uses: ["internet", "dns", "power"],
     breaksThrough: true,
     repeats: false,
     ack: "none",

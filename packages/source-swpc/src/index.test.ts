@@ -29,7 +29,7 @@ describe("createSwpcSource", () => {
       transport: "poll",
       interval: 60_000,
       auth: "none",
-      uses: ["internet", "power"],
+      uses: ["internet", "dns", "power"],
     });
     expect(SWPC_DESCRIPTOR.listing).toBeUndefined();
     expect(SWPC_DESCRIPTOR.maxQuiet).toBeUndefined();

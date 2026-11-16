@@ -16,6 +16,13 @@
     "@mark1russell7/text": "^0.0.10"
   },
   "devDependencies": {
+    "@mark1russell7/alerts-source-emsc": "workspace:*",
+    "@mark1russell7/alerts-source-iem": "workspace:*",
+    "@mark1russell7/alerts-source-ipaws": "workspace:*",
+    "@mark1russell7/alerts-source-nws-api": "workspace:*",
+    "@mark1russell7/alerts-source-swpc": "workspace:*",
+    "@mark1russell7/alerts-source-tsunami": "workspace:*",
+    "@mark1russell7/alerts-source-usgs": "workspace:*",
     "@mark1russell7/cue": "^2.0.0",
     "@types/node": "^26.6.5",
     "@vitest/coverage-v8": "^5.0.3",

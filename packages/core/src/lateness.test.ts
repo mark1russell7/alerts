@@ -78,7 +78,7 @@ function descriptor(id: SourceId, provider: string): SourceDescriptor {
     title: id === API ? "The API" : "The WEA feed",
     origins: ["nws"],
     dependsOn: [`provider:${provider}`],
-    uses: ["internet", "power"],
+    uses: ["internet", "dns", "power"],
     kinds: ["met"],
     coverage: [{ type: "code", system: "ugc", code: "KSZ083" }],
     transport: "poll",

@@ -12,12 +12,6 @@
     "note": "The host of the feed of acled-api."
   },
   {
-    "id": "akamai",
-    "name": "Akamai, the content network in front of api.weather.gov",
-    "kind": "provider",
-    "note": "A DNS lookup of api.weather.gov on 2026-11-15 gave the canonical name sancert.weather.gov.edgekey.net, a name of Akamai."
-  },
-  {
     "id": "amberalert.ojp.gov",
     "name": "amberalert.ojp.gov",
     "kind": "host",
@@ -210,18 +204,6 @@
     "note": "The host of the feed of ipaws-open."
   },
   {
-    "id": "arcgis-online",
-    "name": "ArcGIS Online of Esri",
-    "kind": "provider",
-    "note": "The NIFC open data site is an ArcGIS Hub site of Esri."
-  },
-  {
-    "id": "atlassian-statuspage",
-    "name": "Atlassian Statuspage",
-    "kind": "provider",
-    "note": "These status pages run on Atlassian Statuspage, the provider of the public JSON API."
-  },
-  {
     "id": "aviation-safety.net",
     "name": "aviation-safety.net",
     "kind": "host",
@@ -240,22 +222,58 @@
     "note": "The host of the feed of cbp-bwt."
   },
   {
+    "id": "carrier:ipaws-open",
+    "name": "IPAWS-OPEN, the alert aggregator of FEMA",
+    "kind": "carrier",
+    "note": "FEMA IPAWS-OPEN collects the alerts of the NWS and of the alerting authorities, and the feed publishes them."
+  },
+  {
+    "id": "carrier:noaaport",
+    "name": "NOAAPort, the satellite broadcast of the NWS products",
+    "kind": "carrier",
+    "note": "IEM reads the NWS text products from NOAAPort and makes its VTEC database from them."
+  },
+  {
+    "id": "carrier:pacer",
+    "name": "PACER, the court records system of the US federal courts",
+    "kind": "carrier",
+    "note": "CourtListener gets the dockets from PACER, through RECAP."
+  },
+  {
+    "id": "carrier:polymarket-clob",
+    "name": "The central limit order book of Polymarket",
+    "kind": "carrier",
+    "note": "The CLOB API and the market websocket give the data of one order book."
+  },
+  {
     "id": "cdn-api.cboe.com",
     "name": "cdn-api.cboe.com",
     "kind": "host",
     "note": "The host of the feed of cboe-vix-history."
   },
   {
+    "id": "cdn:akamai",
+    "name": "Akamai, the content network in front of api.weather.gov",
+    "kind": "cdn",
+    "note": "A DNS lookup of api.weather.gov on 2026-11-15 gave the canonical name sancert.weather.gov.edgekey.net, a name of Akamai."
+  },
+  {
+    "id": "cdn:cloudflare",
+    "name": "Cloudflare, the content network in front of apps.fema.gov",
+    "kind": "cdn",
+    "note": "The answers of the IPAWS feed on 2026-11-16 had the header Server: cloudflare and a CF-RAY header."
+  },
+  {
+    "id": "cdn:cloudfront",
+    "name": "Amazon CloudFront, the content network in front of earthquake.usgs.gov and services.swpc.noaa.gov",
+    "kind": "cdn",
+    "note": "The answers of the USGS feed on 2026-11-16 had the header x-cache: Hit from cloudfront. The answers of the SWPC list on 2026-11-16 had the same header and a Via header of CloudFront."
+  },
+  {
     "id": "clob.polymarket.com",
     "name": "clob.polymarket.com",
     "kind": "host",
     "note": "The host of the feed of polymarket-clob-api."
-  },
-  {
-    "id": "cloudfront",
-    "name": "Amazon CloudFront, the content network in front of earthquake.usgs.gov and services.swpc.noaa.gov",
-    "kind": "provider",
-    "note": "The answers of the USGS feed on 2026-11-16 had the header x-cache: Hit from cloudfront. The answers of the SWPC list on 2026-11-16 had the same header and a Via header of CloudFront."
   },
   {
     "id": "coastalscience.noaa.gov",
@@ -408,12 +426,6 @@
     "note": "The host of the feed of insight-prediction-site."
   },
   {
-    "id": "ipaws-open",
-    "name": "IPAWS-OPEN, the alert aggregator of FEMA",
-    "kind": "carrier",
-    "note": "FEMA IPAWS-OPEN collects the alerts of the NWS and of the alerting authorities, and the feed publishes them."
-  },
-  {
     "id": "ll.thespacedevs.com",
     "name": "ll.thespacedevs.com",
     "kind": "host",
@@ -456,12 +468,6 @@
     "note": "NOAA publishes the GLM files in its open data buckets in the cloud."
   },
   {
-    "id": "noaaport",
-    "name": "NOAAPort, the satellite broadcast of the NWS products",
-    "kind": "carrier",
-    "note": "IEM reads the NWS text products from NOAAPort and makes its VTEC database from them."
-  },
-  {
     "id": "nrc.uscg.mil",
     "name": "nrc.uscg.mil",
     "kind": "host",
@@ -486,22 +492,10 @@
     "note": "The host of the feed of ofac-recent-actions, ofac-sanctions-list-service."
   },
   {
-    "id": "pacer",
-    "name": "PACER, the court records system of the US federal courts",
-    "kind": "carrier",
-    "note": "CourtListener gets the dockets from PACER, through RECAP."
-  },
-  {
     "id": "pollen.googleapis.com",
     "name": "pollen.googleapis.com",
     "kind": "host",
     "note": "The host of the feed of google-pollen-api."
-  },
-  {
-    "id": "polymarket-clob",
-    "name": "The central limit order book of Polymarket",
-    "kind": "carrier",
-    "note": "The CLOB API and the market websocket give the data of one order book."
   },
   {
     "id": "portal.apic4e.faa.gov",
@@ -526,6 +520,18 @@
     "name": "promedmail.org",
     "kind": "host",
     "note": "The host of the feed of promed."
+  },
+  {
+    "id": "provider:arcgis-online",
+    "name": "ArcGIS Online of Esri",
+    "kind": "provider",
+    "note": "The NIFC open data site is an ArcGIS Hub site of Esri."
+  },
+  {
+    "id": "provider:atlassian-statuspage",
+    "name": "Atlassian Statuspage",
+    "kind": "provider",
+    "note": "These status pages run on Atlassian Statuspage, the provider of the public JSON API."
   },
   {
     "id": "recalls-rappels.canada.ca",

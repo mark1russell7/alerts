@@ -34,7 +34,7 @@ function source(id: string, fields: Partial<SourceDescriptor> = {}): SourceDescr
     title: `The source ${id}`,
     origins: ["https://example.test"],
     dependsOn: [`provider:${id}`],
-    uses: ["internet", "power"],
+    uses: ["internet", "dns", "power"],
     kinds: ["met"],
     coverage: US,
     transport: "poll",
@@ -115,7 +115,7 @@ describe("coverage", () => {
 
   it("finds the one domain that stops two sources", () => {
     const [entry] = coverage({ sources: [API, MIRROR], health: [healthOf("api", "healthy"), healthOf("mirror", "healthy")], places: [KANSAS], kinds: [TORNADO] });
-    expect(entry).toMatchObject({ independent: 1, faults: ["cdn:x"], commonResources: ["internet", "power"], required: 2 });
+    expect(entry).toMatchObject({ independent: 1, faults: ["cdn:x"], commonResources: ["internet", "dns", "power"], required: 2 });
     expect(coverageShort(entry!)).toBe(true);
   });
 
@@ -173,7 +173,7 @@ describe("coverage", () => {
     const states: HealthState[] = ["healthy", "slow", "failing", "unknown", "silent", "changed"];
     for (let round = 0; round < 150; round += 1) {
       const sources = Array.from({ length: r.int(0, 6) }, (_, n) =>
-        source(`s${n}`, { dependsOn: Array.from({ length: r.int(0, 3) }, () => pool[r.int(0, pool.length - 1)]!), uses: r.chance(0.5) ? ["internet", "power"] : ["receiver", "power"] }),
+        source(`s${n}`, { dependsOn: Array.from({ length: r.int(0, 3) }, () => pool[r.int(0, pool.length - 1)]!), uses: r.chance(0.5) ? ["internet", "dns", "power"] : ["receiver", "power"] }),
       );
       const health = sources.map((entry) => healthOf(entry.id, states[r.int(0, states.length - 1)]!));
       const [entry] = coverage({ sources, health, places: [KANSAS], kinds: [TORNADO] });
@@ -183,7 +183,7 @@ describe("coverage", () => {
       // The faults stop each source that is up, and no smaller set of domains does.
       expect(up.every((one) => failureDomains(one).some((domain) => entry!.faults.includes(domain))), label).toBe(true);
       expect(entry!.independent, label).toBe(smallestCut(up.map(failureDomains)));
-      expect(entry!.commonResources, label).toEqual(up.length === 0 ? [] : up.every((one) => one.uses.includes("internet")) ? ["internet", "power"] : up.every((one) => one.uses.includes("receiver")) ? ["power", "receiver"] : ["power"]);
+      expect(entry!.commonResources, label).toEqual(up.length === 0 ? [] : up.every((one) => one.uses.includes("internet")) ? ["internet", "dns", "power"] : up.every((one) => one.uses.includes("receiver")) ? ["power", "receiver"] : ["power"]);
     }
   });
 });

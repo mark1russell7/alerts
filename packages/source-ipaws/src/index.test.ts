@@ -25,7 +25,7 @@ describe("createIpawsSource", () => {
       transport: "poll",
       interval: 60_000,
       auth: "none",
-      uses: ["internet", "power"],
+      uses: ["internet", "dns", "power"],
     });
     expect(IPAWS_DESCRIPTOR.kinds).toEqual(KIND_PREFIXES);
     expect(IPAWS_DESCRIPTOR.dependsOn).not.toContain("provider:nws-api");

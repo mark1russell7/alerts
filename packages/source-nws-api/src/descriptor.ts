@@ -17,7 +17,7 @@ export const NWS_DESCRIPTOR: SourceDescriptor = {
   origins: [NWS_ORIGIN],
   // The NWS API answers through the Akamai network (api.weather.gov is a name of edgekey.net)
   dependsOn: ["provider:nws-api", "cdn:akamai"],
-  uses: ["internet", "power"],
+  uses: ["internet", "dns", "power"],
   kinds: KIND_PREFIXES,
   coverage: COVERAGE,
   transport: "poll",

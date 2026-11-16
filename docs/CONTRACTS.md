@@ -126,7 +126,7 @@ The rules of each adapter:
 
    Fatal and lossy problems move the health to `changed`. Notes do not. So a renamed value that the map replaces with a fallback shows in the health.
    When the map cannot read an area or a subject that a watch can match, it gives a fatal problem. A place with no position matches only by codes, so an area needs a region code or a place.
-3. **The descriptor tells the truth about dependencies.** `origins` names the authorities whose messages the source carries. `dependsOn` names the failure domains outside the cell: providers, CDNs, transmitters. `uses` names the resources of the cell: `internet`, `power`, `receiver`. The coverage uses both.
+3. **The descriptor tells the truth about dependencies.** `origins` names the authorities whose messages the source carries. `dependsOn` names the failure domains outside the cell: providers, CDNs, carriers, transmitters. Each id starts with its kind, for example `cdn:akamai`. `uses` names the resources of the cell: `internet`, `dns`, `power`, `receiver`. The coverage uses both.
 4. **The ids are hashes of content.** The core gives the id functions in `ids.ts`. An adapter does not make its own ids.
    - `observationId`: the SHA-256 of the source id, the content type, the request URL and the body. The fetch time is not part of it, so a poll with no change gives the same id. The URL is the part that the `map` function reads. A URL with the time of the poll gives the URL with no time, and a test holds that `map` does not read the time.
    - `reportId`: the SHA-256 of the source id, the source key and the sent time. A message with two or more reports adds the part of each report, for example the info block `info[1]` of a CAP message.
@@ -171,7 +171,7 @@ The system uses two kinds of independence, and keeps them apart:
 - **Independence for coverage** asks: "can one fault stop both sources?" Two sources are independent when their `dependsOn` sets have no shared domain. The NWS API and the NOAA Weather Radio are independent: one comes from a provider on the internet, and the other comes from a transmitter.
 - **Independence for corroboration** asks: "are these two witnesses, or one witness twice?" Two sources are independent when their `origins` differ. A news story that repeats an NWS warning is not a second witness.
 
-The cell is the copy of the system on one machine. Its internet link, its power and its receivers are common to each of its sources. So a source names them in `uses`, not in `dependsOn`. Else each internet source falls into one group, and the coverage cannot tell two providers apart.
+The cell is the copy of the system on one machine. Its internet link, its DNS resolver, its power and its receivers are common to each of its sources. A source that uses `internet` also uses `dns`. So a source names them in `uses`, not in `dependsOn`. Else each internet source falls into one group, and the coverage cannot tell two providers apart.
 
 `coverage(input, policy)` gives the coverage of each kind at each place. It is a pure calculation on the descriptors, the health of the sources and the places.
 
@@ -516,7 +516,8 @@ The owner of the project decided this rule on 2026-11-15. The target is the most
 The origins and the paths are data:
 
 - An origin is the body that issues a signal, for example the NWS. `origins.json` is the closed list of the origins.
-- A path starts with the host that the adapter reads. Then come the carriers and the providers, for example NOAAPort or IPAWS-OPEN. `paths.json` is the closed list of the parts.
+- A path starts with the host that the adapter reads. Then come the CDNs, the carriers and the providers, for example `cdn:akamai` or `carrier:noaaport`. `paths.json` is the closed list of the parts.
+- The id of each part that is not a host starts with its kind. The `dependsOn` of a descriptor uses the same ids. A test of the atlas checks that each adopted adapter names each CDN and carrier of its path.
 - Each source names its origins and its path. The gate checks each id against its list, and each entry of a list has a source.
 - An origin or a part that the research did not find has the id `unknown`. It is a gap of the research, not a gap of the cover.
 - A layer does not count an unknown origin or a path with an unknown part. Each round records the two counts of unknowns (`unknownOrigins` and `unknownPaths`).

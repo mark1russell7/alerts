@@ -230,13 +230,13 @@ export type Transport = "poll" | "stream" | "push" | "radio";
 
 /**
  * A resource of the cell. The cell is the copy of the system on one machine. Each source of the
- * cell uses the same internet link, the same power and the same receivers. So the fault of a
+ * cell uses the same internet link, the same DNS resolver, the same power and the same receivers. So the fault of a
  * resource is a common fault of the cell, not the fault of one source.
  */
-export type CellResource = "internet" | "power" | "receiver";
+export type CellResource = "internet" | "dns" | "power" | "receiver";
 
 /** The resources of the cell, in their order in a report. */
-export const CELL_RESOURCES: readonly CellResource[] = ["internet", "power", "receiver"];
+export const CELL_RESOURCES: readonly CellResource[] = ["internet", "dns", "power", "receiver"];
 
 /** The facts of a source. The core uses them for the schedule, the health and the coverage. */
 export interface SourceDescriptor {
@@ -245,13 +245,14 @@ export interface SourceDescriptor {
   /** The authorities whose messages the source carries, for example `nws` or `usgs`. */
   readonly origins: readonly string[];
   /**
-   * The failure domains outside the cell that the source needs: providers, CDNs, transmitters and
-   * regions. Examples: `provider:nws-api`, `cdn:akamai`, `rf:nwr`. Two sources with a shared
+   * The failure domains outside the cell that the source needs: providers, CDNs, carriers, transmitters
+   * and regions. Examples: `provider:nws-api`, `cdn:akamai`, `carrier:noaaport`, `rf:nwr`. The kind of a
+   * domain comes before the colon. The paths of the atlas use the same ids. Two sources with a shared
    * domain are not independent for coverage. Do not put the resources of the cell here.
    */
   readonly dependsOn: readonly string[];
   /**
-   * The resources of the cell that the source uses. An internet source uses `internet` and
+   * The resources of the cell that the source uses. An internet source uses `internet`, `dns` and
    * `power`. A radio source uses `receiver` and `power`.
    */
   readonly uses: readonly CellResource[];
@@ -567,7 +568,7 @@ export interface ChannelDescriptor {
   readonly dependsOn: readonly string[];
   /**
    * The resources of the cell that the channel uses. A push or a text through an API uses
-   * `internet` and `power`. Thus a fault of the internet link stops each source and each such
+   * `internet`, `dns` and `power`. Thus a fault of the internet link stops each source and each such
    * channel together.
    */
   readonly uses: readonly CellResource[];

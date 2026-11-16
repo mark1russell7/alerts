@@ -26,7 +26,7 @@ describe("createEmscSource", () => {
       transport: "poll",
       interval: 60_000,
       auth: "none",
-      uses: ["internet", "power"],
+      uses: ["internet", "dns", "power"],
       listing: "snapshot",
     });
     expect(EMSC_DESCRIPTOR.coverage).toContainEqual({ type: "code", system: "iso3166", code: "US" });

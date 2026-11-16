@@ -22,11 +22,11 @@ describe("createIemSource", () => {
     expect(IEM_DESCRIPTOR).toMatchObject({
       id: "iem",
       origins: [NWS_ORIGIN],
-      dependsOn: ["provider:iem"],
+      dependsOn: ["provider:iem", "carrier:noaaport"],
       transport: "poll",
       interval: 120_000,
       auth: "none",
-      uses: ["internet", "power"],
+      uses: ["internet", "dns", "power"],
       listing: "snapshot",
     });
     expect(IEM_DESCRIPTOR.kinds).toEqual(VTEC_KIND_PREFIXES);

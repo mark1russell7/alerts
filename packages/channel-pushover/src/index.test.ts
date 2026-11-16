@@ -137,7 +137,7 @@ describe("the descriptor", () => {
   it("names the push service of the platform, and the resources of the cell", () => {
     expect(pushoverDescriptor("ios").dependsOn).toEqual(["provider:pushover", "provider:apns"]);
     expect(pushoverDescriptor("android").dependsOn).toEqual(["provider:pushover", "provider:fcm"]);
-    expect(pushoverDescriptor()).toMatchObject({ id: "pushover", uses: ["internet", "power"], breaksThrough: true, repeats: true, ack: "poll", maxTitle: 250, maxBody: 1024 });
+    expect(pushoverDescriptor()).toMatchObject({ id: "pushover", uses: ["internet", "dns", "power"], breaksThrough: true, repeats: true, ack: "poll", maxTitle: 250, maxBody: 1024 });
     // A push takes the why line of the push limit.
     expect(pushoverDescriptor().why).toEqual(WHY_LIMITS.push);
     const fake = server();

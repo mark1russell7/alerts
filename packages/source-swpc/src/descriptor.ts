@@ -18,7 +18,7 @@ export const SWPC_DESCRIPTOR: SourceDescriptor = {
   title: "SWPC: the space weather alerts, watches, warnings and summaries of the NOAA",
   origins: [NWS_ORIGIN],
   dependsOn: ["provider:swpc", "cdn:cloudfront"],
-  uses: ["internet", "power"],
+  uses: ["internet", "dns", "power"],
   kinds: SWPC_KINDS,
   coverage: "global",
   transport: "poll",

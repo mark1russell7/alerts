@@ -94,7 +94,7 @@ const SOURCE: SourceProcedures = {
     title: "The source api",
     origins: ["nws"],
     dependsOn: ["provider:api"],
-    uses: ["internet", "power"],
+    uses: ["internet", "dns", "power"],
     kinds: ["met"],
     coverage: [{ type: "code", system: "ugc", code: "KSZ083" }],
     transport: "poll",
@@ -135,7 +135,7 @@ interface Script {
 function channel(id: ChannelId, ack: ChannelDescriptor["ack"], now: () => number, script: Script = {}): { readonly procedures: ChannelProcedures; readonly calls: Calls } {
   const calls: Calls = { send: [], copies: [], status: [], cancel: [], stops: [] };
   const procedures: ChannelProcedures = {
-    describe: () => ({ id, title: id, dependsOn: [], uses: ["internet"], breaksThrough: true, repeats: ack === "poll", ack, maxTitle: 250, maxBody: 1024, ...script.describe }),
+    describe: () => ({ id, title: id, dependsOn: [], uses: ["internet", "dns"], breaksThrough: true, repeats: ack === "poll", ack, maxTitle: 250, maxBody: 1024, ...script.describe }),
     send: async ({ message, copy }) => {
       calls.send.push(message);
       calls.copies.push(copy);
