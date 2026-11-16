@@ -13,6 +13,7 @@ import type {
   Instant,
   InterestEdge,
   InterestGraph,
+  Mute,
   MuteEffect,
   NodeKey,
   Relevance,
@@ -68,9 +69,25 @@ interface Part {
 // Code-point order. It does not depend on the locale.
 const byText = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
 
-// The hit edges in the order of their nodes, then the edges of the graph that are on, in the order of their ids. Thus
-// the order of the entries, of the edges and of a file has no effect on the result.
-function partsOf(input: RelevanceInput, graph: InterestGraph): readonly Part[] {
+// The mutes that have effect at the time of the input, and whose kinds match its kind or that have no kinds.
+function activeMutes(input: RelevanceInput, graph: InterestGraph): readonly Mute[] {
+  return graph.mutes
+    .filter((mute) => mute.until === undefined || mute.until > input.at)
+    .filter((mute) => mute.kinds === undefined || hasKind(mute.kinds, input.kind));
+}
+
+// The nodes that the active mutes cut from the graph: their subjects. An incident of the mandatory class under the policy
+// `silent` has no cut, because a mute changes only its sound.
+function cutOf(input: RelevanceInput, graph: InterestGraph, policy: RelevancePolicy): ReadonlySet<NodeKey> {
+  if (input.mandatory && policy.mandatory === "silent") return new Set();
+  return new Set(activeMutes(input, graph).flatMap((mute) => mute.subjects ?? []));
+}
+
+// The hit edges in the order of their nodes, then the edges of the graph that are on, in the order of their ids. Each
+// edge into or out of a node of the cut is off. Thus the order of the entries, of the edges and of a file has no effect
+// on the result.
+function partsOf(input: RelevanceInput, graph: InterestGraph, policy: RelevancePolicy): readonly Part[] {
+  const cut = cutOf(input, graph, policy);
   const entries = new Map<NodeKey, SubjectEntry>();
   for (const entry of input.entries) {
     if (entry.node === PERSON) throw new RangeError("An entry of an incident is a subject, not the person.");
@@ -83,10 +100,10 @@ function partsOf(input: RelevanceInput, graph: InterestGraph): readonly Part[] {
     if (ids.has(edge.id)) throw new RangeError(`The id ${edge.id} is on two edges of the graph.`);
     ids.add(edge.id);
     if (edge.from === PERSON) throw new RangeError(`The edge ${edge.id} starts at the person.`);
-    if (edge.on) edges.push(edge);
+    if (edge.on && !cut.has(edge.from) && !cut.has(edge.to)) edges.push(edge);
   }
   edges.sort((a, b) => byText(a.id, b.id));
-  const hits = [...entries.values()].sort((a, b) => byText(a.node, b.node));
+  const hits = [...entries.values()].filter((entry) => !cut.has(entry.node)).sort((a, b) => byText(a.node, b.node));
   return [
     ...hits.map((entry): Part => ({ from: EVENT, to: entry.node, weight: entry.hit, entry })),
     ...edges.map((edge): Part => ({ from: edge.from, to: edge.to, weight: edge.weight, edge })),
@@ -108,8 +125,9 @@ function solve<N>(parts: readonly Part[], end: ReachEnd, arithmetic: ReachArithm
 
 /**
  * This function gives the reach of an incident at one end of the intervals, in the arithmetic of `arithmetic`. It
- * does not apply the mutes. The result is the result of `twoTerminalReliability` over the hit edges and the edges
- * that are on. The gates use it with exact rationals.
+ * applies the cut of the mutes, and not the match of `muteOf`. The result is the result of `twoTerminalReliability`
+ * over the hit edges and the edges that are on. No edge goes into or out of a muted subject. The gates use it with
+ * exact rationals.
  */
 export function reachOf<N>(
   input: RelevanceInput,
@@ -119,18 +137,18 @@ export function reachOf<N>(
   end: ReachEnd = "value",
   options: RelevanceOptions = {},
 ): TwoTerminalReliability<N> {
-  return solve(partsOf(input, graph), end, arithmetic, policy, options.maxSteps);
+  return solve(partsOf(input, graph, policy), end, arithmetic, policy, options.maxSteps);
 }
 
 /**
  * This function gives the mute of the graph that matches the incident, and its effect, or `undefined`. A mute has
- * effect when it has no end or its end is after `input.at`. Of two matched mutes, the mute with the first id wins.
+ * effect when it has no end or its end is after `input.at`. A mute with subjects matches when one of its subjects is
+ * an entry. Of two matched mutes, the mute with the first id wins. A mute with subjects that does not match cuts its
+ * subjects from the graph (`reachOf`).
  */
 export function muteOf(input: RelevanceInput, graph: InterestGraph, policy: RelevancePolicy): { readonly mute: string; readonly effect: MuteEffect } | undefined {
   const nodes = new Set(input.entries.map((entry) => entry.node));
-  const matched = graph.mutes
-    .filter((mute) => mute.until === undefined || mute.until > input.at)
-    .filter((mute) => mute.kinds === undefined || hasKind(mute.kinds, input.kind))
+  const matched = activeMutes(input, graph)
     .filter((mute) => mute.subjects === undefined || mute.subjects.some((node) => nodes.has(node)))
     .sort((a, b) => byText(a.id, b.id));
   const first = matched[0];
@@ -168,6 +186,8 @@ function highOf(result: TwoTerminalReliability<number>): number {
  * This function gives the relevance of an incident for one person.
  *
  * - A mute with the effect `absent` gives a reach of 0 and no path.
+ * - A mute with subjects cuts each subject from the graph: each edge into or out of a muted subject is off. Thus no
+ *   path goes through a muted subject. An incident of the mandatory class under the policy `silent` has no cut.
  * - The reach is the exact two-terminal reliability from the event to the person, over paths of `policy.hopCap` edges
  *   of the graph or fewer. The interval comes from the low and the high ends of the weights and the hits.
  * - When the budget of steps ends a sum, the field `bound` tells it. The reach is then the ceiling, so an alert is not lost.
@@ -176,7 +196,7 @@ function highOf(result: TwoTerminalReliability<number>): number {
 export function relevance(input: RelevanceInput, graph: InterestGraph, policy: RelevancePolicy, options: RelevanceOptions = {}): Relevance {
   const muted = muteOf(input, graph, policy);
   if (muted?.effect === "absent") return { reach: NONE, best: 0, noisyOr: 0, paths: [], muted };
-  const parts = partsOf(input, graph);
+  const parts = partsOf(input, graph, policy);
   const point = solve(parts, "value", FLOAT_REACH, policy, options.maxSteps);
   // A float sum can pass 1 by a unit in the last place, so each end stays in the unit interval.
   const low = Math.min(1, lowOf(solve(parts, "low", FLOAT_REACH, policy, options.maxSteps)));

@@ -177,6 +177,39 @@ describe("the gate: an opt-out wins", () => {
       if (why.via !== undefined) expect(on.some((e) => e.from === why.subject && e.to === why.via), label).toBe(true);
     }
   });
+
+  it.each(SEEDS)("cuts each muted subject that is not an entry: each path through it goes, and the reach does not rise (seed %i)", (seed) => {
+    const r = random(seed);
+    for (let round = 0; round < 100; round += 1) {
+      const c = randomCase(r);
+      const entries = new Set(c.input.entries.map((e) => e.node));
+      const others = SUBJECTS.map(([node]) => node).filter((node) => !entries.has(node));
+      const subjects = r.shuffle(others).slice(0, r.int(1, 2));
+      if (subjects.length === 0) continue;
+      const mute: Mute = { id: "m", subjects, ...(r.chance(0.5) ? { kinds: [c.input.kind.split(".")[0]!] } : {}), date: "2026-11-15" };
+      const muted: Case = { ...c, graph: graphOf(c.graph.edges, [mute]) };
+      // The same graph with each edge into or out of a muted subject off.
+      const cut: Case = { ...c, graph: graphOf(c.graph.edges.map((e) => (subjects.includes(e.from) || subjects.includes(e.to) ? { ...e, on: false } : e))) };
+      const label = `seed ${seed} round ${round}`;
+      for (const end of ["low", "value", "high"] as const) expect(exactValue(muted, end), label).toEqual(exactValue(cut, end));
+      expect(compare(exactValue(muted), exactValue(c)), label).toBeLessThanOrEqual(0);
+      const result = relevance(muted.input, muted.graph, c.policy);
+      expect(result, label).toEqual(relevance(cut.input, cut.graph, c.policy));
+      expect(result.muted, label).toBeUndefined();
+      const named = [result.why?.subject, result.why?.via, result.why?.anchor, ...result.paths.map((path) => path.subject)];
+      expect(named.some((node) => node !== undefined && subjects.includes(node)), label).toBe(false);
+      const ids = new Set(c.graph.edges.filter((e) => subjects.includes(e.from) || subjects.includes(e.to)).map((e) => e.id));
+      expect(result.paths.some((path) => path.edges.some((id) => ids.has(id))), label).toBe(false);
+      // The mandatory class: under the policy `silent`, a mute changes only the sound, so it cuts nothing.
+      const mandatory = { ...c.input, mandatory: true };
+      const expected = c.policy.mandatory === "silent" ? relevance(mandatory, c.graph, c.policy) : relevance(mandatory, cut.graph, c.policy);
+      expect(relevance(mandatory, muted.graph, c.policy), label).toEqual(expected);
+      // A mute of another kind and a mute that ended cut nothing.
+      const plain = relevance(c.input, c.graph, c.policy);
+      expect(relevance(c.input, graphOf(c.graph.edges, [{ ...mute, kinds: ["zz"] }]), c.policy), label).toEqual(plain);
+      expect(relevance(c.input, graphOf(c.graph.edges, [{ ...mute, until: AT }]), c.policy), label).toEqual(plain);
+    }
+  });
 });
 
 describe("the gate: one answer in any order", () => {
@@ -301,6 +334,8 @@ describe("the gate: who each class reaches", () => {
     readonly reach: Estimate;
     readonly why?: { readonly rule: string; readonly anchor: NodeKey; readonly via?: NodeKey; readonly coverage: number };
     readonly muted?: string;
+    /** The mutes of the row, after the mutes of the person. */
+    readonly mutes?: readonly Mute[];
   }[] = [
     {
       name: "a tornado warning near the home, after the mute ends",
@@ -331,6 +366,21 @@ describe("the gate: who each class reaches", () => {
       why: { rule: "reach.entity.person", anchor: "domain:bank.example", coverage: 1 },
     },
     {
+      name: "an outage of the DNS provider, with the bank muted",
+      input: input("infra.telecom", [entry("domain:dns.example", "entity")]),
+      mutes: [{ id: "m2", subjects: ["domain:bank.example"], date: "2026-11-15" }],
+      // Only the path through the web service stays: 0.4 * 0.4.
+      reach: { value: 0.16, low: 0.06, high: 0.3 },
+      why: { rule: "reach.entity.work", anchor: "domain:web.example", coverage: 1 },
+    },
+    {
+      name: "an outage of the DNS provider, with a mute of the weather alerts about the bank",
+      input: input("infra.telecom", [entry("domain:dns.example", "entity")]),
+      mutes: [{ id: "m2", kinds: ["met"], subjects: ["domain:bank.example"], date: "2026-11-15" }],
+      reach: { value: 0.6892, low: 0.5864, high: 0.79 },
+      why: { rule: "reach.entity.person", anchor: "domain:bank.example", coverage: 1 },
+    },
+    {
       name: "an outage of the cloud region, with one shown path",
       input: input("infra.telecom", [entry("provider-region:cloud/east-1", "entity")]),
       policy: { ...POLICY, topPaths: 1 },
@@ -354,7 +404,8 @@ describe("the gate: who each class reaches", () => {
   ];
 
   it.each(rows)("$name", (row) => {
-    const result = relevance(row.input, PERSON_GRAPH, row.policy ?? POLICY);
+    const graph = row.mutes === undefined ? PERSON_GRAPH : graphOf(EDGES, [...MUTES, ...row.mutes]);
+    const result = relevance(row.input, graph, row.policy ?? POLICY);
     expect(relevanceSchema.parse(result)).toEqual(result);
     expect(result.reach.value).toBeCloseTo(row.reach.value, 12);
     expect(result.reach.low).toBeCloseTo(row.reach.low, 12);
@@ -451,6 +502,12 @@ describe("muteOf", () => {
     expect(muteOf(input("met.tornado", [entry("place:home", "place")]), graph, POLICY)).toEqual({ mute: "m1", effect: "absent" });
     expect(muteOf(input("met.tornado", [entry("place:work", "place")]), graph, POLICY)).toEqual({ mute: "m2", effect: "absent" });
     expect(muteOf(input("metro.closure", [entry("place:home", "place")]), graph, POLICY)).toBeUndefined();
+  });
+
+  it("does not match a mute of a subject that is not an entry: that mute cuts its subject", () => {
+    const bank = graphOf(EDGES, [{ id: "m3", subjects: ["domain:bank.example"], date: "2026-11-15" }]);
+    expect(muteOf(input("infra.telecom", [entry("domain:dns.example", "entity")]), bank, POLICY)).toBeUndefined();
+    expect(muteOf(input("infra.telecom", [entry("domain:bank.example", "entity")]), bank, POLICY)).toEqual({ mute: "m3", effect: "absent" });
   });
 });
 
