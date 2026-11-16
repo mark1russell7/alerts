@@ -746,7 +746,7 @@ export interface KnownFault {
 }
 
 const AL_8 = "AL-8: the limit of the delay learns the delay of a late copy, and a late copy clears the misses.";
-const BURST = "The runtime does not stop a fetch at its limit. The fetches that wait for a parked host go out together.";
+const BURST = "AL-39: the runtime does not stop a fetch at its limit. The fetches that wait for a parked host go out together.";
 
 /**
  * The gates that fail because of a known fault of the core. The verdict expects each one to fail. The fix of a fault
