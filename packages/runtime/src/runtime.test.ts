@@ -518,6 +518,27 @@ describe("one pass of the runtime", () => {
     log.close();
   });
 
+  it("gives a wake after the pass when a balance read comes due during the fetches of the pass (AL-42)", async () => {
+    const clock = fakeWallClock(T0);
+    let slowFor = 0;
+    const api: SourceProcedures = { describe: () => descriptor(API, MINUTE), fetch: async () => (await clock.advance(slowFor), { ok: true, observations: [], complete: true }), map };
+    let reads = 0;
+    const read = async (): Promise<BalanceReading> => ((reads += 1), { ok: true, balance: 20, currency: "USD" });
+    const watch = balanceWatch({ provider: "provider:twilio", title: "Twilio", channels: ["twilio-call" as ChannelId], floor: 5, read, every: MINUTE + 10_000 });
+    const { runtime, log } = open([api], { clock, balances: [watch] });
+    expect((await runtime.pass()).wakeAt).toBe(T0 + MINUTE);
+    await clock.advance(MINUTE);
+    slowFor = 15_000;
+    // The pass starts at T0 + 60 s, before the read is due, and fetches API until T0 + 75 s. The read comes due at T0 + 70 s.
+    const second = await runtime.pass();
+    expect([reads, second.at, second.wakeAt]).toEqual([1, T0 + 75_000, T0 + 75_001]);
+    await clock.advance(1);
+    slowFor = 0;
+    await runtime.pass();
+    expect(reads).toBe(2);
+    log.close();
+  });
+
   it("gives a wake after the pass when a fetch runs to its limit of one interval", async () => {
     const clock = fakeWallClock(T0);
     // The fetch never ends. The runtime stops the wait at the limit, one interval, which is the next fetch of the source.
