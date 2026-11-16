@@ -1,0 +1,802 @@
+[
+  {
+    "id": "aaa",
+    "name": "AAA (the American Automobile Association)",
+    "issues": null,
+    "note": "The records of aaa-gas-prices name this issuer."
+  },
+  {
+    "id": "accessnow",
+    "name": "Access Now",
+    "issues": null,
+    "note": "The records of accessnow-keepiton name this issuer."
+  },
+  {
+    "id": "acled",
+    "name": "ACLED (Armed Conflict Location and Event Data)",
+    "issues": null,
+    "note": "The records of acled-api name this issuer."
+  },
+  {
+    "id": "air-quality-agencies",
+    "name": "The air monitors other than the EPA that OpenAQ collects",
+    "issues": null,
+    "note": "OpenAQ collects the data of government and research monitors. Its US data comes from EPA AirNow, so the EPA is a separate origin. The record does not name each other agency."
+  },
+  {
+    "id": "ashp",
+    "name": "ASHP (the American Society of Health-System Pharmacists)",
+    "issues": null,
+    "note": "The records of ashp-drug-shortages name this issuer."
+  },
+  {
+    "id": "aviation-safety-network",
+    "name": "Aviation Safety Network (Flight Safety Foundation)",
+    "issues": null,
+    "note": "The records of aviation-safety-net name this issuer."
+  },
+  {
+    "id": "aws",
+    "name": "Amazon Web Services",
+    "issues": null,
+    "note": "The records of aws-health-rss name this issuer."
+  },
+  {
+    "id": "bea",
+    "name": "US Bureau of Economic Analysis",
+    "issues": null,
+    "note": "The records of bea-release-schedule name this issuer."
+  },
+  {
+    "id": "binance",
+    "name": "Binance",
+    "issues": null,
+    "note": "The records of binance-api name this issuer."
+  },
+  {
+    "id": "blitzortung",
+    "name": "Blitzortung.org, a network of volunteer lightning stations",
+    "issues": null,
+    "note": "The records of blitzortung name this issuer."
+  },
+  {
+    "id": "bls",
+    "name": "US Bureau of Labor Statistics",
+    "issues": null,
+    "note": "The records of bls-api, bls-release-calendar name this issuer."
+  },
+  {
+    "id": "canada-government",
+    "name": "The departments of the Government of Canada (Health Canada, CFIA, Transport Canada)",
+    "issues": null,
+    "note": "The records of canada-recalls name this issuer."
+  },
+  {
+    "id": "cboe",
+    "name": "Cboe Global Markets",
+    "issues": null,
+    "note": "The records of cboe-vix-history name this issuer."
+  },
+  {
+    "id": "cbp",
+    "name": "US Customs and Border Protection",
+    "issues": null,
+    "note": "The records of cbp-bwt name this issuer."
+  },
+  {
+    "id": "cdc",
+    "name": "US Centers for Disease Control and Prevention",
+    "issues": null,
+    "note": "The records of cdc-han, cdc-nwss, cdc-travel-notices name this issuer."
+  },
+  {
+    "id": "census",
+    "name": "US Census Bureau",
+    "issues": null,
+    "note": "The records of census-econ-calendar name this issuer."
+  },
+  {
+    "id": "cfsre",
+    "name": "CFSRE (the Center for Forensic Science Research and Education)",
+    "issues": null,
+    "note": "The records of cfsre-nps-discovery name this issuer."
+  },
+  {
+    "id": "cisa",
+    "name": "US Cybersecurity and Infrastructure Security Agency",
+    "issues": null,
+    "note": "The records of cisa-advisories-rss, cisa-kev name this issuer."
+  },
+  {
+    "id": "cloudflare",
+    "name": "Cloudflare",
+    "issues": null,
+    "note": "The records of cloudflare-radar-api name this issuer."
+  },
+  {
+    "id": "coingecko",
+    "name": "CoinGecko",
+    "issues": null,
+    "note": "The records of coingecko-api name this issuer."
+  },
+  {
+    "id": "cornell-ilr",
+    "name": "The Labor Action Tracker of Cornell ILR and Illinois LER",
+    "issues": null,
+    "note": "The records of cornell-labor-action-tracker name this issuer."
+  },
+  {
+    "id": "cpsc",
+    "name": "US Consumer Product Safety Commission",
+    "issues": null,
+    "note": "The records of cpsc-recalls-api name this issuer."
+  },
+  {
+    "id": "cve-program",
+    "name": "The CVE Program and its numbering authorities",
+    "issues": null,
+    "note": "The NVD, the GitHub advisories and OSV publish the CVE records of the CVE Program."
+  },
+  {
+    "id": "defillama",
+    "name": "DefiLlama",
+    "issues": null,
+    "note": "The records of defillama-hacks, defillama-stablecoins name this issuer."
+  },
+  {
+    "id": "dhs",
+    "name": "US Department of Homeland Security",
+    "issues": null,
+    "note": "The records of dhs-ntas name this issuer."
+  },
+  {
+    "id": "downdetector",
+    "name": "Downdetector (Ookla), from the reports of users",
+    "issues": null,
+    "note": "The records of downdetector name this issuer."
+  },
+  {
+    "id": "easa",
+    "name": "EASA (the European Union Aviation Safety Agency)",
+    "issues": null,
+    "note": "The records of easa-czib name this issuer."
+  },
+  {
+    "id": "ecb",
+    "name": "The European Central Bank",
+    "issues": null,
+    "note": "The ECB publishes the reference rates. Frankfurter publishes the same rates again."
+  },
+  {
+    "id": "eccc",
+    "name": "Environment and Climate Change Canada",
+    "issues": null,
+    "note": "The records of eccc-alerts-datamart name this issuer."
+  },
+  {
+    "id": "ecdc",
+    "name": "ECDC (the European Centre for Disease Prevention and Control)",
+    "issues": null,
+    "note": "The records of ecdc-threats name this issuer."
+  },
+  {
+    "id": "eia",
+    "name": "US Energy Information Administration",
+    "issues": null,
+    "note": "The records of eia-api name this issuer."
+  },
+  {
+    "id": "emsc",
+    "name": "EMSC (the Euro-Mediterranean Seismological Centre)",
+    "issues": null,
+    "note": "The records of emsc-seismicportal-ws name this issuer."
+  },
+  {
+    "id": "endoflife-date",
+    "name": "The community of endoflife.date",
+    "issues": null,
+    "note": "The records of endoflife-date-api name this issuer."
+  },
+  {
+    "id": "epa",
+    "name": "US Environmental Protection Agency",
+    "issues": null,
+    "note": "The records of airnow-api, epa-beacon, epa-cyan-api, epa-radnet, epa-uv-api, openaq-api name this issuer."
+  },
+  {
+    "id": "ercot",
+    "name": "ERCOT (the grid operator of most of Texas)",
+    "issues": null,
+    "note": "The records of ercot-txans name this issuer."
+  },
+  {
+    "id": "esa",
+    "name": "ESA (the European Space Agency)",
+    "issues": null,
+    "note": "The records of esa-neocc-risk-list, esa-reentry-predictions name this issuer."
+  },
+  {
+    "id": "eskom",
+    "name": "Eskom, the power utility of South Africa",
+    "issues": null,
+    "note": "EskomSePush publishes the load-shedding plans of Eskom and of the municipalities again."
+  },
+  {
+    "id": "eu-commission",
+    "name": "The European Commission, with the authorities of the member states",
+    "issues": null,
+    "note": "The records of eu-safety-gate name this issuer."
+  },
+  {
+    "id": "eu-jrc",
+    "name": "The Joint Research Centre of the European Commission, with the radiation networks of the member states",
+    "issues": null,
+    "note": "The records of eurdep name this issuer."
+  },
+  {
+    "id": "eumetnet-members",
+    "name": "The national weather services of EUMETNET",
+    "issues": null,
+    "note": "The records of meteoalarm-feeds name this issuer."
+  },
+  {
+    "id": "faa",
+    "name": "US Federal Aviation Administration",
+    "issues": null,
+    "note": "The records of faa-nas-status, faa-notam-api name this issuer."
+  },
+  {
+    "id": "fcc",
+    "name": "US Federal Communications Commission",
+    "issues": null,
+    "note": "The records of fcc-dirs name this issuer."
+  },
+  {
+    "id": "fda",
+    "name": "US Food and Drug Administration",
+    "issues": null,
+    "note": "The records of fda-core-investigations, openfda-drug-shortages, openfda-enforcement name this issuer."
+  },
+  {
+    "id": "fdic",
+    "name": "US Federal Deposit Insurance Corporation",
+    "issues": null,
+    "note": "The records of fdic-bankfind-api, fdic-failed-bank-list name this issuer."
+  },
+  {
+    "id": "federal-reserve-board",
+    "name": "The Board of Governors of the Federal Reserve System",
+    "issues": null,
+    "note": "The records of fed-fomc-calendar, fed-rss name this issuer."
+  },
+  {
+    "id": "federal-reserve-financial-services",
+    "name": "Federal Reserve Financial Services (the Federal Reserve Banks)",
+    "issues": null,
+    "note": "The records of frbservices-status name this issuer."
+  },
+  {
+    "id": "fema",
+    "name": "US Federal Emergency Management Agency",
+    "issues": null,
+    "note": "The records of fema-open-shelters, openfema-api name this issuer."
+  },
+  {
+    "id": "first",
+    "name": "FIRST (the Forum of Incident Response and Security Teams)",
+    "issues": null,
+    "note": "The records of first-epss-api name this issuer."
+  },
+  {
+    "id": "fra",
+    "name": "US Federal Railroad Administration",
+    "issues": null,
+    "note": "The records of fra-safety-data name this issuer."
+  },
+  {
+    "id": "freddie-mac",
+    "name": "Freddie Mac",
+    "issues": null,
+    "note": "The records of freddie-mac-pmms name this issuer."
+  },
+  {
+    "id": "ftc",
+    "name": "US Federal Trade Commission",
+    "issues": null,
+    "note": "The records of ftc-consumer-alerts name this issuer."
+  },
+  {
+    "id": "gasbuddy",
+    "name": "GasBuddy, from the reports of users",
+    "issues": null,
+    "note": "The records of gasbuddy-availability-tracker name this issuer."
+  },
+  {
+    "id": "gdacs",
+    "name": "GDACS (the European Commission and the United Nations)",
+    "issues": null,
+    "note": "The records of gdacs-rss name this issuer."
+  },
+  {
+    "id": "gemini",
+    "name": "Gemini",
+    "issues": null,
+    "note": "The records of gemini-prediction-api name this issuer."
+  },
+  {
+    "id": "github",
+    "name": "GitHub, and its curators of advisories",
+    "issues": null,
+    "note": "The records of github-advisories-api, osv-api name this issuer."
+  },
+  {
+    "id": "good-judgment",
+    "name": "Good Judgment Open",
+    "issues": null,
+    "note": "The records of gjopen-site name this issuer."
+  },
+  {
+    "id": "google",
+    "name": "Google",
+    "issues": null,
+    "note": "The records of gcp-status-json, google-pollen-api name this issuer."
+  },
+  {
+    "id": "hhs-ocr",
+    "name": "The Office for Civil Rights of the US Department of Health and Human Services",
+    "issues": null,
+    "note": "The records of hhs-ocr-breach-portal name this issuer."
+  },
+  {
+    "id": "hibp",
+    "name": "Have I Been Pwned",
+    "issues": null,
+    "note": "The records of hibp-api name this issuer."
+  },
+  {
+    "id": "iana",
+    "name": "IANA (the Internet Assigned Numbers Authority)",
+    "issues": null,
+    "note": "The records of iana-tz name this issuer."
+  },
+  {
+    "id": "imf",
+    "name": "The International Monetary Fund",
+    "issues": null,
+    "note": "The records of imf-portwatch name this issuer."
+  },
+  {
+    "id": "insight-prediction",
+    "name": "Insight Prediction",
+    "issues": null,
+    "note": "The records of insight-prediction-site name this issuer."
+  },
+  {
+    "id": "ioda",
+    "name": "IODA (Georgia Tech)",
+    "issues": null,
+    "note": "The records of ioda-api name this issuer."
+  },
+  {
+    "id": "irs",
+    "name": "US Internal Revenue Service",
+    "issues": null,
+    "note": "The records of irs-disaster-relief name this issuer."
+  },
+  {
+    "id": "isid",
+    "name": "ISID (the International Society for Infectious Diseases), the publisher of ProMED",
+    "issues": null,
+    "note": "The records of promed name this issuer."
+  },
+  {
+    "id": "israel-home-front-command",
+    "name": "The Home Front Command of Israel",
+    "issues": null,
+    "note": "The records of oref-alerts name this issuer."
+  },
+  {
+    "id": "kalshi",
+    "name": "Kalshi",
+    "issues": null,
+    "note": "The records of kalshi-api, kalshi-ws name this issuer."
+  },
+  {
+    "id": "limitless",
+    "name": "Limitless Exchange",
+    "issues": null,
+    "note": "The records of limitless-api name this issuer."
+  },
+  {
+    "id": "manifold",
+    "name": "Manifold Markets",
+    "issues": null,
+    "note": "The records of manifold-api name this issuer."
+  },
+  {
+    "id": "metaculus",
+    "name": "Metaculus",
+    "issues": null,
+    "note": "The records of metaculus-api name this issuer."
+  },
+  {
+    "id": "microsoft",
+    "name": "Microsoft (Azure)",
+    "issues": null,
+    "note": "The records of azure-status-rss name this issuer."
+  },
+  {
+    "id": "mobilitydata",
+    "name": "MobilityData, the publisher of the Mobility Database",
+    "issues": null,
+    "note": "The records of mobility-database name this issuer."
+  },
+  {
+    "id": "nager-date",
+    "name": "Nager.Date",
+    "issues": null,
+    "note": "The records of nager-date name this issuer."
+  },
+  {
+    "id": "nasa",
+    "name": "NASA (FIRMS and LANCE)",
+    "issues": null,
+    "note": "The records of nasa-firms-api name this issuer."
+  },
+  {
+    "id": "nasa-jpl",
+    "name": "The Jet Propulsion Laboratory of NASA (CNEOS)",
+    "issues": null,
+    "note": "The records of jpl-fireball-api, jpl-sentry-api name this issuer."
+  },
+  {
+    "id": "nasdaq",
+    "name": "Nasdaq",
+    "issues": null,
+    "note": "The records of nasdaq-halts-rss, nasdaq-system-status name this issuer."
+  },
+  {
+    "id": "news-media",
+    "name": "The news media that GDELT reads",
+    "issues": null,
+    "note": "GDELT codes events from the articles of the news media."
+  },
+  {
+    "id": "nga",
+    "name": "US National Geospatial-Intelligence Agency",
+    "issues": null,
+    "note": "The records of nga-msi name this issuer."
+  },
+  {
+    "id": "nhtsa",
+    "name": "US National Highway Traffic Safety Administration",
+    "issues": null,
+    "note": "The records of nhtsa-recalls-api name this issuer."
+  },
+  {
+    "id": "nist",
+    "name": "NIST (the National Vulnerability Database)",
+    "issues": null,
+    "note": "The records of nvd-cve-api name this issuer."
+  },
+  {
+    "id": "noaa-nesdis",
+    "name": "NOAA NESDIS (the satellite service of NOAA)",
+    "issues": null,
+    "note": "The records of noaa-goes-glm, noaa-hms, washington-vaac name this issuer."
+  },
+  {
+    "id": "noaa-nos",
+    "name": "NOAA NOS (the National Ocean Service)",
+    "issues": null,
+    "note": "The records of coops-api, noaa-hab-forecasts, noaa-incidentnews name this issuer."
+  },
+  {
+    "id": "nps",
+    "name": "US National Park Service",
+    "issues": null,
+    "note": "The records of nps-alerts-api name this issuer."
+  },
+  {
+    "id": "ntsb",
+    "name": "US National Transportation Safety Board",
+    "issues": null,
+    "note": "The records of ntsb-carol name this issuer."
+  },
+  {
+    "id": "nws",
+    "name": "US National Weather Service, with its centers (NHC, SWPC, the tsunami warning centers, AWC)",
+    "issues": [
+      "met",
+      "fire.weather",
+      "env.air-stagnation",
+      "env.smoke",
+      "geo.debris-flow",
+      "geo.tsunami",
+      "geo.space-weather",
+      "geo.volcano.ashfall",
+      "geo.volcano.ashfall-marine",
+      "transport.air.hazard-weather"
+    ],
+    "note": "The NWS issues the products. api.weather.gov, IEM, NOAAPort and IPAWS carry them."
+  },
+  {
+    "id": "nyse",
+    "name": "The New York Stock Exchange",
+    "issues": null,
+    "note": "The records of nyse-halts-csv, nyse-holidays-page, nyse-market-status name this issuer."
+  },
+  {
+    "id": "ofac",
+    "name": "OFAC (the Office of Foreign Assets Control, US Treasury)",
+    "issues": null,
+    "note": "The records of ofac-recent-actions, ofac-sanctions-list-service name this issuer."
+  },
+  {
+    "id": "open-source-vulnerability-databases",
+    "name": "The vulnerability databases of the open-source ecosystems that OSV collects",
+    "issues": null,
+    "note": "The records of osv-api name this issuer."
+  },
+  {
+    "id": "opm",
+    "name": "US Office of Personnel Management",
+    "issues": null,
+    "note": "The records of opm-status name this issuer."
+  },
+  {
+    "id": "phmsa",
+    "name": "US Pipeline and Hazardous Materials Safety Administration",
+    "issues": null,
+    "note": "The records of phmsa-incidents name this issuer."
+  },
+  {
+    "id": "polymarket",
+    "name": "Polymarket",
+    "issues": null,
+    "note": "The records of polymarket-clob-api, polymarket-gamma-api, polymarket-ws-market name this issuer."
+  },
+  {
+    "id": "predictit",
+    "name": "PredictIt",
+    "issues": null,
+    "note": "The records of predictit-api name this issuer."
+  },
+  {
+    "id": "public-safety-agencies",
+    "name": "The fire and medical dispatch agencies that publish to PulsePoint",
+    "issues": null,
+    "note": "The records of pulsepoint name this issuer."
+  },
+  {
+    "id": "ransomware-groups",
+    "name": "The ransomware groups, on their leak sites",
+    "issues": null,
+    "note": "ransomware.live collects the claims of the leak sites. The groups issue the claims."
+  },
+  {
+    "id": "ripe-ncc",
+    "name": "RIPE NCC (the RIS route collectors)",
+    "issues": null,
+    "note": "The records of ripe-ris-live name this issuer."
+  },
+  {
+    "id": "sec",
+    "name": "US Securities and Exchange Commission",
+    "issues": null,
+    "note": "The records of sec-enforcement-rss, sec-trading-suspensions-rss name this issuer."
+  },
+  {
+    "id": "service-vendors",
+    "name": "The vendor of each service, on its status page",
+    "issues": null,
+    "note": "Each vendor writes its own status page. StatusGator and the Statuspage API read these pages."
+  },
+  {
+    "id": "smarkets",
+    "name": "Smarkets",
+    "issues": null,
+    "note": "The records of smarkets-api name this issuer."
+  },
+  {
+    "id": "state-dots",
+    "name": "The departments of transportation of the states",
+    "issues": null,
+    "note": "The records of state-511, wzdx-feeds name this issuer."
+  },
+  {
+    "id": "the-space-devs",
+    "name": "The Space Devs (Launch Library 2)",
+    "issues": null,
+    "note": "The records of launch-library-2 name this issuer."
+  },
+  {
+    "id": "thousandeyes",
+    "name": "ThousandEyes (Cisco)",
+    "issues": null,
+    "note": "The records of thousandeyes-outages name this issuer."
+  },
+  {
+    "id": "ticketmaster",
+    "name": "Ticketmaster",
+    "issues": null,
+    "note": "The records of ticketmaster-discovery-api name this issuer."
+  },
+  {
+    "id": "transit-agencies",
+    "name": "The transit agencies, in their GTFS Realtime feeds",
+    "issues": null,
+    "note": "The records of gtfs-rt-alerts name this issuer."
+  },
+  {
+    "id": "ua",
+    "name": "The civil defense of Ukraine: the air raid alerts of the regional administrations",
+    "issues": null,
+    "note": "alerts.in.ua publishes the official air raid alerts again."
+  },
+  {
+    "id": "ucdp",
+    "name": "UCDP (Uppsala University)",
+    "issues": null,
+    "note": "The records of ucdp-api name this issuer."
+  },
+  {
+    "id": "uk-fcdo",
+    "name": "The Foreign, Commonwealth and Development Office of the United Kingdom",
+    "issues": null,
+    "note": "The records of fcdo-travel-advice-api name this issuer."
+  },
+  {
+    "id": "ukmto",
+    "name": "UKMTO (UK Maritime Trade Operations, Royal Navy)",
+    "issues": null,
+    "note": "The records of ukmto name this issuer."
+  },
+  {
+    "id": "us-alerting-authorities",
+    "name": "The state, local, tribal and territorial alerting authorities of IPAWS",
+    "issues": [
+      "geo.avalanche",
+      "geo.earthquake",
+      "geo.fireball",
+      "geo.landslide",
+      "geo.near-earth-object",
+      "geo.space-debris",
+      "geo.subsidence",
+      "geo.volcano.eruption",
+      "safety",
+      "security",
+      "rescue",
+      "fire.burn-ban",
+      "fire.structure",
+      "fire.wildfire",
+      "health",
+      "env.air-quality",
+      "env.pest-quarantine",
+      "env.pollen",
+      "env.spill",
+      "env.uv",
+      "env.water",
+      "transport.air.accident",
+      "transport.air.conflict-zone",
+      "transport.air.disruption",
+      "transport.air.notam",
+      "transport.rail",
+      "transport.road",
+      "transport.sea",
+      "transport.space",
+      "transport.transit",
+      "infra",
+      "cbrne"
+    ],
+    "note": "IPAWS carries the alerts of these authorities. The NWS issues the weather warnings, so these authorities issue the other categories of CAP."
+  },
+  {
+    "id": "us-avalanche-centers",
+    "name": "The avalanche centers of the US",
+    "issues": null,
+    "note": "The records of avalanche-org-api name this issuer."
+  },
+  {
+    "id": "us-courts",
+    "name": "The federal courts of the US, through PACER",
+    "issues": null,
+    "note": "The records of courtlistener-api name this issuer."
+  },
+  {
+    "id": "us-drought-monitor",
+    "name": "The US Drought Monitor (NDMC, USDA and NOAA)",
+    "issues": null,
+    "note": "The records of usdm-api name this issuer."
+  },
+  {
+    "id": "us-electric-utilities",
+    "name": "The electric utilities of the US, on their outage maps and in their reports",
+    "issues": null,
+    "note": "PowerOutage.us, EAGLE-I and ODIN collect the outage data of the utilities. The CPUC page lists the shutoffs of the utilities of California."
+  },
+  {
+    "id": "us-federal-agencies",
+    "name": "The federal agencies of the US, in the Federal Register",
+    "issues": null,
+    "note": "The records of federal-register-api name this issuer."
+  },
+  {
+    "id": "us-nrc",
+    "name": "US Nuclear Regulatory Commission",
+    "issues": null,
+    "note": "The records of nrc-event-reports name this issuer."
+  },
+  {
+    "id": "us-space-force",
+    "name": "The US Space Force (Space-Track.org)",
+    "issues": null,
+    "note": "The records of space-track-api name this issuer."
+  },
+  {
+    "id": "us-state-department",
+    "name": "US Department of State",
+    "issues": null,
+    "note": "The records of state-dept-advisories name this issuer."
+  },
+  {
+    "id": "us-treasury",
+    "name": "US Department of the Treasury (Fiscal Service)",
+    "issues": null,
+    "note": "The records of treasury-fiscal-data-api name this issuer."
+  },
+  {
+    "id": "us-wildland-fire-agencies",
+    "name": "The wildland fire agencies of the US (IRWIN and InciWeb)",
+    "issues": null,
+    "note": "The records of inciweb-rss, nifc-wfigs name this issuer."
+  },
+  {
+    "id": "uscg",
+    "name": "US Coast Guard (NAVCEN and the National Response Center)",
+    "issues": null,
+    "note": "The records of nrc-uscg-reports, uscg-navcen name this issuer."
+  },
+  {
+    "id": "usda-aphis",
+    "name": "USDA APHIS (the Animal and Plant Health Inspection Service)",
+    "issues": null,
+    "note": "The records of aphis-hpai name this issuer."
+  },
+  {
+    "id": "usda-fsis",
+    "name": "USDA FSIS (the Food Safety and Inspection Service)",
+    "issues": null,
+    "note": "The records of fsis-recall-api name this issuer."
+  },
+  {
+    "id": "usgs",
+    "name": "US Geological Survey",
+    "issues": null,
+    "note": "The records of usgs-comcat-geojson, usgs-hans-api, usgs-landslide-program, usgs-vns, usgs-wateralert name this issuer."
+  },
+  {
+    "id": "usps",
+    "name": "US Postal Service",
+    "issues": null,
+    "note": "The records of usps-service-alerts name this issuer."
+  },
+  {
+    "id": "wastewaterscan",
+    "name": "WastewaterSCAN (Stanford, Emory and Verily)",
+    "issues": null,
+    "note": "The records of wastewaterscan name this issuer."
+  },
+  {
+    "id": "who",
+    "name": "The World Health Organization",
+    "issues": null,
+    "note": "The records of who-don-api name this issuer."
+  },
+  {
+    "id": "woah",
+    "name": "WOAH (the World Organisation for Animal Health)",
+    "issues": null,
+    "note": "The records of woah-wahis name this issuer."
+  }
+]

@@ -27,7 +27,7 @@ fetch ──► Observation ──► map ──► Report ──► merge state
 | `@mark1russell7/alerts-format-<name>` | `packages/format-<name>` | The reader of one message format that two or more sources use: `format-cap` for CAP 1.2, `format-nws` for VTEC and the NWS kinds. |
 | `@mark1russell7/alerts-fetch` | `packages/fetch` | The fetch parts that the sources share: the request through polite-crawler, and the map from an answer to a failure. |
 | `@mark1russell7/alerts-source-<id>` | `packages/source-<id>` | One source adapter as procedures. |
-| `@mark1russell7/alerts-atlas` | `packages/atlas` | The source atlas: each signal class, the candidate sources of each class with a decision and its reason, and the records of the research rounds. Its gate needs 2 or more sources with no risk for each class, or a reason. |
+| `@mark1russell7/alerts-atlas` | `packages/atlas` | The source atlas: each signal class, the candidate sources of each class with a decision and its reason, and the records of the research rounds. Its gate needs 2 or more sources with no risk for each class, or a reason. It measures the layers of the cover of each class. |
 | `@mark1russell7/alerts-channel-<id>` | `packages/channel-<id>` | One delivery channel as procedures. |
 | `@mark1russell7/alerts-runtime` | `packages/runtime` | The service: the loops, the event log, the delivery ledger and the heartbeat, on `@mark1russell7/service` and the SQLite home. |
 | `@mark1russell7/alerts-testkit` | `packages/testkit` | The conformance tests of the adapters, the fixtures and the fault plans. |
@@ -267,10 +267,37 @@ For `life-safety`, the system prefers a duplicate to a miss.
 - A code does not leave the taxonomy by a plain removal. `taxonomy.lock.json` holds each code that the taxonomy has or had, and a test holds the lock.
 - A removed code gets an entry in `KIND_ALIASES`, from the old code to its new code. The parse changes an old code to its new code before the check.
 - The source atlas uses the codes as its signal classes. Its gate needs a class for each code outside `system` and `other`.
-- The atlas has two measures. A gap is a class with fewer than 2 adopted or planned sources with no risk. The adopted cover counts the classes with 2 or more adopted sources with no risk.
-- Each round records its measures and their cause. The gap count shows the research and the plans. The adopted cover shows the alerts that arrive.
-- The gate does not let the adopted cover fall below the measure of the latest round. A real loss needs a new round whose cause names the loss.
+- A gap is a class with fewer than 2 adopted or planned sources with no risk. The gap count shows the research and the plans.
+- The layers of the cover show the alerts that arrive. The next section tells the rule of the layers.
 - The kinds go from physical events to technical outages. A new adapter adds its new codes to `TAXONOMY` in its pull request, with a class in the atlas.
+
+## The cover rule
+
+The owner of the project decided this rule on 2026-11-15. The target is the most redundancy at each layer, not the least that passes the gate.
+
+- Independence is a measure of each layer. It is not a filter. A shared origin or path does not lower a plan and does not refuse a source.
+- The cover of a class is a vector of layers, from the adopted sources with no risk:
+  - `adopted` counts these sources.
+  - `paths` counts the most of these sources with a known path and no shared part. A second path to the same origin counts in full at this layer.
+  - `origins` counts the known origins of these sources that issue the class.
+  - The distinct channels of delivery are a later layer.
+- No layer replaces another one. Each round records two measures of each layer: the cover and the total.
+- The cover of a layer counts the classes with 2 or more. The total is the sum over the classes, so it shows each gain above 2.
+- The gate stops a change that makes the cover or the total of a layer fall below the measure of the latest round. A real loss needs a new round whose cause names the loss.
+
+The origins and the paths are data:
+
+- An origin is the body that issues a signal, for example the NWS. `origins.json` is the closed list of the origins.
+- A path starts with the host that the adapter reads. Then come the carriers and the providers, for example NOAAPort or IPAWS-OPEN. `paths.json` is the closed list of the parts.
+- Each source names its origins and its path. The gate checks each id against its list, and each entry of a list has a source.
+- An origin or a part that the research did not find has the id `unknown`. It is a gap of the research, not a gap of the cover.
+- A layer does not count an unknown origin or a path with an unknown part. Each round records the two counts of unknowns (`unknownOrigins` and `unknownPaths`).
+
+The claims of the pairs:
+
+- A shared origin or a shared part of a path is a claim that two sources fail together. `pairClaims` gives the claim of each pair with a shared class.
+- A claim is data with its evidence, and it can be wrong. A later check compares each claim with the joint outages of the health log.
+- Each source of a pair with a claim stays in each layer. The claim changes only the count of distinct paths or origins.
 
 ## The route and the delivery step
 

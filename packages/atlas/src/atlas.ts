@@ -9,6 +9,9 @@
  * The id of each class is a code of `TAXONOMY` of the core, and the core holds its plain name and its
  * summary. Thus the system has one id for each kind of signal. The gate also needs a class for each code
  * of the taxonomy, so a new code of an adapter gets its sources in the atlas.
+ *
+ * Each source names its origins and its path. The cover of a class has layers: the adopted sources, the
+ * paths with no shared part, and the origins. Each layer is a measure, not a filter.
  */
 
 import { categoryOf, knownKind, SUBJECT_SYSTEMS, TAXONOMY, type Category, type SubjectKind, type SubjectSystem } from "@mark1russell7/alerts";
@@ -45,6 +48,35 @@ export const LIVE_DECISIONS: readonly Decision[] = ["adopt", "plan"];
 
 /** The least count of sources of a class, with no reason of a gap. With 2 sources, one source can fail and the class stays live. */
 export const MIN_SOURCES = 2;
+
+/** The kinds of the parts of a path. */
+export const PATH_KINDS = ["host", "carrier", "provider"] as const;
+/** One kind of a part of a path. */
+export type PathKind = (typeof PATH_KINDS)[number];
+/** The id of an origin or a part of a path that the research did not find. The measures count it apart. */
+export const UNKNOWN = "unknown";
+
+/** One origin: the body that issues a signal, for example the NWS. When an origin fails, its sources lose its signals. */
+export interface Origin {
+  readonly id: string;
+  readonly name: string;
+  /** The codes that the origin issues, or `null` for each class of the sources that carry it. */
+  readonly issues: readonly string[] | null;
+  /** The basis of the record. */
+  readonly note: string;
+}
+
+/**
+ * One part of the path of a signal. The first part of a path is the host that the adapter reads. A carrier
+ * brings the signal to a host, and a provider operates a host or a carrier.
+ */
+export interface PathPart {
+  readonly id: string;
+  readonly name: string;
+  readonly kind: PathKind;
+  /** The basis of the record, for example a page or a DNS lookup with its date. */
+  readonly note: string;
+}
 
 /** One signal class: one kind of signal that can touch a person. */
 export interface SignalClass {
@@ -99,6 +131,10 @@ export interface Source {
   readonly coverage: string;
   /** The systems of the public subject ids that the signals give, or `null` when the research did not record them. */
   readonly subjectIds: readonly SubjectSystem[] | null;
+  /** The ids of the origins of the signals in `origins.json`, or `unknown`. */
+  readonly origins: readonly string[];
+  /** The path from the origin to the adapter: the ids of `paths.json`, the host first, or `unknown`. */
+  readonly path: readonly string[];
   /** Each known event that can stop the source. The coverage does not count a source with a risk. */
   readonly risks: readonly string[];
   readonly decision: Decision;
@@ -122,15 +158,37 @@ export interface Study {
 }
 
 /**
- * The measures of the atlas at one time. The gap count measures the research and the plans. The adopted
- * cover measures the signals that reach a person at this time.
+ * The layers of the cover of a class, from the adopted sources with no risk. No layer replaces another
+ * one, and a shared origin or path does not remove a source from a layer.
+ */
+export interface Layers {
+  /** The adopted sources with no risk. */
+  readonly adopted: number;
+  /** The most of these sources with a known path and no shared part of a path. */
+  readonly paths: number;
+  /** The known origins of these sources that issue the class. */
+  readonly origins: number;
+}
+
+/** The names of the layers, in order. */
+export const LAYERS: readonly (keyof Layers)[] = ["adopted", "paths", "origins"];
+
+/**
+ * The measures of the atlas at one time. The gap count measures the research and the plans. The layers
+ * measure the signals that reach a person at this time.
  */
 export interface Measures {
   readonly classes: number;
   /** The classes with fewer than `MIN_SOURCES` adopted or planned sources with no risk. */
   readonly gaps: number;
-  /** The classes with `MIN_SOURCES` or more adopted sources with no risk. */
-  readonly adoptedCover: number;
+  /** For each layer, the classes with `MIN_SOURCES` or more. */
+  readonly cover: Layers;
+  /** For each layer, the sum over the classes. It shows each gain above `MIN_SOURCES`. */
+  readonly total: Layers;
+  /** The sources that are not rejected, with an unknown origin. This is a gap of the research, not of the cover. */
+  readonly unknownOrigins: number;
+  /** The sources that are not rejected, with an unknown part of the path. */
+  readonly unknownPaths: number;
 }
 
 /** The measures that a round records, with the cause of the change from the record before. */
@@ -153,7 +211,7 @@ export interface Round {
   readonly queries: readonly string[];
   readonly notes: readonly string[];
   readonly studies: readonly Study[];
-  /** The measures of the atlas at the end of the round. The adopted cover of the atlas stays at or above the measure of the latest round. */
+  /** The measures of the atlas at the end of the round. Each layer of the atlas stays at or above the measure of the latest round. */
   readonly measures: RoundMeasures;
 }
 
@@ -162,6 +220,8 @@ export interface Atlas {
   readonly classes: readonly SignalClass[];
   readonly sources: readonly Source[];
   readonly rounds: readonly Round[];
+  readonly origins: readonly Origin[];
+  readonly paths: readonly PathPart[];
 }
 
 /** One problem of the atlas. */
@@ -180,7 +240,22 @@ export interface Coverage {
   readonly atRisk: readonly string[];
   /** The sources of `sources` with the decision `adopt`: an adapter of the repository reads them at this time. */
   readonly adopted: readonly string[];
+  readonly layers: Layers;
   readonly gap: string | null;
+}
+
+/**
+ * The claim of the atlas for two sources of a shared class: the origins and the parts of a path that they
+ * share. A shared origin or part is a claim that the two fail together. The claim can be wrong, and the
+ * joint outages in the health log can test it.
+ */
+export interface PairClaim {
+  readonly a: string;
+  readonly b: string;
+  /** The classes whose cover counts the two sources. */
+  readonly classes: readonly string[];
+  readonly origins: readonly string[];
+  readonly path: readonly string[];
 }
 
 /** The facts of the repository that the gate compares with the atlas. */
@@ -199,6 +274,7 @@ export const EXEMPT_CATEGORIES: readonly Category[] = ["system", "other"];
 
 const ID = /^[a-z][a-z0-9]*(\.[a-z0-9]+(-[a-z0-9]+)*)+$/;
 const SOURCE_ID = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+const PART_ID = /^[a-z0-9]+([.-][a-z0-9]+)*$/;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const SUBJECT_KINDS: ReadonlySet<string> = new Set(Object.values(SUBJECT_SYSTEMS));
 
@@ -212,6 +288,21 @@ const isUrl = (text: string): boolean => {
 };
 
 const isUnder = (name: string, id: string): boolean => name === id || name.startsWith(`${id}.`);
+const known = (list: readonly string[]): string[] => list.filter((id) => id !== UNKNOWN);
+// The JSON of a source is not parsed by a schema. A source with no list counts as a source with an unknown list.
+const listOf = (list: readonly string[] | undefined): readonly string[] => list ?? [UNKNOWN];
+
+/**
+ * This function gives the most sets of the list with no shared item. The search is exact. A class has few
+ * adopted sources, so the cost stays small.
+ */
+export function mostDisjoint(sets: readonly (readonly string[])[]): number {
+  const [first, ...rest] = sets;
+  if (first === undefined) return 0;
+  const apart = rest.filter((other) => !other.some((item) => first.includes(item)));
+  const withFirst = 1 + mostDisjoint(apart);
+  return withFirst >= rest.length ? withFirst : Math.max(withFirst, mostDisjoint(rest));
+}
 
 /** This function gives the parent of a class: the longest prefix of its id that is a class, or `null`. */
 export function parentOf(id: string, classIds: ReadonlySet<string>): string | null {
@@ -246,29 +337,69 @@ export function planBlock(source: Pick<Source, "access" | "auth" | "cost" | "ter
   return null;
 }
 
-/** This function gives the coverage of each class: the adopted and planned sources of the class and of its descendants. */
+/** This function gives the coverage of each class: the adopted and planned sources of the class and of its descendants, and the layers. */
 export function coverage(atlas: Atlas): Coverage[] {
+  const origins = new Map(atlas.origins.map((origin) => [origin.id, origin]));
   return atlas.classes.map(({ id, gap }) => {
     const live = atlas.sources.filter((source) => LIVE_DECISIONS.includes(source.decision) && source.classes.some((name) => isUnder(name, id)));
     const ids = (list: readonly Source[]): string[] => list.map((source) => source.id);
+    const counted = live.filter((source) => source.decision === "adopt" && source.risks.length === 0);
+    const issues = (origin: string): boolean => {
+      const codes = origins.get(origin)?.issues;
+      return codes === null || (codes !== undefined && codes.some((code) => isUnder(id, code) || isUnder(code, id)));
+    };
+    // A path with an unknown part cannot show that it is apart, so the path layer does not count it.
+    const knownPaths = counted.map((source) => listOf(source.path)).filter((path) => !path.includes(UNKNOWN));
     return {
       id,
       sources: ids(live),
       atRisk: ids(live.filter((source) => source.risks.length > 0)),
       adopted: ids(live.filter((source) => source.decision === "adopt")),
+      layers: {
+        adopted: counted.length,
+        paths: mostDisjoint(knownPaths),
+        origins: new Set(counted.flatMap((source) => listOf(source.origins).filter(issues))).size,
+      },
       gap,
     };
   });
 }
 
-/** This function gives the measures of the atlas: the classes, the gaps and the adopted cover. */
+/**
+ * This function gives the claim of each pair of sources with a shared class, for the sources of the
+ * decisions. The measures do not remove a source because of a claim.
+ */
+export function pairClaims(atlas: Atlas, decisions: readonly Decision[] = LIVE_DECISIONS): PairClaim[] {
+  const chosen = atlas.sources.filter((source) => decisions.includes(source.decision));
+  const claims: PairClaim[] = [];
+  for (const [index, a] of chosen.entries()) {
+    for (const b of chosen.slice(index + 1)) {
+      const reaches = (source: Source, id: string): boolean => source.classes.some((name) => isUnder(name, id));
+      const classes = atlas.classes.filter(({ id }) => reaches(a, id) && reaches(b, id)).map(({ id }) => id);
+      if (classes.length === 0) continue;
+      const shared = (pick: (source: Source) => readonly string[] | undefined): string[] => known(listOf(pick(a))).filter((id) => listOf(pick(b)).includes(id));
+      claims.push({ a: a.id, b: b.id, classes, origins: shared((source) => source.origins), path: shared((source) => source.path) });
+    }
+  }
+  return claims;
+}
+
+/** This function gives the measures of the atlas: the classes, the gaps, the cover and the total of each layer, and the unknowns. */
 export function measures(atlas: Atlas): Measures {
   const rows = coverage(atlas);
-  const free = (list: readonly string[], atRisk: readonly string[]): number => list.filter((id) => !atRisk.includes(id)).length;
+  const free = (row: Coverage): number => row.sources.filter((id) => !row.atRisk.includes(id)).length;
+  const per = (pick: (value: number) => number): Layers => {
+    const sum = (name: keyof Layers): number => rows.reduce((total, row) => total + pick(row.layers[name]), 0);
+    return { adopted: sum("adopted"), paths: sum("paths"), origins: sum("origins") };
+  };
+  const kept = atlas.sources.filter((source) => source.decision !== "reject");
   return {
     classes: rows.length,
-    gaps: rows.filter((row) => free(row.sources, row.atRisk) < MIN_SOURCES).length,
-    adoptedCover: rows.filter((row) => free(row.adopted, row.atRisk) >= MIN_SOURCES).length,
+    gaps: rows.filter((row) => free(row) < MIN_SOURCES).length,
+    cover: per((value) => (value >= MIN_SOURCES ? 1 : 0)),
+    total: per((value) => value),
+    unknownOrigins: kept.filter((source) => listOf(source.origins).includes(UNKNOWN)).length,
+    unknownPaths: kept.filter((source) => listOf(source.path).includes(UNKNOWN)).length,
   };
 }
 
@@ -286,18 +417,51 @@ export function checkAtlas(atlas: Atlas, context: AtlasContext = {}): AtlasProbl
     const recorded = (round as Partial<Round>).measures;
     if (recorded === undefined) add(at, "the round has no measures");
     else {
-      for (const value of [recorded.classes, recorded.gaps, recorded.adoptedCover]) if (!Number.isSafeInteger(value) || value < 0) add(at, `the measure ${String(value)} is not a count`);
+      const layered = (group: Layers | undefined): unknown[] => LAYERS.map((name) => group?.[name]);
+      const values = [recorded.classes, recorded.gaps, ...layered(recorded.cover), ...layered(recorded.total), recorded.unknownOrigins, recorded.unknownPaths];
+      for (const value of values) if (!Number.isSafeInteger(value) || (value as number) < 0) add(at, `the measure ${String(value)} is not a count`);
       if (typeof recorded.cause !== "string" || recorded.cause.trim() === "") add(at, "the measures have no cause");
     }
   }
   if (rounds.size !== atlas.rounds.length) add("atlas", "two records of rounds have one number");
-  // The adopted cover is the outcome. Its floor is the measure of the latest round. Thus a real loss of a
+  // Each layer is an outcome. Its floor is the measure of the latest round. Thus a real loss of a
   // source needs a new round whose cause names the loss, and no record of an old round changes.
   const latest = atlas.rounds.reduce<Round | undefined>((last, round) => (last === undefined || round.round > last.round ? round : last), undefined);
-  const floor = (latest as Partial<Round> | undefined)?.measures?.adoptedCover ?? 0;
-  const { adoptedCover } = measures(atlas);
-  if (latest !== undefined && adoptedCover < floor) {
-    add("atlas", `the adopted cover is ${String(adoptedCover)} classes, below the ${String(floor)} classes of round ${String(latest.round)}`);
+  const originIds = new Set<string>();
+  for (const origin of atlas.origins) {
+    const at = `origin ${origin.id}`;
+    if (originIds.has(origin.id)) add(at, "the id is not unique");
+    originIds.add(origin.id);
+    if (!PART_ID.test(origin.id) || origin.id === UNKNOWN) add(at, "the id is not in lower case with hyphens and dots, or it is unknown");
+    if (origin.name.trim() === "" || origin.note.trim() === "") add(at, "the origin has no name or no note");
+    for (const code of origin.issues ?? []) if (!knownKind(code)) add(at, `the code ${code} is not in the taxonomy`);
+  }
+  const parts = new Map<string, PathPart>();
+  for (const part of atlas.paths) {
+    const at = `path ${part.id}`;
+    if (parts.has(part.id)) add(at, "the id is not unique");
+    parts.set(part.id, part);
+    if (!PART_ID.test(part.id) || part.id === UNKNOWN) add(at, "the id is not in lower case with hyphens and dots, or it is unknown");
+    if (!(PATH_KINDS as readonly string[]).includes(part.kind)) add(at, `the kind ${part.kind} is not known`);
+    if (part.name.trim() === "" || part.note.trim() === "") add(at, "the part has no name or no note");
+  }
+  // The JSON of a source is not parsed by a schema, so the gate reads the layers only when each source has its lists.
+  const listed = atlas.sources.every((source) => Array.isArray(source.origins) && Array.isArray(source.path));
+  if (listed) {
+    const named = (pick: (source: Source) => readonly string[]): Set<string> => new Set(atlas.sources.flatMap(pick));
+    const usedOrigins = named((source) => source.origins);
+    const usedParts = named((source) => source.path);
+    for (const id of originIds) if (!usedOrigins.has(id)) add(`origin ${id}`, "no source names the origin");
+    for (const id of parts.keys()) if (!usedParts.has(id)) add(`path ${id}`, "no source names the part");
+    const now = measures(atlas);
+    for (const group of ["cover", "total"] as const) {
+      for (const name of LAYERS) {
+        const floor = (latest as Partial<Round> | undefined)?.measures?.[group]?.[name] ?? 0;
+        if (latest !== undefined && now[group][name] < floor) {
+          add("atlas", `the ${group} of the layer ${name} is ${String(now[group][name])}, below the ${String(floor)} of round ${String(latest.round)}`);
+        }
+      }
+    }
   }
   const classIds = new Set<string>();
   for (const item of atlas.classes) {
@@ -339,6 +503,19 @@ export function checkAtlas(atlas: Atlas, context: AtlasContext = {}): AtlasProbl
     if (LIVE_DECISIONS.includes(source.decision) && source.evidence.length === 0) add(at, "an adopted or planned source has no evidence");
     for (const url of source.evidence) if (!isUrl(url)) add(at, `the evidence ${url} is not an http or https URL`);
     if (!rounds.has(source.round)) add(at, `the round ${String(source.round)} has no record`);
+    const lists = [
+      { field: "origins", list: (source as Partial<Source>).origins, ids: originIds },
+      { field: "path", list: (source as Partial<Source>).path, ids: new Set(parts.keys()) },
+    ];
+    for (const { field, list, ids } of lists) {
+      if (!Array.isArray(list) || list.length === 0) add(at, `the source has no ${field}: give the ids, or unknown`);
+      else {
+        if (new Set(list).size !== list.length) add(at, `the ${field} have a duplicate`);
+        for (const id of list) if (id !== UNKNOWN && !ids.has(id)) add(at, `the id ${id} of the ${field} is not in its list`);
+      }
+    }
+    const first = parts.get((source as Partial<Source>).path?.[0] ?? UNKNOWN);
+    if (first !== undefined && first.kind !== "host") add(at, "the first part of the path is not a host");
   }
   if (context.codes !== undefined) for (const code of unreachedCodes(atlas.classes, context.codes)) add(`code ${code}`, "no class is the code, an ancestor of it or a descendant of it");
   for (const { id, sources, atRisk, gap } of coverage(atlas)) {
