@@ -6,7 +6,7 @@
 import { basename } from "node:path";
 import type { Instant } from "@mark1russell7/alerts";
 import { listRecoveries, openCheckedEventLog, openEventLog, type EventLogFile, type RecoveryEntry } from "@mark1russell7/sqlite";
-import { envelope, parseEvent, type RecoveredEvent, type RuntimeEvent } from "./events.ts";
+import { envelope, EVENT_TYPES, parseEvent, type RecoveredEvent, type RuntimeEvent } from "./events.ts";
 
 /** One event of the log with its position. The position of a later event is larger. */
 export interface RuntimeLogEntry {
@@ -26,8 +26,13 @@ export interface EntriesOptions {
 
 /** The log of the runtime. */
 export interface RuntimeLog {
-  /** This function gives the events of the log, in their order. */
+  /**
+   * This function gives the events of the log, in their order. It gives only the types of `EVENT_TYPES`. A later build
+   * can add a type, and this build then skips its events. Thus a rollback to this build starts on the log of a later build.
+   */
   read(): Iterable<RuntimeEvent>;
+  /** This function gives the count of the events of the log, of each type. */
+  count(): number;
   /** This function gives the entries of the log after a position, in their order. */
   entries(options: EntriesOptions): Iterable<RuntimeLogEntry>;
   /** This function gives the position of the last event, or 0 for an empty log. */
@@ -135,7 +140,9 @@ function fileOptions(options: RuntimeLogOptions): { readonly makeFolder: true; r
 // The log of the runtime on an event log file.
 function runtimeLog(log: EventLogFile<RuntimeEvent>): RuntimeLog {
   return {
-    read: () => log.read(),
+    // The filter is on the type of the row, thus the parse does not get a type that this build does not know.
+    read: () => log.read({ types: EVENT_TYPES }),
+    count: () => log.count(),
     entries: (options) => log.entries(options),
     head: () => log.head(),
     has: (id) => log.get(id) !== undefined,
