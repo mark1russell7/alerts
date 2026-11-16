@@ -2,7 +2,18 @@ import type { Level, Message, PersonId, ReportId } from "@mark1russell7/alerts";
 import type { TwilioFetch } from "@procedures/notify/twilio";
 import { memoryQuotaStore, quotaGate, type Quota, type QuotaGate } from "polite-crawler/api";
 import { describe, expect, it } from "vitest";
-import { CALL_LAST_SENTENCE, CALL_REPEATS, CALL_SAY_LIMIT, createTwilioCallChannel, spokenTextOf, twilioCallDescriptor, twilioCallOf, type TwilioSpendGates } from "./index.ts";
+import {
+  CALL_LAST_SENTENCE,
+  CALL_REPEATS,
+  CALL_SAY_LIMIT,
+  createTwilioCallChannel,
+  readTwilioBalance,
+  spokenTextOf,
+  twilioCallDescriptor,
+  twilioCallOf,
+  twilioSetupProblems,
+  type TwilioSpendGates,
+} from "./index.ts";
 
 // Fake credentials and fake numbers: the country code +999 has no country.
 const ACCOUNT = `AC${"0".repeat(32)}`;
@@ -203,6 +214,45 @@ describe("the status", () => {
     expect(await channel.status({ receipt: { call: "CA1" } })).toMatchObject({ state: "accepted" });
     expect(await channel.status({ receipt: { call: SID } })).toMatchObject({ state: "accepted" });
     expect(fake.calls).toHaveLength(1);
+  });
+});
+
+describe("the check of the setup", () => {
+  it("finds a bad account SID, a bad key SID, an empty secret and a bad number, and names no value", () => {
+    expect(twilioSetupProblems(CREDENTIALS, FROM)).toEqual([]);
+    const bad = twilioSetupProblems({ accountSid: "AC-bad-value", secret: "fake-secret" }, "+1-bad-value");
+    expect(bad).toEqual(["The account SID is not AC and 32 hexadecimal digits.", "The number that calls is not a phone number in E.164 form."]);
+    expect(twilioSetupProblems({ ...CREDENTIALS, keySid: "SK-bad-value" }, FROM)).toEqual(["The API key SID is not SK and 32 hexadecimal digits."]);
+    expect(twilioSetupProblems({ ...CREDENTIALS, secret: "" }, FROM)).toHaveLength(1);
+    // The number must match as a whole: a valid number with more text after it is not valid.
+    expect(twilioSetupProblems(CREDENTIALS, `${FROM}x`)).toHaveLength(1);
+    expect(JSON.stringify(bad)).not.toContain("bad-value");
+  });
+});
+
+describe("the read of the balance", () => {
+  it("gives the balance and the currency of the account", async () => {
+    const fake = server({ status: 200, body: { account_sid: ACCOUNT, balance: "-1.83164", currency: "USD" } });
+    expect(await readTwilioBalance({ credentials: CREDENTIALS, fetch: fake.fetch })).toEqual({ ok: true, balance: -1.83164, currency: "USD" });
+    expect(fake.calls).toMatchObject([{ method: "GET", url: `https://api.twilio.com/2010-04-01/Accounts/${ACCOUNT}/Balance.json` }]);
+  });
+
+  it("gives each failure as a value, and makes no request with a bad account SID", async () => {
+    const fake = server({ status: 401, body: { code: 20003, message: "Authenticate" } }, new TypeError("fetch failed"), { status: 200, body: { balance: "a lot" } });
+    const read = () => readTwilioBalance({ credentials: CREDENTIALS, fetch: fake.fetch });
+    expect(await read()).toMatchObject({ ok: false, message: expect.stringContaining("(auth)") });
+    expect(await read()).toMatchObject({ ok: false, message: expect.stringContaining("(network)") });
+    expect(await read()).toMatchObject({ ok: false, message: expect.stringContaining("no balance") });
+    expect(await readTwilioBalance({ credentials: { accountSid: "AC1", secret: "fake-secret" }, fetch: fake.fetch })).toMatchObject({ ok: false });
+    expect(fake.calls).toHaveLength(3);
+  });
+
+  it("throws the reason of the signal at its abort", async () => {
+    const stop = new AbortController();
+    const fetch: TwilioFetch = (_url, init) => new Promise((_resolve, reject) => init.signal.addEventListener("abort", () => reject(init.signal.reason), { once: true }));
+    const read = readTwilioBalance({ credentials: CREDENTIALS, fetch }, stop.signal);
+    stop.abort(new Error("The runtime stops."));
+    await expect(read).rejects.toThrow("The runtime stops.");
   });
 });
 

@@ -1,15 +1,17 @@
 /**
  * The Twilio voice call channel of the alert system. It gives the procedures of the channel contract of
- * `@mark1russell7/alerts`: `describe`, `send`, `status` and `cancel`. The calls of the Twilio API come
- * from `@procedures/notify/twilio`.
+ * `@mark1russell7/alerts`: `describe`, `send`, `status` and `cancel`, and the read of the balance of the
+ * account. The calls of the Twilio API come from `@procedures/notify/twilio`.
  */
 
 import { COPY_ID, type ChannelProcedures, type Instant, type SendOutcome } from "@mark1russell7/alerts";
 import { errorMessage } from "@mark1russell7/text";
 import {
   callTwilio,
+  extractTwilioBalance,
   extractTwilioCall,
   TWILIO_ACCOUNT_SID,
+  twilioBalanceRequest,
   twilioCallRequest,
   twilioCallStatusRequest,
   twilioEndCallRequest,
@@ -20,15 +22,35 @@ import {
   type TwilioRequest,
 } from "@procedures/notify/twilio";
 import { isQuotaError, type QuotaError, type QuotaGate, type QuotaState } from "polite-crawler/api";
-import { twilioCallDescriptor } from "./descriptor.ts";
+import { TWILIO_PHONE_PATTERN, twilioCallDescriptor } from "./descriptor.ts";
 import { callFailureOf, callStatusOf, twilioCallOf, type TwilioCallMapOptions } from "./map.ts";
 
 export { CHANNEL_ID, TWILIO_CALL_ADDRESS, TWILIO_CALL_COST_USD, TWILIO_CALL_MAX_IN_FLIGHT, TWILIO_PHONE_PATTERN, twilioCallDescriptor } from "./descriptor.ts";
 export { CALL_LAST_SENTENCE, CALL_REPEATS, CALL_SAY_LIMIT, callFailureOf, callStatusOf, spokenTextOf, twilioCallOf } from "./map.ts";
 export type { Refusal, TwilioCallMapOptions } from "./map.ts";
+export type { TwilioCredentials, TwilioFetch } from "@procedures/notify/twilio";
 
 /** The time limit of one request to Twilio. */
 export const TWILIO_CALL_TIMEOUT_MS = 10_000;
+
+// The whole number that calls, in the form of a number of a person.
+const FROM_NUMBER = new RegExp(`^(?:${TWILIO_PHONE_PATTERN})$`, "u");
+
+/**
+ * This function gives the problems of the setup of the channel: the credentials and the number that calls.
+ * It makes no request. A problem names the field, and no value.
+ */
+export function twilioSetupProblems(credentials: TwilioCredentials, from: string): string[] {
+  const problems: string[] = [];
+  try {
+    // The builder of each request checks the form of the credentials. This request goes nowhere.
+    twilioBalanceRequest(credentials);
+  } catch (error) {
+    problems.push(errorMessage(error));
+  }
+  if (!FROM_NUMBER.test(from)) problems.push("The number that calls is not a phone number in E.164 form.");
+  return problems;
+}
 
 /**
  * The cap of the spend of the account, as two gates of `polite-crawler/api`. The two gates have one store,
@@ -145,6 +167,36 @@ export function createTwilioCallChannel(options: TwilioCallChannelOptions): Chan
 }
 
 export * from "./outage.ts";
+
+/** The answer of a read of the balance of the account. */
+export type TwilioBalanceReading = { readonly ok: true; readonly balance: number; readonly currency: string } | { readonly ok: false; readonly message: string };
+
+/** The options of a read of the balance. */
+export interface TwilioBalanceOptions {
+  /** The credentials of the Twilio account. */
+  readonly credentials: TwilioCredentials;
+  /** The fetch of the request. */
+  readonly fetch: TwilioFetch;
+  /** The time limit of the request. The default is 10 seconds. */
+  readonly timeoutMs?: number | undefined;
+}
+
+/**
+ * This function reads the balance of the Twilio account, in the currency of the account. It gives each
+ * failure as a value. It throws only the reason of `signal`, at its abort.
+ */
+export async function readTwilioBalance(options: TwilioBalanceOptions, signal?: AbortSignal): Promise<TwilioBalanceReading> {
+  let request: TwilioRequest;
+  try {
+    request = twilioBalanceRequest(options.credentials);
+  } catch (error) {
+    return { ok: false, message: `The credentials of the account are not valid: ${errorMessage(error)}` };
+  }
+  const timeoutMs = options.timeoutMs ?? TWILIO_CALL_TIMEOUT_MS;
+  const result = await callTwilio(options.fetch, request, extractTwilioBalance, signal === undefined ? { timeoutMs } : { timeoutMs, signal });
+  if (!result.ok) return { ok: false, message: `Twilio did not give the balance (${result.kind}): ${result.errors.join(" ")}` };
+  return { ok: true, balance: result.balance, currency: result.currency };
+}
 
 /**
  * This function gives the refusal of a gate of the spend. The gate of `life-safety` has no reserve, thus

@@ -3,14 +3,16 @@ import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fakeClock, type FakeClock, type WallClock } from "@mark1russell7/algebra/clock";
-import { CONFIG_FORMAT, matchPlaces, parseConfig, type AlertConfig, type Watch, type ChannelId, type EscalationPolicy, type PersonId, type PlaceId, type SecretLookup, type SourceId } from "@mark1russell7/alerts";
+import { CONFIG_FORMAT, matchPlaces, parseConfig, type AlertConfig, type Watch, type ChannelId, type EscalationPolicy, type PersonId, type PlaceId, type SecretLookup, type SourceId, type SpendConfig } from "@mark1russell7/alerts";
+import type { TwilioFetch } from "@mark1russell7/alerts-channel-twilio";
 import { PUSHOVER_QUOTA, PUSHOVER_RESERVE_NOTICES, PUSHOVER_TIMEOUT_MS, type PushoverChannelOptions } from "@mark1russell7/alerts-channel-pushover";
 import { memoryCache, type ShapeCache } from "@mark1russell7/alerts-shapes-nws";
 import { CANARY_PATH, createNwsSource } from "@mark1russell7/alerts-source-nws-api";
-import { quotaGate, type Exchange, type Transport } from "polite-crawler/api";
+import { memoryQuotaStore, quotaGate, type Exchange, type Transport } from "polite-crawler/api";
 import { DEFAULT_POLICY } from "polite-crawler/politeness";
 import { afterEach, describe, expect, it } from "vitest";
 import { CHECKS_KEY, checksKeys, DAEMON_CHECK, DELIVERY_TIMES, INSTANCE_CHANNELS, INSTANCE_CHECK, INSTANCE_EXPECTATIONS, INSTANCE_SOURCES, INSTANCE_TIMES, instanceProblems, LOUD_PING_URL_KEY, openInstance, PING_URL_KEY, pingTargets, SOURCE_POLICY, sourcePace, USER_AGENT_NAME, type Instance, type InstanceOptions } from "./instance.ts";
+import { spendGates, spendQuota } from "./balance.ts";
 import { overdueLimit } from "./delivery.ts";
 import type { ShapeOutcome } from "./shapes.ts";
 import { nextFetch } from "./view.ts";
@@ -440,12 +442,105 @@ describe("openInstance", () => {
     const missing = messageOf(() => open(phone("+1555555012"), withPhone(pushOnly)));
     expect(missing).toContain("The person person-1: The field to of the address on twilio-call is not a phone number in E.164 form");
     expect(missing).not.toContain("+1555555012");
-    // A good number on a step loads. The instance has no sender on the channel until AL-15, thus it does not start.
+    // A good number on a step loads. Without the keys of Twilio, the instance has no sender on the channel, thus it does not start.
     const steps = [...pushOnly, { channel: call, at: 5 * MINUTE }];
     expect(parseConfig(JSON.stringify(withPhone(steps)), INSTANCE_CHANNELS, phone("+15555550123")).tag).toBe("ok");
     expect(messageOf(() => open(phone("+15555550123"), withPhone(steps)))).toContain("Step 1 of life-safety of person-1 uses the channel twilio-call, and the instance has no sender on it.");
     // A number with no step only waits for its sender. The instance starts.
     expect(() => open(phone("+15555550123"), withPhone(pushOnly))).not.toThrow();
+  });
+});
+
+describe("the Twilio call channel of the instance", () => {
+  const call = "twilio-call" as ChannelId;
+  // Fake keys and fake numbers: the country code +999 has no country. A test looks for the values in each problem.
+  const TWILIO = {
+    TWILIO_ACCOUNT_SID: `AC${"0".repeat(32)}`,
+    TWILIO_API_KEY_SID: `SK${"1".repeat(32)}`,
+    TWILIO_API_KEY_SECRET: "s".repeat(32),
+    TWILIO_FROM: "+99900000001",
+    PHONE: "+99900000002",
+  };
+  const SPEND: SpendConfig = { provider: "provider:twilio", monthlyUsd: 10, reserveUsd: 3, floor: 5, timeZone: "America/Chicago" };
+  // Each policy calls the person at once, next to the Pushover message.
+  const calling = (spend?: readonly SpendConfig[]): AlertConfig => ({
+    ...CONFIG,
+    contacts: [...CONFIG.contacts, { person, channel: call, address: { to: { secret: "PHONE" } } }],
+    policies: CONFIG.policies.map((entry) => ({ ...entry, steps: [...entry.steps, { channel: call, at: 0 }] })),
+    ...(spend === undefined ? {} : { spend }),
+  });
+
+  /** A fake Twilio server. It accepts each call, and it gives a balance of 12.50 US dollars. */
+  function twilioServer() {
+    const calls: Array<{ url: string; method: string; authorization: string | undefined; fields: Record<string, string> }> = [];
+    const fetch: TwilioFetch = async (url, init) => {
+      calls.push({ url, method: init.method, authorization: init.headers["authorization"], fields: Object.fromEntries(new URLSearchParams(init.body ?? "")) });
+      const body = url.endsWith("/Balance.json") ? { balance: "12.50", currency: "USD" } : { sid: `CA${"a".repeat(32)}`, status: "queued" };
+      return { status: url.endsWith("/Calls.json") ? 201 : 200, text: async () => JSON.stringify(body), headers: { get: () => null } };
+    };
+    return { fetch, calls, made: () => calls.filter((entry) => entry.method === "POST" && entry.url.endsWith("/Calls.json")) };
+  }
+
+  it("calls the person with the keys of the secrets, counts the call in the cap, and reads the balance", async () => {
+    const twilio = twilioServer();
+    const { instance, clock, server } = open(store({ ...SECRETS, ...TWILIO }), calling([SPEND]), undefined, undefined, { twilio: twilio.fetch, spendStore: memoryQuotaStore() });
+    const pass = await finish(clock, instance.runtime.pass());
+    expect(pass.delivery?.sent).toHaveLength(2);
+    expect(server.calls).toHaveLength(1);
+    const [made] = twilio.made();
+    expect(twilio.made()).toHaveLength(1);
+    expect(made?.url).toBe(`https://api.twilio.com/2010-04-01/Accounts/${TWILIO.TWILIO_ACCOUNT_SID}/Calls.json`);
+    expect(made?.fields).toMatchObject({ To: TWILIO.PHONE, From: TWILIO.TWILIO_FROM, MachineDetection: "Enable" });
+    expect(made?.fields["Twiml"]).toContain("Flood Warning");
+    // The API key signs each request, not the account SID.
+    expect(made?.authorization).toBe(`Basic ${btoa(`${TWILIO.TWILIO_API_KEY_SID}:${TWILIO.TWILIO_API_KEY_SECRET}`)}`);
+    // The cap is 10 US dollars with a reserve of 3, in cents. One call takes 4 cents.
+    expect(instance.quotas()).toContainEqual({ channel: call, limit: 1_000, reserve: 300, used: 4, unit: "cents", resetAt: expect.any(Number) });
+    expect(twilio.calls.filter((entry) => entry.method === "GET" && entry.url.endsWith("/Balance.json"))).toHaveLength(1);
+    expect(instance.balances.map((watch) => [watch.provider, watch.balance()?.read?.balance, watch.balance()?.floor])).toEqual([["provider:twilio", 12.5, 5]]);
+  });
+
+  it("keeps the reserve of the cap for life-safety: a call below life-safety in the reserve does not go", async () => {
+    const twilio = twilioServer();
+    const spendStore = memoryQuotaStore();
+    // An earlier run used 700 of the 1000 cents. The last 300 cents are the reserve.
+    spendGates(spendQuota({ name: "Twilio spend", ...SPEND }), { key: "provider:twilio:spend", store: spendStore, now: () => T0 }).gate.take(700);
+    const { instance, clock, server } = open(store({ ...SECRETS, ...TWILIO }), calling([SPEND]), undefined, undefined, { twilio: twilio.fetch, spendStore });
+    const pass = await finish(clock, instance.runtime.pass());
+    expect(server.calls).toHaveLength(1);
+    expect(twilio.made()).toEqual([]);
+    expect(pass.delivery?.failures.map((failure) => [failure.channel, failure.kind])).toEqual([[call, "reserved"]]);
+    expect(instance.quotas().find((quota) => quota.channel === call)?.used).toBe(700);
+  });
+
+  it("makes no call channel without the keys, and the heartbeat has only the Pushover quota", () => {
+    const gate = quotaGate(PUSHOVER_QUOTA, { key: "pushover:app", now: () => T0 });
+    const { instance } = open(undefined, undefined, undefined, undefined, { pushoverQuota: gate });
+    expect(instance.quotas().map((quota) => quota.channel)).toEqual([pushover]);
+    expect(instance.balances).toEqual([]);
+  });
+
+  it("does not start with some keys of Twilio, a key of a bad form, or a call with no cap, and no problem holds a value", () => {
+    const keys = (extra: Readonly<Record<string, string>>): SecretLookup => store({ ...SECRETS, ...TWILIO, ...extra });
+    const partial = messageOf(() => open(keys({ TWILIO_API_KEY_SECRET: "" }), calling([SPEND])));
+    expect(partial).toContain("it has no value for TWILIO_API_KEY_SECRET. Give all the keys, or none.");
+    const badAccount = messageOf(() => open(keys({ TWILIO_ACCOUNT_SID: "AC-bad-value" }), calling([SPEND])));
+    expect(badAccount).toContain("The keys of Twilio have a problem: The account SID is not AC and 32 hexadecimal digits.");
+    const badKey = messageOf(() => open(keys({ TWILIO_API_KEY_SID: "SK-bad-value" }), calling([SPEND])));
+    expect(badKey).toContain("The API key SID is not SK and 32 hexadecimal digits.");
+    const badFrom = messageOf(() => open(keys({ TWILIO_FROM: "+1-bad-value" }), calling([SPEND])));
+    expect(badFrom).toContain("The number that calls is not a phone number in E.164 form.");
+    const noCap = messageOf(() => open(keys({}), calling()));
+    expect(noCap).toContain("The channel twilio-call costs money, and the configuration has no spend entry for its provider.");
+    for (const problem of [partial, badAccount, badKey, badFrom, noCap]) expect(problem).not.toMatch(/bad-value|s{32}|0{32}|1{32}|\+999/);
+    // With the keys and no step on the channel, no cap is needed.
+    expect(() => open(keys({}), CONFIG, undefined, undefined, { twilio: twilioServer().fetch })).not.toThrow();
+  });
+
+  it("needs the fetch of the channel and the store of the cap from the entry", () => {
+    const keys = store({ ...SECRETS, ...TWILIO });
+    expect(messageOf(() => open(keys, calling([SPEND]), undefined, undefined, { spendStore: memoryQuotaStore() }))).toContain("no fetch for the call channel");
+    expect(messageOf(() => open(keys, calling([SPEND]), undefined, undefined, { twilio: twilioServer().fetch }))).toContain("no store for its count");
   });
 });
 
