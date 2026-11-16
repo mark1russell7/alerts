@@ -337,6 +337,88 @@ For `life-safety`, the system prefers a duplicate to a miss.
 - When two copies cannot reach each other, both can send. Then the person can get the alert two times. The person does not get it zero times.
 - The message key is the SHA-256 of the incident report, the level, the person and the step. A channel that can drop a repeated key does so.
 
+## The copies of the system
+
+A copy of the system is one runtime on one computer: a cell. When one computer, its power or its link stops, a second copy still sends the alerts (AL-16). This section gives the design. Some parts of it are not in the code yet.
+
+### The settings of a copy
+
+Each copy loads the same `config.json` and `secrets.env`. The file `copy.json` of `ALERTS_HOME` gives the settings of one copy, and each copy has its own file:
+
+- `id`: the name of the copy, for example `home` or `cloud`. Two copies do not have the same id.
+- `rank`: the order of the copy, from 0. The copy with rank 0 sends first.
+- `listen`: the address and the port of the exchange. The address is the tailnet address of the computer, not all addresses.
+- `peers`: the id and the URL of the exchange of each other copy.
+- `pingKey`: the key of `secrets.env` that holds the ping URL of the first check of this copy. The default is `HEALTHCHECKS_PING_URL`.
+
+Without `copy.json`, the runtime is the only copy. It has rank 0 and no exchange. The key `COPY_TOKEN` of `secrets.env` gives the token of the exchange, the same for each copy.
+
+### The rank wait
+
+A copy waits `rank × RANK_DELAY` before each send: the knob `rank_wait` of the escalation. `RANK_DELAY` is 30 seconds, the sum of four times:
+
+- the flight limit of one send, 20 seconds: the copy before writes its delivery in this time
+- the period of the exchange, 5 seconds
+- the time limit of one exchange, 3 seconds
+- the limit of the difference between two clocks, 2 seconds
+
+Thus when each copy is up, the copy after gets the delivery of the copy before, and it does not send. A late pass of the copy before can give a duplicate, and the delivery promise accepts it.
+
+A copy with a higher rank sends first when it sees the incident `RANK_DELAY` or more before the other copies. Then the other copies get its delivery, and they do not send.
+
+### The exchange
+
+Each copy reads the log of each other copy, and adds the shared events to its own log:
+
+- The procedure `alerts.log.entries` gives the shared events of the log after a sequence number, one page at a time. It also gives the head of the log, the time of the copy and the hash of its configuration.
+- The procedures host of `@procedures/peer` serves the procedure on the address `listen`. The host checks the token. The runtime has no route and no token check of its own.
+- A worker of each copy reads each other copy each 5 seconds, with a time limit of 3 seconds. It keeps the last sequence number of each copy.
+- When the head of another copy is below that number, the log of that copy is new. Then the worker starts again from 0.
+- At its start, a copy reads each other copy before its first delivery step, for one time limit or less. Thus a restart does not repeat the sends of another copy.
+
+The shared events are the parts of the merge state and of the delivery ledger:
+
+- the reports of each `fetch` event, with no fetch record and no cursor
+- the events `ended`, `back`, `delivery`, `acknowledgment`, `cancelled` and `escalation-end`
+
+The other events stay in their copy, because each copy has its own sources, health and channels:
+
+- the events `started`, `observation`, `system`, `escalation` and `clock`
+- the events of the tries of a send: `attempt`, `settled` and `refused`
+
+The rules of an import:
+
+- An imported event keeps its id, and it gets the field `from`: the id of the copy that wrote it. The log keeps one event for each id, thus the same delivery of two copies is one event.
+- The fold of an imported event changes only the shared state. It is the merge, the cancels, the ends of the escalations and the refusals of a delivered key.
+- The health, the cursors and the counts of the deliveries of each channel stay with their copy.
+- A copy also gives the events that it imported. Thus three copies agree when only two pairs of them can reach each other.
+- The instants of an imported event come from the clock of another copy. Thus a step of the clock of this copy does not move them.
+- An acknowledgment goes to each copy. Each copy polls the receipts of each delivery in the ledger, thus an acknowledgment comes also when the copy of the send is down.
+
+The exchange also checks the copies. Each of these faults is a line of system reports:
+
+- the time of another copy differs from the time of this copy by more than 2 seconds, at the middle of the call
+- another copy has a different hash of the configuration: then the copies can route an alert in two ways
+- the reads of another copy fail for 60 seconds: then the two copies can both send
+
+### The checks of the copies
+
+- Each copy pings its own first check, with the URL of `pingKey`. Thus the owner gets a message when one copy stops.
+- The copies share the loud check, and each copy pings it. Thus the outage call comes only when no copy pings it in its grace.
+- A fail ping of one copy still makes the loud check go down. A fail comes from a channel that refuses, or from an overdue send of the joined ledger. Thus it tells of the whole system.
+
+### The quotas and the caps
+
+- The Pushover gate of each copy notes the count of the application from each answer of Pushover. The copies share the application, thus each gate is correct again at its next send.
+- The cap of the Twilio spend counts each call of another copy at its import. A count above the cap sets the gate to the cap.
+- Thus the copies keep one cap, apart from the calls that they make while they cannot reach each other.
+
+### The host of a copy on Linux
+
+- `install.ts` also installs the host on Linux: a systemd unit starts the supervisor at the boot, and again after a stop.
+- systemd stops the supervisor with SIGTERM. The supervisor sends the message `shutdown` to the runtime, as on Windows.
+- A cloud copy runs far from the places. Thus one storm or one power cut does not stop the two copies.
+
 ## The taxonomy
 
 `TAXONOMY` of the core holds each kind code, its plain name and a summary of one sentence. A code is dotted, for example `met.flood.flash`.
@@ -635,6 +717,7 @@ The instants of others do not move. They come from the clocks of the sources and
 - the times of a report of a source: `sent`, `effective`, `onset`, `expires` and `ends`
 - `asOf` of an end mark
 - the time of an acknowledgment
+- each instant of an event that another copy wrote
 
 ### The host on one computer
 
@@ -857,3 +940,5 @@ The file `schemas.ts` of the core has one zod 4 schema for each data type of the
 - The frame clock does not see a step while the process is down, because the first frame starts with the process. Then a time of the log can be after the first pass.
 - The park times of the hosts in `polite-crawler` do not move at a step of the wall clock.
 - The quota gates read the wall clock with no frame. Their windows are civil times, thus a step changes them as it changes the calendar.
+- A system report does not name its copy. With two copies, the owner cannot tell which copy has the fault.
+- A copy gets `config.json` and `secrets.env` by a copy of the files over the tailnet. A sync of the files is not in the code. The check of the hash finds a difference.
