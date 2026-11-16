@@ -2,7 +2,7 @@ import { random, seedsFrom } from "@mark1russell7/rigor-generators";
 import { describe, expect, expectTypeOf, it } from "vitest";
 import { z } from "zod";
 import { assess, COVERAGE_KIND, DEFAULT_ASSESS_POLICY } from "./assess.ts";
-import { CONFIG_FORMAT, loadConfig, type AlertConfig } from "./config.ts";
+import { CONFIG_FORMAT, COPY_FORMAT, copyProblems, loadConfig, ONLY_COPY, type AlertConfig, type CopySettings } from "./config.ts";
 import type {
   Acknowledgment,
   EndMark,
@@ -102,6 +102,9 @@ import {
   channelIdSchema,
   checkWith,
   contactConfigSchema,
+  copyListenSchema,
+  copyPeerSchema,
+  copySettingsSchema,
   correlationKeySchema,
   coverageSchema,
   cursorSchema,
@@ -137,6 +140,7 @@ import {
   observationSchema,
   operationSchema,
   parseConfig,
+  parseCopySettings,
   personConfigSchema,
   personIdSchema,
   personWatchSchema,
@@ -411,6 +415,9 @@ const SCHEMA_NAMES = [
   "channelDescriptorSchema",
   "channelIdSchema",
   "contactConfigSchema",
+  "copyListenSchema",
+  "copyPeerSchema",
+  "copySettingsSchema",
   "correlationKeySchema",
   "coverageSchema",
   "cursorSchema",
@@ -857,6 +864,53 @@ describe("the private configuration", () => {
     fails(outageConfigSchema, { people: [{ person: PERSON, chain: { steps: ["twilio-call"] }, to: "x" }] });
     fails(outagePersonConfigSchema, { person: PERSON, chain: { steps: [7] } });
     fails(tryChainSchema, { steps: "twilio-call" });
+  });
+
+  it("checks the form of the settings of a copy", () => {
+    const home: CopySettings = { format: COPY_FORMAT, id: "home", rank: 0, listen: { host: "100.64.0.1", port: 4751 }, peers: [{ id: "cloud", url: "http://cloud.example.ts.net:4751" }], pingKey: "HEALTHCHECKS_PING_URL_HOME" };
+    holds(copySettingsSchema, home);
+    holds(copySettingsSchema, ONLY_COPY);
+    holds(copyListenSchema, { host: "home.example.ts.net", port: 65535 });
+    holds(copyPeerSchema, { id: "c-2", url: "https://[fd7a:115c::1]:4751/exchange" });
+    for (const bad of [{ format: "alerts-copy/2" }, { id: "Home" }, { id: "" }, { id: "-home" }, { id: "a".repeat(33) }, { rank: -1 }, { rank: 0.5 }, { pingKey: "lower" }, { pingKey: "" }, { extra: 1 }]) fails(copySettingsSchema, { ...home, ...bad });
+    for (const bad of [{ port: 0 }, { port: 65536 }, { port: 1.5 }, { host: "" }]) fails(copyListenSchema, { host: "100.64.0.1", port: 4751, ...bad });
+    for (const url of ["ftp://cloud.example:4751", "http://user@cloud.example:4751", "http://cloud.example:4751/?q=1", "http://cloud.example:4751/#f", "cloud.example:4751", "http://", "http://-cloud.example"]) fails(copyPeerSchema, { id: "cloud", url });
+  });
+
+  it("finds the problems of the ranks, the ids and the address of a copy, and the problems hold no URL", () => {
+    const listen = { host: "100.64.0.1", port: 4751 };
+    const url = "http://cloud.example.ts.net:4751";
+    const base: CopySettings = { format: COPY_FORMAT, id: "home", rank: 1, listen, peers: [{ id: "cloud", url }] };
+    expect(copyProblems(base)).toEqual([]);
+    expect(copyProblems(ONLY_COPY)).toEqual([]);
+    // A rank is lower than the count of the copies.
+    expect(copyProblems({ ...base, rank: 2 })).toHaveLength(1);
+    expect(copyProblems({ format: COPY_FORMAT, id: "home", rank: 1 })).toHaveLength(1);
+    // A repeated id, the id of this copy, and a repeated URL.
+    const repeated = copyProblems({ ...base, peers: [{ id: "cloud", url }, { id: "cloud", url: `${url}/b` }, { id: "home", url }] });
+    expect(repeated).toHaveLength(3);
+    // A copy with other copies listens, and not on all the interfaces.
+    expect(copyProblems({ format: COPY_FORMAT, id: "home", rank: 0, peers: [{ id: "cloud", url }] })).toHaveLength(1);
+    for (const host of ["0.0.0.0", "::", "[::]", "*"]) expect(copyProblems({ ...base, listen: { host, port: 4751 } })).toHaveLength(1);
+    for (const problem of [...repeated, ...copyProblems({ ...base, listen: { host: "0.0.0.0", port: 4751 } })]) {
+      expect(problem).not.toContain(url);
+      expect(problem).not.toContain("example");
+    }
+  });
+
+  it("reads the text of copy.json: the JSON, then the schema, then the problems", () => {
+    const home: CopySettings = { format: COPY_FORMAT, id: "home", rank: 0, listen: { host: "100.64.0.1", port: 4751 }, peers: [{ id: "cloud", url: "http://cloud.example.ts.net:4751" }] };
+    const read = parseCopySettings(JSON.stringify(home));
+    expect(read.tag).toBe("ok");
+    if (read.tag === "ok") expect(read.value).toEqual(home);
+    const notJson = parseCopySettings("{ id: home");
+    expect(notJson).toEqual({ tag: "err", error: ["The settings of the copy are not valid JSON."] });
+    const badUrl = parseCopySettings(JSON.stringify({ ...home, peers: [{ id: "cloud", url: "http://user:pass@cloud.example.ts.net:4751" }] }));
+    expect(badUrl.tag).toBe("err");
+    if (badUrl.tag === "err") for (const problem of badUrl.error) expect(problem).not.toContain("pass@");
+    const badRank = parseCopySettings(JSON.stringify({ ...home, rank: 3 }));
+    expect(badRank.tag).toBe("err");
+    if (badRank.tag === "err") expect(badRank.error).toHaveLength(1);
   });
 
   it("checks the form of the link policy of the merge", () => {

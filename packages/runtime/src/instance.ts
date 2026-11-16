@@ -8,6 +8,7 @@ import {
   configuredExpectations,
   expectationProblems,
   localPlaces,
+  ONLY_COPY,
   placeLabels,
   sourceCovers,
   sourcePlaces,
@@ -15,6 +16,7 @@ import {
   type ChannelId,
   type ChannelProcedures,
   type ChannelQuota,
+  type CopySettings,
   type Duration,
   type Expectation,
   type Instant,
@@ -45,6 +47,7 @@ import type { Pace, QuotaStore, Transport } from "polite-crawler/api";
 import { DEFAULT_POLICY, HostScheduler, type PolitenessPolicy } from "polite-crawler/politeness";
 import { balanceWatch, SPEND_UNIT, spendGates, spendQuota, spendUnits, type BalanceWatch, type SpendGates } from "./balance.ts";
 import { parseSecrets, requireKey, SECRETS_FILE, type FileText, type InstanceCheck } from "./config.ts";
+import { CLOCK_SKEW_LIMIT, COPY_FILE, COPY_TOKEN_KEY, EXCHANGE_EVERY, EXCHANGE_LIMIT } from "./copy.ts";
 import { overdueLimit, type DeliveryOptions } from "./delivery.ts";
 import { frameClock } from "./frame.ts";
 import type { RuntimeLog } from "./log.ts";
@@ -67,18 +70,25 @@ export const PING_URL_KEY = "HEALTHCHECKS_PING_URL";
  */
 export const LOUD_PING_URL_KEY = "HEALTHCHECKS_LOUD_PING_URL";
 
+/**
+ * This function gives the key of `secrets.env` with the address of the first check of a copy. Each copy has its own
+ * first check, thus a stop of one copy makes its own alert. The default key is `PING_URL_KEY`.
+ */
+export const pingKeyOf = (copy: CopySettings): string => copy.pingKey ?? PING_URL_KEY;
+
 /** One check of the outside heartbeat: the key of `secrets.env` and its address. */
 export interface PingTarget {
-  readonly key: typeof PING_URL_KEY | typeof LOUD_PING_URL_KEY;
+  /** The key of the first check of the copy, or `LOUD_PING_URL_KEY`. */
+  readonly key: string;
   readonly url: string;
 }
 
 /**
- * This function gives the checks of the outside heartbeat from the secrets: the check of
- * `HEALTHCHECKS_PING_URL`, then the loud check. A key with an empty value gives no check.
+ * This function gives the checks of the outside heartbeat from the secrets: the first check of the copy, then the loud
+ * check. The copies share the loud check. A key with an empty value gives no check.
  */
-export function pingTargets(secret: (key: string) => string | undefined): readonly PingTarget[] {
-  return ([PING_URL_KEY, LOUD_PING_URL_KEY] as const).flatMap((key): PingTarget[] => {
+export function pingTargets(secret: (key: string) => string | undefined, copy: CopySettings = ONLY_COPY): readonly PingTarget[] {
+  return [pingKeyOf(copy), LOUD_PING_URL_KEY].flatMap((key): PingTarget[] => {
     const url = secret(key) ?? "";
     return url === "" ? [] : [{ key, url }];
   });
@@ -101,16 +111,17 @@ export interface ChecksKeys {
 }
 
 /**
- * This function gives the keys of the status check of the heartbeat from the text of `secrets.env`. It
- * parses the text as the start does. A problem holds no value and no path.
+ * This function gives the keys of the status check of the heartbeat from the text of `secrets.env`. The keys are
+ * the key of the API, the first check of the copy and the loud check. It parses the text as the start does. A problem holds no value and no path.
  */
-export function checksKeys(file: FileText): Result<ChecksKeys, readonly string[]> {
+export function checksKeys(file: FileText, copy: CopySettings = ONLY_COPY): Result<ChecksKeys, readonly string[]> {
   const keys = parseSecrets(file);
   if (keys.tag === "err") return keys;
+  const pingKey = pingKeyOf(copy);
   const key = keys.value[CHECKS_KEY] ?? "";
-  const url = keys.value[PING_URL_KEY] ?? "";
+  const url = keys.value[pingKey] ?? "";
   const loudUrl = keys.value[LOUD_PING_URL_KEY] ?? "";
-  if (key === "" || url === "") return err([`The file ${SECRETS_FILE} needs ${CHECKS_KEY} and ${PING_URL_KEY} for this check.`]);
+  if (key === "" || url === "") return err([`The file ${SECRETS_FILE} needs ${CHECKS_KEY} and ${pingKey} for this check.`]);
   return ok(loudUrl === "" ? { key, url } : { key, url, loudUrl });
 }
 
@@ -233,6 +244,16 @@ export const DELIVERY_TIMES: Pick<DeliveryOptions, "pollEvery" | "retry" | "call
 };
 
 /**
+ * The wait of each rank of a copy: 30 s. A copy with rank 1 sends a step 30 s after the copy with rank 0. In that
+ * time, the send of rank 0 ends, and its delivery comes to rank 1 by the exchange:
+ *
+ * - the flight limit of one send, 20 s
+ * - one interval of the exchange, 5 s, and the time limit of one read, 3 s
+ * - the largest difference of the clocks of the copies with no system line, 2 s.
+ */
+export const RANK_DELAY: Duration = DELIVERY_TIMES.flightLimit + EXCHANGE_EVERY + EXCHANGE_LIMIT + CLOCK_SKEW_LIMIT;
+
+/**
  * This function gives the problems of a configuration that stop the start of the instance:
  *
  * - a missing token, or a token with a bad form
@@ -293,10 +314,22 @@ export const INSTANCE_CHECK: InstanceCheck = {
 };
 
 /**
- * The check of the live instance, the profile `daemon`. It adds the key of the outside heartbeat to
- * `INSTANCE_CHECK`, because the live instance does not start without its heartbeat.
+ * This function gives the check of the live instance of a copy, the profile `daemon`. It adds the key of the first
+ * check of the copy to `INSTANCE_CHECK`, because the live instance does not start without its heartbeat. A copy with
+ * other copies also needs the token of the exchange.
  */
-export const DAEMON_CHECK: InstanceCheck = requireKey(INSTANCE_CHECK, PING_URL_KEY, "The live instance needs its outside heartbeat.");
+export function daemonCheck(copy: CopySettings): InstanceCheck {
+  const pingKey = pingKeyOf(copy);
+  const ping = requireKey(INSTANCE_CHECK, pingKey, "The live instance needs its outside heartbeat.");
+  const check = (copy.peers ?? []).length === 0 ? ping : requireKey(ping, COPY_TOKEN_KEY, "A copy with other copies needs the token of the exchange.");
+  // The copies share the loud check. A copy that pings it as its first check hides the stop of the other copies.
+  if (pingKey !== LOUD_PING_URL_KEY) return check;
+  const shared = `The file ${COPY_FILE}: pingKey is ${LOUD_PING_URL_KEY}, the key of the shared loud check. Each copy has its own first check.`;
+  return { channels: check.channels, problems: (parsed, secret) => [...check.problems(parsed, secret), shared] };
+}
+
+/** The check of the live instance of the only copy: `daemonCheck(ONLY_COPY)`. */
+export const DAEMON_CHECK: InstanceCheck = daemonCheck(ONLY_COPY);
 
 /** The options of `openInstance`. */
 export interface InstanceOptions {
@@ -335,6 +368,8 @@ export interface InstanceOptions {
   readonly spendStore?: QuotaStore;
   /** The id of this run. Each start of the process has a new id. */
   readonly run: string;
+  /** The settings of this copy of the system. The default is `ONLY_COPY`, with rank 0. A copy waits its rank times `RANK_DELAY` before each send. */
+  readonly copy?: CopySettings;
   /** The runtime starts this hook at the end of each pass with no error. */
   readonly onPass?: (pass: Pass) => void | Promise<void>;
   /** The loop gives each failed pass to this function. */
@@ -446,7 +481,15 @@ export function openInstance(options: InstanceOptions): Instance {
   const balances = twilio?.watch === undefined ? [] : [twilio.watch];
   const channels = twilio === undefined ? [pushover] : [pushover, twilio.channel];
   // The labels of the places go only into the why line of each message. The policy of the configuration replaces the default policy of the core.
-  const delivery: DeliveryOptions = { recipients, channels, labels: placeLabels(placed), ...(config.assess === undefined ? {} : { assess: config.assess }), ...DELIVERY_TIMES };
+  const delivery: DeliveryOptions = {
+    recipients,
+    channels,
+    labels: placeLabels(placed),
+    ...(config.assess === undefined ? {} : { assess: config.assess }),
+    ...DELIVERY_TIMES,
+    rank: (options.copy ?? ONLY_COPY).rank,
+    rankDelay: RANK_DELAY,
+  };
 
   const runtime: Runtime = openRuntime({
     log: options.log,

@@ -3,7 +3,7 @@ import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fakeClock, type FakeClock, type WallClock } from "@mark1russell7/algebra/clock";
-import { CONFIG_FORMAT, matchPlaces, parseConfig, type AlertConfig, type Watch, type ChannelId, type EscalationPolicy, type PersonId, type PlaceId, type SecretLookup, type SourceId, type SpendConfig } from "@mark1russell7/alerts";
+import { CONFIG_FORMAT, COPY_FORMAT, matchPlaces, ONLY_COPY, parseConfig, type AlertConfig, type Watch, type ChannelId, type EscalationPolicy, type PersonId, type PlaceId, type SecretLookup, type CopySettings, type SourceId, type SpendConfig } from "@mark1russell7/alerts";
 import type { TwilioFetch } from "@mark1russell7/alerts-channel-twilio";
 import { PUSHOVER_QUOTA, PUSHOVER_RESERVE_NOTICES, PUSHOVER_TIMEOUT_MS, type PushoverChannelOptions } from "@mark1russell7/alerts-channel-pushover";
 import { memoryCache, type ShapeCache } from "@mark1russell7/alerts-shapes-nws";
@@ -11,8 +11,9 @@ import { CANARY_PATH, createNwsSource } from "@mark1russell7/alerts-source-nws-a
 import { memoryQuotaStore, quotaGate, type Exchange, type Transport } from "polite-crawler/api";
 import { DEFAULT_POLICY } from "polite-crawler/politeness";
 import { afterEach, describe, expect, it } from "vitest";
-import { CHECKS_KEY, checksKeys, DAEMON_CHECK, DELIVERY_TIMES, INSTANCE_CHANNELS, INSTANCE_CHECK, INSTANCE_EXPECTATIONS, INSTANCE_SOURCES, INSTANCE_TIMES, instanceProblems, LOUD_PING_URL_KEY, openInstance, PING_URL_KEY, pingTargets, SOURCE_POLICY, sourcePace, USER_AGENT_NAME, type Instance, type InstanceOptions } from "./instance.ts";
+import { CHECKS_KEY, checksKeys, DAEMON_CHECK, daemonCheck, DELIVERY_TIMES, INSTANCE_CHANNELS, INSTANCE_CHECK, INSTANCE_EXPECTATIONS, INSTANCE_SOURCES, INSTANCE_TIMES, instanceProblems, LOUD_PING_URL_KEY, openInstance, PING_URL_KEY, pingKeyOf, pingTargets, RANK_DELAY, SOURCE_POLICY, sourcePace, USER_AGENT_NAME, type Instance, type InstanceOptions } from "./instance.ts";
 import { spendGates, spendQuota } from "./balance.ts";
+import { CLOCK_SKEW_LIMIT, COPY_TOKEN_KEY, EXCHANGE_EVERY, EXCHANGE_LIMIT } from "./copy.ts";
 import { overdueLimit } from "./delivery.ts";
 import type { ShapeOutcome } from "./shapes.ts";
 import { nextFetch } from "./view.ts";
@@ -642,6 +643,80 @@ describe("the check of the instance", () => {
     expect(DAEMON_CHECK.channels).toBe(INSTANCE_CHECK.channels);
     expect(DAEMON_CHECK.problems(parsed, store(SECRETS))).toEqual([`The file secrets.env has no ${PING_URL_KEY}. The live instance needs its outside heartbeat.`]);
     expect(DAEMON_CHECK.problems(parsed, store({ ...SECRETS, [PING_URL_KEY]: "https://hc-ping.example/test" }))).toEqual([]);
+  });
+});
+
+describe("the copies of the system", () => {
+  // A copy with rank 1 and its own first check. The addresses are fake.
+  const CLOUD_KEY = "HEALTHCHECKS_PING_URL_CLOUD";
+  const CLOUD: CopySettings = { format: COPY_FORMAT, id: "cloud", rank: 1, listen: { host: "cloud.example", port: 4751 }, peers: [{ id: "home", url: "http://home.example:4751" }], pingKey: CLOUD_KEY };
+  const URL_OF_CHECK = "https://hc-ping.com/00000000-0000-4000-8000-000000000000";
+  const lookup = (values: Record<string, string>) => (key: string) => values[key];
+
+  it("waits 30 s for each rank: the flight limit, one exchange with its time limit, and the clock difference", () => {
+    expect(RANK_DELAY).toBe(DELIVERY_TIMES.flightLimit + EXCHANGE_EVERY + EXCHANGE_LIMIT + CLOCK_SKEW_LIMIT);
+    expect(RANK_DELAY).toBe(30_000);
+    // The delivery of rank 0 comes to rank 1 before its wait ends, also after the longest send and one failed read.
+    expect(RANK_DELAY).toBeGreaterThan(DELIVERY_TIMES.flightLimit + 2 * EXCHANGE_EVERY - EXCHANGE_EVERY + EXCHANGE_LIMIT);
+  });
+
+  it("sends a step of a copy with rank 1 one rank delay after the start of the escalation", async () => {
+    const { instance, clock, server } = await open(undefined, undefined, undefined, undefined, { copy: CLOUD });
+    const first = await finish(clock, instance.runtime.pass());
+    const route = first.delivery?.routes[0];
+    expect(route).toBeDefined();
+    expect(server.calls).toEqual([]);
+    expect(route?.plan.sends).toEqual([]);
+    expect(route?.plan.wakeAt).toBe((route?.plan.start ?? 0) + RANK_DELAY);
+    await clock.advance(RANK_DELAY);
+    const second = await finish(clock, instance.runtime.pass());
+    expect(server.calls).toHaveLength(1);
+    expect(second.delivery?.sent[0]?.at).toBeGreaterThanOrEqual((route?.plan.start ?? 0) + RANK_DELAY);
+  });
+
+  it("sends a step of the only copy at once", async () => {
+    const { instance, clock, server } = await open(undefined, undefined, undefined, undefined, { copy: ONLY_COPY });
+    await finish(clock, instance.runtime.pass());
+    expect(server.calls).toHaveLength(1);
+  });
+
+  it("pings the first check of the copy and the shared loud check", () => {
+    const loud = `${URL_OF_CHECK}-loud`;
+    const own = `${URL_OF_CHECK}-cloud`;
+    const secrets = lookup({ [PING_URL_KEY]: URL_OF_CHECK, [CLOUD_KEY]: own, [LOUD_PING_URL_KEY]: loud });
+    expect(pingKeyOf(ONLY_COPY)).toBe(PING_URL_KEY);
+    expect(pingKeyOf(CLOUD)).toBe(CLOUD_KEY);
+    expect(pingTargets(secrets, CLOUD)).toEqual([
+      { key: CLOUD_KEY, url: own },
+      { key: LOUD_PING_URL_KEY, url: loud },
+    ]);
+    expect(pingTargets(secrets)).toEqual(pingTargets(secrets, ONLY_COPY));
+    expect(checksKeys({ text: `${CHECKS_KEY}=${"k".repeat(32)}
+${CLOUD_KEY}=${own}
+` }, CLOUD)).toEqual({ tag: "ok", value: { key: "k".repeat(32), url: own } });
+    const missing = checksKeys({ text: `${CHECKS_KEY}=${"k".repeat(32)}
+${PING_URL_KEY}=${URL_OF_CHECK}
+` }, CLOUD);
+    expect(missing).toEqual({ tag: "err", error: [`The file secrets.env needs ${CHECKS_KEY} and ${CLOUD_KEY} for this check.`] });
+  });
+
+  it("needs the first check of the copy, the token of the exchange with other copies, and its own first check", () => {
+    const parsed = parseConfig(JSON.stringify(CONFIG), INSTANCE_CHECK.channels, store(SECRETS));
+    if (parsed.tag === "err") throw new Error(parsed.error.join("
+"));
+    const check = daemonCheck(CLOUD);
+    expect(check.channels).toBe(INSTANCE_CHECK.channels);
+    expect(check.problems(parsed.value, store({ ...SECRETS, [PING_URL_KEY]: URL_OF_CHECK }))).toEqual([
+      `The file secrets.env has no ${CLOUD_KEY}. The live instance needs its outside heartbeat.`,
+      `The file secrets.env has no ${COPY_TOKEN_KEY}. A copy with other copies needs the token of the exchange.`,
+    ]);
+    expect(check.problems(parsed.value, store({ ...SECRETS, [CLOUD_KEY]: URL_OF_CHECK, [COPY_TOKEN_KEY]: "t".repeat(32) }))).toEqual([]);
+    // The only copy has no exchange, thus it needs no token.
+    expect(daemonCheck(ONLY_COPY).problems(parsed.value, store({ ...SECRETS, [PING_URL_KEY]: URL_OF_CHECK }))).toEqual([]);
+    expect(DAEMON_CHECK.problems(parsed.value, store(SECRETS))).toEqual(daemonCheck(ONLY_COPY).problems(parsed.value, store(SECRETS)));
+    // The copies share the loud check. It is not the first check of a copy.
+    const shared = daemonCheck({ ...ONLY_COPY, pingKey: LOUD_PING_URL_KEY }).problems(parsed.value, store({ ...SECRETS, [LOUD_PING_URL_KEY]: URL_OF_CHECK }));
+    expect(shared).toEqual([`The file copy.json: pingKey is ${LOUD_PING_URL_KEY}, the key of the shared loud check. Each copy has its own first check.`]);
   });
 });
 

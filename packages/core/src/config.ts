@@ -117,6 +117,73 @@ export interface AlertConfig {
   readonly assess?: AssessPolicy;
 }
 
+/** The name of the format of the settings of one copy of the system. A change that breaks a file gets a new name. */
+export const COPY_FORMAT = "alerts-copy/1";
+
+/** The address and the port of the exchange of a copy. */
+export interface CopyListen {
+  /** The address of the computer on the tailnet. An address of all interfaces is a problem. */
+  readonly host: string;
+  readonly port: number;
+}
+
+/** Another copy of the system, as one copy sees it. */
+export interface CopyPeer {
+  /** The id of the other copy. */
+  readonly id: string;
+  /** The URL of the exchange of the other copy, with `http` or `https`. */
+  readonly url: string;
+}
+
+/**
+ * The settings of one copy of the system: the file `copy.json`. Each copy has its own file. The configuration and the
+ * secrets are the same in each copy. A runtime with no file is the only copy, `ONLY_COPY`.
+ */
+export interface CopySettings {
+  readonly format: typeof COPY_FORMAT;
+  /** The name of the copy, for example `home` or `cloud`. Two copies do not have the same id. */
+  readonly id: string;
+  /** The order of the copy, from 0. A copy waits its rank times the rank delay before each send. */
+  readonly rank: number;
+  /** The address of the exchange of this copy. A copy with other copies needs it. */
+  readonly listen?: CopyListen;
+  /** The other copies. */
+  readonly peers?: readonly CopyPeer[];
+  /** The key of the secrets with the ping URL of the first check of this copy. The runtime gives a default key. */
+  readonly pingKey?: string;
+}
+
+/** The settings of a runtime with no file `copy.json`: the only copy, with rank 0 and no exchange. */
+export const ONLY_COPY: CopySettings = { format: COPY_FORMAT, id: "only", rank: 0 };
+
+// The addresses of all the interfaces. The exchange does not listen on them: only the tailnet reaches it.
+const ALL_INTERFACES: ReadonlySet<string> = new Set(["0.0.0.0", "::", "[::]", "*"]);
+
+/**
+ * This function gives the problems of the settings of a copy that a schema cannot find. Each problem names a field,
+ * and it holds no address and no URL.
+ *
+ * - A rank is lower than the count of the copies, because the ranks of the copies are 0, 1, 2 and up.
+ * - The other copies have different ids and URLs, and no other copy has the id of this copy.
+ * - A copy with other copies has the address `listen`, and the address is not an address of all interfaces.
+ */
+export function copyProblems(settings: CopySettings): string[] {
+  const problems: string[] = [];
+  const peers = settings.peers ?? [];
+  if (settings.rank > peers.length) problems.push(`The rank is ${String(settings.rank)}, but the copies are ${String(peers.length + 1)}. A rank is lower than the count of the copies.`);
+  const ids = new Set<string>([settings.id]);
+  const urls = new Set<string>();
+  peers.forEach((peer, at) => {
+    if (ids.has(peer.id)) problems.push(`peers[${String(at)}]: the id ${peer.id} is the id of this copy or of an earlier copy.`);
+    if (urls.has(peer.url)) problems.push(`peers[${String(at)}]: the URL is the URL of an earlier copy.`);
+    ids.add(peer.id);
+    urls.add(peer.url);
+  });
+  if (peers.length > 0 && settings.listen === undefined) problems.push("A copy with other copies needs the address listen of its exchange.");
+  if (settings.listen !== undefined && ALL_INTERFACES.has(settings.listen.host)) problems.push("listen.host: the exchange does not listen on all the interfaces. Give the tailnet address of the computer.");
+  return problems;
+}
+
 /** The settings of one expectation of the instance, for example the WEA check of a copy source. */
 export interface ExpectationConfig {
   /** The id of the expectation. */
