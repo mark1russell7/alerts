@@ -293,6 +293,16 @@ report(order.id, { ...order.verdict, problems: [...order.verdict.problems, ...or
     });
   }),
   "",
+  `System incidents: ${
+    order.records
+      .flatMap((record) => {
+        const result = order.verdict.results[record.arm];
+        const sent = ORDER_PLACES.map((place) => `${place} ${labels(result?.systemSends[place] ?? [])}`).join(", ");
+        return record.system.length === 0 ? [] : [`${record.arm}: ${record.system.map((incident) => `${incident.kind} at ${s(incident.at)} s`).join(", ")} (sends: ${sent})`];
+      })
+      .join("; ") || "none"
+  }.`,
+  "",
   `Known faults: ${ORDER_KNOWN_FAULTS.length === 0 ? "none" : ORDER_KNOWN_FAULTS.map((fault) => `${fault.arm} ${fault.gate}`).join(", ")}.`,
   "",
   `Read: ${yes(order.verdict.read)}. Pass: **${yes(order.verdict.pass)}**.`,

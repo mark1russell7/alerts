@@ -119,10 +119,14 @@ export type CopyPlace = "kept" | "dropped";
 /** The id of each watched place. */
 const PLACE_IDS: Readonly<Record<CopyPlace, PlaceId>> = { kept: "kept" as PlaceId, dropped: "dropped" as PlaceId };
 
-/** The watched places: the county TXC137 is in the NEW and the EXT message, and the county TXC019 is only in the NEW message. */
+/**
+ * The watched places: the county TXC137 is in the NEW and the EXT message, and the county TXC019 is only in the NEW message.
+ * The code `iso3166` `US` puts each place in the coverage of the two sources. Without it, the coverage of each place is 0 sources.
+ * The places have no `state` code, because that code changes the NWS query to a query of the state.
+ */
 export const COPY_PLACES: readonly WatchedPlace[] = [
-  { id: PLACE_IDS.kept, codes: [{ system: "ugc", code: "TXC137" }], bufferKm: 0 },
-  { id: PLACE_IDS.dropped, codes: [{ system: "ugc", code: "TXC019" }], bufferKm: 0 },
+  { id: PLACE_IDS.kept, codes: [{ system: "ugc", code: "TXC137" }, { system: "iso3166", code: "US" }], bufferKm: 0 },
+  { id: PLACE_IDS.dropped, codes: [{ system: "ugc", code: "TXC019" }, { system: "iso3166", code: "US" }], bufferKm: 0 },
 ];
 const WATCH: Watch = { places: COPY_PLACES };
 const VIEW: RuntimeOptions["view"] = {

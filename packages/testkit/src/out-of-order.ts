@@ -29,6 +29,9 @@
  * - `cancels`: each expected send has a cancel exactly when the expectation has one.
  * - `receipts`: Pushover got a cancel of each receipt exactly when the log has a cancel of its delivery.
  * - `live`: the place has a threat at the end of the arm exactly when the expectation has one.
+ * - `system`: the person gets no send of an incident with the status `system`. The other gates do not count such a send.
+ *
+ * An incident with the status `system` tells of a fault of the setup, for example a place that no source covers.
  *
  * The arms have no acknowledgment. The runtime has no acknowledge function, and the Pushover fake gives one state to
  * all receipts. A state for each receipt in the fake of `@procedures/notify/testing` removes this limit.
@@ -493,9 +496,9 @@ export interface OrderLog {
   /** The start of each send. */
   readonly attempts: readonly TimedKey[];
   readonly cancelled: readonly TimedKey[];
-  /** Each end of the escalations of a person in a live incident. */
-  readonly ends: readonly { readonly person: string; readonly at: number }[];
-  readonly starts: readonly { readonly person: string; readonly level: Level; readonly at: number }[];
+  /** Each end of the escalations of a person in a live incident. The incident is a report of the incident at the end. */
+  readonly ends: readonly { readonly incident: string; readonly person: string; readonly at: number }[];
+  readonly starts: readonly { readonly incident: string; readonly person: string; readonly level: Level; readonly at: number }[];
 }
 
 /** This function reads the sends, the cancels, the starts and the ends of the escalations of a log. */
@@ -503,8 +506,8 @@ export function orderLogOf(log: Pick<RuntimeLog, "read">, start: number): OrderL
   const deliveries: OrderDelivery[] = [];
   const attempts: TimedKey[] = [];
   const cancelled: TimedKey[] = [];
-  const ends: { person: string; at: number }[] = [];
-  const starts: { person: string; level: Level; at: number }[] = [];
+  const ends: { incident: string; person: string; at: number }[] = [];
+  const starts: { incident: string; person: string; level: Level; at: number }[] = [];
   for (const event of log.read()) {
     if (event.type === "delivery") {
       const { delivery } = event;
@@ -523,9 +526,9 @@ export function orderLogOf(log: Pick<RuntimeLog, "read">, start: number): OrderL
     } else if (event.type === "cancelled") {
       cancelled.push({ key: event.delivery, at: event.time - start });
     } else if (event.type === "escalation-end") {
-      ends.push({ person: event.end.person, at: event.end.at - start });
+      ends.push({ incident: event.end.incident, person: event.end.person, at: event.end.at - start });
     } else if (event.type === "escalation") {
-      starts.push({ person: event.start.person, level: event.start.level, at: event.start.at - start });
+      starts.push({ incident: event.start.incident, person: event.start.person, level: event.start.level, at: event.start.at - start });
     }
   }
   return { deliveries, attempts, cancelled, ends, starts };
@@ -550,6 +553,17 @@ export interface OrderFailure {
   readonly message: string;
 }
 
+/** An incident with the status `system`: a line of the runtime about the health or the coverage of its sources, or a quota. */
+export interface OrderSystemIncident {
+  readonly anchor: string;
+  /** The reports of the incident in each pass, with the anchor. */
+  readonly reports: readonly string[];
+  /** The code of the kind at the last pass with the incident. */
+  readonly kind: string;
+  /** The time of the first pass with the incident, from the start of the case clock. */
+  readonly at: number;
+}
+
 /** The records of one arm. */
 export interface OrderRecord {
   readonly arm: OrderArm;
@@ -563,6 +577,8 @@ export interface OrderRecord {
   readonly failures: readonly OrderFailure[];
   /** The keys that the channel accepted again after the log had their delivery. */
   readonly duplicates: readonly string[];
+  /** The incidents with the status `system` in each pass. Only the gate `system` counts their sends. */
+  readonly system: readonly OrderSystemIncident[];
   readonly passes: number;
   /** The message of a throw of a pass. */
   readonly error?: string;
@@ -619,6 +635,7 @@ export async function runOrderArm(arm: OrderArm, settings: OrderSettings = CASE_
   const log = openRuntimeLog(":memory:");
   const failures: OrderFailure[] = [];
   const duplicates: string[] = [];
+  const system = new Map<string, { reports: Set<string>; kind: string; at: number }>();
   let incidents: readonly Incident[] = [];
   let passes = 0;
   let error: string | undefined;
@@ -638,6 +655,12 @@ export async function runOrderArm(arm: OrderArm, settings: OrderSettings = CASE_
       const result = await runtime.pass();
       passes += 1;
       incidents = result.view.incidents;
+      for (const incident of incidents) {
+        if (incident.status !== "system") continue;
+        const seen = system.get(incident.anchor) ?? { reports: new Set<string>(), kind: incident.kind.code, at: result.at - settings.start };
+        for (const report of [incident.anchor, ...incident.reports]) seen.reports.add(report);
+        system.set(incident.anchor, { ...seen, kind: incident.kind.code });
+      }
       duplicates.push(...(result.delivery?.duplicates ?? []));
       for (const failure of result.delivery?.failures ?? []) failures.push({ at: result.at - settings.start, call: failure.call, kind: failure.kind, message: failure.message });
       const next = Math.min(result.wakeAt ?? Number.POSITIVE_INFINITY, clock.now() + TICK);
@@ -662,13 +685,14 @@ export async function runOrderArm(arm: OrderArm, settings: OrderSettings = CASE_
     live: { kept: liveAt("kept"), dropped: liveAt("dropped") },
     failures,
     duplicates,
+    system: [...system].map(([anchor, seen]) => ({ anchor, reports: [...seen.reports].sort(), kind: seen.kind, at: seen.at })),
     passes,
     ...(error === undefined ? {} : { error }),
   };
 }
 
 /** The names of the gates of each place, in their order. */
-export const ORDER_GATES = ["sends", "oneKey", "quietAway", "episodes", "ends", "cancels", "receipts", "live"] as const;
+export const ORDER_GATES = ["sends", "oneKey", "quietAway", "episodes", "ends", "cancels", "receipts", "live", "system"] as const;
 
 /** A gate of a place. */
 export type OrderGate = (typeof ORDER_GATES)[number];
@@ -703,6 +727,8 @@ export interface OrderResult {
   readonly ends: Readonly<Record<CopyPlace, number>>;
   /** The start time of each send of a person while the threat is away from the place. */
   readonly awaySends: Readonly<Record<CopyPlace, readonly number[]>>;
+  /** The labels of the sends of the system incidents to the person of each place. Only the gate `system` counts them. */
+  readonly systemSends: Readonly<Record<CopyPlace, readonly string[]>>;
 }
 
 const sameList = (a: readonly string[], b: readonly string[]): boolean => a.length === b.length && a.every((item, index) => item === b[index]);
@@ -721,16 +747,19 @@ export function orderGatesOf(record: OrderRecord): OrderResult {
   const duplicated = new Set(record.duplicates);
   const orphan = log.attempts.some((attempt) => !delivered.has(attempt.key));
   const receipts = new Map(record.ledger.map((entry) => [entry.receipt, entry.cancelled]));
+  const systemReports = new Set(record.system.flatMap((incident) => incident.reports));
   const gates: Partial<Record<GateKey, boolean>> = {};
   const sends: Partial<Record<CopyPlace, string[]>> = {};
   const ends: Partial<Record<CopyPlace, number>> = {};
   const away: Partial<Record<CopyPlace, number[]>> = {};
+  const systemSends: Partial<Record<CopyPlace, string[]>> = {};
   for (const place of ORDER_PLACES) {
     const person: string = personOf(place);
     const keyOf = (gate: OrderGate): GateKey => `${place}:${gate}`;
     const want = expected[place];
-    const mine = log.deliveries.filter((delivery) => delivery.person === person);
-    const closes = log.ends.filter((one) => one.person === person).map((one) => one.at);
+    const all = log.deliveries.filter((delivery) => delivery.person === person);
+    const mine = all.filter((delivery) => !systemReports.has(delivery.incident));
+    const closes = log.ends.filter((one) => one.person === person && !systemReports.has(one.incident)).map((one) => one.at);
     const episodeOf = (at: number): number => closes.filter((close) => close < at).length;
     const startsOf = (delivery: OrderDelivery): number[] => attempts.get(delivery.key) ?? [delivery.at];
     const actual = mine.map((delivery) => ({
@@ -758,15 +787,20 @@ export function orderGatesOf(record: OrderRecord): OrderResult {
     });
     gates[keyOf("receipts")] = mine.every((delivery) => delivery.receipt === undefined || receipts.get(delivery.receipt) === cancelled.has(delivery.key));
     gates[keyOf("live")] = record.live[place] === want.live;
+    gates[keyOf("system")] = all.every((delivery) => !systemReports.has(delivery.incident));
     sends[place] = actual.map((one) => sendLabel(one));
     ends[place] = closes.length;
     away[place] = awaySends;
+    systemSends[place] = all
+      .filter((delivery) => systemReports.has(delivery.incident))
+      .map((delivery) => sendLabel({ level: delivery.level, step: delivery.step, episode: episodeOf(Math.min(...startsOf(delivery))), cancelled: cancelled.has(delivery.key) }));
   }
   return {
     gates: gates as Record<GateKey, boolean>,
     sends: sends as Record<CopyPlace, string[]>,
     ends: ends as Record<CopyPlace, number>,
     awaySends: away as Record<CopyPlace, number[]>,
+    systemSends: systemSends as Record<CopyPlace, string[]>,
   };
 }
 

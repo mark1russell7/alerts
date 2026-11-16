@@ -1,5 +1,5 @@
-import { incidents, messageKey, normalize, type Observation, type ObservationId, type Report, type ReportId, threats } from "@mark1russell7/alerts";
-import { COPY_SUFFIX, mapObservation as mapIpaws, SOURCE_ID as IPAWS_ID } from "@mark1russell7/alerts-source-ipaws";
+import { incidents, messageKey, normalize, type Observation, type ObservationId, type Report, type ReportId, sourceCovers, threats } from "@mark1russell7/alerts";
+import { COPY_SUFFIX, IPAWS_DESCRIPTOR, mapObservation as mapIpaws, SOURCE_ID as IPAWS_ID } from "@mark1russell7/alerts-source-ipaws";
 import { mapObservation as mapNws, NWS_DESCRIPTOR, SOURCE_ID as NWS_ID } from "@mark1russell7/alerts-source-nws-api";
 import { describe, expect, it } from "vitest";
 import { COPY_PLACES, type CopyPlace, readPair } from "./copy-late.ts";
@@ -28,6 +28,7 @@ import {
   orderRecipientsOf,
   type OrderRecord,
   orderSettingsProblems,
+  type OrderSystemIncident,
   orderVerdictOf,
   personOf,
   PLACE_COUNTIES,
@@ -82,14 +83,14 @@ function recordOf(arm: OrderArm, expected: Readonly<Record<CopyPlace, PlaceExpec
   const deliveries: OrderDelivery[] = [];
   const attempts: TimedKey[] = [];
   const cancelled: TimedKey[] = [];
-  const ends: { person: string; at: number }[] = [];
+  const ends: { incident: string; person: string; at: number }[] = [];
   const ledger: OrderRecord["ledger"][number][] = [];
   for (const place of ORDER_PLACES) {
     const want = expected[place];
     const person = personOf(place);
     const from = want.away === undefined ? undefined : arrivalOf({ arm, fetches }, want.away.from);
     const until = want.away?.until === undefined ? undefined : arrivalOf({ arm, fetches }, want.away.until);
-    for (let end = 0; end < want.ends; end += 1) ends.push({ person, at: (from ?? 0) + 500 });
+    for (let end = 0; end < want.ends; end += 1) ends.push({ incident: ANCHOR, person, at: (from ?? 0) + 500 });
     for (const [index, send] of want.sends.entries()) {
       const at = send.episode === 0 ? 1000 + index * 100 : (until ?? 0) + 1000 + index * 100;
       const key = messageKey({ incident: ANCHOR, level: send.level, person, step: send.step, episode: send.episode });
@@ -109,6 +110,7 @@ function recordOf(arm: OrderArm, expected: Readonly<Record<CopyPlace, PlaceExpec
     live: { kept: expected.kept.live, dropped: expected.dropped.live },
     failures: [],
     duplicates: [],
+    system: [],
     passes: 100,
   };
 }
@@ -278,8 +280,40 @@ describe("the gates", () => {
     const record = recordOf("control");
     const extra = { ...record, log: { ...record.log, deliveries: [...record.log.deliveries, { ...(record.log.deliveries[0] as OrderDelivery), key: "extra", step: 2 }] } };
     expect(failedOf(extra)).toContain("kept:sends");
-    const ended = { ...record, log: { ...record.log, ends: [{ person: personOf("dropped"), at: 9 * INTERVAL }] } };
+    const ended = { ...record, log: { ...record.log, ends: [{ incident: ANCHOR, person: personOf("dropped"), at: 9 * INTERVAL }] } };
     expect(failedOf(ended)).toEqual(["dropped:ends"]);
+  });
+
+  it("fails only system for the sends and the end of a system incident, and gives its sends apart", () => {
+    const record = recordOf("cancel-first");
+    const coverage = "report-coverage";
+    const person = personOf("kept");
+    const sends = [0, 1].map((step) => {
+      const key = messageKey({ incident: coverage as ReportId, level: "urgent", person, step, episode: 0 });
+      return { key, incident: coverage, person, level: "urgent" as const, step, at: 1000 + step * 300_000 };
+    });
+    const withSystem = (system: readonly OrderSystemIncident[]): OrderRecord => ({
+      ...record,
+      log: {
+        ...record.log,
+        deliveries: [...record.log.deliveries, ...sends],
+        attempts: [...record.log.attempts, ...sends.map((send) => ({ key: send.key, at: send.at - 50 }))],
+        ends: [...record.log.ends, { incident: coverage, person, at: 60_000 }],
+      },
+      system,
+    });
+    // The Cancel of the arm comes at 241 s, so the send of step 1 at 301 s starts while the threat is away.
+    const known = withSystem([{ anchor: coverage, reports: [coverage], kind: "system.coverage.met.flood", at: 1000 }]);
+    expect(failedOf(known)).toEqual(["kept:system"]);
+    expect(orderGatesOf(known).systemSends).toEqual({ kept: ["u00", "u10"], dropped: [] });
+    // With no system incident in the record, the same sends and end are sends and an end of the line.
+    expect(failedOf(withSystem([]))).toEqual(["kept:sends", "kept:quietAway", "kept:episodes", "kept:ends"]);
+  });
+
+  it("puts each place in the coverage of the NWS source and the IPAWS source", () => {
+    for (const place of COPY_PLACES) {
+      for (const descriptor of [NWS_DESCRIPTOR, IPAWS_DESCRIPTOR]) expect(descriptor.kinds.every((kind) => sourceCovers(descriptor, place, kind)), `${place.id} ${descriptor.id}`).toBe(true);
+    }
   });
 
   it("fails quietAway for a send that starts while the threat is away, and passes a send that starts before", () => {

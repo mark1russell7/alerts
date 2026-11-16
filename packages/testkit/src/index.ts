@@ -252,6 +252,7 @@ export {
   type OrderResult,
   type OrderRun,
   type OrderSettings,
+  type OrderSystemIncident,
   type OrderVerdict,
   type PlaceExpectation,
   type TimedKey,
