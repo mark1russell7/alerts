@@ -77,16 +77,45 @@ export function readOutageList(assets: Readonly<Record<string, { open(): string 
   return parsed.data;
 }
 
+// The Functions runtime gives `Runtime` and `Twilio` to the code of a Function as free names. The live entry of 2026-11-16
+// did not find `Runtime.getAssets` and `Twilio.Response` on `globalThis`. Thus the code reads the free names.
+declare const Runtime: unknown;
+declare const Twilio: unknown;
+
+/** This function gives the value of a free name of the Functions runtime, or `undefined` when the scope does not have it. */
+function freeName(name: "Runtime" | "Twilio"): unknown {
+  if (name === "Runtime") return typeof Runtime === "undefined" ? undefined : Runtime;
+  return typeof Twilio === "undefined" ? undefined : Twilio;
+}
+
+/** This function gives the member `name` of a value of the runtime. A value that is not an object or a function has no member. */
+function memberOf(value: unknown, name: string): unknown {
+  return (typeof value === "object" && value !== null) || typeof value === "function" ? Reflect.get(value, name) : undefined;
+}
+
 /**
  * This function reads the globals of the Functions runtime: `Runtime.getAssets()`, `Twilio.Response` and
- * the console. It throws an error when a global is absent, for example outside the runtime.
+ * the console. It reads the free names, so it finds them in a global and in the scope of a wrapper of the file.
+ *
+ * @throws Error that names each absent part, for example outside the runtime.
  */
 export function twilioGlobals(): RuntimeGlobals {
-  const runtime: unknown = Reflect.get(globalThis, "Runtime");
-  const twilio: unknown = Reflect.get(globalThis, "Twilio");
-  const getAssets: unknown = typeof runtime === "object" && runtime !== null ? Reflect.get(runtime, "getAssets") : undefined;
-  const Response: unknown = typeof twilio === "object" && twilio !== null ? Reflect.get(twilio, "Response") : undefined;
-  if (typeof getAssets !== "function" || typeof Response !== "function") throw new Error("The globals Runtime and Twilio of the Functions runtime are absent.");
+  return runtimeGlobalsOf(freeName("Runtime"), freeName("Twilio"));
+}
+
+/**
+ * This function makes the globals of the handlers from the values of `Runtime` and `Twilio`.
+ *
+ * @throws Error that names each absent part: `Runtime`, `Runtime.getAssets`, `Twilio` or `Twilio.Response`.
+ */
+export function runtimeGlobalsOf(runtime: unknown, twilio: unknown): RuntimeGlobals {
+  const getAssets = memberOf(runtime, "getAssets");
+  const Response = memberOf(twilio, "Response");
+  const absent = [
+    ...(runtime === undefined ? ["Runtime"] : typeof getAssets === "function" ? [] : ["Runtime.getAssets"]),
+    ...(twilio === undefined ? ["Twilio"] : typeof Response === "function" ? [] : ["Twilio.Response"]),
+  ];
+  if (typeof getAssets !== "function" || typeof Response !== "function") throw new Error(`The Functions runtime does not give ${absent.join(" and ")}.`);
   return {
     assets: () => Reflect.apply(getAssets, runtime, []),
     response: () => Reflect.construct(Response, []),
