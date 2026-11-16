@@ -38,6 +38,11 @@ export interface Expectation {
   /** The source that carries the second copy. */
   readonly to: SourceId;
   readonly when: ReportFilter;
+  /**
+   * The start of the record of the expectation. `lateness` reads only the checks that start at this
+   * time or later. An operator sets it after a change of a source, so the old record does not teach the limit.
+   */
+  readonly since?: Instant;
 }
 
 /**
@@ -319,11 +324,13 @@ export function missLimit(record: MissRecord, level: number): number | undefined
  *
  * A copy after its deadline is a miss, so a lag of the copies keeps the source late. The first met
  * check after the misses ends them, because it shows that the source carries the reports in time again.
+ * A check that starts before the `since` of its expectation is not in the record.
  */
 export function lateness(checks: readonly Carriage[], expectations: readonly Expectation[], at: Instant, rule: LimitRule): Lateness[] {
   return expectations.map((expectation) => {
     const base = { expectation: expectation.id, from: expectation.from, to: expectation.to };
-    const record = decide(checks, expectation.id, at, rule.delay);
+    const since = expectation.since;
+    const record = decide(since === undefined ? checks : checks.filter((check) => check.started >= since), expectation.id, at, rule.delay);
     const deadlines = record.flatMap((entry) => (entry.outcome === "open" && entry.limit !== undefined ? [entry.check.started + entry.limit] : []));
     const wake = deadlines.length === 0 ? {} : { wakeAt: deadlines.reduce((a, b) => Math.min(a, b)) };
     const delay = rule.delay(record.flatMap((entry) => (entry.sample === undefined ? [] : [entry.sample])));

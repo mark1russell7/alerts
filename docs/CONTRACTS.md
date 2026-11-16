@@ -219,7 +219,8 @@ Some sources carry a copy of the messages of another source. FEMA IPAWS carries 
 - A met check gives its delay to the sample of the delays. A missed check gives its limit, because its delay is only known to be more than the limit. Thus a lag or a backlog of the copies does not raise the limit.
 - In the warm-up, no limit is in force. A check is `measured` when its copy comes, and `waiting` before that. A warm-up check is not a miss.
 - With the measured rule, each limit after the first limit is at most the first limit. The rank of the bound grows by 1 or less for each sample, and each new sample is at most the limit at its start. Two gates of `lateness.test.ts` hold these rules.
-- Thus a lasting rise of the normal delay shows as a lasting late state. A person ends it with a new baseline: the policy of the delay gets a start time.
+- Thus a lasting rise of the normal delay shows as a lasting late state. A person ends it with a new baseline: an entry `{ id, since }` in the field `expectations` of the configuration.
+- The `since` of an `Expectation` starts its record. `lateness` reads only the checks that start at `since` or later. The check of the instance refuses an unknown id and a `since` in the future.
 - In normal work, some copies come late and some copies do not come. So one miss is not a proof.
 - `missRecord(record)` counts the misses of the past. Only a decided check after a met check is a trial, so a long stop of the source counts as one miss.
 - `missLimit(record, level)` gives the count of misses in a row that makes the source late. It is the smallest k with `high ** k <= 1 - level`. `high` is the upper bound of the rate of the misses, from `clopperPearson` of `@mark1russell7/rigor-statistics`. No person sets a count.

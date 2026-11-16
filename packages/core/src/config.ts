@@ -3,8 +3,9 @@
  * the owner, and the load that checks it and makes the recipients. The repository holds no
  * configuration. The functions are pure, and the caller gives the secrets.
  */
-import type { Address, ChannelDescriptor, ChannelId, EscalationPolicy, NodeKey, PersonId, PersonWatch, PlaceId, Position, RegionCode, SourceId, WatchedPlace } from "./contracts.ts";
+import type { Address, ChannelDescriptor, ChannelId, EscalationPolicy, Instant, NodeKey, PersonId, PersonWatch, PlaceId, Position, RegionCode, SourceId, WatchedPlace } from "./contracts.ts";
 import { recipientProblems, type Recipient } from "./delivery.ts";
+import type { Expectation } from "./lateness.ts";
 import type { WhyLabels } from "./why.ts";
 
 /** The name of the format of a configuration. A change that breaks a configuration gets a new name. */
@@ -65,6 +66,41 @@ export interface AlertConfig {
    * server of another party gives it in the User-Agent. Without it, the User-Agent has no contact.
    */
   readonly contact?: string;
+  /** The settings of the expectations of the instance. Each entry names an expectation by its id. */
+  readonly expectations?: readonly ExpectationConfig[];
+}
+
+/** The settings of one expectation of the instance, for example the WEA check of a copy source. */
+export interface ExpectationConfig {
+  /** The id of the expectation. */
+  readonly id: string;
+  /** The start of a new record of the checks of the expectation. The value goes into `Expectation.since`. */
+  readonly since: Instant;
+}
+
+/**
+ * This function gives the expectations with the settings of the configuration. The `since` of each
+ * entry goes into the expectation with its id. An expectation with no entry stays the same.
+ */
+export function configuredExpectations(expectations: readonly Expectation[], settings: readonly ExpectationConfig[] = []): Expectation[] {
+  const byId = new Map(settings.map((entry) => [entry.id, entry]));
+  return expectations.map((expectation) => {
+    const entry = byId.get(expectation.id);
+    return entry === undefined ? expectation : { ...expectation, since: entry.since };
+  });
+}
+
+/**
+ * This function checks the settings of expectations against the expectations of an instance. It finds
+ * an entry with an unknown id, and a `since` after the time `at`. A `since` in the future stops the
+ * record until that time, so the source cannot be late.
+ */
+export function expectationProblems(settings: readonly ExpectationConfig[] | undefined, expectations: readonly Expectation[], at: Instant): string[] {
+  const known = new Set(expectations.map((expectation) => expectation.id));
+  return (settings ?? []).flatMap((entry) => [
+    ...(known.has(entry.id) ? [] : [`The configuration sets the expectation ${entry.id}, and the instance has no such expectation.`]),
+    ...(entry.since > at ? [`The since of the expectation ${entry.id} is in the future. The check of the source then has no record until that time.`] : []),
+  ]);
 }
 
 /** The secret store of the instance. It gives the value of a key, or `undefined` when it has no such key. */
@@ -87,6 +123,7 @@ export interface LoadedConfig {
  * - two places or two people with one id, and a place with no region code
  * - a place of a person or of a rule that the configuration or the person does not have
  * - a contact of an unknown person, two contacts of a person on one channel, and a secret that the store does not have
+ * - two settings of one expectation
  * - each problem of `recipientProblems` for each person.
  */
 export function loadConfig(config: AlertConfig, channels: readonly ChannelDescriptor[], secret: SecretLookup): LoadedConfig {
@@ -111,6 +148,12 @@ export function loadConfig(config: AlertConfig, channels: readonly ChannelDescri
         if (!own.has(place)) problems.push(`Rule ${index} of the person ${person} names the place ${place}, and the person does not watch it. The rule matches no incident there.`);
       }
     });
+  }
+
+  const expectations = new Set<string>();
+  for (const { id } of config.expectations ?? []) {
+    if (expectations.has(id)) problems.push(`Two settings of expectations have the id ${id}.`);
+    expectations.add(id);
   }
 
   // Maps, not objects: an id or a field such as `constructor` is then a plain key.

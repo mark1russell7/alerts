@@ -1,7 +1,8 @@
 import { random, seedsFrom } from "@mark1russell7/rigor-generators";
 import { describe, expect, it } from "vitest";
-import { CONFIG_FORMAT, loadConfig, localPlaces, placeLabels, sourcePlaces, type AlertConfig, type ContactConfig, type PersonConfig, type PlaceConfig, type SecretLookup } from "./config.ts";
+import { CONFIG_FORMAT, configuredExpectations, expectationProblems, loadConfig, localPlaces, placeLabels, sourcePlaces, type AlertConfig, type ContactConfig, type PersonConfig, type PlaceConfig, type SecretLookup } from "./config.ts";
 import type { ChannelDescriptor, ChannelId, EscalationPolicy, PersonId, PlaceId, Position, SourceId } from "./contracts.ts";
+import type { Expectation } from "./lateness.ts";
 
 const SEEDS = seedsFrom(process.env["SEED"], [1, 2, 3, 4, 5, 6, 7, 8]);
 const MINUTE = 60_000;
@@ -186,5 +187,29 @@ describe("the places of a configuration", () => {
         });
       }
     }
+  });
+});
+
+describe("the settings of the expectations", () => {
+  const wea: Expectation = { id: "api-to-wea", from: "api" as SourceId, to: "wea" as SourceId, when: { statuses: ["actual"] } };
+  const other: Expectation = { ...wea, id: "other" };
+
+  it("puts the since of each entry into the expectation with its id", () => {
+    expect(configuredExpectations([wea, other], [{ id: "api-to-wea", since: 5_000 }])).toEqual([{ ...wea, since: 5_000 }, other]);
+    expect(configuredExpectations([wea])).toEqual([wea]);
+  });
+
+  it("finds an unknown expectation and a since in the future", () => {
+    expect(expectationProblems([{ id: "api-to-wea", since: 5_000 }], [wea], 5_000)).toEqual([]);
+    expect(expectationProblems([{ id: "x", since: 1 }, { id: "api-to-wea", since: 5_001 }], [wea], 5_000)).toEqual([
+      "The configuration sets the expectation x, and the instance has no such expectation.",
+      "The since of the expectation api-to-wea is in the future. The check of the source then has no record until that time.",
+    ]);
+    expect(expectationProblems(undefined, [wea], 0)).toEqual([]);
+  });
+
+  it("finds two settings of one expectation at the load", () => {
+    const loaded = loadConfig(config({ expectations: [{ id: "api-to-wea", since: 1 }, { id: "api-to-wea", since: 2 }] }), CHANNELS, store);
+    expect(loaded.problems).toEqual(["Two settings of expectations have the id api-to-wea."]);
   });
 });

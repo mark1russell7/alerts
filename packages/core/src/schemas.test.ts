@@ -83,6 +83,7 @@ import {
   addressSchema,
   addressValueSchema,
   alertConfigSchema,
+  expectationConfigSchema,
   areaSchema,
   assessedLevelSchema,
   assessmentSchema,
@@ -681,6 +682,10 @@ describe("the private configuration", () => {
     fails(contactConfigSchema, { person: PERSON, channel: PUSHOVER, address: { user: 7 } });
     fails(placeConfigSchema, { id: KANSAS.id, codes: KANSAS.codes, bufferKm: 0 });
     fails(personConfigSchema, { watch: { person: PERSON, places: [], rules: [] }, policies: [{ ...ESCALATION, level: "loud" }] });
+    fails(alertConfigSchema, { ...CONFIG, expectations: [{ id: "api-to-wea", since: "2026-11-16" }] });
+    fails(alertConfigSchema, { ...CONFIG, expectations: [{ id: "api-to-wea" }] });
+    fails(expectationConfigSchema, { id: "api-to-wea", since: 0, extra: 1 });
+    holds(alertConfigSchema, { ...CONFIG, expectations: [{ id: "api-to-wea", since: 1_794_700_000_000 }] });
     // A person who watches a place that the configuration does not have is a problem of the load, not of the form.
     holds(alertConfigSchema, { ...CONFIG, people: [{ watch: { person: PERSON, places: ["place:z"], rules: [] } }] });
   });

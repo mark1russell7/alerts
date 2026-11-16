@@ -315,6 +315,16 @@ describe("the lateness", () => {
     expect(lateness(checks.slice(1), [EXPECT], 1_700_000, two)[0]!.state).toBe("no-data");
   });
 
+  it("reads only the checks from the since of the expectation", () => {
+    const checks = [check(0), check(1_000_000)];
+    expect(lateness(checks, [EXPECT], 1_700_000, RULE)[0]).toMatchObject({ state: "late", missed: ["r0", "r1000000"], since: 600_000 });
+    // A check that starts at the since is in the record, and each earlier check is not.
+    expect(lateness(checks, [{ ...EXPECT, since: 1_000_000 }], 1_700_000, RULE)[0]).toMatchObject({ state: "late", missed: ["r1000000"], since: 1_600_000 });
+    const fresh = lateness(checks, [{ ...EXPECT, since: 1_000_001 }], 1_700_000, RULE)[0]!;
+    expect(fresh).toMatchObject({ state: "no-data", missed: [] });
+    expect(fresh.wakeAt).toBeUndefined();
+  });
+
   it("takes a count below 1 as 1", () => {
     expect(lateness([check(0)], [EXPECT], 600_000, fixed(600_000, 0))[0]).toMatchObject({ state: "late", since: 600_000 });
   });

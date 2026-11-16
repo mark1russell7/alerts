@@ -10,7 +10,7 @@ import { CANARY_PATH, createNwsSource } from "@mark1russell7/alerts-source-nws-a
 import { quotaGate, type Exchange, type Transport } from "polite-crawler/api";
 import { DEFAULT_POLICY } from "polite-crawler/politeness";
 import { afterEach, describe, expect, it } from "vitest";
-import { CHECKS_KEY, checksKeys, DAEMON_CHECK, DELIVERY_TIMES, INSTANCE_CHANNELS, INSTANCE_CHECK, INSTANCE_SOURCES, INSTANCE_TIMES, instanceProblems, LOUD_PING_URL_KEY, openInstance, PING_URL_KEY, pingTargets, SOURCE_POLICY, sourcePace, USER_AGENT_NAME, type Instance, type InstanceOptions } from "./instance.ts";
+import { CHECKS_KEY, checksKeys, DAEMON_CHECK, DELIVERY_TIMES, INSTANCE_CHANNELS, INSTANCE_CHECK, INSTANCE_EXPECTATIONS, INSTANCE_SOURCES, INSTANCE_TIMES, instanceProblems, LOUD_PING_URL_KEY, openInstance, PING_URL_KEY, pingTargets, SOURCE_POLICY, sourcePace, USER_AGENT_NAME, type Instance, type InstanceOptions } from "./instance.ts";
 import { overdueLimit } from "./delivery.ts";
 import type { ShapeOutcome } from "./shapes.ts";
 import { nextFetch } from "./view.ts";
@@ -521,7 +521,15 @@ describe("the check of the instance", () => {
   });
 
   it("finds no problem in a configuration that starts", () => {
-    expect(instanceProblems(parse(CONFIG, store(SECRETS)), store(SECRETS), INSTANCE_SOURCES)).toEqual([]);
+    expect(instanceProblems(parse(CONFIG, store(SECRETS)), store(SECRETS), INSTANCE_SOURCES, 0)).toEqual([]);
+  });
+
+  it("checks the settings of the expectations against the expectations of the instance", () => {
+    const wea = INSTANCE_EXPECTATIONS[0]!.id;
+    const parsed = parse({ ...CONFIG, expectations: [{ id: "other", since: 1_000 }, { id: wea, since: 9_000 }] }, store(SECRETS));
+    const unknown = "The configuration sets the expectation other, and the instance has no such expectation.";
+    expect(instanceProblems(parsed, store(SECRETS), INSTANCE_SOURCES, 5_000)).toEqual([unknown, `The since of the expectation ${wea} is in the future. The check of the source then has no record until that time.`]);
+    expect(instanceProblems(parsed, store(SECRETS), INSTANCE_SOURCES, 9_000)).toEqual([unknown]);
   });
 
   it("needs the key of the outside heartbeat only for the live instance", () => {
