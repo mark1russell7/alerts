@@ -186,7 +186,7 @@ export function route(input: RouteInput): Route[] {
       // The first time of an episode: its earliest start or delivery, or `now`.
       const firstOf = (episode: number): Instant =>
         Math.min(now, ...[...mine(starts), ...mine(deliveries)].filter((item) => episodeOf(item.at) === episode).map((item) => item.at).filter(Number.isFinite));
-      const assessment = incident.live ? assess(incident, recipient.watch, input.places, policy) : undefined;
+      const assessment = incident.live ? assess(incident, recipient.watch, input.places, policy, now) : undefined;
       // A mute with the effect `absent` keeps the incident from the person. With `silent`, the level stays and the mode changes.
       const muted = assessment?.muted;
       const assessed: AssessedLevel | undefined = assessment === undefined ? undefined : muted?.effect === "absent" ? "none" : assessment.level;

@@ -509,12 +509,12 @@ The first assessment is a table of data: `DEFAULT_ASSESS_POLICY`. The policy put
 So an incident is `life-safety` when each of these conditions is true:
 
 - The status is `actual`.
-- The kind is in the life-safety class. `LIFE_SAFETY_KINDS` has its codes.
+- The kind is in the life-safety class.
 - An area of the incident contains a watched place.
 - The severity is `severe`, `extreme` or `unknown`.
 - The urgency is `immediate`, `expected` or `unknown`.
 
-A kind is in the life-safety class when its warning tells the people at a place to act at once to save their lives. They take shelter, leave, or go to high ground. The class holds tornado, flash flood, extreme wind, hurricane, typhoon, storm surge, fire, tsunami, earthquake shaking, debris flow and volcanic eruption. It also holds the national emergency (EAN), evacuation, shelter in place, civil danger, civil emergency, and chemical, biological, radiological and nuclear hazards. For these kinds, an unknown value counts as high, because a miss costs more than a false alarm. A tornado watch has the urgency `future`, so it is `urgent`: a push at once that does not wake the person.
+A kind is in the life-safety class when its warning tells the people at a place to act at once to save their lives. They take shelter, leave, or go to high ground. The class holds tornado, flash flood, extreme wind, hurricane, typhoon, storm surge, fire, tsunami, earthquake early warning, debris flow and volcanic eruption. It also holds the national emergency (EAN), evacuation, shelter in place, civil danger, civil emergency, and chemical, biological, radiological and nuclear hazards. For these kinds, an unknown value counts as high, because a miss costs more than a false alarm. A tornado watch has the urgency `future`, so it is `urgent`: a push at once that does not wake the person.
 
 Some dangerous kinds are not in the class. Their danger comes over hours, or it is on the road or at sea. These kinds reach `urgent` at most:
 
@@ -524,6 +524,10 @@ Some dangerous kinds are not in the class. Their danger comes over hours, or it 
 
 A severe thunderstorm with the destructive damage threat is also not in the class. The damage threat tags of the NWS and the Wireless Emergency Alert handling of the issuer are inputs of AL-31.
 
+An earthquake has its own class. Its report tells of shaking that occurred, so its urgency is `past`. The table of the class has a window (`pastWithin`) of one hour. In that window after the onset, `past` counts as `immediate`. The reason `table` then has `recentPast`. With no onset or no time, the age is unknown, and `past` counts as `immediate`.
+
+So an earthquake is `life-safety` when its status is `actual` and its severity is `extreme` (MMI VIII or more) or `unknown`. Its urgency must be `immediate`, `expected` or `unknown`, or `past` in the window. The severity `severe` (MMI VII) gives `urgent`. After the window, a report is a `digest`. `LIFE_SAFETY_KINDS` has the codes of both classes, because each of them can reach `life-safety`.
+
 Each lookup only grows with the severity and with the urgency. So a more severe or more urgent incident does not get a lower level. Tests hold this order and the rule above for each value.
 
 The level for a person is the highest level at the places of the person. A rule of the person can lower the level of some kinds at some places. For example, warnings at the places of other people can come as `urgent`. At each place, the first rule that matches applies, and a rule does not raise the level.
@@ -532,7 +536,7 @@ An incident can have lines (`Incident.lines`): one for each report that gives it
 
 For example, an earthquake has one line for each band of its shaking. A place in the outer band gets the level of that band, not the level of the center. The reason `place-table` tells the reports of the lines at the place. A rule of the person then applies to that level. A seeded gate holds the rule: the level of an incident is the highest level of each of its lines alone.
 
-The assessment reads no clock, because the level is about the incident. The escalation reads `now`, so it holds the night rule:
+The assessment reads no clock. The caller gives the time `at`, and only a window `pastWithin` reads it. The escalation reads `now`, so it holds the night rule:
 
 - Each person can have a quiet window (`PersonWatch.quiet`): a time zone, and a start and an end in local times, for example `22:00` to `07:00`. An equal start and end give the full day.
 - In the window, each send below `life-safety` is quiet. A `life-safety` send ignores the window. It wakes the person.

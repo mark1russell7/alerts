@@ -772,7 +772,7 @@ const urgencyLookup = z.record(urgencySchema, assessedLevelSchema).readonly();
 
 /** This schema checks the highest levels for the severity and the urgency. Each lookup has a level for each value. */
 export const levelTableSchema: z.ZodType<LevelTable, LevelTable> = schemaOf<LevelTable>()(
-  z.strictObject({ severity: severityLookup, urgency: urgencyLookup }).readonly(),
+  z.strictObject({ severity: severityLookup, urgency: urgencyLookup, pastWithin: z.number().min(0).exactOptional() }).readonly(),
 );
 
 /**
@@ -787,6 +787,7 @@ export const kindClassSchema: z.ZodType<KindClass, KindClass> = schemaOf<KindCla
       statuses: z.array(statusSchema).readonly().exactOptional(),
       severity: severityLookup,
       urgency: urgencyLookup,
+      pastWithin: z.number().min(0).exactOptional(),
     })
     .readonly(),
 );
@@ -1117,6 +1118,7 @@ export const assessReasonSchema: z.ZodType<AssessReason, AssessReason> = schemaO
         bySeverity: assessedLevelSchema,
         byUrgency: assessedLevelSchema,
         level: assessedLevelSchema,
+        recentPast: z.literal(true).exactOptional(),
       }),
       z.strictObject({ kind: z.literal("rule"), place: placeIdSchema.exactOptional(), index: count(), max: assessedLevelSchema }),
       z.strictObject({ kind: z.literal("shadow"), score: shadowScoreSchema }),

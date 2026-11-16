@@ -161,7 +161,7 @@ export function replay(steps: readonly Step[], people: readonly PersonWatch[], p
       incident.reports.map((id) => byId.get(id)!).reduce((best, report) => (report.sent < best.sent || (report.sent === best.sent && report.key < best.key) ? report : best));
     const order = (a: Incident, b: Incident): number => head(a).sent - head(b).sent || compare(head(a).key, head(b).key) || compare(a.anchor, b.anchor);
     const now = incidents(state, step.at, { link }).sort(order);
-    const judge = (list: readonly Incident[]): Assessment[] => list.flatMap((incident) => people.map((person) => assess(incident, person, places, DEFAULT_ASSESS_POLICY)));
+    const judge = (list: readonly Incident[]): Assessment[] => list.flatMap((incident) => people.map((person) => assess(incident, person, places, DEFAULT_ASSESS_POLICY, step.at)));
     const own = now.filter((incident) => incident.status !== "system");
     const reported = now.filter((incident) => incident.status === "system");
     return {

@@ -13,6 +13,7 @@ import type {
   Assessment,
   Incident,
   IncidentLine,
+  Instant,
   KindClass,
   LevelTable,
   PersonWatch,
@@ -58,6 +59,23 @@ export const LIFE_SAFETY_KINDS: readonly string[] = [
 const LIFE_SAFETY_TABLE: LevelTable = {
   severity: { extreme: "life-safety", severe: "life-safety", moderate: "urgent", minor: "notice", unknown: "life-safety" },
   urgency: { immediate: "life-safety", expected: "life-safety", future: "urgent", past: "digest", unknown: "life-safety" },
+};
+
+/** The kinds of the earthquake class: the reports of the shaking after a rupture. An early warning is in the life-safety class. */
+export const EARTHQUAKE_KINDS: readonly string[] = ["geo.earthquake"];
+
+/** The time after the onset of an earthquake in which its report counts as `immediate`: one hour. */
+export const EARTHQUAKE_PAST_WITHIN = 3_600_000;
+
+/**
+ * The table of an earthquake. A report of the shaking has the urgency `past`, so it counts as `immediate` in
+ * `EARTHQUAKE_PAST_WITHIN` after the onset. Then the severity of the band at the place decides. The severity
+ * `extreme` (MMI VIII and more) wakes the person, and `severe` (MMI VII) is `urgent`. An unknown value counts as high.
+ */
+const EARTHQUAKE_TABLE: LevelTable = {
+  severity: { extreme: "life-safety", severe: "urgent", moderate: "notice", minor: "digest", unknown: "life-safety" },
+  urgency: { immediate: "life-safety", expected: "life-safety", future: "urgent", past: "digest", unknown: "life-safety" },
+  pastWithin: EARTHQUAKE_PAST_WITHIN,
 };
 
 /** The table of the other kinds. These kinds reach `urgent` at most. */
@@ -110,11 +128,16 @@ const SYSTEM_TABLE: LevelTable = {
  * The two system classes hold the reports of the core, and they admit only the status `system`. The
  * coverage of a life-safety kind can reach `life-safety`. Each other report of the core reaches
  * `notice` at most. The NWS kinds `system.test` and `system.admin` are not in these classes.
+ *
+ * The earthquake class has its own table. In one hour after the onset, its urgency `past` counts as
+ * `immediate`. Then `extreme` is `life-safety`, and `severe` is `urgent`.
  */
 export const DEFAULT_ASSESS_POLICY: AssessPolicy = {
   statuses: ["actual"],
   classes: [
-    { id: "life-safety", kinds: LIFE_SAFETY_KINDS, ...LIFE_SAFETY_TABLE },
+    // The first class with a prefix of the kind applies. Thus an early warning stays in the life-safety class.
+    { id: "life-safety", kinds: [...LIFE_SAFETY_KINDS.filter((kind) => !EARTHQUAKE_KINDS.includes(kind)), "geo.earthquake.early-warning"], ...LIFE_SAFETY_TABLE },
+    { id: "earthquake", kinds: EARTHQUAKE_KINDS, ...EARTHQUAKE_TABLE },
     { id: "system-coverage", kinds: LIFE_SAFETY_KINDS.map((kind) => `${COVERAGE_KIND}.${kind}`), statuses: ["system"], ...COVERAGE_TABLE },
     { id: "system", kinds: [HEALTH_KIND, COVERAGE_KIND, QUOTA_KIND, BALANCE_KIND], statuses: ["system"], ...SYSTEM_TABLE },
   ],
@@ -147,6 +170,8 @@ export interface TableResult {
   readonly byUrgency: AssessedLevel;
   /** The lower of the two levels. */
   readonly level: AssessedLevel;
+  /** This value is true when the urgency `past` counted as `immediate` in the window `pastWithin` of the table. */
+  readonly recentPast?: true;
 }
 
 /** This function gives the first class of the policy with a prefix of a kind, or `undefined`. */
@@ -162,14 +187,24 @@ export function admits(policy: AssessPolicy, incident: Pick<Incident, "status" |
   return (classOf(policy, incident.kind.code)?.statuses ?? policy.statuses).includes(incident.status);
 }
 
-/** This function gives the level of the table for an incident or a line: the lower of its two lookups. */
-export function tableLevel(policy: AssessPolicy, incident: Pick<Incident | IncidentLine, "kind" | "severity" | "urgency">): TableResult {
+/**
+ * This function gives the level of the table for an incident or a line: the lower of its two lookups. In the
+ * window `pastWithin` of the table after the onset, the urgency `past` counts as `immediate`. The time `at`
+ * gives the age. With no time or no onset, the age is unknown, and `past` counts as `immediate`.
+ */
+export function tableLevel(
+  policy: AssessPolicy,
+  incident: Pick<Incident | IncidentLine, "kind" | "severity" | "urgency" | "onset">,
+  at?: Instant,
+): TableResult {
   const found = classOf(policy, incident.kind.code);
   const table = found ?? policy.otherwise;
+  const span = table.pastWithin;
+  const recent = incident.urgency === "past" && span !== undefined && (at === undefined || incident.onset === undefined || at - incident.onset <= span);
   const bySeverity = table.severity[incident.severity];
-  const byUrgency = table.urgency[incident.urgency];
+  const byUrgency = table.urgency[recent ? "immediate" : incident.urgency];
   const level = lowerLevel(bySeverity, byUrgency);
-  return found === undefined ? { bySeverity, byUrgency, level } : { class: found.id, bySeverity, byUrgency, level };
+  return { ...(found === undefined ? {} : { class: found.id }), bySeverity, byUrgency, level, ...(recent ? { recentPast: true as const } : {}) };
 }
 
 /**
@@ -296,6 +331,7 @@ export function assess(
   person: PersonWatch,
   places: readonly WatchedPlace[],
   policy: AssessPolicy = DEFAULT_ASSESS_POLICY,
+  at?: Instant,
 ): Assessment {
   const byId = new Map(places.map((place) => [place.id, place]));
   const reasons: AssessReason[] = [];
@@ -326,7 +362,7 @@ export function assess(
     reasons.push({ kind: noMatch(incident, watched) });
     return result("none");
   }
-  const table = tableLevel(policy, incident);
+  const table = tableLevel(policy, incident, at);
   reasons.push({ kind: "table", ...table });
   let level: AssessedLevel = "none";
   // The level of the table at one place: the highest table of the lines that hold the place.
@@ -334,7 +370,7 @@ export function assess(
     const place = byId.get(id);
     const holding = place === undefined ? [] : linesAt(incident, place);
     if (holding.length === 0) return table.level;
-    const found = holding.map((line) => tableLevel(policy, line).level).reduce(higherLevel);
+    const found = holding.map((line) => tableLevel(policy, line, at).level).reduce(higherLevel);
     if (found !== table.level) reasons.push({ kind: "place-table", place: id, reports: holding.map((line) => line.report), level: found });
     return found;
   };
