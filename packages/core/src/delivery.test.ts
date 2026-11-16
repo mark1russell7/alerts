@@ -507,6 +507,33 @@ describe("route: a mute of the person (AL-35)", () => {
     expect(messageKey(loud[0]!.plan.sends[0]!)).toBe(keyOf("life-safety", 0, 1));
   });
 
+  it("gives the loud episode after a mute the rules of the quiet window, as any new start", () => {
+    // T0 is 13:00 in Chicago, in the quiet window of the person. A mute that expires and a mute that the person removes
+    // are the same to route(): no mute at now. So one case holds both.
+    const base = recipient();
+    const night: Recipient = { ...base, watch: { ...base.watch, quiet: { zone: "America/Chicago", start: "12:00", end: "15:00" } } };
+    const at = T0 + 3 * MINUTE;
+    for (const [fields, level, quiet] of [
+      [WATCH, "urgent", true],
+      [WARNING, "life-safety", false],
+    ] as const) {
+      const muted = delivery(level, 0, T0);
+      const ended = route(input({ incidents: [incident(fields)], recipients: [night], starts: [silentStart(level, T0)], merge: { deliveries: [muted] }, now: at }));
+      expect(
+        ended.map((entry) => [entry.policy.level, entry.episode, entry.freshEnd, entry.fresh, entry.end?.reason]),
+        level,
+      ).toEqual([
+        [level, 0, true, false, "muted"],
+        [level, 1, false, true, undefined],
+      ]);
+      const loud = route(
+        input({ incidents: [incident(fields)], recipients: [night], starts: [silentStart(level, T0), start(level, at + 1)], ends: [endAt(at, "muted")], merge: { deliveries: [muted] }, cancelled: new Set([muted.key]), now: at + MINUTE }),
+      );
+      // Below life-safety, the new episode sends quiet in the window. At life-safety, it sends loud.
+      expect(sends(loud), level).toEqual([{ episode: 1, level, step: 0, quiet }]);
+    }
+  });
+
   it("does not alert again after an acknowledgment when a mute starts and ends", () => {
     // The person acknowledged the loud alert, then muted it, then ended the mute.
     const muteAt = T0 + 2 * MINUTE;
