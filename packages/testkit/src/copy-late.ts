@@ -79,10 +79,10 @@ export const EXT_FROM = 87;
 /** The gate `tellsStop` permits the first late state in this count of fetches from the start of the window. */
 export const TELL_WITHIN = 10;
 /**
- * The fetches of the outage of the arm `copy-backlog`: from `from`, and before `to`. The outage is short, so the backlog
+ * The fetches of the outage of the arm `copy-backlog`: from `from`, and before `to`. The outage starts with the window. It is short, so the backlog
  * after it stays in the lookback of the feed.
  */
-export const OUTAGE = { from: WINDOW.from, to: WINDOW.from + 12 } as const;
+export const OUTAGE = { from: 70, to: 82 } as const;
 /** The gate `metAgain` permits the first met state in this count of fetches after the first current feed. */
 export const MEET_WITHIN = 2;
 /** The bound of the passes of an arm, for each fetch. A pass with no fetch adds no fetch. */
