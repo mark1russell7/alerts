@@ -1,7 +1,7 @@
 import { NWS_ORIGIN, VTEC_KIND_PREFIXES } from "@mark1russell7/alerts-format-nws";
 import { HostScheduler } from "polite-crawler/politeness";
 import { describe, expect, it } from "vitest";
-import { createIemSource, IEM_DESCRIPTOR, SOURCE_ID } from "./index.ts";
+import { createIemSource, IEM_BASE_URL, IEM_DESCRIPTOR, SOURCE_ID } from "./index.ts";
 
 const clock = { now: () => 0, sleep: async () => {} };
 
@@ -32,5 +32,26 @@ describe("createIemSource", () => {
     expect(IEM_DESCRIPTOR.kinds).toEqual(VTEC_KIND_PREFIXES);
     expect(IEM_DESCRIPTOR.maxQuiet).toBeUndefined();
     expect(IEM_DESCRIPTOR.canary).toBeUndefined();
+  });
+
+  it("gives the signal of the caller to the fetch: a fetch behind a parked host sends no request after the abort", async () => {
+    // The sleep of the pace ends only at the abort. Thus without the signal the fetch waits for ever.
+    const parked = { now: () => 0, sleep: (_ms: number, signal?: AbortSignal) => new Promise<void>((_resolve, reject) => signal?.addEventListener("abort", () => reject(signal.reason as Error), { once: true })) };
+    const scheduler = new HostScheduler(parked, 1);
+    scheduler.park(new URL(IEM_BASE_URL).host, 60_000);
+    let sent = 0;
+    const source = createIemSource({
+      pace: { scheduler, now: parked.now },
+      transport: async () => {
+        sent += 1;
+        return { status: 200, statusText: "OK", headers: {}, body: "" };
+      },
+      userAgent: "alerts-tests",
+    });
+    const controller = new AbortController();
+    const pending = source.fetch({ watch: { places: [] } }, controller.signal);
+    controller.abort(new Error("The fetch ended at its limit."));
+    await expect(pending).rejects.toThrow("The fetch ended at its limit.");
+    expect(sent).toBe(0);
   });
 });

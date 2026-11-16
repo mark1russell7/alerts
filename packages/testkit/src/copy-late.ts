@@ -33,7 +33,9 @@
  * - `limitHolds` (each arm with IPAWS faults): the limit of the delay after the start of the faults is not above the limit before.
  * - `metAgain` (each arm with IPAWS faults): the lateness is `met` in `MEET_WITHIN` intervals of the end of the first current fetch.
  * - `noLongLate` (`control` and `nws-lag`): each late period ends in one interval of the sources.
- * - `keepsPace` (each arm): the fetches of each source end at least `PACE_PART` of an interval apart. A burst of fetches fails it.
+ * - `keepsPace` (each arm): the fetches of each source that send a request end at least `PACE_PART` of an interval apart.
+ *   No fetch sends more than `QUERIES_PER_FETCH`. A burst of fetches fails it. A fetch that the runtime stops before
+ *   its request sends nothing, thus it does not count.
  *
  * The limit of the delay is the upper bound of the 0.99 quantile of the delays. A copy with a delay above that bound gives
  * a short late period, by design. The gate `noLongLate` permits these periods, and the record keeps each one.
@@ -88,6 +90,13 @@ export const OUTAGE = { from: 70, to: 82 } as const;
 export const MEET_WITHIN = 2;
 /** The gate `keepsPace` permits no two fetches of one source that end closer than this part of the interval. */
 export const PACE_PART = 0.5;
+
+/**
+ * The most requests of one fetch of each source: NWS asks the zone, the WEA messages and the canary, and IPAWS
+ * asks the feed. The sources do not try again in a fetch. Thus a fetch with more requests has a late request of
+ * a fetch that the runtime stopped. That burst at the server does not show in the gaps of the ends.
+ */
+export const QUERIES_PER_FETCH = { nws: 3, ipaws: 1 } as const;
 /** The bound of the passes of an arm, for each fetch. A pass with no fetch adds no fetch. */
 const PASSES_PER_FETCH = 10;
 
@@ -521,6 +530,8 @@ export function answersOf(bodies: CopyBodies, route: CopyRoute, faults: Readonly
 export interface CopyFetch {
   /** The time of the end of the fetch, after the start of the arm. */
   readonly at: number;
+  /** The count of the requests of the fetch that went to the transport. A fetch that waits behind a park and stops at its limit has 0. */
+  readonly sent: number;
   readonly ok: boolean;
   readonly complete: boolean;
   readonly observations: number;
@@ -582,8 +593,9 @@ export interface OutageRecord {
   readonly inWindow: number;
 }
 
-const fetchOf = (outcome: FetchOutcome, at: number): CopyFetch => ({
+const fetchOf = (outcome: FetchOutcome, at: number, sent: number): CopyFetch => ({
   at,
+  sent,
   ok: outcome.ok,
   complete: outcome.ok && outcome.complete,
   observations: outcome.ok ? outcome.observations.length : 0,
@@ -650,23 +662,27 @@ export async function runCopyArm(arm: CopyArm, settings: CopySettings = CASE_8_S
   // The pace of production: one scheduler for the two hosts on the case clock, with the jitter of the arm.
   const pace = { ...sourcePace({ now: clock.now, after: clock.after }, clock, 2), random: () => jitter.next() };
   const records: Record<"nws" | "ipaws", CopyFetch[]> = { nws: [], ipaws: [] };
+  // The count of the requests of some routes that went to the transport.
+  const requestsOf = (routes: readonly CopyRoute[]): number => routes.reduce((sum, route) => sum + counts[route].direct + counts[route].proxied, 0);
   // The wrapper gives each argument to the source. A fetch that throws is a failed fetch of the record, thus a fetch that the runtime stops still counts.
-  const captured = (inner: SourceProcedures, into: CopyFetch[], begun?: number[]): SourceProcedures => ({
+  // The fetches of one source do not overlap, thus the requests of its routes from the start to the end of a fetch are the requests of the fetch.
+  const captured = (inner: SourceProcedures, into: CopyFetch[], routes: readonly CopyRoute[], begun?: number[]): SourceProcedures => ({
     ...inner,
     fetch: async (...args: Parameters<SourceProcedures["fetch"]>) => {
       begun?.push(clock.now());
+      const before = requestsOf(routes);
       try {
         const outcome = await inner.fetch(...args);
-        into.push(fetchOf(outcome, clock.now() - settings.start));
+        into.push(fetchOf(outcome, clock.now() - settings.start, requestsOf(routes) - before));
         return outcome;
       } catch (error) {
-        into.push({ at: clock.now() - settings.start, ok: false, complete: false, observations: 0 });
+        into.push({ at: clock.now() - settings.start, sent: requestsOf(routes) - before, ok: false, complete: false, observations: 0 });
         throw error;
       }
     },
   });
-  const nws = captured(createNwsSource({ pace, transport, userAgent: USER_AGENT, baseUrl: CASE_8_NWS }), records.nws, starts);
-  const ipaws = captured(createIpawsSource({ pace, transport, userAgent: USER_AGENT, baseUrl: CASE_8_IPAWS }), records.ipaws);
+  const nws = captured(createNwsSource({ pace, transport, userAgent: USER_AGENT, baseUrl: CASE_8_NWS }), records.nws, ["zone", "wea", "canary"], starts);
+  const ipaws = captured(createIpawsSource({ pace, transport, userAgent: USER_AGENT, baseUrl: CASE_8_IPAWS }), records.ipaws, ["feed"]);
   const log = openRuntimeLog(":memory:");
   const passes: CopyPass[] = [];
   let error: string | undefined;
@@ -746,7 +762,6 @@ export interface KnownFault {
 }
 
 const AL_8 = "AL-8: the limit of the delay learns the delay of a late copy, and a late copy clears the misses.";
-const BURST = "The runtime does not stop a fetch at its limit. The fetches that wait for a parked host go out together.";
 
 /**
  * The gates that fail because of a known fault of the core. The verdict expects each one to fail. The fix of a fault
@@ -757,7 +772,6 @@ export const KNOWN_FAULTS: readonly KnownFault[] = [
   { arm: "ipaws-lag", gate: "staysLate", reason: AL_8 },
   { arm: "ipaws-lag", gate: "limitHolds", reason: AL_8 },
   { arm: "copy-backlog", gate: "limitHolds", reason: AL_8 },
-  { arm: "copy-backlog", gate: "keepsPace", reason: BURST },
 ];
 
 /** This function gives the known fault of a gate of an arm, or `undefined` when the gate has no known fault. */
@@ -857,7 +871,9 @@ export function copyGatesOf(record: Pick<CopyRecord, "arm" | "passes" | "fetches
   const met = span === undefined ? undefined : passes.find((pass) => pass.ipaws > span.to && pass.state === "met");
   const current = span === undefined ? undefined : record.fetches.ipaws[span.to];
   const metAfter = met === undefined || current === undefined ? undefined : met.at - current.at;
-  const gapOf = { nws: smallestGapOf(record.fetches.nws), ipaws: smallestGapOf(record.fetches.ipaws) };
+  // Only a fetch that sent a request is a fetch at the server. A fetch that the runtime stopped behind a park sent nothing.
+  const atServer = (fetches: readonly CopyFetch[]): CopyFetch[] => fetches.filter((fetch) => fetch.sent > 0);
+  const gapOf = { nws: smallestGapOf(atServer(record.fetches.nws)), ipaws: smallestGapOf(atServer(record.fetches.ipaws)) };
   const smallestGaps = Object.fromEntries(Object.entries(gapOf).filter(([, gap]) => gap !== undefined)) as Partial<Record<"nws" | "ipaws", number>>;
   const all: Record<CopyGate, boolean> = {
     noFalseClear: fetched.length > 0 && falseClears.length === 0,
@@ -869,7 +885,9 @@ export function copyGatesOf(record: Pick<CopyRecord, "arm" | "passes" | "fetches
     limitHolds: limitBefore !== undefined && (limitAfter === undefined || limitAfter <= limitBefore),
     metAgain: metAfter !== undefined && metAfter <= MEET_WITHIN * IPAWS_DESCRIPTOR.interval,
     noLongLate: periods.every((period) => period.to !== undefined && period.to - period.from <= NWS_DESCRIPTOR.interval),
-    keepsPace: Object.values(gapOf).every((gap) => gap === undefined || gap >= PACE_PART * NWS_DESCRIPTOR.interval),
+    keepsPace:
+      Object.values(gapOf).every((gap) => gap === undefined || gap >= PACE_PART * NWS_DESCRIPTOR.interval) &&
+      (["nws", "ipaws"] as const).every((source) => record.fetches[source].every((fetch) => fetch.sent <= QUERIES_PER_FETCH[source])),
   };
   const gates = Object.fromEntries(ARM_GATES[arm].map((gate) => [gate, all[gate]]));
   return {

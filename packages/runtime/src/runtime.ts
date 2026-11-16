@@ -82,8 +82,12 @@ export interface Runtime {
   /**
    * This function does one pass. It throws when a write to the log fails. Then the state is the state of
    * the log, and the next pass does the work again.
+   *
+   * The signal `stop` aborts each fetch of the pass. A fetch that fails after the abort writes nothing to the
+   * log: the stop is not a fault of the source. The delivery step does not read the signal. Each of its calls
+   * ends at its own time limit.
    */
-  pass(): Promise<Pass>;
+  pass(stop?: AbortSignal): Promise<Pass>;
 }
 
 /**
@@ -118,12 +122,26 @@ export function openRuntime(options: RuntimeOptions): Runtime {
   const limit = options.snapshotMisses ?? SNAPSHOT_MISSES;
   if (!Number.isInteger(limit) || limit < 1) throw new Error(`The count of snapshot misses is ${limit}, not an integer of 1 or more.`);
 
-  const fetchOne = async (source: SourceProcedures, descriptor: SourceDescriptor): Promise<readonly string[]> => {
+  const fetchOne = async (source: SourceProcedures, descriptor: SourceDescriptor, stop: AbortSignal | undefined): Promise<readonly string[]> => {
     const started = clock.now();
     const cursor = state.cursors[descriptor.id];
+    // Each fetch has its own signal. It aborts at the stop of the runtime, and at the end of the fetch: its
+    // outcome or its time limit. Thus no request of a fetch waits behind the park of its host and goes later.
+    const own = new AbortController();
+    let stopped = false;
+    const onStop = (): void => {
+      stopped = true;
+      own.abort(stop?.reason);
+    };
+    if (stop?.aborted === true) onStop();
+    else stop?.addEventListener("abort", onStop, { once: true });
     // A fetch that throws at once is a failure of its source too, not a failure of the pass.
-    const work = Promise.resolve().then(() => source.fetch({ watch: options.watch(descriptor), ...(cursor === undefined ? {} : { cursor }) }));
+    const work = Promise.resolve().then(() => source.fetch({ watch: options.watch(descriptor), ...(cursor === undefined ? {} : { cursor }) }, own.signal));
     const outcome = await bounded(work, options.fetchLimit?.(descriptor) ?? descriptor.interval, clock);
+    stop?.removeEventListener("abort", onStop);
+    own.abort(new Error(`The fetch of ${descriptor.id} ended.`));
+    // A failure after the stop is the stop, not a fault of the source. The log keeps no fetch, and the cursor stays.
+    if (stopped && !outcome.ok) return [];
     const ended = clock.now();
     const conflicts = append(fetchEvents({ source: descriptor.id, procedures: source, started, ended, outcome, known: (id) => log.has(id) }));
     if (descriptor.listing !== "snapshot") return conflicts;
@@ -148,14 +166,14 @@ export function openRuntime(options: RuntimeOptions): Runtime {
   return {
     config,
     state: () => state,
-    async pass() {
+    async pass(stop) {
       const start = clock.now();
       const due = options.sources.flatMap((source, at) => {
         const descriptor = config.sources[at]!;
         return nextFetch(state, descriptor) <= start ? [{ source, descriptor }] : [];
       });
       // Each fetch ends before the pass ends, also when one of them fails. Thus no fetch of a pass runs on in the next pass.
-      const settled = await Promise.allSettled(due.map(({ source, descriptor }) => fetchOne(source, descriptor)));
+      const settled = await Promise.allSettled(due.map(({ source, descriptor }) => fetchOne(source, descriptor, stop)));
       const failed = settled.find((result) => result.status === "rejected");
       if (failed !== undefined) throw failed.reason;
       const conflicts = settled.flatMap((result) => (result.status === "fulfilled" ? result.value : []));
@@ -187,7 +205,7 @@ export function openRuntime(options: RuntimeOptions): Runtime {
 /**
  * This function gives the outcome of a fetch, or a timeout when the fetch takes longer than its limit.
  * A fetch that throws is a fault of the adapter. Its outcome is a failure, and the health records it.
- * The fetch continues after a timeout, and the runtime ignores its outcome. The adapter owns its transport.
+ * This function does not stop the fetch. The runtime aborts the signal of the fetch after this outcome.
  */
 export function bounded(work: Promise<FetchOutcome>, limit: Duration, clock: WallClock): Promise<FetchOutcome> {
   return limited<FetchOutcome>(
