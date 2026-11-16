@@ -335,7 +335,7 @@ const passesOf = (arm: CopyArm, late: (fetch: number) => boolean): CopyPass[] =>
 
 /** This function gives the fetches of a source, each good and complete except the fetches of `failed`. */
 const fetchesOf = (failed: (fetch: number) => boolean = () => false): CopyFetch[] =>
-  Array.from({ length: CASE_8_SETTINGS.fetches }, (_, fetch) => ({ at: fetch * INTERVAL, ok: !failed(fetch), complete: !failed(fetch), observations: 1 }));
+  Array.from({ length: CASE_8_SETTINGS.fetches }, (_, fetch) => ({ at: fetch * INTERVAL, sent: 1, ok: !failed(fetch), complete: !failed(fetch), observations: 1 }));
 
 /** The fetches of the outage of the arm `copy-backlog`, from `OUTAGE.from` and before `OUTAGE.to`. */
 const inOutage = (fetch: number): boolean => fetch >= OUTAGE.from && fetch < OUTAGE.to;
@@ -418,6 +418,18 @@ describe("the gates", () => {
     const burst = copyGatesOf({ arm: "copy-backlog", passes, fetches: moved(OUTAGE.to * INTERVAL - 1000) });
     expect(burst).toMatchObject({ gates: { keepsPace: false }, smallestGaps: { nws: INTERVAL, ipaws: 1000 } });
     expect(copyGatesOf({ arm: "copy-backlog", passes, fetches: moved(OUTAGE.to * INTERVAL - PACE_PART * INTERVAL) }).gates.keepsPace).toBe(true);
+    // The record of CI: the last fetch of the outage waits behind the park, and the runtime stops it at its limit with no
+    // request. The next fetch starts then, and its request goes 21 s later at the end of the park.
+    const stopped = {
+      ...fetches,
+      ipaws: fetches.ipaws.map((fetch, index) =>
+        index === OUTAGE.to - 1 ? { ...fetch, at: OUTAGE.to * INTERVAL, sent: 0 } : index === OUTAGE.to ? { ...fetch, at: OUTAGE.to * INTERVAL + 21_000 } : fetch,
+      ),
+    };
+    expect(copyGatesOf({ arm: "copy-backlog", passes, fetches: stopped })).toMatchObject({ gates: { keepsPace: true }, smallestGaps: { ipaws: INTERVAL - 21_000 } });
+    // The same end times with a request in each fetch are a burst.
+    const sentEach = { ...stopped, ipaws: stopped.ipaws.map((fetch) => ({ ...fetch, sent: 1 })) };
+    expect(copyGatesOf({ arm: "copy-backlog", passes, fetches: sentEach }).gates.keepsPace).toBe(false);
     expect(smallestGapOf([])).toBeUndefined();
     expect(smallestGapOf([{ at: 5 }])).toBeUndefined();
     expect(smallestGapOf([{ at: 0 }, { at: 9 }, { at: 12 }])).toBe(3);
