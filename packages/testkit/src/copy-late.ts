@@ -19,6 +19,8 @@
  * - `copy-stopped`: each IPAWS feed in the window is empty.
  * - `ipaws-lag`: each IPAWS feed in the window is the feed of `LAG` fetches before.
  * - `nws-lag`: each NWS list in the window is the list of `LAG` fetches before. The canary stays current.
+ * - `copy-backlog`: the IPAWS feed gives HTTP 503 in the `OUTAGE` window of the case clock. The cursor of the source stays,
+ *   so the first good fetch after the outage gets the backlog: each copy since the cursor. The arm has no lag of a fetch.
  *
  * The gates of each arm:
  *
@@ -26,26 +28,34 @@
  * - `oneIncident`: no pass has two threats at one place. The NWS message and its IPAWS copy are one incident.
  * - `settles`: the last pass has one threat at `kept` and no threat at `dropped`.
  * - `clears`: the lateness of the last pass is `met`.
- * - `tellsStop` (`copy-stopped` and `ipaws-lag`): the lateness goes late in `TELL_WITHIN` fetches of the start of the window.
+ * - `tellsStop` (each arm with IPAWS faults): the lateness goes late in `TELL_WITHIN` fetches of the start of the faults.
+ * - `staysLate` (each arm with IPAWS faults): each pass from the first late pass to the first current feed is late.
+ * - `limitHolds` (each arm with IPAWS faults): the limit of the delay after the start of the faults is not above the limit before.
+ * - `metAgain` (each arm with IPAWS faults): the lateness is `met` in `MEET_WITHIN` intervals of the end of the first current fetch.
  * - `noLongLate` (`control` and `nws-lag`): each late period ends in one interval of the sources.
+ * - `keepsPace` (each arm): the fetches of each source end at least `PACE_PART` of an interval apart. A burst of fetches fails it.
  *
  * The limit of the delay is the upper bound of the 0.99 quantile of the delays. A copy with a delay above that bound gives
  * a short late period, by design. The gate `noLongLate` permits these periods, and the record keeps each one.
+ *
+ * `KNOWN_FAULTS` has the gates that fail because of a known fault of the core. The verdict expects them to fail. When a
+ * known fault passes, the verdict fails, and the fix of the fault removes it from the list.
  */
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { threats, type FetchOutcome, type LatenessState, type PlaceId, type SourceProcedures, type Watch, type WatchedPlace } from "@mark1russell7/alerts";
 import { DELAY_LIMITS, openRuntime, openRuntimeLog, sourcePace, type RuntimeOptions } from "@mark1russell7/alerts-runtime";
-import { COPY_SUFFIX, createIpawsSource, FEED_PATH, IPAWS_DESCRIPTOR, WEA_EXPECTATION } from "@mark1russell7/alerts-source-ipaws";
+import { COPY_SUFFIX, createIpawsSource, FEED_PATH, IPAWS_DESCRIPTOR, LOOKBACK_MS, OVERLAP_MS, WEA_EXPECTATION } from "@mark1russell7/alerts-source-ipaws";
 import { CANARY_PATH, createNwsSource, NWS_DESCRIPTOR, queriesOf, WEA_PATH } from "@mark1russell7/alerts-source-nws-api";
-import { type Fault, faultPlanOf } from "@mark1russell7/rigor-chaos";
+import { platformClock } from "@mark1russell7/algebra/clock";
+import { type Fault, type FaultPlan, type FaultWindow, faultPlanOf } from "@mark1russell7/rigor-chaos";
 import { random, sha256Hex } from "@mark1russell7/rigor-generators";
 import { startFaultProxy } from "@mark1russell7/rigor-proxy";
 import { startScriptedServer } from "@mark1russell7/rigor-testkit/http";
-import { fetchTransport, type Transport } from "polite-crawler/api";
+import { fetchTransport, type Reply, type Transport } from "polite-crawler/api";
 import { caseBodies } from "./nws.ts";
-import { caseClock } from "./source-down.ts";
+import { caseClock, downLimits } from "./source-down.ts";
 
 /** The id and the seed of the case. The draws of the copies and the jitter of each arm come from this seed. */
 export const CASE_8_ID = "al-13-case-8";
@@ -69,6 +79,15 @@ export const LIST_SPAN = 10;
 export const EXT_FROM = 87;
 /** The gate `tellsStop` permits the first late state in this count of fetches from the start of the window. */
 export const TELL_WITHIN = 10;
+/**
+ * The fetches of the outage of the arm `copy-backlog`: from `from`, and before `to`. The outage starts with the window. It is short, so the backlog
+ * after it stays in the lookback of the feed.
+ */
+export const OUTAGE = { from: 70, to: 82 } as const;
+/** The gate `metAgain` permits the first met state in this count of intervals after the end of the first current fetch. */
+export const MEET_WITHIN = 2;
+/** The gate `keepsPace` permits no two fetches of one source that end closer than this part of the interval. */
+export const PACE_PART = 0.5;
 /** The bound of the passes of an arm, for each fetch. A pass with no fetch adds no fetch. */
 const PASSES_PER_FETCH = 10;
 
@@ -283,6 +302,20 @@ export const ZONE_PATH: string = (() => {
 /** The target of each route on the server. The transport sends each IPAWS request to `FEED_PATH`, with no time. */
 export const ROUTE_PATHS: Readonly<Record<CopyRoute, string>> = { zone: ZONE_PATH, wea: WEA_PATH, canary: CANARY_PATH, feed: FEED_PATH };
 
+/** One IPAWS copy of the case. */
+export interface DueCopy {
+  /** The NWS fetch of the first IPAWS feed with the copy. */
+  readonly due: number;
+  /** The copy, as CAP XML. */
+  readonly copy: string;
+}
+
+/** This function gives each IPAWS copy of the case, in its order. The copy of each synthetic message comes first, and the copy of the EXT message last. */
+export function dueCopiesOf(settings: CopySettings, pair: PairFixtures = readPair()): DueCopy[] {
+  const copies = messagesOf(settings).map((message) => ({ due: message.fetch + message.delay, copy: copyOf(message, pair.newCopy) }));
+  return [...copies, { due: EXT_FROM, copy: pair.extCopy }];
+}
+
 /** The bodies of each route for each fetch. */
 export interface CopyBodies {
   readonly zone: readonly string[];
@@ -291,11 +324,14 @@ export interface CopyBodies {
   readonly feed: readonly string[];
   /** The IPAWS feed with no alert. */
   readonly empty: string;
+  /** The IPAWS copies, for the feed of the arm `copy-backlog`. */
+  readonly copies: readonly DueCopy[];
 }
 
 /** This function gives the bodies of each fetch of the case. Each arm has the same bodies. A fault gives the body of another fetch. */
 export function copyBodiesOf(settings: CopySettings, pair: PairFixtures = readPair()): CopyBodies {
-  const items = messagesOf(settings).map((message) => ({ message, feature: featureOf(message, pair.newFeature), copy: copyOf(message, pair.newCopy) }));
+  const items = messagesOf(settings).map((message) => ({ message, feature: featureOf(message, pair.newFeature) }));
+  const copies = dueCopiesOf(settings, pair);
   const fetches = Array.from({ length: settings.fetches }, (_, fetch) => fetch);
   const collection = (list: readonly unknown[]): string => JSON.stringify({ type: "FeatureCollection", features: list });
   // The feed of a fetch has the copies that first come in that fetch or in the fetch before it.
@@ -304,32 +340,58 @@ export function copyBodiesOf(settings: CopySettings, pair: PairFixtures = readPa
     zone: fetches.map((fetch) => collection([fetch < EXT_FROM ? pair.newFeature : pair.extFeature])),
     wea: fetches.map((fetch) => collection(items.filter(({ message }) => message.fetch > fetch - LIST_SPAN && message.fetch <= fetch).map((item) => item.feature))),
     canary: fetches.map((fetch) => caseBodies({ keepaliveSent: settings.start + fetch * NWS_DESCRIPTOR.interval }).canary),
-    feed: fetches.map((fetch) => {
-      const due = items.filter(({ message }) => inFeed(message.fetch + message.delay, fetch)).map((item) => item.copy);
-      return feedOf(pair.emptyFeed, inFeed(EXT_FROM, fetch) ? [...due, pair.extCopy] : due);
-    }),
+    feed: fetches.map((fetch) => feedOf(pair.emptyFeed, copies.filter(({ due }) => inFeed(due, fetch)).map(({ copy }) => copy))),
     empty: pair.emptyFeed,
+    copies,
   };
 }
 
-/** An arm of the case: the control, or a plan of faults in the window. */
-export type CopyArm = "control" | "copy-stopped" | "ipaws-lag" | "nws-lag";
+/**
+ * This function gives the IPAWS feed of the arm `copy-backlog` for one request. IPAWS gets each copy at the start of the
+ * NWS fetch `due` of the copy, from `starts`. The feed has each copy that IPAWS got after `since`, as the real feed does.
+ */
+export function backlogFeedOf(copies: readonly DueCopy[], emptyFeed: string, starts: readonly number[], since: number): string {
+  return feedOf(
+    emptyFeed,
+    copies.filter(({ due }) => (starts[due] ?? Number.NEGATIVE_INFINITY) > since).map(({ copy }) => copy),
+  );
+}
+
+/** An arm of the case: the control, a plan of faults in the window, or an outage of the feed. */
+export type CopyArm = "control" | "copy-stopped" | "ipaws-lag" | "nws-lag" | "copy-backlog";
 
 /** The arms of the case. The run starts them at the same time, each with its own servers, proxies and clock. */
-export const COPY_ARMS: readonly CopyArm[] = ["control", "copy-stopped", "ipaws-lag", "nws-lag"];
+export const COPY_ARMS: readonly CopyArm[] = ["control", "copy-stopped", "ipaws-lag", "nws-lag", "copy-backlog"];
+
+/**
+ * This function gives the outage window of the arm `copy-backlog`, in milliseconds of the case clock after the start of
+ * the arm. Each edge is half an interval before the fetch of `OUTAGE`. The window has its start and does not have its end.
+ */
+export function outageWindowOf(interval: number = IPAWS_DESCRIPTOR.interval): FaultWindow {
+  return { from: (OUTAGE.from - 0.5) * interval, to: (OUTAGE.to - 0.5) * interval };
+}
+
+/** This function gives the fault plan of the arm `copy-backlog`: HTTP 503 for each feed request in the outage window. */
+export function outagePlanOf(interval: number = IPAWS_DESCRIPTOR.interval): FaultPlan {
+  return faultPlanOf([], [{ window: outageWindowOf(interval), direction: "up", at: { frame: 0 }, kind: "answer", status: 503 }]);
+}
 
 /** The body that a fault gives: the body of the route at another fetch, or the empty feed. */
 export type FaultBody = number | "empty";
 
 const windowFetches = (): number[] => Array.from({ length: WINDOW.to - WINDOW.from }, (_, at) => WINDOW.from + at);
 
-/** This function gives the faults of an arm on each route: for each fetch with a fault, the body that the proxy gives. */
+/**
+ * This function gives the faults of an arm on each route: for each fetch with a fault, the body that the proxy gives. The
+ * arm `copy-backlog` has no fault of a fetch: its outage is a window of the case clock (`outagePlanOf`).
+ */
 export function copyFaultsOf(arm: CopyArm): Readonly<Record<CopyRoute, ReadonlyMap<number, FaultBody>>> {
   const none = new Map<number, FaultBody>();
   const lag = new Map<number, FaultBody>(windowFetches().map((fetch) => [fetch, fetch - LAG]));
   const empty = new Map<number, FaultBody>(windowFetches().map((fetch) => [fetch, "empty"]));
   switch (arm) {
     case "control":
+    case "copy-backlog":
       return { zone: none, wea: none, canary: none, feed: none };
     case "copy-stopped":
       return { zone: none, wea: none, canary: none, feed: empty };
@@ -369,6 +431,36 @@ export interface CopyTransportOptions {
   /** The requests of each route that go to the proxy. The transport counts the requests of each route from 0. */
   readonly faulted: Readonly<Record<CopyRoute, ReadonlySet<number>>>;
   readonly counts: Record<CopyRoute, RouteCounts>;
+  /** The backlog feed of the arm `copy-backlog`. With it, each IPAWS request goes to the outage proxy. */
+  readonly backlog?: BacklogFeed;
+}
+
+/** The backlog feed of the arm `copy-backlog`. */
+export interface BacklogFeed {
+  /** The origin of the outage proxy. The server behind it gives the empty feed. */
+  readonly proxy: string;
+  /** This function gives the feed of a request from the time `since` in its path. */
+  readonly feed: (since: number) => string;
+  readonly clock: { readonly now: () => number };
+  /** The transport adds the time of each IPAWS request on the clock to this list. */
+  readonly sent: number[];
+}
+
+/** This function gives the time `since` of an IPAWS request from its path, or `NaN` when the path has no time. */
+export function sinceOfPath(pathname: string): number {
+  return Date.parse(decodeURIComponent(pathname.slice(`${FEED_PATH}/`.length)));
+}
+
+/**
+ * This function sends an IPAWS request of the arm `copy-backlog` to the outage proxy. The proxy does not know the copies.
+ * Thus a reply of 200 gets the backlog feed of the time `since` of the request.
+ */
+async function backlogSend(inner: Transport, backlog: BacklogFeed, exchange: Parameters<Transport>[0], signal: Parameters<Transport>[1]): Promise<Reply> {
+  const since = sinceOfPath(new URL(exchange.url).pathname);
+  if (Number.isNaN(since)) throw new TypeError(`The IPAWS request ${exchange.url} has no time.`);
+  backlog.sent.push(backlog.clock.now());
+  const reply = await inner({ ...exchange, url: `${backlog.proxy}${ROUTE_PATHS.feed}` }, signal);
+  return reply.status === 200 ? { status: 200, statusText: "OK", headers: { ...XML }, body: backlog.feed(since) } : reply;
 }
 
 /** This function gives the route of a request of a source, or `undefined` when the request is not a request of the case. */
@@ -382,14 +474,19 @@ export function routeOf(url: URL): CopyRoute | undefined {
 /**
  * This function gives the transport of the case. It refuses each request that is not on a route of the case. It sends each
  * request with a fault to the proxy of its route, and each other request to the server. An IPAWS request goes to `FEED_PATH`.
+ * With a backlog feed, each IPAWS request goes to the outage proxy.
  */
 export function copyTransport(options: CopyTransportOptions): Transport {
-  const { inner, faulted, counts } = options;
+  const { inner, faulted, counts, backlog } = options;
   return (exchange, signal) => {
     const url = new URL(exchange.url);
     const route = routeOf(url);
     if (route === undefined) return Promise.reject(new TypeError(`The address ${exchange.url} is not an address of the case.`));
     const count = counts[route];
+    if (route === "feed" && backlog !== undefined) {
+      count.proxied += 1;
+      return backlogSend(inner, backlog, exchange, signal);
+    }
     const proxy = options.proxies[route];
     const faults = faulted[route].has(count.direct + count.proxied) && proxy !== undefined;
     if (faults) count.proxied += 1;
@@ -471,8 +568,18 @@ export interface CopyRecord {
   readonly served: number;
   /** The count of the requests that the servers behind the proxies read. When each fault falls at its point, the count is 0. */
   readonly leaked: number;
+  /** The outage of the arm `copy-backlog`. */
+  readonly outage?: OutageRecord;
   /** The message of a throw of a pass. */
   readonly error?: string;
+}
+
+/** The outage of the arm `copy-backlog`. */
+export interface OutageRecord {
+  /** The outage window, in milliseconds of the case clock after the start of the arm. */
+  readonly window: FaultWindow;
+  /** The count of the IPAWS requests that the transport sent in the window. */
+  readonly inWindow: number;
 }
 
 const fetchOf = (outcome: FetchOutcome, at: number): CopyFetch => ({
@@ -482,14 +589,20 @@ const fetchOf = (outcome: FetchOutcome, at: number): CopyFetch => ({
   observations: outcome.ok ? outcome.observations.length : 0,
 });
 
-/** This function starts one arm: a server, a proxy for each route with faults, a new runtime and its passes on a new clock. */
+/**
+ * This function starts one arm: a server, a proxy for each route with faults, a new runtime and its passes on a new clock.
+ * The arm `copy-backlog` also has the outage proxy in front of the server, on the time of the case clock.
+ */
 export async function runCopyArm(arm: CopyArm, settings: CopySettings = CASE_8_SETTINGS, bodies: CopyBodies = copyBodiesOf(settings)): Promise<CopyRecord> {
   const faults = copyFaultsOf(arm);
+  const backlogArm = arm === "copy-backlog";
   const fetches = Array.from({ length: settings.fetches }, (_, fetch) => fetch);
   const repliesOf = (route: CopyRoute) =>
-    fetches
-      .filter((fetch) => !faults[route].has(fetch))
-      .map((fetch) => ({ fields: route === "feed" ? XML : GEO_JSON, body: bodies[route][fetch] ?? "" }));
+    route === "feed" && backlogArm
+      ? [{ fields: XML, body: bodies.empty }]
+      : fetches
+          .filter((fetch) => !faults[route].has(fetch))
+          .map((fetch) => ({ fields: route === "feed" ? XML : GEO_JSON, body: bodies[route][fetch] ?? "" }));
   const server = await startScriptedServer({ routes: COPY_ROUTES.map((route) => ({ path: ROUTE_PATHS[route], replies: repliesOf(route) })) });
   const proxied = COPY_ROUTES.filter((route) => faults[route].size > 0);
   const behinds = await Promise.all(proxied.map(() => startScriptedServer({ routes: [] })));
@@ -501,6 +614,20 @@ export async function runCopyArm(arm: CopyArm, settings: CopySettings = CASE_8_S
     }),
   );
   const clock = caseClock(settings.start, settings.speed);
+  // The outage proxy takes a monotonic clock with the speed and the time of the case clock. Thus the window of its plan,
+  // from the origin `settings.start`, is in the time of the arm.
+  const outage = backlogArm
+    ? await startFaultProxy({
+        target: { host: server.host, port: server.port },
+        plan: outagePlanOf(),
+        protocol: "http",
+        clock: platformClock({ speed: settings.speed, start: clock.now() }),
+        origin: settings.start,
+      })
+    : undefined;
+  // The start of each NWS fetch on the case clock. IPAWS gets the copies of a fetch at its start.
+  const starts: number[] = [];
+  const sent: number[] = [];
   const counts: Record<CopyRoute, RouteCounts> = { zone: { direct: 0, proxied: 0 }, wea: { direct: 0, proxied: 0 }, canary: { direct: 0, proxied: 0 }, feed: { direct: 0, proxied: 0 } };
   const transport = copyTransport({
     inner: fetchTransport({ userAgent: USER_AGENT }),
@@ -508,20 +635,37 @@ export async function runCopyArm(arm: CopyArm, settings: CopySettings = CASE_8_S
     proxies: Object.fromEntries(proxied.map((route, at) => [route, `http://${proxies[at]?.host ?? ""}:${String(proxies[at]?.port ?? 0)}`])),
     faulted: { zone: new Set(faults.zone.keys()), wea: new Set(faults.wea.keys()), canary: new Set(faults.canary.keys()), feed: new Set(faults.feed.keys()) },
     counts,
+    ...(outage === undefined
+      ? {}
+      : {
+          backlog: {
+            proxy: `http://${outage.host}:${String(outage.port)}`,
+            feed: (since: number) => backlogFeedOf(bodies.copies, bodies.empty, starts, since),
+            clock,
+            sent,
+          },
+        }),
   });
   const jitter = random(`${CASE_8_ID}-${arm}`);
   // The pace of production: one scheduler for the two hosts on the case clock, with the jitter of the arm.
   const pace = { ...sourcePace({ now: clock.now, after: clock.after }, clock, 2), random: () => jitter.next() };
   const records: Record<"nws" | "ipaws", CopyFetch[]> = { nws: [], ipaws: [] };
-  const captured = (inner: SourceProcedures, into: CopyFetch[]): SourceProcedures => ({
+  // The wrapper gives each argument to the source. A fetch that throws is a failed fetch of the record, thus a fetch that the runtime stops still counts.
+  const captured = (inner: SourceProcedures, into: CopyFetch[], begun?: number[]): SourceProcedures => ({
     ...inner,
-    fetch: async (input) => {
-      const outcome = await inner.fetch(input);
-      into.push(fetchOf(outcome, clock.now() - settings.start));
-      return outcome;
+    fetch: async (...args: Parameters<SourceProcedures["fetch"]>) => {
+      begun?.push(clock.now());
+      try {
+        const outcome = await inner.fetch(...args);
+        into.push(fetchOf(outcome, clock.now() - settings.start));
+        return outcome;
+      } catch (error) {
+        into.push({ at: clock.now() - settings.start, ok: false, complete: false, observations: 0 });
+        throw error;
+      }
     },
   });
-  const nws = captured(createNwsSource({ pace, transport, userAgent: USER_AGENT, baseUrl: CASE_8_NWS }), records.nws);
+  const nws = captured(createNwsSource({ pace, transport, userAgent: USER_AGENT, baseUrl: CASE_8_NWS }), records.nws, starts);
   const ipaws = captured(createIpawsSource({ pace, transport, userAgent: USER_AGENT, baseUrl: CASE_8_IPAWS }), records.ipaws);
   const log = openRuntimeLog(":memory:");
   const passes: CopyPass[] = [];
@@ -550,11 +694,16 @@ export async function runCopyArm(arm: CopyArm, settings: CopySettings = CASE_8_S
   }
   log.close();
   await Promise.all(proxies.map((proxy) => proxy.close()));
+  await outage?.close();
   const leaked = behinds.reduce((sum, behind) => sum + behind.requests.length, 0);
   await Promise.all(behinds.map((behind) => behind.close()));
   const served = server.requests.length;
   await server.close();
-  const recorded = Object.fromEntries(COPY_ROUTES.map((route) => [route, proxies[proxied.indexOf(route)]?.records.length ?? 0])) as Record<CopyRoute, number>;
+  const recorded = Object.fromEntries(
+    COPY_ROUTES.map((route) => [route, route === "feed" && outage !== undefined ? outage.records.length : (proxies[proxied.indexOf(route)]?.records.length ?? 0)]),
+  ) as Record<CopyRoute, number>;
+  const outageWindow = outageWindowOf();
+  const inOutage = (at: number): boolean => at - settings.start >= outageWindow.from && at - settings.start < outageWindow.to;
   return {
     arm,
     passes,
@@ -563,23 +712,76 @@ export async function runCopyArm(arm: CopyArm, settings: CopySettings = CASE_8_S
     faults: recorded,
     served,
     leaked,
+    ...(outage === undefined
+      ? {}
+      : { outage: { window: outageWindow, inWindow: sent.filter(inOutage).length } }),
     ...(error === undefined ? {} : { error }),
   };
 }
 
 /** The names of the gates, in their order. */
-export const COPY_GATES = ["noFalseClear", "oneIncident", "settles", "clears", "tellsStop", "noLongLate"] as const;
+export const COPY_GATES = ["noFalseClear", "oneIncident", "settles", "clears", "tellsStop", "staysLate", "limitHolds", "metAgain", "noLongLate", "keepsPace"] as const;
 
 /** A gate of the case. */
 export type CopyGate = (typeof COPY_GATES)[number];
 
+const IPAWS_GATES: readonly CopyGate[] = ["noFalseClear", "oneIncident", "settles", "clears", "tellsStop", "staysLate", "limitHolds", "metAgain", "keepsPace"];
+const QUIET_GATES: readonly CopyGate[] = ["noFalseClear", "oneIncident", "settles", "clears", "noLongLate", "keepsPace"];
+
 /** The gates of each arm. */
 export const ARM_GATES: Readonly<Record<CopyArm, readonly CopyGate[]>> = {
-  control: ["noFalseClear", "oneIncident", "settles", "clears", "noLongLate"],
-  "copy-stopped": ["noFalseClear", "oneIncident", "settles", "clears", "tellsStop"],
-  "ipaws-lag": ["noFalseClear", "oneIncident", "settles", "clears", "tellsStop"],
-  "nws-lag": ["noFalseClear", "oneIncident", "settles", "clears", "noLongLate"],
+  control: QUIET_GATES,
+  "copy-stopped": IPAWS_GATES,
+  "ipaws-lag": IPAWS_GATES,
+  "nws-lag": QUIET_GATES,
+  "copy-backlog": IPAWS_GATES,
 };
+
+/** A gate of an arm that fails because of a known fault of the core. */
+export interface KnownFault {
+  readonly arm: CopyArm;
+  readonly gate: CopyGate;
+  /** The fault, with the id of its item. */
+  readonly reason: string;
+}
+
+const AL_8 = "AL-8: the limit of the delay learns the delay of a late copy, and a late copy clears the misses.";
+const BURST = "The runtime does not stop a fetch at its limit. The fetches that wait for a parked host go out together.";
+
+/**
+ * The gates that fail because of a known fault of the core. The verdict expects each one to fail. The fix of a fault
+ * removes its gates from this list, in the same change.
+ */
+export const KNOWN_FAULTS: readonly KnownFault[] = [
+  { arm: "copy-stopped", gate: "limitHolds", reason: AL_8 },
+  { arm: "ipaws-lag", gate: "staysLate", reason: AL_8 },
+  { arm: "ipaws-lag", gate: "limitHolds", reason: AL_8 },
+  { arm: "copy-backlog", gate: "limitHolds", reason: AL_8 },
+  { arm: "copy-backlog", gate: "keepsPace", reason: BURST },
+];
+
+/** This function gives the known fault of a gate of an arm, or `undefined` when the gate has no known fault. */
+export function knownFaultOf(arm: CopyArm, gate: CopyGate, known: readonly KnownFault[] = KNOWN_FAULTS): KnownFault | undefined {
+  return known.find((fault) => fault.arm === arm && fault.gate === gate);
+}
+
+/** The IPAWS fetches of the faults of an arm: from `from`, and before `to`. The IPAWS fetch `to` gives the first current feed. */
+export interface FaultFetches {
+  readonly from: number;
+  readonly to: number;
+}
+
+/**
+ * This function gives the IPAWS fetches of the faults of an arm. For `copy-backlog`, they are the failed fetches: from the
+ * first failed fetch to the next good fetch. It gives `undefined` when the record has no such fetches.
+ */
+export function faultFetchesOf(record: Pick<CopyRecord, "arm" | "fetches">): FaultFetches | undefined {
+  if (record.arm !== "copy-backlog") return WINDOW;
+  const list = record.fetches.ipaws;
+  const from = list.findIndex((fetch) => !fetch.ok);
+  const to = from === -1 ? -1 : list.findIndex((fetch, at) => at > from && fetch.ok);
+  return to === -1 ? undefined : { from, to };
+}
 
 /** This function gives the periods of late states of an arm, from its passes. */
 export function latePeriodsOf(passes: readonly CopyPass[]): LatePeriod[] {
@@ -601,16 +803,44 @@ export function latePeriodsOf(passes: readonly CopyPass[]): LatePeriod[] {
 export interface CopyResult {
   readonly gates: Readonly<Partial<Record<CopyGate, boolean>>>;
   readonly periods: readonly LatePeriod[];
-  /** The count of NWS fetches at the first late pass from the start of the window. */
+  /** The IPAWS fetches of the faults. */
+  readonly faultFetches?: FaultFetches;
+  /** The count of NWS fetches at the first late pass from the start of the faults. */
   readonly toldAt?: number;
+  /** The largest limit of the delay before the faults, in milliseconds. */
+  readonly limitBefore?: number;
+  /** The largest limit of the delay from the start of the faults, in milliseconds. */
+  readonly limitAfter?: number;
+  /** The time of each pass from the first late pass to the first current feed that is not late. */
+  readonly clearedEarly: readonly number[];
+  /** The count of NWS fetches at the first met pass after the first current feed. */
+  readonly metAt?: number;
+  /** The time from the end of the first current fetch to the first met pass after it, in milliseconds. */
+  readonly metAfter?: number;
+  /** The smallest time between the ends of two fetches of each source, in milliseconds. A source with one fetch or none has no value. */
+  readonly smallestGaps: Readonly<Partial<Record<"nws" | "ipaws", number>>>;
   /** The time of each pass with no threat at `kept`, or with no threat at `dropped` before the EXT message. */
   readonly falseClears: readonly number[];
   /** The time of each pass with two threats or more at one place. */
   readonly doubles: readonly number[];
 }
 
-/** This function gives the gates of an arm from its passes. */
-export function copyGatesOf(record: Pick<CopyRecord, "arm" | "passes">, settings: CopySettings = CASE_8_SETTINGS): CopyResult {
+const largest = (values: readonly (number | undefined)[]): number | undefined => {
+  const known = values.filter((value): value is number => value !== undefined);
+  return known.length === 0 ? undefined : Math.max(...known);
+};
+
+/** This function gives the smallest time between the ends of two fetches, or `undefined` for one fetch or none. */
+export function smallestGapOf(fetches: readonly Pick<CopyFetch, "at">[]): number | undefined {
+  const gaps = fetches.slice(1).map((fetch, at) => fetch.at - (fetches[at] as Pick<CopyFetch, "at">).at);
+  return gaps.length === 0 ? undefined : Math.min(...gaps);
+}
+
+/**
+ * This function gives the gates of an arm from its passes. The counts of a pass are the number of the last fetch and 1.
+ * Thus the faults start at the count `from + 1`, and the first current feed ends at the count `to + 1`.
+ */
+export function copyGatesOf(record: Pick<CopyRecord, "arm" | "passes" | "fetches">, settings: CopySettings = CASE_8_SETTINGS): CopyResult {
   const { arm, passes } = record;
   const ext = extFetchOf(arm, settings.fetches);
   const fetched = passes.filter((pass) => pass.nws > 0);
@@ -618,18 +848,44 @@ export function copyGatesOf(record: Pick<CopyRecord, "arm" | "passes">, settings
   const doubles = passes.filter((pass) => pass.threats.kept > 1 || pass.threats.dropped > 1).map((pass) => pass.at);
   const last = passes.at(-1);
   const periods = latePeriodsOf(passes);
-  // The count of NWS fetches is the number of the last fetch and 1. The window starts at the count WINDOW.from + 1.
-  const told = passes.find((pass) => pass.nws > WINDOW.from && pass.state === "late");
+  const span = faultFetchesOf(record);
+  const told = span === undefined ? undefined : passes.find((pass) => pass.nws > span.from && pass.state === "late");
+  const held = told === undefined || span === undefined ? [] : passes.filter((pass) => pass.at >= told.at && pass.ipaws <= span.to);
+  const clearedEarly = held.filter((pass) => pass.state !== "late").map((pass) => pass.at);
+  const limitBefore = span === undefined ? undefined : largest(passes.filter((pass) => pass.nws <= span.from).map((pass) => pass.limit));
+  const limitAfter = span === undefined ? undefined : largest(passes.filter((pass) => pass.nws > span.from).map((pass) => pass.limit));
+  const met = span === undefined ? undefined : passes.find((pass) => pass.ipaws > span.to && pass.state === "met");
+  const current = span === undefined ? undefined : record.fetches.ipaws[span.to];
+  const metAfter = met === undefined || current === undefined ? undefined : met.at - current.at;
+  const gapOf = { nws: smallestGapOf(record.fetches.nws), ipaws: smallestGapOf(record.fetches.ipaws) };
+  const smallestGaps = Object.fromEntries(Object.entries(gapOf).filter(([, gap]) => gap !== undefined)) as Partial<Record<"nws" | "ipaws", number>>;
   const all: Record<CopyGate, boolean> = {
     noFalseClear: fetched.length > 0 && falseClears.length === 0,
     oneIncident: doubles.length === 0,
     settles: last !== undefined && last.threats.kept === 1 && last.threats.dropped === 0,
     clears: last?.state === "met",
-    tellsStop: told !== undefined && told.nws <= WINDOW.from + TELL_WITHIN,
+    tellsStop: told !== undefined && span !== undefined && told.nws <= span.from + TELL_WITHIN,
+    staysLate: held.length > 0 && clearedEarly.length === 0,
+    limitHolds: limitBefore !== undefined && (limitAfter === undefined || limitAfter <= limitBefore),
+    metAgain: metAfter !== undefined && metAfter <= MEET_WITHIN * IPAWS_DESCRIPTOR.interval,
     noLongLate: periods.every((period) => period.to !== undefined && period.to - period.from <= NWS_DESCRIPTOR.interval),
+    keepsPace: Object.values(gapOf).every((gap) => gap === undefined || gap >= PACE_PART * NWS_DESCRIPTOR.interval),
   };
   const gates = Object.fromEntries(ARM_GATES[arm].map((gate) => [gate, all[gate]]));
-  return { gates, periods, ...(told === undefined ? {} : { toldAt: told.nws }), falseClears, doubles };
+  return {
+    gates,
+    periods,
+    ...(span === undefined ? {} : { faultFetches: span }),
+    ...(told === undefined ? {} : { toldAt: told.nws }),
+    ...(limitBefore === undefined ? {} : { limitBefore }),
+    ...(limitAfter === undefined ? {} : { limitAfter }),
+    clearedEarly,
+    ...(met === undefined ? {} : { metAt: met.nws }),
+    ...(metAfter === undefined ? {} : { metAfter }),
+    smallestGaps,
+    falseClears,
+    doubles,
+  };
 }
 
 /** The verdict of the case. A case with no read does not pass. */
@@ -640,8 +896,11 @@ export interface CopyVerdict {
    */
   readonly read: boolean;
   readonly results: Readonly<Partial<Record<CopyArm, CopyResult>>>;
+  /** True when the case has a read, each gate passes, and each gate of `KNOWN_FAULTS` fails. */
   readonly pass: boolean;
   readonly problems: readonly string[];
+  /** Each gate of `KNOWN_FAULTS` that passes. The fix of its fault removes it from the list. */
+  readonly fixed: readonly string[];
 }
 
 /** This function gives each problem of the settings. */
@@ -660,6 +919,31 @@ export function copySettingsProblems(settings: CopySettings, pair: PairFixtures 
   if (time(pair.newFeature, "sent") > settings.start) problems.push("The NEW message is sent after the start of the arm.");
   if (time(pair.newFeature, "expires") <= settings.start + (ext + 1) * interval) problems.push("The NEW message expires before the last arm gets the EXT message.");
   if (time(pair.extFeature, "expires") <= settings.start + (settings.fetches + 1) * interval) problems.push("The EXT message expires in the arm.");
+  // The cursor of the first good fetch after the outage is from the last good fetch before it, less the overlap. The
+  // health of a source recovers in `recoverMs` after an outage. Thus the age of the cursor is at most this sum.
+  const cursorAge = (OUTAGE.to - OUTAGE.from + 1) * interval + downLimits().recoverMs + OVERLAP_MS;
+  if (cursorAge > LOOKBACK_MS) problems.push(`The cursor after the outage can be ${String(cursorAge)} ms old, more than the lookback ${String(LOOKBACK_MS)} ms of the feed.`);
+  if (OUTAGE.from < WINDOW.from || OUTAGE.to > WINDOW.to) problems.push("The outage is not in the window of the faults.");
+  return problems;
+}
+
+/** This function gives each problem of the IPAWS fetches and the outage of the arm `copy-backlog`. */
+export function backlogProblems(record: Pick<CopyRecord, "arm" | "fetches" | "faults" | "outage">): string[] {
+  const problems: string[] = [];
+  const list = record.fetches.ipaws;
+  const span = faultFetchesOf(record);
+  if (span === undefined) return [`${record.arm}: the IPAWS fetches have no failure, or no good fetch after a failure.`];
+  const bad = list.flatMap((fetch, at) => ((at < span.from || at >= span.to) && !(fetch.ok && fetch.complete) ? [at] : []));
+  if (bad.length > 0) problems.push(`${record.arm}: the ipaws fetches ${bad.join(", ")} out of the outage failed or are not complete.`);
+  const outage = record.outage;
+  if (outage === undefined) return [...problems, `${record.arm}: the record has no outage.`];
+  const first = list[span.from];
+  const good = list[span.to];
+  if (first !== undefined && first.at < outage.window.from) problems.push(`${record.arm}: the ipaws fetch ${String(span.from)} failed before the outage.`);
+  if (good !== undefined && good.at < outage.window.to) problems.push(`${record.arm}: the ipaws fetch ${String(span.to)} is good before the end of the outage.`);
+  if (outage.inWindow === 0 || record.faults.feed === 0) {
+    problems.push(`${record.arm}: ${String(outage.inWindow)} IPAWS requests in the outage window and ${String(record.faults.feed)} faults of the proxy.`);
+  }
   return problems;
 }
 
@@ -672,32 +956,46 @@ export function copyVerdictOf(records: readonly CopyRecord[], settings: CopySett
   }
   for (const record of records) {
     const faults = copyFaultsOf(record.arm);
+    const backlog = record.arm === "copy-backlog";
     if (record.error !== undefined) problems.push(`${record.arm}: a pass threw: ${record.error}`);
     for (const source of ["nws", "ipaws"] as const) {
       const list = record.fetches[source];
       if (list.length < settings.fetches) problems.push(`${record.arm}: ${String(list.length)} ${source} fetches, not ${String(settings.fetches)}.`);
+      // The IPAWS fetches of the outage fail by design. The function `backlogProblems` examines them.
+      if (backlog && source === "ipaws") continue;
       const bad = list.flatMap((fetch, at) => (fetch.ok && fetch.complete ? [] : [at]));
       if (bad.length > 0) problems.push(`${record.arm}: the ${source} fetches ${bad.join(", ")} failed or are not complete.`);
     }
+    if (backlog) problems.push(...backlogProblems(record));
     let direct = 0;
     for (const route of COPY_ROUTES) {
       const planned = faults[route].size;
       const counts = record.requests[route];
       direct += counts.direct;
+      // Each IPAWS request of the arm `copy-backlog` goes to the outage proxy. The function `backlogProblems` examines its faults.
+      if (backlog && route === "feed") continue;
       if (counts.proxied !== planned || record.faults[route] !== planned) {
         problems.push(`${record.arm}: ${String(counts.proxied)} ${route} requests to the proxy and ${String(record.faults[route])} faults, not ${String(planned)}.`);
       }
     }
+    // The outage proxy sends each request with no fault to the server.
+    const reached = backlog ? direct + record.requests.feed.proxied - record.faults.feed : direct;
     if (record.leaked > 0) problems.push(`${record.arm}: ${String(record.leaked)} requests got to the servers behind the proxies.`);
-    if (record.served !== direct) problems.push(`${record.arm}: the server read ${String(record.served)} requests, not the ${String(direct)} direct requests.`);
+    if (record.served !== reached) problems.push(`${record.arm}: the server read ${String(record.served)} requests, not ${String(reached)}.`);
     const before = record.passes.filter((pass) => pass.nws <= WINDOW.from).at(-1);
     if (before?.limit === undefined) problems.push(`${record.arm}: the lateness has no limit of the delay before the window.`);
   }
   const read = problems.length === 0;
   const results: Partial<Record<CopyArm, CopyResult>> = {};
   for (const record of records) results[record.arm] = copyGatesOf(record, settings);
-  const pass = read && COPY_ARMS.every((arm) => ARM_GATES[arm].every((gate) => results[arm]?.gates[gate] === true));
-  return { read, results, pass, problems };
+  const expected = (arm: CopyArm, gate: CopyGate): boolean => knownFaultOf(arm, gate) === undefined;
+  const fixed = COPY_ARMS.flatMap((arm) =>
+    ARM_GATES[arm]
+      .filter((gate) => !expected(arm, gate) && results[arm]?.gates[gate] === true)
+      .map((gate) => `${arm}: the gate ${gate} passes. Its known fault is fixed: remove it from KNOWN_FAULTS.`),
+  );
+  const pass = read && fixed.length === 0 && COPY_ARMS.every((arm) => ARM_GATES[arm].every((gate) => results[arm]?.gates[gate] === expected(arm, gate)));
+  return { read, results, pass, problems, fixed };
 }
 
 /** The records of one run of the case. */

@@ -14,7 +14,22 @@ import { changesOf, runChangedFormat } from "../src/changed-format.ts";
 import { ACCEPT_ARMS, ACCEPT_GATES, runLateAccept } from "../src/late-accept.ts";
 import { runSlowSource, SLOW_ARMS, trickleMs } from "../src/slow-source.ts";
 import { DOWN_ARMS, runSourceDown } from "../src/source-down.ts";
-import { COPY_ARMS, COPY_GATES, COPY_ROUTES, copyFaultsOf, extFetchOf, LAG, PER_FETCH, runCopyLate, WINDOW } from "../src/copy-late.ts";
+import {
+  COPY_ARMS,
+  COPY_GATES,
+  COPY_ROUTES,
+  type CopyArm,
+  copyFaultsOf,
+  type CopyGate,
+  extFetchOf,
+  KNOWN_FAULTS,
+  knownFaultOf,
+  LAG,
+  outageWindowOf,
+  PER_FETCH,
+  runCopyLate,
+  WINDOW,
+} from "../src/copy-late.ts";
 import { OLD_LISTS, R2_FROM, R3_UNTIL, runStaleList, STALE_ARMS, STALE_GATES } from "../src/stale-list.ts";
 
 const at = process.argv.indexOf("--out");
@@ -196,24 +211,37 @@ report(channel.id, channel.verdict, [
 
 const copy = await runCopyLate();
 write("case-8.json", copy);
-report(copy.id, copy.verdict, [
-  `## ${copy.id}: a copy feed that stops or lags`,
+// A gate of a known fault shows "no (known)" when it fails, and "YES (fixed)" when it passes.
+const copyGate = (arm: CopyArm, gate: CopyGate, value: boolean | undefined): string => {
+  if (value === undefined) return "-";
+  if (knownFaultOf(arm, gate) === undefined) return yes(value);
+  return value ? "YES (fixed)" : "no (known)";
+};
+report(copy.id, { ...copy.verdict, problems: [...copy.verdict.problems, ...copy.verdict.fixed] }, [
+  `## ${copy.id}: a copy feed that stops, lags or comes as a backlog`,
   "",
   `Each arm has ${String(copy.settings.fetches)} fetches of the NWS source and of the IPAWS source. The case clock moves ${String(copy.settings.speed)} times faster than real time.`,
   `Each NWS fetch gives ${String(PER_FETCH)} WEA messages. The faults are in the fetches from ${String(WINDOW.from)} to ${String(WINDOW.to - 1)}. A lag gives the answer of ${String(LAG)} fetches before.`,
+  `In copy-backlog, the IPAWS feed gives HTTP 503 from ${s(outageWindowOf().from)} s to ${s(outageWindowOf().to)} s of the case clock. The next good fetch gets the backlog.`,
   "",
-  `| Arm | Faults (route) | EXT at | Limit before the window (s) | Late periods (first fetch) | First late in the window | False clears | Double threats | ${COPY_GATES.join(" | ")} |`,
-  `| --- | --- | --- | --- | --- | --- | --- | --- | ${COPY_GATES.map(() => "---").join(" | ")} |`,
+  `| Arm | Faults (route) | EXT at | IPAWS faults (fetches) | Limit before (s) | Largest limit after (s) | Late periods (first fetch) | First late | First met after | Met after (s) | Smallest gap NWS, IPAWS (s) | False clears | Double threats | ${COPY_GATES.join(" | ")} |`,
+  `| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | ${COPY_GATES.map(() => "---").join(" | ")} |`,
   ...COPY_ARMS.map((arm) => {
     const record = copy.records.find((one) => one.arm === arm);
     const result = copy.verdict.results[arm];
     const faults = copyFaultsOf(arm);
-    const routes = COPY_ROUTES.filter((route) => faults[route].size > 0).map((route) => `${String(faults[route].size)} ${route}`).join(", ") || "none";
-    const limit = record?.passes.filter((pass) => pass.nws <= WINDOW.from).at(-1)?.limit;
+    const routes =
+      arm === "copy-backlog"
+        ? `${String(record?.faults.feed ?? 0)} feed (503), ${String(record?.outage?.inWindow ?? 0)} in the window`
+        : COPY_ROUTES.filter((route) => faults[route].size > 0).map((route) => `${String(faults[route].size)} ${route}`).join(", ") || "none";
+    const span = result?.faultFetches === undefined ? "none" : `${String(result.faultFetches.from)} to ${String(result.faultFetches.to - 1)}`;
     const periods = result?.periods.map((period) => String(period.nws - 1)).join(", ") || "none";
-    const gates = COPY_GATES.map((gate) => (result?.gates[gate] === undefined ? "-" : yes(result.gates[gate] === true))).join(" | ");
-    return `| ${arm} | ${routes} | ${String(extFetchOf(arm, copy.settings.fetches))} | ${s(limit)} | ${String(result?.periods.length ?? 0)} (${periods}) | ${result?.toldAt === undefined ? "none" : String(result.toldAt - 1)} | ${String(result?.falseClears.length ?? 0)} | ${String(result?.doubles.length ?? 0)} | ${gates} |`;
+    const fetchOf = (count: number | undefined): string => (count === undefined ? "none" : String(count - 1));
+    const gates = COPY_GATES.map((gate) => copyGate(arm, gate, result?.gates[gate])).join(" | ");
+    return `| ${arm} | ${routes} | ${String(extFetchOf(arm, copy.settings.fetches))} | ${span} | ${s(result?.limitBefore)} | ${s(result?.limitAfter)} | ${String(result?.periods.length ?? 0)} (${periods}) | ${fetchOf(result?.toldAt)} | ${fetchOf(result?.metAt)} | ${s(result?.metAfter)} | ${s(result?.smallestGaps.nws)}, ${s(result?.smallestGaps.ipaws)} | ${String(result?.falseClears.length ?? 0)} | ${String(result?.doubles.length ?? 0)} | ${gates} |`;
   }),
+  "",
+  `Known faults: ${KNOWN_FAULTS.map((fault) => `${fault.arm} ${fault.gate}`).join(", ")}. ${[...new Set(KNOWN_FAULTS.map((fault) => fault.reason))].join(" ")}`,
   "",
   `Read: ${yes(copy.verdict.read)}. Pass: **${yes(copy.verdict.pass)}**.`,
 ]);
