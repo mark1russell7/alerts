@@ -196,5 +196,37 @@
       "unknownPaths": 4,
       "cause": "At the merge of PR 115 the adopted cover was 16. The change of the class ids made it 24: 13 new classes are NWS products that the two adopted NWS sources already read. The layers came after: the 24 classes have 2 adopted sources on 2 paths with no shared part, but one origin, the NWS. A parent class counts its sources at each leaf code, so no class has 2 origins at this time. This rule also made market.crypto a gap, because its two planned sources give different children. No adapter is new, so no new signal reaches a person."
     }
+  },
+  {
+    "round": 2,
+    "date": "2026-11-15",
+    "by": "One research agent, for the adapter of the USGS earthquake feed (AL-14), then a check of each fact in the tests of the adapter.",
+    "method": "The check of one planned source before its adapter. It read the terms and the format of the feed, recorded the feed, counted the events of 12 days of one year, and held the intensity laws against the DYFI curves of the USGS.",
+    "lists": [
+      "USGS GeoJSON summary format: https://earthquake.usgs.gov/earthquakes/feed/v1.0/geojson.php",
+      "USGS copyrights and credits: https://www.usgs.gov/information-policies-and-instructions/copyrights-and-credits",
+      "USGS event web service, the count method: https://earthquake.usgs.gov/fdsnws/event/1/",
+      "USGS event detail feeds of us70005dj8 and us7000ki5u, with their DYFI attenuation plots: https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/us7000ki5u.geojson"
+    ],
+    "queries": [],
+    "notes": [
+      "The answers of the feed have Last-Modified and no ETag, with Cache-Control max-age=60, through CloudFront. A conditional GET gives 304.",
+      "The counts of the events of magnitude 2.5 or more in 24 hours, at 12 times of 2025, were 51 to 156. An empty feed is a fault of the source.",
+      "The DYFI plots of older events draw the laws of Atkinson and Wald (2007), and the laws of the adapter match them to 1e-4. The plots of newer events draw the laws of 2014. At magnitude 5.5 the felt radius of 2007 is 20% smaller in active crust and 28% larger in stable crust."
+    ],
+    "studies": [
+      {
+        "title": "Atkinson and Wald (2007), '\"Did You Feel It?\" intensity data: a surprisingly good measure of earthquake ground motion', Seismological Research Letters 78 (3)",
+        "url": "https://doi.org/10.1785/gssrl.78.3.362",
+        "finding": "Two laws give the MMI from the magnitude and the hypocentral distance: one for California and one for the central and eastern US. The coefficients match the DYFI curves of us70005dj8 to 1e-4.",
+        "verified": false
+      },
+      {
+        "title": "Atkinson, Worden and Wald (2014), 'Intensity Prediction Equations for North America', Bulletin of the Seismological Society of America 104 (6)",
+        "url": "https://doi.org/10.1785/0120140178",
+        "finding": "The 2014 laws revise the 2007 laws, which give too much shaking for large events at short distances. The round did not find the coefficients.",
+        "verified": false
+      }
+    ]
   }
 ]

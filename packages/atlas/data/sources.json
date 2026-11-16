@@ -6582,33 +6582,38 @@
     "access": "feed",
     "auth": "none",
     "terms": {
-      "url": null,
+      "url": "https://www.usgs.gov/information-policies-and-instructions/copyrights-and-credits",
       "automated": "allowed",
-      "redistribution": "unclear",
-      "note": "The page says GeoJSON is a programmatic interface for applications and follows the USGS feed life cycle policy. The legal page was not opened."
+      "redistribution": "allowed",
+      "note": "The copyrights page says that the information the USGS makes is in the U.S. public domain, and asks for the credit \"U.S. Geological Survey\". The feed page calls the GeoJSON feeds a programmatic interface for applications."
     },
     "cost": "free",
     "delay": "feeds updated every minute",
-    "history": "unknown",
-    "rateLimit": "unknown",
+    "history": "The feed of the adapter holds the past day. The other summary feeds hold the past hour to the past 30 days.",
+    "rateLimit": "No published limit. The answers have Cache-Control max-age=60 and Last-Modified, and no ETag. The adapter asks once a minute with If-Modified-Since.",
     "calibration": null,
     "coverage": "World, with dense US coverage. Past hour to past 30 days, by magnitude or significance.",
     "origins": [
       "usgs"
     ],
     "path": [
-      "earthquake.usgs.gov"
+      "earthquake.usgs.gov",
+      "cloudfront"
     ],
-    "subjectIds": null,
+    "subjectIds": [
+      "point"
+    ],
     "risks": [],
-    "decision": "plan",
-    "adapter": null,
-    "reason": "The reference global earthquake catalogue with minute updates and no key.",
+    "decision": "adopt",
+    "adapter": "@mark1russell7/alerts-source-usgs",
+    "reason": "The reference catalog of earthquakes, with minute updates and no key. The adapter reads the feed of magnitude 2.5 or more of the past day, and the laws of Atkinson and Wald (2007) give a disc for each band of the shaking.",
     "evidence": [
       "https://earthquake.usgs.gov/earthquakes/feed/v1.0/geojson.php",
-      "https://www.usgs.gov/web-tools/alerts-and-notification-services"
+      "https://www.usgs.gov/web-tools/alerts-and-notification-services",
+      "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_day.geojson",
+      "https://www.usgs.gov/information-policies-and-instructions/copyrights-and-credits"
     ],
-    "round": 1
+    "round": 2
   },
   {
     "id": "usgs-hans-api",

@@ -252,6 +252,12 @@
     "note": "The host of the feed of polymarket-clob-api."
   },
   {
+    "id": "cloudfront",
+    "name": "Amazon CloudFront, the content network in front of earthquake.usgs.gov",
+    "kind": "provider",
+    "note": "The answers of the USGS feed on 2026-11-16 had the header x-cache: Hit from cloudfront."
+  },
+  {
     "id": "coastalscience.noaa.gov",
     "name": "coastalscience.noaa.gov",
     "kind": "host",
