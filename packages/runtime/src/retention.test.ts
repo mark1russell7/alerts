@@ -1,5 +1,27 @@
 import { fakeWallClock } from "@mark1russell7/algebra/clock";
-import { DEFAULT_LINK_POLICY, linkRule, RETENTION_HORIZON, reportId, TOMBSTONE_LIFE, type ChannelId, type Delivery, type Observation, type ObservationId, type PersonId, type PlaceId, type Report, type ReportId, type SourceId, type SourceProcedures, type WatchedPlace } from "@mark1russell7/alerts";
+import {
+  DEFAULT_LINK_POLICY,
+  incidents,
+  linkRule,
+  RETENTION_HORIZON,
+  reportId,
+  route,
+  TOMBSTONE_LIFE,
+  type ChannelDescriptor,
+  type ChannelId,
+  type Delivery,
+  type Observation,
+  type ObservationId,
+  type PersonId,
+  type PlaceId,
+  type Recipient,
+  type Report,
+  type ReportId,
+  type Route,
+  type SourceId,
+  type SourceProcedures,
+  type WatchedPlace,
+} from "@mark1russell7/alerts";
 import { random, seedsFrom, type Random } from "@mark1russell7/rigor-generators";
 import { describe, expect, it } from "vitest";
 import { envelope, type RuntimeEvent } from "./events.ts";
@@ -7,7 +29,7 @@ import { importOf, sharedItem } from "./exchange.ts";
 import { openRuntimeLog } from "./log.ts";
 import { retention, retiredEvent, RETIRE_EVERY } from "./retention.ts";
 import { openRuntime } from "./runtime.ts";
-import { EMPTY_RUNTIME, fold, rebuild, type FoldContext, type RuntimeState } from "./state.ts";
+import { cancelledKeys, EMPTY_RUNTIME, fold, rebuild, type FoldContext, type RuntimeState } from "./state.ts";
 
 const T0 = Date.UTC(2026, 3, 1, 18, 0, 0);
 const SECOND = 1000;
@@ -19,6 +41,14 @@ const PUSHOVER = "pushover" as ChannelId;
 const PERSON = "person-1" as PersonId;
 const CONTEXT: FoldContext = { sources: [] };
 const KANSAS: WatchedPlace = { id: "place:a" as PlaceId, codes: [{ system: "ugc", code: "KSZ083" }], bufferKm: 0 };
+/** A person who watches the place in Kansas, with one push for a life-safety warning. The address is fake. */
+const RECIPIENT: Recipient = {
+  watch: { person: PERSON, places: [KANSAS.id], rules: [] },
+  policies: [{ level: "life-safety", steps: [{ channel: PUSHOVER, at: 0 }], exhaustedAfter: 20 * MINUTE }],
+  addresses: { pushover: { user: "fake-user" } },
+};
+/** A push channel that the escalation polls for an acknowledgment. */
+const POLLED: ChannelDescriptor = { id: PUSHOVER, title: "Pushover", dependsOn: ["provider:pushover"], uses: ["internet", "power"], breaksThrough: true, repeats: true, ack: "poll", maxTitle: 250, maxBody: 1024 };
 const SEEDS = seedsFrom(process.env["SEED"], [1, 2, 3, 4, 5, 6, 7, 8]);
 
 /** One tornado warning for a county of Kansas, sent at `sent`, that a copy received at `received`. */
@@ -396,5 +426,31 @@ describe("the retirement of an orphan key (AL-47)", () => {
     expect(early.cancelled).toEqual(["k6"]);
     expect(early.cancelledSince).toEqual({});
     expect(retiredEvent(early, T0 + 100 * DAY, link, options)).toBeUndefined();
+  });
+
+  it("keeps a retired orphan key cancelled for the routes, thus its late delivery gives no poll and no cancel", () => {
+    // The cancel of k9 comes from the copy b. The copy that made the delivery stays out of reach past the horizon.
+    const due = T0 + RETENTION_HORIZON;
+    const orphan = foldWith([started("run-c", T0), imported(cancelled("k9", T0 + SECOND))], due);
+    expect(orphan.at(-1)).toMatchObject({ reports: [], cancelled: ["k9"] });
+    // Then a read brings the delivery of k9, with its receipt, in a live warning.
+    const w9 = report("w9", due + MINUTE, due + MINUTE);
+    const late: RuntimeEvent = { ...envelope("delivery", "delivery:k9", due + 2 * MINUTE), delivery: { ...delivery("k9", w9.id, due + 2 * MINUTE), receipt: { receipt: "r-9" } } };
+    const state = foldAll([...orphan, fetched("fetch:9", due + MINUTE, [w9]), imported(late)]);
+    expect(state.cancelled).toEqual([]);
+    expect(state.merge.deliveries.map((one) => one.key)).toEqual(["k9"]);
+    expect(cancelledKeys(state)).toEqual(new Set(["k9"]));
+    const routesOf = (keys: ReadonlySet<string>, now: number): Route[] =>
+      route({ state: state.merge, incidents: incidents(state.merge, now, { link }), recipients: [RECIPIENT], places: [KANSAS], starts: state.starts, ends: state.escalationEnds, cancelled: keys, channels: [POLLED], now });
+    const keysOf = (routes: readonly Route[], part: (one: Route) => readonly Delivery[]): string[] => routes.flatMap((one) => part(one).map((item) => item.key));
+    // With the keys of `cancelled` only, the route polls k9 while the warning is live, and cancels k9 again after it.
+    const live = due + 3 * MINUTE;
+    // The warning expires one hour after it was sent.
+    const over = due + MINUTE + HOUR + MINUTE;
+    expect(keysOf(routesOf(new Set(state.cancelled), live), (one) => one.polls)).toEqual(["k9"]);
+    expect(keysOf(routesOf(new Set(state.cancelled), over), (one) => one.plan.cancels)).toEqual(["k9"]);
+    // With the keys of the tombstones too, k9 gets no poll and no cancel, and the expired incident has no route.
+    expect(keysOf(routesOf(cancelledKeys(state), live), (one) => one.polls)).toEqual([]);
+    expect(routesOf(cancelledKeys(state), over)).toEqual([]);
   });
 });

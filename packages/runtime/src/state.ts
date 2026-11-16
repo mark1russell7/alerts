@@ -442,6 +442,14 @@ function withCancel(state: RuntimeState, key: string, at: Instant): Pick<Runtime
   };
 }
 
+/**
+ * This function gives each key with no more repeats: the keys of `cancelled` and the keys of the tombstones. A key of a
+ * tombstone was cancelled before its incident or its orphan retired. Thus a late delivery of the key gives no repeat.
+ */
+export function cancelledKeys(state: Pick<RuntimeState, "cancelled" | "cancelTombstones">): ReadonlySet<string> {
+  return new Set([...state.cancelled, ...state.cancelTombstones.map((tombstone) => tombstone.key)]);
+}
+
 // The state has the cancel of the key, or the key has a tombstone. A cancel of a key with a tombstone changes no delivery.
 function hasCancel(state: RuntimeState, key: string): boolean {
   return state.cancelled.includes(key) || sortedHas(state.cancelTombstones, (tombstone) => tombstone.key, key);

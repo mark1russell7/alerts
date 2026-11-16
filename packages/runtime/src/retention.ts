@@ -38,7 +38,8 @@ export function retention(options: RetentionOptions = {}): Required<RetentionOpt
  *
  * - An orphan key is a cancelled key with no delivery in the merge. A new read of the log of another copy can bring back an old cancel.
  * - The delivery of an own retired incident does not come back with it. Thus the orphan goes at the horizon after its time of entry.
- * - A key with no time of entry stays, because an imported cancel can come before its delivery.
+ * - A key with no time of entry stays. Only a cancel that folds before the first own event has no entry: the state has no time then.
+ * - A tombstone keeps each retired orphan key cancelled for the routes. Thus a late delivery of the key gives no repeat.
  */
 export function retiredEvent(state: RuntimeState, at: Instant, link: LinkRule, { horizon, life }: Required<RetentionOptions>): RetiredEvent | undefined {
   const found = incidents(state.merge, at, { link });
