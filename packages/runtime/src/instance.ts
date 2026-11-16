@@ -25,6 +25,7 @@ import {
   type ParsedConfig,
   type SecretLookup,
   type SourceDescriptor,
+  type SourceProcedures,
   type SpendConfig,
 } from "@mark1russell7/alerts";
 import {
@@ -43,6 +44,7 @@ import { createEmscSource, EMSC_DESCRIPTOR } from "@mark1russell7/alerts-source-
 import { createIpawsSource, IPAWS_DESCRIPTOR, WEA_EXPECTATION } from "@mark1russell7/alerts-source-ipaws";
 import { createShapeStore, type ShapeCache, type ShapeStore } from "@mark1russell7/alerts-shapes-nws";
 import { createNwsSource, NWS_DESCRIPTOR } from "@mark1russell7/alerts-source-nws-api";
+import { createTsunamiSource, descriptorOf as tsunamiDescriptor, TSUNAMI_CENTERS, type TsunamiCenter, type TsunamiFetchOptions } from "@mark1russell7/alerts-source-tsunami";
 import { createUsgsSource, USGS_DESCRIPTOR } from "@mark1russell7/alerts-source-usgs";
 import { err, ok, type Result } from "@mark1russell7/optional";
 import type { Pace, QuotaStore, Transport } from "polite-crawler/api";
@@ -195,11 +197,21 @@ export function spendEntryOf(descriptor: ChannelDescriptor, spend: readonly Spen
   return spend?.find((entry) => descriptor.dependsOn.includes(entry.provider));
 }
 
+/** The tsunami warning centers of the NWS. Each center is a source of its own, with its own health. */
+const TSUNAMI = [TSUNAMI_CENTERS.ntwc, TSUNAMI_CENTERS.ptwc] as const;
+
+/** This function gives the factory of the source of one tsunami warning center. */
+const tsunamiFactory =
+  (center: TsunamiCenter) =>
+  (options: Omit<TsunamiFetchOptions, "center">): SourceProcedures =>
+    createTsunamiSource({ ...options, center });
+
 /**
  * The descriptors of the sources of the instance. The function `describe` of each source gives the same descriptor.
  * The USGS and EMSC give the earthquakes. Merge rule 3 (`linkRule` of the core) joins their reports of one event.
+ * The two tsunami warning centers give the tsunami messages.
  */
-export const INSTANCE_SOURCES: readonly SourceDescriptor[] = [NWS_DESCRIPTOR, IPAWS_DESCRIPTOR, USGS_DESCRIPTOR, EMSC_DESCRIPTOR];
+export const INSTANCE_SOURCES: readonly SourceDescriptor[] = [NWS_DESCRIPTOR, IPAWS_DESCRIPTOR, USGS_DESCRIPTOR, EMSC_DESCRIPTOR, ...TSUNAMI.map((center) => tsunamiDescriptor(center))];
 
 /** The expectations of the instance. The field `expectations` of the configuration sets their `since`. */
 export const INSTANCE_EXPECTATIONS: readonly Expectation[] = [WEA_EXPECTATION];
@@ -419,8 +431,9 @@ export interface Instance {
  * problem. A problem is a missing token, a key with a bad form, or a place that no source covers.
  * The message names ids, fields and the names of secrets, and no value.
  *
- * - The sources are the NWS API, IPAWS, the USGS and EMSC. Each source gets the codes of the places. It gets the
- *   position of a place only when the place shares it with that source. The USGS and EMSC ask for no place.
+ * - The sources are the NWS API, IPAWS, the USGS, EMSC and the two tsunami warning centers. Each source gets the codes of
+ *   the places. It gets the position of a place only when the place shares it with that source. The USGS, EMSC and the
+ *   centers ask for no place.
  * - The channels are Pushover, and the Twilio call channel when the secrets have its keys. Each time of the delivery comes
  *   from a fact of the channels.
  * - A spend entry of a channel gives its cap and the watch of the balance of its account.
@@ -429,7 +442,7 @@ export interface Instance {
 export function openInstance(options: InstanceOptions): Instance {
   const { clock } = options;
   const wall = frameClock(options.wall, clock);
-  const factories = [createNwsSource, createIpawsSource, createUsgsSource, createEmscSource] as const;
+  const factories = [createNwsSource, createIpawsSource, createUsgsSource, createEmscSource, ...TSUNAMI.map((center) => tsunamiFactory(center))] as const;
   const pace = sourcePace(clock, wall, factories.length);
   // One User-Agent for each request of the instance: the sources and the store of shapes.
   const agent = userAgent(options.config.config.contact);

@@ -20,6 +20,7 @@
     "@mark1russell7/alerts-source-emsc": "workspace:*",
     "@mark1russell7/alerts-source-ipaws": "workspace:*",
     "@mark1russell7/alerts-source-nws-api": "workspace:*",
+    "@mark1russell7/alerts-source-tsunami": "workspace:*",
     "@mark1russell7/alerts-source-usgs": "workspace:*",
     "@mark1russell7/algebra": "^0.8.9",
     "@mark1russell7/files": "^0.0.3",
