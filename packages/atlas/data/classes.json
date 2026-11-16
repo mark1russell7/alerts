@@ -872,7 +872,7 @@
       "EM-DAT: Extra-terrestrial > Space weather",
       "UNDRR-ISC HIPs 2025: ET0101-ET0104"
     ],
-    "gap": "Round 6 adopts swpc-products-json, the only source with no risk. Its only origin is the NWS. swpc-email is later: see the reason of each.",
+    "gap": "Round 1 found 1 adopted or planned source with no risk: swpc-products-json. swpc-email is later: see the reason of each.",
     "round": 1
   },
   {
@@ -888,7 +888,7 @@
       "EM-DAT: Space weather > Geomagnetic storm",
       "UNDRR-ISC HIPs 2025: ET0101 Geomagnetic Disturbance"
     ],
-    "gap": "Round 6 adopts swpc-products-json, the only source with no risk. Its only origin is the NWS. swpc-email is later: see the reason of each.",
+    "gap": "Round 1 found 1 adopted or planned source with no risk: swpc-products-json. swpc-email is later: see the reason of each.",
     "round": 1
   },
   {
@@ -903,7 +903,7 @@
       "EM-DAT: Space weather > Radio disturbance",
       "UNDRR-ISC HIPs 2025: ET0103 Solar Flare, ET0102 Ionospheric Disturbance"
     ],
-    "gap": "Round 6 adopts swpc-products-json, the only source with no risk. Its only origin is the NWS. swpc-email is later: see the reason of each.",
+    "gap": "Round 1 found 1 adopted or planned source with no risk: swpc-products-json. swpc-email is later: see the reason of each.",
     "round": 1
   },
   {
@@ -918,7 +918,7 @@
       "EM-DAT: Space weather > Energetic particles",
       "UNDRR-ISC HIPs 2025: ET0104 Solar Energetic Particles"
     ],
-    "gap": "Round 6 adopts swpc-products-json, the only source with no risk. Its only origin is the NWS. swpc-email is later: see the reason of each.",
+    "gap": "Round 1 found 1 adopted or planned source with no risk: swpc-products-json. swpc-email is later: see the reason of each.",
     "round": 1
   },
   {

@@ -51,6 +51,8 @@ export function shiftMerge(state: MergeState, size: Duration): MergeState {
     deliveries: state.deliveries.map((delivery) => shiftDelivery(delivery, size)),
     acks,
     ends: state.ends.map((mark) => shiftEndMark(mark, size)),
+    // The runtime sets the end of a tombstone from its own clock, thus the end moves.
+    retired: state.retired.map((tombstone) => ({ ...tombstone, until: by(tombstone.until, size) })),
   });
 }
 

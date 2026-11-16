@@ -108,7 +108,9 @@ describe("the shift of the own instants", () => {
     );
     const deliveries = Array.from({ length: r.int(0, 6) }, (_, index) => delivery(`d${index}`, instant()));
     const ends = reports.filter(() => r.chance(0.4)).map((entry): EndMark => ({ report: entry.id, at: instant(), ended: r.chance(0.8), ...(r.chance(0.5) ? { asOf: instant() } : {}) }));
-    const state = normalize({ reports, deliveries, acks: [], ends });
+    // The tombstones are of other reports, so they remove no part of the state.
+    const retired = Array.from({ length: r.int(0, 3) }, (_, index) => ({ report: `gone${index}` as ReportId, until: instant() }));
+    const state = normalize({ reports, deliveries, acks: [], ends, retired });
     const size = r.pick([-1, 1]) * r.int(CLOCK_STEP_ABOVE + 1, 12 * HOUR);
     const moved = shiftMerge(state, size);
     expect(moved).toEqual(normalize(moved));

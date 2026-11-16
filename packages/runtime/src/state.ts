@@ -217,7 +217,7 @@ function collector(): { readonly parts: MergeParts; push(parts: MergeParts | und
 
 // The merge state has no part.
 function emptyMerge(merge: MergeState): boolean {
-  return merge.reports.length + merge.deliveries.length + merge.acks.length + merge.ends.length === 0;
+  return merge.reports.length + merge.deliveries.length + merge.acks.length + merge.ends.length + merge.retired.length === 0;
 }
 
 // The state has a part of another copy.
