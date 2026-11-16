@@ -18,6 +18,9 @@
  * profile `daemon` of the live instance does not start without it. Another profile starts with a warning.
  * The optional key `HEALTHCHECKS_LOUD_PING_URL` gives a second check. The heartbeat sends each ping to it too.
  *
+ * The optional file `copy.json` gives the settings of this copy of the system (`copy.ts`): its rank and the key of its
+ * first check. Without the file, the runtime is the only copy. A change of the file needs `install.ts restart`.
+ *
  * A bad `config.json` gives way to the last good copy `config.good.json` (`reload.ts`). In the profile
  * `daemon`, a change of the private files that passes the check stops the runtime. The supervisor starts it again.
  */
@@ -32,11 +35,12 @@ import { redactSecrets } from "@mark1russell7/text/redact";
 import { SqliteHostStateStore } from "polite-crawler";
 import { fetchTransport, quotaGate } from "polite-crawler/api";
 import { writeFileAtomic } from "@procedures/fs/files";
-import { alertsHome, configPath, envSecrets } from "./config.ts";
+import { alertsHome, ConfigRefused, configPath, envSecrets } from "./config.ts";
+import { readCopySettings } from "./copy.ts";
 import { heartbeat, heldOf, type PassSummary } from "./heartbeat.ts";
 import { quotaNote } from "./quota.ts";
 import { PROFILES, declare } from "./index.ts";
-import { DAEMON_CHECK, INSTANCE_CHECK, LOUD_PING_URL_KEY, openInstance, PING_URL_KEY, pingTargets, userAgent } from "./instance.ts";
+import { daemonCheck, INSTANCE_CHECK, LOUD_PING_URL_KEY, openInstance, pingKeyOf, pingTargets, userAgent } from "./instance.ts";
 import { openCheckedRuntimeLog } from "./log.ts";
 import { GOOD_CONFIG_FILE, privateFiles, reloadHook, startConfig } from "./reload.ts";
 import { shapeReport, zoneCodesText } from "./shapes.ts";
@@ -60,7 +64,13 @@ async function runtime(): Promise<ServiceBuilder> {
 
   // The start checks config.json with the keys of secrets.env. A bad config.json gives way to the last good copy.
   // A problem names the line and the key of a bad line, or the code of a read error. It holds no value and no path.
-  const check = name === "daemon" ? DAEMON_CHECK : INSTANCE_CHECK;
+  // The settings of this copy of the system. A problem stops the start, and it holds no address and no URL.
+  const copied = await readCopySettings(home);
+  if (copied.tag === "err") throw new ConfigRefused(copied.error);
+  const copy = copied.value;
+  const peers = copy.peers ?? [];
+  if (peers.length > 0) console.log(`This runtime is the copy ${copy.id} with rank ${String(copy.rank)}. The other copies: ${peers.map((peer) => peer.id).join(", ")}.`);
+  const check = name === "daemon" ? daemonCheck(copy) : INSTANCE_CHECK;
   const files = privateFiles(home, configPath(process.env, process.cwd()));
   const loaded = await startConfig(files, check, (path, text) => writeFileAtomic(path, text));
   if (loaded.fallback.length > 0) console.error(`The file config.json has problems. The runtime uses the last good copy ${GOOD_CONFIG_FILE}:\n- ${loaded.fallback.join("\n- ")}`);
@@ -81,8 +91,8 @@ async function runtime(): Promise<ServiceBuilder> {
 
   // The outside heartbeat. Without it, a stop of this process is silent. The check of the profile daemon needs it.
   // Each check has its own hook. The hooks make the same pings, and a slow ping to one check does not hold the other.
-  const targets = pingTargets(secret);
-  if (!targets.some((target) => target.key === PING_URL_KEY)) console.warn(`The file secrets.env has no ${PING_URL_KEY}. This runtime has no outside heartbeat.`);
+  const targets = pingTargets(secret, copy);
+  if (!targets.some((target) => target.key === pingKeyOf(copy))) console.warn(`The file secrets.env has no ${pingKeyOf(copy)}. This runtime has no outside heartbeat.`);
   const beats = targets.map((target) =>
     heartbeat({
       url: target.url,
@@ -140,6 +150,7 @@ async function runtime(): Promise<ServiceBuilder> {
     twilio: fetch,
     spendStore: quotas,
     run: randomUUID(),
+    copy,
     ...(onPass === undefined ? {} : { onPass }),
     // The output gets no secret, also when an error quotes a request.
     onError: (error, failures) => console.error(`A pass failed (${failures} in sequence): ${redactSecrets(errorMessage(error), values)}`),

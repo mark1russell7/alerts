@@ -355,13 +355,16 @@ A copy of the system is one runtime on one computer: a cell. When one computer, 
 
 Each copy loads the same `config.json` and `secrets.env`. The file `copy.json` of `ALERTS_HOME` gives the settings of one copy, and each copy has its own file:
 
+- `format`: the text `alerts-copy/1`.
 - `id`: the name of the copy, for example `home` or `cloud`. Two copies do not have the same id.
 - `rank`: the order of the copy, from 0. The copy with rank 0 sends first.
 - `listen`: the address and the port of the exchange. The address is the tailnet address of the computer, not all addresses.
 - `peers`: the id and the URL of the exchange of each other copy.
-- `pingKey`: the key of `secrets.env` that holds the ping URL of the first check of this copy. The default is `HEALTHCHECKS_PING_URL`.
+- `pingKey`: the key of `secrets.env` that holds the ping URL of the first check of this copy. The default is `HEALTHCHECKS_PING_URL`. It is not the key of the loud check, because the copies share the loud check.
 
-Without `copy.json`, the runtime is the only copy. It has rank 0 and no exchange. The key `COPY_TOKEN` of `secrets.env` gives the token of the exchange, the same for each copy.
+Without `copy.json`, the runtime is the only copy. It has rank 0 and no exchange. The key `COPY_TOKEN` of `secrets.env` gives the token of the exchange, the same for each copy. The check of the profile `daemon` needs it when the copy has other copies.
+
+The runtime reads `copy.json` only at its start. The reload hook watches only `config.json` and `secrets.env`. Thus, after a change of `copy.json`, start `node src/install.ts restart`. A problem of the file stops the start, and the problem holds no address and no URL.
 
 ### The rank wait
 

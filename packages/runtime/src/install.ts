@@ -10,6 +10,8 @@
  * - `node src/install.ts restart` restarts the runtime on the code of this checkout, with no elevated shell. It checks
  *   the private files with this code first. Then it waits for the new runtime and its readiness.
  *
+ * A change of `copy.json` needs `restart`, because the runtime reads the file only at its start.
+ *
  * After each install, and after each change of `config.json` or `secrets.env`, start `status` when the
  * time of the ready wait passed. A runtime that is not ready sends no alert.
  *
@@ -29,9 +31,10 @@ import { redactSecrets } from "@mark1russell7/text/redact";
 import { fetchTransport, send, statusLine } from "polite-crawler/api";
 import { HostScheduler, realClock } from "polite-crawler/politeness";
 import { alertsHome, configPath, readText, SECRETS_FILE } from "./config.ts";
+import { readCopySettings } from "./copy.ts";
 import { checkOfPingUrl, checksRequest, checkTimesProblem, heartbeatGap } from "./heartbeat.ts";
 import { discoveryPid, hostTask, READY_WITHIN, readinessProbe, RUNTIME_GRACE, runtimeDiscovery, supervisorDiscovery } from "./host.ts";
-import { checksKeys, DAEMON_CHECK, INSTANCE_TIMES, USER_AGENT_NAME } from "./instance.ts";
+import { checksKeys, daemonCheck, INSTANCE_TIMES, USER_AGENT_NAME } from "./instance.ts";
 import { privateFiles, requestRestart, type RestartOutcome } from "./reload.ts";
 
 const ACTIONS = ["install", "remove", "status", "restart"] as const;
@@ -133,8 +136,9 @@ if (action === "install") {
   process.exitCode = report(await uninstallService(spec, ports, { discovery }));
 } else if (action === "status") {
   const readiness = await probeOnce(readinessProbe(), PROBE_TIMEOUT_MS, ports);
-  // The status reads secrets.env as the start does: a bad line is a problem, and no problem holds a value.
-  const keys = checksKeys(await readText(() => readFile(join(home, SECRETS_FILE), "utf8")));
+  // The status reads copy.json and secrets.env as the start does: a bad line is a problem, and no problem holds a value.
+  const copy = await readCopySettings(home);
+  const keys = copy.tag === "err" ? copy : checksKeys(await readText(() => readFile(join(home, SECRETS_FILE), "utf8")), copy.value);
   const neededSeconds = Math.ceil(heartbeatGap(INSTANCE_TIMES) / 1000);
   const secrets = keys.tag === "ok" ? [keys.value.key, keys.value.url, ...(keys.value.loudUrl === undefined ? [] : [keys.value.loudUrl])] : [];
   const heartbeat: OutsideCheck = keys.tag === "err" ? { ok: false, neededSeconds, problem: keys.error.join(" ") } : await outsideCheck(keys.value.key, keys.value.url, secrets);
@@ -144,8 +148,11 @@ if (action === "install") {
   if (!readiness.ok || !heartbeat.ok || ("loud" in loud && !loud.loud.ok)) process.exitCode = 1;
 } else if (action === "restart") {
   const files = privateFiles(home, configPath(process.env, process.cwd()));
+  // The check of the restart uses the settings of the copy, as the start does. A bad copy.json stops the restart.
+  const copy = await readCopySettings(home);
+  if (copy.tag === "err") throw new Error(`The restart does not start. The file copy.json has problems:\n- ${copy.error.join("\n- ")}`);
   const outcome = await requestRestart(
-    { files, check: DAEMON_CHECK, waitMs: RESTART_WAIT_MS, pollMs: 2000 },
+    { files, check: daemonCheck(copy.value), waitMs: RESTART_WAIT_MS, pollMs: 2000 },
     {
       write: (path, text) => writeFileAtomic(path, text),
       pid: async () => discoveryPid(await readText(() => readFile(runtimeDiscovery(home), "utf8"))),

@@ -108,10 +108,15 @@ import {
 import { err, ok, tryCatch, type Result } from "@mark1russell7/optional";
 import {
   CONFIG_FORMAT,
+  COPY_FORMAT,
+  copyProblems,
   loadConfig,
   type AddressValue,
   type AlertConfig,
   type ContactConfig,
+  type CopyListen,
+  type CopyPeer,
+  type CopySettings,
   type ExpectationConfig,
   type OutageConfig,
   type OutagePersonConfig,
@@ -1330,6 +1335,54 @@ export const alertConfigSchema: z.ZodType<AlertConfig, AlertConfig> = schemaOf<A
     })
     .readonly(),
 );
+
+// The id of a copy: a short name of lowercase letters, digits and hyphens, thus a log line and a file name can hold it.
+const copyIdSchema = z.string().regex(/^[a-z0-9][a-z0-9-]{0,31}$/u, "The id of a copy is 1 to 32 lowercase letters, digits and hyphens.");
+
+// The URL of the exchange of another copy. The tailnet carries it, thus `http` is also a valid protocol. The host is a
+// name with one label or more, an IPv4 address or an IPv6 address in brackets. The URL has no user, no query and no fragment.
+const EXCHANGE_URL = /^https?:\/\/(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)*|\[[0-9a-f:.]+\])(?::[0-9]{1,5})?(?:\/[^\s?#]*)?$/iu;
+const isExchangeUrl = (text: string): boolean => EXCHANGE_URL.test(text);
+
+/** This schema checks the address of the exchange of a copy. */
+export const copyListenSchema: z.ZodType<CopyListen, CopyListen> = schemaOf<CopyListen>()(
+  z.strictObject({ host: z.string().min(1, "The address is a non-empty text."), port: z.int().min(1).max(65535, "The port is 1 to 65535.") }).readonly(),
+);
+
+/** This schema checks another copy of the system: its id and the URL of its exchange. */
+export const copyPeerSchema: z.ZodType<CopyPeer, CopyPeer> = schemaOf<CopyPeer>()(
+  z.strictObject({ id: copyIdSchema, url: z.string().refine(isExchangeUrl, "The URL of a copy is an http or https URL with no user, no query and no fragment.") }).readonly(),
+);
+
+/** This schema checks the JSON of the settings of one copy, the file `copy.json`. Then `copyProblems` checks the ranks and the ids. */
+export const copySettingsSchema: z.ZodType<CopySettings, CopySettings> = schemaOf<CopySettings>()(
+  z
+    .strictObject({
+      format: z.literal(COPY_FORMAT),
+      id: copyIdSchema,
+      rank: z.int().nonnegative("The rank is an integer, 0 or more."),
+      listen: copyListenSchema.exactOptional(),
+      peers: z.array(copyPeerSchema).readonly().exactOptional(),
+      pingKey: z
+        .string()
+        .regex(/^[A-Z][A-Z0-9_]*$/u, "The key is a name of the secrets: capital letters, digits and underscores.")
+        .exactOptional(),
+    })
+    .readonly(),
+);
+
+/**
+ * This function reads the JSON text of the settings of one copy. It checks the JSON, then the schema, then
+ * `copyProblems`. The problems hold no address and no URL.
+ */
+export function parseCopySettings(text: string): Result<CopySettings, readonly string[]> {
+  const json = tryCatch((): unknown => JSON.parse(text), () => ["The settings of the copy are not valid JSON."]);
+  if (json.tag === "err") return json;
+  const checked = checkWith(copySettingsSchema, json.value);
+  if (checked.tag === "err") return checked;
+  const problems = copyProblems(checked.value);
+  return problems.length > 0 ? err(problems) : checked;
+}
 
 /**
  * This function checks a value at a trust boundary. The result is the value, or one problem for each
