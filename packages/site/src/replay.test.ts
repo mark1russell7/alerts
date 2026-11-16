@@ -280,7 +280,7 @@ describe("the words of the page", () => {
   it("tells the level of the table at a place", () => {
     const [incident] = frames[1]!.incidents;
     const reason = { kind: "place-table", place: "home-a" as PlaceId, reports: [incident!.anchor], level: "urgent" } as const;
-    expect(reasonText(reason, incident!)).toBe("The lines that hold the home of A, in the Valley, give the level urgent at that place.");
+    expect(reasonText(reason, incident!)).toBe("The lines that hold this place give the level urgent at the home of A, in the Valley.");
   });
 
   it("tells first that the shadow score does not decide, and gives each factor with its source", () => {
