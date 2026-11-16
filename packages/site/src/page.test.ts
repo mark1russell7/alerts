@@ -47,7 +47,7 @@ describe("the local page", () => {
   const entry = read(LOCAL_ENTRY);
 
   it("has each part of the page, and asks the search engines not to list it", () => {
-    for (const id of ["theme", "read", "problem", "map", "incidents", "unshaped"]) expect(local).toContain(`id="${id}"`);
+    for (const id of ["theme", "read", "problem", "globe", "map", "globe-tools", "words", "whole", "incidents", "unshaped"]) expect(local).toContain(`id="${id}"`);
     expect(local).toContain('<meta name="robots" content="noindex">');
     expect(local).toContain('<script type="module" src="./src/local.ts"></script>');
   });
@@ -55,7 +55,7 @@ describe("the local page", () => {
   it("calls fetch once, with the path of readMap, and names no URL with a host", () => {
     expect(entry.split("fetch(")).toHaveLength(2);
     expect(entry).toContain("readMap((path) => fetch(path, {");
-    for (const text of [entry, read("map-read.ts"), read("map-view.ts"), local]) expect(text).not.toMatch(/https?:|\/\/[a-z0-9.-]+[.:]/i);
+    for (const text of [entry, read("map-read.ts"), read("map-view.ts"), read("globe-view.ts"), read("globe-stage.ts"), local]) expect(text).not.toMatch(/https?:|\/\/[a-z0-9.-]+[.:]/i);
     for (const call of ["XMLHttpRequest", "WebSocket", "EventSource", "sendBeacon", "import("]) expect(entry).not.toContain(call);
   });
 

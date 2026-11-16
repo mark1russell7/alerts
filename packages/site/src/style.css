@@ -6,6 +6,8 @@
   --line: #d6d6d0;
   --link: #1f5fbf;
   --sea: #dbe7f0;
+  --grid: #c2d3e0;
+  --rim: #58768c;
   --water: #3b7bbf;
   --ls: #c3262b;
   --urgent: #c25700;
@@ -25,6 +27,8 @@
     --line: #3b3b38;
     --link: #8ab8ff;
     --sea: #1b2630;
+    --grid: #2a3a47;
+    --rim: #05090c;
     --water: #6fa8e0;
     --ls: #ff6b6b;
     --urgent: #ff9a52;
@@ -43,6 +47,8 @@
   --line: #3b3b38;
   --link: #8ab8ff;
   --sea: #1b2630;
+  --grid: #2a3a47;
+  --rim: #05090c;
   --water: #6fa8e0;
   --ls: #ff6b6b;
   --urgent: #ff9a52;
@@ -366,6 +372,44 @@ summary:focus-visible,
   display: block;
   width: 100%;
   height: auto;
+}
+
+/* The globe of the local page. Its box has the shape of the flat map, so the page keeps its layout. */
+
+.globe-box {
+  aspect-ratio: 25 / 16;
+  overflow: hidden;
+  border-radius: 0.375rem;
+  background: var(--sea);
+}
+
+.globe-box canvas:focus-visible {
+  outline: 2px solid var(--link);
+  outline-offset: -2px;
+}
+
+.globe-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.globe-tools[hidden] {
+  display: none;
+}
+
+.map-words {
+  flex: 1 1 12rem;
+  min-height: 1.6em;
+  margin: 0;
+  font-weight: 600;
+}
+
+.globe-tools .hint {
+  flex-basis: 100%;
+  margin: 0;
 }
 
 .map .sea {
@@ -1001,6 +1045,11 @@ main.local {
 }
 
 @media (max-width: 36rem) {
+  /* A narrow page gets a higher globe, so a finger has space to move it. */
+  .globe-box {
+    aspect-ratio: 1;
+  }
+
   /* The map is approximately 0.3 of its view box here. Larger labels and pins stay readable. */
   .map .place-label {
     font-size: 44px;

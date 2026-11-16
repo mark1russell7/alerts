@@ -25,7 +25,7 @@ const PAD = MAP_VIEW.pad;
 const KM_PER_DEGREE = 111.195;
 
 /** The radius of the pad circle around each pin. Thus the fit does not zoom in on one point. */
-const PIN_PAD_KM = 20;
+export const PIN_PAD_KM = 20;
 
 /** An element of the SVG of the map, as data. */
 export interface MapNode {
@@ -76,7 +76,7 @@ function incidentClass(incident: MapIncident, selected: string | undefined): str
 }
 
 /** This function gives the words of a place for a reader of the screen: its label, its level and its gaps. */
-function placeTitle(place: MapPlace): string {
+export function placeTitle(place: MapPlace): string {
   const gaps = place.gaps.map(kindLabel).join(", ");
   return `${place.label}: ${LEVEL_WORDS[place.level]}.${gaps === "" ? "" : ` The coverage is short for: ${gaps}.`}`;
 }
@@ -84,6 +84,11 @@ function placeTitle(place: MapPlace): string {
 /** This function gives the words of a region of the basemap: its name and its code, for example `Center (KSZ083)`. */
 export function regionTitle(region: MapRegion): string {
   return `${region.name} (${region.code.code})`;
+}
+
+/** This function gives the words of the map for a reader of the screen: what the map shows, and the counts of its parts. */
+export function mapSummary(view: MapView): string {
+  return `A map of the live incidents and the watched places. Live incidents: ${String(view.incidents.length)}. Watched places: ${String(view.places.length)}.`;
 }
 
 /**
@@ -100,8 +105,7 @@ export function mapNodes(view: MapView, options: Omit<MapOptions, "select"> & { 
     ...outlined.flatMap((place) => place.shapes.map(geometryOf)),
     ...pinned.map((pin) => groundCircle(pin.at, PIN_PAD_KM)),
   ];
-  const summary = `A map of the live incidents and the watched places. Live incidents: ${String(view.incidents.length)}. Watched places: ${String(view.places.length)}.`;
-  const root = { viewBox: `0 0 ${String(MAP_WIDTH)} ${String(MAP_HEIGHT)}`, class: "map live-map", role: options.selectable === true ? "group" : "img", "aria-label": summary };
+  const root = { viewBox: `0 0 ${String(MAP_WIDTH)} ${String(MAP_HEIGHT)}`, class: "map live-map", role: options.selectable === true ? "group" : "img", "aria-label": mapSummary(view) };
   if (fitted.length === 0) {
     return node("svg", root, node("text", { class: "map-empty", x: MAP_WIDTH / 2, y: MAP_HEIGHT / 2 }, "No shape to draw."));
   }
