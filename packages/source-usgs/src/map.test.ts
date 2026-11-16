@@ -31,7 +31,7 @@ const observationOf = (feature: unknown): Observation => {
   return { id: observationId({ source: SOURCE_ID, contentType: "application/json", url: URL_OF_FEED, body }), source: SOURCE_ID, fetched: FETCHED, contentType: "application/json", body, transport: { latency: 0 } };
 };
 /** This function maps one feature, and expects one report or more and no problem. */
-const mapAll = (feature: unknown): Report[] => {
+const mapAll = (feature: unknown): readonly Report[] => {
   const result = mapObservation(observationOf(feature));
   expect(result.problems).toEqual([]);
   expect(result.reports.length).toBeGreaterThan(0);
