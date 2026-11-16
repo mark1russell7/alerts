@@ -1021,7 +1021,7 @@ The API also serves the built local page (`packages/site/dist`) on the same addr
 
 - The files come after the routes. A path of no file gets 404.
 - Each file gets the policy of the folder: no inline script, no inline style and no connection to another origin.
-- The theme before the first paint is the classic script `public/theme.js`, not an inline script.
+- The theme before the first paint is the classic script `theme.js`, not an inline script. The plugin `themeFile` of `packages/site/theme-file.ts` adds it to the build and to the head of each page.
 - Build the page before the start of the runtime: `pnpm --filter ./packages/site build`. Without the build, the path `/` gives 404.
 
 ## Relevance

@@ -61,16 +61,18 @@ describe("the local page", () => {
 
   it("has no inline script and no inline style, because the runtime serves each page with a policy that refuses them", () => {
     for (const html of [page, local]) {
-      const scripts = [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/g)];
-      expect(scripts.length).toBeGreaterThan(1);
+      const scripts = [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script[^>]*>/gi)];
+      expect(scripts.length).toBeGreaterThan(0);
       for (const [, attributes, body] of scripts) {
         expect(attributes).toMatch(/\ssrc="/);
         expect(body?.trim()).toBe("");
       }
       expect(html).not.toMatch(/\sstyle="|\son[a-z]+="|<style/i);
-      // The theme before the first paint is a classic script in the folder public.
-      expect(html).toContain('<script src="/theme.js"></script>');
+      // The plugin themeFile adds the theme script to the head of each page, thus the page itself has no theme script.
+      expect(html).not.toContain("theme.js");
     }
-    expect(readFileSync(new URL("../public/theme.js", import.meta.url), "utf8")).toContain('localStorage.getItem("theme")');
+    // The plugin and the theme button of each page use one key.
+    expect(readFileSync(new URL("../vite.config.ts", import.meta.url), "utf8")).toContain('plugins: [themeFile("theme")]');
+    for (const name of ["index.ts", LOCAL_ENTRY]) expect(read(name)).toContain('setupTheme(byId<HTMLButtonElement>("theme"), "theme");');
   });
 });
