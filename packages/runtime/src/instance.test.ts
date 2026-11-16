@@ -8,6 +8,7 @@ import type { TwilioFetch } from "@mark1russell7/alerts-channel-twilio";
 import { PUSHOVER_QUOTA, PUSHOVER_RESERVE_NOTICES, PUSHOVER_TIMEOUT_MS, type PushoverChannelOptions } from "@mark1russell7/alerts-channel-pushover";
 import { memoryCache, type ShapeCache } from "@mark1russell7/alerts-shapes-nws";
 import { CANARY_PATH, createNwsSource } from "@mark1russell7/alerts-source-nws-api";
+import { SWPC_KINDS } from "@mark1russell7/alerts-source-swpc";
 import { memoryQuotaStore, quotaGate, type Exchange, type Transport } from "polite-crawler/api";
 import { DEFAULT_POLICY } from "polite-crawler/politeness";
 import { afterEach, describe, expect, it } from "vitest";
@@ -76,6 +77,7 @@ function fixture(source: string, name: string): string {
  *
  * The USGS and EMSC give their recorded earthquakes of 2026-11-16. No disc of these earthquakes reaches the place.
  * Each tsunami warning center gives its recorded statement of 2026-11-13. Each statement expired before the time of the tests.
+ * The SWPC gives its recorded list of 2026-11-16. Its caps are far from the place, and its other messages have no area.
  *
  * Each exchange takes `delay` milliseconds of real time, as on a busy runner. With `Infinity`, no exchange ends.
  */
@@ -91,6 +93,7 @@ function network(delay = 0) {
     if (url.hostname === "apps.fema.gov") return { status: 200, statusText: "OK", headers: { "content-type": "application/xml" }, body: fixture("alerts-source-ipaws", "feed-empty.xml") };
     if (url.hostname === "earthquake.usgs.gov") return { status: 200, statusText: "OK", headers: { "content-type": "application/geo+json" }, body: fixture("alerts-source-usgs", "feed-2.5_day-20261116T0327Z.geojson") };
     if (url.hostname === "www.seismicportal.eu") return { status: 200, statusText: "OK", headers: { "content-type": "application/json" }, body: fixture("alerts-source-emsc", "query-2.5_day-20261116T0528Z.json") };
+    if (url.hostname === "services.swpc.noaa.gov") return { status: 200, statusText: "OK", headers: { "content-type": "application/json" }, body: fixture("alerts-source-swpc", "alerts-20261116T1553Z.json") };
     if (url.hostname === "www.tsunami.gov") {
       const name = url.pathname.endsWith("/PHEBCAP.xml") ? "PHEBCAP-20261116T1134Z.xml" : "PAAQCAP-20261116T1134Z.xml";
       return { status: 200, statusText: "OK", headers: { "content-type": "text/xml" }, body: fixture("alerts-source-tsunami", name) };
@@ -209,7 +212,7 @@ describe("openInstance", () => {
   it("sends a recorded NWS warning for a watched county to the person on Pushover", async () => {
     const { instance, clock, net, server } = await open();
     const pass = await finish(clock, instance.runtime.pass());
-    expect(pass.fetched).toEqual(["nws-api", "ipaws", "usgs", "emsc", "tsunami-ntwc", "tsunami-ptwc"]);
+    expect(pass.fetched).toEqual(["nws-api", "ipaws", "usgs", "emsc", "tsunami-ntwc", "tsunami-ptwc", "swpc"]);
     // A fetch that ran out of time names its cause here, before the checks of the send.
     expect(pass.view?.health.map((health) => [health.source, health.state])).toEqual([
       ["nws-api", "healthy"],
@@ -218,6 +221,7 @@ describe("openInstance", () => {
       ["emsc", "healthy"],
       ["tsunami-ntwc", "healthy"],
       ["tsunami-ptwc", "healthy"],
+      ["swpc", "healthy"],
     ]);
     expect(server.calls).toHaveLength(1);
     const [call] = server.calls;
@@ -307,11 +311,11 @@ describe("openInstance", () => {
     const outside = { ...CONFIG.places[0]!, at: [LONGITUDE, 28.46] as const };
     const { instance, clock, server } = open(store(SECRETS), { ...CONFIG, places: [outside] });
     const pass = await finish(clock, instance.runtime.pass());
-    expect(pass.fetched).toEqual(["nws-api", "ipaws", "usgs", "emsc", "tsunami-ntwc", "tsunami-ptwc"]);
+    expect(pass.fetched).toEqual(["nws-api", "ipaws", "usgs", "emsc", "tsunami-ntwc", "tsunami-ptwc", "swpc"]);
     expect(server.calls).toHaveLength(0);
-    // The USGS and EMSC give earthquake incidents too, and the tsunami centers give expired statements.
-    // The order of the incidents is the order of their anchors.
-    const incident = pass.view.incidents.find((one) => !["geo.earthquake", "geo.tsunami"].includes(one.kind.code));
+    // The USGS and EMSC give earthquake incidents too, the tsunami centers give expired statements, and the SWPC gives
+    // space weather. The order of the incidents is the order of their anchors.
+    const incident = pass.view.incidents.find((one) => !["geo.earthquake", "geo.tsunami", ...SWPC_KINDS].includes(one.kind.code));
     expect(incident?.areas.some((area) => area.type === "polygon")).toBe(true);
     expect(matchPlaces(incident!, [outside])).toEqual([]);
     // With a buffer of 10 km, the polygon is in the buffer of the place, and the distance decides the match.
@@ -332,6 +336,7 @@ describe("openInstance", () => {
       ["emsc", "healthy"],
       ["tsunami-ntwc", "healthy"],
       ["tsunami-ptwc", "healthy"],
+      ["swpc", "healthy"],
     ]);
     expect(server.calls.map((call) => call.fields["title"])).toEqual([expect.stringContaining("Flood Warning")]);
   });
@@ -346,6 +351,7 @@ describe("openInstance", () => {
       ["emsc", "The fetch took longer than 5000 ms."],
       ["tsunami-ntwc", "The fetch took longer than 5000 ms."],
       ["tsunami-ptwc", "The fetch took longer than 5000 ms."],
+      ["swpc", "The fetch took longer than 5000 ms."],
     ]);
   });
 
@@ -353,7 +359,7 @@ describe("openInstance", () => {
     const { instance, clock, net } = await open();
     await finish(clock, instance.runtime.pass());
     const hosts = new Set(net.exchanges.map((exchange) => new URL(exchange.url).hostname));
-    expect(hosts).toEqual(new Set(["api.weather.gov", "apps.fema.gov", "earthquake.usgs.gov", "www.seismicportal.eu", "www.tsunami.gov"]));
+    expect(hosts).toEqual(new Set(["api.weather.gov", "apps.fema.gov", "earthquake.usgs.gov", "www.seismicportal.eu", "www.tsunami.gov", "services.swpc.noaa.gov"]));
     for (const exchange of net.exchanges) {
       expect(exchange.headers["user-agent"]).toBe(USER_AGENT_NAME);
       const text = JSON.stringify(exchange);
@@ -377,7 +383,7 @@ describe("openInstance", () => {
     // The refresh starts after the pass, and it starts no request that can end after the next fetch of a source.
     const next = Math.min(...instance.runtime.config.sources.map((source) => nextFetch(instance.runtime.state(), source)));
     expect(clock.now()).toBeLessThanOrEqual(next);
-    expect(pass.fetched).toEqual(["nws-api", "ipaws", "usgs", "emsc", "tsunami-ntwc", "tsunami-ptwc"]);
+    expect(pass.fetched).toEqual(["nws-api", "ipaws", "usgs", "emsc", "tsunami-ntwc", "tsunami-ptwc", "swpc"]);
     expect(outcomes).toHaveLength(1);
     expect(outcomes[0]?.ok).toBe(true);
     await instance.shapes.close();
@@ -454,7 +460,7 @@ describe("openInstance", () => {
   it("gives the loop the times of the sources and of the channel", async () => {
     const { instance } = await open();
     const intervals = instance.runtime.config.sources.map((source) => source.interval);
-    expect(instance.runtime.config.sources.map((source) => source.id)).toEqual(["nws-api", "ipaws", "usgs", "emsc", "tsunami-ntwc", "tsunami-ptwc"].map((id) => id as SourceId));
+    expect(instance.runtime.config.sources.map((source) => source.id)).toEqual(["nws-api", "ipaws", "usgs", "emsc", "tsunami-ntwc", "tsunami-ptwc", "swpc"].map((id) => id as SourceId));
     expect(instance.loop.times).toEqual({
       passLimit: Math.max(...intervals) + 2 * PUSHOVER_TIMEOUT_MS,
       retryBase: Math.min(PUSHOVER_TIMEOUT_MS, ...intervals),
@@ -473,11 +479,12 @@ describe("openInstance", () => {
     for (const start of [noToken, noUser]) expect(messageOf(start)).not.toMatch(/t{30}|u{30}/);
   });
 
-  it("does not start when no source covers a place", () => {
-    // The place has no code of the country. The coverage of each source is a list of countries.
+  it("does not start when no regional source covers a place", () => {
+    // The place has no code of the country. The coverage of each regional source is a list of countries.
+    // The SWPC covers the whole Earth, so it covers the place with no code. The check does not count it.
     const place = CONFIG.places[0]!;
     const config: AlertConfig = { ...CONFIG, places: [{ ...place, codes: place.codes.filter((code) => code.system !== "iso3166") }] };
-    expect(messageOf(() => open(store(SECRETS), config))).toContain("No source covers the place place-1.");
+    expect(messageOf(() => open(store(SECRETS), config))).toContain("No regional source covers the place place-1.");
   });
 
   it("does not start with a key that is not a key of Pushover, and no message holds the bad value", () => {
@@ -688,13 +695,19 @@ describe("the check of the instance", () => {
     const uncovered: AlertConfig = { ...CONFIG, places: [{ ...place, codes: place.codes.filter((code) => code.system !== "iso3166") }] };
     const bad = store({ ...SECRETS, PUSHOVER_APP_TOKEN: "bad-token-value" });
     const problems = INSTANCE_CHECK.problems(parse(uncovered, bad), bad);
-    expect(problems).toEqual([expect.stringContaining("The value of PUSHOVER_APP_TOKEN is not a key of Pushover"), expect.stringContaining("No source covers the place place-1.")]);
+    expect(problems).toEqual([expect.stringContaining("The value of PUSHOVER_APP_TOKEN is not a key of Pushover"), expect.stringContaining("No regional source covers the place place-1.")]);
     expect(problems.join("\n")).not.toMatch(/bad-token-value|bad-user-value/);
     expect(messageOf(() => open(bad, uncovered))).toContain(problems.join("\n- "));
   });
 
   it("finds no problem in a configuration that starts", () => {
     expect(instanceProblems(parse(CONFIG, store(SECRETS)), store(SECRETS), INSTANCE_SOURCES, 0)).toEqual([]);
+  });
+
+  it("does not count a global source as the cover of a place", () => {
+    const global = INSTANCE_SOURCES.filter((descriptor) => descriptor.coverage === "global");
+    expect(global.map((descriptor) => descriptor.id)).toEqual(["swpc"]);
+    expect(instanceProblems(parse(CONFIG, store(SECRETS)), store(SECRETS), global, 0)).toEqual([expect.stringContaining("No regional source covers the place place-1.")]);
   });
 
   it("checks the settings of the expectations against the expectations of the instance", () => {

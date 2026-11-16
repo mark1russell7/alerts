@@ -749,7 +749,7 @@ The instance does not start when it finds one of these problems:
 - some keys of Twilio and not all, or a key of Twilio with a bad form
 - a step of a policy on a channel that the instance has no sender for. Without the keys of Twilio, the call channel has no sender.
 - a step on a channel with a cost, when the configuration has no spend entry for a provider of the channel
-- a place that no source covers. Usually the place does not have a code of each level: the zone, the county, SAME, the state and the country.
+- a place that no regional source covers. Usually the place does not have a code of each level: the zone, the county, SAME, the state and the country. A source with the coverage `global`, for example the SWPC, covers each place with no code. Thus the check does not count it.
 
 The environment gives `PORT` (8080), `PROBE_PORT` (9090) and `SERVICE_PROFILE` (`local`, `daemon` or `pod`). The folder `ALERTS_HOME` (`.alerts` in the home folder) holds the private files: `config.json`, `secrets.env`, the log `runtime.sqlite` and the outlines of the zones `shapes.sqlite`. It also holds the counts of the quotas, `quotas.sqlite`. No repository holds them. A problem of `secrets.env` names its line and its key, and no value. The output of a failed pass shows no value of `secrets.env`.
 

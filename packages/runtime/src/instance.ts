@@ -47,6 +47,7 @@ import { createEmscSource, EMSC_DESCRIPTOR } from "@mark1russell7/alerts-source-
 import { createIpawsSource, IPAWS_DESCRIPTOR, WEA_EXPECTATION } from "@mark1russell7/alerts-source-ipaws";
 import { createShapeStore, type ShapeCache, type ShapeStore } from "@mark1russell7/alerts-shapes-nws";
 import { createNwsSource, NWS_DESCRIPTOR } from "@mark1russell7/alerts-source-nws-api";
+import { createSwpcSource, SWPC_DESCRIPTOR } from "@mark1russell7/alerts-source-swpc";
 import { createTsunamiSource, descriptorOf as tsunamiDescriptor, TSUNAMI_CENTERS, type TsunamiCenter, type TsunamiFetchOptions } from "@mark1russell7/alerts-source-tsunami";
 import { createUsgsSource, USGS_DESCRIPTOR } from "@mark1russell7/alerts-source-usgs";
 import { err, ok, type Result } from "@mark1russell7/optional";
@@ -206,9 +207,16 @@ const tsunamiFactory =
 /**
  * The descriptors of the sources of the instance. The function `describe` of each source gives the same descriptor.
  * The USGS and EMSC give the earthquakes. Merge rule 3 (`linkRule` of the core) joins their reports of one event.
- * The two tsunami warning centers give the tsunami messages.
+ * The two tsunami warning centers give the tsunami messages. The SWPC gives the space weather messages.
  */
-export const INSTANCE_SOURCES: readonly SourceDescriptor[] = [NWS_DESCRIPTOR, IPAWS_DESCRIPTOR, USGS_DESCRIPTOR, EMSC_DESCRIPTOR, ...TSUNAMI.map((center) => tsunamiDescriptor(center))];
+export const INSTANCE_SOURCES: readonly SourceDescriptor[] = [
+  NWS_DESCRIPTOR,
+  IPAWS_DESCRIPTOR,
+  USGS_DESCRIPTOR,
+  EMSC_DESCRIPTOR,
+  ...TSUNAMI.map((center) => tsunamiDescriptor(center)),
+  SWPC_DESCRIPTOR,
+];
 
 /** The expectations of the instance. The field `expectations` of the configuration sets their `since`. */
 export const INSTANCE_EXPECTATIONS: readonly Expectation[] = [WEA_EXPECTATION];
@@ -271,7 +279,7 @@ export const RANK_DELAY: Duration = DELIVERY_TIMES.flightLimit + EXCHANGE_EVERY 
  * - some keys of Twilio and not all, or a key of Twilio with a bad form
  * - a step of a policy on a channel with no sender
  * - a step on a channel with a cost, when the configuration has no spend entry for its provider
- * - a place that no source covers
+ * - a place that no regional source covers. A source with the coverage `global` covers each place, with no code.
  * - an outage call with no keys of Twilio, no token `OUTAGE_TOKEN` or a bad list
  * - a setting of an unknown expectation, or a `since` after the time `at`.
  *
@@ -309,12 +317,14 @@ export function instanceProblems(parsed: ParsedConfig, secret: SecretLookup, des
       ? [`The channel ${descriptor.id} costs money, and the configuration has no spend entry for its provider. Give an entry with a monthly cap.`]
       : [],
   );
-  // A place that no source covers gets no alert. The usual cause is a missing code of a level.
-  const kinds = [...new Set(descriptors.flatMap((descriptor) => descriptor.kinds))];
+  // A place that no regional source covers gets no alert of its area. The usual cause is a missing code of a level.
+  // A global source covers each place with no code, so it tells nothing about the codes of a place.
+  const regional = descriptors.filter((descriptor) => descriptor.coverage !== "global");
+  const kinds = [...new Set(regional.flatMap((descriptor) => descriptor.kinds))];
   const placeProblems = localPlaces(parsed.config).flatMap((place) =>
-    descriptors.some((descriptor) => kinds.some((kind) => sourceCovers(descriptor, place, kind)))
+    regional.some((descriptor) => kinds.some((kind) => sourceCovers(descriptor, place, kind)))
       ? []
-      : [`No source covers the place ${place.id}. Give the place its codes at each level: the NWS zone and county, SAME, the state and the country (iso3166).`],
+      : [`No regional source covers the place ${place.id}. Give the place its codes at each level: the NWS zone and county, SAME, the state and the country (iso3166).`],
   );
   // The outage call deploys at the start. A bad list or a missing key fails the deploy, so it stops the start.
   const outage = outageSetup(parsed, secret, twilio.tag === "ok" ? twilio.value : undefined);
@@ -475,12 +485,12 @@ export interface Instance {
 
 /**
  * This function makes the instance. It throws when the configuration or the secret store has a
- * problem. A problem is a missing token, a key with a bad form, or a place that no source covers.
+ * problem. A problem is a missing token, a key with a bad form, or a place that no regional source covers.
  * The message names ids, fields and the names of secrets, and no value.
  *
- * - The sources are the NWS API, IPAWS, the USGS, EMSC and the two tsunami warning centers. Each source gets the codes of
- *   the places. It gets the position of a place only when the place shares it with that source. The USGS, EMSC and the
- *   centers ask for no place.
+ * - The sources are the NWS API, IPAWS, the USGS, EMSC, the two tsunami warning centers and the SWPC. Each source gets the
+ *   codes of the places. It gets the position of a place only when the place shares it with that source. The USGS, EMSC,
+ *   the centers and the SWPC ask for no place.
  * - The channels are Pushover, and the Twilio call channel when the secrets have its keys. Each time of the delivery comes
  *   from a fact of the channels.
  * - A spend entry of a channel gives its cap and the watch of the balance of its account.
@@ -490,7 +500,7 @@ export function openInstance(options: InstanceOptions): Instance {
   const { clock } = options;
   // A change of the wall clock of CLOCK_STEP_ABOVE or less is a drift. A larger change is a step of the clock.
   const wall = frameClock(options.wall, clock, { driftLimit: CLOCK_STEP_ABOVE });
-  const factories = [createNwsSource, createIpawsSource, createUsgsSource, createEmscSource, ...TSUNAMI.map((center) => tsunamiFactory(center))] as const;
+  const factories = [createNwsSource, createIpawsSource, createUsgsSource, createEmscSource, ...TSUNAMI.map((center) => tsunamiFactory(center)), createSwpcSource] as const;
   const pace = sourcePace(clock, wall, factories.length);
   // One User-Agent for each request of the instance: the sources and the store of shapes.
   const agent = userAgent(options.config.config.contact);

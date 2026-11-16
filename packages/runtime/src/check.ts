@@ -5,7 +5,7 @@
  *
  * - `node src/check.ts <file>` checks the file. Without a file, it checks `config.json` in the private folder.
  * - The check uses the keys of `secrets.env`, the settings of the copy `copy.json` and the check of the live instance, the profile `daemon`.
- * - It finds each problem that stops the start: the form of a key, a missing key and a place that no source covers.
+ * - It finds each problem that stops the start: the form of a key, a missing key and a place that no regional source covers.
  * - The exit code is 0 for a valid file, 1 for a file with problems and 2 for a wrong command.
  *
  * The environment gives `ALERTS_HOME`, as for `main.ts`. The output holds no value of the file, no
