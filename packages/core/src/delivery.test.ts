@@ -131,6 +131,50 @@ describe("route", () => {
     expect(ended[0]!.why).toBeUndefined();
   });
 
+  it("routes an incident by a topic alone, with no area and no place of the person", () => {
+    const base = recipient("person-1", [LIFE_SAFETY, URGENT], []);
+    const follower: Recipient = { ...base, watch: { ...base.watch, subjects: [{ system: "topic", id: "infra.power.outage" }] } };
+    // A power cut has no class of its own. Thus the table of the other kinds gives it `urgent` at most.
+    const outage = incident({ kind: { code: "infra.power.outage", label: "Power outage" }, areas: [], about: [{ system: "topic", id: "infra.power.outage" }] });
+    const routes = route(input({ incidents: [outage], recipients: [follower] }));
+    expect(summary(routes)).toEqual([{ level: "urgent", state: "last", fresh: true, sends: [0], cancels: [] }]);
+    expect(routes[0]!.start).toEqual(start("urgent", T0));
+    // The why of a topic comes with the relevance step of AL-35. A match by a topic alone has no why at this time.
+    expect(routes[0]!.why).toBeUndefined();
+    // A topic of a life-safety kind escalates as a place does: the first step at once, the second step after 5 minutes.
+    const storm: Recipient = { ...base, watch: { ...base.watch, subjects: [{ system: "topic", id: "met.tornado" }] } };
+    const tornado = incident({ areas: [], about: [{ system: "topic", id: "met.tornado" }] });
+    const first = route(input({ incidents: [tornado], recipients: [storm] }));
+    expect(summary(first)).toEqual([{ level: "life-safety", state: "sent", fresh: true, sends: [0], cancels: [] }]);
+    expect(first[0]!.plan.wakeAt).toBe(T0 + 5 * MINUTE);
+    const later = route(input({ incidents: [tornado], recipients: [storm], starts: [start("life-safety", T0)], now: T0 + 6 * MINUTE }));
+    expect(summary(later)).toEqual([{ level: "life-safety", state: "last", fresh: false, sends: [0, 1], cancels: [] }]);
+  });
+
+  it("matches a topic by its system and its id, and a watch of a system with no id matches each topic", () => {
+    const base = recipient("person-1", [LIFE_SAFETY, URGENT], []);
+    const watching = (subjects: NonNullable<Recipient["watch"]["subjects"]>): Recipient => ({ ...base, watch: { ...base.watch, subjects } });
+    const flood = incident({ areas: [], about: [{ system: "topic", id: "met.flood" }] });
+    expect(route(input({ incidents: [flood], recipients: [watching([{ system: "topic", id: "met.tornado" }])] }))).toEqual([]);
+    expect(route(input({ incidents: [flood], recipients: [watching([{ system: "iptc", id: "met.flood" }])] }))).toEqual([]);
+    expect(route(input({ incidents: [flood], recipients: [watching([{ system: "topic" }])] }))).toHaveLength(1);
+    expect(route(input({ incidents: [flood], recipients: [base] }))).toEqual([]);
+  });
+
+  it("reaches a person by a topic when no place of the person is in the area, and gives the why of a place in the area", () => {
+    const base = recipient();
+    const follower: Recipient = { ...base, watch: { ...base.watch, subjects: [{ system: "topic", id: "met.tornado" }] } };
+    // Harvey County, Kansas: a county next to the place of the person.
+    const elsewhere = incident({ areas: [{ type: "code", system: "ugc", code: "KSC079" }], about: [{ system: "topic", id: "met.tornado" }] });
+    const far = route(input({ incidents: [elsewhere], recipients: [follower] }));
+    expect(summary(far)).toEqual([{ level: "life-safety", state: "sent", fresh: true, sends: [0], cancels: [] }]);
+    expect(far[0]!.why).toBeUndefined();
+    // Without the topic, the incident does not reach the person.
+    expect(route(input({ incidents: [elsewhere] }))).toEqual([]);
+    const near = route(input({ incidents: [incident({ about: [{ system: "topic", id: "met.tornado" }] })], recipients: [follower] }));
+    expect(near[0]!.why).toEqual(placeWhy([home]));
+  });
+
   it("keeps the start of the log, thus a step comes at its time after a restart", () => {
     const routes = route(input({ starts: [start("life-safety", T0)], now: T0 + 6 * MINUTE }));
     expect(summary(routes)).toEqual([{ level: "life-safety", state: "last", fresh: false, sends: [0, 1], cancels: [] }]);
