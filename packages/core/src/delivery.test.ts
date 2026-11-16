@@ -20,6 +20,7 @@ import type {
 } from "./contracts.ts";
 import { LEVELS } from "./contracts.ts";
 import { acknowledgmentOf, addressProblems, messageOf, recipientProblems, route, type EscalationEnd, type EscalationStart, type Recipient, type Route, type RouteInput } from "./delivery.ts";
+import { RANK_DELAY_LIMIT, rankDelayProblems } from "./escalation.ts";
 import { messageKey } from "./ids.ts";
 import { placeWhy } from "./why.ts";
 
@@ -334,6 +335,51 @@ describe("route", () => {
       }
       expect(starts.length, `seed ${seed}`).toBeGreaterThan(0);
     }
+  });
+});
+
+describe("route: the rank delay of each level", () => {
+  const DELAY = 30_000;
+  // The routes of the copies of rank 0 and rank 1, with the same merge state and the table of the private configuration.
+  const copies = (extra: Partial<RouteInput> = {}): Route[][] => [0, 1].map((rank) => route(input({ rank, rankDelay: DELAY, rankDelays: { "life-safety": 0 }, ...extra })));
+  const sends = (routes: readonly Route[]) => routes.map((entry) => entry.plan.sends.map((send) => ({ step: send.step, due: send.due, wait: send.wait })));
+
+  it("gives two sends at the same time from two copies for one life-safety incident", () => {
+    const [first, second] = copies();
+    expect(sends(first!)).toEqual([[{ step: 0, due: T0, wait: 0 }]]);
+    expect(sends(second!)).toEqual(sends(first!));
+  });
+
+  it("gives one send at a lower level: the copy of rank 1 waits the default, and then the delivery of rank 0 holds it", () => {
+    const [first, second] = copies({ incidents: [incident(WATCH)] });
+    expect(sends(first!)).toEqual([[{ step: 0, due: T0, wait: 0 }]]);
+    expect(sends(second!)).toEqual([[]]);
+    expect(second![0]!.plan.wakeAt).toBe(T0 + DELAY);
+    const later = route(input({ incidents: [incident(WATCH)], rank: 1, rankDelay: DELAY, rankDelays: { "life-safety": 0 }, starts: [start("urgent", T0)], merge: { deliveries: [delivery("urgent", 0, T0 + 500)] }, now: T0 + DELAY }));
+    expect(sends(later)).toEqual([[]]);
+  });
+
+  it("gives the default to a level with no entry, and the entry to a level with one", () => {
+    const table = { urgent: 5_000 };
+    expect(route(input({ incidents: [incident(WATCH)], rank: 2, rankDelay: DELAY, rankDelays: table }))[0]!.plan.wakeAt).toBe(T0 + 10_000);
+    const lifeSafety = route(input({ rank: 2, rankDelay: DELAY, rankDelays: table, now: T0 + 2 * DELAY, starts: [start("life-safety", T0)] }));
+    expect(sends(lifeSafety)).toEqual([[{ step: 0, due: T0 + 2 * DELAY, wait: 2 * DELAY }]]);
+  });
+
+  it("gives the plain default to each level with no table", () => {
+    const [, second] = copies({ rankDelays: undefined });
+    expect(sends(second!)).toEqual([[]]);
+    expect(second![0]!.plan.wakeAt).toBe(T0 + DELAY);
+  });
+});
+
+describe("rankDelayProblems", () => {
+  it("accepts 0 and whole milliseconds up to the limit, and names each level with another value", () => {
+    expect(rankDelayProblems({ "life-safety": 0, urgent: RANK_DELAY_LIMIT })).toEqual([]);
+    expect(rankDelayProblems({ notice: 1.5, digest: RANK_DELAY_LIMIT + 1 })).toEqual([
+      `The rank delay of the level notice is not a whole number of milliseconds from 0 to ${RANK_DELAY_LIMIT}.`,
+      `The rank delay of the level digest is not a whole number of milliseconds from 0 to ${RANK_DELAY_LIMIT}.`,
+    ]);
   });
 });
 
@@ -790,7 +836,7 @@ function report(id: ReportId, fields: Partial<Report> = {}): Report {
 }
 
 describe("messageOf", () => {
-  const send = { incident: anchor, level: "life-safety", person, step: 0, channel: pushover, due: T0, quiet: false } as const;
+  const send = { incident: anchor, level: "life-safety", person, step: 0, channel: pushover, due: T0, wait: 0, quiet: false } as const;
 
   it("takes the text of the latest report at the severity and the urgency of the incident", () => {
     const reports = [

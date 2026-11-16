@@ -476,6 +476,7 @@ const SCHEMA_NAMES = [
   "positionSchema",
   "probabilitySchema",
   "quietWindowSchema",
+  "rankDelaysSchema",
   "receiptSchema",
   "regionCodeSchema",
   "relevancePathSchema",

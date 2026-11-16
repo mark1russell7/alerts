@@ -73,7 +73,7 @@ export const ESCALATION_MACHINE: Machine = {
   knobs: {
     step_at: { key: "EscalationStep.at", scope: "policy", unit: "ms", default: null, note: "the time from the start to the first step" },
     step_wait: { key: "the time from one step of the policy to the next", scope: "policy", unit: "ms", default: null, note: "the policy gives one for each step" },
-    rank_wait: { key: "rank × rankDelay of the copy", scope: "cell", unit: "ms", default: null, note: "a copy waits for its rank before each send" },
+    rank_wait: { key: "rank × the rank delay of the level", scope: "cell", unit: "ms", default: null, note: "a copy waits for its rank before each send. The rank delay of a level can be 0, then each copy sends at once" },
     exhausted_after: { key: "EscalationPolicy.exhaustedAfter", scope: "policy", unit: "ms", default: null },
   },
   timers: {
@@ -132,6 +132,7 @@ export interface EscalationInput {
   readonly cancelled?: ReadonlySet<string> | undefined;
   /** The rank of this copy of the system, from 0. A copy waits `rank × rankDelay` before each send. */
   readonly rank?: number | undefined;
+  /** The wait of one rank at the level of the policy. `rankDelayOf` gives it from the table of the levels. */
   readonly rankDelay?: Duration | undefined;
   /** The quiet window of the person, from `PersonWatch.quiet`. A send below `life-safety` in the window is quiet. */
   readonly quiet?: QuietWindow | undefined;
@@ -148,11 +149,34 @@ export interface EscalationInput {
   readonly now: Instant;
 }
 
+/**
+ * The wait of one rank of a copy, for each level. A level with no entry takes the default of the caller. With 0 at a
+ * level, each copy sends each step of the level at once, thus a person gets one message from each copy.
+ */
+export type RankDelays = Readonly<Partial<Record<Level, Duration>>>;
+
+/** The longest rank delay of a level in a configuration: one hour. */
+export const RANK_DELAY_LIMIT: Duration = 60 * 60_000;
+
+/** This function gives the rank delay of a level: its entry in the table, or else the default. */
+export function rankDelayOf(level: Level, delays: RankDelays | undefined, fallback: Duration | undefined): Duration | undefined {
+  return delays?.[level] ?? fallback;
+}
+
+/** This function gives the problems of a table of rank delays. Each problem names a level, and each value is a whole number of milliseconds up to `RANK_DELAY_LIMIT`. */
+export function rankDelayProblems(delays: RankDelays): string[] {
+  return Object.entries(delays).flatMap(([level, delay]) =>
+    delay !== undefined && Number.isInteger(delay) && delay >= 0 && delay <= RANK_DELAY_LIMIT ? [] : [`The rank delay of the level ${level} is not a whole number of milliseconds from 0 to ${RANK_DELAY_LIMIT}.`],
+  );
+}
+
 /** A send that is due. The runtime makes the delivery key with `messageKey` of this value. */
 export interface EscalationSend extends MessageKeyInput {
   readonly channel: ChannelId;
-  /** The time at which the step became due. */
+  /** The time at which the step became due. It holds `wait`. */
   readonly due: Instant;
+  /** The wait of the rank of this copy before the send: `rank × rankDelay`. At 0, each copy sends the step at once. */
+  readonly wait: Duration;
   /** True: the channel sends in its silent mode. The value is for a send at `now`. `Message.quiet` takes it. */
   readonly quiet: boolean;
 }
@@ -278,7 +302,7 @@ export function escalate(input: EscalationInput): EscalationPlan {
         const offset = offsets[index] ?? 0;
         return step === undefined || delivered.has(index)
           ? []
-          : [{ incident: incident.anchor, level, person, step: index, ...(episode === 0 ? {} : { episode }), channel: step.channel, due: start + offset + wait, quiet }];
+          : [{ incident: incident.anchor, level, person, step: index, ...(episode === 0 ? {} : { episode }), channel: step.channel, due: start + offset + wait, wait, quiet }];
       })
     : [];
 

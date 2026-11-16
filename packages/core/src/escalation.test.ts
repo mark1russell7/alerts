@@ -67,7 +67,7 @@ describe("escalate", () => {
     const plan = escalate(input());
     expect(plan.state).toBe("sent");
     expect(plan.due).toEqual([0]);
-    expect(plan.sends).toEqual([{ incident: anchor, level: "life-safety", person, step: 0, channel: pushover, due: T0, quiet: false }]);
+    expect(plan.sends).toEqual([{ incident: anchor, level: "life-safety", person, step: 0, channel: pushover, due: T0, wait: 0, quiet: false }]);
     expect(plan.cancels).toEqual([]);
     expect(plan.wakeAt).toBe(T0 + 5 * MINUTE);
   });

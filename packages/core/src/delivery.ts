@@ -28,7 +28,7 @@ import {
   type WatchedPlace,
   type WhyRecord,
 } from "./contracts.ts";
-import { escalate, escalationProblems, quietWindowProblems, type EscalationPlan, type EscalationSend } from "./escalation.ts";
+import { escalate, escalationProblems, quietWindowProblems, rankDelayOf, type EscalationPlan, type EscalationSend, type RankDelays } from "./escalation.ts";
 import { messageKey } from "./ids.ts";
 import { unknownKinds } from "./taxonomy.ts";
 import { assessmentWhy } from "./why.ts";
@@ -104,7 +104,10 @@ export interface RouteInput {
   readonly channels: readonly ChannelDescriptor[];
   /** The rank of this copy of the system, and the wait of each rank. `escalate` tells how they apply. */
   readonly rank?: number | undefined;
+  /** The default wait of one rank: the wait of each level with no entry in `rankDelays`. */
   readonly rankDelay?: Duration | undefined;
+  /** The wait of one rank for each level. With 0 for `life-safety`, each copy sends a life-safety step at once. */
+  readonly rankDelays?: RankDelays | undefined;
   readonly now: Instant;
 }
 
@@ -251,7 +254,7 @@ export function route(input: RouteInput): Route[] {
             acknowledgments: ownAcks,
             cancelled: input.cancelled,
             rank: input.rank,
-            rankDelay: input.rankDelay,
+            rankDelay: rankDelayOf(level, input.rankDelays, input.rankDelay),
             quiet: recipient.watch.quiet,
             episode,
             silent,

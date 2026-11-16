@@ -290,7 +290,7 @@ describe("the quota reports", () => {
     expect(levels(step.reports, OPERATOR)).toEqual(["none", "none"]);
     const found = incidents(normalize({ reports: step.reports }), 200);
     const uses = found.map((incident) => {
-      const send = { incident: incident.anchor, level: "notice" as const, person: WATCHER.person, step: 0, channel: PUSHOVER, due: 200, quiet: false };
+      const send = { incident: incident.anchor, level: "notice" as const, person: WATCHER.person, step: 0, channel: PUSHOVER, due: 200, wait: 0, quiet: false };
       return [incident.kind.code, messageOf(incident, step.reports, send).useReserve ?? false];
     });
     expect(Object.fromEntries(uses)).toEqual({ "system.quota.low": false, "system.quota.reserve": true });
