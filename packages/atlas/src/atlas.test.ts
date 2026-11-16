@@ -1,14 +1,23 @@
+import { TAXONOMY } from "@mark1russell7/alerts";
 import { describe, expect, it } from "vitest";
 
-import { checkAtlas, coverage, MIN_SOURCES, parentOf, planBlock, type Atlas, type SignalClass, type Source } from "./atlas.ts";
+import { checkAtlas, coverage, measures, MIN_SOURCES, parentOf, planBlock, unreachedCodes, type Atlas, type Round, type SignalClass, type Source } from "./atlas.ts";
 import { readAtlas, workspacePackages } from "./read.ts";
 
-const round = { round: 1, date: "2026-11-15", by: "a test", method: "test", lists: ["a list"], queries: [], notes: [], studies: [] };
+const round: Round = {
+  round: 1,
+  date: "2026-11-15",
+  by: "a test",
+  method: "test",
+  lists: ["a list"],
+  queries: [],
+  notes: [],
+  studies: [],
+  measures: { classes: 0, gaps: 0, adoptedCover: 0, cause: "a test" },
+};
 
 const klass = (id: string, gap: string | null = null): SignalClass => ({
   id,
-  label: id,
-  summary: `The class ${id}.`,
   subjectKinds: ["place"],
   examples: [],
   references: ["a list"],
@@ -44,8 +53,8 @@ const atlas = (classes: readonly SignalClass[], sources: readonly Source[]): Atl
 describe("the committed atlas", () => {
   const committed = readAtlas();
 
-  it("passes the gate: each class has 2 or more sources with no risk, or a reason", () => {
-    expect(checkAtlas(committed, { packages: workspacePackages() })).toEqual([]);
+  it("passes the gate: each class is a code of the taxonomy with 2 or more sources with no risk, or a reason, and a class reaches each code", () => {
+    expect(checkAtlas(committed, { packages: workspacePackages(), codes: Object.keys(TAXONOMY) })).toEqual([]);
   });
 
   it("has prediction markets as a class with 2 or more sources", () => {
@@ -71,8 +80,8 @@ describe("the gate of coverage", () => {
     const classes = [klass("infra.power"), klass("infra.power.outage")];
     const sources = [source("a", ["infra.power.outage"], "adopt"), source("b", ["infra.power"]), source("c", ["infra.power.outage"], "reject"), source("d", ["infra.power.outage"], "later")];
     expect(coverage(atlas(classes, sources))).toEqual([
-      { id: "infra.power", sources: ["a", "b"], atRisk: [], gap: null },
-      { id: "infra.power.outage", sources: ["a"], atRisk: [], gap: null },
+      { id: "infra.power", sources: ["a", "b"], atRisk: [], adopted: ["a"], gap: null },
+      { id: "infra.power.outage", sources: ["a"], atRisk: [], adopted: ["a"], gap: null },
     ]);
   });
 
@@ -104,7 +113,7 @@ describe("the gate of coverage", () => {
     const problems = checkAtlas(atlas(classes, [bad, adopted, absent, paid, page]), { packages: new Set(["@mark1russell7/alerts-source-nws-api"]) }).map((item) => `${item.at}: ${item.problem}`);
     expect(problems).toEqual(
       expect.arrayContaining([
-        "class weather.rain: the first part of the id is not a category of the core",
+        "class weather.rain: the id is not a code of the taxonomy of the core",
         "class cyber.Bad: the id is not a dotted id in lower case",
         "source Bad_Id: the id is not in lower case with hyphens",
         "source Bad_Id: the class infra.nothing is not in the atlas",
@@ -121,6 +130,69 @@ describe("the gate of coverage", () => {
         "source page: the decision plan has a block: a page source needs terms that let automated reading",
       ]),
     );
+  });
+});
+
+describe("the adopted cover", () => {
+  it("counts the classes with 2 or more adopted sources with no risk, next to the gaps", () => {
+    const classes = [klass("infra.power"), klass("infra.power.outage", "one planned source"), klass("infra.water", "no source")];
+    const risky = { ...source("c", ["infra.power"], "adopt"), risks: ["The provider can ask for an agreement."] };
+    const sources = [source("a", ["infra.power.outage"], "adopt"), source("b", ["infra.power"], "adopt"), risky];
+    expect(measures(atlas(classes, sources))).toEqual({ classes: 3, gaps: 2, adoptedCover: 1 });
+    expect(measures(atlas(classes, [...sources.slice(0, 1), { ...source("b", ["infra.power"]) }]))).toEqual({ classes: 3, gaps: 2, adoptedCover: 0 });
+  });
+
+  it("stops a change that makes the adopted cover fall below the measure of a round", () => {
+    const classes = [klass("infra.power")];
+    const covered = atlas(classes, [source("a", ["infra.power"], "adopt"), source("b", ["infra.power"], "adopt")]);
+    const recorded: Atlas = { ...covered, rounds: [{ ...round, measures: { classes: 1, gaps: 0, adoptedCover: 1, cause: "a test" } }] };
+    expect(checkAtlas(recorded)).toEqual([]);
+    const fallen: Atlas = { ...recorded, sources: [source("a", ["infra.power"], "adopt"), source("b", ["infra.power"])] };
+    expect(checkAtlas(fallen)).toEqual([{ at: "atlas", problem: "the adopted cover is 0 classes, below the 1 classes of round 1" }]);
+    const bad: Atlas = { ...recorded, rounds: [{ ...round, measures: { classes: -1, gaps: 0.5, adoptedCover: 1, cause: " " } }] };
+    expect(checkAtlas(bad).map((item) => item.problem)).toEqual(["the measure -1 is not a count", "the measure 0.5 is not a count", "the measures have no cause"]);
+    const { measures: _gone, ...unmeasured } = round;
+    expect(checkAtlas({ ...recorded, rounds: [unmeasured as Round] })).toEqual([{ at: "round 1", problem: "the round has no measures" }]);
+  });
+
+  it("takes the floor from the latest round, so a loss passes only with a new round that names it", () => {
+    const ids = ["infra.power", "infra.water", "met.flood"];
+    // The first `count` classes have 2 adopted sources each. The other classes have no source and a reason.
+    const covering = (count: number): Atlas =>
+      atlas(
+        ids.map((id, index) => klass(id, index < count ? null : "no source")),
+        ids.slice(0, count).flatMap((id, index) => [source(`s${String(index)}a`, [id], "adopt"), source(`s${String(index)}b`, [id], "adopt")]),
+      );
+    const measured = (number: number, adoptedCover: number, cause: string): Round => ({ ...round, round: number, measures: { classes: 3, gaps: 3 - adoptedCover, adoptedCover, cause } });
+    const rounds = [measured(1, 3, "a test"), measured(2, 2, "A source lost its terms of use.")];
+    expect(checkAtlas({ ...covering(2), rounds })).toEqual([]);
+    expect(checkAtlas({ ...covering(2), rounds: [...rounds].reverse() })).toEqual([]);
+    expect(checkAtlas({ ...covering(1), rounds })).toEqual([{ at: "atlas", problem: "the adopted cover is 1 classes, below the 2 classes of round 2" }]);
+    // With no new round, the loss stops at the gate.
+    expect(checkAtlas({ ...covering(2), rounds: rounds.slice(0, 1) })).toEqual([{ at: "atlas", problem: "the adopted cover is 2 classes, below the 3 classes of round 1" }]);
+    expect(checkAtlas({ ...covering(3), rounds: [...rounds, measured(2, 3, "a copy")] })).toEqual([{ at: "atlas", problem: "two records of rounds have one number" }]);
+  });
+
+  it("has the measures of the committed atlas at or above the last round", () => {
+    const committed = readAtlas();
+    const last = committed.rounds.at(-1);
+    expect(measures(committed).adoptedCover).toBeGreaterThanOrEqual(last?.measures.adoptedCover ?? 0);
+  });
+});
+
+describe("the reach of the taxonomy", () => {
+  it("needs a class at each code, an ancestor of it or a descendant of it, except the system and other codes", () => {
+    const codes = ["infra", "infra.power", "infra.power.outage", "infra.water", "system.test", "other.unknown", "met.flood", "met.flood.flash"];
+    expect(unreachedCodes([klass("infra.power"), klass("met.flood.flash")], codes)).toEqual(["infra.water"]);
+    expect(unreachedCodes([], ["met.fl", "met.flood"])).toEqual(["met.fl", "met.flood"]);
+    expect(unreachedCodes([klass("met.flood")], ["met.fl"])).toEqual(["met.fl"]);
+  });
+
+  it("stops an atlas that does not reach a code of the context", () => {
+    const classes = [klass("infra.power", "no source yet")];
+    expect(checkAtlas(atlas(classes, []), { codes: ["infra.power.outage", "infra.water"] })).toEqual([
+      { at: "code infra.water", problem: "no class is the code, an ancestor of it or a descendant of it" },
+    ]);
   });
 });
 

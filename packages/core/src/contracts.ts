@@ -255,7 +255,7 @@ export interface SourceDescriptor {
    * `power`. A radio source uses `receiver` and `power`.
    */
   readonly uses: readonly CellResource[];
-  /** The prefixes of the taxonomy codes that the source covers, for example `met` and `hydro`. */
+  /** The prefixes of the taxonomy codes that the source covers, for example `met` and `geo.earthquake`. */
   readonly kinds: readonly string[];
   /** The areas that the source covers, or `global`. */
   readonly coverage: readonly Area[] | "global";

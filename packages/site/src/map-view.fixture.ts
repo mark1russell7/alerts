@@ -88,7 +88,7 @@ export const MAP_FIXTURE: MapPayload = {
       },
       {
         anchor: ANCHORS.statement,
-        kind: { code: "met.statement", label: "Special weather statement" },
+        kind: { code: "met.special", label: "Special weather statement" },
         level: "digest",
         severity: "minor",
         shapes: [NORTH],
@@ -97,7 +97,7 @@ export const MAP_FIXTURE: MapPayload = {
       },
       {
         anchor: ANCHORS.air,
-        kind: { code: "env.air", label: "Air quality alert" },
+        kind: { code: "env.air-quality", label: "Air quality alert" },
         level: "none",
         severity: "unknown",
         shapes: [],

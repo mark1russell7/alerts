@@ -132,6 +132,13 @@
       "The check added the three sources that adapters of this repository read (nws-alerts-api, ipaws-open, iem-vtec), and eagle-i-history.",
       "The check opened the FEMA fact sheet of the IPAWS feed: it asks each provider for a Memorandum of Agreement. It is not clear that a personal receiver needs one. Until that is clear, the terms of ipaws-open are unclear, and ipaws-open has a risk. The gate does not count a source with a risk, so 9 classes name the risk in their gap.",
       "The research did not record the subject ids of each source. Only the adopted sources and eagle-i-history have them. A value of null means not researched.",
+      "The class ids took the codes of TAXONOMY of the core, so the system has one id for each kind. The core holds the label and the summary of each class.",
+      "14 class ids changed to the core code of the same meaning. Three changes merged two classes: cbrne.hazardous-materials, infra.payments.outage and infra.fuel.shortage.",
+      "met.surf-and-rip-current split into met.surf, met.rip-current and met.beach-hazards, the three NWS products. 13 classes were added for core codes that no class reached.",
+      "After the change the atlas has 200 classes. The gate needs a class at each code of the taxonomy, its ancestor or its descendant.",
+      "The measures of round 1 at the merge of PR 115: 188 classes, 128 gaps and an adopted cover of 16. After the change of the ids: 200 classes, 131 gaps and an adopted cover of 24.",
+      "The adopted cover counts the classes with 2 or more adopted sources with no risk. Only 3 sources are adopted, so the gap count shows the plans and the adopted cover shows the outcome.",
+      "The adopted cover of 24 is a measure of the distribution layer. Its two sources, nws-alerts-api and iem-vtec, fail apart (api.weather.gov and the feeds of IEM), but both carry the products of one origin, the NWS. No class of the 24 has two independent origins. A later part of AL-36 measures each layer apart.",
       "Round 1 searched 39 queries and 58 lists. Round 2 starts with the sources that refused the fetch tool, the terms that are unclear, and the subject ids."
     ],
     "studies": [
@@ -171,6 +178,12 @@
         "finding": "No lead time given; the modal fed funds outcome was right on the eve of each FOMC meeting since 2022, and odds moved within days on Fed speeches and the jobs report (per natlawreview.com).",
         "verified": true
       }
-    ]
+    ],
+    "measures": {
+      "classes": 200,
+      "gaps": 131,
+      "adoptedCover": 24,
+      "cause": "At the merge of PR 115 the adopted cover was 16. The change of the class ids made it 24: 13 new classes are NWS products that the two adopted NWS sources already read. No adapter is new, so no new signal reaches a person."
+    }
   }
 ]

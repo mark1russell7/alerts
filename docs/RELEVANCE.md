@@ -74,9 +74,9 @@ The relevance does not replace the other inputs. The severity, the urgency, the 
 
 ## Topics and the levels of the taxonomy
 
-A topic node has the key `topic:<prefix of a kind code>`. The longest prefix of the kind code with an edge decides, as for the priors and for `LevelRule`.
+A topic node has the key `topic:<prefix of a kind code>`. The prefix is a code of `TAXONOMY`, and the schema refuses another prefix. The longest prefix of the kind code with an edge decides, as for the priors and for `LevelRule`.
 
-Example: a person has the edges `topic:met` and `topic:met.tornado`. An incident of the kind `met.tornado.warning` uses the edge of `topic:met.tornado`.
+Example: a person has the edges `topic:met` and `topic:met.flood`. An incident of the kind `met.flood.flash` uses the edge of `topic:met.flood`.
 
 ## The edges
 

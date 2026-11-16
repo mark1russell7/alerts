@@ -255,13 +255,22 @@ For `life-safety`, the system prefers a duplicate to a miss.
 
 ## The taxonomy
 
-`TAXONOMY` of the core holds each kind code and its plain name. A code is dotted, for example `met.flood.flash`.
+`TAXONOMY` of the core holds each kind code, its plain name and a summary of one sentence. A code is dotted, for example `met.flood.flash`.
 
 - The first part is a category: the 12 categories of CAP 1.2, then `cyber`, `market`, `civic` and `system`. `categoryOf` gives it.
-- The taxonomy is a tree. The parent of each code is also a code, and each category is a root.
+- The taxonomy is a tree. The parent of each code is also a code, and each category is a root. `parentKind` gives the parent.
 - The taxonomy is closed. `knownKind` tells if a code is in it. The coverage codes `system.coverage.<code>` are a family of the core.
+- A parent code is a group of its descendants. An adapter gives the leaf code of its event. A person, a rule or a class of the atlas can name a group.
 - A code with a typo does not match the life-safety class, so it can stop a wake. Thus each adapter has a gate test, and each policy names only known codes.
-- The kinds go from physical events to technical outages. A new adapter adds its new codes to `TAXONOMY` in its pull request.
+- The schemas hold the same rule with `kindCodeSchema`. It covers the kinds of a source, a watch, a rule, a mute and the priors, and each `topic` id.
+- The JSON Schema of a kind code is a plain string at this time. Only the parse checks the code against the taxonomy.
+- A code does not leave the taxonomy by a plain removal. `taxonomy.lock.json` holds each code that the taxonomy has or had, and a test holds the lock.
+- A removed code gets an entry in `KIND_ALIASES`, from the old code to its new code. The parse changes an old code to its new code before the check.
+- The source atlas uses the codes as its signal classes. Its gate needs a class for each code outside `system` and `other`.
+- The atlas has two measures. A gap is a class with fewer than 2 adopted or planned sources with no risk. The adopted cover counts the classes with 2 or more adopted sources with no risk.
+- Each round records its measures and their cause. The gap count shows the research and the plans. The adopted cover shows the alerts that arrive.
+- The gate does not let the adopted cover fall below the measure of the latest round. A real loss needs a new round whose cause names the loss.
+- The kinds go from physical events to technical outages. A new adapter adds its new codes to `TAXONOMY` in its pull request, with a class in the atlas.
 
 ## The route and the delivery step
 
