@@ -10,7 +10,7 @@
  * The source atlas (`@mark1russell7/alerts-atlas`) uses these codes as its signal classes. Each code has
  * its plain name and its summary here, and in no other place. A new code comes here first, in its pull request.
  */
-import { BALANCE_KIND, COVERAGE_KIND, HEALTH_KIND, QUOTA_KIND } from "./assess.ts";
+import { BALANCE_KIND, CLOCK_KIND, COVERAGE_KIND, HEALTH_KIND, QUOTA_KIND } from "./assess.ts";
 import type { BalanceStage, Category, HealthState, QuotaStage } from "./contracts.ts";
 
 /** One code of the taxonomy: its plain name and one plain sentence about it. */
@@ -388,6 +388,8 @@ export const TAXONOMY: Readonly<Record<string, KindEntry>> = {
   ...Object.fromEntries(Object.entries(QUOTA_ENTRIES).map(([stage, value]) => [`${QUOTA_KIND}.${stage}`, value])),
   [BALANCE_KIND]: entry("Balance of a provider", "The balance of a paid provider account: the money that its channels can spend."),
   ...Object.fromEntries(Object.entries(BALANCE_ENTRIES).map(([stage, value]) => [`${BALANCE_KIND}.${stage}`, value])),
+  [CLOCK_KIND]: entry("Clock of the computer", "The wall clock of the computer that runs the alert system."),
+  [`${CLOCK_KIND}.step`]: entry("Step of the clock", "The wall clock of the computer stepped back or forward against its monotonic clock."),
 };
 
 /**

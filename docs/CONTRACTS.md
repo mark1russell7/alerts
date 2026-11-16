@@ -239,6 +239,13 @@ A balance report has no area. Its subjects are `{ system: "alerts.channel", id: 
 - The runtime gives `balanceWatch` for each account. Each pass checks each watch, and a watch reads once a day. A failed read tries again after one hour.
 - The time of the next read and the time of `unread` are timers of the pass.
 
+A clock report has no area. Its subject is `{ system: "alerts.clock", id: "wall" }`. Its kind is `system.clock.step`, with the severity `minor` and the urgency `past`. Thus it gets `digest` at most:
+
+- The condition is the latest step of the wall clock in `CLOCK_STEP_WINDOW` (24 hours) before the time of the snapshot (`recentStep`).
+- The facts of the line are the time and the size of the step. A second step in the window gives an update.
+- The line stays open for the window, thus the digest of the day shows the step. At the end of the window, the line ends with a cancel.
+- The headline gives the direction and the size of the step, in whole hours, minutes or seconds (`stepSizeText`).
+
 `threats(incidents, places)` gives the watches and the warnings. A threat is a live incident with the status `actual` at a watched place. Its stage is `watch`, `warning` or absent. A report of the core has the status `system`, so it is not a threat.
 
 The assessment policy holds two system classes, and each class admits only the status `system`. A class can name its statuses. Else the statuses of the policy apply. The NWS kinds `system.test` and `system.admin` are not in these classes, so the policy statuses apply to them.
@@ -578,6 +585,30 @@ The environment gives `PORT` (8080), `PROBE_PORT` (9090) and `SERVICE_PROFILE` (
 
 After each pass, the runtime gets the outlines of the zones of the watched states. It stops before the next fetch of the alerts. A broken file of outlines goes into quarantine, and the runtime gets the outlines again.
 
+### Steps of the wall clock
+
+A step changes the wall clock and not the monotonic clock, for example a correction of the system time. A change of `CLOCK_STEP_ABOVE` (2 seconds) or less is a drift, not a step. The instance gives a frame clock, `frameClock(wall, monotonic)`, to the runtime, the loop and the channels:
+
+- In a frame, the time is the wall time at the mark plus the monotonic time since the mark. Thus the time does not go back in a pass.
+- At the start of each pass, the runtime reads the step since the last mark. Then it marks a new frame.
+- The runtime writes each step to the log as the event `clock`, with its size. The fold of the event moves each own instant of the state by the size.
+- Then the delivery step and each balance watch move their times in memory by the same size. `Pass.stepped` gives the size to the hooks, and the heartbeat moves its times.
+- The mark comes after the write. Thus a failed write leaves the step to the next pass, with the same id `clock:<n>`.
+- After the step `n`, each id from a time gets the tag `~<n>`: the fetches, the ends of a list and the refused sends. Thus a repeated time gives a new event.
+- The rebuild of the log moves the parts of the merge before each clock event. Thus the rebuild equals the fold.
+
+The own instants move. They are the times of the runtime:
+
+- the receipt time of each report, and each time of a system report
+- the fetches, the health, the deliveries and the end marks
+- the escalations and the refusals
+
+The instants of others do not move. They come from the clocks of the sources and the channels:
+
+- the times of a report of a source: `sent`, `effective`, `onset`, `expires` and `ends`
+- `asOf` of an end mark
+- the time of an acknowledgment
+
 ### The host on one computer
 
 The module `host.ts` gives the host of the live instance as data. A boot task starts a supervisor, and the supervisor starts the runtime:
@@ -792,3 +823,6 @@ The file `schemas.ts` of the core has one zod 4 schema for each data type of the
 - The calculation of the level from probabilities and costs (AL-31), with the base rates from the event log.
 - The count of misses that ends a report of a snapshot source is 2 (`SNAPSHOT_MISSES`). This value is a shortcut. A measure of the flap rate of the IEM list replaces it (AL-8).
 - The merge state grows with each report. A compaction of the incidents that ended before a horizon keeps it small. It must keep the three laws.
+- The frame clock does not see a step while the process is down, because the first frame starts with the process. Then a time of the log can be after the first pass.
+- The park times of the hosts in `polite-crawler` do not move at a step of the wall clock.
+- The quota gates read the wall clock with no frame. Their windows are civil times, thus a step changes them as it changes the calendar.

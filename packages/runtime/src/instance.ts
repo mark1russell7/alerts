@@ -15,6 +15,7 @@ import type { Pace, Transport } from "polite-crawler/api";
 import { DEFAULT_POLICY, HostScheduler, type PolitenessPolicy } from "polite-crawler/politeness";
 import { parseSecrets, requireKey, SECRETS_FILE, type FileText, type InstanceCheck } from "./config.ts";
 import { overdueLimit, type DeliveryOptions } from "./delivery.ts";
+import { frameClock } from "./frame.ts";
 import type { RuntimeLog } from "./log.ts";
 import { createLoop, loopTimes, type LoopTimes, type RuntimeLoop } from "./loop.ts";
 import { channelQuota } from "./quota.ts";
@@ -216,7 +217,10 @@ export interface InstanceOptions {
   readonly log: RuntimeLog;
   /** The monotonic clock of the service. The loop and the pace of the sources use it. */
   readonly clock: Clock;
-  /** The clock of the runtime. It gives each instant. */
+  /**
+   * The wall clock. It gives each instant. The instance makes a frame clock on it and `clock`, and each part of the
+   * instance reads that frame clock. Thus the runtime follows each step of the wall clock.
+   */
   readonly wall: WallClock;
   /** The transport of the requests of the sources. A test gives a transport with faults. */
   readonly transport: Transport;
@@ -275,7 +279,8 @@ export interface Instance {
  * - The times of the loop come from the limits of the runtime.
  */
 export function openInstance(options: InstanceOptions): Instance {
-  const { clock, wall } = options;
+  const { clock } = options;
+  const wall = frameClock(options.wall, clock);
   const factories = [createNwsSource, createIpawsSource] as const;
   const pace = sourcePace(clock, wall, factories.length);
   // One User-Agent for each request of the instance: the sources and the store of shapes.

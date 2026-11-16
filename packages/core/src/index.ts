@@ -14,6 +14,7 @@ export * from "./assess.ts";
 export * from "./score.ts";
 export * from "./escalation.ts";
 export * from "./chain.ts";
+export * from "./clock-step.ts";
 export * from "./delivery.ts";
 export * from "./why.ts";
 export * from "./config.ts";

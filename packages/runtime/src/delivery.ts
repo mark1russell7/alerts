@@ -36,7 +36,7 @@ import {
   type WhyLimit,
 } from "@mark1russell7/alerts";
 import { errorMessage } from "@mark1russell7/text";
-import { envelope, type ChannelFailureKind, type RefusalKind, type RefusedEvent, type RuntimeEvent } from "./events.ts";
+import { envelope, frameTag, type ChannelFailureKind, type RefusalKind, type RefusedEvent, type RuntimeEvent } from "./events.ts";
 import { limited } from "./limit.ts";
 import type { RuntimeState } from "./state.ts";
 import { earliest } from "./view.ts";
@@ -177,11 +177,18 @@ export interface DeliveryContext {
 /** The dispatcher of the deliveries: one step for each pass. */
 export interface Dispatcher {
   step(at: Instant): Promise<DeliveryStep>;
+  /**
+   * This method moves the times in memory by the size of a step of the wall clock. They are the times of the polls,
+   * the waits, the flights, the places and the probes. They are also the times of the deliveries that the next step
+   * writes. Thus each timer keeps its distance on the monotonic clock.
+   */
+  shift(size: Duration): void;
 }
 
 /** A send in flight. A stale flight passed its flight limit on a channel that repeats. The log does not keep its copy. */
 interface Flight {
-  readonly since: Instant;
+  // A step of the wall clock moves this time in place. The object stays the same, thus a late end finds its flight.
+  since: Instant;
   readonly copy: string;
   stale: boolean;
 }
@@ -209,7 +216,8 @@ interface CallFailure {
 
 /** One call of a channel with a limit of calls. It keeps its place until it ends or until its flight limit passes. */
 interface Place {
-  readonly until: Instant;
+  // A step of the wall clock moves this time in place. The object stays the same, thus the end of the call frees it.
+  until: Instant;
 }
 
 /** This function starts a call, and it gives back its place when the call ends, also after the time limit of the step. */
@@ -240,10 +248,12 @@ const thrownFailure = (thrown: unknown, otherwise: string): CallFailure => ({ ki
  * - A channel with \`maxInFlight\` gets no more calls in progress at the same time. Each other call waits for a later
  *   step, and the end of a call wakes the loop. A call keeps its place until it ends or its flight limit passes.
  *
- * The times of the polls and the flights are in memory only. After a restart, each receipt gets a poll
- * at once. The log keeps each refused send, thus the wait of its retry holds after a restart. Before each send on a channel that repeats, the log keeps its copy. The log also
- * keeps the end of the copy: its delivery, a refusal or a stop. Thus the first step after a restart stops each copy of an
- * earlier run with no end.
+ * The times of the polls and the flights are in memory only. A step of the wall clock moves them with `shift`. After
+ * a restart, each receipt gets a poll at once.
+ *
+ * The log keeps each refused send, thus the wait of its retry holds after a restart. Before each send on a channel
+ * that repeats, the log keeps its copy. The log also keeps the end of the copy: its delivery, a refusal or a stop.
+ * Thus the first step after a restart stops each copy of an earlier run with no end.
  */
 export function createDispatcher(options: DeliveryOptions, context: DeliveryContext): Dispatcher {
   const { clock } = context;
@@ -306,6 +316,17 @@ export function createDispatcher(options: DeliveryOptions, context: DeliveryCont
   };
 
   return {
+    shift(size) {
+      for (const [key, at] of polled) polled.set(key, at + size);
+      for (const [call, until] of waits) waits.set(call, until + size);
+      for (const flight of flying.values()) flight.since += size;
+      for (const taken of places.values()) for (const call of taken) call.until += size;
+      for (const [id, probe] of probes) probes.set(id, { ...probe, at: probe.at + size });
+      for (let index = 0; index < landed.length; index += 1) {
+        const entry = landed[index]!;
+        landed[index] = { ...entry, delivery: { ...entry.delivery, at: entry.delivery.at + size } };
+      }
+    },
     async step(at) {
       if (restarted) {
         restarted = false;
@@ -675,7 +696,7 @@ export function createDispatcher(options: DeliveryOptions, context: DeliveryCont
       // The refusals of the step come after each delivery of the step in the log. Thus only a delivery of a later step
       // ends the hold of a refused channel after a restart, as in the pass. The order decides, not the times: a channel
       // can give a time of acceptance after the time of the refusal.
-      write(refusing.map((refused) => ({ ...envelope("refused", `refused:${refused.key}@${at}`, clock.now()), ...refused })));
+      write(refusing.map((refused) => ({ ...envelope("refused", `refused:${refused.key}@${at}${frameTag(context.state().steps.length)}`, clock.now()), ...refused })));
       const broken = settled.find((result) => result.status === "rejected");
       if (broken !== undefined) throw broken.reason;
 

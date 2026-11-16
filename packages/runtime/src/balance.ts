@@ -51,6 +51,11 @@ export interface BalanceWatch {
   balance(): ProviderBalance | undefined;
   /** This method gives the message of the last read when it failed. */
   failure(): string | undefined;
+  /**
+   * This method moves the own times of the watch by the size of a step of the wall clock. They are the start of the
+   * watch, the time of the last read and the time of the next read. Thus the next read keeps its distance on the monotonic clock.
+   */
+  shift(size: Duration): void;
 }
 
 /**
@@ -121,6 +126,11 @@ export function balanceWatch(options: BalanceWatchOptions): BalanceWatch {
       return { provider, title, channels, floor, maxAge, since, ...(read === undefined ? {} : { read }) };
     },
     failure: () => failed,
+    shift(size) {
+      if (since !== undefined) since += size;
+      if (next !== undefined) next += size;
+      if (read !== undefined) read = { ...read, at: read.at + size };
+    },
   };
 }
 
