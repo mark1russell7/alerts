@@ -223,16 +223,63 @@ interface Queued {
  *
  * With the measured rule, each limit after the first limit is at most the first limit. Thus a lasting
  * rise of the normal delay shows as a lasting late state. A copy that came after `at` does not count.
- * The result is a function of the set of checks. The cost is O(n²) for n checks, because each decision
- * calculates the limit again.
+ * The result is a function of the set of checks. Each decision calculates the limit again with `limitOf`.
+ * `decideStep` continues an earlier fold at a lower cost.
  */
 export function decide(checks: readonly Carriage[], expectation: string, at: Instant, limitOf: (sample: readonly Duration[]) => Duration | undefined): Decision[] {
+  return [...decideStep(undefined, checks, expectation, at, limitOf).record];
+}
+
+/**
+ * The state of the fold of one expectation at one time: the record, the sample and the limit after
+ * each decision by that time. `decideStep` continues it at a later time.
+ */
+export interface DecideState {
+  readonly expectation: string;
+  readonly at: Instant;
+  readonly limitOf: (sample: readonly Duration[]) => Duration | undefined;
+  /** The record at `at`: one decision for each check that started by `at`, in the order of the start. */
+  readonly record: readonly Decision[];
+  /** The values of the sample, in the order of their decisions. */
+  readonly sample: readonly Duration[];
+  /** The limit in force after the last decision. */
+  readonly limit: Duration | undefined;
+}
+
+/** The record of one expectation at one time, and the state of its fold. */
+export interface DecideStep {
+  readonly record: readonly Decision[];
+  readonly state: DecideState;
+}
+
+/**
+ * This function gives the record of `decide`, and continues the state `before` of an earlier fold when
+ * the state agrees with the checks. The record is the same with or without the state. Only the cost changes.
+ *
+ * The state agrees with the checks on three conditions. Its expectation and its `limitOf` are the same.
+ * Its time is not after `at`. The checks that started by its time are the same: each has the same report,
+ * start and copy by that time. A check that starts after the time of the state is new.
+ *
+ * A decision by the time of the state does not change, because each of its inputs is the same. Thus
+ * the fold decides again only the open and the waiting checks of the state, and then it folds the new
+ * checks. Each new decision comes after the time of the state, thus after each decision of the state.
+ * The cost is one call of `limitOf` for each new decision. When the state does not agree, the fold starts again.
+ */
+export function decideStep(
+  before: DecideState | undefined,
+  checks: readonly Carriage[],
+  expectation: string,
+  at: Instant,
+  limitOf: (sample: readonly Duration[]) => Duration | undefined,
+): DecideStep {
   const own = checks
     .filter((check) => check.expectation === expectation && check.started <= at)
     .sort((a, b) => a.started - b.started || compare(a.report, b.report));
-  const record: Decision[] = [];
-  const sample: Duration[] = [];
-  let limit = limitOf(sample);
+  const kept = before !== undefined && agrees(before, own, expectation, at, limitOf) ? before : undefined;
+  // Each decision of the state takes the check of this fold, thus the record is the record of the fold from the start.
+  const record: Decision[] = kept === undefined ? [] : kept.record.map((entry, index) => ({ ...entry, check: own[index]! }));
+  const sample: Duration[] = kept === undefined ? [] : [...kept.sample];
+  let limit = kept === undefined ? limitOf(sample) : kept.limit;
   const queue: Queued[] = [];
   const apply = ({ index, decision, value }: Queued): void => {
     const entry = decision.outcome === "measured" && limit !== undefined ? Math.min(value, limit) : value;
@@ -240,10 +287,9 @@ export function decide(checks: readonly Carriage[], expectation: string, at: Ins
     sample.push(entry);
     limit = limitOf(sample);
   };
-  own.forEach((check, index) => {
-    while (queue[0] !== undefined && queue[0].time < check.started) apply(queue.shift()!);
+  // The decision of one check with the limit in force at its start.
+  const judge = (check: Carriage, index: number, start: Duration | undefined): void => {
     const came = check.arrived !== undefined && check.arrived <= at ? check.arrived : undefined;
-    const start = limit;
     const base = { check, ...(start === undefined ? {} : { limit: start }) };
     if (start === undefined) {
       if (came === undefined) record[index] = { ...base, outcome: "waiting" };
@@ -262,9 +308,32 @@ export function decide(checks: readonly Carriage[], expectation: string, at: Ins
     } else {
       record[index] = { ...base, outcome: "open" };
     }
+  };
+  // An open or a waiting check of the state keeps its limit. Its copy or its deadline can come after the time of the state.
+  kept?.record.forEach((entry, index) => {
+    if (entry.outcome === "open" || entry.outcome === "waiting") judge(own[index]!, index, entry.limit);
   });
+  const first = record.length;
+  for (let index = first; index < own.length; index += 1) {
+    const check = own[index]!;
+    while (queue[0] !== undefined && queue[0].time < check.started) apply(queue.shift()!);
+    judge(check, index, limit);
+  }
   while (queue[0] !== undefined) apply(queue.shift()!);
-  return record;
+  return { record, state: { expectation, at, limitOf, record, sample, limit } };
+}
+
+/** This function tells if the state of a fold agrees with `own`, the sorted checks of the expectation at the time `at`. */
+function agrees(state: DecideState, own: readonly Carriage[], expectation: string, at: Instant, limitOf: (sample: readonly Duration[]) => Duration | undefined): boolean {
+  if (state.expectation !== expectation || state.limitOf !== limitOf || state.at > at || state.record.length > own.length) return false;
+  const next = own[state.record.length];
+  if (next !== undefined && next.started <= state.at) return false;
+  // The copy of a check by the time of the state. A copy after that time is new.
+  const came = (check: Carriage): Instant | undefined => (check.arrived !== undefined && check.arrived <= state.at ? check.arrived : undefined);
+  return state.record.every(({ check }, index) => {
+    const now = own[index]!;
+    return now.report === check.report && now.started === check.started && came(now) === came(check);
+  });
 }
 
 /** This function puts a decision in the queue, sorted by its time and then by the order of the start. */
@@ -327,10 +396,31 @@ export function missLimit(record: MissRecord, level: number): number | undefined
  * A check that starts before the `since` of its expectation is not in the record.
  */
 export function lateness(checks: readonly Carriage[], expectations: readonly Expectation[], at: Instant, rule: LimitRule): Lateness[] {
-  return expectations.map((expectation) => {
+  return latenessStep(checks, expectations, at, rule).lateness;
+}
+
+/** The states of the folds of `lateness` at one time, by the id of the expectation. */
+export type LatenessFolds = ReadonlyMap<string, DecideState>;
+
+/** The state of each expectation at one time, and the folds that the next step continues. */
+export interface LatenessStep {
+  readonly lateness: Lateness[];
+  readonly folds: LatenessFolds;
+}
+
+/**
+ * This function gives the states of `lateness`, and the fold of each expectation continues its fold in
+ * `before` (`decideStep`). The states are the same with or without `before`. Only the cost changes.
+ * Thus a runtime keeps the folds of each pass for the next pass, and a pass folds only the new checks.
+ * The `delay` function of the rule must be the same in each step, or each fold starts again.
+ */
+export function latenessStep(checks: readonly Carriage[], expectations: readonly Expectation[], at: Instant, rule: LimitRule, before?: LatenessFolds): LatenessStep {
+  const folds = new Map<string, DecideState>();
+  const states = expectations.map((expectation): Lateness => {
     const base = { expectation: expectation.id, from: expectation.from, to: expectation.to };
     const start = expectation.since;
-    const record = decide(start === undefined ? checks : checks.filter((check) => check.started >= start), expectation.id, at, rule.delay);
+    const { record, state: fold } = decideStep(before?.get(expectation.id), start === undefined ? checks : checks.filter((check) => check.started >= start), expectation.id, at, rule.delay);
+    folds.set(expectation.id, fold);
     const deadlines = record.flatMap((entry) => (entry.outcome === "open" && entry.limit !== undefined ? [entry.check.started + entry.limit] : []));
     const wake = deadlines.length === 0 ? {} : { wakeAt: deadlines.reduce((a, b) => Math.min(a, b)) };
     const delay = rule.delay(record.flatMap((entry) => (entry.sample === undefined ? [] : [entry.sample])));
@@ -352,6 +442,7 @@ export function lateness(checks: readonly Carriage[], expectations: readonly Exp
       ...wake,
     };
   });
+  return { lateness: states, folds };
 }
 
 /** This function gives the sources that are late, sorted. The coverage does not count them. */

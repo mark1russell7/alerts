@@ -8,8 +8,10 @@ import { reportId } from "./ids.ts";
 import {
   carriages,
   decide,
+  decideStep,
   delayLimit,
   lateness,
+  latenessStep,
   lateSources,
   limitRule,
   missLimit,
@@ -17,8 +19,10 @@ import {
   reportPasses,
   type Carriage,
   type CheckOutcome,
+  type DecideState,
   type Decision,
   type Expectation,
+  type LatenessFolds,
   type LimitRule,
 } from "./lateness.ts";
 import { incidents, normalize } from "./merge.ts";
@@ -602,5 +606,90 @@ describe("the effect of a late source", () => {
     const back = systemReports(more.lines, snap([first, second, { ...second, report: "r3" as Carriage["report"], started: 2_000_000, arrived: 2_010_000 }], 2_100_000), 2_100_000);
     expect(back.reports).toMatchObject([{ op: "cancel", response: ["allclear"], kind: { code: "system.health.late" } }]);
     expect(back.lines.open).toEqual({});
+  });
+});
+
+describe("the gate: a fold that continues its state gives the record of the fold from the start", () => {
+  // The count of the calls of the rule in one step. A step that continues its state calls the rule once for each new decision.
+  const newDecisions = (record: readonly Decision[], after: number): number => record.filter((entry) => entry.decided !== undefined && entry.decided > after).length;
+  const allDecisions = (record: readonly Decision[]): number => record.filter((entry) => entry.decided !== undefined).length;
+
+  for (const seed of SEEDS) {
+    it(`holds over a chain of passes with late checks, changed copies and steps back (seed ${seed})`, () => {
+      const rng = random(seed);
+      const rule = limitRule({ quantile: 0.9, level: 0.95 });
+      let calls = 0;
+      // One counted function for the whole chain. Thus each state can continue, because its rule is the same function.
+      const delay = (sample: readonly number[]): number | undefined => {
+        calls += 1;
+        return rule.delay(sample);
+      };
+      const counted: LimitRule = { delay, misses: rule.misses };
+      const checks = randomChecks(rng, 300);
+      const end = checks.at(-1)!.started + 3_600_000;
+      let state: DecideState | undefined;
+      let folds: LatenessFolds | undefined;
+      let at = 0;
+      let late = 0;
+      const seen = { continued: 0, again: 0 };
+      while (at < end) {
+        const before = state?.at;
+        const draw = rng.next();
+        // A step back, a step with no time, or a step forward.
+        const next = draw < 0.05 ? Math.max(0, at - Math.floor(rng.next() * 600_000)) : draw < 0.1 ? at : at + Math.floor(rng.next() * 400_000);
+        let breaks = before !== undefined && next < before;
+        if (before !== undefined) {
+          const change = rng.next();
+          if (change < 0.05) {
+            // A late report: a new check that starts by the time of the state.
+            checks.push({ expectation: EXPECT.id, report: `late${String(late++)}` as Carriage["report"], started: Math.floor(rng.next() * (before + 1)), arrived: before + 50_000 });
+            breaks = true;
+          } else if (change < 0.1) {
+            // A changed copy: a copy by the time of the state comes at another time.
+            const index = checks.findIndex((check) => check.started <= before && check.arrived !== undefined && check.arrived <= before);
+            if (index !== -1) {
+              const check = checks[index]!;
+              checks[index] = { ...check, arrived: check.arrived! - 1 - Math.floor(rng.next() * 1_000) };
+              breaks = true;
+            }
+          }
+        }
+        calls = 0;
+        const step = decideStep(state, checks, EXPECT.id, next, delay);
+        const fresh = decide(checks, EXPECT.id, next, rule.delay);
+        expect(step.record, `at ${next}`).toEqual(fresh);
+        const continued = before !== undefined && !breaks;
+        expect(calls, `the calls at ${next}`).toBe(continued ? newDecisions(fresh, before) : 1 + allDecisions(fresh));
+        if (continued) seen.continued += 1;
+        else seen.again += 1;
+
+        // The step of the lateness continues its folds in the same way. It calls the rule once more for the limit of the whole sample.
+        calls = 0;
+        const states = latenessStep(checks, [EXPECT], next, counted, folds);
+        expect(states.lateness, `the lateness at ${next}`).toEqual(lateness(checks, [EXPECT], next, rule));
+        expect(calls, `the calls of the lateness at ${next}`).toBe((continued ? newDecisions(fresh, before) : 1 + allDecisions(fresh)) + 1);
+        state = step.state;
+        folds = states.folds;
+        at = next;
+      }
+      expect(seen.continued).toBeGreaterThan(20);
+      expect(seen.again).toBeGreaterThan(2);
+    });
+  }
+
+  it("starts again for another rule, another expectation or a time before the state", () => {
+    const rule = limitRule({ quantile: 0.9, level: 0.95 });
+    const checks = randomChecks(random(1), 60);
+    const at = checks.at(-1)!.started;
+    const { state } = decideStep(undefined, checks, EXPECT.id, at, rule.delay);
+    let calls = 0;
+    const other = (sample: readonly number[]): number | undefined => {
+      calls += 1;
+      return rule.delay(sample);
+    };
+    expect(decideStep(state, checks, EXPECT.id, at, other).record).toEqual(decide(checks, EXPECT.id, at, rule.delay));
+    expect(calls).toBe(1 + allDecisions(state.record));
+    expect(decideStep(state, checks, "other", at, rule.delay).record).toEqual([]);
+    expect(decideStep(state, checks, EXPECT.id, at - 1, rule.delay).record).toEqual(decide(checks, EXPECT.id, at - 1, rule.delay));
   });
 });
