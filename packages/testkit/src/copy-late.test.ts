@@ -43,11 +43,13 @@ import {
   OUTAGE,
   outagePlanOf,
   outageWindowOf,
+  PACE_PART,
   PER_FETCH,
   readPair,
   routeOf,
   type RouteCounts,
   sinceOfPath,
+  smallestGapOf,
   TELL_WITHIN,
   vtecOf,
   vtecTime,
@@ -353,7 +355,7 @@ const gatesOf = (arm: CopyArm, passes: readonly CopyPass[]) => copyGatesOf({ arm
 
 describe("the gates", () => {
   it("passes the control with no late state, and with a short late period", () => {
-    expect(gatesOf("control", passesOf("control", () => false)).gates).toEqual({ noFalseClear: true, oneIncident: true, settles: true, clears: true, noLongLate: true });
+    expect(gatesOf("control", passesOf("control", () => false)).gates).toEqual({ noFalseClear: true, oneIncident: true, settles: true, clears: true, noLongLate: true, keepsPace: true });
     const short = [passAt(10, 11, "met"), { ...passAt(10, 11, "late"), at: 10 * INTERVAL + 1000 }, { ...passAt(10, 11, "met"), at: 10 * INTERVAL + 3000 }];
     expect(latePeriodsOf(short)).toEqual([{ from: 10 * INTERVAL + 1000, to: 10 * INTERVAL + 3000, nws: 11 }]);
     expect(gatesOf("control", [...short, ...passesOf("control", () => false).slice(11)]).gates.noLongLate).toBe(true);
@@ -366,7 +368,7 @@ describe("the gates", () => {
 
   it("passes tellsStop for a late state in TELL_WITHIN fetches of the window, and fails it after", () => {
     const told = gatesOf("copy-stopped", passesOf("copy-stopped", (fetch) => fetch >= WINDOW.from + 1 && fetch < WINDOW.to + 1));
-    expect(told.gates).toEqual({ noFalseClear: true, oneIncident: true, settles: true, clears: true, tellsStop: true, staysLate: true, limitHolds: true, metAgain: true });
+    expect(told.gates).toEqual({ noFalseClear: true, oneIncident: true, settles: true, clears: true, tellsStop: true, staysLate: true, limitHolds: true, metAgain: true, keepsPace: true });
     expect(told.toldAt).toBe(WINDOW.from + 2);
     expect(told.metAt).toBe(WINDOW.to + 2);
     const slow = gatesOf("ipaws-lag", passesOf("ipaws-lag", (fetch) => fetch >= WINDOW.from + TELL_WITHIN && fetch < WINDOW.to));
@@ -393,11 +395,32 @@ describe("the gates", () => {
     expect(gatesOf("copy-stopped", lower).gates.limitHolds).toBe(true);
   });
 
-  it("passes metAgain in MEET_WITHIN fetches of the first current feed, and fails it after", () => {
+  it("passes metAgain in MEET_WITHIN intervals of the end of the first current fetch, and fails it after", () => {
     const late = lateOf("copy-stopped");
-    expect(gatesOf("copy-stopped", passesOf("copy-stopped", late)).gates.metAgain).toBe(true);
-    const slow = passesOf("copy-stopped", (fetch) => late(fetch) || (fetch >= WINDOW.to && fetch < WINDOW.to + MEET_WITHIN));
+    expect(gatesOf("copy-stopped", passesOf("copy-stopped", late))).toMatchObject({ gates: { metAgain: true }, metAfter: 0 });
+    const edge = passesOf("copy-stopped", (fetch) => late(fetch) || (fetch >= WINDOW.to && fetch < WINDOW.to + MEET_WITHIN));
+    expect(gatesOf("copy-stopped", edge)).toMatchObject({ gates: { metAgain: true }, metAfter: MEET_WITHIN * INTERVAL });
+    const slow = passesOf("copy-stopped", (fetch) => late(fetch) || (fetch >= WINDOW.to && fetch <= WINDOW.to + MEET_WITHIN));
     expect(gatesOf("copy-stopped", slow).gates.metAgain).toBe(false);
+  });
+
+  it("passes metAgain by time when a burst of fetches ends in one pass", () => {
+    // Run 43786698537: the IPAWS fetches 77 to 82 end in one pass, so the count of fetches of the met pass is 6 above the first current fetch.
+    const fetches = armFetches("copy-backlog");
+    const passes = passesOf("copy-backlog", lateOf("copy-backlog")).map((pass) => (pass.ipaws > OUTAGE.to ? { ...pass, ipaws: pass.ipaws + 5 } : pass));
+    expect(copyGatesOf({ arm: "copy-backlog", passes, fetches })).toMatchObject({ gates: { metAgain: true }, metAfter: 0 });
+  });
+
+  it("fails keepsPace when two fetches of a source end closer than PACE_PART of an interval", () => {
+    const passes = passesOf("copy-backlog", lateOf("copy-backlog"));
+    const fetches = armFetches("copy-backlog");
+    const moved = (at: number) => ({ ...fetches, ipaws: fetches.ipaws.map((fetch, index) => (index === OUTAGE.to - 1 ? { ...fetch, at } : fetch)) });
+    const burst = copyGatesOf({ arm: "copy-backlog", passes, fetches: moved(OUTAGE.to * INTERVAL - 1000) });
+    expect(burst).toMatchObject({ gates: { keepsPace: false }, smallestGaps: { nws: INTERVAL, ipaws: 1000 } });
+    expect(copyGatesOf({ arm: "copy-backlog", passes, fetches: moved(OUTAGE.to * INTERVAL - PACE_PART * INTERVAL) }).gates.keepsPace).toBe(true);
+    expect(smallestGapOf([])).toBeUndefined();
+    expect(smallestGapOf([{ at: 5 }])).toBeUndefined();
+    expect(smallestGapOf([{ at: 0 }, { at: 9 }, { at: 12 }])).toBe(3);
   });
 
   it("takes the faults of the arm copy-backlog from its failed IPAWS fetches", () => {
@@ -464,7 +487,9 @@ describe("the verdict", () => {
       ...(known.includes("limitHolds") && fetch > start + 6 ? { limit: 419_000 } : {}),
       ...(known.includes("staysLate") && fetch === start + 7 ? { state: "met" as const } : {}),
     }));
-    return { ...one, passes };
+    // The burst after the outage: the last failed IPAWS fetch ends 1 s before the first current fetch.
+    const ipaws = one.fetches.ipaws.map((fetch, at) => (known.includes("keepsPace") && at === OUTAGE.to - 1 ? { ...fetch, at: OUTAGE.to * INTERVAL - 1000 } : fetch));
+    return { ...one, passes, fetches: { ...one.fetches, ipaws } };
   };
 
   it("reads and passes a run whose known faults fail and whose other gates pass", () => {

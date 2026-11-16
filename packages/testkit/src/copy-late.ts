@@ -31,8 +31,9 @@
  * - `tellsStop` (each arm with IPAWS faults): the lateness goes late in `TELL_WITHIN` fetches of the start of the faults.
  * - `staysLate` (each arm with IPAWS faults): each pass from the first late pass to the first current feed is late.
  * - `limitHolds` (each arm with IPAWS faults): the limit of the delay after the start of the faults is not above the limit before.
- * - `metAgain` (each arm with IPAWS faults): the lateness is `met` in `MEET_WITHIN` fetches of the first current feed.
+ * - `metAgain` (each arm with IPAWS faults): the lateness is `met` in `MEET_WITHIN` intervals of the end of the first current fetch.
  * - `noLongLate` (`control` and `nws-lag`): each late period ends in one interval of the sources.
+ * - `keepsPace` (each arm): the fetches of each source end at least `PACE_PART` of an interval apart. A burst of fetches fails it.
  *
  * The limit of the delay is the upper bound of the 0.99 quantile of the delays. A copy with a delay above that bound gives
  * a short late period, by design. The gate `noLongLate` permits these periods, and the record keeps each one.
@@ -83,8 +84,10 @@ export const TELL_WITHIN = 10;
  * after it stays in the lookback of the feed.
  */
 export const OUTAGE = { from: 70, to: 82 } as const;
-/** The gate `metAgain` permits the first met state in this count of fetches after the first current feed. */
+/** The gate `metAgain` permits the first met state in this count of intervals after the end of the first current fetch. */
 export const MEET_WITHIN = 2;
+/** The gate `keepsPace` permits no two fetches of one source that end closer than this part of the interval. */
+export const PACE_PART = 0.5;
 /** The bound of the passes of an arm, for each fetch. A pass with no fetch adds no fetch. */
 const PASSES_PER_FETCH = 10;
 
@@ -647,13 +650,19 @@ export async function runCopyArm(arm: CopyArm, settings: CopySettings = CASE_8_S
   // The pace of production: one scheduler for the two hosts on the case clock, with the jitter of the arm.
   const pace = { ...sourcePace({ now: clock.now, after: clock.after }, clock, 2), random: () => jitter.next() };
   const records: Record<"nws" | "ipaws", CopyFetch[]> = { nws: [], ipaws: [] };
+  // The wrapper gives each argument to the source. A fetch that throws is a failed fetch of the record, thus a fetch that the runtime stops still counts.
   const captured = (inner: SourceProcedures, into: CopyFetch[], begun?: number[]): SourceProcedures => ({
     ...inner,
-    fetch: async (input) => {
+    fetch: async (...args: Parameters<SourceProcedures["fetch"]>) => {
       begun?.push(clock.now());
-      const outcome = await inner.fetch(input);
-      into.push(fetchOf(outcome, clock.now() - settings.start));
-      return outcome;
+      try {
+        const outcome = await inner.fetch(...args);
+        into.push(fetchOf(outcome, clock.now() - settings.start));
+        return outcome;
+      } catch (error) {
+        into.push({ at: clock.now() - settings.start, ok: false, complete: false, observations: 0 });
+        throw error;
+      }
     },
   });
   const nws = captured(createNwsSource({ pace, transport, userAgent: USER_AGENT, baseUrl: CASE_8_NWS }), records.nws, starts);
@@ -711,19 +720,20 @@ export async function runCopyArm(arm: CopyArm, settings: CopySettings = CASE_8_S
 }
 
 /** The names of the gates, in their order. */
-export const COPY_GATES = ["noFalseClear", "oneIncident", "settles", "clears", "tellsStop", "staysLate", "limitHolds", "metAgain", "noLongLate"] as const;
+export const COPY_GATES = ["noFalseClear", "oneIncident", "settles", "clears", "tellsStop", "staysLate", "limitHolds", "metAgain", "noLongLate", "keepsPace"] as const;
 
 /** A gate of the case. */
 export type CopyGate = (typeof COPY_GATES)[number];
 
-const IPAWS_GATES: readonly CopyGate[] = ["noFalseClear", "oneIncident", "settles", "clears", "tellsStop", "staysLate", "limitHolds", "metAgain"];
+const IPAWS_GATES: readonly CopyGate[] = ["noFalseClear", "oneIncident", "settles", "clears", "tellsStop", "staysLate", "limitHolds", "metAgain", "keepsPace"];
+const QUIET_GATES: readonly CopyGate[] = ["noFalseClear", "oneIncident", "settles", "clears", "noLongLate", "keepsPace"];
 
 /** The gates of each arm. */
 export const ARM_GATES: Readonly<Record<CopyArm, readonly CopyGate[]>> = {
-  control: ["noFalseClear", "oneIncident", "settles", "clears", "noLongLate"],
+  control: QUIET_GATES,
   "copy-stopped": IPAWS_GATES,
   "ipaws-lag": IPAWS_GATES,
-  "nws-lag": ["noFalseClear", "oneIncident", "settles", "clears", "noLongLate"],
+  "nws-lag": QUIET_GATES,
   "copy-backlog": IPAWS_GATES,
 };
 
@@ -736,6 +746,7 @@ export interface KnownFault {
 }
 
 const AL_8 = "AL-8: the limit of the delay learns the delay of a late copy, and a late copy clears the misses.";
+const BURST = "The runtime does not stop a fetch at its limit. The fetches that wait for a parked host go out together.";
 
 /**
  * The gates that fail because of a known fault of the core. The verdict expects each one to fail. The fix of a fault
@@ -746,6 +757,7 @@ export const KNOWN_FAULTS: readonly KnownFault[] = [
   { arm: "ipaws-lag", gate: "staysLate", reason: AL_8 },
   { arm: "ipaws-lag", gate: "limitHolds", reason: AL_8 },
   { arm: "copy-backlog", gate: "limitHolds", reason: AL_8 },
+  { arm: "copy-backlog", gate: "keepsPace", reason: BURST },
 ];
 
 /** This function gives the known fault of a gate of an arm, or `undefined` when the gate has no known fault. */
@@ -803,6 +815,10 @@ export interface CopyResult {
   readonly clearedEarly: readonly number[];
   /** The count of NWS fetches at the first met pass after the first current feed. */
   readonly metAt?: number;
+  /** The time from the end of the first current fetch to the first met pass after it, in milliseconds. */
+  readonly metAfter?: number;
+  /** The smallest time between the ends of two fetches of each source, in milliseconds. A source with one fetch or none has no value. */
+  readonly smallestGaps: Readonly<Partial<Record<"nws" | "ipaws", number>>>;
   /** The time of each pass with no threat at `kept`, or with no threat at `dropped` before the EXT message. */
   readonly falseClears: readonly number[];
   /** The time of each pass with two threats or more at one place. */
@@ -813,6 +829,12 @@ const largest = (values: readonly (number | undefined)[]): number | undefined =>
   const known = values.filter((value): value is number => value !== undefined);
   return known.length === 0 ? undefined : Math.max(...known);
 };
+
+/** This function gives the smallest time between the ends of two fetches, or `undefined` for one fetch or none. */
+export function smallestGapOf(fetches: readonly Pick<CopyFetch, "at">[]): number | undefined {
+  const gaps = fetches.slice(1).map((fetch, at) => fetch.at - (fetches[at] as Pick<CopyFetch, "at">).at);
+  return gaps.length === 0 ? undefined : Math.min(...gaps);
+}
 
 /**
  * This function gives the gates of an arm from its passes. The counts of a pass are the number of the last fetch and 1.
@@ -833,6 +855,10 @@ export function copyGatesOf(record: Pick<CopyRecord, "arm" | "passes" | "fetches
   const limitBefore = span === undefined ? undefined : largest(passes.filter((pass) => pass.nws <= span.from).map((pass) => pass.limit));
   const limitAfter = span === undefined ? undefined : largest(passes.filter((pass) => pass.nws > span.from).map((pass) => pass.limit));
   const met = span === undefined ? undefined : passes.find((pass) => pass.ipaws > span.to && pass.state === "met");
+  const current = span === undefined ? undefined : record.fetches.ipaws[span.to];
+  const metAfter = met === undefined || current === undefined ? undefined : met.at - current.at;
+  const gapOf = { nws: smallestGapOf(record.fetches.nws), ipaws: smallestGapOf(record.fetches.ipaws) };
+  const smallestGaps = Object.fromEntries(Object.entries(gapOf).filter(([, gap]) => gap !== undefined)) as Partial<Record<"nws" | "ipaws", number>>;
   const all: Record<CopyGate, boolean> = {
     noFalseClear: fetched.length > 0 && falseClears.length === 0,
     oneIncident: doubles.length === 0,
@@ -841,8 +867,9 @@ export function copyGatesOf(record: Pick<CopyRecord, "arm" | "passes" | "fetches
     tellsStop: told !== undefined && span !== undefined && told.nws <= span.from + TELL_WITHIN,
     staysLate: held.length > 0 && clearedEarly.length === 0,
     limitHolds: limitBefore !== undefined && (limitAfter === undefined || limitAfter <= limitBefore),
-    metAgain: met !== undefined && span !== undefined && met.ipaws <= span.to + MEET_WITHIN,
+    metAgain: metAfter !== undefined && metAfter <= MEET_WITHIN * IPAWS_DESCRIPTOR.interval,
     noLongLate: periods.every((period) => period.to !== undefined && period.to - period.from <= NWS_DESCRIPTOR.interval),
+    keepsPace: Object.values(gapOf).every((gap) => gap === undefined || gap >= PACE_PART * NWS_DESCRIPTOR.interval),
   };
   const gates = Object.fromEntries(ARM_GATES[arm].map((gate) => [gate, all[gate]]));
   return {
@@ -854,6 +881,8 @@ export function copyGatesOf(record: Pick<CopyRecord, "arm" | "passes" | "fetches
     ...(limitAfter === undefined ? {} : { limitAfter }),
     clearedEarly,
     ...(met === undefined ? {} : { metAt: met.nws }),
+    ...(metAfter === undefined ? {} : { metAfter }),
+    smallestGaps,
     falseClears,
     doubles,
   };

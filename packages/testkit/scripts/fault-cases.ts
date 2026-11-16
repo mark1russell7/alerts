@@ -224,8 +224,8 @@ report(copy.id, { ...copy.verdict, problems: [...copy.verdict.problems, ...copy.
   `Each NWS fetch gives ${String(PER_FETCH)} WEA messages. The faults are in the fetches from ${String(WINDOW.from)} to ${String(WINDOW.to - 1)}. A lag gives the answer of ${String(LAG)} fetches before.`,
   `In copy-backlog, the IPAWS feed gives HTTP 503 from ${s(outageWindowOf().from)} s to ${s(outageWindowOf().to)} s of the case clock. The next good fetch gets the backlog.`,
   "",
-  `| Arm | Faults (route) | EXT at | IPAWS faults (fetches) | Limit before (s) | Largest limit after (s) | Late periods (first fetch) | First late | First met after | False clears | Double threats | ${COPY_GATES.join(" | ")} |`,
-  `| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | ${COPY_GATES.map(() => "---").join(" | ")} |`,
+  `| Arm | Faults (route) | EXT at | IPAWS faults (fetches) | Limit before (s) | Largest limit after (s) | Late periods (first fetch) | First late | First met after | Met after (s) | Smallest gap NWS, IPAWS (s) | False clears | Double threats | ${COPY_GATES.join(" | ")} |`,
+  `| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | ${COPY_GATES.map(() => "---").join(" | ")} |`,
   ...COPY_ARMS.map((arm) => {
     const record = copy.records.find((one) => one.arm === arm);
     const result = copy.verdict.results[arm];
@@ -238,10 +238,10 @@ report(copy.id, { ...copy.verdict, problems: [...copy.verdict.problems, ...copy.
     const periods = result?.periods.map((period) => String(period.nws - 1)).join(", ") || "none";
     const fetchOf = (count: number | undefined): string => (count === undefined ? "none" : String(count - 1));
     const gates = COPY_GATES.map((gate) => copyGate(arm, gate, result?.gates[gate])).join(" | ");
-    return `| ${arm} | ${routes} | ${String(extFetchOf(arm, copy.settings.fetches))} | ${span} | ${s(result?.limitBefore)} | ${s(result?.limitAfter)} | ${String(result?.periods.length ?? 0)} (${periods}) | ${fetchOf(result?.toldAt)} | ${fetchOf(result?.metAt)} | ${String(result?.falseClears.length ?? 0)} | ${String(result?.doubles.length ?? 0)} | ${gates} |`;
+    return `| ${arm} | ${routes} | ${String(extFetchOf(arm, copy.settings.fetches))} | ${span} | ${s(result?.limitBefore)} | ${s(result?.limitAfter)} | ${String(result?.periods.length ?? 0)} (${periods}) | ${fetchOf(result?.toldAt)} | ${fetchOf(result?.metAt)} | ${s(result?.metAfter)} | ${s(result?.smallestGaps.nws)}, ${s(result?.smallestGaps.ipaws)} | ${String(result?.falseClears.length ?? 0)} | ${String(result?.doubles.length ?? 0)} | ${gates} |`;
   }),
   "",
-  `Known faults: ${KNOWN_FAULTS.map((fault) => `${fault.arm} ${fault.gate}`).join(", ")}. ${KNOWN_FAULTS[0]?.reason ?? ""}`,
+  `Known faults: ${KNOWN_FAULTS.map((fault) => `${fault.arm} ${fault.gate}`).join(", ")}. ${[...new Set(KNOWN_FAULTS.map((fault) => fault.reason))].join(" ")}`,
   "",
   `Read: ${yes(copy.verdict.read)}. Pass: **${yes(copy.verdict.pass)}**.`,
 ]);
