@@ -14,18 +14,29 @@ import type {
   Incident,
   IncidentLine,
   Instant,
+  InterestGraph,
   KindClass,
   LevelTable,
+  NodeKey,
   PersonWatch,
   PlaceId,
   Position,
   RegionCode,
+  Relevance,
+  RelevancePolicy,
+  ReportId,
+  SubjectEntry,
+  SubjectSystem,
   SubjectWatch,
   WatchedPlace,
 } from "./contracts.ts";
-import { ASSESSED_LEVELS } from "./contracts.ts";
+import { ASSESSED_LEVELS, SUBJECT_SYSTEMS } from "./contracts.ts";
+import { hasKind } from "./kind-prefix.ts";
 import type { MapShape } from "./map.ts";
+import { DEFAULT_ENTRY_MAX, DEFAULT_RELEVANCE_POLICY, canReach, relevance, topicEntry } from "./relevance.ts";
 import { isShape, shapeDistanceKm } from "./shapes.ts";
+
+export { hasKind } from "./kind-prefix.ts";
 
 /**
  * The kinds that can reach `life-safety` in the first policy: the list of `docs/CONTRACTS.md`, as
@@ -143,14 +154,6 @@ export const DEFAULT_ASSESS_POLICY: AssessPolicy = {
   ],
   otherwise: OTHER_TABLE,
 };
-
-/**
- * This function tells if a kind has one of the prefixes. A prefix ends at a dot: `met.flood` has
- * `met.flood.flash`, but `met.fl` does not have `met.flood`. The adapters and the core use this one rule.
- */
-export function hasKind(prefixes: readonly string[], kind: string): boolean {
-  return prefixes.some((prefix) => kind === prefix || kind.startsWith(`${prefix}.`));
-}
 
 /** This function gives the lower of two levels. */
 export function lowerLevel(a: AssessedLevel, b: AssessedLevel): AssessedLevel {
@@ -325,6 +328,11 @@ export function matchSubjects(incident: Pick<Incident, "about">, watches: readon
  * An incident with lines has a table level at each place: the highest level of the lines whose areas
  * hold that place. Thus a far place of an earthquake gets the level of its band of shaking, not the
  * level of the center. A subject gets the level of the incident.
+ *
+ * A person with an interest graph gets the routing by the relevance (`docs/RELEVANCE.md`). A place or another
+ * entry counts only when it reaches the person alone. A place under the rule of the life-safety warnings always
+ * counts. An entry that is not a watched place gives the level of the table, up to `entryMax` of the policy.
+ * When the relevance fails, the places decide as with no graph, and the reason `relevance-fault` tells the fault.
  */
 export function assess(
   incident: Incident,
@@ -343,12 +351,14 @@ export function assess(
   }
   const matches = matchPlaces(incident, watched);
   const subjects = matchSubjects(incident, person.subjects ?? []);
+  let muted: Assessment["muted"];
   const result = (level: AssessedLevel): Assessment => ({
     incident: incident.anchor,
     person: person.person,
     level,
     places: matches.map((match) => match.place),
     reasons,
+    ...(muted === undefined ? {} : { muted }),
   });
   if (!incident.live) {
     reasons.push({ kind: "ended" });
@@ -358,22 +368,49 @@ export function assess(
     reasons.push({ kind: "status", status: incident.status });
     return result("none");
   }
-  if (matches.length === 0 && subjects.length === 0) {
+  const table = tableLevel(policy, incident, at);
+  const tables = new Map<PlaceId, PlaceTable>();
+  // The level of the table at one place: the highest table of the lines that hold the place.
+  const placeTable = (id: PlaceId): PlaceTable => {
+    const known = tables.get(id);
+    if (known !== undefined) return known;
+    const place = byId.get(id);
+    const holding = place === undefined ? [] : linesAt(incident, place);
+    const found: PlaceTable =
+      holding.length === 0
+        ? { level: table.level, reports: [] }
+        : { level: holding.map((line) => tableLevel(policy, line, at).level).reduce(higherLevel), reports: holding.map((line) => line.report) };
+    tables.set(id, found);
+    return found;
+  };
+  const relevancePolicy = policy.relevance ?? DEFAULT_RELEVANCE_POLICY;
+  let plan: RelevancePlan | undefined;
+  if (person.interests !== undefined) {
+    try {
+      plan = planOf(incident, person, person.interests, matches, byId, (id) => placeTable(id).level, relevancePolicy, at);
+    } catch (error) {
+      // The alert is not lost: the places decide, as for a person with no graph.
+      reasons.push({ kind: "relevance-fault", message: error instanceof Error && error.message !== "" ? error.message : RELEVANCE_FAULT });
+    }
+  }
+  if (matches.length === 0 && subjects.length === 0 && (plan === undefined || plan.reached.length === 0)) {
     reasons.push({ kind: noMatch(incident, watched) });
     return result("none");
   }
-  const table = tableLevel(policy, incident, at);
   reasons.push({ kind: "table", ...table });
+  const entryLevel = lowerLevel(table.level, relevancePolicy.entryMax ?? DEFAULT_ENTRY_MAX);
+  if (plan !== undefined) {
+    const { reach, why } = plan.relevance;
+    reasons.push({
+      kind: "reach",
+      reach,
+      reached: plan.reached,
+      mandatory: plan.mandatory,
+      ...(plan.others ? { entryLevel } : {}),
+      ...(why === undefined ? {} : { why }),
+    });
+  }
   let level: AssessedLevel = "none";
-  // The level of the table at one place: the highest table of the lines that hold the place.
-  const placeTable = (id: PlaceId): AssessedLevel => {
-    const place = byId.get(id);
-    const holding = place === undefined ? [] : linesAt(incident, place);
-    if (holding.length === 0) return table.level;
-    const found = holding.map((line) => tableLevel(policy, line, at).level).reduce(higherLevel);
-    if (found !== table.level) reasons.push({ kind: "place-table", place: id, reports: holding.map((line) => line.report), level: found });
-    return found;
-  };
   // The level at one match: the first rule that matches can lower the level of the table.
   const atMatch = (place: PlaceId | undefined, base: AssessedLevel): AssessedLevel => {
     const index = person.rules.findIndex(
@@ -388,13 +425,106 @@ export function assess(
   };
   for (const match of matches) {
     reasons.push({ kind: "place", ...match });
-    level = higherLevel(level, atMatch(match.place, placeTable(match.place)));
+    if (plan !== undefined && !plan.places.has(match.place)) continue;
+    const found = placeTable(match.place);
+    if (found.reports.length > 0 && found.level !== table.level) reasons.push({ kind: "place-table", place: match.place, reports: found.reports, level: found.level });
+    level = higherLevel(level, atMatch(match.place, found.level));
   }
+  if (plan?.others === true) level = higherLevel(level, atMatch(undefined, entryLevel));
   for (const subject of subjects) {
     reasons.push({ kind: "subject", subject });
     level = higherLevel(level, atMatch(undefined, table.level));
   }
+  muted = plan?.relevance.muted;
   return result(level);
+}
+
+// The level of the table at one place, and the reports of the lines that hold the place.
+interface PlaceTable {
+  readonly level: AssessedLevel;
+  readonly reports: readonly ReportId[];
+}
+
+// The routing by the relevance for one person.
+interface RelevancePlan {
+  // The matched places that count: each place of the rule of the life-safety warnings, and each place that reaches the person alone.
+  readonly places: ReadonlySet<PlaceId>;
+  // True when an entry that is not a matched place reaches the person alone.
+  readonly others: boolean;
+  // The entries that count, in the order of the entries.
+  readonly reached: readonly NodeKey[];
+  // The matched places of the rule of the life-safety warnings, in the order of the matches.
+  readonly mandatory: readonly PlaceId[];
+  readonly relevance: Relevance;
+}
+
+// The message of a fault with no text of its own.
+const RELEVANCE_FAULT = "The relevance failed with no message.";
+
+// The node of a watched place in an interest graph.
+const placeNode = (place: PlaceId): NodeKey => `place:${place}`;
+
+// The hit of an entry that the incident names: a place in its areas, a code, a subject or the topic of its kind.
+const FULL_HIT = { value: 1, low: 1, high: 1 } as const;
+
+// The plan of the routing by the relevance. A matched place is under the rule of the life-safety warnings when the
+// rule of the person is on there, the match is in its range and the table gives `life-safety` at the place. Each other
+// entry counts when it reaches the person alone, with the cut of the mutes. The function throws when the relevance
+// throws, and the caller records the fault.
+function planOf(
+  incident: Incident,
+  person: PersonWatch,
+  graph: InterestGraph,
+  matches: readonly PlaceMatch[],
+  byId: ReadonlyMap<PlaceId, WatchedPlace>,
+  levelAt: (place: PlaceId) => AssessedLevel,
+  policy: RelevancePolicy,
+  at: Instant | undefined,
+): RelevancePlan {
+  if (graph.person !== person.person) throw new RangeError("The interest graph is of another person.");
+  const mandatory = matches
+    .filter((match) => {
+      const rule = person.mandatory?.find((candidate) => candidate.place === match.place);
+      const rangeKm = rule?.rangeKm ?? byId.get(match.place)?.bufferKm ?? 0;
+      const inRange = match.codes.length > 0 || match.distanceKm === undefined || match.distanceKm <= rangeKm;
+      return (rule?.on ?? true) && inRange && levelAt(match.place) === "life-safety";
+    })
+    .map((match) => match.place);
+  const entries = entriesOf(incident, matches, graph);
+  const kind = incident.kind.code;
+  // With no time, a mute with an end has no effect, so the alert is not lost.
+  const time = at ?? Number.POSITIVE_INFINITY;
+  const found = relevance({ kind, entries, at: time, mandatory: mandatory.length > 0 }, graph, policy);
+  const kept = new Set(mandatory.map(placeNode));
+  // Only a node that starts an edge can reach the person. Each entry counts alone, with the cut of the mutes.
+  const starts = new Set(graph.edges.map((edge) => edge.from));
+  const reached = entries
+    .filter((entry) => kept.has(entry.node) || (starts.has(entry.node) && canReach({ kind, entries: [entry], at: time, mandatory: false }, graph, policy)))
+    .map((entry) => entry.node);
+  const counted = new Set(reached);
+  const places = new Set(matches.filter((match) => counted.has(placeNode(match.place))).map((match) => match.place));
+  const matched = new Set(matches.map((match) => placeNode(match.place)));
+  return { places, others: reached.some((node) => !matched.has(node)), reached, mandatory, relevance: found };
+}
+
+// The entries of an incident for a graph, one for each node: the matched places, the areas, the subjects and the topic,
+// in this order. A code or a subject gives an entry when its system is in `SUBJECT_SYSTEMS`.
+function entriesOf(incident: Incident, matches: readonly PlaceMatch[], graph: InterestGraph): SubjectEntry[] {
+  const found = new Map<NodeKey, SubjectEntry>();
+  const add = (system: string, id: string): void => {
+    if (!Object.hasOwn(SUBJECT_SYSTEMS, system)) return;
+    const node = `${system}:${id}`;
+    if (!found.has(node)) found.set(node, { node, kind: SUBJECT_SYSTEMS[system as SubjectSystem], hit: FULL_HIT });
+  };
+  for (const match of matches) add("place", match.place);
+  for (const area of incident.areas) {
+    if (area.type === "code") add(area.system, area.code);
+    else if (area.type === "place") add("place", area.place);
+  }
+  for (const subject of incident.about) add(subject.system, subject.id);
+  const topic = topicEntry(incident.kind.code, graph);
+  if (topic !== undefined && !found.has(topic.node)) found.set(topic.node, topic);
+  return [...found.values()];
 }
 
 /**

@@ -56,6 +56,7 @@ import {
   type LevelRule,
   type LevelTable,
   type LocateOutcome,
+  type MandatoryRule,
   type MapProblem,
   type MapResult,
   type Message,
@@ -799,6 +800,8 @@ export const assessPolicySchema: z.ZodType<AssessPolicy, AssessPolicy> = schemaO
       statuses: z.array(statusSchema).readonly(),
       classes: z.array(kindClassSchema).readonly(),
       otherwise: levelTableSchema,
+      // The schema of the relevance policy comes later in this file.
+      relevance: z.lazy(() => relevancePolicySchema).exactOptional(),
     })
     .readonly(),
 );
@@ -835,7 +838,15 @@ export const subjectWatchSchema: z.ZodType<SubjectWatch, SubjectWatch> = schemaO
     .readonly(),
 );
 
-/** This schema checks the places and the rules of one person. */
+// The rule of the life-safety warnings at one place of a person. The range is 0 or more.
+const mandatoryRuleSchema: z.ZodType<MandatoryRule, MandatoryRule> = schemaOf<MandatoryRule>()(
+  z.strictObject({ place: placeIdSchema, on: z.boolean(), rangeKm: z.number().min(0, "The range of a rule is 0 km or more.") }).readonly(),
+);
+
+/**
+ * This schema checks the places and the rules of one person. A place has one rule of the life-safety warnings at
+ * most. The schema of the interest graph comes later in this file.
+ */
 export const personWatchSchema: z.ZodType<PersonWatch, PersonWatch> = schemaOf<PersonWatch>()(
   z
     .strictObject({
@@ -844,6 +855,12 @@ export const personWatchSchema: z.ZodType<PersonWatch, PersonWatch> = schemaOf<P
       subjects: z.array(subjectWatchSchema).readonly().exactOptional(),
       rules: z.array(levelRuleSchema).readonly(),
       quiet: quietWindowSchema.exactOptional(),
+      interests: z.lazy(() => interestGraphSchema).exactOptional(),
+      mandatory: z
+        .array(mandatoryRuleSchema)
+        .refine((rules) => new Set(rules.map((rule) => rule.place)).size === rules.length, "A place has one rule of the life-safety warnings at most.")
+        .readonly()
+        .exactOptional(),
     })
     .readonly(),
 );
@@ -1064,6 +1081,7 @@ export const relevancePolicySchema: z.ZodType<RelevancePolicy, RelevancePolicy> 
       hopCap: z.number().int().min(1, "The hop cap is 1 or more."),
       topPaths: z.number().int().min(1, "The count of paths is 1 or more."),
       mandatory: muteEffectSchema,
+      entryMax: assessedLevelSchema.exactOptional(),
     })
     .readonly(),
 );
@@ -1122,6 +1140,15 @@ export const assessReasonSchema: z.ZodType<AssessReason, AssessReason> = schemaO
       }),
       z.strictObject({ kind: z.literal("rule"), place: placeIdSchema.exactOptional(), index: count(), max: assessedLevelSchema }),
       z.strictObject({ kind: z.literal("shadow"), score: shadowScoreSchema }),
+      z.strictObject({
+        kind: z.literal("reach"),
+        reach: probabilitySchema,
+        reached: z.array(nodeKeySchema).readonly(),
+        mandatory: z.array(placeIdSchema).readonly(),
+        entryLevel: assessedLevelSchema.exactOptional(),
+        why: whyRecordSchema.exactOptional(),
+      }),
+      z.strictObject({ kind: z.literal("relevance-fault"), message: z.string().min(1, "The message of a fault is a non-empty string.") }),
     ])
     .readonly(),
 );
