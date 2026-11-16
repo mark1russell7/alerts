@@ -41,7 +41,7 @@ import { closeSync, mkdtempSync, openSync, readdirSync, readFileSync, rmSync, st
 import { tmpdir } from "node:os";
 import { join, sep } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
-import { type FakeClock, fakeClock, type WallClock } from "@mark1russell7/algebra/clock";
+import { type FakeClock, fakeClock, fakeWallClock } from "@mark1russell7/algebra/clock";
 import type { SourceProcedures } from "@mark1russell7/alerts";
 import { createPushoverChannel } from "@mark1russell7/alerts-channel-pushover";
 import {
@@ -319,12 +319,6 @@ export interface LogFaultRun {
   readonly verdict: LogFaultVerdict;
 }
 
-/** The wall clock of a fake monotonic clock: the same time and the same queue of timers. */
-function wallOf(mono: FakeClock): WallClock {
-  // The loop and the runtime share one queue of timers. The end: `fakeWallClock` of algebra 0.9.2, with a monotonic clock.
-  return { time: "wall", now: () => mono.now(), after: (ms, run) => mono.after(ms, run) };
-}
-
 /** This function gives the source of the case: the source of the fixture, with the interval of the IPAWS source. */
 function sourceOf(): SourceProcedures {
   const inner = FIXTURE.sourceOf(CASE_12_START);
@@ -361,7 +355,7 @@ interface Life {
 /** This function opens a runtime on the log of the life, and it drives the loop of the runtime to the end of the life. */
 async function driveLife(life: Life, trace: LifeTrace): Promise<void> {
   const { mono, since } = life;
-  const wall = wallOf(mono);
+  const wall = fakeWallClock(mono.now(), mono);
   // The channel requests the address of the Pushover API. This fetch sends each request to the scripted API.
   const channel = createPushoverChannel({ token: FIXTURE.token, fetch: pushoverFetchTo(`http://${life.server.host}:${String(life.server.port)}`), now: () => wall.now() });
   const delivery: DeliveryOptions = { recipients: [FIXTURE.recipient], channels: [channel], ...DELIVERY_TIMES };
@@ -472,7 +466,7 @@ export async function runLockArm(arm: LockArm, settings: LogFaultSettings = CASE
       pings.push({ at: since(), kind: url.endsWith("/fail") ? "fail" : "success" });
       return Promise.resolve({ status: 200 });
     },
-    clock: wallOf(mono),
+    clock: fakeWallClock(mono.now(), mono),
     userAgent: "alerts-testkit/0 (fault suite)",
     onError: (message) => {
       pingErrors.push(message);
