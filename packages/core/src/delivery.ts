@@ -3,7 +3,7 @@
  * send and the acknowledgment of a status. It is pure. The runtime gives the time, and
  * the runtime does each call of a channel.
  */
-import { assess, COVERAGE_KIND, DEFAULT_ASSESS_POLICY, hasKind, LIFE_SAFETY_KINDS, QUOTA_KIND } from "./assess.ts";
+import { assess, COVERAGE_KIND, DEFAULT_ASSESS_POLICY, hasKind, LIFE_SAFETY_KINDS, QUOTA_KIND, reachedAssessment } from "./assess.ts";
 import {
   LEVELS,
   type Acknowledgment,
@@ -190,7 +190,7 @@ export function route(input: RouteInput): Route[] {
       const assessment = incident.live ? assess(incident, recipient.watch, input.places, policy, now) : undefined;
       // A mute with the effect `absent` keeps the incident from the person. With `silent`, the level stays and the mode changes.
       const muted = assessment?.muted;
-      const assessed: AssessedLevel | undefined = assessment === undefined ? undefined : muted?.effect === "absent" ? "none" : assessment.level;
+      const assessed: AssessedLevel | undefined = assessment === undefined ? undefined : reachedAssessment(assessment).level;
       const silentNow = muted?.effect === "silent";
       for (let episode = 0; episode <= closes.length; episode += 1) {
         const closed = closes[episode];

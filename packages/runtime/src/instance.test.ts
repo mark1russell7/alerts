@@ -3,7 +3,7 @@ import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fakeClock, type FakeClock, type WallClock } from "@mark1russell7/algebra/clock";
-import { CONFIG_FORMAT, COPY_FORMAT, matchPlaces, ONLY_COPY, parseConfig, type AlertConfig, type Watch, type ChannelId, type EscalationPolicy, type PersonId, type PlaceId, type SecretLookup, type CopySettings, type SourceId, type SpendConfig } from "@mark1russell7/alerts";
+import { CONFIG_FORMAT, COPY_FORMAT, MAP_FORMAT, matchPlaces, ONLY_COPY, parseConfig, type AlertConfig, type Watch, type ChannelId, type EscalationPolicy, type PersonId, type PlaceId, type SecretLookup, type CopySettings, type SourceId, type SpendConfig } from "@mark1russell7/alerts";
 import type { TwilioFetch } from "@mark1russell7/alerts-channel-twilio";
 import { PUSHOVER_QUOTA, PUSHOVER_RESERVE_NOTICES, PUSHOVER_TIMEOUT_MS, type PushoverChannelOptions } from "@mark1russell7/alerts-channel-pushover";
 import { memoryCache, type ShapeCache } from "@mark1russell7/alerts-shapes-nws";
@@ -220,6 +220,21 @@ describe("openInstance", () => {
     expect(pass.delivery?.sent).toHaveLength(1);
     // The source asks for the alerts of the state. The match to the county is local.
     expect(net.exchanges.map((exchange) => exchange.url)).toContain("https://api.weather.gov/alerts/active?area=TX");
+  });
+
+  it("gives the map of the last pass, also of a pass that starts outside the loop, with the level of the person", async () => {
+    const { instance, clock } = await open();
+    const before = instance.map();
+    expect(before.format).toBe(MAP_FORMAT);
+    expect(before.at).toBeNull();
+    expect(before.view.incidents).toEqual([]);
+    const pass = await finish(clock, instance.runtime.pass());
+    const after = instance.map();
+    expect(after.at).toBe(pass.at);
+    expect(after.view.places.map((place) => place.id)).toEqual(CONFIG.places.map((place) => place.id));
+    // The warning of the county reaches the person, thus the map shows a level above `none`.
+    expect(after.view.incidents.length).toBeGreaterThan(0);
+    expect(after.view.incidents.some((incident) => incident.level !== "none")).toBe(true);
   });
 
   it("gives the gate of the month to the Pushover channel: a send counts, and the reserve stops a send below life-safety", async () => {

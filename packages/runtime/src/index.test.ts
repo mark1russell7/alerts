@@ -3,7 +3,7 @@ import type { AddressInfo } from "node:net";
 import { embeddedProcess, lint, localDev } from "@mark1russell7/service";
 import type { Rule, Scenario } from "@mark1russell7/service";
 import { realClock, wallClock } from "@mark1russell7/algebra/clock";
-import type { SourceId } from "@mark1russell7/alerts";
+import { MAP_FORMAT, type MapPayload, type SourceId } from "@mark1russell7/alerts";
 import { describe, expect, it } from "vitest";
 import { PROFILES, STOP_MESSAGE, createLoop, declare, type Pass, type Status } from "./index.ts";
 
@@ -63,6 +63,24 @@ const loopOf = () => {
   });
 };
 
+// A map before the first pass: no incident, no place and no region.
+const EMPTY_MAP: MapPayload = { format: MAP_FORMAT, at: null, view: { incidents: [], places: [], unshaped: [] }, basemap: [] };
+
+// The deadline of each wait of the lifecycle test. A busy runner can take some seconds for the start and the first pass.
+const WAIT_LIMIT_MS = 20_000;
+
+/** This function waits until the check is true. It throws at the deadline. */
+async function waitUntil(check: () => boolean | Promise<boolean>, what: string): Promise<void> {
+  const end = Date.now() + WAIT_LIMIT_MS;
+  while (!(await check())) {
+    if (Date.now() > end) throw new Error(`The test waited ${String(WAIT_LIMIT_MS)} ms for ${what}.`);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+}
+
+/** This function tells if an address answers with a status of 200 to 299. A refused connection is false. */
+const answers = (url: string): Promise<boolean> => fetch(url).then((response) => response.ok, () => false);
+
 /** This function gives a free TCP port of the loopback interface. */
 const freePort = (): Promise<number> =>
   new Promise((resolve, reject) => {
@@ -97,6 +115,15 @@ describe("the declaration of the service", () => {
       ]);
     });
   }
+
+  it("declares the route GET /map only with a function of the map", () => {
+    const routes = (map?: () => MapPayload) =>
+      declare({ port: 0, probePort: 0, profile: localDev, loop: loopOf(), log: { close: () => undefined }, map })
+        .describe()
+        .controllers.map((controller) => [controller.name, Object.keys(controller.routes)]);
+    expect(routes()).toEqual([["api", ["GET /status"]]]);
+    expect(routes(() => EMPTY_MAP)).toEqual([["api", ["GET /status", "GET /map"]]]);
+  });
 });
 
 describe("the lifecycle of the service", () => {
@@ -107,14 +134,18 @@ describe("the lifecycle of the service", () => {
     const loop = loopOf();
     let closes = 0;
     const log = { close: () => (closes += 1) };
-    const life = await declare({ port, probePort, profile: localDev, loop, log }).run({ process: embeddedProcess() });
+    const life = await declare({ port, probePort, profile: localDev, loop, log, map: () => EMPTY_MAP }).run({ process: embeddedProcess() });
     try {
-      // The worker starts the first pass at the start of the service.
-      for (let tries = 0; loop.last() === undefined && tries < 100; tries += 1) await new Promise((resolve) => setTimeout(resolve, 10));
+      // The probe answers after the start of each transport. The worker starts the first pass at the start of the service.
+      await waitUntil(() => answers(`http://127.0.0.1:${probePort}/readiness`), "the readiness probe");
+      await waitUntil(() => loop.last() !== undefined, "the first pass");
       const status = await fetch(`http://127.0.0.1:${port}/status`);
       expect(status.status).toBe(200);
       const body = (await status.json()) as Status;
       expect(body).toEqual({ at: loop.last()?.at, wakeAt: loop.last()?.wakeAt, fetched: ["nws-api"], sent: 0, conflicts: 0, stuck: null });
+      const map = await fetch(`http://127.0.0.1:${port}/map`);
+      expect(map.status).toBe(200);
+      expect(await map.json()).toEqual(EMPTY_MAP);
       expect((await fetch(`http://127.0.0.1:${port}/hello`)).status).toBe(404);
       expect((await fetch(`http://127.0.0.1:${probePort}/readiness`)).status).toBe(200);
       expect((await fetch(`http://127.0.0.1:${probePort}/liveness`)).status).toBe(200);
@@ -126,5 +157,5 @@ describe("the lifecycle of the service", () => {
     expect(await life.done).toBe(0);
     expect(life.errors).toEqual([]);
     expect(closes).toBe(1);
-  });
+  }, 3 * WAIT_LIMIT_MS);
 });
