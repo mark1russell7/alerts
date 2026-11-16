@@ -6,6 +6,7 @@ import {
   OUTAGE_LIST_ASSET,
   readOutageList,
   runtimeHandler,
+  runtimeGlobalsOf,
   runtimePorts,
   twilioGlobals,
   type RuntimeCallOptions,
@@ -159,7 +160,26 @@ describe("runtimeHandler", () => {
 });
 
 describe("twilioGlobals", () => {
-  it("throws outside the Functions runtime", () => {
-    expect(() => twilioGlobals()).toThrow("The globals Runtime and Twilio of the Functions runtime are absent.");
+  it("throws outside the Functions runtime, and names both absent globals", () => {
+    expect(() => twilioGlobals()).toThrow("The Functions runtime does not give Runtime and Twilio.");
+  });
+});
+
+describe("runtimeGlobalsOf", () => {
+  const response = fakeResponse();
+  const runtime = { getAssets: () => ({ [OUTAGE_LIST_ASSET]: { open: () => JSON.stringify(LIST) } }) };
+  const twilio = { Response: class {} };
+
+  it("names each absent part", () => {
+    expect(() => runtimeGlobalsOf(undefined, twilio)).toThrow("The Functions runtime does not give Runtime.");
+    expect(() => runtimeGlobalsOf({}, twilio)).toThrow("The Functions runtime does not give Runtime.getAssets.");
+    expect(() => runtimeGlobalsOf(runtime, {})).toThrow("The Functions runtime does not give Twilio.Response.");
+    expect(() => runtimeGlobalsOf(1, null)).toThrow("The Functions runtime does not give Runtime.getAssets and Twilio.Response.");
+  });
+
+  it("reads the Assets and makes a response with the values that it gets", () => {
+    const globals = runtimeGlobalsOf(runtime, { Response: function Response() { return response; } });
+    expect(Object.keys(globals.assets())).toEqual([OUTAGE_LIST_ASSET]);
+    expect(globals.response()).toBe(response);
   });
 });

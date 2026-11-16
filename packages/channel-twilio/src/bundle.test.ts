@@ -1,5 +1,5 @@
 import { builtinModules } from "node:module";
-import { createContext, runInContext } from "node:vm";
+import { compileFunction, createContext, runInContext } from "node:vm";
 import type { ChannelId, PersonId } from "@mark1russell7/alerts";
 import { beforeAll, describe, expect, it } from "vitest";
 import { bundleFunctions, type FunctionBundle } from "./bundle.ts";
@@ -44,28 +44,38 @@ class FakeResponse {
 // The Node globals of the Functions runtime that a bundle can read.
 const NODE_GLOBALS = ["process", "Buffer", "URL", "URLSearchParams", "TextEncoder", "TextDecoder", "AbortController", "AbortSignal", "setTimeout", "clearTimeout", "queueMicrotask", "structuredClone", "crypto", "performance"];
 
-// This function runs a bundle as the Functions runtime does: in a context with the Node globals, `Runtime` and `Twilio`.
+/**
+ * How the test gives `Runtime` and `Twilio` to a bundle.
+ * - `globals`: as globals of the context, as the dev runtime of Twilio does.
+ * - `wrapper`: as parameters of a wrapper of the file. The context has no such global, as on the server of Twilio.
+ */
+type Scope = "globals" | "wrapper";
+
+// This function runs a bundle as the Functions runtime does: with the Node globals, `Runtime` and `Twilio`.
 // The `require` of the context gives only the Node built-ins.
-function load(bundle: FunctionBundle): Loaded {
+function load(bundle: FunctionBundle, scope: Scope = "globals"): Loaded {
   const required: string[] = [];
   const lines: string[] = [];
   const builtins = new Set(builtinModules);
   const module = { exports: {} as Record<string, unknown> };
-  const context = createContext({
-    module,
-    exports: module.exports,
-    require: (name: string) => {
-      required.push(name);
-      const bare = name.startsWith("node:") ? name.slice("node:".length) : name;
-      if (!builtins.has(bare)) throw new Error(`The bundle requires ${name}, and the runtime of Twilio does not give it.`);
-      return process.getBuiltinModule(name);
-    },
+  const require = (name: string): unknown => {
+    required.push(name);
+    const bare = name.startsWith("node:") ? name.slice("node:".length) : name;
+    if (!builtins.has(bare)) throw new Error(`The bundle requires ${name}, and the runtime of Twilio does not give it.`);
+    return process.getBuiltinModule(name);
+  };
+  const runtime = { getAssets: () => ({ [OUTAGE_LIST_ASSET]: { open: () => JSON.stringify(LIST) } }) };
+  const twilio = { Response: FakeResponse };
+  const base = {
     console: { log: (line: string) => lines.push(line), error: (line: string) => lines.push(line) },
     ...Object.fromEntries(NODE_GLOBALS.map((name) => [name, Reflect.get(globalThis, name)])),
-    Runtime: { getAssets: () => ({ [OUTAGE_LIST_ASSET]: { open: () => JSON.stringify(LIST) } }) },
-    Twilio: { Response: FakeResponse },
-  });
-  runInContext(bundle.code, context, { filename: `${bundle.path}.js` });
+  };
+  if (scope === "globals") {
+    runInContext(bundle.code, createContext({ ...base, module, exports: module.exports, require, Runtime: runtime, Twilio: twilio }), { filename: `${bundle.path}.js` });
+  } else {
+    const wrapper = compileFunction(bundle.code, ["exports", "require", "module", "Runtime", "Twilio"], { parsingContext: createContext(base), filename: `${bundle.path}.js` });
+    Reflect.apply(wrapper, undefined, [module.exports, require, module, runtime, twilio]);
+  }
   const handler = module.exports["handler"];
   if (typeof handler !== "function") throw new Error(`The bundle of ${bundle.path} has no handler.`);
   return { handler: (context, event, callback) => Reflect.apply(handler, undefined, [context, event, callback]), required, lines };
@@ -122,6 +132,15 @@ describe("bundleFunctions", () => {
     expect(response.body).toBe(JSON.stringify({ calls: 1 }));
     expect(created.map((call) => [call.to, call.from])).toEqual([["+15555550123", "+15555550100"]]);
     expect(created[0]!.twiml).toContain("<Gather");
+  });
+
+  it("starts the calls and says the confirmed text when Runtime and Twilio are only names of a wrapper", async () => {
+    const created: RuntimeCallOptions[] = [];
+    const entry = await invoke(load(bundles[0]!, "wrapper"), { token: "token-0000", status: "down" }, created);
+    expect(entry.status).toBe(200);
+    expect(created.map((call) => call.to)).toEqual(["+15555550123"]);
+    const event = { outage: "60000000", person: "0", step: "0", round: "0", list: "v1", Digits: "1", CallSid: "CA0001" };
+    expect((await invoke(load(bundles[1]!, "wrapper"), event)).body).toContain(`<Say>${OUTAGE_TEXTS.confirmed}</Say>`);
   });
 
   it("refuses a wrong token in the bundle of the entry", async () => {
