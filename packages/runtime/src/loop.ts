@@ -44,8 +44,8 @@ export function loopTimes<S extends { readonly interval: Duration }>(sources: re
 
 /** The options of the loop. */
 export interface LoopOptions {
-  /** This function does one pass: `Runtime.pass`. */
-  readonly pass: () => Promise<Pass>;
+  /** This function does one pass: `Runtime.pass`. The signal of the iteration aborts at the drain, at the bound of the pass and at the close. */
+  readonly pass: (stop: AbortSignal) => Promise<Pass>;
   /**
    * The monotonic clock of the service. The worker, the waits and the bound of a pass use it. Give the
    * clock of the lifecycle, because the drain compares its deadline with this clock.
@@ -125,12 +125,12 @@ export function createLoop(options: LoopOptions): RuntimeLoop {
       ...(options.onError === undefined ? {} : { onError: options.onError }),
       // The setup makes the teardown start at the close.
       setup: () => undefined,
-      iteration: async () => {
+      iteration: async ({ signal }) => {
         stop();
         running = clock.now();
         let pass: Pass;
         try {
-          pass = await options.pass();
+          pass = await options.pass(signal);
         } catch (error) {
           // The backoff of the worker loop waits `retryCap` at most.
           due = clock.now() + times.retryCap;

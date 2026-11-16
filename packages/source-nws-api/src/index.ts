@@ -23,7 +23,7 @@ export function createNwsSource(options: NwsFetchOptions): SourceProcedures {
   const fetch = createNwsFetch(options);
   return {
     describe: () => NWS_DESCRIPTOR,
-    fetch: (input) => fetch(input),
+    fetch: (input, signal) => fetch(input, signal),
     map: ({ observation }) => mapObservation(observation),
     check: ({ observations }) => checkCanary(observations),
   };
