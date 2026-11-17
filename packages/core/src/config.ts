@@ -6,9 +6,11 @@
 import { localTime } from "@mark1russell7/algebra/clock";
 import { canonicalHash } from "@mark1russell7/rigor-generators";
 import type { Address, AssessPolicy, ChannelDescriptor, ChannelId, Duration, EscalationPolicy, Instant, InterestGraph, NodeKey, PersonId, PersonWatch, PlaceId, Position, RegionCode, SourceId, WatchedPlace } from "./contracts.ts";
-import { recipientProblems, type Recipient } from "./delivery.ts";
-import { drillProblems, type DrillConfig } from "./drill.ts";
-import { DRILL_SUBJECT } from "./system-reports.ts";
+import { assess, DEFAULT_ASSESS_POLICY, DRILL_KIND, matchSubjects, reachedAssessment } from "./assess.ts";
+import { recipientProblems, ruleSteps, type ChannelRule, type Recipient } from "./delivery.ts";
+import { DRILL_PROBES, drillProblems, nextDrillAt, type DrillConfig } from "./drill.ts";
+import { incidents, normalize } from "./merge.ts";
+import { DRILL_SUBJECT, NO_SYSTEM_LINES, systemReports } from "./system-reports.ts";
 import type { TryChain } from "./chain.ts";
 import type { Expectation } from "./lateness.ts";
 import { rankDelayProblems, rankFloorProblems, type RankDelays } from "./escalation.ts";
@@ -262,7 +264,8 @@ export interface LoadedConfig {
  * - a step of the outage call on a channel with no contact of the person
  * - a rank delay that is not a whole number of milliseconds up to `RANK_DELAY_LIMIT`
  * - two drills with one id, a drill of an unknown person, and a drill on a channel with no contact of the person
- * - a drill of a person who does not watch `DRILL_SUBJECT`, or with no step on its channel in the life-safety policy
+ * - a drill of a person who does not watch `DRILL_SUBJECT`
+ * - a run or a failure of a drill that sends nothing to its person: no policy of its level, or no step after the rules
  * - each problem of `drillProblems` for each drill
  * - each problem of `recipientProblems` for each person.
  */
@@ -365,6 +368,7 @@ export function loadConfig(config: AlertConfig, channels: readonly ChannelDescri
 
   const drills = new Set<string>();
   const recipientOf = new Map(recipients.map((recipient) => [recipient.watch.person as string, recipient]));
+  const rulesOf = new Map<string, ChannelRule[]>();
   for (const drill of config.drills ?? []) {
     const { id, person, path } = drill;
     if (drills.has(id)) problems.push(`Two drills have the id ${id}.`);
@@ -376,12 +380,68 @@ export function loadConfig(config: AlertConfig, channels: readonly ChannelDescri
       // The route sends the drill report only to a person who watches its subject.
       const watched = (recipient.watch.subjects ?? []).some((watch) => watch.system === DRILL_SUBJECT && (watch.id === undefined || watch.id === id));
       if (!watched) problems.push(`The drill ${id} is for the person ${person}, and the person does not watch the subject ${DRILL_SUBJECT}. The drill does not reach the person.`);
-      const policy = recipient.policies.find((entry) => entry.level === "life-safety");
-      if (policy?.steps.some((step) => step.channel === path.channel) !== true) problems.push(`The drill ${id} uses the channel ${path.channel}, and the life-safety policy of the person ${person} has no step on it.`);
+      const rules = drillRules(drill);
+      rulesOf.set(person, [...(rulesOf.get(person) ?? []), ...rules]);
+      // A run goes only to the person of the drill. Another person who watches the drill gets no step of a run, and
+      // still gets the failure.
+      for (const other of recipients) {
+        if (other.watch.person === person || matchSubjects({ about: [{ system: DRILL_SUBJECT, id }] }, other.watch.subjects ?? []).length === 0) continue;
+        rulesOf.set(other.watch.person, [...(rulesOf.get(other.watch.person) ?? []), { kinds: [`${DRILL_KIND}.run`], about: { system: DRILL_SUBJECT, id }, keep: "only", channels: [] }]);
+      }
+      if (watched) problems.push(...drillPlanProblems(drill, { ...recipient, channelRules: [...(recipient.channelRules ?? []), ...rules] }, config.assess ?? DEFAULT_ASSESS_POLICY));
     }
     problems.push(...drillProblems(drill, channels, recipient?.watch.quiet));
   }
-  return { recipients, problems };
+  const ruled = recipients.map((recipient) => {
+    const rules = rulesOf.get(recipient.watch.person);
+    return rules === undefined ? recipient : { ...recipient, channelRules: [...(recipient.channelRules ?? []), ...rules] };
+  });
+  return { recipients: ruled, problems };
+}
+
+/**
+ * This function gives the two channel rules of a drill. A run goes only on the channel of the path. A failure goes on
+ * each other channel of the person, because the path can be the broken part. `loadConfig` adds them to the person.
+ */
+export function drillRules(drill: DrillConfig): ChannelRule[] {
+  const about = { system: DRILL_SUBJECT, id: drill.id };
+  return [
+    { kinds: [`${DRILL_KIND}.run`], about, keep: "only", channels: [drill.path.channel] },
+    { kinds: [`${DRILL_KIND}.failed`], about, keep: "except", channels: [drill.path.channel] },
+  ];
+}
+
+// The plans of a drill for its person: the system fold makes the reports of a run and of its failure, the assessment
+// gives their levels, and the channel rules keep the steps. Thus the check reads the same code as the runtime.
+function drillPlanProblems(drill: DrillConfig, recipient: Recipient, policy: AssessPolicy): string[] {
+  const at = DRILL_PROBES.map((from) => nextDrillAt(drill, [], from, recipient.watch.quiet)).find((start) => start !== undefined);
+  // A drill with no start has a problem of `drillProblems`.
+  if (at === undefined) return [];
+  const snapshot = { sources: [], health: [], coverage: [], threats: [], drills: [{ copy: "probe", drill, run: { drill: drill.id, at } }] };
+  const run = systemReports(NO_SYSTEM_LINES, snapshot, at);
+  const end = at + drill.ackWithin;
+  const failed = systemReports(run.lines, snapshot, end);
+  const { id, person, path } = drill;
+  const plans = [
+    { name: "run", reports: run.reports, at },
+    { name: "failure", reports: failed.reports.filter((report) => report.kind.code === `${DRILL_KIND}.failed`), at: end },
+  ];
+  const problems: string[] = [];
+  for (const plan of plans) {
+    for (const incident of incidents(normalize({ reports: plan.reports }), plan.at)) {
+      const level = reachedAssessment(assess(incident, recipient.watch, [], policy, plan.at)).level;
+      const found = level === "none" ? undefined : recipient.policies.find((entry) => entry.level === level);
+      if (found === undefined) {
+        problems.push(`The ${plan.name} of the drill ${id} reaches the person ${person} at the level ${level}, and the person has no policy of it. It sends nothing.`);
+        continue;
+      }
+      const kept = ruleSteps(found, recipient.channelRules, incident).policy;
+      if (kept.steps.length > 0) continue;
+      const which = plan.name === "run" ? `no step on the channel ${path.channel}` : `no step on a channel other than ${path.channel}`;
+      problems.push(`The ${plan.name} of the drill ${id} reaches the person ${person} at the level ${level}, and its policy has ${which}. It sends nothing.`);
+    }
+  }
+  return problems;
 }
 
 // The place ids of the place nodes of a graph, in the order of the edges and then of the mutes.

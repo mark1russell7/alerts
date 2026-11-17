@@ -1,6 +1,6 @@
 import { random, seedsFrom } from "@mark1russell7/rigor-generators";
 import { describe, expect, it } from "vitest";
-import { CONFIG_FORMAT, configHash, configuredExpectations, expectationProblems, loadConfig, localPlaces, placeLabels, sourcePlaces, type AlertConfig, type ContactConfig, type PersonConfig, type PlaceConfig, type SecretLookup } from "./config.ts";
+import { CONFIG_FORMAT, configHash, drillRules, configuredExpectations, expectationProblems, loadConfig, localPlaces, placeLabels, sourcePlaces, type AlertConfig, type ContactConfig, type PersonConfig, type PlaceConfig, type SecretLookup } from "./config.ts";
 import type { ChannelDescriptor, ChannelId, EscalationPolicy, InterestEdge, InterestGraph, NodeKey, PersonId, PlaceId, Position, SourceId } from "./contracts.ts";
 import { RANK_DELAY_LIMIT } from "./escalation.ts";
 import { DRILL_SUBJECT } from "./system-reports.ts";
@@ -32,6 +32,8 @@ const LIFE_SAFETY: EscalationPolicy = {
   exhaustedAfter: 20 * MINUTE,
 };
 const URGENT: EscalationPolicy = { level: "urgent", steps: [{ channel: pushover, at: 0 }], exhaustedAfter: 10 * MINUTE };
+// The failure of a drill goes at the level notice, on each channel other than the path of the drill.
+const NOTICE: EscalationPolicy = { level: "notice", steps: [{ channel: sms, at: 0 }], exhaustedAfter: 10 * MINUTE };
 
 function channel(id: ChannelId): ChannelDescriptor {
   return { id, title: id, dependsOn: [], uses: ["internet", "dns"], breaksThrough: true, repeats: false, ack: "none", maxTitle: 250, maxBody: 1024 };
@@ -53,6 +55,10 @@ function contacts(id: PersonId): ContactConfig[] {
 }
 
 function config(fields: Partial<AlertConfig> = {}): AlertConfig {
+  return configOf(fields);
+}
+
+function configOf(fields: Partial<AlertConfig> = {}): AlertConfig {
   return { format: CONFIG_FORMAT, places: PLACES, people: [person(p1)], contacts: contacts(p1), policies: [LIFE_SAFETY, URGENT], ...fields };
 }
 
@@ -200,6 +206,8 @@ describe("loadConfig", () => {
       { system: DRILL_SUBJECT, id: "text" },
     ];
     const watcher = person(p1, [home], { watch: { person: p1, places: [home], rules: [], subjects } });
+    // The people of a drill have a policy of the level notice for the failure of the drill.
+    const config = (fields: Partial<AlertConfig>): AlertConfig => configOf({ policies: [LIFE_SAFETY, URGENT, NOTICE], ...fields });
     expect(loadConfig(config({ people: [watcher], drills: [drill] }), polled, store).problems).toEqual([]);
     // A watch with no id matches each drill.
     const all = person(p1, [home], { watch: { person: p1, places: [home], rules: [], subjects: [{ system: DRILL_SUBJECT }] } });
@@ -226,16 +234,49 @@ describe("loadConfig", () => {
       store,
     ).problems;
     // The person person-1 also has no contact on the channel of a step. Only the problems of the drills count here.
-    expect(problems.filter((problem) => problem.startsWith("The drill") || problem.startsWith("Two drills"))).toEqual([
+    expect(problems.filter((problem) => /^(The drill|Two drills|The run of|The failure of)/.test(problem))).toEqual([
       "The drill push-weekly uses the channel pushover, and the person person-1 has no contact on it.",
       "Two drills have the id push-weekly.",
       "The drill push-weekly is for the person person-9, and the configuration has no such person.",
+      // The failure of the drill text goes on each channel other than sms, and the notice policy has only sms.
+      "The failure of the drill text reaches the person person-1 at the level notice, and its policy has no step on a channel other than sms. It sends nothing.",
       "The drill text uses the channel sms, and the channel does not tell of an acknowledgment. The drill cannot pass.",
       "The drill second is for the person person-2, and the person does not watch the subject alerts.drill. The drill does not reach the person.",
-      "The drill second uses the channel pushover, and the life-safety policy of the person person-2 has no step on it.",
       "The drill third is for the person person-1, and the person does not watch the subject alerts.drill. The drill does not reach the person.",
       "The drill third uses the channel sms, and the channel does not tell of an acknowledgment. The drill cannot pass.",
     ]);
+  });
+
+  it("refuses a drill whose run or failure sends nothing, and gives the rules of the drill to its people", () => {
+    const polled = [{ ...channel(pushover), ack: "poll" as const }, channel(sms)];
+    const window = { zone: "America/Chicago", start: "11:00", end: "17:00", days: [6] };
+    const drill = { id: "push-weekly", person: p1, path: { kind: "channel" as const, channel: pushover }, every: 6 * 24 * 60 * MINUTE, window, ackWithin: 30 * MINUTE };
+    const watch = (id: PersonId) => ({ person: id, places: [home], rules: [], subjects: [{ system: DRILL_SUBJECT }] });
+    const load = (policies: readonly EscalationPolicy[]) => loadConfig(config({ people: [person(p1, [home], { watch: watch(p1), policies })], drills: [drill] }), polled, store).problems;
+    const onPush: EscalationPolicy = { ...NOTICE, steps: [{ channel: pushover, at: 0 }] };
+    const textOnly: EscalationPolicy = { ...LIFE_SAFETY, steps: [{ channel: sms, at: 0 }] };
+    const run = "The run of the drill push-weekly reaches the person person-1 at the level life-safety";
+    const failure = "The failure of the drill push-weekly reaches the person person-1 at the level notice";
+    // Each refusal has its flip: the same configuration with the missing step or policy.
+    expect(load([LIFE_SAFETY, URGENT])).toEqual([`${failure}, and the person has no policy of it. It sends nothing.`]);
+    expect(load([LIFE_SAFETY, URGENT, onPush])).toEqual([`${failure}, and its policy has no step on a channel other than pushover. It sends nothing.`]);
+    expect(load([textOnly, URGENT, NOTICE])).toEqual([`${run}, and its policy has no step on the channel pushover. It sends nothing.`]);
+    expect(load([LIFE_SAFETY, URGENT, NOTICE])).toEqual([]);
+
+    // The person of the drill gets its two rules. Another person who watches the drill gets a rule that blocks its run.
+    const loaded = loadConfig(
+      config({ people: [person(p1, [home], { watch: watch(p1), policies: [LIFE_SAFETY, URGENT, NOTICE] }), person(p2, [home], { watch: watch(p2), policies: [LIFE_SAFETY, URGENT, NOTICE] })], contacts: [...contacts(p1), ...contacts(p2)], drills: [drill] }),
+      polled,
+      store,
+    );
+    expect(loaded.problems).toEqual([]);
+    const rules = new Map(loaded.recipients.map((recipient) => [recipient.watch.person, recipient.channelRules]));
+    const about = { system: DRILL_SUBJECT, id: "push-weekly" };
+    expect(rules.get(p1)).toEqual(drillRules(drill));
+    expect(rules.get(p2)).toEqual([{ kinds: ["system.drill.run"], about, keep: "only", channels: [] }]);
+    // A person who does not watch the drill gets no rule.
+    const apart = loadConfig(config({ people: [person(p1, [home], { watch: watch(p1) }), person(p2)], contacts: [...contacts(p1), ...contacts(p2)], drills: [drill] }), polled, store);
+    expect(apart.recipients.find((recipient) => recipient.watch.person === p2)?.channelRules).toBeUndefined();
   });
 
   it("checks the outage call: a known person, one time each, a chain with steps, and a contact on each channel of a step", () => {

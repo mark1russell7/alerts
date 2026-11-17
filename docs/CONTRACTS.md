@@ -637,17 +637,28 @@ The log also keeps each refused send. A refused send is a refusal, a bad key, a 
 - After a restart, the first step keeps the wait of each refusal. Thus the quota of a channel holds across a restart.
 - The heartbeat reads the refusals of the state at the start. Thus a restart does not end the fail of a refused channel.
 
+A channel rule (`ChannelRule`) of a person keeps or removes the steps of a plan for some incidents (AL-43). The function `ruleSteps` applies the rules in `route`:
+
+- A rule has kinds (prefixes of the taxonomy), an optional subject and channels. With `only`, only the steps on the channels stay. With `except`, those steps go.
+- A rule applies only to an incident with the status `system`, `test` or `exercise` (`RULED_STATUSES`). No rule changes the plan of a real warning.
+- When two rules apply, a step stays only when each rule keeps it. Thus the order of the rules has no effect.
+- The route keeps the indexes of the rules that apply and of the removed steps in `Route.ruled`. A route with no rule that applies has no field `ruled`.
+- The rules do not change the why record of the route.
+- A plan with no step sends nothing. `escalate` gives it the state `exhausted` at its end.
+
 A recipient has no problem from `recipientProblems` before it gets alerts:
 
 - A person who watches a place or a subject has a policy of the level `life-safety`.
 - No rule keeps a life-safety kind, or the coverage of one, below `life-safety`. A rule with no kinds applies to each kind.
 - Each rule names kinds of the taxonomy, and the quiet window has a good time zone and good local times.
+- Each channel rule has one or more kinds of the taxonomy, and each of its channels is a channel of the instance.
 
 The message of a send takes its text from one report of the incident. That report is the latest one with the severity and the urgency of the incident. The body has the instruction first, then the area and the description. The channel cuts the text to its limits.
 
 One part waits:
 
 - The exhaustion alert to the next person waits for a second person (AL-21). Until then, the repeats continue after the exhaustion, and the routes of each pass show it.
+- The exhaustion alert skips a plan with no step, because a channel rule empties such a plan on purpose.
 
 ## Levels and the first night rule
 
@@ -932,9 +943,16 @@ The fakes and the fault cases of CI test the code. Only a drill tests the live p
 - The search for a start runs in January and in July (`DRILL_PROBES`). Two windows in two zones move by an hour at a change of an offset.
 - `drillProblems` also finds an empty list of copies and a copy that the list names two times. Such a drill starts in no copy, or the list has a typo.
 
+`loadConfig` gives the channel rules of each drill (`drillRules`, the section The route and the delivery step):
+
+- The person of the drill gets two rules. A run goes only on the channel of the path. A failure goes on each other channel, because the path can be the broken part.
+- Each other person who watches the drill gets a rule that removes each step of a run. That person still gets the failure.
+- `loadConfig` checks the plans of the person of each drill with the code of the runtime. The system fold makes the reports of a drill and of its failure at the first start in `DRILL_PROBES`.
+- The assessment gives the levels of the run and of the failure, and the rules keep the steps.
+- A plan with no policy of its level, or with no step after the rules, is a problem. Such a drill sends nothing.
+
 The system fold gives the drill lines (the section of the system reports). The runtime starts no drill yet. The next steps are these:
 
-- A channel rule keeps a run on the channel of its path. A failure goes on each other channel. A rule does not apply to the status `actual`.
 - The runtime keeps the runs in its log, starts each due drill and wakes at the end of each time.
 - Then comes a drill of the outage call.
 
@@ -968,7 +986,8 @@ The schema `alertConfigSchema` checks the JSON of the configuration first. Then 
 - an unknown person of the outage call, and a person two times in the call
 - a chain of the call with no step, and a step on a channel with no contact of the person
 - two drills with one id, a drill of an unknown person, and a drill on a channel with no contact of the person
-- a drill of a person who does not watch `alerts.drill`, or with no step on its channel in the life-safety policy
+- a drill of a person who does not watch `alerts.drill`
+- a drill whose run or failure sends nothing to its person: no policy of its level, or no step after the rules
 - each problem of `drillProblems`
 - an interest graph of another person, and a place of the graph that the person does not watch
 - a rule of the life-safety warnings at a place that the person does not watch, and rules with no interest graph
