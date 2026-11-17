@@ -28,7 +28,7 @@ The target is the whole vision. The milestones give the order of the work.
 | ID | Item | Status | Summary |
 | --- | --- | --- | --- |
 | AL-28 | Contracts: the event, the source and the channel | done | The TypeScript types and [`CONTRACTS.md`](CONTRACTS.md). The sources and delivery efforts start from them. |
-| AL-1 | Design study | next | The scope, the pipeline, the formulas of the priority, the fault model, a catalog of sources by kind and the test plan. |
+| AL-1 | Design study | done | The scope, the pipeline, the event model, the formulas of the priority, the fault model, a catalog of sources by kind and the test plan. The owner answered each open question. |
 | AL-2 | First commit and the public repo | done | The template stamp, the public repo and the first CI runs. |
 | AL-3 | The home of each part | done | One public repo holds the packages: the core, the formats, the sources, the channels, the runtime, the testkit and the site. `docs/CONTRACTS.md` has the table. The sending clients go to `@procedures/notify`. Geography goes to `@mark1russell7/geo`. The fetches go through `polite-crawler`. |
 | AL-4 | The push and heartbeat accounts | done | The owner makes a Pushover account and a Healthchecks.io account. The keys stay outside the repo. |
