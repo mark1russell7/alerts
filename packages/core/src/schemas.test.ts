@@ -433,6 +433,7 @@ const SCHEMA_NAMES = [
   "deliverySchema",
   "deliveryStateSchema",
   "deliveryStatusSchema",
+  "dimensionIdSchema",
   "drillConfigSchema",
   "drillPathSchema",
   "drillWindowSchema",
@@ -458,6 +459,8 @@ const SCHEMA_NAMES = [
   "historyRegionSchema",
   "incidentLineSchema",
   "incidentSchema",
+  "indicatorAreaKindSchema",
+  "indicatorAreaSchema",
   "instantSchema",
   "interestEdgeSchema",
   "interestGraphSchema",
@@ -477,15 +480,19 @@ const SCHEMA_NAMES = [
   "mapProblemSchema",
   "mapResultSchema",
   "mapShapeSchema",
+  "measureDeclarationSchema",
   "messageSchema",
+  "moveSchema",
   "muteEffectSchema",
   "muteSchema",
   "nodeKeySchema",
   "observationIdSchema",
   "observationSchema",
   "operationSchema",
+  "optInConfigSchema",
   "outageConfigSchema",
   "outagePersonConfigSchema",
+  "ownBaselineSchema",
   "personConfigSchema",
   "personIdSchema",
   "personWatchSchema",
@@ -498,6 +505,7 @@ const SCHEMA_NAMES = [
   "quotaHealthSchema",
   "quotaStageSchema",
   "rankDelaysSchema",
+  "readingSchema",
   "receiptSchema",
   "regionCodeSchema",
   "relevancePathSchema",
@@ -921,6 +929,10 @@ describe("the private configuration", () => {
     for (const bad of [{ monthlyUsd: 0 }, { monthlyUsd: -1 }, { reserveUsd: -1 }, { floor: "5" }, { timeZone: "" }, { provider: "" }, { currency: "USD" }]) fails(spendConfigSchema, { ...spend, ...bad });
     // A reserve above the cap and a bad zone are problems of the load, with the names of the fields.
     holds(spendConfigSchema, { ...spend, reserveUsd: 20, timeZone: "Mars/Olympus" });
+    // The fixed costs: each one has a name and a cost of 0 or more. Fixed costs above the cap are a problem of the load.
+    holds(spendConfigSchema, { ...spend, fixed: [{ what: "toll-free number", usd: 2.15 }, { what: "free", usd: 0 }] });
+    holds(spendConfigSchema, { ...spend, fixed: [{ what: "rent", usd: 50 }] });
+    for (const bad of [[{ what: "", usd: 1 }], [{ what: "rent", usd: -1 }], [{ what: "rent" }], [{ what: "rent", usd: 1, extra: 1 }], {}]) fails(spendConfigSchema, { ...spend, fixed: bad });
   });
 
   it("checks the form of the outage call, and leaves the people and the channels to the load", () => {

@@ -169,10 +169,16 @@ describe("the steps of the heartbeat", () => {
 
   it("gives success to a send in the reserve of a quota, and holds no fail for it", () => {
     expect(UNREACHABLE).toEqual(["auth", "refused", "rate-limited"]);
-    expect(REFUSAL_KINDS).toEqual([...UNREACHABLE, "reserved"]);
+    expect(REFUSAL_KINDS).toEqual([...UNREACHABLE, "reserved", "consent"]);
     expect(holdStep({}, refused(T0, "reserved"))).toEqual({});
     expect(pingOf(refused(T0, "reserved")).kind).toBe("success");
     expect(heldOf({ refusals: { a: { channel: "pushover", kind: "reserved", retryAt: T0 + 60 * SECOND, deliveries: 0 } }, delivered: {} }, T0)).toEqual({});
+  });
+
+  it("gives success to a send that the person refused with a STOP reply, and holds no fail for it", () => {
+    expect(holdStep({}, refused(T0, "consent"))).toEqual({});
+    expect(pingOf(refused(T0, "consent")).kind).toBe("success");
+    expect(heldOf({ refusals: { a: { channel: "twilio-text", kind: "consent", retryAt: T0 + 60 * SECOND, deliveries: 0 } }, delivered: {} }, T0)).toEqual({});
   });
 
   it("pings again when the wall clock steps back", () => {

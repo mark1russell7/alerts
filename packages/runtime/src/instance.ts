@@ -15,6 +15,7 @@ import {
   localPlaces,
   mapPayload,
   ONLY_COPY,
+  optedIn,
   placeLabels,
   sourceCovers,
   sourcePlaces,
@@ -29,6 +30,7 @@ import {
   type HistoryPayload,
   type Instant,
   type MapPayload,
+  type OptInRecord,
   type ParsedConfig,
   type SecretLookup,
   type SourceDescriptor,
@@ -47,6 +49,7 @@ import {
   twilioCallDescriptor,
   twilioSetupProblems,
   twilioTextDescriptor,
+  type TextOptIn,
   type TwilioCredentials,
   type TwilioFetch,
 } from "@mark1russell7/alerts-channel-twilio";
@@ -653,7 +656,7 @@ export function openInstance(options: InstanceOptions): Instance {
     ...(options.pushoverQuota === undefined ? {} : { quota: options.pushoverQuota }),
     ...(options.pushoverReserveNotices === undefined ? {} : { reserveNotices: options.pushoverReserveNotices }),
   });
-  const twilio = twilioChannel(options, config.spend);
+  const twilio = twilioChannel(options, config.spend, options.config.optIn);
   // The worker of the exchange reads the runtime only in its rounds, after the start of the service. Thus it gets the runtime through a function.
   const peers = copy.peers ?? [];
   const worker =
@@ -833,7 +836,7 @@ interface TwilioParts {
  * This function makes the Twilio channels when the secrets have their keys. The function `instanceProblems` checked the keys before.
  * A spend entry gives one cap of the two channels and the watch of the balance. Its floor is in the currency of the account.
  */
-function twilioChannel(options: InstanceOptions, spend: readonly SpendConfig[] | undefined): TwilioParts | undefined {
+function twilioChannel(options: InstanceOptions, spend: readonly SpendConfig[] | undefined, records: readonly OptInRecord[]): TwilioParts | undefined {
   const setup = twilioSetup(options.secret);
   if (setup.tag === "err" || setup.value === undefined) return undefined;
   const { credentials, from, textFrom } = setup.value;
@@ -841,11 +844,15 @@ function twilioChannel(options: InstanceOptions, spend: readonly SpendConfig[] |
   if (fetch === undefined) throw new Error("The secret store has the keys of Twilio, and the instance has no fetch for the call channel.");
   const now = (): number => options.wall.now();
   const entry = spendEntryOf(twilioCallDescriptor(), spend);
+  // The text channel sends only to a number of the opt-in list. Twilio keeps the state of the STOP and START replies, and
+  // refuses a text to a number that replied STOP. The runtime keeps no STOP until it reads the START replies too (the read
+  // of the replies, AL-56). Thus a START reply works at once, and each text to a number that replied STOP gives `consent`.
+  const optIn: TextOptIn = { has: (number, at) => optedIn(records, [], number, at), stopped: () => undefined };
   // The text channel takes the gates of the call channel, with the units of one text.
   const text = (gates?: SpendGates): { readonly text?: ChannelProcedures } =>
     textFrom === undefined
       ? {}
-      : { text: createTwilioTextChannel({ credentials, from: textFrom, fetch, now, ...(gates === undefined ? {} : { spend: { ...gates, units: spendUnits(TWILIO_TEXT_COST_USD) } }) }) };
+      : { text: createTwilioTextChannel({ credentials, from: textFrom, fetch, now, optIn, ...(gates === undefined ? {} : { spend: { ...gates, units: spendUnits(TWILIO_TEXT_COST_USD) } }) }) };
   if (entry === undefined) return { channel: createTwilioCallChannel({ credentials, from, fetch, now }), ...text() };
   const store = options.spendStore;
   if (store === undefined) throw new Error(`The configuration has a spend entry for ${entry.provider}, and the instance has no store for its count.`);

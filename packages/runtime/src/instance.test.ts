@@ -647,6 +647,8 @@ describe("the Twilio call channel of the instance", () => {
     const texting = (spend?: readonly SpendConfig[]): AlertConfig => ({
       ...CONFIG,
       contacts: [...CONFIG.contacts, { person, channel: text, address: { to: { secret: "PHONE" } } }],
+      // The person agreed to the texts before the start of the test.
+      optIn: [{ number: { secret: "PHONE" }, at: "2026-11-01T00:00:00Z", way: "written", words: "texts-consent/1" }],
       policies: CONFIG.policies.map((entry) => ({ ...entry, steps: [...entry.steps, { channel: text, at: 0 }] })),
       ...(spend === undefined ? {} : { spend }),
     });
@@ -671,7 +673,7 @@ describe("the Twilio call channel of the instance", () => {
       expect(instance.balances.map((watch) => watch.provider)).toEqual(["provider:twilio"]);
     });
 
-    it("does not start with a text step and no number of the texts, a number of a bad form, a number with no keys, or no cap", () => {
+    it("does not start with a text step and no number of the texts, a number of a bad form, a number with no keys, no cap, or no opt-in", () => {
       const more = () => ({ twilio: twilioServer().fetch, spendStore: memoryQuotaStore() });
       const noFrom = messageOf(() => open(store({ ...SECRETS, ...TWILIO }), texting([SPEND]), undefined, undefined, more()));
       expect(noFrom).toContain("uses the channel twilio-text, and the instance has no sender on it.");
@@ -681,7 +683,9 @@ describe("the Twilio call channel of the instance", () => {
       expect(alone).toContain("The secret store has a value for TWILIO_TEXT_FROM, and no keys of Twilio.");
       const noCap = messageOf(() => open(store({ ...SECRETS, ...TEXTS }), texting(), undefined, undefined, more()));
       expect(noCap).toContain("The channel twilio-text costs money, and the configuration has no spend entry for its provider.");
-      for (const problem of [noFrom, badFrom, alone, noCap]) expect(problem).not.toMatch(/bad-value|s{32}|0{32}|1{32}|\+999/u);
+      const noOptIn = messageOf(() => open(store({ ...SECRETS, ...TEXTS }), { ...texting([SPEND]), optIn: [] }, undefined, undefined, more()));
+      expect(noOptIn).toContain(`The field to of the contact of ${person} on twilio-text is not on the opt-in list. The channel sends nothing to it.`);
+      for (const problem of [noFrom, badFrom, alone, noCap, noOptIn]) expect(problem).not.toMatch(/bad-value|s{32}|0{32}|1{32}|\+999/u);
       // With the number of the texts and no step on the channel, the instance starts.
       expect(() => open(store({ ...SECRETS, ...TEXTS }), CONFIG, undefined, undefined, more())).not.toThrow();
     });

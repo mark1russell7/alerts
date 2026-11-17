@@ -66,6 +66,12 @@
     "note": "The records of bls-api, bls-release-calendar name this issuer."
   },
   {
+    "id": "bom-sws",
+    "name": "Australian Bureau of Meteorology, Space Weather Services",
+    "issues": null,
+    "note": "The records of bom-sws-api name this issuer."
+  },
+  {
     "id": "canada-government",
     "name": "The departments of the Government of Canada (Health Canada, CFIA, Transport Canada)",
     "issues": null,
@@ -322,6 +328,12 @@
     "name": "Gemini",
     "issues": null,
     "note": "The records of gemini-prediction-api name this issuer."
+  },
+  {
+    "id": "gfz",
+    "name": "GFZ German Research Centre for Geosciences (the Kp index)",
+    "issues": null,
+    "note": "The records of gfz-kp-hpo name this issuer. Its Kp comes from 13 observatories, and some of them are observatories of the USGS that the SWPC also reads."
   },
   {
     "id": "github",
@@ -591,6 +603,12 @@
     "name": "The vendor of each service, on its status page",
     "issues": null,
     "note": "Each vendor writes its own status page. StatusGator and the Statuspage API read these pages."
+  },
+  {
+    "id": "sidc",
+    "name": "SIDC, the Solar Influences Data Analysis Center (RWC-Belgium)",
+    "issues": null,
+    "note": "The records of sidc-alerts-email name this issuer."
   },
   {
     "id": "smarkets",
