@@ -1,9 +1,10 @@
-import { TAXONOMY } from "@mark1russell7/alerts";
+import { DIMENSION_IDS, TAXONOMY } from "@mark1russell7/alerts";
 import { describe, expect, it } from "vitest";
 
 import {
   checkAtlas,
   coverage,
+  dimensionCoverage,
   LAYERS,
   leafCodes,
   measures,
@@ -181,7 +182,7 @@ describe("the layers of the cover", () => {
     const risky = { ...source("c", ["infra.power"], "adopt"), risks: ["The provider can ask for an agreement."] };
     const sources = [source("a", ["infra.power.outage"], "adopt"), source("b", ["infra.power"], "adopt"), risky];
     // infra.power counts a and b: 2 paths with no shared part, and 1 origin. infra.power.outage counts a.
-    expect(measures(atlas(classes, sources))).toEqual({ classes: 3, gaps: 2, cover: layers(1, 1, 0), total: layers(3, 3, 2), unknownOrigins: 0, unknownPaths: 0 });
+    expect(measures(atlas(classes, sources))).toEqual({ classes: 3, gaps: 2, cover: layers(1, 1, 0), total: layers(3, 3, 2), unknownOrigins: 0, unknownPaths: 0, dimensions: 0 });
     expect(measures(atlas(classes, [...sources.slice(0, 1), source("b", ["infra.power"])]))).toEqual({
       classes: 3,
       gaps: 2,
@@ -189,6 +190,7 @@ describe("the layers of the cover", () => {
       total: layers(2, 2, 2),
       unknownOrigins: 0,
       unknownPaths: 0,
+      dimensions: 0,
     });
   });
 
@@ -459,6 +461,44 @@ describe("the layers of the cover", () => {
       expect(now.cover[name], name).toBeGreaterThanOrEqual(last?.measures.cover[name] ?? 0);
       expect(now.total[name], name).toBeGreaterThanOrEqual(last?.measures.total[name] ?? 0);
     }
+  });
+});
+
+describe("the dimensions of indicators", () => {
+  const indicator = (id: string, dimensions: readonly string[], decision: Source["decision"] = "plan"): Source => ({ ...source(id, [], decision), dimensions: dimensions as Source["dimensions"] });
+  const classes = [klass("met.flood", "no source")];
+
+  it("takes a source with a dimension and no class, and stops a source with no class and no dimension", () => {
+    expect(checkAtlas(atlas(classes, [indicator("a", ["road-traffic"])]))).toEqual([]);
+    expect(checkAtlas(atlas(classes, [source("b", [])]))).toEqual([{ at: "source b", problem: "the source has no class and no dimension" }]);
+  });
+
+  it("stops an empty list, a duplicate and an id that is not a dimension of the core", () => {
+    const problems = checkAtlas(atlas(classes, [indicator("a", []), indicator("b", ["rail", "rail"]), indicator("c", ["rail-delays"])])).map((item) => `${item.at}: ${item.problem}`);
+    expect(problems).toEqual([
+      "source a: the field dimensions has no id: give one or more, or no field",
+      "source b: the dimensions have a duplicate",
+      "source c: the dimension rail-delays is not in DIMENSIONS of the core",
+    ]);
+  });
+
+  it("counts the adopted and planned sources with no risk of each dimension, in the order of the core", () => {
+    const risky = { ...indicator("c", ["rail"]), risks: ["The terms can change."] };
+    const sources = [indicator("a", ["rail", "air-traffic"]), indicator("b", ["rail"], "adopt"), risky, indicator("d", ["air-traffic"], "later")];
+    const rows = dimensionCoverage(atlas(classes, sources));
+    expect(rows.map((row) => row.id)).toEqual(DIMENSION_IDS);
+    expect(rows.find((row) => row.id === "rail")?.sources).toEqual(["a", "b"]);
+    expect(rows.find((row) => row.id === "air-traffic")?.sources).toEqual(["a"]);
+    expect(measures(atlas(classes, sources)).dimensions).toBe(1);
+  });
+
+  it("stops a fall of the dimensions with two live sources below the latest round, and a measure that is not a count", () => {
+    const sources = [indicator("a", ["rail"]), indicator("b", ["rail"])];
+    const rounds = [{ ...round, measures: { ...round.measures, dimensions: 1 } }];
+    expect(checkAtlas({ ...atlas(classes, sources), rounds })).toEqual([]);
+    expect(checkAtlas({ ...atlas(classes, sources.slice(0, 1)), rounds })).toEqual([{ at: "atlas", problem: "0 dimensions have 2 live sources, below the 1 of round 1" }]);
+    const bad = [{ ...round, measures: { ...round.measures, dimensions: -1 } }];
+    expect(checkAtlas({ ...atlas(classes, sources), rounds: bad }).map((item) => item.problem)).toEqual(["the measure -1 is not a count"]);
   });
 });
 

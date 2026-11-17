@@ -55,4 +55,16 @@ describe("the paths of the atlas and the descriptors of the adapters", () => {
     );
     expect(missing).toEqual([]);
   });
+
+  // A measure of a dimension that the atlas does not give the source is a cover that the atlas does not count.
+  it("gives the dimension of each measure of a descriptor in the dimensions of its adopted source", () => {
+    const missing = adopted.flatMap((source) =>
+      (DESCRIPTORS[source.adapter ?? ""] ?? []).flatMap((descriptor) =>
+        (descriptor.measures ?? [])
+          .filter((measure) => source.dimensions?.includes(measure.dimension) !== true)
+          .map((measure) => `the dimensions of ${source.id} lack ${measure.dimension} of the measure ${measure.id} of ${descriptor.id}`),
+      ),
+    );
+    expect(missing).toEqual([]);
+  });
 });

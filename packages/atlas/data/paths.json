@@ -18,6 +18,12 @@
     "note": "The host of the feed of amber-alert-ojp."
   },
   {
+    "id": "api.adsb.lol",
+    "name": "api.adsb.lol",
+    "kind": "host",
+    "note": "The host of the data of adsb-lol."
+  },
+  {
     "id": "api.alerts.in.ua",
     "name": "api.alerts.in.ua",
     "kind": "host",
@@ -42,6 +48,12 @@
     "note": "The host of the feed of bls-api."
   },
   {
+    "id": "api.carbonintensity.org.uk",
+    "name": "api.carbonintensity.org.uk",
+    "kind": "host",
+    "note": "The host of the data of carbon-intensity-gb."
+  },
+  {
     "id": "api.cloudflare.com",
     "name": "api.cloudflare.com",
     "kind": "host",
@@ -64,6 +76,12 @@
     "name": "api.elections.kalshi.com",
     "kind": "host",
     "note": "The host of the feed of kalshi-api, kalshi-ws."
+  },
+  {
+    "id": "api.energy-charts.info",
+    "name": "api.energy-charts.info",
+    "kind": "host",
+    "note": "The host of the data of energy-charts-power and energy-charts-frequency."
   },
   {
     "id": "api.fda.gov",
@@ -126,6 +144,12 @@
     "note": "The host of the feed of mobility-database."
   },
   {
+    "id": "api.neso.energy",
+    "name": "api.neso.energy",
+    "kind": "host",
+    "note": "The host of the data of neso-data-portal."
+  },
+  {
     "id": "api.nhtsa.gov",
     "name": "api.nhtsa.gov",
     "kind": "host",
@@ -150,6 +174,12 @@
     "note": "The host of the feed of ransomware-live-api."
   },
   {
+    "id": "api.safecast.org",
+    "name": "api.safecast.org",
+    "kind": "host",
+    "note": "The host of the data of safecast."
+  },
+  {
     "id": "api.smarkets.com",
     "name": "api.smarkets.com",
     "kind": "host",
@@ -168,6 +198,12 @@
     "note": "The host of the feed of coops-api."
   },
   {
+    "id": "api.trafikinfo.trafikverket.se",
+    "name": "api.trafikinfo.trafikverket.se",
+    "kind": "host",
+    "note": "The host of the data of trafikverket-open-api."
+  },
+  {
     "id": "api.water.noaa.gov",
     "name": "api.water.noaa.gov",
     "kind": "host",
@@ -178,6 +214,12 @@
     "name": "api.waterdata.usgs.gov",
     "kind": "host",
     "note": "The host of the feed of usgs-wateralert."
+  },
+  {
+    "id": "api.weather.gc.ca",
+    "name": "api.weather.gc.ca",
+    "kind": "host",
+    "note": "The host of the data of eccc-hydrometric."
   },
   {
     "id": "api.weather.gov",
@@ -202,6 +244,12 @@
     "name": "apps.fema.gov",
     "kind": "host",
     "note": "The host of the feed of ipaws-open."
+  },
+  {
+    "id": "atlas.ripe.net",
+    "name": "atlas.ripe.net",
+    "kind": "host",
+    "note": "The host of the data of ripe-atlas."
   },
   {
     "id": "aviation-safety.net",
@@ -288,6 +336,12 @@
     "note": "The host of the feed of ftc-consumer-alerts."
   },
   {
+    "id": "creativecommons.tankerkoenig.de",
+    "name": "creativecommons.tankerkoenig.de",
+    "kind": "host",
+    "note": "The host of the data of tankerkoenig."
+  },
+  {
     "id": "data-nifc.opendata.arcgis.com",
     "name": "data-nifc.opendata.arcgis.com",
     "kind": "host",
@@ -310,6 +364,18 @@
     "name": "data.gdeltproject.org",
     "kind": "host",
     "note": "The host of the feed of gdelt-events."
+  },
+  {
+    "id": "data.humdata.org",
+    "name": "data.humdata.org",
+    "kind": "host",
+    "note": "The host of the data of wfp-food-prices."
+  },
+  {
+    "id": "data.sensor.community",
+    "name": "data.sensor.community",
+    "kind": "host",
+    "note": "The host of the data of sensor-community."
   },
   {
     "id": "date.nager.at",
@@ -366,6 +432,24 @@
     "note": "The host of the feed of endoflife-date-api."
   },
   {
+    "id": "energy.ec.europa.eu",
+    "name": "energy.ec.europa.eu",
+    "kind": "host",
+    "note": "The host of the data of eu-weekly-oil-bulletin."
+  },
+  {
+    "id": "environment.data.gov.uk",
+    "name": "environment.data.gov.uk",
+    "kind": "host",
+    "note": "The host of the data of ea-flood-monitoring."
+  },
+  {
+    "id": "ewds.climate.copernicus.eu",
+    "name": "ewds.climate.copernicus.eu",
+    "kind": "host",
+    "note": "The host of the data of glofas."
+  },
+  {
     "id": "feeds.meteoalarm.org",
     "name": "feeds.meteoalarm.org",
     "kind": "host",
@@ -390,10 +474,28 @@
     "note": "The host of the feed of aaa-gas-prices."
   },
   {
+    "id": "gbfs-system-hosts",
+    "name": "The GBFS feeds of the share systems, one host for each",
+    "kind": "host",
+    "note": "Each operator or its vendor publishes the GBFS feed of its system. The record of gbfs-systems names this part."
+  },
+  {
     "id": "gis.fema.gov",
     "name": "gis.fema.gov",
     "kind": "host",
     "note": "The host of the feed of fema-open-shelters."
+  },
+  {
+    "id": "github.com",
+    "name": "github.com",
+    "kind": "host",
+    "note": "The host of the repository of the files of ecdc-erviss."
+  },
+  {
+    "id": "gpsjam.org",
+    "name": "gpsjam.org",
+    "kind": "host",
+    "note": "The host of the data of gpsjam."
   },
   {
     "id": "haveibeenpwned.com",
@@ -406,6 +508,12 @@
     "name": "health.aws.amazon.com",
     "kind": "host",
     "note": "The host of the feed of aws-health-rss."
+  },
+  {
+    "id": "hubeau.eaufrance.fr",
+    "name": "hubeau.eaufrance.fr",
+    "kind": "host",
+    "note": "The host of the data of hubeau-hydrometrie."
   },
   {
     "id": "incidentnews.noaa.gov",
@@ -426,10 +534,22 @@
     "note": "The host of the feed of insight-prediction-site."
   },
   {
+    "id": "jetstream.us-east.bsky.network",
+    "name": "jetstream.us-east.bsky.network",
+    "kind": "host",
+    "note": "The host of the data of bluesky-jetstream."
+  },
+  {
     "id": "kp.gfz.de",
     "name": "kp.gfz.de",
     "kind": "host",
     "note": "The host of gfz-kp-hpo. A DNS lookup on 2026-11-16 gave the canonical name rz-vm229.gfz.de, a server of GFZ with no content network."
+  },
+  {
+    "id": "ladsweb.modaps.eosdis.nasa.gov",
+    "name": "ladsweb.modaps.eosdis.nasa.gov",
+    "kind": "host",
+    "note": "The host of the data of black-marble."
   },
   {
     "id": "ll.thespacedevs.com",
@@ -504,6 +624,12 @@
     "note": "The host of the feed of ofac-recent-actions, ofac-sanctions-list-service."
   },
   {
+    "id": "opendata.ndw.nu",
+    "name": "opendata.ndw.nu",
+    "kind": "host",
+    "note": "The host of the data of ndw-open-data."
+  },
+  {
     "id": "pollen.googleapis.com",
     "name": "pollen.googleapis.com",
     "kind": "host",
@@ -544,6 +670,12 @@
     "name": "Atlassian Statuspage",
     "kind": "provider",
     "note": "These status pages run on Atlassian Statuspage, the provider of the public JSON API."
+  },
+  {
+    "id": "rapidmapping.emergency.copernicus.eu",
+    "name": "rapidmapping.emergency.copernicus.eu",
+    "kind": "host",
+    "note": "The host of the data of copernicus-ems-rapid-mapping."
   },
   {
     "id": "recalls-rappels.canada.ca",
@@ -630,6 +762,12 @@
     "note": "The host of the feed of statusgator."
   },
   {
+    "id": "stream.aisstream.io",
+    "name": "stream.aisstream.io",
+    "kind": "host",
+    "note": "The host of the data of aisstream."
+  },
+  {
     "id": "striketracker.ilr.cornell.edu",
     "name": "striketracker.ilr.cornell.edu",
     "kind": "host",
@@ -640,6 +778,12 @@
     "name": "sws-data.sws.bom.gov.au",
     "kind": "host",
     "note": "The host of bom-sws-api. A DNS lookup on 2026-11-16 gave the canonical name prd.bom.sws.edgekey.net, a name of Akamai."
+  },
+  {
+    "id": "tie.digitraffic.fi",
+    "name": "tie.digitraffic.fi",
+    "kind": "host",
+    "note": "The host of the data of digitraffic-road."
   },
   {
     "id": "tracker.gasbuddy.com",
@@ -678,10 +822,22 @@
     "note": "StatusGator reads the status pages of the vendors. Many of them run on Atlassian Statuspage."
   },
   {
+    "id": "verkehr.autobahn.de",
+    "name": "verkehr.autobahn.de",
+    "kind": "host",
+    "note": "The host of the data of autobahn-api."
+  },
+  {
     "id": "volcanoes.usgs.gov",
     "name": "volcanoes.usgs.gov",
     "kind": "host",
     "note": "The host of the feed of usgs-hans-api."
+  },
+  {
+    "id": "webtris.nationalhighways.co.uk",
+    "name": "webtris.nationalhighways.co.uk",
+    "kind": "host",
+    "note": "The host of the data of webtris."
   },
   {
     "id": "ws-subscriptions-clob.polymarket.com",
@@ -804,6 +960,18 @@
     "note": "The host of the feed of ercot-txans."
   },
   {
+    "id": "www.eurocontrol.int",
+    "name": "www.eurocontrol.int",
+    "kind": "host",
+    "note": "The host of the data of eurocontrol-traffic."
+  },
+  {
+    "id": "www.fao.org",
+    "name": "www.fao.org",
+    "kind": "host",
+    "note": "The host of the data of fao-food-price-index."
+  },
+  {
     "id": "www.fcc.gov",
     "name": "www.fcc.gov",
     "kind": "host",
@@ -876,6 +1044,18 @@
     "note": "The host of the feed of iana-tz."
   },
   {
+    "id": "www.imis.bfs.de",
+    "name": "www.imis.bfs.de",
+    "kind": "host",
+    "note": "The host of the data of bfs-odl."
+  },
+  {
+    "id": "www.ioc-sealevelmonitoring.org",
+    "name": "www.ioc-sealevelmonitoring.org",
+    "kind": "host",
+    "note": "The host of the data of ioc-slsmf."
+  },
+  {
     "id": "www.irs.gov",
     "name": "www.irs.gov",
     "kind": "host",
@@ -942,6 +1122,12 @@
     "note": "The host of the feed of eagle-i-history."
   },
   {
+    "id": "www.pegelonline.wsv.de",
+    "name": "www.pegelonline.wsv.de",
+    "kind": "host",
+    "note": "The host of the data of pegelonline."
+  },
+  {
     "id": "www.phmsa.dot.gov",
     "name": "www.phmsa.dot.gov",
     "kind": "host",
@@ -994,6 +1180,12 @@
     "name": "www.thousandeyes.com",
     "kind": "host",
     "note": "The host of the feed of thousandeyes-outages."
+  },
+  {
+    "id": "www.tsa.gov",
+    "name": "www.tsa.gov",
+    "kind": "host",
+    "note": "The host of the data of tsa-throughput."
   },
   {
     "id": "www.tsunami.gov",

@@ -112,6 +112,126 @@
     "round": 1
   },
   {
+    "id": "adsb-exchange",
+    "name": "ADS-B Exchange API",
+    "classes": [],
+    "dimensions": [
+      "air-traffic"
+    ],
+    "url": "https://www.adsbexchange.com/api-lite/",
+    "access": "api",
+    "auth": "paid",
+    "terms": {
+      "url": "https://support.adsbexchange.com/hc/en-us/articles/37363886073613",
+      "automated": "limited",
+      "redistribution": "unclear",
+      "note": "A personal non-commercial plan through RapidAPI costs 10 USD a month. Commercial use needs an enterprise licence."
+    },
+    "cost": "paid",
+    "delay": "unknown",
+    "history": "unknown",
+    "rateLimit": "unknown",
+    "calibration": null,
+    "coverage": "worldwide where feeders exist",
+    "origins": [
+      "adsb-exchange"
+    ],
+    "path": [
+      "unknown"
+    ],
+    "subjectIds": null,
+    "risks": [],
+    "decision": "reject",
+    "adapter": null,
+    "reason": "The API is paid, and commercial use needs an enterprise licence. The adsb.lol API gives the same data with no key.",
+    "evidence": [
+      "https://www.adsbexchange.com/api-lite/",
+      "https://support.adsbexchange.com/hc/en-us/articles/37363886073613"
+    ],
+    "round": 10
+  },
+  {
+    "id": "adsb-lol",
+    "name": "adsb.lol API",
+    "classes": [],
+    "dimensions": [
+      "air-traffic",
+      "gnss-interference"
+    ],
+    "url": "https://github.com/adsblol/api",
+    "access": "api",
+    "auth": "none",
+    "terms": {
+      "url": null,
+      "automated": "limited",
+      "redistribution": "unclear",
+      "note": "The code is BSD-3. The licence of the data is not confirmed. The rate limits are dynamic."
+    },
+    "cost": "free",
+    "delay": "unknown",
+    "history": "unknown",
+    "rateLimit": "dynamic (not published)",
+    "calibration": null,
+    "coverage": "worldwide where feeders exist",
+    "origins": [
+      "adsb-lol"
+    ],
+    "path": [
+      "api.adsb.lol"
+    ],
+    "subjectIds": null,
+    "risks": [
+      "The operator plans a key that goes to people who feed data."
+    ],
+    "decision": "plan",
+    "adapter": null,
+    "reason": "World aircraft positions with no key. One adapter gives two dimensions: the aircraft count and the share of aircraft with low NACp.",
+    "evidence": [
+      "https://github.com/adsblol/api"
+    ],
+    "round": 10
+  },
+  {
+    "id": "afir-access-points",
+    "name": "AFIR national access points for charging data (EU)",
+    "classes": [],
+    "dimensions": [
+      "ev-charging"
+    ],
+    "url": "https://nationale-leitstelle.de/en/charging-infrastructure-in-the-eu-context/",
+    "access": "feed",
+    "auth": "unknown",
+    "terms": {
+      "url": null,
+      "automated": "unclear",
+      "redistribution": "unclear",
+      "note": "The regulation makes the data free of charge. The access terms differ for each national access point."
+    },
+    "cost": "free",
+    "delay": "up to about 1 minute (AFIR rule)",
+    "history": "unknown",
+    "rateLimit": "unknown",
+    "calibration": null,
+    "coverage": "EU member states, for example Mobilithek (DE), DOT-NL (NL), Fintraffic (FI), data.gov.ie (IE)",
+    "origins": [
+      "charge-point-operators"
+    ],
+    "path": [
+      "unknown"
+    ],
+    "subjectIds": null,
+    "risks": [],
+    "decision": "later",
+    "adapter": null,
+    "reason": "Live status of EU public charge points through the national access points. The auth and the terms differ for each access point.",
+    "evidence": [
+      "https://nationale-leitstelle.de/en/charging-infrastructure-in-the-eu-context/",
+      "https://www.fintraffic.fi/en/digitalservices/afir",
+      "https://www.electrive.com/2025/08/26/germany-publishes-datex-ii-data-profile-for-live-ev-charging-station-data"
+    ],
+    "round": 10
+  },
+  {
     "id": "airnow-api",
     "name": "EPA AirNow API",
     "classes": [
@@ -148,6 +268,84 @@
       "https://docs.airnowapi.org/"
     ],
     "round": 1
+  },
+  {
+    "id": "aishub",
+    "name": "AISHub data exchange",
+    "classes": [],
+    "dimensions": [
+      "maritime-traffic"
+    ],
+    "url": "https://www.aishub.net/join-us",
+    "access": "api",
+    "auth": "partner",
+    "terms": {
+      "url": "https://www.aishub.net/terms",
+      "automated": "limited",
+      "redistribution": "limited",
+      "note": "Members share the raw NMEA of their own AIS station. The terms forbid passing raw data to others. Credit 'Data: AISHub contributors'."
+    },
+    "cost": "free",
+    "delay": "unknown",
+    "history": "unknown",
+    "rateLimit": "1 request per minute",
+    "calibration": null,
+    "coverage": "worldwide where member stations exist",
+    "origins": [
+      "aishub"
+    ],
+    "path": [
+      "unknown"
+    ],
+    "subjectIds": null,
+    "risks": [],
+    "decision": "reject",
+    "adapter": null,
+    "reason": "Access needs an own AIS station that shares its data. The terms forbid passing raw data to others.",
+    "evidence": [
+      "https://www.aishub.net/join-us",
+      "https://www.aishub.net/terms"
+    ],
+    "round": 10
+  },
+  {
+    "id": "aisstream",
+    "name": "aisstream.io",
+    "classes": [],
+    "dimensions": [
+      "maritime-traffic"
+    ],
+    "url": "https://aisstream.io",
+    "access": "stream",
+    "auth": "key",
+    "terms": {
+      "url": null,
+      "automated": "unclear",
+      "redistribution": "unclear",
+      "note": "The terms were not read. The documentation page returned 403."
+    },
+    "cost": "free",
+    "delay": "unknown",
+    "history": "no",
+    "rateLimit": "unknown",
+    "calibration": null,
+    "coverage": "worldwide (terrestrial receivers)",
+    "origins": [
+      "aisstream"
+    ],
+    "path": [
+      "stream.aisstream.io"
+    ],
+    "subjectIds": null,
+    "risks": [],
+    "decision": "later",
+    "adapter": null,
+    "reason": "Live world AIS messages with a free key. The terms were not read, because the documentation page returned 403.",
+    "evidence": [
+      "https://aisstream.io",
+      "https://github.com/aisstream"
+    ],
+    "round": 10
   },
   {
     "id": "alerts-in-ua",
@@ -294,6 +492,46 @@
     "reason": "A second shortage list; access and reuse terms are unknown.",
     "evidence": [],
     "round": 1
+  },
+  {
+    "id": "autobahn-api",
+    "name": "Autobahn API (Germany)",
+    "classes": [
+      "transport.road.incident"
+    ],
+    "dimensions": [
+      "road-events"
+    ],
+    "url": "https://verkehr.autobahn.de/o/autobahn/",
+    "access": "api",
+    "auth": "unknown",
+    "terms": {
+      "url": null,
+      "automated": "unclear",
+      "redistribution": "unclear",
+      "note": "No terms are stated."
+    },
+    "cost": "unknown",
+    "delay": "unknown",
+    "history": "unknown",
+    "rateLimit": "unknown",
+    "calibration": null,
+    "coverage": "Germany, the Autobahn network",
+    "origins": [
+      "autobahn-gmbh"
+    ],
+    "path": [
+      "verkehr.autobahn.de"
+    ],
+    "subjectIds": null,
+    "risks": [],
+    "decision": "later",
+    "adapter": null,
+    "reason": "Roadworks, warnings and closures of the German Autobahn. A community project documents the API, and the auth and the terms are not known.",
+    "evidence": [
+      "https://github.com/bundesAPI/autobahn-api"
+    ],
+    "round": 10
   },
   {
     "id": "avalanche-org-api",
@@ -479,6 +717,50 @@
     "round": 1
   },
   {
+    "id": "bay-area-511",
+    "name": "511.org open data (San Francisco Bay Area)",
+    "classes": [
+      "transport.transit.service-alert",
+      "transport.road.incident"
+    ],
+    "dimensions": [
+      "road-events",
+      "public-transit"
+    ],
+    "url": "https://511.org/open-data",
+    "access": "api",
+    "auth": "key",
+    "terms": {
+      "url": null,
+      "automated": "limited",
+      "redistribution": "unclear",
+      "note": "Free with a token. Credit 511.org as the data provider. The default limit is 60 requests per 3600 seconds per token."
+    },
+    "cost": "free",
+    "delay": "unknown",
+    "history": "unknown",
+    "rateLimit": "60 requests per 3600 seconds per token (the default)",
+    "calibration": null,
+    "coverage": "San Francisco Bay Area transit agencies and highways",
+    "origins": [
+      "transit-agencies"
+    ],
+    "path": [
+      "unknown"
+    ],
+    "subjectIds": null,
+    "risks": [],
+    "decision": "later",
+    "adapter": null,
+    "reason": "A regional 511 feed of transit and road events, with a free token. The generic GTFS-RT and WZDx adapters read it, so it needs no adapter of its own.",
+    "evidence": [
+      "https://511.org/open-data/transit",
+      "https://511.org/open-data/traffic",
+      "https://511.org/open-data/faqs"
+    ],
+    "round": 10
+  },
+  {
     "id": "bea-release-schedule",
     "name": "BEA release schedule (ICS, JSON and RSS)",
     "classes": [
@@ -516,6 +798,46 @@
     "round": 1
   },
   {
+    "id": "bfs-odl",
+    "name": "BfS ODL gamma dose rate network (Germany)",
+    "classes": [
+      "cbrne.radiological"
+    ],
+    "dimensions": [
+      "radiation"
+    ],
+    "url": "https://odlinfo.bfs.de/ODL/EN/service/data-interface/data-interface_node.html",
+    "access": "api",
+    "auth": "none",
+    "terms": {
+      "url": null,
+      "automated": "unclear",
+      "redistribution": "unclear",
+      "note": "Free under the terms of the BfS Geoportal. The text of the terms was not read."
+    },
+    "cost": "free",
+    "delay": "unknown",
+    "history": "yes",
+    "rateLimit": "unknown",
+    "calibration": null,
+    "coverage": "Germany, about 1,629 stations (2021 figure)",
+    "origins": [
+      "bfs"
+    ],
+    "path": [
+      "www.imis.bfs.de"
+    ],
+    "subjectIds": null,
+    "risks": [],
+    "decision": "later",
+    "adapter": null,
+    "reason": "Hourly gamma dose rate at about 1,600 German stations, with no key. The text of the terms was not read.",
+    "evidence": [
+      "https://odlinfo.bfs.de/ODL/EN/service/data-interface/data-interface_node.html"
+    ],
+    "round": 10
+  },
+  {
     "id": "binance-api",
     "name": "Binance public API (system status and market data)",
     "classes": [
@@ -551,6 +873,45 @@
       "https://api.binance.com/sapi/v1/system/status"
     ],
     "round": 1
+  },
+  {
+    "id": "black-marble",
+    "name": "NASA Black Marble daily night lights (VNP46A1)",
+    "classes": [],
+    "dimensions": [
+      "night-lights"
+    ],
+    "url": "https://ladsweb.modaps.eosdis.nasa.gov/missions-and-measurements/products/VNP46A1/",
+    "access": "file",
+    "auth": "unknown",
+    "terms": {
+      "url": null,
+      "automated": "unclear",
+      "redistribution": "unclear",
+      "note": "The pages read state no terms."
+    },
+    "cost": "free",
+    "delay": "under 1 day (near-real-time product through LANCE)",
+    "history": "yes (since 2012)",
+    "rateLimit": "unknown",
+    "calibration": null,
+    "coverage": "worldwide",
+    "origins": [
+      "nasa"
+    ],
+    "path": [
+      "ladsweb.modaps.eosdis.nasa.gov"
+    ],
+    "subjectIds": null,
+    "risks": [],
+    "decision": "later",
+    "adapter": null,
+    "reason": "Daily night radiance for the world, within 1 day. The login need is not confirmed, and it confirms large power cuts only slowly.",
+    "evidence": [
+      "https://www.earthdata.nasa.gov/data/projects/black-marble",
+      "https://ladsweb.modaps.eosdis.nasa.gov/missions-and-measurements/products/VNP46A1/"
+    ],
+    "round": 10
   },
   {
     "id": "blitzortung",
@@ -665,6 +1026,44 @@
     "round": 1
   },
   {
+    "id": "bluesky-jetstream",
+    "name": "Bluesky Jetstream",
+    "classes": [],
+    "dimensions": [
+      "social-volume"
+    ],
+    "url": "https://bsky.network/docs/jetstream",
+    "access": "stream",
+    "auth": "none",
+    "terms": {
+      "url": null,
+      "automated": "unclear",
+      "redistribution": "unclear",
+      "note": "The terms were not read."
+    },
+    "cost": "free",
+    "delay": "unknown (seconds in practice: not measured)",
+    "history": "yes (replay by cursor)",
+    "rateLimit": "unknown",
+    "calibration": null,
+    "coverage": "worldwide, the Bluesky network",
+    "origins": [
+      "bluesky"
+    ],
+    "path": [
+      "jetstream.us-east.bsky.network"
+    ],
+    "subjectIds": null,
+    "risks": [],
+    "decision": "plan",
+    "adapter": null,
+    "reason": "A live world stream of posts with no key, the fastest human signal of the list. The terms were not read, so the adapter waits for them.",
+    "evidence": [
+      "https://bsky.network/docs/jetstream"
+    ],
+    "round": 10
+  },
+  {
     "id": "bom-sws-api",
     "name": "Australian Bureau of Meteorology Space Weather API",
     "classes": [
@@ -745,6 +1144,44 @@
     "round": 1
   },
   {
+    "id": "carbon-intensity-gb",
+    "name": "Carbon Intensity API (Great Britain)",
+    "classes": [],
+    "dimensions": [
+      "power-supply"
+    ],
+    "url": "https://api.carbonintensity.org.uk/",
+    "access": "api",
+    "auth": "none",
+    "terms": {
+      "url": "https://api.carbonintensity.org.uk/",
+      "automated": "unclear",
+      "redistribution": "allowed",
+      "note": "CC BY 4.0."
+    },
+    "cost": "free",
+    "delay": "unknown",
+    "history": "yes",
+    "rateLimit": "unknown",
+    "calibration": null,
+    "coverage": "Great Britain",
+    "origins": [
+      "neso"
+    ],
+    "path": [
+      "api.carbonintensity.org.uk"
+    ],
+    "subjectIds": null,
+    "risks": [],
+    "decision": "later",
+    "adapter": null,
+    "reason": "Carbon intensity and generation mix for Great Britain under CC BY 4.0. On its own it is a weak disaster signal.",
+    "evidence": [
+      "https://api.carbonintensity.org.uk/"
+    ],
+    "round": 10
+  },
+  {
     "id": "cboe-vix-history",
     "name": "Cboe VIX daily history CSV",
     "classes": [
@@ -787,6 +1224,9 @@
     "classes": [
       "transport.road.border-wait"
     ],
+    "dimensions": [
+      "border-crossings"
+    ],
     "url": "https://bwt.cbp.gov/",
     "access": "page",
     "auth": "none",
@@ -813,7 +1253,9 @@
     "decision": "later",
     "adapter": null,
     "reason": "Official waits; feed to be confirmed.",
-    "evidence": [],
+    "evidence": [
+      "https://bwt.cbp.gov/api/bwtnew"
+    ],
     "round": 1
   },
   {
@@ -857,10 +1299,52 @@
     "round": 1
   },
   {
+    "id": "cdc-nssp",
+    "name": "CDC NSSP emergency department visits",
+    "classes": [],
+    "dimensions": [
+      "public-health"
+    ],
+    "url": "https://catalog.data.gov/dataset/nssp-emergency-department-visit-trajectories-by-state-and-sub-state-regions-covid-19-flu-r",
+    "access": "api",
+    "auth": "none",
+    "terms": {
+      "url": null,
+      "automated": "unclear",
+      "redistribution": "unclear",
+      "note": "The pages read state no terms."
+    },
+    "cost": "free",
+    "delay": "days (85 percent of US emergency departments report, often within 24 hours)",
+    "history": "yes",
+    "rateLimit": "unknown",
+    "calibration": null,
+    "coverage": "United States",
+    "origins": [
+      "cdc"
+    ],
+    "path": [
+      "data.cdc.gov"
+    ],
+    "subjectIds": null,
+    "risks": [],
+    "decision": "later",
+    "adapter": null,
+    "reason": "The share of emergency visits for COVID-19, influenza and RSV in the United States. The data come days late, and the terms are not stated.",
+    "evidence": [
+      "https://catalog.data.gov/dataset/nssp-emergency-department-visit-trajectories-by-state-and-sub-state-regions-covid-19-flu-r",
+      "https://www.cdc.gov/nssp/php/about/index.html"
+    ],
+    "round": 10
+  },
+  {
     "id": "cdc-nwss",
     "name": "CDC National Wastewater Surveillance System data (data.cdc.gov)",
     "classes": [
       "health.wastewater-signal"
+    ],
+    "dimensions": [
+      "public-health"
     ],
     "url": "https://data.cdc.gov/api/views/2ew6-ywp6",
     "access": "api",
@@ -890,7 +1374,9 @@
     "reason": "The dataset opened is archived; find the current NWSS datasets in round 2.",
     "evidence": [
       "https://data.cdc.gov/api/views/2ew6-ywp6",
-      "https://www.cdc.gov/nwss/index.html"
+      "https://www.cdc.gov/nwss/index.html",
+      "https://catalog.data.gov/dataset/cdc-wastewater-viral-activity-level-for-sars-cov-2-influenza-a-and-rsv",
+      "https://www.cdc.gov/nwss/about-data.html"
     ],
     "round": 1
   },
@@ -1091,14 +1577,18 @@
       "infra.internet.bgp",
       "infra.internet.dns-cdn"
     ],
+    "dimensions": [
+      "internet-connectivity",
+      "internet-routing"
+    ],
     "url": "https://developers.cloudflare.com/radar/investigate/bgp-anomalies/",
     "access": "api",
     "auth": "key",
     "terms": {
-      "url": null,
+      "url": "https://developers.cloudflare.com/radar/",
       "automated": "allowed",
-      "redistribution": "unclear",
-      "note": "Token with Account:Radar permission; a free account works per the guide. Data license not stated."
+      "redistribution": "limited",
+      "note": "Token with Account:Radar permission; a free account works per the guide. Data license not stated. The data of the API is under CC BY-NC 4.0: no commercial use."
     },
     "cost": "free-tier",
     "delay": "unknown",
@@ -1118,7 +1608,12 @@
     "adapter": null,
     "reason": "Broad internet view with an API; the outage center page was not opened.",
     "evidence": [
-      "https://developers.cloudflare.com/radar/investigate/bgp-anomalies/"
+      "https://developers.cloudflare.com/radar/investigate/bgp-anomalies/",
+      "https://developers.cloudflare.com/radar/",
+      "https://developers.cloudflare.com/api/operations/radar-get-annotations-outages",
+      "https://developers.cloudflare.com/api/resources/radar/subresources/traffic_anomalies/index.md",
+      "https://blog.cloudflare.com/traffic-anomalies-notifications-radar/",
+      "https://developers.cloudflare.com/radar/get-started/first-request/"
     ],
     "round": 1
   },
@@ -1167,6 +1662,9 @@
     "classes": [
       "met.flood.coastal"
     ],
+    "dimensions": [
+      "sea-level"
+    ],
     "url": "https://api.tidesandcurrents.noaa.gov/api/prod/",
     "access": "api",
     "auth": "none",
@@ -1197,6 +1695,44 @@
       "https://api.tidesandcurrents.noaa.gov/api/prod/"
     ],
     "round": 1
+  },
+  {
+    "id": "copernicus-ems-rapid-mapping",
+    "name": "Copernicus EMS Rapid Mapping activations",
+    "classes": [],
+    "dimensions": [
+      "disaster-mapping"
+    ],
+    "url": "https://mapping.emergency.copernicus.eu/about/how-to-harvest-cems-mapping-data/emergency-response-data/",
+    "access": "api",
+    "auth": "none",
+    "terms": {
+      "url": "https://mapping.emergency.copernicus.eu/about/how-to-harvest-cems-mapping-data/emergency-response-data/",
+      "automated": "unclear",
+      "redistribution": "unclear",
+      "note": "Credit '© European Union, Copernicus Emergency Management Service'."
+    },
+    "cost": "free",
+    "delay": "unknown",
+    "history": "yes",
+    "rateLimit": "unknown",
+    "calibration": null,
+    "coverage": "worldwide",
+    "origins": [
+      "copernicus-ems"
+    ],
+    "path": [
+      "rapidmapping.emergency.copernicus.eu"
+    ],
+    "subjectIds": null,
+    "risks": [],
+    "decision": "later",
+    "adapter": null,
+    "reason": "New satellite mapping activations for the world, with no key. The ranking of round 10 puts other sources first.",
+    "evidence": [
+      "https://mapping.emergency.copernicus.eu/about/how-to-harvest-cems-mapping-data/emergency-response-data/"
+    ],
+    "round": 10
   },
   {
     "id": "cornell-labor-action-tracker",
@@ -1347,6 +1883,85 @@
     "round": 1
   },
   {
+    "id": "darwin-push-port",
+    "name": "National Rail Darwin Push Port (Great Britain)",
+    "classes": [],
+    "dimensions": [
+      "rail"
+    ],
+    "url": "https://nre.co.uk/developers/",
+    "access": "stream",
+    "auth": "account",
+    "terms": {
+      "url": null,
+      "automated": "unclear",
+      "redistribution": "unclear",
+      "note": "An open licence since 1 June 2014. The name of the licence was not checked."
+    },
+    "cost": "free",
+    "delay": "unknown",
+    "history": "unknown",
+    "rateLimit": "unknown",
+    "calibration": null,
+    "coverage": "Great Britain, passenger rail",
+    "origins": [
+      "rail-delivery-group"
+    ],
+    "path": [
+      "unknown"
+    ],
+    "subjectIds": null,
+    "risks": [],
+    "decision": "later",
+    "adapter": null,
+    "reason": "Delays and cancellations at each station in Great Britain, with an account. The licence name is not checked, and a report tells of message loss.",
+    "evidence": [
+      "https://wiki.openraildata.com/index.php/Darwin:Push_Port",
+      "https://raildeliverygroup.com/our-services/rail-data/nre-data.html"
+    ],
+    "round": 10
+  },
+  {
+    "id": "db-timetables",
+    "name": "DB Timetables API (Germany)",
+    "classes": [],
+    "dimensions": [
+      "rail"
+    ],
+    "url": "https://developers.deutschebahn.com/db-api-marketplace/apis/product/timetables",
+    "access": "api",
+    "auth": "account",
+    "terms": {
+      "url": "https://developers.deutschebahn.com/db-api-marketplace/apis/product/timetables",
+      "automated": "limited",
+      "redistribution": "allowed",
+      "note": "CC BY 4.0. The API is a beta. The free plan has 60 calls per minute."
+    },
+    "cost": "free",
+    "delay": "unknown",
+    "history": "unknown",
+    "rateLimit": "60 calls per minute on the free plan",
+    "calibration": null,
+    "coverage": "Germany, DB stations",
+    "origins": [
+      "deutsche-bahn"
+    ],
+    "path": [
+      "unknown"
+    ],
+    "subjectIds": null,
+    "risks": [
+      "DB plans to replace the API with the OpenBoards API."
+    ],
+    "decision": "later",
+    "adapter": null,
+    "reason": "Delays and cancellations at German stations under CC BY 4.0, with an account. DB plans to replace the API with the OpenBoards API.",
+    "evidence": [
+      "https://developers.deutschebahn.com/db-api-marketplace/apis/product/timetables"
+    ],
+    "round": 10
+  },
+  {
     "id": "defillama-hacks",
     "name": "DefiLlama hacks API",
     "classes": [
@@ -1462,6 +2077,126 @@
     "round": 1
   },
   {
+    "id": "digitraffic-marine",
+    "name": "Digitraffic marine (Fintraffic)",
+    "classes": [],
+    "dimensions": [
+      "maritime-traffic"
+    ],
+    "url": "https://www.digitraffic.fi/en/support/instructions/",
+    "access": "api",
+    "auth": "none",
+    "terms": {
+      "url": "https://www.digitraffic.fi/en/terms-of-service/",
+      "automated": "unclear",
+      "redistribution": "allowed",
+      "note": "CC BY 4.0 with the credit of Fintraffic."
+    },
+    "cost": "free",
+    "delay": "unknown",
+    "history": "unknown",
+    "rateLimit": "unknown",
+    "calibration": null,
+    "coverage": "Finland and the Baltic Sea area near it",
+    "origins": [
+      "fintraffic"
+    ],
+    "path": [
+      "unknown"
+    ],
+    "subjectIds": null,
+    "risks": [],
+    "decision": "later",
+    "adapter": null,
+    "reason": "AIS vessel locations near Finland under CC BY 4.0, with no key. The same client as digitraffic-road serves it.",
+    "evidence": [
+      "https://www.digitraffic.fi/en/support/instructions/",
+      "https://www.digitraffic.fi/en/terms-of-service/"
+    ],
+    "round": 10
+  },
+  {
+    "id": "digitraffic-rail",
+    "name": "Digitraffic rail (Fintraffic)",
+    "classes": [],
+    "dimensions": [
+      "rail"
+    ],
+    "url": "https://www.digitraffic.fi/en/railway-traffic/",
+    "access": "api",
+    "auth": "none",
+    "terms": {
+      "url": "https://www.digitraffic.fi/en/terms-of-service/",
+      "automated": "limited",
+      "redistribution": "allowed",
+      "note": "CC BY 4.0 with the credit of Fintraffic. The limit for rail is 30 requests per minute per IP."
+    },
+    "cost": "free",
+    "delay": "unknown",
+    "history": "unknown (the docs suggest about 2 months)",
+    "rateLimit": "30 requests per minute per IP",
+    "calibration": null,
+    "coverage": "Finland",
+    "origins": [
+      "fintraffic"
+    ],
+    "path": [
+      "unknown"
+    ],
+    "subjectIds": null,
+    "risks": [],
+    "decision": "later",
+    "adapter": null,
+    "reason": "Train delays and cancellations for Finland under CC BY 4.0, with no key. The ranking of round 10 puts other sources first.",
+    "evidence": [
+      "https://www.digitraffic.fi/en/railway-traffic/",
+      "https://www.digitraffic.fi/en/terms-of-service/"
+    ],
+    "round": 10
+  },
+  {
+    "id": "digitraffic-road",
+    "name": "Digitraffic road (Fintraffic)",
+    "classes": [
+      "transport.road.incident"
+    ],
+    "dimensions": [
+      "road-traffic",
+      "road-events"
+    ],
+    "url": "https://tie.digitraffic.fi/",
+    "access": "api",
+    "auth": "none",
+    "terms": {
+      "url": "https://www.digitraffic.fi/en/terms-of-service/",
+      "automated": "limited",
+      "redistribution": "allowed",
+      "note": "CC BY 4.0 with the credit of Fintraffic. Send a Digitraffic-User header and use gzip. The limit is 60 requests per minute per IP."
+    },
+    "cost": "free",
+    "delay": "unknown",
+    "history": "unknown",
+    "rateLimit": "60 requests per minute per IP. The MQTT limit is 5 per IP.",
+    "calibration": null,
+    "coverage": "Finland",
+    "origins": [
+      "fintraffic"
+    ],
+    "path": [
+      "tie.digitraffic.fi"
+    ],
+    "subjectIds": null,
+    "risks": [],
+    "decision": "later",
+    "adapter": null,
+    "reason": "Open counts, speeds and traffic messages for Finland under CC BY 4.0, with no key. The ranking of round 10 puts other sources first.",
+    "evidence": [
+      "https://www.digitraffic.fi/en/support/instructions/",
+      "https://www.digitraffic.fi/en/terms-of-service/"
+    ],
+    "round": 10
+  },
+  {
     "id": "downdetector",
     "name": "Downdetector",
     "classes": [
@@ -1497,6 +2232,47 @@
     "reason": "Crowd reports are early, but no access route was confirmed.",
     "evidence": [],
     "round": 1
+  },
+  {
+    "id": "ea-flood-monitoring",
+    "name": "Environment Agency flood monitoring API (England)",
+    "classes": [
+      "met.flood",
+      "met.flood.river"
+    ],
+    "dimensions": [
+      "river-levels"
+    ],
+    "url": "https://environment.data.gov.uk/flood-monitoring/doc/reference",
+    "access": "api",
+    "auth": "none",
+    "terms": {
+      "url": "https://environment.data.gov.uk/flood-monitoring/doc/reference",
+      "automated": "unclear",
+      "redistribution": "allowed",
+      "note": "OGL v3 with an attribution statement."
+    },
+    "cost": "free",
+    "delay": "unknown",
+    "history": "yes",
+    "rateLimit": "unknown",
+    "calibration": null,
+    "coverage": "England, several thousand stations",
+    "origins": [
+      "environment-agency-england"
+    ],
+    "path": [
+      "environment.data.gov.uk"
+    ],
+    "subjectIds": null,
+    "risks": [],
+    "decision": "later",
+    "adapter": null,
+    "reason": "Levels, flows and flood warnings for England under OGL v3, with no key. The typical range of each station gives a ready normal level.",
+    "evidence": [
+      "https://environment.data.gov.uk/flood-monitoring/doc/reference"
+    ],
+    "round": 10
   },
   {
     "id": "eagle-i-history",
@@ -1657,6 +2433,86 @@
     "round": 1
   },
   {
+    "id": "eccc-hydrometric",
+    "name": "ECCC real-time hydrometric data (Canada, GeoMet OGC API)",
+    "classes": [
+      "met.flood.river"
+    ],
+    "dimensions": [
+      "river-levels"
+    ],
+    "url": "https://api.weather.gc.ca/collections/hydrometric-realtime",
+    "access": "api",
+    "auth": "none",
+    "terms": {
+      "url": null,
+      "automated": "unclear",
+      "redistribution": "unclear",
+      "note": "The page read states no terms."
+    },
+    "cost": "free",
+    "delay": "unknown",
+    "history": "yes",
+    "rateLimit": "unknown",
+    "calibration": null,
+    "coverage": "Canada, over 2,100 stations",
+    "origins": [
+      "eccc"
+    ],
+    "path": [
+      "api.weather.gc.ca"
+    ],
+    "subjectIds": null,
+    "risks": [],
+    "decision": "later",
+    "adapter": null,
+    "reason": "Real-time levels and flows at over 2,100 Canadian stations, with no key. The page read states no terms.",
+    "evidence": [
+      "https://api.weather.gc.ca/collections/hydrometric-realtime"
+    ],
+    "round": 10
+  },
+  {
+    "id": "ecdc-erviss",
+    "name": "ECDC ERVISS weekly respiratory virus data",
+    "classes": [],
+    "dimensions": [
+      "public-health"
+    ],
+    "url": "https://github.com/EU-ECDC/Respiratory_viruses_weekly_data",
+    "access": "file",
+    "auth": "none",
+    "terms": {
+      "url": null,
+      "automated": "unclear",
+      "redistribution": "unclear",
+      "note": "No licence was found."
+    },
+    "cost": "free",
+    "delay": "unknown",
+    "history": "yes (snapshots)",
+    "rateLimit": "unknown",
+    "calibration": null,
+    "coverage": "European Union and EEA",
+    "origins": [
+      "ecdc"
+    ],
+    "path": [
+      "github.com"
+    ],
+    "subjectIds": null,
+    "risks": [
+      "The updates paused during the move from TESSy to EpiPulse."
+    ],
+    "decision": "later",
+    "adapter": null,
+    "reason": "Weekly respiratory virus rates for the EU and EEA. The updates paused during a system move, and the licence was not found.",
+    "evidence": [
+      "https://ftp.fau.de/cran/web/packages/ervissexplore/vignettes/fetching-data.html"
+    ],
+    "round": 10
+  },
+  {
     "id": "ecdc-threats",
     "name": "ECDC communicable disease threats (CDTR, now public health events page)",
     "classes": [
@@ -1701,6 +2557,11 @@
       "market.price.commodity",
       "infra.fuel.shortage"
     ],
+    "dimensions": [
+      "power-demand",
+      "power-supply",
+      "fuel-prices"
+    ],
     "url": "https://www.eia.gov/opendata/",
     "access": "api",
     "auth": "key",
@@ -1729,7 +2590,9 @@
     "reason": "Free public-domain fuel and energy prices by region, with one key. Context for grid stress and fuel prices, not alerts by itself.",
     "evidence": [
       "https://www.eia.gov/opendata/",
-      "https://www.eia.gov/about/copyrights_reuse.php"
+      "https://www.eia.gov/about/copyrights_reuse.php",
+      "https://www.eia.gov/electricity/930-content/about.html",
+      "https://docs.catalyst.coop/pudl/en/stable/data_sources/eia930.html"
     ],
     "round": 1
   },
@@ -1790,6 +2653,9 @@
     "classes": [
       "geo.earthquake"
     ],
+    "dimensions": [
+      "felt-reports"
+    ],
     "url": "https://www.seismicportal.eu/realtime.html",
     "access": "stream",
     "auth": "none",
@@ -1829,7 +2695,9 @@
     "evidence": [
       "https://www.seismicportal.eu/realtime.html",
       "https://www.seismicportal.eu/terms.html",
-      "https://www.seismicportal.eu/fdsnws/event/1/query?format=json&minmag=2.5&limit=500"
+      "https://www.seismicportal.eu/fdsnws/event/1/query?format=json&minmag=2.5&limit=500",
+      "https://github.com/EMSC-CSEM/webservices101",
+      "https://jaguar.emsc-csem.org/Files/epos/specifications/Specs_Testimony-WS.pdf"
     ],
     "round": 4
   },
@@ -1869,6 +2737,125 @@
       "https://endoflife.date/"
     ],
     "round": 1
+  },
+  {
+    "id": "energy-charts-frequency",
+    "name": "Energy-Charts API (Fraunhofer ISE), grid frequency",
+    "classes": [],
+    "dimensions": [
+      "grid-frequency"
+    ],
+    "url": "https://api.energy-charts.info/",
+    "access": "api",
+    "auth": "none",
+    "terms": {
+      "url": "https://api.energy-charts.info/llms.txt",
+      "automated": "limited",
+      "redistribution": "allowed",
+      "note": "CC BY 4.0. The default limit is 2 requests per minute (burst 4)."
+    },
+    "cost": "free",
+    "delay": "unknown",
+    "history": "yes",
+    "rateLimit": "2 requests per minute by default (burst 4)",
+    "calibration": null,
+    "coverage": "Continental Europe",
+    "origins": [
+      "fraunhofer-ise"
+    ],
+    "path": [
+      "api.energy-charts.info"
+    ],
+    "subjectIds": null,
+    "risks": [],
+    "decision": "plan",
+    "adapter": null,
+    "reason": "Grid frequency of Continental Europe under CC BY 4.0, with no key. A large drop shows the loss of a big generator.",
+    "evidence": [
+      "https://api.energy-charts.info/llms.txt"
+    ],
+    "round": 10
+  },
+  {
+    "id": "energy-charts-power",
+    "name": "Energy-Charts API (Fraunhofer ISE), power and prices",
+    "classes": [],
+    "dimensions": [
+      "power-demand",
+      "power-supply"
+    ],
+    "url": "https://api.energy-charts.info/",
+    "access": "api",
+    "auth": "none",
+    "terms": {
+      "url": "https://api.energy-charts.info/llms.txt",
+      "automated": "limited",
+      "redistribution": "limited",
+      "note": "CC BY 4.0, except the day-ahead prices of some zones, which are for private use only. The default limit is 2 requests per minute (burst 4). Honor Retry-After."
+    },
+    "cost": "free",
+    "delay": "unknown",
+    "history": "yes",
+    "rateLimit": "2 requests per minute by default (burst 4)",
+    "calibration": null,
+    "coverage": "about 38 European countries",
+    "origins": [
+      "european-tsos"
+    ],
+    "path": [
+      "api.energy-charts.info"
+    ],
+    "subjectIds": null,
+    "risks": [],
+    "decision": "later",
+    "adapter": null,
+    "reason": "Generation, load, flows and prices for about 38 countries under CC BY 4.0, with no key. The ranking names only the frequency source of this API.",
+    "evidence": [
+      "https://api.energy-charts.info/llms.txt"
+    ],
+    "round": 10
+  },
+  {
+    "id": "entsoe-transparency",
+    "name": "ENTSO-E Transparency Platform",
+    "classes": [],
+    "dimensions": [
+      "power-demand",
+      "power-supply"
+    ],
+    "url": "https://transparencyplatform.zendesk.com/hc/en-us/articles/12845911031188",
+    "access": "api",
+    "auth": "account",
+    "terms": {
+      "url": null,
+      "automated": "limited",
+      "redistribution": "unclear",
+      "note": "The reuse terms are not recorded. ENTSO-E can revoke a token for misuse. The limit is 400 requests per minute per token."
+    },
+    "cost": "free",
+    "delay": "unknown",
+    "history": "yes",
+    "rateLimit": "400 requests per minute per token",
+    "calibration": null,
+    "coverage": "Europe, the ENTSO-E member systems",
+    "origins": [
+      "european-tsos"
+    ],
+    "path": [
+      "unknown"
+    ],
+    "subjectIds": null,
+    "risks": [
+      "API access needs an email request, and ENTSO-E grants it within 3 working days."
+    ],
+    "decision": "later",
+    "adapter": null,
+    "reason": "Load, generation, flows and prices for Europe, with an account. API access needs an email request, and the reuse terms are not recorded.",
+    "evidence": [
+      "https://transparencyplatform.zendesk.com/hc/en-us/articles/12783148966036-API-Rate-Limit-Part-1",
+      "https://transparencyplatform.zendesk.com/hc/en-us/articles/12845911031188"
+    ],
+    "round": 10
   },
   {
     "id": "epa-beacon",
@@ -1949,6 +2936,9 @@
     "name": "EPA RadNet near-real-time air monitoring",
     "classes": [
       "cbrne.radiological"
+    ],
+    "dimensions": [
+      "radiation"
     ],
     "url": "https://www.epa.gov/radnet/radnet-csv-file-downloads",
     "access": "file",
@@ -2201,10 +3191,53 @@
     "round": 1
   },
   {
+    "id": "eu-weekly-oil-bulletin",
+    "name": "EU Weekly Oil Bulletin",
+    "classes": [
+      "market.price.fuel"
+    ],
+    "dimensions": [
+      "fuel-prices"
+    ],
+    "url": "https://energy.ec.europa.eu/data-and-analysis/weekly-oil-bulletin_en",
+    "access": "file",
+    "auth": "none",
+    "terms": {
+      "url": null,
+      "automated": "unclear",
+      "redistribution": "unclear",
+      "note": "No terms are stated."
+    },
+    "cost": "free",
+    "delay": "days (member states send data on Wednesdays)",
+    "history": "yes (since 2005)",
+    "rateLimit": "unknown",
+    "calibration": null,
+    "coverage": "European Union",
+    "origins": [
+      "eu-commission"
+    ],
+    "path": [
+      "energy.ec.europa.eu"
+    ],
+    "subjectIds": null,
+    "risks": [],
+    "decision": "later",
+    "adapter": null,
+    "reason": "Weekly fuel prices of each EU member state in XLSX files. It is slow and gives only a regional baseline.",
+    "evidence": [
+      "https://energy.ec.europa.eu/data-and-analysis/weekly-oil-bulletin_en"
+    ],
+    "round": 10
+  },
+  {
     "id": "eurdep",
     "name": "EURDEP (European Radiological Data Exchange Platform)",
     "classes": [
       "cbrne.radiological"
+    ],
+    "dimensions": [
+      "radiation"
     ],
     "url": "https://remon.jrc.ec.europa.eu/About/Rad-Data-Exchange",
     "access": "page",
@@ -2238,10 +3271,54 @@
     "round": 1
   },
   {
+    "id": "eurocontrol-traffic",
+    "name": "Eurocontrol daily traffic and airport delay data",
+    "classes": [],
+    "dimensions": [
+      "aviation-delays",
+      "air-passengers"
+    ],
+    "url": "https://www.eurocontrol.int/Economics/DailyTrafficVariation-States.html",
+    "access": "file",
+    "auth": "none",
+    "terms": {
+      "url": null,
+      "automated": "unclear",
+      "redistribution": "unclear",
+      "note": "The pages read state no terms."
+    },
+    "cost": "free",
+    "delay": "unknown for the state variation. Months for the airport CSV (data ran to about October 2025 when read).",
+    "history": "yes (airport data from 2016)",
+    "rateLimit": "unknown",
+    "calibration": null,
+    "coverage": "Europe (ECAC)",
+    "origins": [
+      "eurocontrol"
+    ],
+    "path": [
+      "www.eurocontrol.int"
+    ],
+    "subjectIds": null,
+    "risks": [],
+    "decision": "later",
+    "adapter": null,
+    "reason": "Daily flights for each European state against 2019, and airport delays. It is a download with no API, and the airport files are months old.",
+    "evidence": [
+      "https://www.eurocontrol.int/Economics/DailyTrafficVariation-States.html",
+      "https://www.ansperformance.eu/reference/dataset/airport-arrival-atfm-delay/",
+      "https://aiu-portal.netlify.app/data"
+    ],
+    "round": 10
+  },
+  {
     "id": "faa-nas-status",
     "name": "FAA NAS Status airport status XML",
     "classes": [
       "transport.air.disruption"
+    ],
+    "dimensions": [
+      "aviation-delays"
     ],
     "url": "https://nasstatus.faa.gov/api/airport-status-information",
     "access": "api",
@@ -2270,7 +3347,9 @@
     "adapter": null,
     "reason": "Official airport programs and closures as XML.",
     "evidence": [
-      "https://nasstatus.faa.gov/api/airport-status-information"
+      "https://nasstatus.faa.gov/api/airport-status-information",
+      "https://www.fly.faa.gov/What_s_New/XML_is_changing.jsp",
+      "https://nasstatus-alpha.faa.gov/static/media/NASStatusUserGuide.cccc6d48.pdf"
     ],
     "round": 1
   },
@@ -2308,6 +3387,46 @@
     "reason": "Primary NOTAM source; access terms for round 2.",
     "evidence": [],
     "round": 1
+  },
+  {
+    "id": "fao-food-price-index",
+    "name": "FAO Food Price Index",
+    "classes": [
+      "market.price.commodity"
+    ],
+    "dimensions": [
+      "food-prices"
+    ],
+    "url": "https://www.fao.org/worldfoodsituation/foodpricesindex/en/",
+    "access": "file",
+    "auth": "none",
+    "terms": {
+      "url": null,
+      "automated": "unclear",
+      "redistribution": "unclear",
+      "note": "FAO terms apply. Their text was not read."
+    },
+    "cost": "free",
+    "delay": "about a month",
+    "history": "yes (monthly from 1990, annual from 1961)",
+    "rateLimit": "unknown",
+    "calibration": null,
+    "coverage": "world",
+    "origins": [
+      "fao"
+    ],
+    "path": [
+      "www.fao.org"
+    ],
+    "subjectIds": null,
+    "risks": [],
+    "decision": "later",
+    "adapter": null,
+    "reason": "A world food price index, about a month late. It gives slow context, not an alert signal.",
+    "evidence": [
+      "https://www.fao.org/worldfoodsituation/foodpricesindex/en/"
+    ],
+    "round": 10
   },
   {
     "id": "fcc-dirs",
@@ -2803,14 +3922,17 @@
       "market.rates.mortgage",
       "market.indicator.recession"
     ],
+    "dimensions": [
+      "financial-markets"
+    ],
     "url": "https://fred.stlouisfed.org/docs/api/terms_of_use.html",
     "access": "api",
     "auth": "key",
     "terms": {
       "url": "https://fred.stlouisfed.org/docs/api/terms_of_use.html",
-      "automated": "allowed",
+      "automated": "limited",
       "redistribution": "limited",
-      "note": "No date on the page. A registered API key is required. Copyrighted series say so in their notes, and their use needs permission of the owner (the St. Louis Fed cannot give it). An application must show: 'This product uses the FRED API but is not endorsed or certified by the Federal Reserve Bank of St. Louis.' No app may replace the FRED API experience. Limits may be imposed."
+      "note": "No date on the page. A registered API key is required. Copyrighted series say so in their notes, and their use needs permission of the owner (the St. Louis Fed cannot give it). An application must show: 'This product uses the FRED API but is not endorsed or certified by the Federal Reserve Bank of St. Louis.' No app may replace the FRED API experience. Limits may be imposed. The catalog read of round 10 reports that the terms forbid wholesale downloading. So the adapter reads only a few chosen series."
     },
     "cost": "free",
     "delay": "as each series (mostly daily or slower)",
@@ -2830,7 +3952,8 @@
     "adapter": null,
     "reason": "One keyed API for many slow indicators, but third-party series such as VIX keep their owners' terms.",
     "evidence": [
-      "https://fred.stlouisfed.org/docs/api/terms_of_use.html"
+      "https://fred.stlouisfed.org/docs/api/terms_of_use.html",
+      "https://fred.stlouisfed.org/docs/api/api_key.html"
     ],
     "round": 1
   },
@@ -2982,10 +4105,53 @@
     "round": 1
   },
   {
+    "id": "gbfs-systems",
+    "name": "GBFS systems catalog (MobilityData)",
+    "classes": [],
+    "dimensions": [
+      "micromobility"
+    ],
+    "url": "https://github.com/MobilityData/gbfs/blob/master/systems.csv",
+    "access": "feed",
+    "auth": "none",
+    "terms": {
+      "url": null,
+      "automated": "unclear",
+      "redistribution": "unclear",
+      "note": "Each system states its own licence. A column of the catalog marks the systems that need authentication."
+    },
+    "cost": "free",
+    "delay": "unknown",
+    "history": "no",
+    "rateLimit": "unknown",
+    "calibration": null,
+    "coverage": "worldwide",
+    "origins": [
+      "gbfs-operators"
+    ],
+    "path": [
+      "gbfs-system-hosts"
+    ],
+    "subjectIds": null,
+    "risks": [],
+    "decision": "plan",
+    "adapter": null,
+    "reason": "One GBFS adapter reads about 1,279 share systems in the world. The catalog needs no key, and each system states its own licence.",
+    "evidence": [
+      "https://github.com/MobilityData/gbfs/blob/master/systems.csv",
+      "https://gbfs.org/",
+      "https://www.metro-magazine.com/blogposts/mobility-data-sharing-standards-openness-or-monopolies"
+    ],
+    "round": 10
+  },
+  {
     "id": "gcp-status-json",
     "name": "Google Cloud Service Health incidents JSON",
     "classes": [
       "infra.cloud.outage"
+    ],
+    "dimensions": [
+      "online-service-status"
     ],
     "url": "https://status.cloud.google.com/incidents.json",
     "access": "api",
@@ -3014,7 +4180,8 @@
     "adapter": null,
     "reason": "Structured JSON with locations and updates.",
     "evidence": [
-      "https://status.cloud.google.com/incidents.json"
+      "https://status.cloud.google.com/incidents.json",
+      "https://docs.cloud.google.com/support/docs/dashboard"
     ],
     "round": 1
   },
@@ -3067,6 +4234,9 @@
       "security.armed-conflict",
       "security.civil-unrest"
     ],
+    "dimensions": [
+      "news-volume"
+    ],
     "url": "https://www.gdeltproject.org/data.html",
     "access": "file",
     "auth": "none",
@@ -3094,7 +4264,8 @@
     "adapter": null,
     "reason": "Fast and global, but noisy; useful as a weak signal.",
     "evidence": [
-      "https://www.gdeltproject.org/data.html"
+      "https://www.gdeltproject.org/data.html",
+      "https://www.gdeltproject.org/about.html"
     ],
     "round": 1
   },
@@ -3260,6 +4431,47 @@
     "round": 1
   },
   {
+    "id": "glofas",
+    "name": "GloFAS river discharge (Copernicus EWDS)",
+    "classes": [
+      "met.flood.river"
+    ],
+    "dimensions": [
+      "river-levels"
+    ],
+    "url": "https://ewds.climate.copernicus.eu/datasets/cems-glofas-forecast",
+    "access": "file",
+    "auth": "account",
+    "terms": {
+      "url": "https://ewds.climate.copernicus.eu/datasets/cems-glofas-forecast",
+      "automated": "unclear",
+      "redistribution": "unclear",
+      "note": "Each dataset has a licence that the user accepts with an ECMWF account."
+    },
+    "cost": "free",
+    "delay": "unknown",
+    "history": "yes (reanalysis)",
+    "rateLimit": "unknown",
+    "calibration": null,
+    "coverage": "worldwide",
+    "origins": [
+      "copernicus-ems"
+    ],
+    "path": [
+      "ewds.climate.copernicus.eu"
+    ],
+    "subjectIds": null,
+    "risks": [],
+    "decision": "later",
+    "adapter": null,
+    "reason": "World river discharge forecasts on a model grid, with an ECMWF account. The flood thresholds are not checked.",
+    "evidence": [
+      "https://ewds.climate.copernicus.eu/datasets/cems-glofas-forecast",
+      "https://confluence.ecmwf.int/x/7adtDg"
+    ],
+    "round": 10
+  },
+  {
     "id": "google-pollen-api",
     "name": "Google Maps Platform Pollen API",
     "classes": [
@@ -3295,6 +4507,86 @@
       "https://developers.google.com/maps/documentation/pollen/overview"
     ],
     "round": 1
+  },
+  {
+    "id": "google-trends",
+    "name": "Google Trends",
+    "classes": [],
+    "dimensions": [
+      "online-attention"
+    ],
+    "url": "https://developers.google.com/search/blog/2025/07/trends-api",
+    "access": "api",
+    "auth": "partner",
+    "terms": {
+      "url": null,
+      "automated": "limited",
+      "redistribution": "unclear",
+      "note": "No API is generally open. An alpha API, announced on 24 July 2025, is open by application to a small group."
+    },
+    "cost": "unknown",
+    "delay": "unknown",
+    "history": "yes",
+    "rateLimit": "unknown",
+    "calibration": null,
+    "coverage": "worldwide",
+    "origins": [
+      "google"
+    ],
+    "path": [
+      "unknown"
+    ],
+    "subjectIds": null,
+    "risks": [
+      "The alpha API is open only by application to a small group."
+    ],
+    "decision": "reject",
+    "adapter": null,
+    "reason": "No API is generally open. The alpha API is open only by application to a small group.",
+    "evidence": [
+      "https://developers.google.com/search/blog/2025/07/trends-api"
+    ],
+    "round": 10
+  },
+  {
+    "id": "gpsjam",
+    "name": "GPSJam daily GNSS interference map",
+    "classes": [
+      "infra.gnss.interference"
+    ],
+    "dimensions": [
+      "gnss-interference"
+    ],
+    "url": "https://gpsjam.org/faq",
+    "access": "page",
+    "auth": "none",
+    "terms": {
+      "url": null,
+      "automated": "unclear",
+      "redistribution": "unclear",
+      "note": "No terms are stated. The site says that it is free to use."
+    },
+    "cost": "free",
+    "delay": "up to 1 day",
+    "history": "yes (since 2022-02-14)",
+    "rateLimit": "unknown",
+    "calibration": null,
+    "coverage": "worldwide where ADS-B receivers exist",
+    "origins": [
+      "gpsjam"
+    ],
+    "path": [
+      "gpsjam.org"
+    ],
+    "subjectIds": null,
+    "risks": [],
+    "decision": "reject",
+    "adapter": null,
+    "reason": "The site has no API and no download. A live NACp share from adsb.lol gives the same measure.",
+    "evidence": [
+      "https://gpsjam.org/faq"
+    ],
+    "round": 10
   },
   {
     "id": "gtfs-rt-alerts",
@@ -3406,6 +4698,46 @@
     "round": 1
   },
   {
+    "id": "hubeau-hydrometrie",
+    "name": "Hub'Eau hydrometrie (France)",
+    "classes": [
+      "met.flood.river"
+    ],
+    "dimensions": [
+      "river-levels"
+    ],
+    "url": "https://hubeau.eaufrance.fr/page/api-hydrometrie",
+    "access": "api",
+    "auth": "none",
+    "terms": {
+      "url": null,
+      "automated": "unclear",
+      "redistribution": "unclear",
+      "note": "The page read states no terms."
+    },
+    "cost": "free",
+    "delay": "unknown",
+    "history": "yes",
+    "rateLimit": "unknown",
+    "calibration": null,
+    "coverage": "France, about 5,000 stations",
+    "origins": [
+      "unknown"
+    ],
+    "path": [
+      "hubeau.eaufrance.fr"
+    ],
+    "subjectIds": null,
+    "risks": [],
+    "decision": "later",
+    "adapter": null,
+    "reason": "Real-time water height and flow at about 5,000 French stations, with no key. The terms are not stated.",
+    "evidence": [
+      "https://hubeau.eaufrance.fr/page/api-hydrometrie"
+    ],
+    "round": 10
+  },
+  {
     "id": "iana-tz",
     "name": "IANA time zone database releases",
     "classes": [
@@ -3509,10 +4841,51 @@
     "round": 1
   },
   {
+    "id": "ihr",
+    "name": "Internet Health Report (IIJ)",
+    "classes": [
+      "infra.internet.outage"
+    ],
+    "dimensions": [
+      "internet-routing"
+    ],
+    "url": "https://www.ihr.live/en/api",
+    "access": "api",
+    "auth": "unknown",
+    "terms": {
+      "url": null,
+      "automated": "unclear",
+      "redistribution": "unclear",
+      "note": "No terms were found."
+    },
+    "cost": "free",
+    "delay": "unknown",
+    "history": "yes (daily dumps at ihr-archive.iijlab.net)",
+    "rateLimit": "unknown",
+    "calibration": null,
+    "coverage": "worldwide",
+    "origins": [
+      "iij"
+    ],
+    "path": [
+      "unknown"
+    ],
+    "subjectIds": null,
+    "risks": [],
+    "decision": "later",
+    "adapter": null,
+    "reason": "Network delay and disconnection events from RIPE Atlas probes. The auth and the terms were not found.",
+    "evidence": [],
+    "round": 10
+  },
+  {
     "id": "imf-portwatch",
     "name": "IMF PortWatch",
     "classes": [
       "infra.supply-chain.disruption"
+    ],
+    "dimensions": [
+      "port-activity"
     ],
     "url": "https://portwatch.imf.org/",
     "access": "page",
@@ -3540,7 +4913,11 @@
     "decision": "later",
     "adapter": null,
     "reason": "Known port and chokepoint monitor; facts not seen.",
-    "evidence": [],
+    "evidence": [
+      "https://worldbank.github.io/alternative-data-for-crisis/notebooks/disruptions-business-trade/chokepoints-monitor.html",
+      "https://worldbank.github.io/alternative-data-for-crisis/notebooks/disruptions-business-trade/maritime-port-activity.html",
+      "https://www.imf.org/en/about/copyright-and-terms"
+    ],
     "round": 1
   },
   {
@@ -3620,11 +4997,54 @@
     "round": 1
   },
   {
+    "id": "ioc-slsmf",
+    "name": "IOC Sea Level Station Monitoring Facility (VLIZ)",
+    "classes": [
+      "met.flood.coastal"
+    ],
+    "dimensions": [
+      "sea-level"
+    ],
+    "url": "https://www.ioc-sealevelmonitoring.org/service.php",
+    "access": "api",
+    "auth": "key",
+    "terms": {
+      "url": null,
+      "automated": "unclear",
+      "redistribution": "unclear",
+      "note": "The page read states no terms."
+    },
+    "cost": "free",
+    "delay": "unknown",
+    "history": "unknown",
+    "rateLimit": "unknown",
+    "calibration": null,
+    "coverage": "worldwide (station count not checked)",
+    "origins": [
+      "tide-gauge-networks"
+    ],
+    "path": [
+      "www.ioc-sealevelmonitoring.org"
+    ],
+    "subjectIds": null,
+    "risks": [],
+    "decision": "later",
+    "adapter": null,
+    "reason": "World tide gauge levels, with a key from a registration. The terms are not stated.",
+    "evidence": [
+      "https://www.ioc-sealevelmonitoring.org/service.php"
+    ],
+    "round": 10
+  },
+  {
     "id": "ioda-api",
     "name": "IODA (Internet Outage Detection and Analysis) API",
     "classes": [
       "infra.internet.outage",
       "infra.internet.shutdown"
+    ],
+    "dimensions": [
+      "internet-connectivity"
     ],
     "url": "https://api.ioda.inetintel.cc.gatech.edu/v2/",
     "access": "api",
@@ -3658,7 +5078,9 @@
     "evidence": [
       "https://api.ioda.inetintel.cc.gatech.edu/v2/",
       "https://api.ioda.inetintel.cc.gatech.edu/v2/outages/alerts",
-      "https://github.com/InetIntel/ioda-api"
+      "https://github.com/InetIntel/ioda-api",
+      "https://blog.apnic.net/2024/09/11/ioda-internet-outage-detection-and-analysis/",
+      "https://www.petsymposium.org/foci/2026/foci-2026-0015.pdf"
     ],
     "round": 9
   },
@@ -3940,6 +5362,84 @@
     "round": 1
   },
   {
+    "id": "kraken-ohlc",
+    "name": "Kraken public OHLC API",
+    "classes": [
+      "market.price.move"
+    ],
+    "dimensions": [
+      "financial-markets"
+    ],
+    "url": "https://docs.kraken.com/api/docs/rest-api/get-ohlc-data/",
+    "access": "api",
+    "auth": "none",
+    "terms": {
+      "url": null,
+      "automated": "unclear",
+      "redistribution": "unclear",
+      "note": "The page read states no terms."
+    },
+    "cost": "free",
+    "delay": "unknown",
+    "history": "yes",
+    "rateLimit": "unknown",
+    "calibration": null,
+    "coverage": "world (a market that trades all hours of every day)",
+    "origins": [
+      "kraken"
+    ],
+    "path": [
+      "unknown"
+    ],
+    "subjectIds": null,
+    "risks": [],
+    "decision": "later",
+    "adapter": null,
+    "reason": "Crypto prices that move at night and on weekends, with no key. The terms and the rate limits are not stated.",
+    "evidence": [
+      "https://docs.kraken.com/api/docs/rest-api/get-ohlc-data/"
+    ],
+    "round": 10
+  },
+  {
+    "id": "kystverket-ais",
+    "name": "Kystverket open AIS (Norway)",
+    "classes": [],
+    "dimensions": [
+      "maritime-traffic"
+    ],
+    "url": "https://kystverket.no/en/navigation-and-monitoring/ais/access-to-ais-data",
+    "access": "stream",
+    "auth": "none",
+    "terms": {
+      "url": "https://kystverket.no/en/navigation-and-monitoring/ais/access-to-ais-data",
+      "automated": "unclear",
+      "redistribution": "allowed",
+      "note": "NLOD, the Norwegian Licence for Open Government Data."
+    },
+    "cost": "free",
+    "delay": "unknown",
+    "history": "yes (CSV download at ais-public.kystverket.no)",
+    "rateLimit": "unknown",
+    "calibration": null,
+    "coverage": "Norway, coastal waters (range not checked)",
+    "origins": [
+      "kystverket"
+    ],
+    "path": [
+      "unknown"
+    ],
+    "subjectIds": null,
+    "risks": [],
+    "decision": "later",
+    "adapter": null,
+    "reason": "Raw AIS for Norwegian waters under NLOD, with no registration. It needs a raw NMEA decoder, and the stream has only an IP address.",
+    "evidence": [
+      "https://kystverket.no/en/navigation-and-monitoring/ais/access-to-ais-data"
+    ],
+    "round": 10
+  },
+  {
     "id": "launch-library-2",
     "name": "Launch Library 2 (The Space Devs)",
     "classes": [
@@ -4056,6 +5556,44 @@
     "round": 1
   },
   {
+    "id": "mastodon-streaming",
+    "name": "Mastodon streaming API",
+    "classes": [],
+    "dimensions": [
+      "social-volume"
+    ],
+    "url": "https://docs.joinmastodon.org/methods/streaming/",
+    "access": "stream",
+    "auth": "account",
+    "terms": {
+      "url": null,
+      "automated": "unclear",
+      "redistribution": "unclear",
+      "note": "Each instance has its own terms."
+    },
+    "cost": "free",
+    "delay": "unknown",
+    "history": "no",
+    "rateLimit": "unknown",
+    "calibration": null,
+    "coverage": "the federated timeline that one instance sees",
+    "origins": [
+      "mastodon-instances"
+    ],
+    "path": [
+      "unknown"
+    ],
+    "subjectIds": null,
+    "risks": [],
+    "decision": "later",
+    "adapter": null,
+    "reason": "The public timeline of one instance needs a user token. Each instance has its own terms.",
+    "evidence": [
+      "https://docs.joinmastodon.org/methods/streaming/"
+    ],
+    "round": 10
+  },
+  {
     "id": "metaculus-api",
     "name": "Metaculus API 2.0",
     "classes": [
@@ -4155,6 +5693,9 @@
     "classes": [
       "transport.transit.service-alert"
     ],
+    "dimensions": [
+      "public-transit"
+    ],
     "url": "https://mobilitydatabase.org/",
     "access": "api",
     "auth": "account",
@@ -4182,7 +5723,10 @@
     "adapter": null,
     "reason": "Finds the alert feed of each transit agency.",
     "evidence": [
-      "https://mobilitydatabase.org/"
+      "https://mobilitydatabase.org/",
+      "https://mobilitydatabase.org/about",
+      "https://github.com/MobilityData/mobility-feed-api",
+      "https://ftp.fau.de/cran/web/packages/mobdb/vignettes/mobdb.html"
     ],
     "round": 1
   },
@@ -4228,6 +5772,9 @@
       "fire.wildfire",
       "fire.wildfire.hotspot"
     ],
+    "dimensions": [
+      "active-fires"
+    ],
     "url": "https://firms.modaps.eosdis.nasa.gov/api/",
     "access": "api",
     "auth": "key",
@@ -4255,7 +5802,8 @@
     "adapter": null,
     "reason": "Global hotspots that show fires before reports, outside the US too.",
     "evidence": [
-      "https://firms.modaps.eosdis.nasa.gov/api/"
+      "https://firms.modaps.eosdis.nasa.gov/api/",
+      "https://firms.modaps.eosdis.nasa.gov/api/map_key"
     ],
     "round": 1
   },
@@ -4338,6 +5886,129 @@
       "https://www.nasdaqtrader.com/Trader.aspx?id=MarketSystemStatus"
     ],
     "round": 1
+  },
+  {
+    "id": "ndw-open-data",
+    "name": "NDW open data (Netherlands)",
+    "classes": [
+      "transport.road.incident"
+    ],
+    "dimensions": [
+      "road-traffic",
+      "road-events"
+    ],
+    "url": "https://opendata.ndw.nu/",
+    "access": "file",
+    "auth": "none",
+    "terms": {
+      "url": null,
+      "automated": "unclear",
+      "redistribution": "unclear",
+      "note": "A terms page exists, but its content was not read."
+    },
+    "cost": "free",
+    "delay": "unknown",
+    "history": "yes (the archive Dexter)",
+    "rateLimit": "unknown",
+    "calibration": null,
+    "coverage": "Netherlands",
+    "origins": [
+      "ndw"
+    ],
+    "path": [
+      "opendata.ndw.nu"
+    ],
+    "subjectIds": null,
+    "risks": [
+      "The DATEX II v2.3 files end on 9 February 2027."
+    ],
+    "decision": "later",
+    "adapter": null,
+    "reason": "Open speed, flow and closure files for the Netherlands, with no key. The terms page was not read, and the DATEX II v2.3 files end in 2027.",
+    "evidence": [
+      "https://opendata.ndw.nu/",
+      "https://docs.ndw.nu/en/"
+    ],
+    "round": 10
+  },
+  {
+    "id": "neso-data-portal",
+    "name": "NESO data portal (Great Britain)",
+    "classes": [],
+    "dimensions": [
+      "power-demand",
+      "grid-frequency"
+    ],
+    "url": "https://www.neso.energy/data-portal/system-frequency-data/january_2026_-_historic_frequency_data",
+    "access": "api",
+    "auth": "none",
+    "terms": {
+      "url": null,
+      "automated": "unclear",
+      "redistribution": "unclear",
+      "note": "The licence is not confirmed."
+    },
+    "cost": "free",
+    "delay": "up to about 1 month for frequency",
+    "history": "yes",
+    "rateLimit": "unknown",
+    "calibration": null,
+    "coverage": "Great Britain",
+    "origins": [
+      "neso"
+    ],
+    "path": [
+      "api.neso.energy"
+    ],
+    "subjectIds": null,
+    "risks": [],
+    "decision": "later",
+    "adapter": null,
+    "reason": "Frequency at 1 second for Great Britain, but in monthly files. It suits baselines only, and the licence is not confirmed.",
+    "evidence": [
+      "https://www.neso.energy/data-portal/system-frequency-data/january_2026_-_historic_frequency_data",
+      "https://www.neso.energy/data-portal/2-day-ahead-demand-forecast/2_day_ahead_demand_forecast"
+    ],
+    "round": 10
+  },
+  {
+    "id": "network-rail-feeds",
+    "name": "Network Rail open data feeds (Great Britain)",
+    "classes": [],
+    "dimensions": [
+      "rail"
+    ],
+    "url": "https://www.networkrail.co.uk/who-we-are/transparency-and-ethics/transparency/open-data-feeds/",
+    "access": "stream",
+    "auth": "account",
+    "terms": {
+      "url": "https://www.networkrail.co.uk/who-we-are/transparency-and-ethics/transparency/open-data-feeds/network-rail-infrastructure-limited-data-feeds-licence",
+      "automated": "unclear",
+      "redistribution": "unclear",
+      "note": "The Data Feeds Licence of Network Rail Infrastructure Limited, based on the OGL."
+    },
+    "cost": "free",
+    "delay": "unknown",
+    "history": "unknown",
+    "rateLimit": "unknown",
+    "calibration": null,
+    "coverage": "Great Britain, all train operators and freight",
+    "origins": [
+      "network-rail"
+    ],
+    "path": [
+      "unknown"
+    ],
+    "subjectIds": null,
+    "risks": [],
+    "decision": "later",
+    "adapter": null,
+    "reason": "Train movements with their variation from the timetable, for Great Britain. It needs an account, and the ranking puts other sources first.",
+    "evidence": [
+      "https://wiki.openraildata.com/index.php/Train_Movements",
+      "https://www.networkrail.co.uk/who-we-are/transparency-and-ethics/transparency/open-data-feeds/network-rail-infrastructure-limited-data-feeds-licence"
+    ],
+    "round": 10
   },
   {
     "id": "nga-msi",
@@ -5328,10 +6999,51 @@
     "round": 1
   },
   {
+    "id": "open311-georeport",
+    "name": "Open311 GeoReport v2 servers",
+    "classes": [],
+    "dimensions": [
+      "emergency-calls"
+    ],
+    "url": "https://wiki.open311.org/GeoReport_v2/Servers",
+    "access": "api",
+    "auth": "unknown",
+    "terms": {
+      "url": null,
+      "automated": "unclear",
+      "redistribution": "unclear",
+      "note": "Each city has its own terms."
+    },
+    "cost": "free",
+    "delay": "unknown",
+    "history": "yes (per city)",
+    "rateLimit": "unknown",
+    "calibration": null,
+    "coverage": "the cities in the server list",
+    "origins": [
+      "open311-cities"
+    ],
+    "path": [
+      "unknown"
+    ],
+    "subjectIds": null,
+    "risks": [],
+    "decision": "later",
+    "adapter": null,
+    "reason": "Service requests of the cities in the Open311 server list. The auth and the terms differ for each city.",
+    "evidence": [
+      "https://wiki.open311.org/GeoReport_v2/Servers"
+    ],
+    "round": 10
+  },
+  {
     "id": "openaq-api",
     "name": "OpenAQ API v3",
     "classes": [
       "env.air-quality"
+    ],
+    "dimensions": [
+      "air-quality"
     ],
     "url": "https://docs.openaq.org/about/about",
     "access": "api",
@@ -5361,7 +7073,9 @@
     "adapter": null,
     "reason": "Global air quality where no national AQI API exists. The decision is later because the cost is unknown.",
     "evidence": [
-      "https://docs.openaq.org/about/about"
+      "https://docs.openaq.org/about/about",
+      "https://docs.openaq.org/using-the-api/api-key",
+      "https://docs.openaq.org/about/terms"
     ],
     "round": 1
   },
@@ -5485,6 +7199,86 @@
     "round": 1
   },
   {
+    "id": "opensky-rest",
+    "name": "OpenSky Network REST API",
+    "classes": [],
+    "dimensions": [
+      "air-traffic"
+    ],
+    "url": "https://openskynetwork.github.io/opensky-api/rest.html",
+    "access": "api",
+    "auth": "none",
+    "terms": {
+      "url": "https://zenodo.org/records/6325961/files/LICENSE.txt?download=1",
+      "automated": "limited",
+      "redistribution": "unclear",
+      "note": "Non-profit research, education or government use only. Commercial use needs a licence."
+    },
+    "cost": "free",
+    "delay": "unknown",
+    "history": "yes (Trino for approved researchers)",
+    "rateLimit": "Anonymous: 400 credits a day. Account: 4,000 a day. Active feeder: 8,000 a day.",
+    "calibration": null,
+    "coverage": "worldwide where receivers exist",
+    "origins": [
+      "opensky-network"
+    ],
+    "path": [
+      "unknown"
+    ],
+    "subjectIds": null,
+    "risks": [],
+    "decision": "reject",
+    "adapter": null,
+    "reason": "The terms limit use to non-profit research, education or government work. Commercial use needs a licence.",
+    "evidence": [
+      "https://openskynetwork.github.io/opensky-api/rest.html",
+      "https://zenodo.org/records/6325961/files/LICENSE.txt?download=1"
+    ],
+    "round": 10
+  },
+  {
+    "id": "opentransportdata-swiss",
+    "name": "opentransportdata.swiss",
+    "classes": [
+      "transport.transit.service-alert"
+    ],
+    "dimensions": [
+      "public-transit"
+    ],
+    "url": "https://opentransportdata.swiss/en/cookbook/",
+    "access": "api",
+    "auth": "key",
+    "terms": {
+      "url": "https://opentransportdata.swiss/en/limits-and-costs/",
+      "automated": "limited",
+      "redistribution": "unclear",
+      "note": "GTFS-RT has 5 requests per minute per key. SIRI-SX and SIRI-ET have 2 per minute and 3,000 per day. The pages read state no licence."
+    },
+    "cost": "free-tier",
+    "delay": "unknown",
+    "history": "unknown",
+    "rateLimit": "GTFS-RT: 5 requests per minute per key. SIRI-SX unplanned and SIRI-ET: 2 per minute and 3,000 per day.",
+    "calibration": null,
+    "coverage": "Switzerland, all public transport",
+    "origins": [
+      "transit-agencies"
+    ],
+    "path": [
+      "unknown"
+    ],
+    "subjectIds": null,
+    "risks": [],
+    "decision": "later",
+    "adapter": null,
+    "reason": "All Swiss public transport in one GTFS-RT feed, with a free key. The licence is not stated, and the request limits are low.",
+    "evidence": [
+      "https://opentransportdata.swiss/en/limits-and-costs/",
+      "https://opentransportdata.swiss/en/cookbook/"
+    ],
+    "round": 10
+  },
+  {
     "id": "opm-status",
     "name": "OPM operating status (Washington DC area)",
     "classes": [
@@ -5596,6 +7390,46 @@
       "https://osv.dev/"
     ],
     "round": 1
+  },
+  {
+    "id": "pegelonline",
+    "name": "PEGELONLINE (Germany, WSV)",
+    "classes": [
+      "met.flood.river"
+    ],
+    "dimensions": [
+      "river-levels"
+    ],
+    "url": "https://www.pegelonline.wsv.de/webservice/guideRestapi",
+    "access": "api",
+    "auth": "none",
+    "terms": {
+      "url": "https://www.pegelonline.wsv.de/webservice/guideRestapi",
+      "automated": "unclear",
+      "redistribution": "allowed",
+      "note": "The licence is dl-de/zero-2.0, the Data licence Germany, zero."
+    },
+    "cost": "free",
+    "delay": "unknown",
+    "history": "yes",
+    "rateLimit": "unknown",
+    "calibration": null,
+    "coverage": "Germany, federal waterways",
+    "origins": [
+      "wsv"
+    ],
+    "path": [
+      "www.pegelonline.wsv.de"
+    ],
+    "subjectIds": null,
+    "risks": [],
+    "decision": "later",
+    "adapter": null,
+    "reason": "Water levels of the German federal waterways under dl-de/zero-2.0, with no key. The ranking of round 10 puts other sources first.",
+    "evidence": [
+      "https://www.pegelonline.wsv.de/webservice/guideRestapi"
+    ],
+    "round": 10
   },
   {
     "id": "phmsa-incidents",
@@ -5910,6 +7744,47 @@
     "round": 1
   },
   {
+    "id": "prix-carburants-fr",
+    "name": "Prix des carburants (France)",
+    "classes": [
+      "market.price.fuel",
+      "infra.fuel.shortage"
+    ],
+    "dimensions": [
+      "fuel-prices"
+    ],
+    "url": "https://www.prix-carburants.gouv.fr/rubrique/opendata/",
+    "access": "file",
+    "auth": "none",
+    "terms": {
+      "url": "https://www.prix-carburants.gouv.fr/rubrique/opendata/",
+      "automated": "unclear",
+      "redistribution": "allowed",
+      "note": "Licence Ouverte."
+    },
+    "cost": "free",
+    "delay": "about 10 minutes",
+    "history": "yes (yearly archives since 2007)",
+    "rateLimit": "unknown",
+    "calibration": null,
+    "coverage": "France, all stations",
+    "origins": [
+      "prix-carburants"
+    ],
+    "path": [
+      "unknown"
+    ],
+    "subjectIds": null,
+    "risks": [],
+    "decision": "later",
+    "adapter": null,
+    "reason": "Fuel prices and stock outages at each French station under the Licence Ouverte. Stock outages are a strong signal of a supply shock.",
+    "evidence": [
+      "https://www.prix-carburants.gouv.fr/rubrique/opendata/"
+    ],
+    "round": 10
+  },
+  {
     "id": "promed",
     "name": "ProMED",
     "classes": [
@@ -5984,6 +7859,48 @@
     "round": 1
   },
   {
+    "id": "purpleair",
+    "name": "PurpleAir API",
+    "classes": [
+      "env.air-quality"
+    ],
+    "dimensions": [
+      "air-quality"
+    ],
+    "url": "https://community.purpleair.com/t/about-the-purpleair-api/7145",
+    "access": "api",
+    "auth": "key",
+    "terms": {
+      "url": "https://www2.purpleair.com/pages/attribution",
+      "automated": "limited",
+      "redistribution": "limited",
+      "note": "A points system gives 1 million free points at signup, then it is paid. Reports say that the terms restrict open redistribution."
+    },
+    "cost": "paid",
+    "delay": "unknown",
+    "history": "yes",
+    "rateLimit": "1 million free points at signup, then paid",
+    "calibration": null,
+    "coverage": "worldwide",
+    "origins": [
+      "purpleair"
+    ],
+    "path": [
+      "unknown"
+    ],
+    "subjectIds": null,
+    "risks": [],
+    "decision": "later",
+    "adapter": null,
+    "reason": "PM2.5 from PurpleAir sensors, but paid after the first free points. Sensor.Community and OpenAQ come first.",
+    "evidence": [
+      "https://community.purpleair.com/t/api-pricing/4523",
+      "https://community.purpleair.com/t/about-the-purpleair-api/7145",
+      "https://www2.purpleair.com/pages/attribution"
+    ],
+    "round": 10
+  },
+  {
     "id": "ransomware-live-api",
     "name": "ransomware.live API v2",
     "classes": [
@@ -6021,10 +7938,92 @@
     "round": 1
   },
   {
+    "id": "reddit-data-api",
+    "name": "Reddit Data API",
+    "classes": [],
+    "dimensions": [
+      "social-volume"
+    ],
+    "url": "https://support.reddithelp.com/hc/en-us/articles/16160319875092-Reddit-Data-API-Wiki",
+    "access": "api",
+    "auth": "account",
+    "terms": {
+      "url": null,
+      "automated": "limited",
+      "redistribution": "unclear",
+      "note": "OAuth with 100 requests per minute. New clients need approval since November 2025 (Responsible Builder Policy). The free tier is for non-commercial use."
+    },
+    "cost": "free-tier",
+    "delay": "unknown",
+    "history": "unknown",
+    "rateLimit": "100 requests per minute",
+    "calibration": null,
+    "coverage": "worldwide",
+    "origins": [
+      "reddit"
+    ],
+    "path": [
+      "unknown"
+    ],
+    "subjectIds": null,
+    "risks": [
+      "New clients need approval under the Responsible Builder Policy since November 2025."
+    ],
+    "decision": "later",
+    "adapter": null,
+    "reason": "Posts per subreddit through OAuth. New clients need approval, and the free tier is for non-commercial use.",
+    "evidence": [
+      "https://data365.co/blog/reddit-api-pricing"
+    ],
+    "round": 10
+  },
+  {
+    "id": "ripe-atlas",
+    "name": "RIPE Atlas",
+    "classes": [],
+    "dimensions": [
+      "internet-connectivity",
+      "internet-routing"
+    ],
+    "url": "https://atlas.ripe.net/docs/apis/rest-api-reference/",
+    "access": "api",
+    "auth": "none",
+    "terms": {
+      "url": null,
+      "automated": "unclear",
+      "redistribution": "unclear",
+      "note": "The terms were not read."
+    },
+    "cost": "free",
+    "delay": "unknown",
+    "history": "yes",
+    "rateLimit": "unknown",
+    "calibration": null,
+    "coverage": "worldwide, probes in many countries",
+    "origins": [
+      "ripe-ncc"
+    ],
+    "path": [
+      "atlas.ripe.net"
+    ],
+    "subjectIds": null,
+    "risks": [],
+    "decision": "later",
+    "adapter": null,
+    "reason": "Public latency and reachability results from probes, with no key. The terms were not read, and the details are not verified.",
+    "evidence": [
+      "https://atlas.ripe.net/docs/apis/rest-api-reference/"
+    ],
+    "round": 10
+  },
+  {
     "id": "ripe-ris-live",
     "name": "RIPE NCC RIS Live",
     "classes": [
       "infra.internet.bgp"
+    ],
+    "dimensions": [
+      "internet-routing"
     ],
     "url": "https://ris-live.ripe.net/",
     "access": "stream",
@@ -6054,9 +8053,91 @@
     "reason": "Raw BGP updates need a detector of hijacks, leaks and lost prefixes. Cloudflare Radar gives the events directly. The terms are known since round 9, and the RIS Live manual page did not load.",
     "evidence": [
       "https://www.ripe.net/about-us/legal/terms-of-service",
-      "https://www.ripe.net/analyse/internet-measurements/routing-information-service-ris/commercial-use/"
+      "https://www.ripe.net/analyse/internet-measurements/routing-information-service-ris/commercial-use/",
+      "https://ris-live.ripe.net/"
     ],
     "round": 9
+  },
+  {
+    "id": "safecast",
+    "name": "Safecast",
+    "classes": [
+      "cbrne.radiological"
+    ],
+    "dimensions": [
+      "radiation"
+    ],
+    "url": "https://safecast.org/data/",
+    "access": "api",
+    "auth": "none",
+    "terms": {
+      "url": "https://safecast.org/data/",
+      "automated": "unclear",
+      "redistribution": "allowed",
+      "note": "CC0."
+    },
+    "cost": "free",
+    "delay": "unknown",
+    "history": "yes",
+    "rateLimit": "unknown",
+    "calibration": null,
+    "coverage": "worldwide",
+    "origins": [
+      "safecast"
+    ],
+    "path": [
+      "api.safecast.org"
+    ],
+    "subjectIds": null,
+    "risks": [],
+    "decision": "later",
+    "adapter": null,
+    "reason": "World radiation readings from citizen devices under CC0, with no key. The ranking of round 10 puts other sources first.",
+    "evidence": [
+      "https://safecast.org/data/",
+      "https://simplemap.safecast.org/docs/"
+    ],
+    "round": 10
+  },
+  {
+    "id": "seattle-fire-911",
+    "name": "Seattle Real Time Fire 911 Calls",
+    "classes": [
+      "fire.structure"
+    ],
+    "dimensions": [
+      "emergency-calls"
+    ],
+    "url": "https://catalog.data.gov/dataset/seattle-real-time-fire-911-calls",
+    "access": "api",
+    "auth": "none",
+    "terms": {
+      "url": null,
+      "automated": "unclear",
+      "redistribution": "unclear",
+      "note": "The pages read state no terms."
+    },
+    "cost": "free",
+    "delay": "unknown",
+    "history": "yes",
+    "rateLimit": "unknown",
+    "calibration": null,
+    "coverage": "one US city",
+    "origins": [
+      "seattle-fire-department"
+    ],
+    "path": [
+      "unknown"
+    ],
+    "subjectIds": null,
+    "risks": [],
+    "decision": "later",
+    "adapter": null,
+    "reason": "Fire dispatches of one US city through Socrata. Other cities with the same kind of dataset are not checked.",
+    "evidence": [
+      "https://catalog.data.gov/dataset/seattle-real-time-fire-911-calls"
+    ],
+    "round": 10
   },
   {
     "id": "sec-enforcement-rss",
@@ -6138,6 +8219,46 @@
     "round": 1
   },
   {
+    "id": "sensor-community",
+    "name": "Sensor.Community (luftdaten)",
+    "classes": [
+      "env.air-quality"
+    ],
+    "dimensions": [
+      "air-quality"
+    ],
+    "url": "https://github.com/opendata-stuttgart/meta/wiki/EN-APIs",
+    "access": "file",
+    "auth": "none",
+    "terms": {
+      "url": null,
+      "automated": "limited",
+      "redistribution": "unclear",
+      "note": "The page read states no licence. The service asks for a User-Agent."
+    },
+    "cost": "free",
+    "delay": "about 5 minutes",
+    "history": "yes (daily CSV archive at archive.sensor.community)",
+    "rateLimit": "unknown",
+    "calibration": null,
+    "coverage": "worldwide citizen sensors",
+    "origins": [
+      "sensor-community"
+    ],
+    "path": [
+      "data.sensor.community"
+    ],
+    "subjectIds": null,
+    "risks": [],
+    "decision": "later",
+    "adapter": null,
+    "reason": "PM readings from citizen sensors every 5 minutes, with no key. The licence is not stated.",
+    "evidence": [
+      "https://github.com/opendata-stuttgart/meta/wiki/EN-APIs"
+    ],
+    "round": 10
+  },
+  {
     "id": "sidc-alerts-email",
     "name": "SIDC (RWC-Belgium) alerts by email: Presto, the flare alert and the halo CME alert",
     "classes": [
@@ -6213,6 +8334,47 @@
       "https://api.smarkets.com/v3/events/"
     ],
     "round": 1
+  },
+  {
+    "id": "sncf-gtfs-rt",
+    "name": "SNCF GTFS-RT and SIRI SX Lite (France)",
+    "classes": [
+      "transport.transit.service-alert"
+    ],
+    "dimensions": [
+      "rail"
+    ],
+    "url": "https://transport.data.gouv.fr/resources/83077",
+    "access": "feed",
+    "auth": "unknown",
+    "terms": {
+      "url": "https://www.digital.sncf.com/startup/API/conditions-generales-dutilisation-de-lapi-sncf",
+      "automated": "unclear",
+      "redistribution": "unclear",
+      "note": "The API has its own conditions (CGU). The licence of the feeds on transport.data.gouv.fr was not checked."
+    },
+    "cost": "free",
+    "delay": "unknown",
+    "history": "unknown",
+    "rateLimit": "unknown",
+    "calibration": null,
+    "coverage": "France, SNCF long-distance and regional trains",
+    "origins": [
+      "sncf"
+    ],
+    "path": [
+      "unknown"
+    ],
+    "subjectIds": null,
+    "risks": [],
+    "decision": "later",
+    "adapter": null,
+    "reason": "Delays, cancellations and service alerts of SNCF trains. The auth is unknown, and the licence of the feeds is not checked.",
+    "evidence": [
+      "https://www.data.gouv.fr/datasets/horaires-sncf/reuses_and_dataservices",
+      "https://transport.data.gouv.fr/resources/83077"
+    ],
+    "round": 10
   },
   {
     "id": "space-track-api",
@@ -6455,6 +8617,9 @@
       "infra.internet.dns-cdn",
       "infra.payments.outage"
     ],
+    "dimensions": [
+      "online-service-status"
+    ],
     "url": "https://www.githubstatus.com/api",
     "access": "api",
     "auth": "none",
@@ -6484,7 +8649,8 @@
     "reason": "One adapter covers many services from their own pages.",
     "evidence": [
       "https://www.githubstatus.com/api",
-      "https://developer.statuspage.io/"
+      "https://developer.statuspage.io/",
+      "https://metastatuspage.com/api"
     ],
     "round": 1
   },
@@ -6575,6 +8741,46 @@
     "round": 6
   },
   {
+    "id": "tankerkoenig",
+    "name": "Tankerkoenig fuel prices (Germany, MTS-K)",
+    "classes": [
+      "market.price.fuel"
+    ],
+    "dimensions": [
+      "fuel-prices"
+    ],
+    "url": "https://creativecommons.tankerkoenig.de/",
+    "access": "api",
+    "auth": "key",
+    "terms": {
+      "url": "https://creativecommons.tankerkoenig.de/",
+      "automated": "limited",
+      "redistribution": "limited",
+      "note": "CC BY 4.0. The free API has a limit of 1 request per minute. The terms block bulk use and exclude oil companies. The history CSV is CC BY-NC-SA, with an account."
+    },
+    "cost": "free",
+    "delay": "unknown",
+    "history": "yes (CSV since June 2014, account needed)",
+    "rateLimit": "1 request per minute on the free API",
+    "calibration": null,
+    "coverage": "Germany, over 14,000 stations",
+    "origins": [
+      "mts-k"
+    ],
+    "path": [
+      "creativecommons.tankerkoenig.de"
+    ],
+    "subjectIds": null,
+    "risks": [],
+    "decision": "later",
+    "adapter": null,
+    "reason": "Station fuel prices for Germany under CC BY 4.0. The terms block bulk use, so a baseline for the whole country is hard.",
+    "evidence": [
+      "https://creativecommons.tankerkoenig.de/"
+    ],
+    "round": 10
+  },
+  {
     "id": "thousandeyes-outages",
     "name": "ThousandEyes Internet Outages Map",
     "classes": [
@@ -6647,6 +8853,132 @@
     "round": 1
   },
   {
+    "id": "tomtom-traffic",
+    "name": "TomTom Traffic API (Flow and Incidents)",
+    "classes": [
+      "transport.road.incident"
+    ],
+    "dimensions": [
+      "road-traffic",
+      "road-events"
+    ],
+    "url": "https://docs.tomtom.com/traffic-api/documentation/tomtom-maps/product-information/introduction",
+    "access": "api",
+    "auth": "key",
+    "terms": {
+      "url": null,
+      "automated": "limited",
+      "redistribution": "limited",
+      "note": "Third-party comparisons say that storage is forbidden and that caching follows the response headers. The terms of TomTom were not read to confirm it."
+    },
+    "cost": "free-tier",
+    "delay": "unknown",
+    "history": "unknown",
+    "rateLimit": "2,500 non-tile requests a day by the pricing FAQ. The price announcement gives monthly figures instead.",
+    "calibration": null,
+    "coverage": "many countries (list not checked)",
+    "origins": [
+      "tomtom"
+    ],
+    "path": [
+      "unknown"
+    ],
+    "subjectIds": null,
+    "risks": [],
+    "decision": "later",
+    "adapter": null,
+    "reason": "Speed against free-flow speed on each segment, with a free tier. The storage terms are not confirmed, and a baseline needs stored values.",
+    "evidence": [
+      "https://docs.tomtom.com/traffic-api/documentation/tomtom-maps/product-information/introduction",
+      "https://developer.tomtom.com/platform/documentation/status-and-support/faqs",
+      "https://docs.tomtom.com/pricing/price-announcement"
+    ],
+    "round": 10
+  },
+  {
+    "id": "trafikverket-open-api",
+    "name": "Trafikverket open API (Sweden)",
+    "classes": [
+      "transport.road.incident"
+    ],
+    "dimensions": [
+      "road-events",
+      "rail"
+    ],
+    "url": "https://api.trafikinfo.trafikverket.se/",
+    "access": "api",
+    "auth": "key",
+    "terms": {
+      "url": null,
+      "automated": "unclear",
+      "redistribution": "unclear",
+      "note": "The pages read state no terms."
+    },
+    "cost": "free",
+    "delay": "unknown",
+    "history": "unknown",
+    "rateLimit": "unknown",
+    "calibration": null,
+    "coverage": "Sweden",
+    "origins": [
+      "trafikverket"
+    ],
+    "path": [
+      "api.trafikinfo.trafikverket.se"
+    ],
+    "subjectIds": null,
+    "risks": [],
+    "decision": "later",
+    "adapter": null,
+    "reason": "Train delays, cancellations and road situations for Sweden, with a free key. The licence was not found.",
+    "evidence": [
+      "https://www.trafiklab.se/api/trafiklab-apis/trafikverket/",
+      "https://bransch.trafikverket.se/en/startpage/operations/Operations-road/Traffic-information/Real-time-traffic-information/How-to-subscribe---Real-time-traffic-information"
+    ],
+    "round": 10
+  },
+  {
+    "id": "transitland",
+    "name": "Transitland v2",
+    "classes": [
+      "transport.transit.service-alert"
+    ],
+    "dimensions": [
+      "public-transit"
+    ],
+    "url": "https://www.transit.land/documentation/plans-and-billing",
+    "access": "api",
+    "auth": "key",
+    "terms": {
+      "url": "https://www.transit.land/terms",
+      "automated": "unclear",
+      "redistribution": "limited",
+      "note": "Attribution with a link to transit.land/terms. Each feed keeps its own licence. GraphQL is paid only."
+    },
+    "cost": "free-tier",
+    "delay": "up to about 1 minute after the source feed",
+    "history": "unknown",
+    "rateLimit": "A low rate limit and a monthly quota on the free tier (the figures are not recorded)",
+    "calibration": null,
+    "coverage": "worldwide",
+    "origins": [
+      "transit-agencies"
+    ],
+    "path": [
+      "unknown"
+    ],
+    "subjectIds": null,
+    "risks": [],
+    "decision": "later",
+    "adapter": null,
+    "reason": "Many GTFS-RT feeds through one API, with a free key and a low limit. The Mobility Database gives the same feeds directly.",
+    "evidence": [
+      "https://www.transit.land/documentation/plans-and-billing",
+      "https://www.transit.land/terms"
+    ],
+    "round": 10
+  },
+  {
     "id": "treasury-fiscal-data-api",
     "name": "Treasury Fiscal Data API",
     "classes": [
@@ -6682,6 +9014,45 @@
       "https://fiscaldata.treasury.gov/api-documentation/"
     ],
     "round": 1
+  },
+  {
+    "id": "tsa-throughput",
+    "name": "TSA checkpoint travel numbers",
+    "classes": [],
+    "dimensions": [
+      "air-passengers"
+    ],
+    "url": "https://www.tsa.gov/travel/passenger-volumes",
+    "access": "page",
+    "auth": "none",
+    "terms": {
+      "url": null,
+      "automated": "unclear",
+      "redistribution": "unclear",
+      "note": "No terms are stated."
+    },
+    "cost": "free",
+    "delay": "about 1 day",
+    "history": "yes",
+    "rateLimit": "unknown",
+    "calibration": null,
+    "coverage": "United States",
+    "origins": [
+      "tsa"
+    ],
+    "path": [
+      "www.tsa.gov"
+    ],
+    "subjectIds": null,
+    "risks": [],
+    "decision": "later",
+    "adapter": null,
+    "reason": "Daily screened passengers for the United States, 1 day late. It is an HTML table with no stated terms, so a page adapter waits for terms.",
+    "evidence": [
+      "https://catalog.data.gov/dataset/tsa-foia-reading-room-weekly-passenger-throughput-data",
+      "https://ohss.dhs.gov/topics/screening"
+    ],
+    "round": 10
   },
   {
     "id": "tsunami-gov-feeds",
@@ -6764,6 +9135,47 @@
       "https://ucdp.uu.se/apidocs/"
     ],
     "round": 1
+  },
+  {
+    "id": "uk-fuel-finder",
+    "name": "UK Fuel Finder",
+    "classes": [
+      "market.price.fuel"
+    ],
+    "dimensions": [
+      "fuel-prices"
+    ],
+    "url": "https://www.gov.uk/guidance/access-fuel-price-data",
+    "access": "api",
+    "auth": "account",
+    "terms": {
+      "url": null,
+      "automated": "unclear",
+      "redistribution": "unclear",
+      "note": "A third party says OGL v3. The research did not confirm it."
+    },
+    "cost": "free",
+    "delay": "up to 30 minutes for traders, up to half a day for the CSV",
+    "history": "unknown",
+    "rateLimit": "unknown",
+    "calibration": null,
+    "coverage": "United Kingdom",
+    "origins": [
+      "uk-fuel-traders"
+    ],
+    "path": [
+      "unknown"
+    ],
+    "subjectIds": null,
+    "risks": [],
+    "decision": "later",
+    "adapter": null,
+    "reason": "Forecourt fuel prices for the United Kingdom. The API needs a GOV.UK One Login and a registration, and the licence is not confirmed.",
+    "evidence": [
+      "https://www.gov.uk/guidance/access-fuel-price-data",
+      "https://www.gov.uk/guidance/access-the-latest-fuel-prices-and-forecourt-data-via-api-or-email"
+    ],
+    "round": 10
   },
   {
     "id": "ukmto",
@@ -6877,6 +9289,9 @@
     "name": "USGS earthquake GeoJSON summary feeds",
     "classes": [
       "geo.earthquake"
+    ],
+    "dimensions": [
+      "felt-reports"
     ],
     "url": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/geojson.php",
     "access": "feed",
@@ -7032,6 +9447,9 @@
       "met.flood",
       "met.flood.river"
     ],
+    "dimensions": [
+      "river-levels"
+    ],
     "url": "https://api.waterdata.usgs.gov/",
     "access": "api",
     "auth": "key",
@@ -7060,7 +9478,9 @@
     "reason": "Observed river levels at a named gauge, independent of NWS products.",
     "evidence": [
       "https://api.waterdata.usgs.gov/",
-      "https://www.usgs.gov/web-tools/alerts-and-notification-services"
+      "https://www.usgs.gov/web-tools/alerts-and-notification-services",
+      "https://waterdata.usgs.gov/blog/api-waterservices-decom",
+      "https://www.usgs.gov/tools/usgs-water-data-apis"
     ],
     "round": 1
   },
@@ -7179,12 +9599,137 @@
     "round": 1
   },
   {
+    "id": "waze-for-cities",
+    "name": "Waze for Cities data feed",
+    "classes": [
+      "transport.road.incident"
+    ],
+    "dimensions": [
+      "road-traffic",
+      "road-events"
+    ],
+    "url": "https://www.waze.com/en/ccp",
+    "access": "feed",
+    "auth": "partner",
+    "terms": {
+      "url": null,
+      "automated": "limited",
+      "redistribution": "forbidden",
+      "note": "A partner agreement for eligible authorities. Partners agree not to make the data public."
+    },
+    "cost": "free",
+    "delay": "unknown",
+    "history": "unknown",
+    "rateLimit": "unknown",
+    "calibration": null,
+    "coverage": "the area of each partner authority",
+    "origins": [
+      "waze"
+    ],
+    "path": [
+      "unknown"
+    ],
+    "subjectIds": null,
+    "risks": [],
+    "decision": "reject",
+    "adapter": null,
+    "reason": "The feed is for partner authorities only. Partners agree to keep the data private, so a public open-source system cannot use it.",
+    "evidence": [
+      "https://www.waze.com/en/ccp",
+      "https://route-fifty.com/digital-government/2018/12/how-waze-partners-with-cities-on-data-sharing/303402",
+      "https://www.nationalacademies.org/read/28690/chapter/11"
+    ],
+    "round": 10
+  },
+  {
+    "id": "webtris",
+    "name": "National Highways WebTRIS (England)",
+    "classes": [],
+    "dimensions": [
+      "road-traffic"
+    ],
+    "url": "https://webtris.nationalhighways.co.uk/api/swagger/ui/index",
+    "access": "api",
+    "auth": "none",
+    "terms": {
+      "url": null,
+      "automated": "unclear",
+      "redistribution": "unclear",
+      "note": "No licence is named on the API page."
+    },
+    "cost": "free",
+    "delay": "unknown",
+    "history": "yes (examples reach back to 2015)",
+    "rateLimit": "unknown",
+    "calibration": null,
+    "coverage": "England, the strategic road network",
+    "origins": [
+      "national-highways"
+    ],
+    "path": [
+      "webtris.nationalhighways.co.uk"
+    ],
+    "subjectIds": null,
+    "risks": [],
+    "decision": "later",
+    "adapter": null,
+    "reason": "Long series of counts and speeds for England, with no key. No licence is named, and its value as a live signal is not known.",
+    "evidence": [
+      "https://webtris.nationalhighways.co.uk/api/swagger/ui/index"
+    ],
+    "round": 10
+  },
+  {
+    "id": "wfp-food-prices",
+    "name": "WFP global food prices (HDX)",
+    "classes": [
+      "market.price.commodity"
+    ],
+    "dimensions": [
+      "food-prices"
+    ],
+    "url": "https://data.humdata.org/dataset/global-wfp-food-prices",
+    "access": "file",
+    "auth": "none",
+    "terms": {
+      "url": null,
+      "automated": "unclear",
+      "redistribution": "unclear",
+      "note": "The licence on HDX was not checked."
+    },
+    "cost": "free",
+    "delay": "weeks",
+    "history": "yes",
+    "rateLimit": "unknown",
+    "calibration": null,
+    "coverage": "many countries, mostly where WFP works (count not checked)",
+    "origins": [
+      "wfp"
+    ],
+    "path": [
+      "data.humdata.org"
+    ],
+    "subjectIds": null,
+    "risks": [],
+    "decision": "later",
+    "adapter": null,
+    "reason": "Staple food market prices in many countries, weeks late. It gives slow context, and the HDX licence is not checked.",
+    "evidence": [
+      "https://data.humdata.org/dataset/global-wfp-food-prices",
+      "https://github.com/WFP-VAM/DataBridgesAPI"
+    ],
+    "round": 10
+  },
+  {
     "id": "who-don-api",
     "name": "WHO Disease Outbreak News (JSON API)",
     "classes": [
       "health.outbreak",
       "health.travel-notice",
       "cbrne.biological"
+    ],
+    "dimensions": [
+      "outbreak-reports"
     ],
     "url": "https://www.who.int/api/news/diseaseoutbreaknews",
     "access": "api",
@@ -7216,6 +9761,84 @@
       "https://www.who.int/api/news/diseaseoutbreaknews"
     ],
     "round": 1
+  },
+  {
+    "id": "wikimedia-eventstreams",
+    "name": "Wikimedia EventStreams",
+    "classes": [],
+    "dimensions": [
+      "online-attention"
+    ],
+    "url": "https://wikitech.wikimedia.org/wiki/Event_Platform/EventStreams_HTTP_Service",
+    "access": "stream",
+    "auth": "none",
+    "terms": {
+      "url": "https://wikitech.wikimedia.org/wiki/Event_Platform/EventStreams_HTTP_Service",
+      "automated": "limited",
+      "redistribution": "unclear",
+      "note": "The service is for small-scale tools. Connections close after 15 minutes. Filter on the client."
+    },
+    "cost": "free",
+    "delay": "unknown (seconds in practice: not measured)",
+    "history": "yes (short)",
+    "rateLimit": "unknown",
+    "calibration": null,
+    "coverage": "worldwide, every Wikimedia project",
+    "origins": [
+      "wikimedia-foundation"
+    ],
+    "path": [
+      "unknown"
+    ],
+    "subjectIds": null,
+    "risks": [],
+    "decision": "plan",
+    "adapter": null,
+    "reason": "A live world stream of edits with no key, and up to 31 days of replay for a baseline. Edit bursts about a place or a hazard show public attention.",
+    "evidence": [
+      "https://wikitech.wikimedia.org/wiki/Event_Platform/EventStreams_HTTP_Service"
+    ],
+    "round": 10
+  },
+  {
+    "id": "wikimedia-pageviews",
+    "name": "Wikimedia Pageviews API",
+    "classes": [],
+    "dimensions": [
+      "online-attention"
+    ],
+    "url": "https://doc.wikimedia.org/generated-data-platform/aqs/analytics-api/reference/page-views.html",
+    "access": "api",
+    "auth": "none",
+    "terms": {
+      "url": "https://www.mediawiki.org/wiki/Wikimedia_APIs/Access_policy",
+      "automated": "limited",
+      "redistribution": "unclear",
+      "note": "The access policy asks for a User-Agent. The licence of the pageview data was not checked. The wiki content is CC BY-SA 4.0."
+    },
+    "cost": "free",
+    "delay": "unknown",
+    "history": "yes (since 1 July 2015)",
+    "rateLimit": "unknown",
+    "calibration": null,
+    "coverage": "worldwide, every Wikimedia project",
+    "origins": [
+      "wikimedia-foundation"
+    ],
+    "path": [
+      "unknown"
+    ],
+    "subjectIds": null,
+    "risks": [],
+    "decision": "later",
+    "adapter": null,
+    "reason": "Views of each article since 2015, with no key. The long history gives weekly baselines, but the ranking puts the live stream first.",
+    "evidence": [
+      "https://doc.wikimedia.org/generated-data-platform/aqs/analytics-api/reference/page-views.html",
+      "https://www.mediawiki.org/wiki/Wikimedia_APIs/Access_policy",
+      "https://meta.wikimedia.org/wiki/Research:Data"
+    ],
+    "round": 10
   },
   {
     "id": "wmo-cap-feeds",
@@ -7304,6 +9927,9 @@
     "classes": [
       "transport.road.incident"
     ],
+    "dimensions": [
+      "road-events"
+    ],
     "url": "https://www.transportation.gov/av/data/wzdx",
     "access": "feed",
     "auth": "unknown",
@@ -7330,7 +9956,12 @@
     "decision": "later",
     "adapter": null,
     "reason": "A common format for road works across states.",
-    "evidence": [],
+    "evidence": [
+      "https://github.com/usdot-jpo-ode/wzdx",
+      "https://www.volpe.dot.gov/news/enhanced-work-zone-data-exchange-program-improves-roadway-safety",
+      "https://catalog.data.gov/dataset/work-zone-data-exchange-wzdx-feed-registry",
+      "https://www.transportation.gov/av/data/wzdx"
+    ],
     "round": 1
   }
 ]
