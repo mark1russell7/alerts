@@ -38,7 +38,7 @@ describe("createCapFeedSource", () => {
       title: "Deutscher Wetterdienst: the CAP feed",
       origins: ["dwd"],
       dependsOn: ["provider:dwd"],
-      uses: ["internet", "power"],
+      uses: ["internet", "dns", "power"],
       kinds: ["met"],
       coverage: [{ type: "code", system: "iso3166", code: "DE" }],
       transport: "poll",

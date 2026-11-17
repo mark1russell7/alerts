@@ -18,8 +18,7 @@ export function descriptorOf(feed: CapFeed): SourceDescriptor {
     title: `${feed.title}: the CAP feed`,
     origins: [feed.origin],
     dependsOn: feed.dependsOn,
-    // The base of this branch has no resource dns. When the branch moves onto #195, `dns` comes into this list.
-    uses: ["internet", "power"],
+    uses: ["internet", "dns", "power"],
     kinds: feed.kinds,
     coverage,
     transport: "poll",
