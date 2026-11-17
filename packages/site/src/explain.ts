@@ -3,7 +3,7 @@
  * the reports of an incident. These functions only write text. The core makes each decision.
  */
 
-import { placeOfNode, type AssessedLevel, type AssessReason, type Estimate, type HealthState, type HealthStep, type Incident, type Report, type ScoreFactor, type ShadowScore } from "@mark1russell7/alerts";
+import { placeOfNode, type AssessedLevel, type AssessReason, type Estimate, type HealthStep, type Incident, type Report, type ScoreFactor, type ShadowScore } from "@mark1russell7/alerts";
 import { NAMES, SHORT_NAMES } from "./demo.ts";
 
 /** This function gives the name of a person or a place on the page. */
@@ -23,16 +23,6 @@ export function shortName(id: string): string {
 export function stepLabel(index: number, count: number): string {
   return `Step ${String(index + 1)} of ${String(count)}`;
 }
-
-/** The words of each health state of a source. */
-export const HEALTH_WORDS: Readonly<Record<HealthState, string>> = {
-  unknown: "Unknown",
-  healthy: "Healthy",
-  slow: "Slow",
-  failing: "Failing",
-  silent: "Silent",
-  changed: "Changed",
-};
 
 /** The words of the kinds that the coverage examines. */
 export const KIND_WORDS: Readonly<Record<string, string>> = {

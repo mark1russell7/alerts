@@ -1187,6 +1187,16 @@ The route `GET /health` of the runtime gives the `HealthPayload` of `healthPaylo
 
 The coverage holds the ids of the places. Thus only the loopback address gives the route, as for the map.
 
+The local page shows the payload in the panel "Sources" (`packages/site/src/health-read.ts`, `health-view.ts`).
+
+- The page reads the route after each good read of the map. A runtime with no `health` option gives 404, and the panel tells that it has no health.
+- Two sentences sum the payload: the sources, and the quotas and balances that stop or limit a message. A link at the top of the page has the same sentences.
+- Each source has a row with its state, the time since its last good read and the kinds that it covers. The source that needs attention is first.
+- A source that is down or late needs attention. A source is late when an entry of `lateness` has the state `late` and names it in `to`.
+- A quota, a balance or a copy gets a row only when it has a stage.
+- The health is of the present. For a past time of the scrubber, the panel tells that it stays at the present.
+- After a failed read, the panel keeps the last rows. One sentence tells the time of that read in place of the two sentences.
+
 ### The history
 
 The function `historyPayload` gives the `HistoryPayload` of the route `GET /history`. A time scrubber of a page replays how each incident grew. `historyPayloadSchema` checks the payload. The runtime gives the route on the loopback address only.

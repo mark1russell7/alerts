@@ -5,6 +5,9 @@
  *
  * A time scrubber below the map sets the time of the page. Its end is the present, and each other time is from the
  * history of the runtime. The page sends each request to the origin of the page only.
+ *
+ * A panel below the map tells the health of each source, and if a quota or a balance stops a message. A link at the
+ * top of the page has the same two sentences. The health is of the present, also when the map shows a past time.
  */
 
 import { NO_HISTORIES, type Histories, type MapPayload } from "@mark1russell7/alerts";
@@ -12,6 +15,8 @@ import { byId, setupTheme } from "@mark1russell7/site-pages/chrome";
 import { replayOf, replayPause, replaySeek, replaySpan, type Replay } from "@mark1russell7/visuals";
 import { createScrubber, type Scrubber } from "@mark1russell7/visuals/scrubber";
 import { loadGlobe } from "./globe-load.ts";
+import { readHealth, type HealthRead } from "./health-read.ts";
+import { drawHealth, drawVerdicts, healthPanel, keepHealth, NO_HEALTH, type KeptHealth } from "./health-view.ts";
 import { readHistories, WHOLE_READ_EVERY_MS } from "./history-read.ts";
 import { readLine, readMap, READ_EVERY_MS } from "./map-read.ts";
 import { drawIncidentList, drawMapView, drawStatusLegend, drawUnshaped } from "./map-view.ts";
@@ -31,6 +36,13 @@ const timeBox = byId("time");
 const timeProblem = byId("time-problem");
 const past = byId("past");
 const pastText = byId("past-text");
+const brief = byId("brief");
+const healthTitle = byId("sources-h");
+const healthPast = byId("health-past");
+const healthSum = byId("health-sum");
+const healthProblem = byId("health-problem");
+const healthBox = byId("health");
+const healthHint = byId("health-hint");
 
 /** The live map: the last good read of the runtime. */
 let payload: MapPayload | undefined;
@@ -48,6 +60,10 @@ let wholeAt = -Infinity;
 let selected: string | undefined;
 let lastGood: number | undefined;
 let reading = false;
+/** The health of the sources that the page keeps between two reads. */
+let health: KeptHealth = NO_HEALTH;
+/** The sentences of the panel of the sources that the page shows. The page writes them again only when they change. */
+let verdicts = "";
 
 const time = (at: number): string => new Date(at).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
 
@@ -108,6 +124,32 @@ function setWords(replay: Replay | undefined): void {
   if (listTitle.textContent !== words.list) listTitle.textContent = words.list;
   if (words.past !== undefined && pastText.textContent !== words.past) pastText.textContent = words.past;
   past.hidden = words.past === undefined;
+  // The health is of the present only. For a past time, the panel of the sources tells that it stays at the present.
+  if (healthTitle.textContent !== words.sources) healthTitle.textContent = words.sources;
+  if (words.health !== undefined && healthPast.textContent !== words.health) healthPast.textContent = words.health;
+  healthPast.hidden = words.health === undefined;
+}
+
+/**
+ * This function shows the result of a read of the health in the panel of the sources and in the link at the top.
+ * With no result, the runtime did not answer the read of the map, and the page did not ask for the health.
+ */
+function showHealth(result: HealthRead | undefined): void {
+  const at = Date.now();
+  health = keepHealth(health, result, at);
+  const panel = healthPanel(health, at, clock);
+  // A screen reader reads the sentences when they change. Thus a read with the same sentences does not write them again.
+  const key = JSON.stringify(panel.verdicts);
+  if (key !== verdicts) {
+    verdicts = key;
+    healthSum.replaceChildren(...drawVerdicts(panel.verdicts, "p"));
+    brief.replaceChildren(...drawVerdicts(panel.verdicts, "span"));
+  }
+  healthProblem.textContent = panel.problem ?? "";
+  healthProblem.hidden = panel.problem === undefined;
+  healthBox.replaceChildren(...drawHealth(panel));
+  // The hint tells the sequence of the rows. A panel with no row does not show it.
+  healthHint.hidden = panel.rows.length === 0;
 }
 
 /** This function sets the map of the picture from the live map and the time of the scrubber. */
@@ -183,6 +225,8 @@ async function refresh(): Promise<void> {
     problem.textContent = result.ok ? "" : result.text;
     problem.hidden = result.ok;
     line.textContent = readLine(lastGood, !result.ok, time);
+    // The health also comes after a good map, for the same reason. It is the last read, so a slow health does not hold the map.
+    showHealth(result.ok ? await readHealth(get) : undefined);
   } finally {
     reading = false;
   }
