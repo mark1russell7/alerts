@@ -4,7 +4,7 @@
  * alert system. The third is the UGC and SAME region codes and the state codes. The fourth is the
  * event codes of the WEA messages.
  *
- * The package also holds the origin and the office ids of the NWS. The NWS API source, the CAP sources,
+ * The package also holds the origin and the office ids of the NWS, and the rule of the keepalive of the NWS. The NWS API source, the CAP sources,
  * the IEM source and the weather radio source use these functions.
  */
 
@@ -40,7 +40,8 @@ export {
   stateOfUgc,
   type SameLocation,
 } from "./codes.ts";
-export { NWS_ORIGIN, vtecOffice } from "./nws.ts";
+export { isKeepalive, KEEPALIVE_AWIPS_ID, KEEPALIVE_MAX_AGE_MS, keepaliveCheck } from "./keepalive.ts";
+export { NWS_ORIGIN, US_COVERAGE, vtecOffice } from "./nws.ts";
 export { statesOf } from "./watch.ts";
 export { WEA_EVENT_CODES, WEA_PARAMETER } from "./wea.ts";
 export {
