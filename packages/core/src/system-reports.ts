@@ -158,6 +158,11 @@ export interface DrillSnapshot {
   readonly drill: DrillConfig;
   /** The last run of the drill in the copy. A drill that is due has a run that starts at the time of the snapshot. */
   readonly run?: DrillRun;
+  /**
+   * This value tells that the drill has no next start: `nextDrillAt` gives `undefined`. Such a drill is a condition, a
+   * failure with the reason `no-start`. Thus the path of the life-safety warnings does not lose its test with no report.
+   */
+  readonly noStart?: boolean;
 }
 
 /** One snapshot of the system. */
@@ -346,6 +351,7 @@ export function systemReports(lines: SystemLines, snapshot: SystemSnapshot, at: 
   if (recovery !== undefined) conditions.set(LOG_LINE, logCondition(recovery));
   for (const entry of snapshot.drills ?? []) {
     const { copy, drill, run } = entry;
+    if (entry.noStart === true) conditions.set(`${drillName(copy, drill.id)}/no-start`, drillNoStartCondition(copy, drill));
     if (run === undefined || run.drill !== drill.id) continue;
     const verdict = drillVerdict(drill, run, at);
     if (verdict.state === "pending") conditions.set(drillName(copy, drill.id), drillRunCondition(copy, drill, run));
@@ -511,6 +517,24 @@ function drillFailedCondition(copy: string, drill: DrillConfig, run: DrillRun, w
     description: `The drill started at ${new Date(run.at).toISOString()} on the channel ${drill.path.channel}, from the copy ${copy}. A real warning on this path can also go without an answer.`,
     instruction: "Examine the channel, the app and the settings of the phone. The next run of the drill tests the path again.",
     parameters: { drill: [drill.id], copy: [copy], why: [why] },
+  };
+}
+
+function drillNoStartCondition(copy: string, drill: DrillConfig): Condition {
+  const code = `${DRILL_KIND}.failed`;
+  return {
+    // The drill and the reason are the only facts. Thus the line gives one alert, and a next start gives its cancel.
+    facts: { copy, drill: drill.id, why: "no-start" },
+    kind: { code, label: kindLabel(code) },
+    severity: "moderate",
+    urgency: "expected",
+    response: ["assess"],
+    areas: [],
+    about: [{ system: DRILL_SUBJECT, id: drill.id, label: `Drill ${drill.id}` }],
+    headline: `The drill ${drill.id} has no next start.`,
+    description: `Each time of the window of the drill is in the quiet window of the person, or too near to it. The copy ${copy} does not test the path on the channel ${drill.path.channel}.`,
+    instruction: "Change the window of the drill or the quiet window of the person in the configuration.",
+    parameters: { drill: [drill.id], copy: [copy], why: ["no-start"] },
   };
 }
 

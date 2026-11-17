@@ -647,6 +647,21 @@ describe("the drill reports", () => {
     ]);
   });
 
+  it("gives a failure with the reason no-start for a drill with no next start, and ends it at the next start", () => {
+    const stuck = { drills: [{ copy: "home", drill: DRILL, noStart: true }] };
+    const failed = systemReports(NO_SYSTEM_LINES, snapshot(stuck), START);
+    expect(codes(failed.reports)).toEqual([["alert", "system.drill.failed", "drill/home/push-weekly/no-start"]]);
+    expect(failed.reports[0]!.headline).toBe("The drill push-weekly has no next start.");
+    expect(failed.reports[0]!.parameters).toEqual({ drill: ["push-weekly"], copy: ["home"], why: ["no-start"] });
+    // The same condition later gives no report. A next start ends the line, and the last run keeps its own line.
+    expect(systemReports(failed.lines, snapshot(stuck), START + MINUTE).reports).toEqual([]);
+    const fixed = systemReports(failed.lines, snapshot(drills({})), START + 2 * MINUTE);
+    expect(codes(fixed.reports)).toEqual([
+      ["alert", "system.drill.run", "drill/home/push-weekly"],
+      ["cancel", "system.drill.failed", "drill/home/push-weekly/no-start"],
+    ]);
+  });
+
   it("keeps the lines with no drills in the snapshot, ends them for a drill that is gone, and starts no line with no run", () => {
     const started = systemReports(NO_SYSTEM_LINES, snapshot(drills({})), START);
     expect(systemReports(started.lines, snapshot(), START + 40 * MINUTE).reports).toEqual([]);
