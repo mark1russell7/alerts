@@ -15,6 +15,7 @@ import { KILL_ARMS, KILL_GATES, runKillRestart } from "../src/kill-restart.ts";
 import { ACCEPT_ARMS, ACCEPT_GATES, runLateAccept } from "../src/late-accept.ts";
 import { runSlowSource, SLOW_ARMS, trickleMs } from "../src/slow-source.ts";
 import { DOWN_ARMS, runSourceDown } from "../src/source-down.ts";
+import { COPIES_ARMS, COPIES_GATES, runTwoCopies, type SentRecord } from "../src/two-copies.ts";
 import {
   COPY_ARMS,
   COPY_GATES,
@@ -335,4 +336,27 @@ report(kill.id, kill.verdict, [
   }),
   "",
   `Read: ${yes(kill.verdict.read)}. Arms: ${KILL_ARMS.join(", ")}. Known faults: none. Pass: **${yes(kill.verdict.pass)}**.`,
+]);
+
+const copies = await runTwoCopies();
+write("case-13.json", copies);
+const sent = (list: readonly SentRecord[]): string => list.map((one) => `${one.copy} at ${s(one.at)}`).join(", ") || "none";
+report(copies.id, copies.verdict, [
+  `## ${copies.id}: two copies and one phone`,
+  "",
+  `The case clock moves ${String(copies.settings.speed)} times faster than real time. Each arm has ${s(copies.settings.armMs)} s. The copy home has rank 0, and the copy cloud has rank 1.`,
+  `Each copy reads the other copy through a fault proxy. The rank delay of life-safety is 0, and the rank floor of a call is ${s(copies.times.rankFloor)} s. Two calls come ${s(copies.times.apartLimit)} s apart or more.`,
+  "",
+  `| Arm | First sight (s, home and cloud) | Pushes (s) | Calls (s) | Faults | Connections | Rounds (failed), home and cloud | ${COPIES_GATES.join(" | ")} |`,
+  `| --- | --- | --- | --- | --- | --- | --- | ${COPIES_GATES.map(() => "---").join(" | ")} |`,
+  ...COPIES_ARMS.map((arm) => {
+    const record = copies.records.find((one) => one.arm === arm);
+    const gates = copies.verdict.results[arm];
+    if (record === undefined) return `| ${arm} | - | - | - | - | - | - | ${COPIES_GATES.map(() => "-").join(" | ")} |`;
+    const seen = record.copies.map((copy) => s(copy.seenAt)).join(", ");
+    const rounds = record.copies.map((copy) => `${String(copy.rounds)} (${String(copy.failedRounds)})`).join(", ");
+    return `| ${arm} | ${seen} | ${sent(record.pushes)} | ${sent(record.calls)} | ${String(record.faults)} | ${String(record.connections)} | ${rounds} | ${COPIES_GATES.map((gate) => (gates === undefined ? "-" : yes(gates[gate]))).join(" | ")} |`;
+  }),
+  "",
+  `Read: ${yes(copies.verdict.read)}. Pass: **${yes(copies.verdict.pass)}**.`,
 ]);

@@ -1110,6 +1110,9 @@ importers:
       '@mark1russell7/alerts-channel-pushover':
         specifier: workspace:*
         version: link:../channel-pushover
+      '@mark1russell7/alerts-channel-twilio':
+        specifier: workspace:*
+        version: link:../channel-twilio
       '@mark1russell7/alerts-format-cap':
         specifier: workspace:*
         version: link:../format-cap
