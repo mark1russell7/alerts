@@ -8,7 +8,7 @@ import { fakeHost } from "@mark1russell7/service/testing";
 import { describe, expect, it } from "vitest";
 import { HOME_LOCK_FILE, HomeHeld, holdHome, homeLockPath } from "./home-lock.ts";
 
-const HOME = "/home/test/.alerts";
+const HOME = "/srv/alerts-test";
 
 /** This function gives the error of a take, or fails the test when the take gives a lock. */
 async function refusal(take: Promise<unknown>): Promise<HomeHeld> {
