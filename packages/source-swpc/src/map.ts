@@ -12,29 +12,26 @@
  *   Earth needs the point under the Sun, and no home package has that function yet.
  */
 
-import { categoryOf, kindLabel, Problems, reportId, type Area, type Certainty, type CorrelationKey, type Instant, type MapResult, type Observation, type Report, type Severity, type Significance, type SourceId, type Urgency } from "@mark1russell7/alerts";
+import { categoryOf, kindLabel, Problems, reportId, type Area, type Certainty, type CorrelationKey, type Instant, type MapResult, type Observation, type Report, type Significance, type SourceId, type Urgency } from "@mark1russell7/alerts";
 import { NWS_ORIGIN } from "@mark1russell7/alerts-format-nws";
-import { EARTH_MEAN_RADIUS_KM } from "@mark1russell7/geo";
+import {
+  GEOMAGNETIC_STORM_KIND,
+  POLEWARD_BY_LEVEL,
+  polarCaps,
+  RADIO_BLACKOUT_KIND,
+  SEVERITY_BY_LEVEL,
+  SOLAR_RADIATION_STORM_KIND,
+  SPACE_WEATHER_KIND,
+  type ScaleLevel,
+} from "@mark1russell7/alerts-space-weather";
 import { errorMessage } from "@mark1russell7/text";
 
-import { messageTime, parseMessage, periodEnd, polewardOf, statedScale, watchDays, type Head, type MessageText, type ScaleLevel, type WatchDay } from "./text.ts";
+import { messageTime, parseMessage, periodEnd, polewardOf, statedScale, watchDays, type Head, type MessageText, type WatchDay } from "./text.ts";
 
 /** The id of this source. */
 export const SOURCE_ID = "swpc" as SourceId;
 
-/** The kind code of space weather with no NOAA scale: a K-index of 4, a sudden impulse, an electron flux or a radio emission. */
-export const SPACE_WEATHER_KIND = "geo.space-weather";
-
-/** The kind code of a geomagnetic storm: the NOAA scale G. */
-export const GEOMAGNETIC_STORM_KIND = "geo.space-weather.geomagnetic-storm";
-
-/** The kind code of a radio blackout from a solar flare: the NOAA scale R. */
-export const RADIO_BLACKOUT_KIND = "geo.space-weather.radio-blackout";
-
-/** The kind code of a solar radiation storm: the NOAA scale S, and the protons of 100 MeV. */
-export const SOLAR_RADIATION_STORM_KIND = "geo.space-weather.solar-radiation-storm";
-
-/** The kind codes of this source. */
+/** The kind codes of this source. The codes and the facts of the NOAA scales are in `@mark1russell7/alerts-space-weather`. */
 export const SWPC_KINDS: readonly string[] = [SPACE_WEATHER_KIND, GEOMAGNETIC_STORM_KIND, RADIO_BLACKOUT_KIND, SOLAR_RADIATION_STORM_KIND];
 
 /** The page of the alerts, watches and warnings of the SWPC for a person. */
@@ -115,28 +112,6 @@ export const PRODUCTS: Readonly<Record<string, Product>> = {
   WARPC0: { family: "radiation" },
 };
 
-/**
- * The severity of each level of a NOAA scale, from no level (index 0) to level 5. The NOAA names are minor, moderate,
- * strong, severe and extreme. CAP has no word for strong, so level 3 is `moderate`.
- */
-export const SEVERITY_BY_LEVEL: readonly Severity[] = ["minor", "minor", "moderate", "moderate", "severe", "extreme"];
-
-/**
- * The geomagnetic latitude poleward of which a geomagnetic message has effects, from no G level (a K-index of 4,
- * index 0) to G5. The SWPC writes these values in the line `Potential Impacts` of each message.
- */
-export const POLEWARD_BY_LEVEL: readonly number[] = [65, 60, 55, 50, 45, 40];
-
-/**
- * The geomagnetic poles of the dipole of the World Magnetic Model WMM2025 at its epoch 2025.0, in geocentric
- * coordinates as `[longitude, latitude]`. The two poles are antipodes. The model ends at the end of 2029. NCEI:
- * `https://www.ncei.noaa.gov/products/wandering-geomagnetic-poles`.
- */
-export const GEOMAGNETIC_POLES: readonly (readonly [number, number])[] = [
-  [-72.76, 80.79],
-  [107.24, -80.79],
-];
-
 /** The time in milliseconds that an alert of a flare or of a radio emission stays in effect. The R scale tells of blackouts of tens of minutes at R2. */
 export const SHORT_ALERT_LIFE_MS = 3_600_000;
 
@@ -168,15 +143,6 @@ export function kindOf(family: Family | undefined, level: number): string {
   if (family === "radio-blackout") return RADIO_BLACKOUT_KIND;
   if (family === "radiation") return SOLAR_RADIATION_STORM_KIND;
   return SPACE_WEATHER_KIND;
-}
-
-/**
- * This function gives the two polar caps of a geomagnetic latitude: two circles at the geomagnetic poles. The radius
- * is the arc from the pole to the latitude, on the sphere of the mean radius that the core uses for each distance.
- */
-export function polarCaps(latitude: number, block?: string): Area[] {
-  const radiusKm = ((90 - latitude) * Math.PI * EARTH_MEAN_RADIUS_KM) / 180;
-  return GEOMAGNETIC_POLES.map(([lon, lat]) => ({ type: "circle", center: [lon, lat], radiusKm, ...(block === undefined ? {} : { block }) }));
 }
 
 const ENTRY_TIME = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,6}))?$/;

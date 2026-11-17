@@ -1,21 +1,16 @@
 import { readFileSync } from "node:fs";
 import { incidents, kindLabel, knownKind, linesAt, matchPlaces, normalize, observationId, type Observation, type PlaceId, type Position, type Report, type WatchedPlace } from "@mark1russell7/alerts";
+import { GEOMAGNETIC_POLES, GEOMAGNETIC_STORM_KIND, polarCaps, RADIO_BLACKOUT_KIND, SOLAR_RADIATION_STORM_KIND, SPACE_WEATHER_KIND } from "@mark1russell7/alerts-space-weather";
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import { entryBody } from "./fetch.ts";
 import {
   ALERT_LIFE_MS,
   entryTime,
-  GEOMAGNETIC_POLES,
-  GEOMAGNETIC_STORM_KIND,
   kindOf,
   mapObservation,
-  polarCaps,
-  RADIO_BLACKOUT_KIND,
   SHORT_ALERT_LIFE_MS,
-  SOLAR_RADIATION_STORM_KIND,
   SOURCE_ID,
-  SPACE_WEATHER_KIND,
   SWPC_PAGE,
   SWPC_SENDER,
   WATCH_DAY_SYSTEM,

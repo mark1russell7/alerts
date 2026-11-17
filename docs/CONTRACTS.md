@@ -25,6 +25,7 @@ fetch ──► Observation ──► map ──► Report ──► merge state
 | --- | --- | --- |
 | `@mark1russell7/alerts` | `packages/core` | The contracts, the merge, the assessment, the routing, the escalation, the health and the coverage. Pure functions on an injected clock. |
 | `@mark1russell7/alerts-format-<name>` | `packages/format-<name>` | The reader of one message format that two or more sources use: `format-cap` for CAP 1.2, `format-nws` for VTEC and the NWS kinds. |
+| `@mark1russell7/alerts-<hazard>` | `packages/<hazard>` | The facts of one hazard that two or more sources share: `quake` for the shaking of an earthquake, `space-weather` for the NOAA scales, the scale G from Kp and the polar caps. |
 | `@mark1russell7/alerts-fetch` | `packages/fetch` | The fetch parts that the sources share: the request through polite-crawler, and the map from an answer to a failure. |
 | `@mark1russell7/alerts-source-<id>` | `packages/source-<id>` | One source adapter as procedures. |
 | `@mark1russell7/alerts-atlas` | `packages/atlas` | The source atlas: each signal class, the candidate sources of each class with a decision and its reason, and the records of the research rounds. Its gate needs 2 or more sources with no risk for each class, or a reason. It measures the layers of the cover of each class. |
