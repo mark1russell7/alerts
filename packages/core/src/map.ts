@@ -21,6 +21,7 @@ import {
   type ReportId,
   type Severity,
   type Instant,
+  type Status,
 } from "./contracts.ts";
 import { coverageShort } from "./coverage.ts";
 import { areasWithoutBlocks } from "./shapes.ts";
@@ -58,6 +59,11 @@ export interface MapInput {
 /** An incident on the map. */
 export interface MapIncident {
   readonly anchor: ReportId;
+  /**
+   * The status of the incident. A renderer shows each status other than `actual` with a look and a legend entry of its own.
+   * Thus a test or an exercise does not look like a real alert.
+   */
+  readonly status: Status;
   readonly kind: Kind;
   /** The highest level of the incident over each person, or `none` when no person gets it. */
   readonly level: AssessedLevel;
@@ -201,6 +207,7 @@ export function mapView(input: MapInput): MapView {
       }
       return {
         anchor: incident.anchor,
+        status: incident.status,
         kind: incident.kind,
         level: levels.get(incident.anchor) ?? "none",
         severity: incident.severity,

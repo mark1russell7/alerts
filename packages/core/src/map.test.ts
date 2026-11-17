@@ -77,6 +77,15 @@ describe("the incidents of the map", () => {
     expect(only?.places).toEqual([PLACE_A, PLACE_B]);
   });
 
+  it("keep the status of each incident, thus a test does not look like a real alert", () => {
+    const view = mapView(input({ incidents: [incident("a"), incident("b", { status: "test" }), incident("c", { status: "exercise" })] }));
+    expect(view.incidents.map((entry) => [entry.anchor[0], entry.status])).toEqual([
+      ["a", "actual"],
+      ["b", "test"],
+      ["c", "exercise"],
+    ]);
+  });
+
   it("drop each incident that ended", () => {
     const view = mapView(input({ incidents: [incident("a", { live: false }), incident("b")] }));
     expect(view.incidents.map((entry) => entry.anchor[0])).toEqual(["b"]);
