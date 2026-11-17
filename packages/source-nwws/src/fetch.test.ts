@@ -155,6 +155,13 @@ describe("the cursor", () => {
     expect(markOf(cursorOf("e", { seq: 0, losses: 0 }, undefined))).toBeUndefined();
   });
 
+  it("keeps the serial of a processor with the name of a property of objects", () => {
+    // The counterexample of the property below: a processor named `__proto__` lost its serial.
+    const serials = Object.fromEntries([["__proto__", 3], ["constructor", 5]]);
+    const mark = markOf(cursorOf("e", { seq: 0, losses: 0 }, { at: 0, serials }));
+    expect(Object.entries(mark?.serials ?? {})).toEqual([["__proto__", 3], ["constructor", 5]]);
+  });
+
   it("gives back each position and each place, and reads any cursor with no error", () => {
     fc.assert(
       fc.property(

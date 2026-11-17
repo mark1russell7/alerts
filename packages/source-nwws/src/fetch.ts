@@ -38,11 +38,13 @@ export interface NwwsFetchOptions {
 export function markOf(cursor: Cursor | undefined): StreamMark | undefined {
   const at = Number(cursor?.[AT]);
   if (cursor === undefined || !Number.isFinite(at)) return undefined;
-  const serials: Record<string, number> = {};
-  for (const [key, value] of Object.entries(cursor)) {
-    const serial = Number(value);
-    if (key.startsWith(SERIAL) && Number.isSafeInteger(serial)) serials[key.slice(SERIAL.length)] = serial;
-  }
+  // The names of the processors come from the stream. `Object.fromEntries` keeps a name such as `__proto__` as a key.
+  const serials: Record<string, number> = Object.fromEntries(
+    Object.entries(cursor).flatMap(([key, value]) => {
+      const serial = Number(value);
+      return key.startsWith(SERIAL) && Number.isSafeInteger(serial) ? [[key.slice(SERIAL.length), serial] as const] : [];
+    }),
+  );
   return { at, serials };
 }
 
