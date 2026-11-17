@@ -618,7 +618,7 @@ importers:
         specifier: ^2.0.0
         version: 2.1.4
       '@mark1russell7/rigor-generators':
-        specifier: ^0.1.18
+        specifier: ^0.1.19
         version: 0.1.19
       '@types/node':
         specifier: ^26.6.5

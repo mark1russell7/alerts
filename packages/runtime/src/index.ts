@@ -3,11 +3,11 @@ import { add, type Quantity } from "@mark1russell7/quantity";
 import { daemon, kubernetes, localDev, service } from "@mark1russell7/service";
 import type { Profile, ServiceBuilder, Timing, WorkerLoop } from "@mark1russell7/service";
 import { probeServer } from "@mark1russell7/service/http";
-import { LOOPBACK, attachApi } from "./api.ts";
+import { LOOPBACK, attachApi, type StartStatus } from "./api.ts";
 import type { RuntimeLoop } from "./loop.ts";
 import type { OutageDeployWorker } from "./outage.ts";
 
-export { LOOPBACK, PAGE_INDEX, attachApi, pageFolder, statusOf, type ApiOptions, type Status } from "./api.ts";
+export { LOOPBACK, PAGE_INDEX, attachApi, pageFolder, statusOf, type ApiOptions, type StartStatus, type Status } from "./api.ts";
 export * from "./balance.ts";
 export * from "./config.ts";
 export * from "./delivery.ts";
@@ -78,6 +78,8 @@ export interface Options {
   readonly page?: string | undefined;
   /** The worker of the deploy of the outage call. The service runs it as the worker `outage`, beside the passes. */
   readonly outage?: OutageDeployWorker;
+  /** The files of the start. The route `GET /status` gives them. */
+  readonly start?: StartStatus;
   /** The exchange with the other copies of the system. */
   readonly exchange?: ServiceExchange;
 }
@@ -124,7 +126,7 @@ export const declare = (options: Options): ServiceBuilder => {
 // The parts of the service of each runtime: the API, the dependencies, the workers of the passes and of the outage call, the checks and the policies.
 const parts = (options: Options): ServiceBuilder =>
   withOutage(
-    attachApi(service("runtime"), { port: options.port, loop: options.loop, map: options.map, health: options.health, page: options.page, ...(options.outage === undefined ? {} : { outage: options.outage }) })
+    attachApi(service("runtime"), { port: options.port, loop: options.loop, map: options.map, health: options.health, page: options.page, ...(options.outage === undefined ? {} : { outage: options.outage }), ...(options.start === undefined ? {} : { start: options.start }) })
       .dependency("log", { system: null, knobs: {}, operations: {} }, { connect: () => undefined, close: () => options.log.close() })
       .dependency("shapes", { system: null, knobs: {}, operations: {} }, { connect: () => undefined, close: () => options.shapes?.close() })
       .dependency("quotas", { system: null, knobs: {}, operations: {} }, { connect: () => undefined, close: () => options.quotas?.close() })

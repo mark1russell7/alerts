@@ -39,7 +39,7 @@ import { readCopySettings } from "./copy.ts";
 import { checkOfPingUrl, checksRequest, checkTimesProblem, heartbeatGap } from "./heartbeat.ts";
 import { discoveryPid, hostTask, READY_WITHIN, readinessProbe, RUNTIME_GRACE, runtimeDiscovery, supervisorDiscovery } from "./host.ts";
 import { checksKeys, daemonCheck, INSTANCE_TIMES, USER_AGENT_NAME } from "./instance.ts";
-import { privateFiles, requestRestart, type RestartOutcome } from "./reload.ts";
+import { checkStart, GOOD_FILE, privateFiles, readStartTexts, requestRestart, restartUse, type RestartOutcome } from "./reload.ts";
 
 const ACTIONS = ["install", "remove", "status", "restart"] as const;
 const action = process.argv[2];
@@ -87,13 +87,24 @@ function reportRestart(outcome: RestartOutcome): number {
     case "no-restart":
       console.error(`The runtime (process ${outcome.pid}) did not restart in ${Math.round(RESTART_WAIT_MS / 1000)} s. The request stays, and the next pass of the runtime reads it.`);
       return 1;
-    case "restarted":
-      if (outcome.ready) {
-        console.log(`Done. The runtime restarted (process ${outcome.from}, then ${outcome.to}), and it is ready.`);
+    case "restarted": {
+      const restarted = `The runtime restarted (process ${outcome.from}, then ${outcome.to})`;
+      if (!outcome.ready) {
+        console.error(`${restarted}, and it is not ready. Then read: node src/install.ts status`);
+        return 1;
+      }
+      if (outcome.use === "files") {
+        console.log(`Done. ${restarted}, it is ready, and it uses the private files.`);
         return 0;
       }
-      console.error(`The runtime restarted (process ${outcome.from}, then ${outcome.to}), and it is not ready. Then read: node src/install.ts status`);
+      // A runtime on the last good set sends alerts, but the deploy did not get its files. Its output tells the reason.
+      console.error(
+        outcome.use === "good"
+          ? `${restarted}, and it is ready. Its start stopped with the private files, thus it uses the last good set ${GOOD_FILE}. The output of the runtime tells the reason.`
+          : `${restarted}, and it is ready. Its start is not marked good in ${Math.round(RESTART_WAIT_MS / 1000)} s. Then read the output of the runtime.`,
+      );
       return 1;
+    }
   }
 }
 
@@ -148,15 +159,21 @@ if (action === "install") {
   const heartbeat: OutsideCheck = keys.tag === "err" ? { ok: false, neededSeconds, problem: keys.error.join(" ") } : await outsideCheck(keys.value.key, keys.value.url, secrets);
   // The loud check is optional. Without its key, the status has no field of it.
   const loud = keys.tag === "ok" && keys.value.loudUrl !== undefined ? { loud: await outsideCheck(keys.value.key, keys.value.loudUrl, secrets) } : {};
-  console.log(JSON.stringify({ task: await serviceStatus(spec, ports, { discovery }), readiness, heartbeat, ...loud }, null, 2));
-  if (!readiness.ok || !heartbeat.ok || ("loud" in loud && !loud.loud.ok)) process.exitCode = 1;
+  // The start marker tells the files of the runtime, and the check of the files tells the files of the next start.
+  // A runtime on the last good set, or private files with problems, give the code 1. The problems hold no value.
+  const files = privateFiles(home, configPath(process.env, process.cwd()));
+  const next = checkStart(await readStartTexts(files), daemonCheck);
+  const start = { use: restartUse(await readText(() => readFile(files.marker, "utf8"))), files: next.tag === "ok" ? [] : next.error };
+  console.log(JSON.stringify({ task: await serviceStatus(spec, ports, { discovery }), readiness, heartbeat, ...loud, start }, null, 2));
+  if (start.use !== "files") console.error(`The runtime does not use the private files (${start.use}). Read the output of the runtime.`);
+  if (start.files.length > 0) console.error(`The private files have problems, thus the next start uses the last good set ${GOOD_FILE}.`);
+  const startOk = start.use === "files" && start.files.length === 0;
+  if (!readiness.ok || !heartbeat.ok || ("loud" in loud && !loud.loud.ok) || !startOk) process.exitCode = 1;
 } else if (action === "restart") {
   const files = privateFiles(home, configPath(process.env, process.cwd()));
-  // The check of the restart uses the settings of the copy, as the start does. A bad copy.json stops the restart.
-  const copy = await readCopySettings(home);
-  if (copy.tag === "err") throw new Error(`The restart does not start. The file copy.json has problems:\n- ${copy.error.join("\n- ")}`);
+  // The check of the restart reads the three private files, as the start does. A bad copy.json stops the restart.
   const outcome = await requestRestart(
-    { files, check: daemonCheck(copy.value), waitMs: RESTART_WAIT_MS, pollMs: 2000 },
+    { files, checkOf: daemonCheck, waitMs: RESTART_WAIT_MS, pollMs: 2000 },
     {
       write: (path, text) => writeFileAtomic(path, text),
       pid: async () => discoveryPid(await readText(() => readFile(runtimeDiscovery(home), "utf8"))),
