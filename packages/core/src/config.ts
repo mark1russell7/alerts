@@ -12,6 +12,7 @@ import { assess, DEFAULT_ASSESS_POLICY, DRILL_KIND, matchSubjects, reachedAssess
 import { policyFor, recipientProblems, ruleSteps, type ChannelRule, type Recipient } from "./delivery.ts";
 import { DRILL_PROBES, drillProblems, nextDrillAt, type DrillConfig } from "./drill.ts";
 import { incidents, normalize } from "./merge.ts";
+import { optInFields, resolveOptIn, type OptInConfig, type OptInRecord } from "./opt-in.ts";
 import { DRILL_SUBJECT, NO_SYSTEM_LINES, systemReports } from "./system-reports.ts";
 import type { TryChain } from "./chain.ts";
 import type { Expectation } from "./lateness.ts";
@@ -161,6 +162,11 @@ export interface AlertConfig {
   readonly assess?: AssessPolicy;
   /** The drills of the live paths. Without them, the instance starts no drill. */
   readonly drills?: readonly DrillConfig[];
+  /**
+   * The private opt-in list of the texts. A channel with an address field of `optIn` sends only to a phone on this
+   * list, and a STOP reply removes the number. The list holds phone numbers: keep it out of each public text.
+   */
+  readonly optIn?: readonly OptInConfig[];
 }
 
 /** The name of the format of a part of the configuration. A change that breaks a part gets a new name. */
@@ -343,6 +349,8 @@ export interface LoadedConfig {
    * no value of a secret, no label and no position. The runtime does not start with a problem.
    */
   readonly problems: readonly string[];
+  /** The opt-in list of the texts, with the value of each number. */
+  readonly optIn: readonly OptInRecord[];
 }
 
 /**
@@ -421,6 +429,19 @@ export function loadConfig(config: AlertConfig, channels: readonly ChannelDescri
     ofPerson.set(channel, Object.fromEntries(fields));
   }
 
+  // Each value of an opt-in field needs a record. A channel of texts then sends only to a person who agreed.
+  const { records: optIn, problems: optInFound } = resolveOptIn(config.optIn ?? [], secret);
+  problems.push(...optInFound);
+  const listed = new Set(optIn.map((record) => record.number));
+  for (const channel of channels) {
+    for (const field of optInFields(channel)) {
+      for (const [person, ofPerson] of addresses) {
+        const value = ofPerson.get(channel.id)?.[field.name];
+        if (value !== undefined && !listed.has(value)) problems.push(`The field ${field.name} of the contact of ${person} on ${channel.id} is not on the opt-in list. The channel sends nothing to it.`);
+      }
+    }
+  }
+
   const providers = new Set<string>();
   for (const spend of config.spend ?? []) {
     const { provider } = spend;
@@ -493,7 +514,7 @@ export function loadConfig(config: AlertConfig, channels: readonly ChannelDescri
     const rules = rulesOf.get(recipient.watch.person);
     return rules === undefined ? recipient : { ...recipient, channelRules: [...(recipient.channelRules ?? []), ...rules] };
   });
-  return { recipients: ruled, problems };
+  return { recipients: ruled, problems, optIn };
 }
 
 /**
