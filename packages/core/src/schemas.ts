@@ -136,6 +136,7 @@ import {
 } from "./config.ts";
 import type { TryChain } from "./chain.ts";
 import type { EscalationEnd, Recipient } from "./delivery.ts";
+import type { DrillConfig, DrillPath } from "./drill.ts";
 import type { RankDelays } from "./escalation.ts";
 import { HEALTH_FORMAT, type BalanceHealth, type CopyHealth, type HealthPayload, type QuotaHealth, type SourceHealthView } from "./health-payload.ts";
 import type { Lateness, LatenessLimit, LatenessState } from "./lateness.ts";
@@ -1342,6 +1343,38 @@ export const outageConfigSchema: z.ZodType<OutageConfig, OutageConfig> = schemaO
   z.strictObject({ people: z.array(outagePersonConfigSchema).readonly() }).readonly(),
 );
 
+/**
+ * This schema checks the window of the starts of a drill: the shape of `TimeWindow` of `@mark1russell7/algebra/clock`.
+ * It does not check the time zone or the local times. `drillProblems` finds a bad window.
+ */
+export const drillWindowSchema: z.ZodType<DrillConfig["window"], DrillConfig["window"]> = schemaOf<DrillConfig["window"]>()(
+  z
+    .strictObject({
+      zone: z.string(),
+      start: z.string(),
+      end: z.string(),
+      days: z.array(z.int().min(0).max(6, "A day of the week is from 0 (Sunday) to 6 (Saturday).")).readonly().optional(),
+    })
+    .readonly(),
+);
+
+/** This schema checks the path of a drill: one channel. `loadConfig` checks the channel and the contact of the person on it. */
+export const drillPathSchema: z.ZodType<DrillPath, DrillPath> = schemaOf<DrillPath>()(z.strictObject({ kind: z.literal("channel"), channel: channelIdSchema }).readonly());
+
+/** This schema checks one drill of the configuration. `loadConfig` checks the person, the channel and the times. */
+export const drillConfigSchema: z.ZodType<DrillConfig, DrillConfig> = schemaOf<DrillConfig>()(
+  z
+    .strictObject({
+      id: z.string().regex(/^[a-z0-9][a-z0-9-]{0,31}$/u, "The id of a drill is 1 to 32 lowercase letters, digits and hyphens."),
+      person: personIdSchema,
+      path: drillPathSchema,
+      every: durationSchema,
+      window: drillWindowSchema,
+      ackWithin: durationSchema,
+    })
+    .readonly(),
+);
+
 /** This schema checks a table of rank delays: a duration for some levels. `loadConfig` checks the bounds of each value. */
 export const rankDelaysSchema: z.ZodType<RankDelays, RankDelays> = schemaOf<RankDelays>()(
   z.strictObject({ digest: durationSchema.exactOptional(), notice: durationSchema.exactOptional(), urgent: durationSchema.exactOptional(), "life-safety": durationSchema.exactOptional() }).readonly(),
@@ -1350,7 +1383,7 @@ export const rankDelaysSchema: z.ZodType<RankDelays, RankDelays> = schemaOf<Rank
 /**
  * This schema checks the JSON of the private configuration at the load. It checks the form of each
  * value. Then `loadConfig` checks the references: the ids, the places of each person, the contacts,
- * the secrets and the outage call.
+ * the secrets, the outage call and the drills.
  */
 export const alertConfigSchema: z.ZodType<AlertConfig, AlertConfig> = schemaOf<AlertConfig>()(
   z
@@ -1368,6 +1401,7 @@ export const alertConfigSchema: z.ZodType<AlertConfig, AlertConfig> = schemaOf<A
       rankDelay: rankDelaysSchema.exactOptional(),
       rankFloor: durationSchema.exactOptional(),
       assess: assessPolicySchema.exactOptional(),
+      drills: z.array(drillConfigSchema).readonly().exactOptional(),
     })
     .readonly(),
 );
