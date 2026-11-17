@@ -359,15 +359,28 @@ The Twilio call channel makes one voice call for each send:
 - A call that nobody answered, and a call that Twilio could not make, are `failed`. The escalation goes to its next step.
 - `cancel` ends the call in each state. Twilio refuses the end of a call that it does not know, and the cancel ends with no error.
 - `readTwilioBalance` reads the balance of the account. It gives each failure as a value.
-- `twilioSetupProblems` checks the credentials and the number that calls, with no request. A problem names the field, and no value.
+- `twilioSetupProblems` checks the credentials, the number that calls and the number that texts, with no request. A problem names the field, and no value.
+- A failure of a send has the mark `[number]` in place of each phone number of the send. An error of Twilio can quote a number.
 
-The cap of the spend of a call channel is two gates of `polite-crawler/api`, with one store, one key and one quota name:
+The Twilio text channel `twilio-text` sends one SMS message for each send (AL-56):
+
+- The text has the title, the why line and the body as sentences, with `TWILIO_TEXT_LIMIT` (160) code points or fewer. The cut is at the end of a word.
+- The address is the address of a call: the field `to`, in E.164 form. The sender is the registered number of the texts.
+- A quiet message, a message that expired and an address with a problem get no text. The outcome is `refused`.
+- The channel does not break through the silent mode, and it does not repeat. Its `ack` is `none`.
+- A text that the carrier delivered is `delivered`. A text that did not go, or that the carrier did not deliver, is `failed`.
+- `cancel` does nothing. Twilio cannot stop a text in its queue.
+- A text costs `TWILIO_TEXT_COST_USD` (4 cents): 3 segments and the carrier fees, rounded up. Thus a text costs no more than a call.
+
+The cap of the spend of a Twilio channel is two gates of `polite-crawler/api`, with one store, one key and one quota name:
 
 - The two gates count the same units. The gate of `life-safety` has no reserve. Thus only `life-safety` uses the last part of the cap.
 - A full cap gives `rate-limited`. A cap in its reserve gives `reserved` to a message below `life-safety`.
 - A call that Twilio refused, did not authorize or limited gives its units back. Twilio made no call.
 - A network fault, a time-out and a server error keep the units, because the call can have started.
 - A fault of the store of a gate does not stop a call. The call goes with no count.
+- The text channel takes its units from the same gates as the call channel. Thus one cap holds the calls and the texts of the account.
+- `takeSpend` in `spend.ts` takes the units for each channel. The quota line of the status is the line of `twilio-call`.
 
 ## The delivery promise
 
@@ -773,6 +786,7 @@ The function `openInstance` makes the instance of the owner from the private con
 
 - The sources are the NWS API and IPAWS. The channels are Pushover, and the Twilio call channel when `secrets.env` has its keys.
 - The keys of Twilio are `TWILIO_ACCOUNT_SID`, `TWILIO_API_KEY_SID`, `TWILIO_API_KEY_SECRET` and `TWILIO_FROM`. An API key signs each request.
+- The optional key `TWILIO_TEXT_FROM` adds the text channel. It holds the registered sender of texts: a phone of a 10DLC campaign or a verified toll-free phone.
 - A spend entry of a provider of a channel gives the cap of the channel. The count of the cap is in `quotas.sqlite`.
 - The spend entry of Twilio also gives the watch of the balance: one read each day, and its floor.
 - Each source gets the watch of `sourcePlaces`. Thus a source gets the region codes, and a position only when the place shares it with that source.
@@ -786,7 +800,8 @@ The instance does not start when it finds one of these problems:
 - a missing secret, or an API token that does not have the form of a Pushover key (30 letters and digits)
 - each problem of `parseConfig`: the JSON, the schema, the references and the fields of each address on its channel
 - some keys of Twilio and not all, or a key of Twilio with a bad form
-- a step of a policy on a channel that the instance has no sender for. Without the keys of Twilio, the call channel has no sender.
+- the key `TWILIO_TEXT_FROM` with no keys of Twilio, or a value of the key that is not in E.164 form
+- a step of a policy on a channel that the instance has no sender for. Without the keys of Twilio, the call channel has no sender. Without `TWILIO_TEXT_FROM`, the text channel has no sender.
 - a step on a channel with a cost, when the configuration has no spend entry for a provider of the channel
 - a place that no regional source covers. Usually the place does not have a code of each level: the zone, the county, SAME, the state and the country. A source with the coverage `global`, for example the SWPC, covers each place with no code. Thus the check does not count it.
 
@@ -936,9 +951,8 @@ The module `deploy.ts` of the package puts the three Functions and the list on o
 The runtime operates the deploy in the worker `outage` of its service (`outage.ts`), beside the worker `passes`.
 
 - `outageSetup` reads the field `outage`, the keys of Twilio and the key `OUTAGE_TOKEN`. A missing key, a token of a bad form or a bad list stops the start.
-- The key `TWILIO_TEXT_FROM` holds the registered sender of texts: a phone of a 10DLC campaign or a verified toll-free phone.
+- The setup of Twilio reads the key `TWILIO_TEXT_FROM` for the outage call and the text channel. A value that is not in E.164 form stops the start.
 - With the key, the list has the text `OUTAGE_TEXT_MESSAGE`, and the deploy gives the number to the Functions. Without the key, the outage call sends no text.
-- A value of the key that is not in E.164 form stops the start.
 - The worker deploys after the startup. A change of the private files restarts the runtime, so a new list deploys at once.
 - Once in each day, the worker deploys again. Thus a change on the side of Twilio heals in a day.
 - A failed deploy goes again after a backoff: one minute, then double, up to one hour. The pass limit bounds one deploy, so the drain of the service holds it.
