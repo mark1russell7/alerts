@@ -454,6 +454,7 @@ const SCHEMA_NAMES = [
   "historyChangeSchema",
   "historyIncidentSchema",
   "historyPayloadSchema",
+  "historyPlaceSchema",
   "historyRegionSchema",
   "incidentLineSchema",
   "incidentSchema",

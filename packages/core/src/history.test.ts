@@ -1,11 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { assess, reachedAssessment } from "./assess.ts";
-import type { MergeState, ObservationId, PersonId, PersonWatch, PlaceId, RegionCode, Report, ReportId, SourceId } from "./contracts.ts";
+import type { InterestGraph, MergeState, ObservationId, PersonId, PersonWatch, PlaceId, RegionCode, Report, ReportId, SourceId } from "./contracts.ts";
 import { HISTORY_FORMAT, historyPayload, OWN_ENTRY_TIMES, type EntryTimes, type HistoryInput } from "./history.ts";
 import { reportId } from "./ids.ts";
 import type { MapPlaceInput, MapShape, ShapeLookup } from "./map.ts";
 import { EMPTY_STATE, incidents } from "./merge.ts";
 import { historyPayloadSchema } from "./schemas.ts";
+import { placeNode } from "./why.ts";
 
 const MINUTE = 60_000;
 const T0 = 1_763_157_600_000;
@@ -52,7 +53,7 @@ function report(draft: Draft): Report {
     certainty: "observed",
     response: ["shelter"],
     received: sent,
-    expires: sent + 60 * MINUTE,
+    expires: sent + 600 * MINUTE,
     areas: [{ type: "code", ...zone }],
     about: [],
     sender: "NWS Topeka KS",
@@ -176,6 +177,90 @@ describe("historyPayload", () => {
     const odd = report({ key: "p1", areas: [{ type: "code", ...far }, polygon, { ...polygon }] });
     const change = historyPayload(input(merge([odd]))).incidents[0]?.changes[0];
     expect(change).toMatchObject({ codes: [], unshaped: [far], shapes: [polygon] });
+  });
+
+  it("gives each watched place in the areas with the highest level of the assessments with the place", () => {
+    const other: MapPlaceInput = { id: "place:c" as PlaceId, label: "Place C", codes: [zone], bufferKm: 0 };
+    const far: MapPlaceInput = { id: "place:t" as PlaceId, label: "Place T", codes: [{ system: "ugc", code: "TXZ205" }], bufferKm: 0 };
+    const lowered: PersonWatch = { person: "person:b" as PersonId, places: [other.id], rules: [{ max: "notice" }] };
+    const changes = historyPayload(input(merge([first]), { people: [person, lowered], places: [other, place, far] })).incidents[0]?.changes ?? [];
+    // The order is the order of the input places. The place far away is not in the areas.
+    expect(changes[0]?.places).toEqual([
+      { id: other.id, level: "notice" },
+      { id: PLACE, level: changes[0]?.level },
+    ]);
+    expect(changes[0]?.level).not.toBe("notice");
+    // The flip: a place that no person watches has the level none.
+    const unwatched = historyPayload(input(merge([first]), { places: [other, place] })).incidents[0]?.changes[0]?.places;
+    expect(unwatched?.[0]).toEqual({ id: other.id, level: "none" });
+  });
+
+  it("gives a change at the expiry of a report up to the time of the payload, and the view is then not live", () => {
+    const short = report({ key: "s1", expires: T0 + 30 * MINUTE });
+    const payload = historyPayload(input(merge([short])));
+    expect(payload.incidents[0]?.changes.map((change) => [change.at, change.reports, change.live, change.level])).toEqual([
+      [T0, [short.id], true, payload.incidents[0]?.changes[0]?.level],
+      [T0 + 30 * MINUTE, [], false, "none"],
+    ]);
+    expect(payload.next).toBe(T0 + 30 * MINUTE);
+    // The flip: an expiry after the time of the payload gives no change yet.
+    const early = historyPayload(input(merge([short]), { at: T0 + 20 * MINUTE }));
+    expect(early.incidents[0]?.changes).toHaveLength(1);
+    expect(early.next).toBe(T0);
+  });
+
+  it("counts the time edges up to the newest time of entry, when an import came after the last pass", () => {
+    const short = report({ key: "s1", expires: T0 + 30 * MINUTE });
+    const later = report({ key: "o1", sent: T0 + 50 * MINUTE, kind: { code: "hydro.flood", significance: "warning", label: "Flood Warning" }, areas: [{ type: "code", ...county }] });
+    const payload = historyPayload(input(merge([short, later]), { at: T0 + 20 * MINUTE }));
+    expect(payload.next).toBe(T0 + 50 * MINUTE);
+    expect(payload.incidents.find((history) => history.anchor === short.id)?.changes.at(-1)).toMatchObject({ at: T0 + 30 * MINUTE, live: false });
+    // Thus the next read with this since also has the change of the expiry, though its time is below the since.
+    expect(historyPayload(input(merge([short, later]), { at: T0 + 60 * MINUTE, since: payload.next })).incidents.map((history) => history.anchor)).toEqual([later.id]);
+  });
+
+  it("gives a change at the end of the window pastWithin of an earthquake", () => {
+    const quake = report({ key: "q1", kind: { code: "geo.earthquake", label: "Earthquake" }, categories: ["geo"], severity: "extreme", urgency: "past", onset: T0 });
+    const payload = historyPayload(input(merge([quake])));
+    expect(payload.incidents[0]?.changes.map((change) => [change.at, change.level])).toEqual([
+      [T0, "life-safety"],
+      [T0 + 60 * MINUTE + 1, "digest"],
+    ]);
+    // The flip: a report with the urgency immediate has no window.
+    expect(historyPayload(input(merge([{ ...quake, urgency: "immediate" }]))).incidents[0]?.changes).toHaveLength(1);
+  });
+
+  it("gives a change at the end of a mute only when the view changes", () => {
+    const flood = report({ key: "f1", kind: { code: "hydro.flood", significance: "warning", label: "Flood Warning" }, categories: ["met"] });
+    const graph = (kinds: readonly string[]): InterestGraph => ({
+      format: "alerts-interest/1",
+      person: person.person,
+      edges: [{ id: "i1", from: placeNode(PLACE), to: "person", kind: "interest", weight: { value: 1, low: 1, high: 1 }, origin: "base", on: true }],
+      mutes: [{ id: "m1", kinds, until: T0 + 40 * MINUTE, date: "2026-11-16" }],
+    });
+    const muted = historyPayload(input(merge([flood]), { people: [{ ...person, interests: graph(["hydro.flood"]) }] }));
+    expect(muted.incidents[0]?.changes.map((change) => [change.at, change.level, change.places])).toEqual([
+      [T0, "none", [{ id: PLACE, level: "none" }]],
+      [T0 + 40 * MINUTE, "urgent", [{ id: PLACE, level: "urgent" }]],
+    ]);
+    // The flip: the end of a mute of another kind changes no view, thus it gives no change.
+    const other = historyPayload(input(merge([flood]), { people: [{ ...person, interests: graph(["met.tornado"]) }] }));
+    expect(other.incidents[0]?.changes.map((change) => [change.at, change.level])).toEqual([[T0, "urgent"]]);
+    expect(other.next).toBe(T0 + 40 * MINUTE);
+  });
+
+  it("keeps only the live parts in a change, as the map shows only live incidents", () => {
+    const a = report({ key: "a", expires: T0 + 10 * MINUTE, correlation: [{ system: "x", id: "1" }] });
+    const b = report({ key: "b", sent: T0 + 5 * MINUTE, severity: "moderate", areas: [{ type: "code", ...county }], correlation: [{ system: "x", id: "2" }] });
+    const link = report({ key: "c", sent: T0 + 15 * MINUTE, severity: "moderate", areas: [{ type: "code", ...county }], correlation: [{ system: "x", id: "1" }, { system: "x", id: "2" }] });
+    const changes = historyPayload(input(merge([a, b, link]))).incidents[0]?.changes ?? [];
+    expect(changes.map((change) => [change.at, change.severity, change.codes, change.live])).toEqual([
+      [T0, "severe", [zone], true],
+      [T0 + 5 * MINUTE, "severe", [county, zone], true],
+      // The part of a expired, thus the change has only the part of b.
+      [T0 + 10 * MINUTE, "moderate", [county], true],
+      [T0 + 15 * MINUTE, "moderate", [county], true],
+    ]);
   });
 
   it("refuses a payload of another format", () => {

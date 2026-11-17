@@ -1156,14 +1156,20 @@ The query `since` is one whole number of milliseconds since the epoch, with no s
 - `format`: `alerts-history/1` (`HISTORY_FORMAT`). A change that breaks a reader gets a new name.
 - `at`: the time of the last pass, or `null` before the first pass.
 - `since`: the payload has each incident with a change at this time or later. The value `null` gives each incident.
-- `next`: the time of the newest change of the merge state, or `null` with no change.
+- `next`: the newest time of a change or of a time edge of the merge state, or `null` with no change.
 - `incidents`: the history of each incident, in the order of the anchors. Each incident has each of its changes, from the oldest.
 - `regions`: the shapes of each region code of the changes, one time each. A change names its codes, and the shapes stay out of each change.
 
-A change comes at each time of entry of a report of the incident on this copy. An end mark of a known report also gives a change. The change has the parts of the incident that the copy knew at that time:
+A change comes at each time of entry of a report of the incident on this copy. An end mark of a known report also gives a change.
 
+A time edge gives a change when the view of the incident changes at that time with no new fact. The time edges are the expiry of a report, the end of the window `pastWithin` of a table and the end of a mute. They count up to `at`, or up to the newest time of entry when it is later. An import can come after the last pass. Thus the view at a time is the last change at or before that time. A reader needs no rule of its own for an expiry.
+
+The change has the parts of the incident that the copy knew at that time:
+
+- The change has the live parts, as the map has only live incidents. With no live part, it has each part, and `live` is false.
 - The level is the highest level over each person at that time, with the policy of the delivery and the mutes.
 - Two parts of an incident before their merge give one change. The change has the higher level and severity, and the areas of the two parts.
+- `places` has each watched place in the areas, in the order of the input places. The level of a place is the highest level of the assessments with the place. A matched place with no assessment has the level `none`. The map uses the same rule.
 - The time of entry comes from the clock of this copy. Thus a late import of a report of another copy comes after the `since` of a reader.
 
 The input `entered` gives the time of entry of each report and each end mark (`EntryTimes`). Without it, the history uses `OWN_ENTRY_TIMES`: the time of receipt of each report and the time of each end mark. The runtime keeps an index of the times of entry next to its state:
@@ -1181,7 +1187,7 @@ A reader keeps its histories by anchor:
 3. Replace the history of each incident of the payload. Drop each history whose anchor is a report of an incident of the payload, because these incidents merged.
 4. When `next` is below `since`, a step of the clock moved the times back. Read again with no `since`.
 
-The work for an incident with no change at `since` or later is only the read of its times. The levels come from the watches of the people, thus only the loopback address gives the route.
+The work for an incident with no change and no time edge at `since` or later is only the read of its times. The levels come from the watches of the people, thus only the loopback address gives the route.
 
 ## Relevance
 
