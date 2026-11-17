@@ -16,7 +16,7 @@ const at = (time: string) => replaySeek(replayOf(RANGE.span), utc(time));
 describe("the range of the scrubber", () => {
   it("goes from the oldest change to the present, with each time at which the map changed", () => {
     expect(RANGE.span).toEqual({ from: utc("15:00"), to: PRESENT });
-    // 16:00 is the expiry of the fog advisory, which no report ends. An expiry after the present is not a change yet.
+    // 16:00 is the expiry of the fog advisory, which no report ends. The runtime gives a change at that time.
     expect(RANGE.times.map(clock)).toEqual(["15:00", "16:00", "16:10", "16:40", "17:25", "17:30", "18:05", "18:40", "19:20", "19:45"]);
   });
 
@@ -69,13 +69,29 @@ describe("the picture of the scrubber", () => {
     expect(late?.shapes).toEqual(MAP_FIXTURE.view.incidents[0]?.shapes);
   });
 
-  it("keeps each place of the live payload with no level, because a change of the history names no place", () => {
-    const shown = scrubPayload(MAP_FIXTURE, KEPT, at("19:50"));
-    expect(shown.view.places.map((place) => [place.label, place.level, place.incidents, place.gaps])).toEqual([
+  it("gives each place of the live payload its level and its incidents at the past time, with no gap", () => {
+    const places = (time: string) => scrubPayload(MAP_FIXTURE, KEPT, at(time)).view.places.map((place) => [place.label, place.level, place.incidents, place.gaps]);
+    // The live map has a gap of the coverage at the shop. The history has no coverage.
+    expect(MAP_FIXTURE.view.places.map((place) => place.gaps.length)).toEqual([0, 1, 0]);
+    expect(places("19:50")).toEqual([
+      ["Farm", "life-safety", [ANCHORS.tornado, ANCHORS.flood], []],
+      ["Shop", "urgent", [ANCHORS.flood], []],
+      ["Cabin", "digest", [ANCHORS.statement], []],
+    ]);
+    // Before the second report of the tornado, the farm has the level of the first report.
+    expect(places("19:30")[0]).toEqual(["Farm", "urgent", [ANCHORS.tornado, ANCHORS.flood], []]);
+    // The fog advisory is on the zone of the farm and of the shop until 16:00.
+    expect(places("15:30")).toEqual([
+      ["Farm", "notice", [ANCHORS.fog], []],
+      ["Shop", "notice", [ANCHORS.fog], []],
+      ["Cabin", "none", [], []],
+    ]);
+    expect(places("16:05")).toEqual([
       ["Farm", "none", [], []],
       ["Shop", "none", [], []],
       ["Cabin", "none", [], []],
     ]);
+    const shown = scrubPayload(MAP_FIXTURE, KEPT, at("19:50"));
     expect(shown.view.places.map((place) => place.at)).toEqual(MAP_FIXTURE.view.places.map((place) => place.at));
   });
 
@@ -125,7 +141,7 @@ describe("the words of the scrubber", () => {
     expect(scrubWords(at("17:00"), clock)).toEqual({
       map: "Map at 17:00",
       list: "Incidents at 17:00",
-      past: "The map shows the incidents and their areas at 17:00. A past time does not show the level of each place.",
+      past: "The map shows the incidents, their areas and the level of each place at 17:00. It does not show the coverage of that time.",
     });
   });
 });

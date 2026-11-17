@@ -134,15 +134,16 @@ const live = (name: keyof typeof ANCHORS): MapIncident => {
   return found;
 };
 
-/** This function gives a change of the history. With no other field, the incident is live and has no area. */
+/** This function gives a change of the history. With no other field, the incident is live and has no area and no place. */
 function change(clock: string, level: HistoryChange["level"], severity: HistoryChange["severity"], fields: Partial<HistoryChange> = {}): HistoryChange {
-  return { at: utc(clock), reports: [], level, severity, live: true, codes: [], shapes: [], unshaped: [], ...fields };
+  return { at: utc(clock), reports: [], level, severity, live: true, codes: [], shapes: [], unshaped: [], places: [], ...fields };
 }
 
 /**
  * The history of the map payload, as one answer to a read of the whole history. The last change of each incident of
  * the map has the level, the severity and the areas of the map. The history also has two incidents that left the map:
  * a storm with an end mark, and a fog advisory that expired. The fog advisory is the oldest change, at 15:00 UTC.
+ * Each change has the places in its areas, with the level of each place at that time.
  */
 export const HISTORY_FIXTURE: HistoryPayload = {
   format: HISTORY_FORMAT,
@@ -157,8 +158,8 @@ export const HISTORY_FIXTURE: HistoryPayload = {
       kind: live("tornado").kind,
       changes: [
         // The first polygon is smaller, and the level is lower. The next report makes the warning larger.
-        change("19:20", "urgent", "severe", { expires: utc("20:30"), shapes: [box(-97.52, 37.56, -97.4, 37.66)] }),
-        change("19:45", "life-safety", "extreme", { expires: utc("23:30"), shapes: live("tornado").shapes }),
+        change("19:20", "urgent", "severe", { expires: utc("20:30"), shapes: [box(-97.52, 37.56, -97.4, 37.66)], places: [{ id: FARM, level: "urgent" }] }),
+        change("19:45", "life-safety", "extreme", { expires: utc("23:30"), shapes: live("tornado").shapes, places: [{ id: FARM, level: "life-safety" }] }),
       ],
     },
     {
@@ -166,7 +167,16 @@ export const HISTORY_FIXTURE: HistoryPayload = {
       reports: [ANCHORS.flood],
       status: "actual",
       kind: live("flood").kind,
-      changes: [change("18:05", "urgent", "severe", { expires: Date.parse("2026-11-16T03:00:00Z"), codes: [{ system: "ugc", code: "KSC173" }] })],
+      changes: [
+        change("18:05", "urgent", "severe", {
+          expires: Date.parse("2026-11-16T03:00:00Z"),
+          codes: [{ system: "ugc", code: "KSC173" }],
+          places: [
+            { id: FARM, level: "urgent" },
+            { id: SHOP, level: "urgent" },
+          ],
+        }),
+      ],
     },
     {
       anchor: ANCHORS.wind,
@@ -180,7 +190,7 @@ export const HISTORY_FIXTURE: HistoryPayload = {
       reports: [ANCHORS.statement],
       status: "actual",
       kind: live("statement").kind,
-      changes: [change("17:30", "digest", "minor", { codes: [{ system: "ugc", code: "KSZ990" }] })],
+      changes: [change("17:30", "digest", "minor", { codes: [{ system: "ugc", code: "KSZ990" }], places: [{ id: CABIN, level: "digest" }] })],
     },
     {
       anchor: ANCHORS.air,
@@ -205,8 +215,26 @@ export const HISTORY_FIXTURE: HistoryPayload = {
       reports: [ANCHORS.fog],
       status: "actual",
       kind: { code: "met.fog", label: "Dense fog advisory" },
-      // No report ends the advisory. It leaves the map at its expiry.
-      changes: [change("15:00", "notice", "minor", { expires: utc("16:00"), codes: [{ system: "ugc", code: "KSZ083" }] })],
+      // No report ends the advisory. The runtime gives a change at its expiry, and the advisory leaves the map.
+      changes: [
+        change("15:00", "notice", "minor", {
+          expires: utc("16:00"),
+          codes: [{ system: "ugc", code: "KSZ083" }],
+          places: [
+            { id: FARM, level: "notice" },
+            { id: SHOP, level: "notice" },
+          ],
+        }),
+        change("16:00", "none", "minor", {
+          live: false,
+          expires: utc("16:00"),
+          codes: [{ system: "ugc", code: "KSZ083" }],
+          places: [
+            { id: FARM, level: "none" },
+            { id: SHOP, level: "none" },
+          ],
+        }),
+      ],
     },
   ],
   regions: [

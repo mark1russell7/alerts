@@ -48,7 +48,7 @@ export function atPresent(replay: Replay | undefined): boolean {
 
 /**
  * This function gives the key of the picture of a scrubber. Two states with one key have one picture, so the page
- * draws again only for a new key. The present has its own key, because the live map also has the level of each place.
+ * draws again only for a new key. The present has its own key, because the live map also has the coverage of each place.
  */
 export function scrubKey(replay: Replay | undefined, times: readonly number[]): number {
   return replay === undefined || atPresent(replay) ? -1 : changeIndex(times, replay.at);
@@ -63,7 +63,7 @@ export function scrubPayload(payload: MapPayload, kept: Histories, replay: Repla
   return { ...payload, at: replay.at, view: historyView(kept, replay.at, payload.view.places) };
 }
 
-/** The form of the text of a time: the clock time, the day of the week with the clock time, or the date with the clock time. */
+/** The form of the text of a time. The clock time is alone, with the day of the week, or with the date. */
 export type TimeForm = "time" | "weekday" | "date";
 
 /**
@@ -110,6 +110,6 @@ export function scrubWords(replay: Replay | undefined, clock: (at: number, prese
   return {
     map: `Map at ${text}`,
     list: `Incidents at ${text}`,
-    past: `The map shows the incidents and their areas at ${text}. A past time does not show the level of each place.`,
+    past: `The map shows the incidents, their areas and the level of each place at ${text}. It does not show the coverage of that time.`,
   };
 }

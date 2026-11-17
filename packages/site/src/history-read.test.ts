@@ -43,7 +43,7 @@ describe("the read of the history", () => {
 
   it("tells a text that is not JSON, and JSON that is not a history", async () => {
     expect(await readHistory(answer("<html>"), null)).toEqual({ ok: false, absent: false, text: `${SOURCE} The answer of the runtime is not JSON.` });
-    const change = '{"at":1,"codes":[],"shapes":[]}';
+    const change = '{"at":1,"codes":[],"shapes":[],"places":[]}';
     const incident = (fields: string): string => `{"format":"${HISTORY_FORMAT}","at":null,"since":null,"next":null,"regions":[],"incidents":[${fields}]}`;
     const bodies = [
       "null",
@@ -56,6 +56,8 @@ describe("the read of the history", () => {
       incident('{"anchor":"a","reports":[]}'),
       incident('{"anchor":"a","reports":[],"changes":[{"codes":[],"shapes":[]}]}'),
       incident('{"anchor":"a","reports":[],"changes":[{"at":1,"codes":[]}]}'),
+      // A runtime before the places of a change gives a change with no list of places.
+      incident('{"anchor":"a","reports":[],"changes":[{"at":1,"codes":[],"shapes":[]}]}'),
     ];
     for (const body of bodies) {
       expect(await readHistory(answer(body), null), body).toEqual({ ok: false, absent: false, text: `${SOURCE} The answer of the runtime is not a history.` });

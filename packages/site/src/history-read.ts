@@ -22,10 +22,10 @@ export const OTHER_FORMAT_TEXT = `${SOURCE_TEXT} The runtime has a different ver
 const isObject = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null;
 const isTime = (value: unknown): boolean => value === null || (typeof value === "number" && Number.isFinite(value));
 
-/** This function examines the history of one incident: an anchor, a list of reports and a list of changes, each with a time. */
+/** This function examines the history of one incident: an anchor, a list of reports and a list of changes. Each change has a time, its areas and its places. */
 function isIncident(value: unknown): boolean {
   if (!isObject(value) || typeof value["anchor"] !== "string" || !Array.isArray(value["reports"]) || !Array.isArray(value["changes"])) return false;
-  return value["changes"].every((change) => isObject(change) && typeof change["at"] === "number" && Array.isArray(change["codes"]) && Array.isArray(change["shapes"]));
+  return value["changes"].every((change) => isObject(change) && typeof change["at"] === "number" && Array.isArray(change["codes"]) && Array.isArray(change["shapes"]) && Array.isArray(change["places"]));
 }
 
 /**

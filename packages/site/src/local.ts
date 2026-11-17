@@ -2,8 +2,9 @@
  * The local page. It reads the map from the alert runtime on this computer every 30 seconds, and when the page
  * comes back into view. It draws the map, the list of the incidents and the region codes with no shape.
  * The map is a globe that a person can move. A browser with no WebGL 2 gets the flat map.
+ *
  * A time scrubber below the map sets the time of the page. Its end is the present, and each other time is from the
- * history of the runtime. It sends each request to the origin of the page only.
+ * history of the runtime. The page sends each request to the origin of the page only.
  */
 
 import { NO_HISTORIES, type Histories, type MapPayload } from "@mark1russell7/alerts";
