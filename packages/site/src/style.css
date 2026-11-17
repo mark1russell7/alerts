@@ -1,3 +1,5 @@
+@import "@mark1russell7/visuals/labels.css";
+
 :root {
   --page: #fbfbfa;
   --panel: #f0f0ed;
@@ -377,10 +379,14 @@ summary:focus-visible,
 /* The globe of the local page. Its box has the shape of the flat map, so the page keeps its layout. */
 
 .globe-box {
+  /* The names of the places are in a layer that fills the box. */
+  position: relative;
   aspect-ratio: 25 / 16;
   overflow: hidden;
   border-radius: 0.375rem;
   background: var(--sea);
+  --labels-ink: var(--ink);
+  --labels-halo: var(--page);
 }
 
 .globe-box canvas:focus-visible {

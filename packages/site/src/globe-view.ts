@@ -1,11 +1,11 @@
 /**
- * The parts of the globe of the local page, as data. The function `globeParts` is a pure calculation: it gives the
- * areas, the points and the regions of a map payload for the globe of `@mark1russell7/visuals`. Thus the tests
- * examine them with no browser. The globe shows the same view as the flat map of `map-view.ts`.
+ * The parts of the globe of the local page, as data. The function `globeParts` is a pure calculation. It gives the
+ * areas, the points, the names and the regions of a map payload for the globe of `@mark1russell7/visuals`. Thus the
+ * tests examine them with no browser. The globe shows the same view as the flat map of `map-view.ts`.
  */
 
-import type { AssessedLevel, MapPayload, MapPlace, MapRegion, MapShape } from "@mark1russell7/alerts";
-import { bboxOfGeoJson, circleKm, fromPosition, type Region } from "@mark1russell7/geo";
+import { ASSESSED_LEVELS, type AssessedLevel, type MapPayload, type MapPlace, type MapRegion, type MapShape } from "@mark1russell7/alerts";
+import { bboxCenter, bboxOfGeoJson, circleKm, fromPosition, type LatLon, type Region } from "@mark1russell7/geo";
 import type { GlobeArea, GlobePoint } from "@mark1russell7/visuals/globe";
 import { LEVEL_WORDS } from "./draw.ts";
 import { PIN_PAD_KM, placeTitle, regionTitle } from "./map-view.ts";
@@ -19,12 +19,33 @@ export type GlobeValue =
   | { readonly type: "place"; readonly words: string; readonly id: string; readonly incident: string | undefined }
   | { readonly type: "region"; readonly words: string; readonly code: string };
 
+/** The name of a watched place on the globe. The text is next to the dot of the place, or in the region of a place with no position. */
+export interface GlobeName {
+  /** The record of the place. The text gets the highlight of the record. */
+  readonly record: string;
+  /** The position of the place. For a place with no position, it is the middle of the box of its region. */
+  readonly place: LatLon;
+  /** The label of the place. */
+  readonly text: string;
+  /** The name of the style of the part of the place: its dot, or the outline of its region. */
+  readonly kind: string;
+  /** The rank of the level of the place. When two texts need one position, the text of the higher rank stays. */
+  readonly rank: number;
+  /**
+   * The width of the mark of the place, in CSS pixels: the dot, or the gap ring around it. The text stays off the mark.
+   * A place with no position has no mark. Its value is 0, and its text is on its position.
+   */
+  readonly size: number;
+}
+
 /** The parts of the globe for one map payload. */
 export interface GlobeParts {
   /** The areas, from the bottom to the top: the regions of the basemap, the incidents from the lowest level, the outlines of the places. */
   readonly areas: readonly GlobeArea<GlobeValue>[];
   /** One point for each place with a position. A place with a short coverage has a larger point below it: the gap ring. */
   readonly points: readonly GlobePoint<GlobeValue>[];
+  /** One name for each place with a label. A place with no position and no shape has no name. */
+  readonly names: readonly GlobeName[];
   /** Each region of the picture, and a circle around each point. The first view of the globe shows them. */
   readonly regions: readonly Region[];
   /** The regions of each incident, by its anchor. The view of a selected incident shows them. */
@@ -81,6 +102,9 @@ export function regionOf(shape: MapShape): Region {
 /** This function tells if the coverage of a place is short for one kind or more. */
 const hasGap = (place: MapPlace): boolean => place.gaps.length > 0;
 
+/** This function gives the rank of a level for the names: a higher level gives a larger number. */
+export const levelRank = (level: AssessedLevel): number => ASSESSED_LEVELS.indexOf(level);
+
 /**
  * This function gives the angle between two lines of the grid for the regions of a picture, in degrees.
  * A small picture gets a small step, so some lines go across it. No region gives the largest step.
@@ -107,6 +131,7 @@ export function globeParts(payload: MapPayload): GlobeParts {
   const { view, basemap } = payload;
   const areas: GlobeArea<GlobeValue>[] = [];
   const points: GlobePoint<GlobeValue>[] = [];
+  const names: GlobeName[] = [];
   const regions: Region[] = [];
   const incidents = new Map<string, readonly Region[]>();
 
@@ -126,16 +151,23 @@ export function globeParts(payload: MapPayload): GlobeParts {
     const record = placeRecord(place.id);
     // A pick of a place selects the first incident of the place: the incident of the highest level.
     const value: GlobeValue = { type: "place", words: placeTitle(place), id: place.id, incident: place.incidents[0] };
+    const text = place.label.trim();
+    const rank = levelRank(place.level);
     if (place.at !== undefined) {
       const at = fromPosition(place.at);
       // The ring is below the dot. The two points have one record, so they are one record of the globe.
       if (hasGap(place)) points.push({ record, place: at, kind: GAP_KIND, value, size: GAP_SIZE });
       points.push({ record, place: at, kind: pinKind(place.level), value, size: PIN_SIZE });
+      if (text !== "") names.push({ record, place: at, text, kind: pinKind(place.level), rank, size: hasGap(place) ? GAP_SIZE : PIN_SIZE });
       regions.push(circleKm(at, PIN_PAD_KM));
     } else {
-      for (const shape of place.shapes) areas.push({ record, region: regionOf(shape), kind: outlineKind(place.level), value, pick: false });
+      const shapes = place.shapes.map(regionOf);
+      for (const region of shapes) areas.push({ record, region, kind: outlineKind(place.level), value, pick: false });
+      // A place with no position has no mark. Its name is at the middle of the box of its region.
+      const box = bboxOfGeoJson({ type: "GeometryCollection", geometries: shapes });
+      if (text !== "" && box !== undefined) names.push({ record, place: bboxCenter(box), text, kind: outlineKind(place.level), rank, size: 0 });
     }
   }
   const all = [...areas.map((area) => area.region), ...regions];
-  return { areas, points, regions: all, incidents, grid: gridOf(all) };
+  return { areas, points, names, regions: all, incidents, grid: gridOf(all) };
 }

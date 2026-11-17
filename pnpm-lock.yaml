@@ -691,8 +691,8 @@ importers:
         specifier: ^2.0.0
         version: 2.1.4
       '@mark1russell7/geo':
-        specifier: ^0.5.1
-        version: 0.5.1
+        specifier: ^0.5.2
+        version: 0.5.2
       '@mark1russell7/site-pages':
         specifier: ^0.4.8
         version: 0.4.8
@@ -700,8 +700,8 @@ importers:
         specifier: ^0.0.10
         version: 0.0.10
       '@mark1russell7/visuals':
-        specifier: ^0.2.1
-        version: 0.2.1(three@0.187.0)
+        specifier: ^0.2.3
+        version: 0.2.3(three@0.187.0)
       '@types/d3-geo':
         specifier: ^3.1.1
         version: 3.1.1
@@ -1374,8 +1374,8 @@ packages:
     resolution: {integrity: sha512-CIG42TK4o9r0FQgP5BZwFfnVba579/oaTaHbQ+UmVrzMGWEz3LLZcIQ2hNYvWOQ+PXuukTefCiKEyUl5jWovmg==}
     engines: {node: '>=22.12'}
 
-  '@mark1russell7/geo@0.5.1':
-    resolution: {integrity: sha512-OpoCJ+4jkx1jvrI7FKhcuoGvCA5wIAvLp8KQJxW4cKPHNFamhbIbg2q0aWYZomdgto4KsT8KpTQDP0hK22gBPQ==}
+  '@mark1russell7/geo@0.5.2':
+    resolution: {integrity: sha512-hr8rFQLIQ0MbzdZUDhQ10A6dKUtVsSXHhpXng8xzkR9NFnwy9dXSgfx1E5dgXF4GjGIFmd4TD/4ZYOwl5YUoiQ==}
     engines: {node: '>=22.12'}
 
   '@mark1russell7/interval@0.1.0':
@@ -1547,8 +1547,8 @@ packages:
     resolution: {integrity: sha512-uKmmt2icpkn2k9Wn/y1fRZvBml80dgwRLRhI72e6SkGVSF3UWCiuPZdYTJA2WEstRolq0viSLRJjXb/o8NF8JQ==}
     engines: {node: '>=22.12'}
 
-  '@mark1russell7/visuals@0.2.1':
-    resolution: {integrity: sha512-qI7TuDbrBtmeryMErBFtQe6BRal9DpW3K0alZWKojbeLGQn0NHusOY5zAFgk+ctCz3u3VXB7XfkNwCk5evU+gg==}
+  '@mark1russell7/visuals@0.2.3':
+    resolution: {integrity: sha512-gfgIQAsKaSCKnS2w4NzCDU17y87phR6R2wY4MkDAq+bmacUEL5V8R5XqlaCFAWaa/LfC6NA0Drj4+mh8D7tVjg==}
     engines: {node: '>=22'}
     peerDependencies:
       three: '>=0.187.0'
@@ -2886,7 +2886,7 @@ snapshots:
       '@mark1russell7/optional': 1.2.0
       '@mark1russell7/predicates': 0.1.2
 
-  '@mark1russell7/geo@0.5.1':
+  '@mark1russell7/geo@0.5.2':
     dependencies:
       '@mark1russell7/optional': 1.2.0
       '@mark1russell7/predicates': 0.1.5
@@ -2895,7 +2895,7 @@ snapshots:
 
   '@mark1russell7/layout-contract@0.10.2':
     dependencies:
-      '@mark1russell7/predicates': 0.1.2
+      '@mark1russell7/predicates': 0.1.5
       '@mark1russell7/rigor-generators': 0.1.19
       '@mark1russell7/rigor-statistics': 0.1.29
       '@mark1russell7/strategy-space': 0.0.5
@@ -3006,9 +3006,9 @@ snapshots:
     transitivePeerDependencies:
       - zod
 
-  '@mark1russell7/visuals@0.2.1(three@0.187.0)':
+  '@mark1russell7/visuals@0.2.3(three@0.187.0)':
     dependencies:
-      '@mark1russell7/geo': 0.5.1
+      '@mark1russell7/geo': 0.5.2
       '@mark1russell7/layout-contract': 0.10.2
     optionalDependencies:
       three: 0.187.0

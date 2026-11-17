@@ -2,7 +2,7 @@ import { ASSESSED_LEVELS } from "@mark1russell7/alerts";
 import { bboxOfGeoJson } from "@mark1russell7/geo";
 import { regionSurface } from "@mark1russell7/visuals/globe";
 import { describe, expect, it } from "vitest";
-import { areaKind, GAP_KIND, GAP_SIZE, globeParts, GRID_STEPS, gridOf, incidentRecord, outlineKind, PIN_SIZE, pinKind, placeRecord, regionOf, ZONE_KIND } from "./globe-view.ts";
+import { areaKind, GAP_KIND, GAP_SIZE, globeParts, GRID_STEPS, gridOf, incidentRecord, levelRank, outlineKind, PIN_SIZE, pinKind, placeRecord, regionOf, ZONE_KIND } from "./globe-view.ts";
 import { ANCHORS, box, EMPTY_FIXTURE, MAP_FIXTURE } from "./map-view.fixture.ts";
 
 const parts = globeParts(MAP_FIXTURE);
@@ -88,6 +88,50 @@ describe("globeParts", () => {
     expect(GAP_SIZE).toBeGreaterThan(PIN_SIZE);
   });
 
+  it("has the label of each place with a position as a name at its dot", () => {
+    const dots = parts.names.filter((name) => name.size > 0);
+    expect(dots.map((name) => [name.text, name.record, name.kind])).toEqual([
+      ["Farm", placeRecord("place:farm"), pinKind("life-safety")],
+      ["Shop", placeRecord("place:shop"), pinKind("urgent")],
+    ]);
+    for (const name of dots) {
+      const dot = parts.points.find((point) => point.record === name.record && point.kind === name.kind);
+      expect(name.place).toEqual(dot?.place);
+    }
+  });
+
+  it("has the name of a place with no position at the middle of the box of its region, with no mark", () => {
+    const cabin = parts.names.find((name) => name.record === placeRecord("place:cabin"));
+    expect(cabin).toMatchObject({ text: "Cabin", kind: outlineKind("digest"), rank: levelRank("digest"), size: 0 });
+    // The region of the cabin is the box from 37.82 to 38.17 north, and from 97.81 to 97.15 west.
+    expect(cabin?.place.lat).toBeCloseTo(37.995, 6);
+    expect(cabin?.place.lon).toBeCloseTo(-97.48, 6);
+    expect(parts.names).toHaveLength(3);
+  });
+
+  it("has no name for a place with no label, and no name for a place with no position and no shape", () => {
+    const places = MAP_FIXTURE.view.places.map((place) => {
+      if (place.id === "place:farm") return { ...place, label: "  " };
+      return place.id === "place:cabin" ? { ...place, shapes: [] } : place;
+    });
+    const found = globeParts({ ...MAP_FIXTURE, view: { ...MAP_FIXTURE.view, places } });
+    expect(found.names.map((name) => name.text)).toEqual(["Shop"]);
+    expect(found.points).toHaveLength(parts.points.length);
+  });
+
+  it("keeps a name off the mark of its place: the dot, or the gap ring of a place with a short coverage", () => {
+    expect(parts.names.map((name) => name.size)).toEqual([PIN_SIZE, GAP_SIZE, 0]);
+  });
+
+  it("gives the name of a place of a higher level a higher rank", () => {
+    const ranks = ASSESSED_LEVELS.map(levelRank);
+    expect(ranks).toEqual([...ranks].sort((a, b) => a - b));
+    expect(new Set(ranks).size).toBe(ASSESSED_LEVELS.length);
+    expect(levelRank("life-safety")).toBeGreaterThan(levelRank("urgent"));
+    expect(levelRank("digest")).toBeGreaterThan(levelRank("none"));
+    expect(parts.names.map((name) => name.rank)).toEqual([levelRank("life-safety"), levelRank("urgent"), levelRank("digest")]);
+  });
+
   it("gives the first incident of a place to a pick of the place: the incident of the highest level", () => {
     const shop = parts.points[1]?.value;
     expect(shop).toMatchObject({ type: "place", id: "place:shop", incident: ANCHORS.flood });
@@ -123,6 +167,7 @@ describe("globeParts", () => {
     const empty = globeParts(EMPTY_FIXTURE);
     expect(empty.areas).toEqual([]);
     expect(empty.points).toEqual([]);
+    expect(empty.names).toEqual([]);
     expect(empty.regions).toEqual([]);
     expect(empty.grid).toBe(15);
   });

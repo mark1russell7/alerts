@@ -1,15 +1,16 @@
 /**
  * The globe of the local page: a stage of `@mark1russell7/visuals` with the parts of `globe-view.ts`. A person turns
- * the globe with a drag, and goes nearer with the wheel. A browser with no WebGL 2 gets no globe. Then the page
- * shows the flat map of `map-view.ts`.
+ * the globe with a drag, and goes nearer with the wheel. The name of each place is a text of the page next to its dot.
+ * A browser with no WebGL 2 gets no globe. Then the page shows the flat map of `map-view.ts`.
  */
 
 import { ASSESSED_LEVELS, type AssessedLevel, type MapPayload } from "@mark1russell7/alerts";
 import type { Region } from "@mark1russell7/geo";
 import type { StageView } from "@mark1russell7/visuals";
-import { createGlobe, GLOBE_POLAR, regionView, type GlobeContent, type GlobeStyle, type GlobeTheme } from "@mark1russell7/visuals/globe";
-import { createStage, type Stage } from "@mark1russell7/visuals/three";
-import { areaKind, GAP_KIND, globeParts, incidentRecord, outlineKind, pinKind, ZONE_KIND, type GlobeParts, type GlobeValue } from "./globe-view.ts";
+import { createGlobe, GLOBE_POLAR, globePoint, inSight, pointRadius, regionView, type GlobeContent, type GlobeStyle, type GlobeTheme } from "@mark1russell7/visuals/globe";
+import { createLabels, type StageLabel } from "@mark1russell7/visuals/labels";
+import { createStage, stackContents, type Stage } from "@mark1russell7/visuals/three";
+import { areaKind, GAP_KIND, globeParts, incidentRecord, outlineKind, pinKind, ZONE_KIND, type GlobeName, type GlobeParts, type GlobeValue } from "./globe-view.ts";
 import { mapSummary } from "./map-view.ts";
 
 /** The elements of the page that the globe uses. */
@@ -52,6 +53,9 @@ const NEAREST = 0.001;
 /** The space around a selected incident in its view. The picture also shows the regions around the incident. */
 const NEAR_MARGIN = 2.2;
 
+/** The space between a name of a place and the edge of the picture, in CSS pixels. */
+const NAME_EDGE = 2;
+
 /** The name of the view that shows each part of the map. */
 const ALL = "all";
 
@@ -92,6 +96,15 @@ export function globeTheme(): GlobeTheme {
     hovered: color("--quiet"),
     selected: color("--ink"),
   };
+}
+
+/**
+ * This function gives the label of the stage for the name of a place. The text stays off the mark of the place.
+ * The text of a place with no mark has its middle on the position of the name.
+ */
+export function labelOf(name: GlobeName): StageLabel {
+  const label = { record: name.record, at: globePoint(name.place), text: name.text, kind: name.kind, rank: name.rank };
+  return name.size > 0 ? { ...label, clear: pointRadius(name.size) } : { ...label, sides: ["center"] };
 }
 
 /**
@@ -148,16 +161,19 @@ export function startGlobe(elements: GlobeElements, select: (anchor: string | un
   /** This function puts a payload on the stage. It gives false when the globe cannot show the payload. */
   const put = (payload: MapPayload): boolean => {
     let next: GlobeParts;
-    let content: GlobeContent<GlobeValue>;
+    let globe: GlobeContent<GlobeValue>;
     try {
       next = globeParts(payload);
       // A payload with no shape has no picture. The flat map tells it in words.
       if (next.areas.length === 0 && next.points.length === 0) return false;
-      content = createGlobe({ areas: next.areas, points: next.points, grid: next.grid, nearest: NEAREST, lineWidth: 1.5, highlightWidth: 3 });
+      globe = createGlobe({ areas: next.areas, points: next.points, grid: next.grid, nearest: NEAREST, lineWidth: 1.5, highlightWidth: 3 });
     } catch {
       // A shape that is not correct stops the globe for this payload. The flat map shows the shapes that it can.
       return false;
     }
+    // The names are texts of the page above the picture. A place on the far side of the Earth has no name in the picture.
+    const names = createLabels(elements.box, { labels: next.names.map(labelOf), visible: (point, eye) => inSight(point, eye, 1), edge: NAME_EDGE });
+    const content = stackContents<GlobeValue, GlobeTheme>([globe, names]);
     parts = next;
     if (followed !== undefined && !next.incidents.has(followed)) followed = undefined;
     setViews();
