@@ -4,7 +4,8 @@
  * module is a pure calculation with no clock and no request.
  */
 import { compareCodeUnits } from "@mark1russell7/text/order";
-import type { Instant, RegionCode, ReportId } from "./contracts.ts";
+import { higherLevel } from "./assess.ts";
+import type { AssessedLevel, Instant, PlaceId, RegionCode, ReportId } from "./contracts.ts";
 import type { HistoryChange, HistoryIncident, HistoryPayload, HistoryRegion } from "./history.ts";
 import { compareMapIncidents, compareRegionCodes, regionCodeKey, type MapIncident, type MapPlace, type MapView } from "./map.ts";
 import { distinctShapes } from "./shapes.ts";
@@ -55,57 +56,44 @@ export function addHistory(kept: Histories, payload: HistoryPayload): Histories 
 }
 
 /**
- * This function tells if a change of an incident is on the map at a time. The change is on the map from its time to
- * the next change of the incident, while the incident is live. A live change with an expiry leaves the map at the
- * expiry, as a report is not live at its expiry.
- */
-function shownAt(change: HistoryChange, next: HistoryChange | undefined, at: Instant): boolean {
-  return change.live && change.at <= at && (next === undefined || at < next.at) && (change.expires === undefined || at < change.expires);
-}
-
-/**
- * This function gives the times at which the map of the histories changes, one time each, from the oldest. These are
- * the time of each change, and the expiry of a live change that comes before the next change of its incident. A
- * scrubber shows a tick at each time. An expiry can be after the time of the histories.
+ * This function gives the times at which the map of the histories can change, one time each, from the oldest. These
+ * are the times of the changes. The runtime gives a change at each time edge, thus an expiry has no time of its own.
+ * A scrubber shows a tick at each time.
  */
 export function historyTimes(kept: Histories): readonly Instant[] {
-  const times = new Set<Instant>();
-  for (const incident of kept.incidents) {
-    incident.changes.forEach((change, index) => {
-      times.add(change.at);
-      const next = incident.changes[index + 1];
-      if (change.live && change.expires !== undefined && change.expires > change.at && (next === undefined || change.expires < next.at)) times.add(change.expires);
-    });
-  }
+  const times = new Set<Instant>(kept.incidents.flatMap((incident) => incident.changes.map((change) => change.at)));
   return [...times].sort((a, b) => a - b);
 }
 
 /**
- * This function gives the change of an incident that is on the map at a time, or `undefined` when the incident is not
- * on the map: before its first change, after its end and after its expiry.
+ * This function gives the change of an incident that is on the map at a time: the last change at or before the time.
+ * It gives `undefined` when the incident is not on the map: before its first change, and while that change is not live.
+ * The reader has no rule of its own for an expiry, because the runtime gives a change at each time edge.
  */
 export function historyChangeAt(incident: HistoryIncident, at: Instant): HistoryChange | undefined {
-  const index = incident.changes.findLastIndex((change) => change.at <= at);
-  const change = incident.changes[index];
-  return change !== undefined && shownAt(change, incident.changes[index + 1], at) ? change : undefined;
+  const change = incident.changes.findLast((each) => each.at <= at);
+  return change?.live === true ? change : undefined;
 }
 
 /**
  * This function gives the view of the map at a time of the histories. The view has each incident that is on the map at
- * that time, with the level, the severity and the areas of its change. A page draws this view with the renderer of the
- * live map. The order of the incidents is the order of the live view.
+ * that time. Each incident has the level, the severity, the areas and the places of its change. A page draws this view
+ * with the renderer of the live map. The order of the incidents is the order of the live view.
  *
- * A change of the history names no place. Thus each place of the result keeps its label, its position and its shapes
- * from `places`, with the level `none`, no incident and no gap. The places of the live view give `places`.
+ * Each place of the result keeps its label, its position and its shapes from `places`. Its level is the highest level
+ * of the place in the changes of the view, as on the live map. The history has no coverage, thus a place of the result
+ * has no gap. The places of the live view give `places`.
  */
 export function historyView(kept: Histories, at: Instant, places: readonly MapPlace[]): MapView {
   const shapes = new Map(kept.regions.map((region) => [regionCodeKey(region.code), region.shapes]));
   const unshaped = new Map<string, RegionCode>();
+  const levels = new Map<PlaceId, AssessedLevel>();
   const incidents = kept.incidents
     .flatMap((incident): MapIncident[] => {
       const change = historyChangeAt(incident, at);
       if (change === undefined) return [];
       for (const code of change.unshaped) unshaped.set(regionCodeKey(code), code);
+      for (const place of change.places) levels.set(place.id, higherLevel(levels.get(place.id) ?? "none", place.level));
       return [
         {
           anchor: incident.anchor,
@@ -117,14 +105,24 @@ export function historyView(kept: Histories, at: Instant, places: readonly MapPl
           ...(change.expires === undefined ? {} : { expires: change.expires }),
           shapes: distinctShapes([...change.shapes, ...change.codes.flatMap((code) => shapes.get(regionCodeKey(code)) ?? [])]),
           unshaped: change.unshaped,
-          places: [],
+          places: change.places.map((place) => place.id),
         },
       ];
     })
     .sort(compareMapIncidents);
   return {
     incidents,
-    places: places.map(({ id, label, at: position, shapes: own }) => ({ id, label, ...(position === undefined ? {} : { at: position }), shapes: own, level: "none", incidents: [], gaps: [] })),
+    places: places.map(
+      ({ id, label, at: position, shapes: own }): MapPlace => ({
+        id,
+        label,
+        ...(position === undefined ? {} : { at: position }),
+        shapes: own,
+        level: levels.get(id) ?? "none",
+        incidents: incidents.filter((incident) => incident.places.includes(id)).map((incident) => incident.anchor),
+        gaps: [],
+      }),
+    ),
     unshaped: [...unshaped.values()].sort(compareRegionCodes),
   };
 }

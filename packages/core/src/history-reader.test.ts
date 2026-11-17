@@ -21,6 +21,8 @@ const square = (lon: number, lat: number): MapShape => ({
   ],
 });
 const id = (text: string): ReportId => text as ReportId;
+const HOME = "place:a" as PlaceId;
+const WORK = "place:b" as PlaceId;
 
 /** A change at a number of minutes after the start, with the codes of its areas. */
 const change = (minutes: number, codes: readonly RegionCode[] = [zone], fields: Partial<HistoryChange> = {}): HistoryChange => ({
@@ -32,6 +34,7 @@ const change = (minutes: number, codes: readonly RegionCode[] = [zone], fields: 
   codes,
   shapes: [],
   unshaped: [],
+  places: [],
   ...fields,
 });
 
@@ -122,42 +125,38 @@ describe("historyTimes", () => {
     expect(historyTimes(NO_HISTORIES)).toEqual([]);
   });
 
-  it("gives the expiry of a live change that comes before the next change of its incident", () => {
-    const expiry = (minutes: number): Partial<HistoryChange> => ({ expires: T0 + minutes * MINUTE });
-    const kept = addHistory(
-      NO_HISTORIES,
-      answer(
-        null,
-        [
-          // The first change has its expiry after the next change, so the map does not change at the expiry.
-          incident("a", [change(0, [zone], expiry(30)), change(10, [zone], expiry(60))]),
-          // The incident ended at 20 minutes, so its expiry changes nothing. A change with no expiry gives no time.
-          incident("b", [change(5, [zone], expiry(15)), change(20, [zone], { ...expiry(90), live: false }), change(100)]),
-        ],
-        [ZONE],
-      ),
-    );
-    expect(historyTimes(kept)).toEqual([0, 5, 10, 15, 20, 60, 100].map((minutes) => T0 + minutes * MINUTE));
+  it("gives no time for an expiry, because the runtime gives a change at each time edge", () => {
+    const expired = change(30, [zone], { live: false, level: "none" });
+    const kept = addHistory(NO_HISTORIES, answer(null, [incident("a", [change(0, [zone], { expires: T0 + 30 * MINUTE }), expired]), incident("b", [change(5, [zone], { expires: T0 + 90 * MINUTE })])], [ZONE]));
+    expect(historyTimes(kept)).toEqual([0, 5, 30].map((minutes) => T0 + minutes * MINUTE));
   });
 });
 
 describe("historyChangeAt", () => {
   const first = change(0, [zone], { expires: T0 + 30 * MINUTE });
   const second = change(10, [county, zone], { expires: T0 + 60 * MINUTE });
+  // The runtime gives the change of the time edge at the expiry, and the change of the end mark later.
+  const expired = change(60, [county, zone], { live: false, level: "none" });
   const end = change(80, [county, zone], { live: false, level: "none" });
-  const one = incident("a", [first, second, end]);
+  const one = incident("a", [first, second, expired, end]);
   const at = (minutes: number): HistoryChange | undefined => historyChangeAt(one, T0 + minutes * MINUTE);
 
   it("gives the last change at or before the time", () => {
     expect([at(-1), at(0), at(9), at(10), at(59)]).toEqual([undefined, first, first, second, second]);
   });
 
-  it("gives no change at and after the expiry, and after the end of the incident", () => {
-    // The incident is not on the map from the expiry of its last live change to the end mark, and after the mark.
+  it("gives no change while the last change is not live", () => {
     expect([at(60), at(79), at(80), at(500)]).toEqual([undefined, undefined, undefined, undefined]);
-    // The flip: a change with no expiry stays on the map.
-    const open = incident("b", [change(0)]);
-    expect(historyChangeAt(open, T0 + 500 * MINUTE)).toBe(open.changes[0]);
+    // The flip: an incident that is live again is on the map again.
+    const again = change(90, [zone]);
+    expect(historyChangeAt(incident("a", [first, expired, again]), T0 + 95 * MINUTE)).toBe(again);
+  });
+
+  it("has no rule of its own for an expiry", () => {
+    // The first change stays after its expiry of 30 minutes, because the runtime gave no change at that time.
+    // The runtime gives the time edges up to its own time, so such a history is a history before the edge.
+    const open = incident("b", [first]);
+    expect(historyChangeAt(open, T0 + 45 * MINUTE)).toBe(first);
   });
 });
 
@@ -166,15 +165,27 @@ describe("historyView", () => {
   const other: RegionCode = { system: "same", code: "020173" };
   const polygon = square(-98.5, 29.4);
   // The tornado grows from the zone to the zone and the county, then it ends. The flood has a polygon and two codes with no shape.
-  const tornado = incident("t", [change(0, [zone], { level: "urgent", onset: T0, expires: T0 + 60 * MINUTE }), change(10, [county, zone], { level: "life-safety", severity: "extreme" }), change(50, [county, zone], { live: false, level: "none" })]);
+  const tornado = incident("t", [
+    change(0, [zone], { level: "urgent", onset: T0, expires: T0 + 60 * MINUTE, places: [{ id: HOME, level: "urgent" }] }),
+    change(10, [county, zone], {
+      level: "life-safety",
+      severity: "extreme",
+      places: [
+        { id: HOME, level: "life-safety" },
+        { id: WORK, level: "none" },
+      ],
+    }),
+    change(50, [county, zone], { live: false, level: "none", places: [{ id: HOME, level: "none" }] }),
+  ]);
   const flood = incident("f", [change(20, [county], { level: "notice", severity: "moderate", shapes: [polygon], unshaped: [far, other] })]);
   // The wind has the level of the flood and a higher severity. The quake has the level of the tornado at 10 minutes.
-  const wind = incident("w", [change(20, [zone], { level: "notice", severity: "severe" })]);
+  const wind = incident("w", [change(20, [zone], { level: "notice", severity: "severe", places: [{ id: HOME, level: "notice" }] })]);
   const quake = incident("q", [change(30, [], { level: "life-safety", severity: "extreme", shapes: [polygon] })]);
   const kept = addHistory(NO_HISTORIES, answer(null, [tornado, flood, wind, quake], [COUNTY, ZONE]));
-  const home: MapPlace = { id: "place:a" as PlaceId, label: "Place A", at: [-97.45, 37.65], shapes: ZONE.shapes, level: "life-safety", incidents: [id("t")], gaps: ["met.tornado"] };
-  const region: MapPlace = { id: "place:b" as PlaceId, label: "Place B", shapes: [], level: "none", incidents: [], gaps: [] };
-  const view = (minutes: number) => historyView(kept, T0 + minutes * MINUTE, [home, region]);
+  // The live view gives the places. The past view takes only their label, their position and their shapes.
+  const home: MapPlace = { id: HOME, label: "Place A", at: [-97.45, 37.65], shapes: ZONE.shapes, level: "notice", incidents: [id("w")], gaps: ["met.tornado"] };
+  const work: MapPlace = { id: WORK, label: "Place B", shapes: [], level: "none", incidents: [], gaps: [] };
+  const view = (minutes: number) => historyView(kept, T0 + minutes * MINUTE, [home, work]);
 
   it("has no incident before the first change", () => {
     expect(view(-1)).toMatchObject({ incidents: [], unshaped: [] });
@@ -182,7 +193,7 @@ describe("historyView", () => {
 
   it("gives each incident the level, the severity, the times and the areas of its change at the time", () => {
     expect(view(0).incidents).toEqual([
-      { anchor: "t", status: "actual", kind: tornado.kind, level: "urgent", severity: "severe", onset: T0, expires: T0 + 60 * MINUTE, shapes: ZONE.shapes, unshaped: [], places: [] },
+      { anchor: "t", status: "actual", kind: tornado.kind, level: "urgent", severity: "severe", onset: T0, expires: T0 + 60 * MINUTE, shapes: ZONE.shapes, unshaped: [], places: [HOME] },
     ]);
     const [grown] = view(10).incidents;
     expect(grown).toMatchObject({ anchor: "t", level: "life-safety", severity: "extreme", shapes: [...COUNTY.shapes, ...ZONE.shapes] });
@@ -206,11 +217,41 @@ describe("historyView", () => {
     expect(view(50).incidents.map((one) => one.anchor)).toEqual(["q", "w", "f"]);
   });
 
-  it("keeps the label, the position and the shapes of each place, with no level, no incident and no gap", () => {
-    expect(view(10).places).toEqual([
-      { id: "place:a", label: "Place A", at: [-97.45, 37.65], shapes: ZONE.shapes, level: "none", incidents: [], gaps: [] },
-      { id: "place:b", label: "Place B", shapes: [], level: "none", incidents: [], gaps: [] },
+  it("keeps the label, the position and the shapes of each place, with no gap", () => {
+    expect(view(-1).places).toEqual([
+      { id: HOME, label: "Place A", at: [-97.45, 37.65], shapes: ZONE.shapes, level: "none", incidents: [], gaps: [] },
+      { id: WORK, label: "Place B", shapes: [], level: "none", incidents: [], gaps: [] },
     ]);
-    expect(view(10).places[1]).not.toHaveProperty("at");
+    expect(view(-1).places[1]).not.toHaveProperty("at");
+  });
+
+  it("gives each place the highest level of its place in the changes, and the incidents with the place", () => {
+    const places = (minutes: number) => view(minutes).places.map((place) => [place.level, place.incidents]);
+    expect(places(0)).toEqual([
+      ["urgent", ["t"]],
+      ["none", []],
+    ]);
+    // A place in the areas with no assessment has the level none, and the incident names it.
+    expect(places(10)).toEqual([
+      ["life-safety", ["t"]],
+      ["none", ["t"]],
+    ]);
+    // The incidents of a place have the order of the view. The tornado is above the wind.
+    expect(places(30)).toEqual([
+      ["life-safety", ["t", "w"]],
+      ["none", ["t"]],
+    ]);
+    // The tornado ended at 50 minutes. The place keeps only the level of the wind.
+    expect(places(50)).toEqual([
+      ["notice", ["w"]],
+      ["none", []],
+    ]);
+  });
+
+  it("names no place that the live view does not have", () => {
+    const gone = historyView(kept, T0 + 30 * MINUTE, [work]);
+    expect(gone.places.map((place) => place.id)).toEqual([WORK]);
+    // The incident keeps the places of its change.
+    expect(gone.incidents.find((one) => one.anchor === "t")?.places).toEqual([HOME, WORK]);
   });
 });

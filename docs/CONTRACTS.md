@@ -1126,6 +1126,15 @@ A reader keeps its histories by anchor:
 2. Read again with `since` set to the last `next`. The payload gives the incident of the newest change again, because one time can get a later report.
 3. Replace the history of each incident of the payload. Drop each history whose anchor is a report of an incident of the payload, because these incidents merged.
 4. When `next` is below `since`, a step of the clock moved the times back. Read again with no `since`.
+5. Read with no `since` at intervals. Only this read removes the history of an incident that the runtime retired.
+
+The module `history-reader.ts` of the core is this reader as a pure calculation:
+
+- `addHistory` adds one answer to the histories of a reader (`Histories`). It does the steps 3 and 4, and it gives the `since` of the next read.
+- `historyTimes` gives the times of the changes. A time scrubber shows a tick at each time.
+- `historyView` gives the view of the map at a time. It has the last change of each incident at or before that time, when that change is live.
+
+The reader has no rule of its own for an expiry, because a time edge gives a change. The view has the type of the view of the map route (`MapView`), so one renderer draws the two. The level of a place is the highest level of the place in the changes of the view. A place of the view has no gap, because the history has no coverage. The test `history-replay.test.ts` holds this view equal to the view of the map at each time.
 
 The work for an incident with no change and no time edge at `since` or later is only the read of its times. The levels come from the watches of the people, thus only the loopback address gives the route.
 
