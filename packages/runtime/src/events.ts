@@ -166,7 +166,10 @@ export interface RetiredEvent extends Envelope<"retired"> {
   readonly reports: readonly ReportId[];
   /** The end of the tombstones. A tombstone keeps a late copy of a report out of the state until this time. */
   readonly until: Instant;
-  /** The keys of `cancelled` of the deliveries of the retired incidents, sorted. A delivery key does not name its incident. */
+  /**
+   * The keys of `cancelled` of the deliveries of the retired incidents, and each old key with no delivery in the merge,
+   * sorted. A delivery key does not name its incident.
+   */
   readonly cancelled: readonly string[];
 }
 

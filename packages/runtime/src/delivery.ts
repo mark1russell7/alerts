@@ -41,7 +41,7 @@ import { errorMessage } from "@mark1russell7/text";
 import { compareCodeUnits } from "@mark1russell7/text/order";
 import { envelope, frameTag, type ChannelFailureKind, type RefusalKind, type RefusedEvent, type RuntimeEvent } from "./events.ts";
 import { limited } from "./limit.ts";
-import type { RuntimeState } from "./state.ts";
+import { cancelledKeys, type RuntimeState } from "./state.ts";
 import { earliest } from "./view.ts";
 
 /** The options of the delivery. The private configuration gives the recipients and the addresses. */
@@ -358,7 +358,7 @@ export function createDispatcher(options: DeliveryOptions, context: DeliveryCont
           assess: options.assess,
           starts: state.starts,
           ends: state.escalationEnds,
-          cancelled: new Set(state.cancelled),
+          cancelled: cancelledKeys(state),
           channels: descriptors,
           rank: options.rank,
           rankDelay: options.rankDelay,
