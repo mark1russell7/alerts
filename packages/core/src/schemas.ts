@@ -139,6 +139,8 @@ import type { EscalationEnd, Recipient } from "./delivery.ts";
 import type { DrillConfig, DrillPath } from "./drill.ts";
 import type { RankDelays } from "./escalation.ts";
 import { HEALTH_FORMAT, type BalanceHealth, type CopyHealth, type HealthPayload, type QuotaHealth, type SourceHealthView } from "./health-payload.ts";
+import { HISTORY_FORMAT, type HistoryChange, type HistoryIncident, type HistoryPayload, type HistoryRegion } from "./history.ts";
+import type { MapShape } from "./map.ts";
 import type { Lateness, LatenessLimit, LatenessState } from "./lateness.ts";
 import type { LinkFamily, LinkPolicy } from "./link.ts";
 import { COVERAGE_KIND } from "./assess.ts";
@@ -291,16 +293,20 @@ export const regionCodeSchema: z.ZodType<RegionCode, RegionCode> = schemaOf<Regi
   z.strictObject({ system: z.string(), code: z.string() }).readonly(),
 );
 
+// The polygon and the circle of an area. An area and a shape of the map share them.
+const polygonObject = z.strictObject({
+  type: z.literal("polygon"),
+  rings: z.array(z.array(positionSchema).readonly()).readonly(),
+  block: z.string().exactOptional(),
+});
+const circleObject = z.strictObject({ type: z.literal("circle"), center: positionSchema, radiusKm: z.number(), block: z.string().exactOptional() });
+
 /** This schema checks one area of an event: a polygon, a circle, a region code or a watched place. */
 export const areaSchema: z.ZodType<Area, Area> = schemaOf<Area>()(
   z
     .discriminatedUnion("type", [
-      z.strictObject({
-        type: z.literal("polygon"),
-        rings: z.array(z.array(positionSchema).readonly()).readonly(),
-        block: z.string().exactOptional(),
-      }),
-      z.strictObject({ type: z.literal("circle"), center: positionSchema, radiusKm: z.number(), block: z.string().exactOptional() }),
+      polygonObject,
+      circleObject,
       z.strictObject({ type: z.literal("code"), system: z.string(), code: z.string(), block: z.string().exactOptional() }),
       z.strictObject({ type: z.literal("place"), place: placeIdSchema }),
     ])
@@ -1537,6 +1543,59 @@ export const healthPayloadSchema: z.ZodType<HealthPayload, HealthPayload> = sche
       copies: z.array(copyHealthSchema).readonly(),
       quotas: z.array(quotaHealthSchema).readonly(),
       balances: z.array(balanceHealthSchema).readonly(),
+    })
+    .readonly(),
+);
+
+/** This schema checks a shape of the map: a polygon or a circle. */
+export const mapShapeSchema: z.ZodType<MapShape, MapShape> = schemaOf<MapShape>()(z.discriminatedUnion("type", [polygonObject, circleObject]).readonly());
+
+/** This schema checks one change of the history of an incident. */
+export const historyChangeSchema: z.ZodType<HistoryChange, HistoryChange> = schemaOf<HistoryChange>()(
+  z
+    .strictObject({
+      at: instantSchema,
+      reports: z.array(reportIdSchema).readonly(),
+      level: assessedLevelSchema,
+      severity: severitySchema,
+      live: z.boolean(),
+      onset: instantSchema.exactOptional(),
+      expires: instantSchema.exactOptional(),
+      codes: z.array(regionCodeSchema).readonly(),
+      shapes: z.array(mapShapeSchema).readonly(),
+      unshaped: z.array(regionCodeSchema).readonly(),
+    })
+    .readonly(),
+);
+
+/** This schema checks the history of one incident. */
+export const historyIncidentSchema: z.ZodType<HistoryIncident, HistoryIncident> = schemaOf<HistoryIncident>()(
+  z
+    .strictObject({
+      anchor: reportIdSchema,
+      reports: z.array(reportIdSchema).min(1, "An incident has one report or more.").readonly(),
+      status: statusSchema,
+      kind: kindSchema,
+      changes: z.array(historyChangeSchema).readonly(),
+    })
+    .readonly(),
+);
+
+/** This schema checks the shapes of one region code of the history. */
+export const historyRegionSchema: z.ZodType<HistoryRegion, HistoryRegion> = schemaOf<HistoryRegion>()(
+  z.strictObject({ code: regionCodeSchema, shapes: z.array(mapShapeSchema).readonly() }).readonly(),
+);
+
+/** This schema checks the answer of the history route of the runtime. */
+export const historyPayloadSchema: z.ZodType<HistoryPayload, HistoryPayload> = schemaOf<HistoryPayload>()(
+  z
+    .strictObject({
+      format: z.literal(HISTORY_FORMAT),
+      at: instantSchema.nullable(),
+      since: instantSchema.nullable(),
+      next: instantSchema.nullable(),
+      incidents: z.array(historyIncidentSchema).readonly(),
+      regions: z.array(historyRegionSchema).readonly(),
     })
     .readonly(),
 );
