@@ -116,12 +116,17 @@ import { err, ok, tryCatch, type Result } from "@mark1russell7/optional";
 import { compareCodeUnits } from "@mark1russell7/text/order";
 import {
   CONFIG_FORMAT,
+  CONFIG_PART_FORMAT,
   COPY_FORMAT,
   copyProblems,
   loadConfig,
+  mergeParts,
+  PART_NAME,
   type AddressValue,
   type AlertConfig,
+  type ConfigPart,
   type ContactConfig,
+  type NamedPart,
   type CopyListen,
   type CopyPeer,
   type CopySettings,
@@ -1417,6 +1422,17 @@ export const alertConfigSchema: z.ZodType<AlertConfig, AlertConfig> = schemaOf<A
     .readonly(),
 );
 
+/** This schema checks the JSON of one part of the private configuration. Then the merge and `loadConfig` check the references. */
+export const configPartSchema: z.ZodType<ConfigPart, ConfigPart> = schemaOf<ConfigPart>()(
+  z
+    .strictObject({
+      format: z.literal(CONFIG_PART_FORMAT),
+      places: z.array(placeConfigSchema).readonly().exactOptional(),
+      people: z.array(personConfigSchema).readonly().exactOptional(),
+      contacts: z.array(contactConfigSchema).readonly().exactOptional(),
+    })
+    .readonly(),
+);
 
 // The URL of the exchange of another copy. The tailnet carries it, thus `http` is also a valid protocol. The host is a
 // name with one label or more, an IPv4 address or an IPv6 address in brackets. The URL has no user, no query and no fragment.
@@ -1638,23 +1654,47 @@ function pathText(path: readonly PropertyKey[]): string {
   return text === "" ? "(root)" : text;
 }
 
-/** A configuration that passed the schema and the load, with the recipient of each person. */
+/** A configuration that passed the schema and the load, with the recipient of each person. The configuration is the merge of the root and its parts. */
 export interface ParsedConfig {
   readonly config: AlertConfig;
   readonly recipients: readonly Recipient[];
 }
 
+/** The JSON text of one part of the private configuration, with the name of the part. */
+export interface PartText {
+  readonly name: string;
+  readonly text: string;
+}
+
 /**
- * This function reads the JSON text of the private configuration. It checks the JSON, then the schema,
- * then the references with `loadConfig`. The runtime starts only with an `ok` result. The problems hold
- * no value of the configuration and no value of a secret.
+ * This function reads the JSON text of the private configuration and the texts of its parts. It checks the JSON and
+ * the schema of each text. Then it merges the parts with `mergeParts` and checks the references of the merge with
+ * `loadConfig`. The runtime starts only with an `ok` result. The problems hold no value of the configuration and no
+ * value of a secret. A problem of a part starts with the name of the part.
  */
-export function parseConfig(text: string, channels: readonly ChannelDescriptor[], secret: SecretLookup): Result<ParsedConfig, readonly string[]> {
+export function parseConfig(
+  text: string,
+  channels: readonly ChannelDescriptor[],
+  secret: SecretLookup,
+  parts: readonly PartText[] = [],
+): Result<ParsedConfig, readonly string[]> {
+  const problems: string[] = [];
   // The message of the JSON parser can quote the text, so the problem does not use it.
   const json = tryCatch((): unknown => JSON.parse(text), () => ["The configuration is not valid JSON."]);
-  if (json.tag === "err") return json;
-  const checked = checkWith(alertConfigSchema, json.value);
-  if (checked.tag === "err") return checked;
-  const loaded = loadConfig(checked.value, channels, secret);
-  return loaded.problems.length > 0 ? err(loaded.problems) : ok({ config: checked.value, recipients: loaded.recipients });
+  const checked = json.tag === "err" ? json : checkWith(alertConfigSchema, json.value);
+  if (checked.tag === "err") problems.push(...checked.error);
+  const named: NamedPart[] = [];
+  parts.forEach(({ name, text: partText }, index) => {
+    // A bad name can hold any text, so the problem gives the index of the part. The merge refuses the name.
+    const label = PART_NAME.test(name) ? `The part ${name}` : `Part ${index}`;
+    const partJson = tryCatch((): unknown => JSON.parse(partText), () => [`${label} is not valid JSON.`]);
+    const part = partJson.tag === "err" ? partJson : checkWith(configPartSchema, partJson.value);
+    if (part.tag === "err") problems.push(...part.error.map((problem) => (partJson.tag === "err" ? problem : `${label}: ${problem}`)));
+    else named.push({ name, part: part.value });
+  });
+  if (checked.tag === "err" || problems.length > 0) return err(problems);
+  const merged = mergeParts(checked.value, named);
+  if (merged.tag === "err") return merged;
+  const loaded = loadConfig(merged.value, channels, secret);
+  return loaded.problems.length > 0 ? err(loaded.problems) : ok({ config: merged.value, recipients: loaded.recipients });
 }

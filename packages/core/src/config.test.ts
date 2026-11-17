@@ -1,6 +1,6 @@
 import { random, seedsFrom } from "@mark1russell7/rigor-generators";
 import { describe, expect, it } from "vitest";
-import { CONFIG_FORMAT, configHash, drillRules, configuredExpectations, expectationProblems, loadConfig, localPlaces, placeLabels, sourcePlaces, type AlertConfig, type ContactConfig, type PersonConfig, type PlaceConfig, type SecretLookup } from "./config.ts";
+import { CONFIG_FORMAT, CONFIG_PART_FORMAT, configHash, mergeParts, drillRules, configuredExpectations, expectationProblems, loadConfig, localPlaces, placeLabels, sourcePlaces, type AlertConfig, type ContactConfig, type NamedPart, type PersonConfig, type PlaceConfig, type SecretLookup } from "./config.ts";
 import type { ChannelDescriptor, ChannelId, EscalationPolicy, InterestEdge, InterestGraph, NodeKey, PersonId, PlaceId, Position, SourceId } from "./contracts.ts";
 import { RANK_DELAY_LIMIT } from "./escalation.ts";
 import { DRILL_SUBJECT } from "./system-reports.ts";
@@ -406,5 +406,90 @@ describe("the settings of the expectations", () => {
   it("finds two settings of one expectation at the load", () => {
     const loaded = loadConfig(config({ expectations: [{ id: "api-to-wea", since: 1 }, { id: "api-to-wea", since: 2 }] }), CHANNELS, store);
     expect(loaded.problems).toEqual(["Two settings of expectations have the id api-to-wea."]);
+  });
+});
+
+describe("the parts of the configuration", () => {
+  const part = (name: string, fields: Partial<NamedPart["part"]> = {}): NamedPart => ({ name, part: { format: CONFIG_PART_FORMAT, ...fields } });
+  // The root keeps the policies, and no place, person or contact.
+  const root = config({ places: [], people: [], contacts: [] });
+
+  it("gives the root unchanged when there is no part", () => {
+    expect(mergeParts(config(), [])).toEqual({ tag: "ok", value: config() });
+  });
+
+  it("puts the entries of the root first, then the entries of each part in the order of the names", () => {
+    const merged = mergeParts(config({ places: [PLACES[0]!], people: [], contacts: [] }), [
+      part("zeta", { people: [person(p2, [work])], contacts: contacts(p2) }),
+      part("alpha", { places: [PLACES[1]!], people: [person(p1)], contacts: contacts(p1) }),
+    ]);
+    expect(merged.tag).toBe("ok");
+    if (merged.tag !== "ok") return;
+    expect(merged.value.places.map((place) => place.id)).toEqual([home, work]);
+    expect(merged.value.people.map(({ watch }) => watch.person)).toEqual([p1, p2]);
+    expect(merged.value.contacts.map((contact) => `${contact.person}/${contact.channel}`)).toEqual(["person-1/pushover", "person-1/sms", "person-2/pushover", "person-2/sms"]);
+    expect(merged.value.policies).toEqual(root.policies);
+    expect(loadConfig(merged.value, CHANNELS, store).problems).toEqual([]);
+  });
+
+  it("finds a place, a person and a contact in two files, and names only ids and parts", () => {
+    const merged = mergeParts(config(), [part("directory", { places: [PLACES[0]!], people: [person(p2)] }), part("people", { people: [person(p2)], contacts: [contacts(p1)[0]!] })]);
+    expect(merged).toEqual({
+      tag: "err",
+      error: [
+        "The place place-1 is in the root configuration and in the part directory.",
+        "The person person-2 is in the part directory and in the part people.",
+        "The contact of the person person-1 on the channel pushover is in the root configuration and in the part people.",
+      ],
+    });
+    const text = JSON.stringify(merged);
+    for (const value of ["Home", "PUSHOVER_USER_KEY", String(HOME_AT[0])]) expect(text).not.toContain(value);
+  });
+
+  it("leaves two entries with one id in one file to the load", () => {
+    const merged = mergeParts(root, [part("directory", { places: [PLACES[0]!, PLACES[0]!] })]);
+    expect(merged.tag).toBe("ok");
+    if (merged.tag === "ok") expect(loadConfig(merged.value, CHANNELS, store).problems).toContain("Two places have the id place-1.");
+  });
+
+  it("refuses a bad name by its index, and two parts with one name", () => {
+    for (const name of ["", "Directory", "1st", "a_b", "a/b", "a".repeat(41)]) {
+      expect(mergeParts(root, [part("good"), part(name)])).toEqual({ tag: "err", error: [expect.stringMatching(/^The name of part 1 is not /u)] });
+    }
+    expect(mergeParts(root, [part("a".repeat(40)), part("a-1")]).tag).toBe("ok");
+    expect(mergeParts(root, [part("same"), part("same")])).toEqual({ tag: "err", error: ["Two parts have the name same."] });
+  });
+
+  it("gives one merge and one hash for each order of the parts, over seeded splits of a configuration", () => {
+    for (const seed of SEEDS) {
+      const r = random(`config-parts:${seed}`);
+      const people = Array.from({ length: r.int(1, 6) }, (_, index) => `person-${index}` as PersonId);
+      const full = config({ people: people.map((id) => person(id, r.chance(0.5) ? [home] : [home, work])), contacts: people.flatMap(contacts) });
+      // Each entry goes to the root or to one of the parts, at random.
+      const names = ["directory", "household", "work"].slice(0, r.int(1, 3));
+      const fileOf = (): number => r.below(names.length + 1);
+      const split = (entries: readonly unknown[]): unknown[][] => {
+        const files: unknown[][] = Array.from({ length: names.length + 1 }, () => []);
+        for (const entry of entries) files[fileOf()]!.push(entry);
+        return files;
+      };
+      const places = split(full.places);
+      const persons = split(full.people);
+      const addresses = split(full.contacts);
+      const rootPart = config({ places: places[0] as PlaceConfig[], people: persons[0] as PersonConfig[], contacts: addresses[0] as ContactConfig[] });
+      const parts = names.map((name, index) => part(name, { places: places[index + 1] as PlaceConfig[], people: persons[index + 1] as PersonConfig[], contacts: addresses[index + 1] as ContactConfig[] }));
+      const first = mergeParts(rootPart, parts);
+      const second = mergeParts(rootPart, r.shuffle([...parts]));
+      expect(first.tag, `seed ${seed}`).toBe("ok");
+      if (first.tag !== "ok" || second.tag !== "ok") continue;
+      expect(second.value, `seed ${seed}`).toEqual(first.value);
+      expect(configHash(second.value)).toBe(configHash(first.value));
+      // The merge holds each entry of the full configuration once.
+      const sorted = (values: readonly unknown[]): string[] => values.map((value) => JSON.stringify(value)).sort();
+      expect(sorted(first.value.places)).toEqual(sorted(full.places));
+      expect(sorted(first.value.people)).toEqual(sorted(full.people));
+      expect(sorted(first.value.contacts)).toEqual(sorted(full.contacts));
+      expect(loadConfig(first.value, CHANNELS, store).problems, `seed ${seed}`).toEqual([]);
+    }
   });
 });
