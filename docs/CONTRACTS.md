@@ -1054,6 +1054,32 @@ The route `GET /health` of the runtime gives the `HealthPayload` of `healthPaylo
 
 The coverage holds the ids of the places. Thus only the loopback address gives the route, as for the map.
 
+### The history
+
+The function `historyPayload` gives the `HistoryPayload` of the route `GET /history`. A time scrubber of a page replays how each incident grew. `historyPayloadSchema` checks the payload. The runtime does not give the route at this time.
+
+- `format`: `alerts-history/1` (`HISTORY_FORMAT`). A change that breaks a reader gets a new name.
+- `at`: the time of the last pass, or `null` before the first pass.
+- `since`: the payload has each incident with a change at this time or later. The value `null` gives each incident.
+- `next`: the time of the newest change of the merge state, or `null` with no change.
+- `incidents`: the history of each incident, in the order of the anchors. Each incident has each of its changes, from the oldest.
+- `regions`: the shapes of each region code of the changes, one time each. A change names its codes, and the shapes stay out of each change.
+
+A change comes at each time of entry of a report of the incident on this copy. An end mark of a known report also gives a change. The change has the parts of the incident that the copy knew at that time:
+
+- The level is the highest level over each person at that time, with the policy of the delivery and the mutes.
+- Two parts of an incident before their merge give one change. The change has the higher level and severity, and the areas of the two parts.
+- The time of entry comes from the clock of this copy. Thus a late import of a report of another copy comes after the `since` of a reader. Without the times of entry, the history uses the time of receipt.
+
+A reader keeps its histories by anchor:
+
+1. Read with no `since`. Keep `next`.
+2. Read again with `since` set to the last `next`. The payload gives the incident of the newest change again, because one time can get a later report.
+3. Replace the history of each incident of the payload. Drop each history whose anchor is a report of an incident of the payload, because these incidents merged.
+4. When `next` is below `since`, a step of the clock moved the times back. Read again with no `since`.
+
+The work for an incident with no change at `since` or later is only the read of its times. The levels come from the watches of the people, thus only the loopback address gives the route.
+
 ## Relevance
 
 The relevance of an incident for one person is a calculation over the interest graph of the person (AL-35). The types are in the section "Relevance" of `contracts.ts`.
