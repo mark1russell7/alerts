@@ -171,7 +171,7 @@ import {
   watchSchema,
   whyLimitSchema,
 } from "./schemas.ts";
-import { NO_SYSTEM_LINES, SOURCE_SUBJECT, systemReports } from "./system-reports.ts";
+import { DRILL_SUBJECT, NO_SYSTEM_LINES, SOURCE_SUBJECT, systemReports } from "./system-reports.ts";
 import { categoryOf, TAXONOMY } from "./taxonomy.ts";
 
 const SEEDS = seedsFrom(process.env["SEED"], [1, 2, 3, 4, 5, 6, 7, 8]);
@@ -845,8 +845,11 @@ describe("the private configuration", () => {
 
   it("accepts the drills, and refuses a bad day, a bad id and a path that is not a channel", () => {
     const drill = { id: "push-weekly", person: PERSON, path: { kind: "channel", channel: PUSHOVER }, every: 6 * 86_400_000, window: { zone: "America/Chicago", start: "11:00", end: "17:00", days: [6] }, ackWithin: 1_800_000 } as const;
-    holds(alertConfigSchema, { ...CONFIG, drills: [drill] });
-    const parsed = alertConfigSchema.parse(JSON.parse(JSON.stringify({ ...CONFIG, drills: [drill] })));
+    // The person watches the drills, thus the route sends each drill to the person.
+    const watcher = { watch: { person: PERSON, places: [KANSAS.id], rules: [], subjects: [{ system: DRILL_SUBJECT }] }, label: "Person A" };
+    const drilled = { ...CONFIG, people: [watcher], drills: [drill] };
+    holds(alertConfigSchema, drilled);
+    const parsed = alertConfigSchema.parse(JSON.parse(JSON.stringify(drilled)));
     expect(loadConfig(parsed, [CHANNEL], (name) => (name === "PUSHOVER_USER" ? "user-test" : undefined)).problems).toEqual([]);
     holds(drillConfigSchema, { ...drill, window: { zone: "UTC", start: "09:00", end: "10:00" } });
     fails(drillConfigSchema, { ...drill, window: { ...drill.window, days: [7] } });

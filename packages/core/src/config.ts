@@ -8,6 +8,7 @@ import { canonicalHash } from "@mark1russell7/rigor-generators";
 import type { Address, AssessPolicy, ChannelDescriptor, ChannelId, EscalationPolicy, Instant, InterestGraph, NodeKey, PersonId, PersonWatch, PlaceId, Position, RegionCode, SourceId, WatchedPlace } from "./contracts.ts";
 import { recipientProblems, type Recipient } from "./delivery.ts";
 import { drillProblems, type DrillConfig } from "./drill.ts";
+import { DRILL_SUBJECT } from "./system-reports.ts";
 import type { TryChain } from "./chain.ts";
 import type { Expectation } from "./lateness.ts";
 import { rankDelayProblems, type RankDelays } from "./escalation.ts";
@@ -255,7 +256,8 @@ export interface LoadedConfig {
  * - an unknown person of the outage call, a person two times in it, and a chain with no step
  * - a step of the outage call on a channel with no contact of the person
  * - a rank delay that is not a whole number of milliseconds up to `RANK_DELAY_LIMIT`
- * - two drills with one id, a drill of an unknown person or with no contact of the person on its channel
+ * - two drills with one id, a drill of an unknown person, and a drill on a channel with no contact of the person
+ * - a drill of a person who does not watch `DRILL_SUBJECT`, or with no step on its channel in the life-safety policy
  * - each problem of `drillProblems` for each drill
  * - each problem of `recipientProblems` for each person.
  */
@@ -345,15 +347,6 @@ export function loadConfig(config: AlertConfig, channels: readonly ChannelDescri
     }
   }
 
-  const drills = new Set<string>();
-  for (const drill of config.drills ?? []) {
-    if (drills.has(drill.id)) problems.push(`Two drills have the id ${drill.id}.`);
-    drills.add(drill.id);
-    if (!people.has(drill.person)) problems.push(`The drill ${drill.id} is for the person ${drill.person}, and the configuration has no such person.`);
-    else if (addresses.get(drill.person)?.has(drill.path.channel) !== true) problems.push(`The drill ${drill.id} uses the channel ${drill.path.channel}, and the person ${drill.person} has no contact on it.`);
-    problems.push(...drillProblems(drill, channels));
-  }
-
   const recipients = config.people.map((entry): Recipient => {
     const recipient: Recipient = {
       watch: entry.watch,
@@ -363,6 +356,25 @@ export function loadConfig(config: AlertConfig, channels: readonly ChannelDescri
     for (const problem of recipientProblems(recipient, channels)) problems.push(`The person ${entry.watch.person}: ${problem}`);
     return recipient;
   });
+
+  const drills = new Set<string>();
+  const recipientOf = new Map(recipients.map((recipient) => [recipient.watch.person as string, recipient]));
+  for (const drill of config.drills ?? []) {
+    const { id, person, path } = drill;
+    if (drills.has(id)) problems.push(`Two drills have the id ${id}.`);
+    drills.add(id);
+    const recipient = recipientOf.get(person);
+    if (recipient === undefined) problems.push(`The drill ${id} is for the person ${person}, and the configuration has no such person.`);
+    else {
+      if (addresses.get(person)?.has(path.channel) !== true) problems.push(`The drill ${id} uses the channel ${path.channel}, and the person ${person} has no contact on it.`);
+      // The route sends the drill report only to a person who watches its subject.
+      const watched = (recipient.watch.subjects ?? []).some((watch) => watch.system === DRILL_SUBJECT && (watch.id === undefined || watch.id === id));
+      if (!watched) problems.push(`The drill ${id} is for the person ${person}, and the person does not watch the subject ${DRILL_SUBJECT}. The drill does not reach the person.`);
+      const policy = recipient.policies.find((entry) => entry.level === "life-safety");
+      if (policy?.steps.some((step) => step.channel === path.channel) !== true) problems.push(`The drill ${id} uses the channel ${path.channel}, and the life-safety policy of the person ${person} has no step on it.`);
+    }
+    problems.push(...drillProblems(drill, channels));
+  }
   return { recipients, problems };
 }
 

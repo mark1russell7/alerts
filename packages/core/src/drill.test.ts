@@ -31,7 +31,7 @@ function channel(ack: ChannelDescriptor["ack"]): ChannelDescriptor {
 }
 
 describe("joinRuns and lastRun", () => {
-  const variants: DrillRun[] = [run(SATURDAY), run(SATURDAY, { acked: SATURDAY + 5 * MINUTE }), run(SATURDAY, { acked: SATURDAY + 9 * MINUTE }), run(SATURDAY, { failed: "b" }), run(SATURDAY, { failed: "a" })];
+  const variants: DrillRun[] = [run(SATURDAY), run(SATURDAY, { acked: SATURDAY + 5 * MINUTE }), run(SATURDAY, { acked: SATURDAY + 9 * MINUTE }), run(SATURDAY, { acked: SATURDAY - MINUTE })];
 
   it("is idempotent, commutative and associative over each set of variants", () => {
     for (const a of variants) {
@@ -43,14 +43,13 @@ describe("joinRuns and lastRun", () => {
     }
   });
 
-  it("keeps the earlier acknowledgment, and a failure only with no acknowledgment", () => {
+  it("keeps the earlier acknowledgment", () => {
     expect(joinRuns(variants[1]!, variants[2]!)).toEqual(run(SATURDAY, { acked: SATURDAY + 5 * MINUTE }));
-    expect(joinRuns(variants[3]!, variants[2]!)).toEqual(run(SATURDAY, { acked: SATURDAY + 9 * MINUTE }));
-    expect(joinRuns(variants[3]!, variants[4]!)).toEqual(run(SATURDAY, { failed: "a" }));
+    expect(joinRuns(variants[0]!, variants[2]!)).toEqual(run(SATURDAY, { acked: SATURDAY + 9 * MINUTE }));
   });
 
   it("gives the run of the latest start of the drill, joined, in any order", () => {
-    const runs = [run(SATURDAY - 7 * DAY, { acked: SATURDAY - 7 * DAY + MINUTE }), run(SATURDAY, { failed: "a" }), { drill: "other", at: SATURDAY + DAY }, run(SATURDAY, { acked: SATURDAY + 2 * MINUTE }), run(Number.NaN)];
+    const runs = [run(SATURDAY - 7 * DAY, { acked: SATURDAY - 7 * DAY + MINUTE }), run(SATURDAY), { drill: "other", at: SATURDAY + DAY }, run(SATURDAY, { acked: SATURDAY + 2 * MINUTE }), run(Number.NaN)];
     expect(lastRun(runs, WEEKLY.id)).toEqual(run(SATURDAY, { acked: SATURDAY + 2 * MINUTE }));
     expect(lastRun([...runs].reverse(), WEEKLY.id)).toEqual(run(SATURDAY, { acked: SATURDAY + 2 * MINUTE }));
     expect(lastRun(runs, "none")).toBeUndefined();
@@ -63,11 +62,10 @@ describe("drillVerdict", () => {
     expect(drillVerdict(WEEKLY, run(SATURDAY), SATURDAY + 30 * MINUTE)).toEqual({ state: "failed", why: "no-ack" });
   });
 
-  it("passes with an acknowledgment in its time, and fails with a late one or a failed send", () => {
+  it("passes with an acknowledgment in its time, and fails with a late one", () => {
     expect(drillVerdict(WEEKLY, run(SATURDAY, { acked: SATURDAY + 30 * MINUTE }), SATURDAY + HOUR)).toEqual({ state: "passed", after: 30 * MINUTE });
     expect(drillVerdict(WEEKLY, run(SATURDAY, { acked: SATURDAY - MINUTE }), SATURDAY)).toEqual({ state: "passed", after: 0 });
     expect(drillVerdict(WEEKLY, run(SATURDAY, { acked: SATURDAY + 31 * MINUTE }), SATURDAY + HOUR)).toEqual({ state: "failed", why: "late-ack" });
-    expect(drillVerdict(WEEKLY, run(SATURDAY, { failed: "The provider refused the message." }), SATURDAY + MINUTE)).toEqual({ state: "failed", why: "send" });
   });
 });
 
@@ -79,12 +77,12 @@ describe("nextDrillAt and drillDue", () => {
     expect(drillDue(WEEKLY, [], WEDNESDAY)).toBe(false);
   });
 
-  it("waits the least time after the last start, also after a failed run", () => {
+  it("waits the least time after the last start, also after a run with no acknowledgment", () => {
     const last = [run(SATURDAY + 5 * MINUTE)];
     expect(nextDrillAt(WEEKLY, last, SATURDAY + HOUR)).toBe(SATURDAY + 7 * DAY);
     expect(drillDue(WEEKLY, last, SATURDAY + HOUR)).toBe(false);
     // Six days after the start is a Friday, so the drill waits for the window of the next Saturday.
-    expect(nextDrillAt(WEEKLY, [run(SATURDAY + 5 * MINUTE, { failed: "a" })], SATURDAY + 6 * DAY + 10 * MINUTE)).toBe(SATURDAY + 7 * DAY);
+    expect(nextDrillAt(WEEKLY, [run(SATURDAY + 5 * MINUTE)], SATURDAY + 6 * DAY + 10 * MINUTE)).toBe(SATURDAY + 7 * DAY);
     // A least time that ends in the window starts the drill at that time.
     const daily: DrillConfig = { ...WEEKLY, every: DAY, window: { zone: ZONE, start: "11:00", end: "17:00" } };
     expect(nextDrillAt(daily, [run(SATURDAY + 2 * HOUR)], SATURDAY + 3 * HOUR)).toBe(SATURDAY + DAY + 2 * HOUR);

@@ -11,8 +11,9 @@ import type { ChannelDescriptor, ChannelId, Duration, Instant, PersonId, QuietWi
 import { inQuietWindow } from "./escalation.ts";
 
 /**
- * The path of a drill: one message on one channel to the contact of the person. The message has the level
- * `life-safety`, thus it tests the path of the life-safety warnings. Its title marks it as a drill.
+ * The path of a drill: one channel of the escalation of the person. A drill goes as a system report of the level
+ * `life-safety`, with the subject `DRILL_SUBJECT`. Thus it goes through the route and the escalation policy of a
+ * life-safety warning. Only an acknowledgment of a delivery on this channel counts for the drill.
  */
 export interface DrillPath {
   readonly kind: "channel";
@@ -37,16 +38,14 @@ export interface DrillConfig {
   readonly ackWithin: Duration;
 }
 
-/** One run of a drill: its start, and its acknowledgment or the failure of its send. The log of each copy holds the runs. */
+/** One run of a drill: its start, and the first acknowledgment of a delivery on the channel of the path. */
 export interface DrillRun {
   /** The id of the drill. */
   readonly drill: string;
   /** The start of the run. */
   readonly at: Instant;
-  /** The time of the acknowledgment, from the receipt of the channel. */
+  /** The time of the acknowledgment. */
   readonly acked?: Instant;
-  /** The reason of a failed send. The text names no address and no number. */
-  readonly failed?: string;
 }
 
 /**
@@ -54,26 +53,24 @@ export interface DrillRun {
  *
  * - `pending`: the run has no acknowledgment, and its time continues until `until`.
  * - `passed`: the acknowledgment came in its time, `after` the start.
- * - `failed`: the send failed (`send`), no acknowledgment came in the time (`no-ack`), or it came late (`late-ack`).
+ * - `failed`: no acknowledgment came in the time (`no-ack`), or it came late (`late-ack`).
  */
 export type DrillVerdict =
   | { readonly state: "pending"; readonly until: Instant }
   | { readonly state: "passed"; readonly after: Duration }
-  | { readonly state: "failed"; readonly why: "send" | "no-ack" | "late-ack" };
+  | { readonly state: "failed"; readonly why: "no-ack" | "late-ack" };
 
 // The most changes of the windows that the search of the next start reads. Each change is one boundary of the window of
 // the drill or of the quiet window. Thus a drill with a window in the quiet window gives no start, and the search stops.
 const SEARCH_LIMIT = 64;
 
 /**
- * This function joins two runs of one start into one run. The earlier acknowledgment counts. A failure counts only
- * when no run has an acknowledgment. The join is idempotent, commutative and associative.
+ * This function joins two runs of one start into one run: the earlier acknowledgment counts. The join is idempotent,
+ * commutative and associative.
  */
 export function joinRuns(a: DrillRun, b: DrillRun): DrillRun {
   const acked = a.acked === undefined ? b.acked : b.acked === undefined ? a.acked : Math.min(a.acked, b.acked);
-  if (acked !== undefined) return { drill: a.drill, at: a.at, acked };
-  const failed = a.failed === undefined ? b.failed : b.failed === undefined ? a.failed : [a.failed, b.failed].sort()[0];
-  return failed === undefined ? { drill: a.drill, at: a.at } : { drill: a.drill, at: a.at, failed };
+  return acked === undefined ? { drill: a.drill, at: a.at } : { drill: a.drill, at: a.at, acked };
 }
 
 /** This function gives the last run of the drill `id`: the run with the latest start, joined with each run of that start. */
@@ -91,7 +88,6 @@ export function lastRun(runs: readonly DrillRun[], id: string): DrillRun | undef
 export function drillVerdict(drill: DrillConfig, run: DrillRun, at: Instant): DrillVerdict {
   const until = run.at + drill.ackWithin;
   if (run.acked !== undefined) return run.acked <= until ? { state: "passed", after: Math.max(0, run.acked - run.at) } : { state: "failed", why: "late-ack" };
-  if (run.failed !== undefined) return { state: "failed", why: "send" };
   return at < until ? { state: "pending", until } : { state: "failed", why: "no-ack" };
 }
 
@@ -121,8 +117,8 @@ export function drillDue(drill: DrillConfig, runs: readonly DrillRun[], at: Inst
 }
 
 /**
- * This function gives the problems of one drill that a schema cannot find. `loadConfig` also checks the person and the
- * contact of the person on the channel.
+ * This function gives the problems of one drill that a schema cannot find. `loadConfig` also checks the person, the
+ * subject that the person watches, the policy of the person and the contact on the channel.
  *
  * - The time of the acknowledgment is above 0, and the least time between two starts is above it.
  * - The window has a good time zone and good local times.

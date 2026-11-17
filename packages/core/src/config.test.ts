@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { CONFIG_FORMAT, configHash, configuredExpectations, expectationProblems, loadConfig, localPlaces, placeLabels, sourcePlaces, type AlertConfig, type ContactConfig, type PersonConfig, type PlaceConfig, type SecretLookup } from "./config.ts";
 import type { ChannelDescriptor, ChannelId, EscalationPolicy, InterestEdge, InterestGraph, NodeKey, PersonId, PlaceId, Position, SourceId } from "./contracts.ts";
 import { RANK_DELAY_LIMIT } from "./escalation.ts";
+import { DRILL_SUBJECT } from "./system-reports.ts";
 import type { Expectation } from "./lateness.ts";
 import { rankDelaysSchema } from "./schemas.ts";
 
@@ -190,25 +191,44 @@ describe("loadConfig", () => {
     expect(rankDelaysSchema.safeParse({ urgent: -1 }).success).toBe(false);
   });
 
-  it("checks the drills: one id each, a known person, a contact on the channel, and each problem of the drill", () => {
+  it("checks the drills: one id each, a known person who watches the drill, a step and a contact on the channel", () => {
     const polled = [{ ...channel(pushover), ack: "poll" as const }, channel(sms)];
     const window = { zone: "America/Chicago", start: "11:00", end: "17:00", days: [6] };
     const drill = { id: "push-weekly", person: p1, path: { kind: "channel" as const, channel: pushover }, every: 6 * 24 * 60 * MINUTE, window, ackWithin: 30 * MINUTE };
-    expect(loadConfig(config({ drills: [drill] }), polled, store).problems).toEqual([]);
+    const subjects = [
+      { system: DRILL_SUBJECT, id: "push-weekly" },
+      { system: DRILL_SUBJECT, id: "text" },
+    ];
+    const watcher = person(p1, [home], { watch: { person: p1, places: [home], rules: [], subjects } });
+    expect(loadConfig(config({ people: [watcher], drills: [drill] }), polled, store).problems).toEqual([]);
+    // A watch with no id matches each drill.
+    const all = person(p1, [home], { watch: { person: p1, places: [home], rules: [], subjects: [{ system: DRILL_SUBJECT }] } });
+    expect(loadConfig(config({ people: [all], drills: [{ ...drill, id: "any" }] }), polled, store).problems).toEqual([]);
     const problems = loadConfig(
       config({
-        contacts: [contacts(p1)[1]!],
-        drills: [drill, { ...drill, person: "person-9" as PersonId }, { ...drill, id: "text", path: { kind: "channel", channel: sms } }],
+        people: [watcher, person(p2, [work], { policies: [URGENT] })],
+        contacts: [contacts(p1)[1]!, ...contacts(p2)],
+        drills: [
+          drill,
+          { ...drill, person: "person-9" as PersonId },
+          { ...drill, id: "text", path: { kind: "channel", channel: sms } },
+          { ...drill, id: "second", person: p2 },
+          { ...drill, id: "third", path: { kind: "channel", channel: sms } },
+        ],
       }),
       polled,
       store,
     ).problems;
-    // The person also has no contact on the channel of a step. Only the problems of the drills count here.
+    // The person person-1 also has no contact on the channel of a step. Only the problems of the drills count here.
     expect(problems.filter((problem) => problem.startsWith("The drill") || problem.startsWith("Two drills"))).toEqual([
       "The drill push-weekly uses the channel pushover, and the person person-1 has no contact on it.",
       "Two drills have the id push-weekly.",
       "The drill push-weekly is for the person person-9, and the configuration has no such person.",
       "The drill text uses the channel sms, and the channel does not tell of an acknowledgment. The drill cannot pass.",
+      "The drill second is for the person person-2, and the person does not watch the subject alerts.drill. The drill does not reach the person.",
+      "The drill second uses the channel pushover, and the life-safety policy of the person person-2 has no step on it.",
+      "The drill third is for the person person-1, and the person does not watch the subject alerts.drill. The drill does not reach the person.",
+      "The drill third uses the channel sms, and the channel does not tell of an acknowledgment. The drill cannot pass.",
     ]);
   });
 
