@@ -64,18 +64,22 @@ describe("the local page", () => {
   const entry = read(LOCAL_ENTRY);
 
   it("has each part of the page, and asks the search engines not to list it", () => {
-    for (const id of ["theme", "read", "problem", "globe", "map", "time", "past", "past-text", "now", "time-problem", "globe-tools", "words", "whole", "incidents", "unshaped"]) expect(local).toContain(`id="${id}"`);
+    const ids = ["theme", "read", "brief", "problem", "globe", "map", "time", "past", "past-text", "now", "time-problem", "globe-tools", "words", "whole", "incidents", "unshaped", "sources-h", "health-past", "health-sum", "health-problem", "health", "health-hint"];
+    for (const id of ids) expect(local).toContain(`id="${id}"`);
+    // The link at the top goes to the panel of the sources on the same page.
+    expect(local).toContain('<a id="brief" href="#sources-h">');
     expect(local).toContain('<meta name="robots" content="noindex">');
     expect(local).toContain('<script type="module" src="./src/local.ts"></script>');
   });
 
   it("calls fetch once, with the path of a reader, and names no URL with a host", () => {
     expect(entry.split("fetch(")).toHaveLength(2);
-    // The reader of the map and the reader of the history get this one function. Each gives it a path with no host.
+    // The readers of the map, of the history and of the health get this one function. Each gives it a path with no host.
     expect(entry).toContain("const get = (path: string): Promise<Response> => fetch(path, {");
     expect(entry).toContain("readMap(get)");
     expect(entry).toContain("readHistories(get, ");
-    for (const text of [entry, read("map-read.ts"), read("history-read.ts"), read("scrub.ts"), read("map-view.ts"), read("globe-view.ts"), read("globe-stage.ts"), read("globe-load.ts"), local]) expect(text).not.toMatch(/https?:|\/\/[a-z0-9.-]+[.:]/i);
+    expect(entry).toContain("readHealth(get)");
+    for (const text of [entry, read("map-read.ts"), read("history-read.ts"), read("health-read.ts"), read("health-view.ts"), read("health-look.ts"), read("scrub.ts"), read("map-view.ts"), read("globe-view.ts"), read("globe-stage.ts"), read("globe-load.ts"), local]) expect(text).not.toMatch(/https?:|\/\/[a-z0-9.-]+[.:]/i);
     for (const call of ["XMLHttpRequest", "WebSocket", "EventSource", "sendBeacon", "import("]) expect(entry).not.toContain(call);
   });
 

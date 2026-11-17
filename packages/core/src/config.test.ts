@@ -1,6 +1,6 @@
 import { random, seedsFrom } from "@mark1russell7/rigor-generators";
 import { describe, expect, it } from "vitest";
-import { CONFIG_FORMAT, configHash, drillRules, configuredExpectations, expectationProblems, loadConfig, localPlaces, placeLabels, sourcePlaces, type AlertConfig, type ContactConfig, type PersonConfig, type PlaceConfig, type SecretLookup } from "./config.ts";
+import { type AlertConfig, CONFIG_FORMAT, configHash, configuredExpectations, type ContactConfig, drillRules, expectationProblems, loadConfig, localPlaces, type PersonConfig, type PlaceConfig, placeLabels, type SecretLookup, sendCapUsd, sourcePlaces } from "./config.ts";
 import type { ChannelDescriptor, ChannelId, EscalationPolicy, InterestEdge, InterestGraph, NodeKey, PersonId, PlaceId, Position, SourceId } from "./contracts.ts";
 import { RANK_DELAY_LIMIT } from "./escalation.ts";
 import { DRILL_SUBJECT } from "./system-reports.ts";
@@ -168,6 +168,47 @@ describe("loadConfig", () => {
     ]);
   });
 
+  it("takes the fixed costs off the cap first: the reserve is a part of the rest, and the rest is above 0", () => {
+    const paid = [{ ...channel(pushover), dependsOn: ["provider:pushover"] }, channel(sms)];
+    const fixed = [
+      { what: "toll-free number", usd: 2.15 },
+      { what: "local number", usd: 1.15 },
+    ];
+    const spend = { provider: "provider:pushover", monthlyUsd: 15, fixed, reserveUsd: 3, floor: 5, timeZone: "America/Chicago" };
+    expect(sendCapUsd(spend)).toBeCloseTo(11.7, 9);
+    expect(sendCapUsd({ monthlyUsd: 15 })).toBe(15);
+    expect(loadConfig(config({ spend: [spend] }), paid, store).problems).toEqual([]);
+    expect(loadConfig(config({ spend: [{ ...spend, reserveUsd: 12 }] }), paid, store).problems).toEqual([
+      "The reserve of the spend of provider:pushover is not below its monthly cap less its fixed costs.",
+    ]);
+    expect(loadConfig(config({ spend: [{ ...spend, monthlyUsd: 3.3, reserveUsd: 0 }] }), paid, store).problems).toEqual([
+      "The fixed costs of the spend of provider:pushover use all of its monthly cap. No send can go.",
+    ]);
+  });
+
+  it("checks the opt-in list, and refuses a contact on a channel of texts with no record of its number", () => {
+    const texts = { ...channel("texts" as ChannelId), address: [{ name: "to", required: true, pattern: "\\+[0-9]{8,15}", form: "a phone number", optIn: true }] };
+    const number = "+15550100123";
+    const contact: ContactConfig = { person: p1, channel: texts.id, address: { to: number } };
+    const yes = { number, at: "2026-11-17T21:30:00Z", way: "written" as const, words: "texts-consent/1" };
+    const withTexts = (fields: Partial<AlertConfig>) => config({ contacts: [...contacts(p1), contact], ...fields });
+    expect(loadConfig(withTexts({ optIn: [yes] }), [...CHANNELS, texts], store).problems).toEqual([]);
+    const missing = loadConfig(withTexts({}), [...CHANNELS, texts], store).problems;
+    expect(missing).toEqual([`The field to of the contact of ${p1} on texts is not on the opt-in list. The channel sends nothing to it.`]);
+    const bad = loadConfig(withTexts({ optIn: [yes, { ...yes, at: "2026-11-17" }] }), [...CHANNELS, texts], store).problems;
+    expect(bad).toEqual(["Record 2 of the opt-in list has no time in UTC with seconds, as 2026-11-17T21:30:00Z.", "Records 1 and 2 of the opt-in list have the same number."]);
+    for (const problem of [...missing, ...bad]) expect(problem).not.toContain(number);
+    // The record can name the secret of the number, as the contact does.
+    const secret: SecretLookup = (name) => (name === "TEXT_NUMBER" ? number : store(name));
+    const bySecret = loadConfig(
+      config({ contacts: [...contacts(p1), { ...contact, address: { to: { secret: "TEXT_NUMBER" } } }], optIn: [{ ...yes, number: { secret: "TEXT_NUMBER" } }] }),
+      [...CHANNELS, texts],
+      secret,
+    );
+    expect(bySecret.problems).toEqual([]);
+    expect(bySecret.optIn).toEqual([yes]);
+  });
+
   it("checks each spend entry: one for each provider, a provider of a channel, a reserve below the cap, and an IANA time zone", () => {
     const paid = [{ ...channel(pushover), dependsOn: ["provider:pushover"] }, channel(sms)];
     const spend = { provider: "provider:pushover", monthlyUsd: 10, reserveUsd: 3, floor: 5, timeZone: "America/Chicago" };
@@ -181,7 +222,7 @@ describe("loadConfig", () => {
     ).problems;
     expect(problems).toEqual([
       "Two spend entries are for the provider provider:pushover.",
-      "The reserve of the spend of provider:pushover is not below its monthly cap.",
+      "The reserve of the spend of provider:pushover is not below its monthly cap less its fixed costs.",
       "The spend entry of provider:pushoverr names a provider that no channel depends on.",
       "The time zone of the spend of provider:pushoverr is not an IANA name.",
     ]);

@@ -5,6 +5,8 @@
  * - The text takes its units from the same gates of the spend as the call channel. Thus one cap holds the calls and the texts.
  * - A text does not repeat, and Twilio cannot cancel a text in its queue. Thus `cancel` does nothing.
  * - No outcome of a send holds a phone number. The reason of a failure has a mark in place of each number of the text.
+ * - A text goes only to a number with the opt-in. Each other send fails with the kind `consent`, and Twilio gets no request.
+ * - When Twilio refuses a text with the error of a number that replied STOP, the channel records the STOP.
  */
 
 import { addressProblems, type Address, type ChannelProcedures, type DeliveryStatus, type Instant, type Message, type SendOutcome } from "@mark1russell7/alerts";
@@ -28,6 +30,17 @@ import { takeSpend, type TwilioSpendGates } from "./spend.ts";
 
 /** The time limit of one request of the text channel to Twilio. */
 export const TWILIO_TEXT_TIMEOUT_MS = 10_000;
+
+/** The error code of Twilio for a text to a number that replied STOP: "Attempt to send to unsubscribed recipient". */
+export const TWILIO_UNSUBSCRIBED = 21610;
+
+/** The opt-in of the numbers of the texts. The runtime gives it from the opt-in list and the STOP and START replies. */
+export interface TextOptIn {
+  /** This function tells if the number has the opt-in at the time. */
+  readonly has: (number: string, at: Instant) => boolean;
+  /** This function records a STOP of the number at the time, when Twilio refuses a text with `TWILIO_UNSUBSCRIBED`. */
+  readonly stopped: (number: string, at: Instant) => void;
+}
 
 /** The options of the map of a message to a text. */
 export interface TwilioTextMapOptions {
@@ -83,13 +96,17 @@ export interface TwilioTextChannelOptions extends TwilioTextMapOptions {
   readonly now?: (() => Instant) | undefined;
   /** The cap of the spend, with the units of one text. Without it, the channel sends each text. */
   readonly spend?: TwilioSpendGates | undefined;
+  /** The opt-in of the numbers. The channel sends only to a number with the opt-in. */
+  readonly optIn: TextOptIn;
 }
 
 /**
  * This function makes the procedures of the Twilio text channel.
  *
  * - `send` does not throw. A text that Twilio accepted gives the receipt `{ text: <the message SID> }`.
+ * - `send` gives `consent` for a number with no opt-in. Then it takes no units, and Twilio gets no request.
  * - `send` takes the units of the text from the gate of its level before the send. A text that Twilio refused, did not authorize or limited gives its units back.
+ * - A refusal of Twilio with `TWILIO_UNSUBSCRIBED` records the STOP of the number, and `send` gives `consent`.
  * - `status` does not throw. A receipt that the channel cannot read keeps the state `accepted`.
  * - `cancel` does nothing.
  */
@@ -111,6 +128,7 @@ export function createTwilioTextChannel(options: TwilioTextChannelOptions): Chan
       if (!TWILIO_ACCOUNT_SID.test(options.credentials.accountSid)) return { ok: false, kind: "auth", message: "The account SID is not AC and 32 hexadecimal digits." };
       const mapped = twilioTextOf(message, address, at, options);
       if ("refused" in mapped) return { ok: false, kind: "refused", message: mapped.refused };
+      if (!options.optIn.has(mapped.to, at)) return { ok: false, kind: "consent", message: "The number is not on the opt-in list, or it replied STOP. The channel sent no text." };
       let request: TwilioRequest;
       try {
         request = twilioTextRequest(options.credentials, mapped);
@@ -123,6 +141,10 @@ export function createTwilioTextChannel(options: TwilioTextChannelOptions): Chan
       // Twilio sends no text for these answers. A network fault, a time-out and a server error can come after the send.
       const notSent = !result.ok && (result.kind === "auth" || result.kind === "refused" || result.kind === "rate-limited");
       if (notSent) taken.giveBack();
+      if (!result.ok && result.code === TWILIO_UNSUBSCRIBED) {
+        options.optIn.stopped(mapped.to, at);
+        return { ok: false, kind: "consent", message: `The number replied STOP, and Twilio refuses each text to it (Twilio error ${String(TWILIO_UNSUBSCRIBED)}).` };
+      }
       if (!result.ok) return callFailureOf(result, [mapped.to, options.from]);
       return { ok: true, receipt: { text: result.sid }, accepted: at };
     },
