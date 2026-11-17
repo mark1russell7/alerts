@@ -190,6 +190,28 @@ describe("loadConfig", () => {
     expect(rankDelaysSchema.safeParse({ urgent: -1 }).success).toBe(false);
   });
 
+  it("checks the drills: one id each, a known person, a contact on the channel, and each problem of the drill", () => {
+    const polled = [{ ...channel(pushover), ack: "poll" as const }, channel(sms)];
+    const window = { zone: "America/Chicago", start: "11:00", end: "17:00", days: [6] };
+    const drill = { id: "push-weekly", person: p1, path: { kind: "channel" as const, channel: pushover }, every: 6 * 24 * 60 * MINUTE, window, ackWithin: 30 * MINUTE };
+    expect(loadConfig(config({ drills: [drill] }), polled, store).problems).toEqual([]);
+    const problems = loadConfig(
+      config({
+        contacts: [contacts(p1)[1]!],
+        drills: [drill, { ...drill, person: "person-9" as PersonId }, { ...drill, id: "text", path: { kind: "channel", channel: sms } }],
+      }),
+      polled,
+      store,
+    ).problems;
+    // The person also has no contact on the channel of a step. Only the problems of the drills count here.
+    expect(problems.filter((problem) => problem.startsWith("The drill") || problem.startsWith("Two drills"))).toEqual([
+      "The drill push-weekly uses the channel pushover, and the person person-1 has no contact on it.",
+      "Two drills have the id push-weekly.",
+      "The drill push-weekly is for the person person-9, and the configuration has no such person.",
+      "The drill text uses the channel sms, and the channel does not tell of an acknowledgment. The drill cannot pass.",
+    ]);
+  });
+
   it("checks the outage call: a known person, one time each, a chain with steps, and a contact on each channel of a step", () => {
     const people = [person(p1), person(p2, [work])];
     const both = [...contacts(p1), ...contacts(p2)];

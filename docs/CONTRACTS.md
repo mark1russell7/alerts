@@ -889,6 +889,20 @@ The runtime operates the deploy in the worker `outage` of its service (`outage.t
 - A failed deploy goes again after a backoff: one minute, then double, up to one hour. The pass limit bounds one deploy, so the drain of the service holds it.
 - `GET /status` gives the state of the last deploy: `pending`, `current` or `failed`, with its stage and its count of failures. The state holds no private value.
 
+### Drills
+
+The fakes and the fault cases of CI test the code. Only a drill tests the live path: the provider, the phone and the person (AL-43). The module `drill.ts` of the core gives the drills as data and as pure functions. The functions read no clock.
+
+- A drill (`DrillConfig`) has an id, a person and a path. It also has the least time `every` between two starts, a window of the starts and the time `ackWithin` of the acknowledgment.
+- The path is one channel. The message goes to the contact of the person on it, with the level `life-safety`. Its title marks it as a drill.
+- The window is a `TimeWindow` of `@mark1russell7/algebra/clock`, with the days of the week. A drill on one day of each week has `every` of 6 days and a window on that day.
+- A run (`DrillRun`) is a start, with an acknowledgment or the reason of a failed send. The log of each copy holds the runs. `joinRuns` joins two runs of one start: the earlier acknowledgment counts, and a failure counts only with no acknowledgment. The join is idempotent, commutative and associative.
+- `nextDrillAt` gives the next start: in the window, not in the quiet window of the person, and `every` or more after the last start. A timer waits for it. A drill with a window in the quiet window has no start.
+- `drillVerdict` gives `pending` until the end of the time of the acknowledgment. Then it gives `passed`, or `failed` with `send`, `no-ack` or `late-ack`.
+- `drillProblems` finds bad times, a bad window, an unknown channel and a channel with no acknowledgment. Such a drill cannot pass.
+
+The runtime starts no drill yet. The next step is the starts and the receipts in the runtime. Then come a system report for a failed drill and a drill of the outage call.
+
 ## People and places
 
 The contracts carry only ids: `PersonId` and `PlaceId`. The runtime gets people, places, addresses and the night rule of each person from the private configuration.
@@ -905,6 +919,7 @@ The core gives the format of the private configuration, `AlertConfig` (`alerts-c
 - `link`: the policy of the link rule of the merge (rule 3). Without it, the instance uses `DEFAULT_LINK_POLICY`.
 - `outage`: the people of the outage call, each with a `TryChain`. Without it, an outage of the instance calls no person.
 - `assess`: the policy of the assessment, `AssessPolicy`. It replaces the full default policy of the core. With no field, the default policy applies.
+- `drills`: the drills of the live paths (the section Drills). Without them, the instance starts no drill.
 
 The times of the delivery and the rank of a copy are not in `AlertConfig`. They are settings of each copy.
 
@@ -917,6 +932,8 @@ The schema `alertConfigSchema` checks the JSON of the configuration first. Then 
 - a reserve of a spend entry that is not below its cap, and a time zone that is not an IANA name
 - an unknown person of the outage call, and a person two times in the call
 - a chain of the call with no step, and a step on a channel with no contact of the person
+- two drills with one id, a drill of an unknown person, and a drill on a channel with no contact of the person
+- each problem of `drillProblems`
 - an interest graph of another person, and a place of the graph that the person does not watch
 - a rule of the life-safety warnings at a place that the person does not watch, and rules with no interest graph
 - each problem of `recipientProblems`

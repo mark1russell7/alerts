@@ -7,6 +7,7 @@ import { localTime } from "@mark1russell7/algebra/clock";
 import { canonicalHash } from "@mark1russell7/rigor-generators";
 import type { Address, AssessPolicy, ChannelDescriptor, ChannelId, EscalationPolicy, Instant, InterestGraph, NodeKey, PersonId, PersonWatch, PlaceId, Position, RegionCode, SourceId, WatchedPlace } from "./contracts.ts";
 import { recipientProblems, type Recipient } from "./delivery.ts";
+import { drillProblems, type DrillConfig } from "./drill.ts";
 import type { TryChain } from "./chain.ts";
 import type { Expectation } from "./lateness.ts";
 import { rankDelayProblems, type RankDelays } from "./escalation.ts";
@@ -124,6 +125,8 @@ export interface AlertConfig {
    * the default policy of the core applies. A policy here replaces the full default policy.
    */
   readonly assess?: AssessPolicy;
+  /** The drills of the live paths. Without them, the instance starts no drill. */
+  readonly drills?: readonly DrillConfig[];
 }
 
 /** The name of the format of the settings of one copy of the system. A change that breaks a file gets a new name. */
@@ -252,6 +255,8 @@ export interface LoadedConfig {
  * - an unknown person of the outage call, a person two times in it, and a chain with no step
  * - a step of the outage call on a channel with no contact of the person
  * - a rank delay that is not a whole number of milliseconds up to `RANK_DELAY_LIMIT`
+ * - two drills with one id, a drill of an unknown person or with no contact of the person on its channel
+ * - each problem of `drillProblems` for each drill
  * - each problem of `recipientProblems` for each person.
  */
 export function loadConfig(config: AlertConfig, channels: readonly ChannelDescriptor[], secret: SecretLookup): LoadedConfig {
@@ -338,6 +343,15 @@ export function loadConfig(config: AlertConfig, channels: readonly ChannelDescri
       if (!channels.some((known) => known.id === channel)) problems.push(`The outage chain of the person ${person} uses the channel ${channel}, and the instance has no such channel.`);
       else if (addresses.get(person)?.has(channel) !== true) problems.push(`The outage chain of the person ${person} uses the channel ${channel}, and the person has no contact on it.`);
     }
+  }
+
+  const drills = new Set<string>();
+  for (const drill of config.drills ?? []) {
+    if (drills.has(drill.id)) problems.push(`Two drills have the id ${drill.id}.`);
+    drills.add(drill.id);
+    if (!people.has(drill.person)) problems.push(`The drill ${drill.id} is for the person ${drill.person}, and the configuration has no such person.`);
+    else if (addresses.get(drill.person)?.has(drill.path.channel) !== true) problems.push(`The drill ${drill.id} uses the channel ${drill.path.channel}, and the person ${drill.person} has no contact on it.`);
+    problems.push(...drillProblems(drill, channels));
   }
 
   const recipients = config.people.map((entry): Recipient => {
