@@ -139,7 +139,7 @@ import type { EscalationEnd, Recipient } from "./delivery.ts";
 import type { DrillConfig, DrillPath } from "./drill.ts";
 import type { RankDelays } from "./escalation.ts";
 import { HEALTH_FORMAT, type BalanceHealth, type CopyHealth, type HealthPayload, type QuotaHealth, type SourceHealthView } from "./health-payload.ts";
-import { HISTORY_FORMAT, type HistoryChange, type HistoryIncident, type HistoryPayload, type HistoryRegion } from "./history.ts";
+import { HISTORY_FORMAT, type HistoryChange, type HistoryIncident, type HistoryPayload, type HistoryPlace, type HistoryRegion } from "./history.ts";
 import type { MapShape } from "./map.ts";
 import type { Lateness, LatenessLimit, LatenessState } from "./lateness.ts";
 import type { LinkFamily, LinkPolicy } from "./link.ts";
@@ -1550,6 +1550,11 @@ export const healthPayloadSchema: z.ZodType<HealthPayload, HealthPayload> = sche
 /** This schema checks a shape of the map: a polygon or a circle. */
 export const mapShapeSchema: z.ZodType<MapShape, MapShape> = schemaOf<MapShape>()(z.discriminatedUnion("type", [polygonObject, circleObject]).readonly());
 
+/** This schema checks one watched place of a change of the history. */
+export const historyPlaceSchema: z.ZodType<HistoryPlace, HistoryPlace> = schemaOf<HistoryPlace>()(
+  z.strictObject({ id: placeIdSchema, level: assessedLevelSchema }).readonly(),
+);
+
 /** This schema checks one change of the history of an incident. */
 export const historyChangeSchema: z.ZodType<HistoryChange, HistoryChange> = schemaOf<HistoryChange>()(
   z
@@ -1564,6 +1569,7 @@ export const historyChangeSchema: z.ZodType<HistoryChange, HistoryChange> = sche
       codes: z.array(regionCodeSchema).readonly(),
       shapes: z.array(mapShapeSchema).readonly(),
       unshaped: z.array(regionCodeSchema).readonly(),
+      places: z.array(historyPlaceSchema).readonly(),
     })
     .readonly(),
 );
