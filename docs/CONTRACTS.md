@@ -665,9 +665,19 @@ A channel rule (`ChannelRule`) of a person keeps or removes the steps of a plan 
 - The rules do not change the why record of the route.
 - A plan with no step sends nothing. `escalate` gives it the state `exhausted` at its end.
 
+A policy can have a subject (`EscalationPolicy.about`, AL-43). The function `policyFor` gives the policy of a level for an incident in `route` and in the check of a drill:
+
+- An incident with the status `system`, `test` or `exercise` gets the first policy of the level whose subject matches a subject of the incident. The match is `matchSubjects`, the match of the channel rules.
+- Each other incident, and an incident with no such policy, gets the first policy of the level with no subject. Thus no policy with a subject changes the plan of a real warning.
+- When two policies of a level match one incident, the first one in the list applies. An example is a policy about `alerts.drill` and a policy about `alerts.drill` with an id.
+- The channel rules apply to the chosen policy. The why record does not change.
+- A person with policies of their own gets no policy of the configuration, also no policy with a subject.
+- An example: a policy of `notice` about `alerts.drill` with a call. The failure of a push drill then calls the person, and a real notice stays a push.
+
 A recipient has no problem from `recipientProblems` before it gets alerts:
 
-- A person who watches a place or a subject has a policy of the level `life-safety`.
+- A person who watches a place or a subject has a policy of the level `life-safety` with no subject.
+- No two policies have the same level and the same subject.
 - No rule keeps a life-safety kind, or the coverage of one, below `life-safety`. A rule with no kinds applies to each kind.
 - Each rule names kinds of the taxonomy, and the quiet window has a good time zone and good local times.
 - Each channel rule has one or more kinds of the taxonomy, and each of its channels is a channel of the instance.
