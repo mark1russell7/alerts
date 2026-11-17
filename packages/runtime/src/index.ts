@@ -11,6 +11,7 @@ export { LOOPBACK, PAGE_INDEX, attachApi, pageFolder, statusOf, type ApiOptions,
 export * from "./balance.ts";
 export * from "./config.ts";
 export * from "./delivery.ts";
+export * from "./drills.ts";
 export * from "./events.ts";
 export * from "./exchange.ts";
 export * from "./exchange-http.ts";

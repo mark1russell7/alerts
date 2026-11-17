@@ -173,6 +173,17 @@ export interface RetiredEvent extends Envelope<"retired"> {
   readonly cancelled: readonly string[];
 }
 
+/**
+ * This copy starts a run of a drill (AL-43). The time of the event is the start of the run. The fold keeps the last start
+ * of each drill. The event stays in its copy: each copy starts its own drills, and each has its own lines.
+ */
+export interface DrillEvent extends Envelope<"drill"> {
+  /** The id of the drill. */
+  readonly drill: string;
+  /** The id of the copy that starts the run. */
+  readonly copy: string;
+}
+
 /** The reports of one fetch of another copy. It has no fetch record and no cursor: each copy has its own health and cursors. */
 export interface SharedFetchEvent extends Envelope<"fetch"> {
   readonly reports: readonly Report[];
@@ -231,7 +242,8 @@ export type RuntimeEvent =
   | RecoveredEvent
   | ImportEvent
   | ExchangeEvent
-  | RetiredEvent;
+  | RetiredEvent
+  | DrillEvent;
 
 /** The types of the events. */
 export const EVENT_TYPES: readonly RuntimeEvent["type"][] = [
@@ -254,6 +266,7 @@ export const EVENT_TYPES: readonly RuntimeEvent["type"][] = [
   "import",
   "exchange",
   "retired",
+  "drill",
 ];
 
 /**

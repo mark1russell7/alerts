@@ -26,6 +26,7 @@ import {
   type Coverage,
   type ChannelQuota,
   type CopyWatch,
+  type DrillSnapshot,
   type ProviderBalance,
   type CoveragePolicy,
   type DelayLimitOptions,
@@ -101,6 +102,8 @@ export interface SystemParts {
   readonly copies?: readonly CopyWatch[];
   /** The folds of the last view (`latenessStep`). With no folds, each fold starts again. The view is the same. */
   readonly folds?: LatenessFolds;
+  /** The drills of this copy (`drillStep`). With no drills, each open line of a drill stays open. */
+  readonly drills?: readonly DrillSnapshot[];
 }
 
 /**
@@ -114,14 +117,14 @@ export interface SystemParts {
  * - The folds are the folds of the last view (`latenessStep`). With no folds, each fold starts again. The view is the same.
  */
 export function systemView(state: RuntimeState, config: ViewConfig, at: Instant, parts: SystemParts = {}): SystemView {
-  const { quotas, balances, copies, folds } = parts;
+  const { quotas, balances, copies, folds, drills } = parts;
   const steps = config.sources.map((source) => advanceHealth(state.health[source.id] ?? startHealth(source.id, state.start ?? at), at, source, config.health));
   const health = steps.map((step) => step.health);
   const found = incidents(state.merge, at, { link: linkRule(config.link ?? DEFAULT_LINK_POLICY) });
   const checks = carriages(state.merge, found, config.expectations);
   const { lateness: late, folds: next } = latenessStep(checks, config.expectations, at, ruleOf(config.delay), folds);
   const covered = coverage({ sources: config.sources, health, late: lateSources(late), places: config.places, kinds: config.kinds }, config.coverage);
-  const step = systemReports(state.lines, { sources: config.sources, health, coverage: covered, threats: threats(found, config.places), lateness: late, ...(quotas === undefined ? {} : { quotas }), ...(balances === undefined ? {} : { balances }), ...(copies === undefined ? {} : { copies }), steps: state.steps, recoveries: state.recoveries }, at);
+  const step = systemReports(state.lines, { sources: config.sources, health, coverage: covered, threats: threats(found, config.places), lateness: late, ...(quotas === undefined ? {} : { quotas }), ...(balances === undefined ? {} : { balances }), ...(copies === undefined ? {} : { copies }), ...(drills === undefined ? {} : { drills }), steps: state.steps, recoveries: state.recoveries }, at);
   // An incident that expires changes the threats, thus its end is a timer too.
   const ends = found.flatMap((incident) => (incident.live && incident.expires !== undefined && incident.expires > at ? [incident.expires] : []));
   const unread = [...(balances ?? []).map(balanceUnreadAt), ...(copies ?? []).map(copyUnreadAt)].filter((time) => time > at);

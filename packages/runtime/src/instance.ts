@@ -62,6 +62,7 @@ import { balanceWatch, SPEND_UNIT, spendEntryOf, spendGates, spendQuota, spendUn
 import { parseSecrets, requireKey, SECRETS_FILE, type FileText, type InstanceCheck } from "./config.ts";
 import { CLOCK_SKEW_LIMIT, COPY_FILE, COPY_TOKEN_KEY, EXCHANGE_EVERY, EXCHANGE_LIMIT } from "./copy.ts";
 import { overdueLimit, type DeliveryOptions } from "./delivery.ts";
+import { copyDrills } from "./drills.ts";
 import type { RuntimeLog } from "./log.ts";
 import { createLoop, loopTimes, type LoopTimes, type RuntimeLoop } from "./loop.ts";
 import { outageDeploy, outageDeployWorker, outageSetup, type OutageDeployWorker } from "./outage.ts";
@@ -622,6 +623,8 @@ export function openInstance(options: InstanceOptions): Instance {
     run: options.run,
     copy: copy.id,
     delivery,
+    // The drills of the live paths that this copy starts (AL-43). Each person keeps the quiet window of the configuration.
+    drills: copyDrills(config.drills ?? [], recipients, copy.id, copy.rank),
     // The loop exists before the first pass, and only a pass starts a wake.
     wake: () => loop.wake(),
     // Each stage of a quota is a line of system reports, and so is each stage of a balance.

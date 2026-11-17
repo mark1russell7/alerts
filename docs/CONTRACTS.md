@@ -274,11 +274,13 @@ A drill report has no area. Its subject is `{ system: "alerts.drill", id: <drill
 | --- | --- | --- | --- |
 | `drill/<copy>/<id>` | `system.drill.run` | The last run waits for its acknowledgment | `life-safety` (`extreme`, `immediate`) |
 | `drill/<copy>/<id>/failed` | `system.drill.failed` | The verdict of the last run is `failed` | `notice` at most |
+| `drill/<copy>/<id>/no-start` | `system.drill.failed` | The drill has no next start | `notice` at most |
 
 - `DrillSnapshot` gives the copy, the drill and its last run. A drill that is due has a run that starts at the time of the snapshot.
 - The facts of the run line are the copy, the drill and the start. An acknowledgment in the time cancels the line.
 - At the end of the time, the run line ends, and the failed line opens. A late acknowledgment gives an update of the failed line.
 - The next run ends the failed line. A snapshot with no drills keeps each open line of a drill.
+- A snapshot with `noStart` opens the line `no-start`, with the reason `no-start`. A next start ends it.
 
 `latestIn(items, at, window)` gives the latest item in a window before a time. `recentStep` and `recentRecovery` use it.
 `threats(incidents, places)` gives the watches and the warnings. A threat is a live incident with the status `actual` at a watched place. Its stage is `watch`, `warning` or absent. A report of the core has the status `system`, so it is not a threat.
@@ -436,7 +438,7 @@ The shared events are the parts of the merge state and of the delivery ledger:
 
 The other events stay in their copy, because each copy has its own sources, health and channels:
 
-- the events `started`, `observation`, `system`, `escalation`, `clock` and `recovered`
+- the events `started`, `observation`, `system`, `escalation`, `clock`, `recovered` and `drill`
 - the events of the tries of a send: `attempt`, `settled` and `refused`
 
 The rules of an import:
@@ -951,9 +953,21 @@ The fakes and the fault cases of CI test the code. Only a drill tests the live p
 - The assessment gives the levels of the run and of the failure, and the rules keep the steps.
 - A plan with no policy of its level, or with no step after the rules, is a problem. Such a drill sends nothing.
 
-The system fold gives the drill lines (the section of the system reports). The runtime starts no drill yet. The next steps are these:
+The system fold gives the drill lines (the section of the system reports). The module `drills.ts` of the runtime starts the drills of its copy:
 
-- The runtime keeps the runs in its log, starts each due drill and wakes at the end of each time.
+- `copyDrills` gives the drills that the copy starts, each with the quiet window of its person. The instance gives them to `openRuntime`.
+- Each pass appends an event `drill` for each due drill before its view. The id has the copy, the drill and the start.
+- The fold keeps the last start of each drill. A restart reads it from the log, thus a drill does not start again in its window.
+- `drillRunOf` gives the last run, with the first acknowledgment of the person on the path, of a run report after the start.
+- An acknowledgment in the user interface or on another channel does not test the path, thus it does not count.
+- `drillStep` gives the snapshots of the view and the next wake: the next start, or the end of the time of the acknowledgment.
+- A drill with no next start gets `noStart`, and the system fold opens its line `no-start`.
+- The event `drill` stays in its copy, because each copy has its own drill lines.
+
+The next steps are these:
+
+- A watchdog finds a drill that does not start in its window, for example when the runtime stops for the full window.
+- The map and the explanation of a route show the steps that the channel rules remove (`Route.ruled`).
 - Then comes a drill of the outage call.
 
 ## People and places

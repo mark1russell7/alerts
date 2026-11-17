@@ -133,6 +133,8 @@ export interface RuntimeState {
   readonly steps: readonly ClockStep[];
   /** The recoveries of the log from a broken file, in the order of the log. A later step of the wall clock moves their times. */
   readonly recoveries: readonly LogRecovery[];
+  /** The last start of each drill of this copy, by the id of the drill (AL-43). A later step of the wall clock moves them. */
+  readonly drills: Readonly<Record<string, Instant>>;
 }
 
 /**
@@ -186,6 +188,7 @@ export const EMPTY_RUNTIME: RuntimeState = {
   delivered: {},
   steps: [],
   recoveries: [],
+  drills: {},
 };
 
 /** This function adds one event to the state. */
@@ -375,6 +378,8 @@ function foldRest(state: RuntimeState, event: RuntimeEvent, context: FoldContext
       return foldRetired(base, event);
     case "exchange":
       return { ...base, exchanges: { ...state.exchanges, [event.peer]: { log: event.log, next: event.next } } };
+    case "drill":
+      return { ...base, drills: { ...state.drills, [event.drill]: Math.max(state.drills[event.drill] ?? event.time, event.time) } };
     default:
       return base;
   }
@@ -521,6 +526,7 @@ export function shiftState(state: RuntimeState, size: Duration): RuntimeState {
     starts: state.starts.map((start) => shiftEscalationStart(start, size)),
     steps: state.steps.map((step) => ({ ...step, at: step.at + size })),
     recoveries: state.recoveries.map((recovery) => ({ ...recovery, at: recovery.at + size })),
+    drills: Object.fromEntries(Object.entries(state.drills).map(([drill, at]) => [drill, at + size])),
   };
 }
 
