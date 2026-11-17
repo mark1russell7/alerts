@@ -465,7 +465,7 @@ describe("the layers of the cover", () => {
 });
 
 describe("the dimensions of indicators", () => {
-  const indicator = (id: string, dimensions: readonly string[], decision: Source["decision"] = "plan"): Source => ({ ...source(id, [], decision), dimensions: dimensions as Source["dimensions"] });
+  const indicator = (id: string, dimensions: readonly string[], decision: Source["decision"] = "plan"): Source => ({ ...source(id, [], decision), dimensions: dimensions as NonNullable<Source["dimensions"]> });
   const classes = [klass("met.flood", "no source")];
 
   it("takes a source with a dimension and no class, and stops a source with no class and no dimension", () => {
