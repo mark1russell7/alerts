@@ -451,5 +451,46 @@
       "unknownPaths": 5,
       "cause": "Round 7 adds the class met.rain and the planned source wmo-cap-feeds. met.rain and met.lightning each have 2 planned sources with no risk, so the gaps go from 132 to 131 of 201 classes. No source is adopted, so the layers do not change. The path of wmo-cap-feeds is unknown, because its feeds are on 92 hosts."
     }
+  },
+  {
+    "round": 8,
+    "date": "2026-11-16",
+    "by": "One session, after the merge of the adapter source-nwws (AL-30). The tests of the atlas check the descriptor of the adapter.",
+    "method": "The adoption of the NWWS-OI adapter. The round read the NWWS page and the disclaimer of the NWS, and it made a DNS lookup of the XMPP server. The facts of the stream come from four live sessions of the adapter on 2026-11-16.",
+    "lists": [
+      "The NOAA Weather Wire Service: https://www.weather.gov/nwws/",
+      "The disclaimer of the NWS: https://www.weather.gov/disclaimer"
+    ],
+    "queries": [],
+    "notes": [
+      "NWWS-OI sends each NWS product to one XMPP room. The adapter keeps the CAP messages of the NWS, the same messages that the NWS API gives.",
+      "The XMPP server is nwws-oi.weather.gov, with no content network. The path of the NWS API has api.weather.gov and Akamai. Thus the two NWS sources share no part of a path.",
+      "The two NWS sources share the origins nws and us-alerting-authorities. Thus the layer of the origins does not change.",
+      "The NWWS page tells of planned transitions of the NWS servers, up to four times a month, with an outage of 10 to 90 minutes. The NWS API source covers these outages.",
+      "A join of the room gives only its last 25 products again. Thus a gap in the stream can lose a product, and the NWS API source finds it.",
+      "These 15 classes get a second source with no risk, so they are not gaps after this round: cbrne.hazardous-materials, fire.structure, geo.earthquake.early-warning, infra.dam.failure, infra.telecom.911-outage, met.outlook, met.special, safety.civil-danger, safety.civil-emergency, safety.evacuation, safety.local-emergency, safety.shelter-in-place, security.blue-alert, security.child-abduction, security.law-enforcement.",
+      "Each of these classes has only the origins of the NWS. Thus its layer of the origins stays at 1, and a fault at the NWS stops both sources.",
+      "The old reasons of these gaps stay true for a second origin. fire.structure: no public national feed of fire dispatch exists, and PulsePoint has no public API.",
+      "geo.earthquake.early-warning: round 1 found no open machine feed of the warnings themselves. infra.dam.failure: round 1 opened no feed for each dam.",
+      "The other classes of the list have a later source with its reason in its record, or round 1 found no other source."
+    ],
+    "studies": [],
+    "measures": {
+      "classes": 201,
+      "gaps": 116,
+      "cover": {
+        "adopted": 51,
+        "paths": 51,
+        "origins": 1
+      },
+      "total": {
+        "adopted": 134,
+        "paths": 134,
+        "origins": 56
+      },
+      "unknownOrigins": 3,
+      "unknownPaths": 5,
+      "cause": "Round 8 adopts NWWS-OI, a second path of the NWS for its 51 classes. The cover of the adopted sources and of the paths goes from 26 to 51 classes, and the gaps go from 131 to 116 of 201 classes. Both NWS sources have the same origins, so the origin layers do not change."
+    }
   }
 ]
