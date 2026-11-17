@@ -749,13 +749,15 @@ export function createDispatcher(options: DeliveryOptions, context: DeliveryCont
 
 /**
  * This function gives the overdue sends of each channel at `at`. An overdue send is a send of the routes after the
- * step, due for `after` or more. A send whose last refusal is `reserved` is not overdue. With no `after`, no send is overdue.
+ * step, due for `after` or more. A send whose last refusal is `reserved` or `consent` is not overdue. With no `after`, no send is overdue.
+ * A `consent` refusal is the choice of the person (a STOP reply), not a fault of the system.
  */
 function overdueSends(routes: readonly Route[], refusals: RuntimeState["refusals"], at: Instant, after: Duration | undefined): OverdueSends[] {
   if (after === undefined) return [];
   const byChannel = new Map<ChannelId, { readonly sends: number; readonly since: Instant }>();
   for (const send of routes.flatMap((entry) => entry.plan.sends)) {
-    if (at - send.due < after || refusals[messageKey(send)]?.kind === "reserved") continue;
+    const last = refusals[messageKey(send)]?.kind;
+    if (at - send.due < after || last === "reserved" || last === "consent") continue;
     const before = byChannel.get(send.channel);
     byChannel.set(send.channel, { sends: (before?.sends ?? 0) + 1, since: Math.min(before?.since ?? send.due, send.due) });
   }

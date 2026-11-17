@@ -186,6 +186,29 @@ describe("loadConfig", () => {
     ]);
   });
 
+  it("checks the opt-in list, and refuses a contact on a channel of texts with no record of its number", () => {
+    const texts = { ...channel("texts" as ChannelId), address: [{ name: "to", required: true, pattern: "\\+[0-9]{8,15}", form: "a phone number", optIn: true }] };
+    const number = "+15550100123";
+    const contact: ContactConfig = { person: p1, channel: texts.id, address: { to: number } };
+    const yes = { number, at: "2026-11-17T21:30:00Z", way: "written" as const, words: "texts-consent/1" };
+    const withTexts = (fields: Partial<AlertConfig>) => config({ contacts: [...contacts(p1), contact], ...fields });
+    expect(loadConfig(withTexts({ optIn: [yes] }), [...CHANNELS, texts], store).problems).toEqual([]);
+    const missing = loadConfig(withTexts({}), [...CHANNELS, texts], store).problems;
+    expect(missing).toEqual([`The field to of the contact of ${p1} on texts is not on the opt-in list. The channel sends nothing to it.`]);
+    const bad = loadConfig(withTexts({ optIn: [yes, { ...yes, at: "2026-11-17" }] }), [...CHANNELS, texts], store).problems;
+    expect(bad).toEqual(["Record 2 of the opt-in list has no time in UTC with seconds, as 2026-11-17T21:30:00Z.", "Records 1 and 2 of the opt-in list have the same number."]);
+    for (const problem of [...missing, ...bad]) expect(problem).not.toContain(number);
+    // The record can name the secret of the number, as the contact does.
+    const secret: SecretLookup = (name) => (name === "TEXT_NUMBER" ? number : store(name));
+    const bySecret = loadConfig(
+      config({ contacts: [...contacts(p1), { ...contact, address: { to: { secret: "TEXT_NUMBER" } } }], optIn: [{ ...yes, number: { secret: "TEXT_NUMBER" } }] }),
+      [...CHANNELS, texts],
+      secret,
+    );
+    expect(bySecret.problems).toEqual([]);
+    expect(bySecret.optIn).toEqual([yes]);
+  });
+
   it("checks each spend entry: one for each provider, a provider of a channel, a reserve below the cap, and an IANA time zone", () => {
     const paid = [{ ...channel(pushover), dependsOn: ["provider:pushover"] }, channel(sms)];
     const spend = { provider: "provider:pushover", monthlyUsd: 10, reserveUsd: 3, floor: 5, timeZone: "America/Chicago" };

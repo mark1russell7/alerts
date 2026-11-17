@@ -14,6 +14,9 @@
  * - `node src/install.ts restart` restarts the runtime on the code of this checkout, with no elevated shell. It checks
  *   the private files with this code first. Then it waits for the new runtime and its readiness.
  *
+ * `status` and `restart` also tell if the local page is not built, or older than the source files of the checkout. The
+ * cloud copy has no page, thus this warning does not change the exit code.
+ *
  * A change of `copy.json` needs `restart`, because the runtime reads the file only at its start.
  *
  * After each install, and after each change of `config.json` or `secrets.env`, start `status` when the
@@ -34,6 +37,7 @@ import { errorMessage } from "@mark1russell7/text";
 import { redactSecrets } from "@mark1russell7/text/redact";
 import { fetchTransport, send, statusLine } from "polite-crawler/api";
 import { HostScheduler, realClock } from "polite-crawler/politeness";
+import { pageWarning, readPageState } from "./api.ts";
 import { alertsHome, configPath, readText, SECRETS_FILE } from "./config.ts";
 import { readCopySettings } from "./copy.ts";
 import { checkOfPingUrl, checksRequest, checkTimesProblem, heartbeatGap } from "./heartbeat.ts";
@@ -164,7 +168,10 @@ if (action === "install") {
   const files = privateFiles(home, configPath(process.env, process.cwd()));
   const next = checkStart(await readStartTexts(files), daemonCheck);
   const start = { use: restartUse(await readText(() => readFile(files.marker, "utf8"))), files: next.tag === "ok" ? [] : next.error };
-  console.log(JSON.stringify({ task: await serviceStatus(spec, ports, { discovery }), readiness, heartbeat, ...loud, start }, null, 2));
+  const page = await readPageState(root);
+  console.log(JSON.stringify({ task: await serviceStatus(spec, ports, { discovery }), readiness, heartbeat, ...loud, start, page }, null, 2));
+  const pageLine = pageWarning(page);
+  if (pageLine !== undefined) console.error(pageLine);
   if (start.use !== "files") console.error(`The runtime does not use the private files (${start.use}). Read the output of the runtime.`);
   if (start.files.length > 0) console.error(`The private files have problems, thus the next start uses the last good set ${GOOD_FILE}.`);
   const startOk = start.use === "files" && start.files.length === 0;
@@ -184,6 +191,8 @@ if (action === "install") {
     },
   );
   process.exitCode = reportRestart(outcome);
+  const pageLine = pageWarning(await readPageState(root));
+  if (pageLine !== undefined) console.error(pageLine);
 } else {
   console.error(`The action is one of: ${ACTIONS.join(", ")}.`);
   process.exitCode = 2;

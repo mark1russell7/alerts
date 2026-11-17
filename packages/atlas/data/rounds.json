@@ -492,5 +492,55 @@
       "unknownPaths": 5,
       "cause": "Round 8 adopts NWWS-OI, a second path of the NWS for its 51 classes. The cover of the adopted sources and of the paths goes from 26 to 51 classes, and the gaps go from 131 to 116 of 201 classes. Both NWS sources have the same origins, so the origin layers do not change."
     }
+  },
+  {
+    "round": 9,
+    "date": "2026-11-16",
+    "by": "One session, for the second origins of space weather and the internet sources of the order of work, then a check of each fact in the pages and in single reads.",
+    "method": "Web searches, then reads of the pages of each source with a generic agent. One small read of the GFZ web service and one of the IODA alerts checked the format and the delay. A DNS lookup of each host checked the content networks.",
+    "lists": [
+      "The data page and the web service of the GFZ Kp index: https://kp.gfz.de/en/data",
+      "The product list of the SIDC: https://sidc.be/registration/registration_main.php",
+      "The OpenAPI page of the IODA API: https://api.ioda.inetintel.cc.gatech.edu/v2/",
+      "The RIS commercial use page of the RIPE NCC: https://www.ripe.net/analyse/internet-measurements/routing-information-service-ris/commercial-use/"
+    ],
+    "queries": [
+      "GFZ Kp index nowcast data access license CC BY 4.0 JSON API kp.gfz.de",
+      "IODA Internet Outage Detection and Analysis API terms of use data license",
+      "RIPE RIS Live terms of use data license RIPE NCC routing data",
+      "Bureau of Meteorology Space Weather Services API get-alert geomagnetic warning free API key documentation",
+      "SIDC STCE space weather alerts presto RSS feed machine readable solar flare alert",
+      "IODA API documentation api.ioda.inetintel.cc.gatech.edu v2 outages alerts terms acceptable use",
+      "\"IODA\" inetintel gatech \"acceptable use\" OR \"terms of use\" OR \"data use\" OR \"acknowledge\" outage data researchers",
+      "RIS Live websocket wss://ris-live.ripe.net/v1/ws/?client= ris_subscribe documentation"
+    ],
+    "notes": [
+      "Before round 9, each class of space weather had one source with no risk, the SWPC, with the NWS as its only origin.",
+      "GFZ gives the planetary Kp and the half-hourly Hp30 under CC BY 4.0, with no key. A Kp of 5 or more is a storm on the G scale of NOAA.",
+      "Some of the 13 Kp observatories are observatories of the USGS that the SWPC also reads. Thus the two origins share a part of their raw data.",
+      "The Space Weather API of the Bureau of Meteorology gives magnetic alerts and warnings of the Australian region. It needs a key from a registration with a name and an email address.",
+      "The SIDC sends its alerts only by email. Its flare alert reads the GOES data of NOAA, so it is a second issuer, not a second sensor.",
+      "The IODA API answered one read with no key. No page gives terms for its data, so the plan waits for written terms before an adapter.",
+      "The terms of service of the RIPE NCC cover the automated use of RIS Live. The RIS Live manual page gave a general page of the RIPE NCC.",
+      "The classes that are not gaps after this round: geo.space-weather, geo.space-weather.geomagnetic-storm, infra.internet.outage, infra.internet.shutdown."
+    ],
+    "studies": [],
+    "measures": {
+      "classes": 201,
+      "gaps": 112,
+      "cover": {
+        "adopted": 51,
+        "paths": 51,
+        "origins": 1
+      },
+      "total": {
+        "adopted": 134,
+        "paths": 134,
+        "origins": 56
+      },
+      "unknownOrigins": 3,
+      "unknownPaths": 6,
+      "cause": "Round 9 plans GFZ and the Bureau of Meteorology as the second and third origins of the geomagnetic storm, and plans IODA with no key. The gaps go from 116 to 112 of 201 classes. No source is adopted, so the layers do not change. The email alerts of the SIDC add 1 source with an unknown path."
+    }
   }
 ]

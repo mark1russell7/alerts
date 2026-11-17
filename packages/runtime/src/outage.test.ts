@@ -78,6 +78,12 @@ describe("outageSetup", () => {
     if (setup.tag === "err" || setup.value === undefined) throw new Error("The setup has problems.");
     expect(setup.value.textFrom).toBe("+99900000003");
     expect(setup.value.list.textMessage).toBe(OUTAGE_TEXT_MESSAGE);
+    // The number of the person is not on the opt-in list. Thus the person gets no text.
+    expect(setup.value.list.people.map((entry) => entry.text)).toEqual([undefined]);
+    const yes = { number: { secret: "PHONE" }, at: "2026-11-17T21:30:00Z", way: "written" as const, words: "texts-consent/1" };
+    const listed = outageSetup(parse({ ...withOutage([call, call]), optIn: [yes] }, secret), secret, { ...KEYS, textFrom: "+99900000003" });
+    if (listed.tag === "err" || listed.value === undefined) throw new Error("The setup has problems.");
+    expect(listed.value.list.people.map((entry) => entry.text)).toEqual([true]);
     const none = outageSetup(parse(withOutage([call, call]), secret), secret, KEYS);
     if (none.tag === "err" || none.value === undefined) throw new Error("The setup has problems.");
     expect(none.value).not.toHaveProperty("textFrom");
