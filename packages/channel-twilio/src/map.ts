@@ -4,7 +4,7 @@
  */
 
 import { addressProblems, type Address, type DeliveryStatus, type Instant, type Message, type SendOutcome } from "@mark1russell7/alerts";
-import { errorMessage } from "@mark1russell7/text";
+import { errorMessage, textLength, truncate } from "@mark1russell7/text";
 import { type TwilioCall, type TwilioCallRead, type TwilioFailure, twilioSayTwiml } from "@procedures/notify/twilio";
 import { twilioCallDescriptor } from "./descriptor.ts";
 
@@ -39,13 +39,11 @@ function sentence(part: string): string {
   return /[.!?]$/.test(words) ? words : `${words}.`;
 }
 
-// The start of a text with `limit` code points or fewer. The cut is at the end of a word when the text has a space.
+// The start of a text with `limit` code points or fewer, as one sentence. The cut keeps each word and each grapheme
+// whole. One code point stays free for the stop of the sentence, because the cut removes the punctuation at its end.
 function cut(text: string, limit: number): string {
-  const points = [...text];
-  if (points.length <= limit) return text;
-  const start = points.slice(0, limit).join("");
-  const space = start.lastIndexOf(" ");
-  return sentence(space > 0 ? start.slice(0, space) : start);
+  if (textLength(text, "code-point") <= limit) return text;
+  return sentence(truncate(text, limit - 1, { unit: "code-point", boundary: "word", mark: "" }));
 }
 
 /**
