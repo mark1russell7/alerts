@@ -662,6 +662,24 @@ describe("the drill reports", () => {
     ]);
   });
 
+  it("gives a failure with the reason missed for a start that the copy missed, and ends it at the next run", () => {
+    const due = START + DRILL.every + DAY;
+    const missed = { drills: [{ copy: "home", drill: DRILL, run: { drill: DRILL.id, at: START, acked: START + MINUTE }, missed: due }] };
+    const failed = systemReports(NO_SYSTEM_LINES, snapshot(missed), due + 7 * 60 * MINUTE);
+    expect(codes(failed.reports)).toEqual([["alert", "system.drill.failed", "drill/home/push-weekly/missed"]]);
+    expect(failed.reports[0]).toMatchObject({ severity: "moderate", urgency: "expected", onset: due, areas: [] });
+    expect(failed.reports[0]!.headline).toBe("The drill push-weekly did not start at its time.");
+    expect(failed.reports[0]!.parameters).toEqual({ drill: ["push-weekly"], copy: ["home"], why: ["missed"] });
+    // The same missed start later gives no report. The next run ends the line, and its own line opens.
+    expect(systemReports(failed.lines, snapshot(missed), due + DAY).reports).toEqual([]);
+    const next = due + 7 * DAY;
+    const run = systemReports(failed.lines, snapshot(drills({ at: next })), next);
+    expect(codes(run.reports)).toEqual([
+      ["alert", "system.drill.run", "drill/home/push-weekly"],
+      ["cancel", "system.drill.failed", "drill/home/push-weekly/missed"],
+    ]);
+  });
+
   it("keeps the lines with no drills in the snapshot, ends them for a drill that is gone, and starts no line with no run", () => {
     const started = systemReports(NO_SYSTEM_LINES, snapshot(drills({})), START);
     expect(systemReports(started.lines, snapshot(), START + 40 * MINUTE).reports).toEqual([]);

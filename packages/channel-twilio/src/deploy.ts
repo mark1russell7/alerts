@@ -50,13 +50,15 @@ export interface OutageDeployInput {
   readonly token: string;
   /** The Twilio number that makes the calls. */
   readonly from: string;
+  /** The Twilio number that sends the texts. Without it, the plan sets no variable `OUTAGE_TEXT_FROM`. */
+  readonly textFrom?: string | undefined;
 }
 
 /**
  * This function gives the deploy plan of the outage call.
  *
  * - The version is the start of the content hash of the files and of the build. A new list or a new bundle gives a new version.
- * - The variables are not in the version. A change of the token or of the number deploys the same build again.
+ * - The variables are not in the version. A change of the token or of a number deploys the same build again.
  *
  * @throws Error when the bundles do not have each path of `OUTAGE_PATHS` one time.
  */
@@ -76,13 +78,13 @@ export function outageDeployPlan(input: OutageDeployInput): TwilioServerlessDepl
     functions,
     assets,
     build,
-    variables: { OUTAGE_TOKEN: input.token, OUTAGE_FROM: input.from },
+    variables: { OUTAGE_TOKEN: input.token, OUTAGE_FROM: input.from, ...(input.textFrom === undefined ? {} : { OUTAGE_TEXT_FROM: input.textFrom }) },
     version: canonicalHash({ functions, assets, build }, { form: "json" }).slice(0, VERSION_LENGTH),
   };
 }
 
-/** The private parts of a deploy: the list, the token and the number. */
-export type OutageSecrets = Pick<OutageDeployInput, "list" | "token" | "from">;
+/** The private parts of a deploy: the list, the token and the numbers. */
+export type OutageSecrets = Pick<OutageDeployInput, "list" | "token" | "from" | "textFrom">;
 
 /**
  * This function makes the bundles of the Functions and deploys the plan. It gives the result of

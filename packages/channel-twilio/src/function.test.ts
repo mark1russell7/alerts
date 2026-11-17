@@ -1,7 +1,7 @@
 import type { ChannelId, Instant, PersonId } from "@mark1russell7/alerts";
 import { describe, expect, it } from "vitest";
 import { CHANNEL_ID } from "./descriptor.ts";
-import { endedFunction, entryFunction, noteLine, pressFunction, scriptTwiml, tokenMatches, type OutagePorts, type PlacedCall } from "./function.ts";
+import { endedFunction, entryFunction, noteLine, pressFunction, scriptTwiml, tokenMatches, type OutagePorts, type PlacedCall, type SentText } from "./function.ts";
 import { OUTAGE_TEXTS, type OutageList, type OutageNote } from "./outage.ts";
 
 // Fake numbers only: 555-0100 to 555-0199 are numbers of fiction.
@@ -29,12 +29,14 @@ const AT = 1_000 * MINUTE;
 interface Fake {
   readonly ports: OutagePorts;
   readonly placed: PlacedCall[];
+  readonly texts: SentText[];
   readonly moves: (readonly [string, string])[];
   readonly lines: string[];
 }
 
 function fake(overrides: Partial<OutagePorts> = {}): Fake {
   const placed: PlacedCall[] = [];
+  const texts: SentText[] = [];
   const moves: (readonly [string, string])[] = [];
   const lines: string[] = [];
   const ports: OutagePorts = {
@@ -43,6 +45,9 @@ function fake(overrides: Partial<OutagePorts> = {}): Fake {
     call: async (call) => {
       placed.push(call);
     },
+    text: async (text) => {
+      texts.push(text);
+    },
     move: async (sid, url) => {
       moves.push([sid, url]);
     },
@@ -50,7 +55,7 @@ function fake(overrides: Partial<OutagePorts> = {}): Fake {
     log: (line) => lines.push(line),
     ...overrides,
   };
-  return { ports, placed, moves, lines };
+  return { ports, placed, texts, moves, lines };
 }
 
 const paramsOf = (url: string): Record<string, string> => Object.fromEntries(new URL(url).searchParams);
@@ -112,7 +117,7 @@ describe("entryFunction", () => {
     const f = fake({ recent: () => Promise.reject(new Error("timeout")) });
     await entryFunction(f.ports, { base: BASE, params: { token: TOKEN } }, TOKEN);
     expect(f.placed).toHaveLength(2);
-    expect(f.lines[0]).toBe("The read of the recent calls failed, so the cap counts no call: timeout");
+    expect(f.lines[0]).toBe("The read of the recent sends failed, so the cap counts no send: timeout");
   });
 
   it("counts the recent calls against the cap", async () => {
@@ -220,6 +225,34 @@ describe("endedFunction", () => {
   });
 });
 
+describe("the text after a chain", () => {
+  const cursor = { outage: String(AT), person: "1", step: "1", round: "0", list: "v1" };
+  const TEXT = "The alert system is down. The calls got no confirmation.";
+
+  it("sends the text of the list at the end of a chain with no confirmation, and the log line has no number", async () => {
+    const f = fake({ list: async () => ({ ...LIST, textMessage: TEXT }) });
+    const reply = await endedFunction(f.ports, { base: BASE, params: { ...cursor, CallStatus: "no-answer" } });
+    expect(reply.body).toBe(JSON.stringify({ calls: 0, texts: 1 }));
+    expect(f.texts).toEqual([{ to: "+15555550124", body: TEXT }]);
+    expect(f.lines).toEqual([`The chain of the person ${p2} ended with no confirmation.`, `A text to the person ${p2} went.`]);
+    noNumber(f.lines);
+  });
+
+  it("sends no text after a confirmation, and logs a failed text with no number", async () => {
+    const acked = fake({ list: async () => ({ ...LIST, textMessage: TEXT }) });
+    await endedFunction(acked.ports, { base: BASE, params: { ...cursor, CallStatus: "completed", acked: "1" } });
+    expect(acked.texts).toEqual([]);
+    const failing = fake({
+      list: async () => ({ ...LIST, textMessage: TEXT }),
+      text: (text) => Promise.reject(new Error(`The 'To' number ${text.to} is not valid.`)),
+    });
+    const reply = await endedFunction(failing.ports, { base: BASE, params: { ...cursor, CallStatus: "busy" } });
+    expect(reply.body).toBe(JSON.stringify({ calls: 0 }));
+    expect(failing.lines).toContain(`The text action of the person ${p2} failed: The 'To' number [number] is not valid.`);
+    noNumber(failing.lines);
+  });
+});
+
 describe("one outage through the three Functions", () => {
   it("calls each person until a key press, and stops the calls of the person who pressed 1", async () => {
     const f = fake();
@@ -268,6 +301,8 @@ describe("noteLine", () => {
     const notes: OutageNote[] = [
       { kind: "capped", person: p1, cap: "window" },
       { kind: "capped", person: p1, cap: "month" },
+      { kind: "text-capped", person: p1, cap: "window" },
+      { kind: "text-capped", person: p1, cap: "month" },
       { kind: "acked", person: p1, step: 1 },
       { kind: "exhausted", person: p1 },
       { kind: "stale" },
@@ -276,6 +311,8 @@ describe("noteLine", () => {
     expect(notes.map(noteLine)).toEqual([
       `The cap stopped a call of the person ${p1}.`,
       `The monthly cap stopped a call of the person ${p1}.`,
+      `The cap stopped the text to the person ${p1}.`,
+      `The monthly cap stopped the text to the person ${p1}.`,
       `The person ${p1} confirmed at step 1.`,
       `The chain of the person ${p1} ended with no confirmation.`,
       "The request has no valid cursor of this list, so no call starts.",

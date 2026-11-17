@@ -13,11 +13,14 @@ import {
   type RuntimeCalls,
   type RuntimeContext,
   type RuntimeGlobals,
+  type RuntimeMessages,
   type RuntimeResponse,
+  type RuntimeTextOptions,
 } from "./twilio-runtime.ts";
 
 // Fake numbers only: 555-0100 to 555-0199 are numbers of fiction.
 const FROM = "+15555550100";
+const TEXT_FROM = "+15555550101";
 const steps = (count: number): ChannelId[] => Array.from({ length: count }, () => CHANNEL_ID);
 const LIST: OutageList = {
   version: "v1",
@@ -34,15 +37,32 @@ const assetsOf = (text: string): Readonly<Record<string, { open(): string }>> =>
 
 interface FakeClient {
   readonly calls: RuntimeCalls;
+  readonly messages: RuntimeMessages;
   readonly created: RuntimeCallOptions[];
   readonly updated: (readonly [string, unknown])[];
   readonly listed: unknown[];
+  readonly texts: RuntimeTextOptions[];
+  readonly textsListed: unknown[];
 }
 
-function fakeClient(dates: readonly (Date | null)[] = []): FakeClient {
+/** A fake client of Twilio. A text list that is an error makes the read of the texts fail with it. */
+function fakeClient(dates: readonly (Date | null)[] = [], textDates: readonly (Date | null)[] | Error = []): FakeClient {
   const created: RuntimeCallOptions[] = [];
   const updated: (readonly [string, unknown])[] = [];
   const listed: unknown[] = [];
+  const texts: RuntimeTextOptions[] = [];
+  const textsListed: unknown[] = [];
+  const messages: RuntimeMessages = {
+    create: async (options) => {
+      texts.push(options);
+      return { sid: "SM0000" };
+    },
+    list: async (options) => {
+      textsListed.push(options);
+      if (textDates instanceof Error) throw textDates;
+      return textDates.map((dateCreated) => ({ dateCreated }));
+    },
+  };
   const calls: RuntimeCalls = Object.assign((sid: string) => ({ update: async (options: unknown) => void updated.push([sid, options]) }), {
     create: async (options: RuntimeCallOptions) => {
       created.push(options);
@@ -53,11 +73,11 @@ function fakeClient(dates: readonly (Date | null)[] = []): FakeClient {
       return dates.map((dateCreated) => ({ dateCreated }));
     },
   });
-  return { calls, created, updated, listed };
+  return { calls, messages, created, updated, listed, texts, textsListed };
 }
 
 function contextOf(client: FakeClient, fields: Partial<RuntimeContext> = {}): RuntimeContext {
-  return { DOMAIN_NAME: "outage-0000.twil.io", OUTAGE_TOKEN: "token-0000", OUTAGE_FROM: FROM, getTwilioClient: () => ({ calls: client.calls }), ...fields };
+  return { DOMAIN_NAME: "outage-0000.twil.io", OUTAGE_TOKEN: "token-0000", OUTAGE_FROM: FROM, getTwilioClient: () => ({ calls: client.calls, messages: client.messages }), ...fields };
 }
 
 interface FakeResponse extends RuntimeResponse {
@@ -121,6 +141,30 @@ describe("runtimePorts", () => {
     const client = fakeClient([new Date(5_000), null, new Date(3_000)]);
     expect(await runtimePorts(contextOf(client), globals).recent(10)).toEqual([5_000, 3_000]);
     expect(client.listed).toEqual([{ from: FROM, limit: 10 }]);
+  });
+
+  it("adds the newest texts of the sender of texts to the recent calls", async () => {
+    const client = fakeClient([new Date(5_000)], [new Date(4_000), null]);
+    expect(await runtimePorts(contextOf(client, { OUTAGE_TEXT_FROM: TEXT_FROM }), globals).recent(10)).toEqual([5_000, 4_000]);
+    expect(client.textsListed).toEqual([{ from: TEXT_FROM, limit: 10 }]);
+    const noSender = fakeClient([new Date(5_000)], [new Date(4_000)]);
+    expect(await runtimePorts(contextOf(noSender), globals).recent(10)).toEqual([5_000]);
+    expect(noSender.textsListed).toEqual([]);
+  });
+
+  it("counts the calls only when the read of the texts fails, and the log line has no number", async () => {
+    const lines: string[] = [];
+    const client = fakeClient([new Date(5_000)], new Error(`The From number ${TEXT_FROM} is not valid. Digits ${TEXT_FROM.slice(1)}.`));
+    const ports = runtimePorts(contextOf(client, { OUTAGE_TEXT_FROM: TEXT_FROM }), { ...globals, log: (line) => lines.push(line) });
+    expect(await ports.recent(10)).toEqual([5_000]);
+    expect(lines).toEqual(["The read of the recent texts failed, so the caps count the calls only: The From number [number] is not valid. Digits [number]."]);
+  });
+
+  it("sends a text from the sender of texts, and refuses a text when the environment has no sender", async () => {
+    const client = fakeClient();
+    await runtimePorts(contextOf(client, { OUTAGE_TEXT_FROM: TEXT_FROM }), globals).text({ to: "+15555550123", body: "The alert system is down." });
+    expect(client.texts).toEqual([{ to: "+15555550123", from: TEXT_FROM, body: "The alert system is down." }]);
+    await expect(runtimePorts(contextOf(client), globals).text({ to: "+15555550123", body: "x" })).rejects.toThrow("The environment has no variable OUTAGE_TEXT_FROM.");
   });
 
   it("moves the status callback of a live call", async () => {

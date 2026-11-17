@@ -822,9 +822,15 @@ export interface EscalationStep {
   readonly at: Duration;
 }
 
-/** The escalation of one level: the steps, until a person acknowledges. */
+/**
+ * The escalation of one level: the steps, until a person acknowledges. A policy with a subject (`about`) applies only
+ * to the incidents about that subject with the status `system`, `test` or `exercise`. For them, it replaces the policy
+ * of the level with no subject. Thus no policy with a subject changes the plan of a real warning.
+ */
 export interface EscalationPolicy {
   readonly level: Level;
+  /** The subject of the policy, as a subject watch. A subject watch with no id matches each subject of its system. */
+  readonly about?: SubjectWatch;
   readonly steps: readonly EscalationStep[];
   /** The time after the last step at which the escalation is exhausted. Exhausted is a system alert. */
   readonly exhaustedAfter: Duration;

@@ -114,6 +114,18 @@ describe("the drills of a copy (AL-43)", () => {
     const late = { ...DRILL, window: { ...WINDOW, start: "22:30", end: "23:30" } };
     expect(drillStep({ drills: {}, merge }, [{ drill: late, quiet: QUIET }], COPY, T0)).toEqual({ snapshots: [{ copy: COPY, drill: late, noStart: true }] });
   });
+
+  it("tells of the start that the copy missed after its last run, until the next run", () => {
+    const merge = { ...EMPTY_STATE, reports: [RUN], acks: [ack()] };
+    const due = Date.UTC(2026, 3, 11, 16, 0, 0);
+    // The window of Saturday 11 April ends at 17:00 in Chicago. In the window, the drill is due, and it is not missed.
+    expect(drillStep({ drills: { [DRILL.id]: T0 }, merge }, OWN, COPY, due + 60 * MINUTE).snapshots[0]?.missed).toBeUndefined();
+    const after = drillStep({ drills: { [DRILL.id]: T0 }, merge }, OWN, COPY, Date.UTC(2026, 3, 11, 22, 30, 0));
+    expect(after.snapshots[0]?.missed).toBe(due);
+    expect(after.wakeAt).toBe(Date.UTC(2026, 3, 18, 16, 0, 0));
+    // Before the first run, the copy has no time from which to count.
+    expect(drillStep({ drills: {}, merge }, OWN, COPY, Date.UTC(2026, 3, 11, 22, 30, 0)).snapshots[0]?.missed).toBeUndefined();
+  });
 });
 
 interface Calls {
@@ -231,6 +243,27 @@ describe("the drills in the passes of the runtime (AL-43)", () => {
     expect(drillEvents(log)).toEqual([]);
     expect(pushover.send).toEqual([]);
     expect(sms.send.map((message) => message.title)).toEqual(["The drill push-weekly has no next start."]);
+    log.close();
+  });
+
+  it("sends a failure for a start that the copy missed while it was stopped, and ends it at the next run", async () => {
+    const { clock, log, runtime } = open({ status: () => ({ state: "acknowledged", at: T0 + 20 * SECOND }) });
+    await runtime.pass();
+    await clock.advance(30 * SECOND);
+    await runtime.pass();
+    // The copy stops for the full window of Saturday 11 April, and it starts again after the window.
+    await clock.advance(Date.UTC(2026, 3, 11, 22, 30, 0) - clock.now());
+    const back = open({ log, clock });
+    await back.runtime.pass();
+    expect(drillLines(back.runtime.state().lines)).toEqual([`drill/${COPY}/${DRILL.id}/missed`]);
+    expect(back.sms.send.map((message) => message.title)).toEqual(["The drill push-weekly did not start at its time."]);
+    expect(back.pushover.send).toEqual([]);
+    // The next run starts in the window of the next week. It ends the failure, and its run line opens.
+    await clock.advance(Date.UTC(2026, 3, 18, 16, 0, 0) - clock.now());
+    await back.runtime.pass();
+    expect(drillEvents(log).length).toBe(2);
+    expect(drillLines(back.runtime.state().lines)).toEqual([`drill/${COPY}/${DRILL.id}`]);
+    expect(back.pushover.send.map((message) => message.title)).toEqual([RUN.headline]);
     log.close();
   });
 

@@ -7,7 +7,7 @@ import { localTime } from "@mark1russell7/algebra/clock";
 import { canonicalHash } from "@mark1russell7/rigor-generators";
 import type { Address, AssessPolicy, ChannelDescriptor, ChannelId, Duration, EscalationPolicy, Instant, InterestGraph, NodeKey, PersonId, PersonWatch, PlaceId, Position, RegionCode, SourceId, WatchedPlace } from "./contracts.ts";
 import { assess, DEFAULT_ASSESS_POLICY, DRILL_KIND, matchSubjects, reachedAssessment } from "./assess.ts";
-import { recipientProblems, ruleSteps, type ChannelRule, type Recipient } from "./delivery.ts";
+import { policyFor, recipientProblems, ruleSteps, type ChannelRule, type Recipient } from "./delivery.ts";
 import { DRILL_PROBES, drillProblems, nextDrillAt, type DrillConfig } from "./drill.ts";
 import { incidents, normalize } from "./merge.ts";
 import { DRILL_SUBJECT, NO_SYSTEM_LINES, systemReports } from "./system-reports.ts";
@@ -50,7 +50,10 @@ export interface PersonConfig {
   readonly watch: PersonWatch;
   /** The name of the person for the UI. */
   readonly label?: string;
-  /** The escalation policies of the person. When it is absent, the policies of the configuration apply. */
+  /**
+   * The escalation policies of the person. When it is absent, the policies of the configuration apply. A person with
+   * policies of their own gets no policy of the configuration, also no policy with a subject.
+   */
   readonly policies?: readonly EscalationPolicy[];
 }
 
@@ -435,7 +438,7 @@ function drillPlanProblems(drill: DrillConfig, recipient: Recipient, policy: Ass
   for (const plan of plans) {
     for (const incident of incidents(normalize({ reports: plan.reports }), plan.at)) {
       const level = reachedAssessment(assess(incident, recipient.watch, [], policy, plan.at)).level;
-      const found = level === "none" ? undefined : recipient.policies.find((entry) => entry.level === level);
+      const found = level === "none" ? undefined : policyFor(recipient.policies, level, incident);
       if (found === undefined) {
         problems.push(`The ${plan.name} of the drill ${id} reaches the person ${person} at the level ${level}, and the person has no policy of it. It sends nothing.`);
         continue;
