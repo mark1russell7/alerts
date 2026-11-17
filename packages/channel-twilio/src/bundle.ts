@@ -23,6 +23,12 @@ export const FUNCTION_RUNTIME = "node24";
  */
 export const FUNCTION_DEPENDENCIES: Readonly<Record<string, string>> = { "@twilio/runtime-handler": "2.1.2" };
 
+/**
+ * The folder of this package. esbuild writes the path of each module into the bundle, relative to its working folder.
+ * This folder is fixed. Thus the start folder of the process does not change the code or the version of the plan.
+ */
+const PACKAGE_ROOT = fileURLToPath(new URL("..", import.meta.url));
+
 /** The bundle of one Function. */
 export interface FunctionBundle {
   /** The path of the Function on the domain of the service. */
@@ -40,12 +46,16 @@ const SOURCES = [
   { path: OUTAGE_PATHS.ended, visibility: "protected", file: "./functions/ended.ts" },
 ] as const;
 
-/** This function makes the bundle of each Function. The same sources and the same esbuild give the same code. */
+/**
+ * This function makes the bundle of each Function. The same sources, the same packages and the same esbuild give the
+ * same code from each start folder.
+ */
 export async function bundleFunctions(): Promise<FunctionBundle[]> {
   return Promise.all(
     SOURCES.map(async (source) => {
       const result = await build({
         entryPoints: [fileURLToPath(new URL(source.file, import.meta.url))],
+        absWorkingDir: PACKAGE_ROOT,
         bundle: true,
         platform: "node",
         format: "cjs",

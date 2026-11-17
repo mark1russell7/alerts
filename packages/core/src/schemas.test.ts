@@ -454,6 +454,7 @@ const SCHEMA_NAMES = [
   "historyChangeSchema",
   "historyIncidentSchema",
   "historyPayloadSchema",
+  "historyPlaceSchema",
   "historyRegionSchema",
   "incidentLineSchema",
   "incidentSchema",
@@ -852,10 +853,13 @@ describe("the private configuration", () => {
     const drill = { id: "push-weekly", person: PERSON, path: { kind: "channel", channel: PUSHOVER }, every: 6 * 86_400_000, window: { zone: "America/Chicago", start: "11:00", end: "17:00", days: [6] }, ackWithin: 1_800_000 } as const;
     // The person watches the drills, thus the route sends each drill to the person.
     const watcher = { watch: { person: PERSON, places: [KANSAS.id], rules: [], subjects: [{ system: DRILL_SUBJECT }] }, label: "Person A" };
-    const drilled = { ...CONFIG, people: [watcher], drills: [drill] };
+    // The failure of a drill goes at the level notice, on a channel other than the path of the drill.
+    const second: ChannelDescriptor = { ...CHANNEL, id: "sms" as ChannelId, title: "SMS", ack: "none" };
+    const notice = { level: "notice" as const, steps: [{ channel: second.id, at: 0 }], exhaustedAfter: 600_000 };
+    const drilled = { ...CONFIG, people: [watcher], drills: [drill], policies: [ESCALATION, notice], contacts: [...CONFIG.contacts, { person: PERSON, channel: second.id, address: { to: { secret: "SMS_TO" } } }] };
     holds(alertConfigSchema, drilled);
     const parsed = alertConfigSchema.parse(JSON.parse(JSON.stringify(drilled)));
-    expect(loadConfig(parsed, [CHANNEL], (name) => (name === "PUSHOVER_USER" ? "user-test" : undefined)).problems).toEqual([]);
+    expect(loadConfig(parsed, [CHANNEL, second], (name) => (name === "PUSHOVER_USER" || name === "SMS_TO" ? "value-test" : undefined)).problems).toEqual([]);
     holds(drillConfigSchema, { ...drill, window: { zone: "UTC", start: "09:00", end: "10:00" } });
     fails(drillConfigSchema, { ...drill, window: { ...drill.window, days: [7] } });
     fails(drillConfigSchema, { ...drill, window: { ...drill.window, days: [1.5] } });

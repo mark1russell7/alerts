@@ -9,6 +9,7 @@ import { DEFAULT_LINK_POLICY, linkRule, ONLY_COPY, type ChannelQuota, type CopyW
 import { errorMessage } from "@mark1russell7/text";
 import type { BalanceWatch } from "./balance.ts";
 import { createDispatcher, type DeliveryOptions, type DeliveryStep } from "./delivery.ts";
+import { drillStarts, drillStep, type CopyDrill } from "./drills.ts";
 import { entryIndex } from "./entries.ts";
 import { envelope, EVENT_TYPES, type RuntimeEvent } from "./events.ts";
 import { importPage, sharePage, type ExchangePage, type ReceivedPage } from "./exchange.ts";
@@ -87,6 +88,11 @@ export interface RuntimeOptions {
   readonly copies?: CopyChecks;
   /** The runtime starts this hook at the end of each pass with no error. The outside heartbeat goes here. */
   readonly onPass?: (pass: Pass) => void | Promise<void>;
+  /**
+   * The drills that this copy starts (`copyDrills`, AL-43). Each pass starts each due drill before its view. With no
+   * drills, the view ends each open line of a drill of this copy.
+   */
+  readonly drills?: readonly CopyDrill[];
 }
 
 /** The result of one pass. */
@@ -314,8 +320,13 @@ export function openRuntime(options: RuntimeOptions): Runtime {
       const conflicts = [...stepped.conflicts, ...settled.flatMap((result) => (result.status === "fulfilled" ? result.value : []))];
 
       const at = clock.now();
+      // Each due drill starts before the view. Thus the system fold of the view gives its run, and the delivery step sends it.
+      const drills = options.drills ?? [];
+      const started = drillStarts(state, drills, self, at);
+      if (started.length > 0) conflicts.push(...append(started));
+      const drilled = drillStep(state, drills, self, at);
       const quotas = readQuotas();
-      const view = systemView(state, config, at, { ...(quotas === undefined ? {} : { quotas }), balances: watches.flatMap((watch) => watch.balance() ?? []), ...(options.copies === undefined ? {} : { copies: options.copies.watches() }), ...(folds === undefined ? {} : { folds }) });
+      const view = systemView(state, config, at, { drills: drilled.snapshots, ...(quotas === undefined ? {} : { quotas }), balances: watches.flatMap((watch) => watch.balance() ?? []), ...(options.copies === undefined ? {} : { copies: options.copies.watches() }), ...(folds === undefined ? {} : { folds }) });
       folds = view.folds;
       const event = systemEvent(view);
       if (event !== undefined) conflicts.push(...append([event]));
@@ -334,7 +345,7 @@ export function openRuntime(options: RuntimeOptions): Runtime {
       // A source or a balance watch can come due after `start`, while the fetches of the pass run. A fetch that runs to its
       // limit of one interval also ends at its next fetch. Such work is due, not a fault: its wake is the first instant after the pass.
       const nextWork = earliest([...config.sources.map((descriptor) => nextFetch(state, descriptor)), ...watches.map((watch) => watch.nextReadAt())]);
-      const wakeAt = earliest([nextWork === undefined ? undefined : Math.max(nextWork, at + 1), view.wakeAt, delivery?.wakeAt]);
+      const wakeAt = earliest([nextWork === undefined ? undefined : Math.max(nextWork, at + 1), view.wakeAt, delivery?.wakeAt, drilled.wakeAt]);
       const pass: Pass = {
         at,
         fetched: due.map(({ descriptor }) => descriptor.id),

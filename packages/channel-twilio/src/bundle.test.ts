@@ -1,4 +1,8 @@
+import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { builtinModules } from "node:module";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { compileFunction, createContext, runInContext } from "node:vm";
 import type { ChannelId, PersonId } from "@mark1russell7/alerts";
 import { beforeAll, describe, expect, it } from "vitest";
@@ -22,7 +26,7 @@ const LIST: OutageList = {
 
 interface Loaded {
   readonly handler: RuntimeHandler;
-  /** The modules that the bundle requires. */
+  /** The modules that the bundle loads with `require`. */
   readonly required: string[];
   readonly lines: string[];
 }
@@ -116,6 +120,25 @@ describe("bundleFunctions", () => {
   it("gives the same code for the same sources", async () => {
     expect((await bundleFunctions()).map((bundle) => bundle.code)).toEqual(bundles.map((bundle) => bundle.code));
   });
+
+  it("gives the same code from each start folder, with each module path relative to the package", async () => {
+    // esbuild reads the start folder when it loads. Thus a second process starts in another folder and makes the bundles.
+    const hash = (code: string) => createHash("sha256").update(code).digest("hex");
+    const script = `const { bundleFunctions } = await import(process.env.BUNDLE_MODULE); const { createHash } = await import("node:crypto");
+      console.log(JSON.stringify((await bundleFunctions()).map((bundle) => createHash("sha256").update(bundle.code).digest("hex"))));`;
+    const output = execFileSync(process.execPath, ["--input-type=module", "--eval", script], {
+      cwd: process.cwd() === tmpdir() ? join(tmpdir(), "..") : tmpdir(),
+      env: { ...process.env, BUNDLE_MODULE: new URL("./bundle.ts", import.meta.url).href },
+      encoding: "utf8",
+    });
+    expect(JSON.parse(output.trim().split("\n").at(-1)!)).toEqual(bundles.map((bundle) => hash(bundle.code)));
+    // The comment of each module gives its path from the package. A start folder or an absolute path is not in the code.
+    for (const bundle of bundles) {
+      const paths = [...bundle.code.matchAll(/^\/\/ (.+)$/gmu)].map((match) => match[1]!);
+      expect(paths, bundle.path).toContain(`src/functions/${bundle.path.slice(1)}.ts`);
+      expect(paths.filter((path) => /^(?:[a-z]:)?[\\/]|\\/iu.test(path)), bundle.path).toEqual([]);
+    }
+  }, 60_000);
 
   it("gives bundles that require only the Node built-ins, and that hold no send code of the channel", () => {
     for (const bundle of bundles) {

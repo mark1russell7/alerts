@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ChannelDescriptor, ChannelId, PersonId, QuietWindow } from "./contracts.ts";
-import { drillDue, drillInCopy, drillProblems, drillVerdict, joinRuns, lastRun, nextDrillAt, type DrillConfig, type DrillRun } from "./drill.ts";
+import { drillDue, drillInCopy, drillProblems, drillVerdict, joinRuns, lastRun, missedDrillAt, nextDrillAt, type DrillConfig, type DrillRun } from "./drill.ts";
 
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
@@ -126,6 +126,36 @@ describe("nextDrillAt and drillDue", () => {
     expect(nextDrillAt({ ...WEEKLY, window: { zone: ZONE, start: "25:00", end: "17:00" } }, [], WEDNESDAY)).toBeUndefined();
     expect(nextDrillAt(WEEKLY, [], Number.NaN)).toBeUndefined();
     expect(drillDue(WEEKLY, [], Number.NaN)).toBe(false);
+  });
+});
+
+describe("missedDrillAt", () => {
+  const last = [run(SATURDAY)];
+  const next = SATURDAY + 7 * DAY;
+
+  it("gives the next start after the last run when its window ended with no run", () => {
+    // The window of the next Saturday ends at 17:00 in Chicago. After it, the start of that Saturday is missed.
+    expect(missedDrillAt(WEEKLY, last, next + 6 * HOUR)).toBe(next);
+    expect(missedDrillAt(WEEKLY, last, next + 3 * DAY)).toBe(next);
+    // Two weeks with no run still give the first missed start.
+    expect(missedDrillAt(WEEKLY, last, next + 7 * DAY + 6 * HOUR)).toBe(next);
+  });
+
+  it("gives no missed start before the next start, at a late start in the window and before the first run", () => {
+    expect(missedDrillAt(WEEKLY, last, SATURDAY + 3 * DAY)).toBeUndefined();
+    expect(missedDrillAt(WEEKLY, last, next)).toBeUndefined();
+    expect(missedDrillAt(WEEKLY, last, next + 2 * HOUR)).toBeUndefined();
+    expect(drillDue(WEEKLY, last, next + 2 * HOUR)).toBe(true);
+    expect(missedDrillAt(WEEKLY, [], next + 3 * DAY)).toBeUndefined();
+    // A run at the next start ends the miss.
+    expect(missedDrillAt(WEEKLY, [...last, run(next + 2 * HOUR)], next + 6 * HOUR)).toBeUndefined();
+  });
+
+  it("counts from the next start out of the quiet window of the person", () => {
+    // A quiet window until 12:00 moves the next start to 12:00. The window of that start still ends at 17:00.
+    const quiet: QuietWindow = { zone: ZONE, start: "22:00", end: "12:00" };
+    expect(missedDrillAt(WEEKLY, [run(SATURDAY + HOUR)], next + 6 * HOUR, quiet)).toBe(next + HOUR);
+    expect(missedDrillAt(WEEKLY, [run(SATURDAY + HOUR)], next + 30 * MINUTE, quiet)).toBeUndefined();
   });
 });
 

@@ -16,6 +16,7 @@ on:
       - packages/core/**
       - packages/runtime/**
       - packages/channel-pushover/**
+      - packages/channel-twilio/**
       - packages/source-ipaws/**
       - packages/format-cap/**
       - pnpm-lock.yaml
@@ -55,6 +56,7 @@ jobs:
             packages/core/**
             packages/runtime/**
             packages/channel-pushover/**
+            packages/channel-twilio/**
             packages/source-ipaws/**
             packages/format-cap/**
             pnpm-lock.yaml

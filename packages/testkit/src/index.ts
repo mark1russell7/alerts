@@ -38,6 +38,7 @@ export {
   type SlowVerdict,
 } from "./slow-source.ts";
 export {
+  baselineAt,
   CASE_3_ID,
   CASE_3_LIMITS,
   changeOf,
@@ -367,3 +368,29 @@ export {
   type PingNote,
   type TimedText,
 } from "./log-fault.ts";
+export {
+  APART_LIMIT,
+  CASE_13_ID,
+  CASE_13_SETTINGS,
+  COPIES,
+  COPIES_ARMS,
+  COPIES_GATES,
+  copiesFaultOf,
+  copiesGatesOf,
+  copiesPlanOf,
+  copiesSettingsProblems,
+  copiesVerdictOf,
+  expectedCallsOf,
+  runCopiesArm,
+  runTwoCopies,
+  seenOf,
+  type CopiesArm,
+  type CopiesGate,
+  type CopiesRecord,
+  type CopiesRun,
+  type CopiesSettings,
+  type CopiesVerdict,
+  type CopyName,
+  type CopyRunRecord,
+  type SentRecord,
+} from "./two-copies.ts";
