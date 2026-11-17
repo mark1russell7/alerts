@@ -34,7 +34,7 @@ import { SWPC_KINDS } from "@mark1russell7/alerts-source-swpc";
 import { memoryQuotaStore, quotaGate, type Exchange, type Transport } from "polite-crawler/api";
 import { DEFAULT_POLICY } from "polite-crawler/politeness";
 import { afterEach, describe, expect, it } from "vitest";
-import { CHECKS_KEY, checksKeys, DAEMON_CHECK, daemonCheck, DELIVERY_TIMES, INSTANCE_CHANNELS, INSTANCE_CHECK, INSTANCE_EXPECTATIONS, INSTANCE_SOURCES, INSTANCE_TIMES, instanceProblems, LOUD_PING_URL_KEY, openInstance, PING_URL_KEY, pingKeyOf, pingTargets, RANK_DELAY, RANK_FLOOR, SOURCE_POLICY, sourcePace, USER_AGENT_NAME, type Instance, type InstanceOptions } from "./instance.ts";
+import { CHECKS_KEY, checksKeys, DAEMON_CHECK, daemonCheck, DELIVERY_TIMES, INSTANCE_CHANNELS, INSTANCE_CHECK, INSTANCE_EXPECTATIONS, INSTANCE_SOURCES, INSTANCE_TIMES, instanceProblems, LOUD_PING_URL_KEY, openInstance, PING_URL_KEY, pingKeyOf, pingTargets, RANK_DELAY, RANK_FLOOR, SOURCE_POLICY, sourcePace, twilioSetup, USER_AGENT_NAME, type Instance, type InstanceOptions } from "./instance.ts";
 import { spendGates, spendQuota } from "./balance.ts";
 import { CLOCK_SKEW_LIMIT, COPY_TOKEN_KEY, EXCHANGE_EVERY, EXCHANGE_LIMIT } from "./copy.ts";
 import { overdueLimit } from "./delivery.ts";
@@ -563,15 +563,20 @@ describe("the Twilio call channel of the instance", () => {
     ...(spend === undefined ? {} : { spend }),
   });
 
-  /** A fake Twilio server. It accepts each call, and it gives a balance of 12.50 US dollars. */
+  /** A fake Twilio server. It accepts each call and each text, and it gives a balance of 12.50 US dollars. */
   function twilioServer() {
     const calls: Array<{ url: string; method: string; authorization: string | undefined; fields: Record<string, string> }> = [];
     const fetch: TwilioFetch = async (url, init) => {
       calls.push({ url, method: init.method, authorization: init.headers["authorization"], fields: Object.fromEntries(new URLSearchParams(init.body ?? "")) });
-      const body = url.endsWith("/Balance.json") ? { balance: "12.50", currency: "USD" } : { sid: `CA${"a".repeat(32)}`, status: "queued" };
-      return { status: url.endsWith("/Calls.json") ? 201 : 200, text: async () => JSON.stringify(body), headers: { get: () => null } };
+      const body = url.endsWith("/Balance.json")
+        ? { balance: "12.50", currency: "USD" }
+        : url.endsWith("/Messages.json")
+          ? { sid: `SM${"b".repeat(32)}`, status: "queued" }
+          : { sid: `CA${"a".repeat(32)}`, status: "queued" };
+      return { status: url.endsWith("/Calls.json") || url.endsWith("/Messages.json") ? 201 : 200, text: async () => JSON.stringify(body), headers: { get: () => null } };
     };
-    return { fetch, calls, made: () => calls.filter((entry) => entry.method === "POST" && entry.url.endsWith("/Calls.json")) };
+    const posts = (resource: string) => calls.filter((entry) => entry.method === "POST" && entry.url.endsWith(resource));
+    return { fetch, calls, made: () => posts("/Calls.json"), texts: () => posts("/Messages.json") };
   }
 
   it("calls the person with the keys of the secrets, counts the call in the cap, and reads the balance", async () => {
@@ -630,6 +635,60 @@ describe("the Twilio call channel of the instance", () => {
     expect(twilio.made()).toEqual([]);
     expect(pass.delivery?.failures.map((failure) => [failure.channel, failure.kind])).toEqual([[call, "reserved"]]);
     expect(instance.quotas().find((quota) => quota.channel === call)?.used).toBe(700);
+  });
+
+  describe("the text channel", () => {
+    const text = "twilio-text" as ChannelId;
+    // A fake number of the texts. The number of a real sender needs a registration at Twilio.
+    const TEXTS = { ...TWILIO, TWILIO_TEXT_FROM: "+99900000003" };
+    // Each policy texts the person at once, next to the Pushover message.
+    const texting = (spend?: readonly SpendConfig[]): AlertConfig => ({
+      ...CONFIG,
+      contacts: [...CONFIG.contacts, { person, channel: text, address: { to: { secret: "PHONE" } } }],
+      policies: CONFIG.policies.map((entry) => ({ ...entry, steps: [...entry.steps, { channel: text, at: 0 }] })),
+      ...(spend === undefined ? {} : { spend }),
+    });
+
+    it("texts the person from the number of the texts, counts the text in the cap of the calls, and watches one balance", async () => {
+      const twilio = twilioServer();
+      const { instance, clock, server } = open(store({ ...SECRETS, ...TEXTS }), texting([SPEND]), undefined, undefined, { twilio: twilio.fetch, spendStore: memoryQuotaStore() });
+      const pass = await finish(clock, instance.runtime.pass());
+      expect(pass.delivery?.sent).toHaveLength(2);
+      expect(server.calls).toHaveLength(1);
+      expect(twilio.made()).toEqual([]);
+      const [sent] = twilio.texts();
+      expect(twilio.texts()).toHaveLength(1);
+      expect(sent?.url).toBe(`https://api.twilio.com/2010-04-01/Accounts/${TWILIO.TWILIO_ACCOUNT_SID}/Messages.json`);
+      expect(sent?.fields).toMatchObject({ To: TWILIO.PHONE, From: TEXTS.TWILIO_TEXT_FROM });
+      expect(sent?.fields["Body"]).toContain("Flood Warning");
+      expect([...(sent?.fields["Body"] ?? "")].length).toBeLessThanOrEqual(160);
+      expect(sent?.authorization).toBe(`Basic ${btoa(`${TWILIO.TWILIO_API_KEY_SID}:${TWILIO.TWILIO_API_KEY_SECRET}`)}`);
+      // The text takes 4 cents from the one cap of the account. The quota of the text is the quota of the calls.
+      expect(instance.quotas()).toContainEqual({ channel: call, limit: 1_000, reserve: 300, used: 4, unit: "cents", resetAt: expect.any(Number) });
+      expect(instance.quotas().map((quota) => quota.channel)).not.toContain(text);
+      expect(instance.balances.map((watch) => watch.provider)).toEqual(["provider:twilio"]);
+    });
+
+    it("does not start with a text step and no number of the texts, a number of a bad form, a number with no keys, or no cap", () => {
+      const more = () => ({ twilio: twilioServer().fetch, spendStore: memoryQuotaStore() });
+      const noFrom = messageOf(() => open(store({ ...SECRETS, ...TWILIO }), texting([SPEND]), undefined, undefined, more()));
+      expect(noFrom).toContain("uses the channel twilio-text, and the instance has no sender on it.");
+      const badFrom = messageOf(() => open(store({ ...SECRETS, ...TWILIO, TWILIO_TEXT_FROM: "+1-bad-value" }), texting([SPEND]), undefined, undefined, more()));
+      expect(badFrom).toContain("The keys of Twilio have a problem: The number that texts is not a phone number in E.164 form.");
+      const alone = messageOf(() => open(store({ ...SECRETS, TWILIO_TEXT_FROM: TEXTS.TWILIO_TEXT_FROM })));
+      expect(alone).toContain("The secret store has a value for TWILIO_TEXT_FROM, and no keys of Twilio.");
+      const noCap = messageOf(() => open(store({ ...SECRETS, ...TEXTS }), texting(), undefined, undefined, more()));
+      expect(noCap).toContain("The channel twilio-text costs money, and the configuration has no spend entry for its provider.");
+      for (const problem of [noFrom, badFrom, alone, noCap]) expect(problem).not.toMatch(/bad-value|s{32}|0{32}|1{32}|\+999/u);
+      // With the number of the texts and no step on the channel, the instance starts.
+      expect(() => open(store({ ...SECRETS, ...TEXTS }), CONFIG, undefined, undefined, more())).not.toThrow();
+    });
+
+    it("gives the number of the texts in the setup of Twilio, so the outage call gets it too", () => {
+      const setup = twilioSetup(store({ ...SECRETS, ...TEXTS }));
+      expect(setup).toEqual({ tag: "ok", value: expect.objectContaining({ from: TWILIO.TWILIO_FROM, textFrom: TEXTS.TWILIO_TEXT_FROM }) });
+      expect(twilioSetup(store({ ...SECRETS, ...TWILIO }))).toEqual({ tag: "ok", value: expect.not.objectContaining({ textFrom: expect.anything() }) });
+    });
   });
 
   it("makes no call channel without the keys, and the heartbeat has only the Pushover quota", () => {

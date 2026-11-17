@@ -44,6 +44,7 @@ import { PUSHOVER_QUOTA, PUSHOVER_RESERVE_NOTICES } from "@mark1russell7/alerts-
 import { openShapeCache, SHAPES_FILE } from "@mark1russell7/alerts-shapes-nws";
 import { realClock, wallClock } from "@mark1russell7/algebra/clock";
 import type { ServiceBuilder } from "@mark1russell7/service";
+import { nodeHostPorts } from "@mark1russell7/service/host";
 import { errorMessage } from "@mark1russell7/text";
 import { redactSecrets } from "@mark1russell7/text/redact";
 import { SqliteHostStateStore } from "polite-crawler";
@@ -54,6 +55,7 @@ import { PAGE_INDEX, pageFolder } from "./api.ts";
 import { COPY_TOKEN_KEY } from "./copy.ts";
 import { EXCHANGE_TOKEN_LENGTH, exchangeCall, exchangeHost } from "./exchange-http.ts";
 import { heartbeat, heldOf, type PassSummary } from "./heartbeat.ts";
+import { holdHome } from "./home-lock.ts";
 import { quotaNote } from "./quota.ts";
 import { PROFILES, declare } from "./index.ts";
 import { daemonCheck, INSTANCE_CHECK, LOUD_PING_URL_KEY, openInstance, pingKeyOf, pingTargets, userAgent } from "./instance.ts";
@@ -78,6 +80,10 @@ async function runtime(): Promise<ServiceBuilder> {
   if (profile === undefined) throw new Error(`SERVICE_PROFILE is "${name}". The profiles are: ${Object.keys(PROFILES).join(", ")}.`);
 
   const home = alertsHome(process.env, process.cwd());
+  // The lock of the home folder comes before each read and each write of its files (AL-58). A second runtime on the folder
+  // stops here. A start that stops after this line leaves a stale lock, and the next start removes it.
+  const held = await holdHome(home, nodeHostPorts());
+  if (held.recovered !== undefined) console.log(`The lock of a runtime that stopped went: ${held.recovered}`);
 
   // The start checks config.json with the keys of secrets.env and the settings of copy.json. Files with problems, or files
   // of a start that stopped before it was ready, give way to the last good set. A problem names the line and the key of a
@@ -251,6 +257,7 @@ async function runtime(): Promise<ServiceBuilder> {
     ...(instance.outage === undefined ? {} : { outage: instance.outage }),
     start: { use: loaded.use, reasons: loaded.fallback.length },
     exchange,
+    home: held.lock,
   });
   return service;
 }

@@ -30,7 +30,7 @@ import {
 import { firstInstantOf, localTime } from "@mark1russell7/algebra/clock";
 import { z } from "zod";
 // The descriptor module, not `index.ts`: the bundle of each Function then holds no send code of the channel.
-import { CHANNEL_ID, twilioCallDescriptor } from "./descriptor.ts";
+import { CHANNEL_ID, TWILIO_TEXT_LIMIT, twilioCallDescriptor } from "./descriptor.ts";
 
 /** One person of the outage call: the phone number and the chain of tries. Each step of the chain is a call. */
 export interface OutagePerson {
@@ -81,7 +81,7 @@ export const OUTAGE_MONTH_MAX = 1000;
  * - One segment in the United States costs at most 1.4 cents with the carrier fee, from the price page of Twilio.
  * - Thus one text costs no more than one call, and each cap counts a text as one call.
  */
-export const OUTAGE_TEXT_LIMIT = 160;
+export const OUTAGE_TEXT_LIMIT: number = TWILIO_TEXT_LIMIT;
 
 /** The list of the outage call. The deploy of the Function copies it from the private configuration. */
 export interface OutageList {

@@ -38,11 +38,15 @@ import {
 import {
   CHANNEL_ID as TWILIO_CHANNEL,
   createTwilioCallChannel,
+  createTwilioTextChannel,
   readTwilioBalance,
+  TEXT_CHANNEL_ID,
   TWILIO_CALL_COST_USD,
   TWILIO_CALL_TIMEOUT_MS,
+  TWILIO_TEXT_COST_USD,
   twilioCallDescriptor,
   twilioSetupProblems,
+  twilioTextDescriptor,
   type TwilioCredentials,
   type TwilioFetch,
 } from "@mark1russell7/alerts-channel-twilio";
@@ -157,7 +161,7 @@ export { DELAY_LIMITS };
  * recipient against this list: the channel of each step, and the fields of each address. Thus the loader
  * and the instance agree on the channels.
  */
-export const INSTANCE_CHANNELS: readonly ChannelDescriptor[] = [pushoverDescriptor(), twilioCallDescriptor()];
+export const INSTANCE_CHANNELS: readonly ChannelDescriptor[] = [pushoverDescriptor(), twilioCallDescriptor(), twilioTextDescriptor()];
 
 /**
  * The names of the keys of `secrets.env` for the Twilio call channel. The secret is the secret of an API key
@@ -165,39 +169,53 @@ export const INSTANCE_CHANNELS: readonly ChannelDescriptor[] = [pushoverDescript
  */
 export const TWILIO_KEYS = { accountSid: "TWILIO_ACCOUNT_SID", keySid: "TWILIO_API_KEY_SID", secret: "TWILIO_API_KEY_SECRET", from: "TWILIO_FROM" } as const;
 
-/** The setup of the Twilio call channel: the credentials of the account and the number that calls. */
+/**
+ * The name of the key of `secrets.env` that holds the Twilio number of the texts. A text to a phone in the United States
+ * needs a registered sender: the phone of a 10DLC campaign or a verified toll-free phone. Without the key, the instance sends no text.
+ */
+export const TWILIO_TEXT_FROM_KEY = "TWILIO_TEXT_FROM";
+
+/** The setup of the Twilio channels: the credentials of the account, the number that calls and the number that texts. */
 export interface TwilioSetup {
   readonly credentials: TwilioCredentials;
   readonly from: string;
+  /** The number of the text channel and of the texts of the outage call, from the key `TWILIO_TEXT_FROM_KEY`. */
+  readonly textFrom?: string;
 }
 
 /**
- * This function gives the setup of the Twilio call channel from the secrets.
+ * This function gives the setup of the Twilio channels from the secrets.
  *
- * - With none of the keys of `TWILIO_KEYS`, it gives `undefined`. The instance then has no call channel.
+ * - With none of the keys of `TWILIO_KEYS`, it gives `undefined`. The instance then has no call channel and no text channel.
  * - With some keys and not all, or with a value of a bad form, it gives the problems. A problem names keys, and no value.
+ * - The key `TWILIO_TEXT_FROM_KEY` is optional. It needs the keys of `TWILIO_KEYS`.
  */
 export function twilioSetup(secret: SecretLookup): Result<TwilioSetup | undefined, readonly string[]> {
   const value = (name: string): string => secret(name) ?? "";
   const names = Object.values(TWILIO_KEYS);
   const missing = names.filter((name) => value(name) === "");
-  if (missing.length === names.length) return ok(undefined);
+  const textFrom = value(TWILIO_TEXT_FROM_KEY);
+  if (missing.length === names.length) {
+    return textFrom === "" ? ok(undefined) : err([`The secret store has a value for ${TWILIO_TEXT_FROM_KEY}, and no keys of Twilio. Give the keys of Twilio, or remove the value.`]);
+  }
   if (missing.length > 0) return err([`The secret store has some keys of Twilio, and it has no value for ${missing.join(", ")}. Give all the keys, or none.`]);
   const setup: TwilioSetup = {
     credentials: { accountSid: value(TWILIO_KEYS.accountSid), keySid: value(TWILIO_KEYS.keySid), secret: value(TWILIO_KEYS.secret) },
     from: value(TWILIO_KEYS.from),
+    ...(textFrom === "" ? {} : { textFrom }),
   };
-  const problems = twilioSetupProblems(setup.credentials, setup.from);
+  const problems = twilioSetupProblems(setup.credentials, setup.from, setup.textFrom);
   return problems.length === 0 ? ok(setup) : err(problems.map((problem) => `The keys of Twilio have a problem: ${problem}`));
 }
 
 /**
- * This function gives the channels that the instance sends on: Pushover, and the Twilio call channel when the secrets have
- * its keys. A step on another channel of `INSTANCE_CHANNELS` stops the start.
+ * This function gives the channels that the instance sends on. Pushover is always one. The Twilio call channel needs the keys of
+ * `TWILIO_KEYS`, and the text channel also needs `TWILIO_TEXT_FROM_KEY`. A step on another channel of `INSTANCE_CHANNELS` stops the start.
  */
 export function instanceSenders(secret: SecretLookup): readonly ChannelId[] {
   const twilio = twilioSetup(secret);
-  return twilio.tag === "ok" && twilio.value !== undefined ? [CHANNEL_ID, TWILIO_CHANNEL] : [CHANNEL_ID];
+  if (twilio.tag === "err" || twilio.value === undefined) return [CHANNEL_ID];
+  return twilio.value.textFrom === undefined ? [CHANNEL_ID, TWILIO_CHANNEL] : [CHANNEL_ID, TWILIO_CHANNEL, TEXT_CHANNEL_ID];
 }
 
 /** The tsunami warning centers of the NWS. Each center is a source of its own, with its own health. */
@@ -592,7 +610,8 @@ export function openInstance(options: InstanceOptions): Instance {
     ...(twilio?.gates === undefined ? [] : [channelQuota(TWILIO_CHANNEL, twilio.gates.gate, SPEND_UNIT)]),
   ];
   const balances = twilio?.watch === undefined ? [] : [twilio.watch];
-  const channels = twilio === undefined ? [pushover] : [pushover, twilio.channel];
+  // The text channel takes its units from the gates of the call channel. Thus the quota of the call channel counts the texts too.
+  const channels = twilio === undefined ? [pushover] : [pushover, twilio.channel, ...(twilio.text === undefined ? [] : [twilio.text])];
   // The labels of the places go only into the why line of each message. The policy of the configuration replaces the default policy of the core.
   const delivery: DeliveryOptions = {
     recipients,
@@ -740,26 +759,33 @@ function outageWorker(options: InstanceOptions, limit: Duration): OutageDeployWo
   });
 }
 
-/** The Twilio call channel of an instance, its gates of the spend and the watch of its balance. */
+/** The Twilio call channel of an instance, its text channel, the gates of the spend and the watch of the balance. */
 interface TwilioParts {
   readonly channel: ChannelProcedures;
+  /** The text channel, when the secrets have the number of the texts. */
+  readonly text?: ChannelProcedures;
   readonly gates?: SpendGates;
   readonly watch?: BalanceWatch;
 }
 
 /**
- * This function makes the Twilio call channel when the secrets have its keys. The function `instanceProblems` checked the
- * keys before. A spend entry gives the cap and the watch of the balance. Its floor is in the currency of the account.
+ * This function makes the Twilio channels when the secrets have their keys. The function `instanceProblems` checked the keys before.
+ * A spend entry gives one cap of the two channels and the watch of the balance. Its floor is in the currency of the account.
  */
 function twilioChannel(options: InstanceOptions, spend: readonly SpendConfig[] | undefined): TwilioParts | undefined {
   const setup = twilioSetup(options.secret);
   if (setup.tag === "err" || setup.value === undefined) return undefined;
-  const { credentials, from } = setup.value;
+  const { credentials, from, textFrom } = setup.value;
   const fetch = options.twilio;
   if (fetch === undefined) throw new Error("The secret store has the keys of Twilio, and the instance has no fetch for the call channel.");
   const now = (): number => options.wall.now();
   const entry = spendEntryOf(twilioCallDescriptor(), spend);
-  if (entry === undefined) return { channel: createTwilioCallChannel({ credentials, from, fetch, now }) };
+  // The text channel takes the gates of the call channel, with the units of one text.
+  const text = (gates?: SpendGates): { readonly text?: ChannelProcedures } =>
+    textFrom === undefined
+      ? {}
+      : { text: createTwilioTextChannel({ credentials, from: textFrom, fetch, now, ...(gates === undefined ? {} : { spend: { ...gates, units: spendUnits(TWILIO_TEXT_COST_USD) } }) }) };
+  if (entry === undefined) return { channel: createTwilioCallChannel({ credentials, from, fetch, now }), ...text() };
   const store = options.spendStore;
   if (store === undefined) throw new Error(`The configuration has a spend entry for ${entry.provider}, and the instance has no store for its count.`);
   // The key names the provider, not the account SID.
@@ -767,10 +793,10 @@ function twilioChannel(options: InstanceOptions, spend: readonly SpendConfig[] |
   const watch = balanceWatch({
     provider: entry.provider,
     title: "Twilio",
-    channels: [TWILIO_CHANNEL],
+    channels: textFrom === undefined ? [TWILIO_CHANNEL] : [TWILIO_CHANNEL, TEXT_CHANNEL_ID],
     floor: entry.floor,
     read: (signal) => readTwilioBalance({ credentials, fetch }, signal),
   });
   const channel = createTwilioCallChannel({ credentials, from, fetch, now, spend: { ...gates, units: spendUnits(TWILIO_CALL_COST_USD) } });
-  return { channel, gates, watch };
+  return { channel, gates, watch, ...text(gates) };
 }
