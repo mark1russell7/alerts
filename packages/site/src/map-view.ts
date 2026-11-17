@@ -9,7 +9,8 @@
 import { kindLabel, MAP_VIEW, type MapIncident, type MapPlace, type MapRegion, type MapShape, type MapView, type Position } from "@mark1russell7/alerts";
 import { h } from "@mark1russell7/site-pages/chrome";
 import { geoArea, geoCircle, geoMercator, geoPath, type ExtendedGeometryCollection, type GeoGeometryObjects, type GeoPath } from "d3-geo";
-import { LEVEL_WORDS, levelChip, s } from "./draw.ts";
+import { LEVEL_WORDS, levelChip, s, statusChip } from "./draw.ts";
+import { dashText, shownStatuses, STATUS_LOOKS, statusLook } from "./status.ts";
 
 /** The width of the view box of the map. The core simplifies the basemap for this view box. */
 export const MAP_WIDTH = MAP_VIEW.width;
@@ -71,11 +72,36 @@ export function geometryOf(shape: MapShape): GeoGeometryObjects {
 
 const collection = (geometries: GeoGeometryObjects[]): ExtendedGeometryCollection => ({ type: "GeometryCollection", geometries });
 
-/** This function gives the classes of an incident: its level, and `selected` or `dim` when an incident is selected. */
+/**
+ * This function gives the classes of an incident: its level, and `selected` or `dim` when an incident is selected.
+ * An incident with a status other than `actual` also has `status` and the name of its status.
+ */
 function incidentClass(incident: MapIncident, selected: string | undefined): string {
   const state = selected === undefined ? "" : selected === incident.anchor ? " selected" : " dim";
-  return `incident level-${incident.level}${state}`;
+  const status = incident.status === "actual" ? "" : ` status status-${incident.status}`;
+  return `incident level-${incident.level}${status}${state}`;
 }
+
+/**
+ * This function gives the words of an incident: its kind and its level, for example `Flood warning: Urgent`.
+ * An incident with a status other than `actual` has the word of its status first, for example `Test. Monthly test: No message`.
+ */
+export function incidentTitle(incident: Pick<MapIncident, "status" | "kind" | "level">): string {
+  const words = `${incident.kind.label}: ${LEVEL_WORDS[incident.level]}`;
+  const look = statusLook(incident.status);
+  return look === undefined ? words : `${look.word}. ${words}`;
+}
+
+/**
+ * The distance between the middle of an incident and the word of its status, in the units of the view box.
+ * Thus the word is below a name of a region on the same middle.
+ */
+const STATUS_DROP = 34;
+/**
+ * The sizes of the word of a status, in the units of the view box: the width of one letter, the space at each side
+ * of the word, the height of its box and the radius of a corner. The text has the width of its letters exactly.
+ */
+const STATUS_WORD = { letter: 13, space: 10, height: 34, corner: 8 } as const;
 
 /** This function gives the words of a place for a reader of the screen: its label, its level and its gaps. */
 export function placeTitle(place: MapPlace): string {
@@ -120,29 +146,57 @@ export function mapNodes(view: MapView, options: Omit<MapOptions, "select"> & { 
     collection(fitted),
   );
   const path: GeoPath = geoPath(projection).digits(1);
-  const paths = (shapes: readonly MapShape[], className: string): MapNode[] =>
+  const paths = (shapes: readonly MapShape[], className: string, more: MapNode["attrs"] = {}): MapNode[] =>
     shapes.flatMap((shape) => {
       const d = path(geometryOf(shape));
-      return d === null ? [] : [node("path", { class: className, d })];
+      return d === null ? [] : [node("path", { class: className, d, ...more })];
     });
   const round = (value: number): number => Math.round(value * 10) / 10;
 
   // Each region is a group with a title, so a hover on its shapes names the region.
   const regions = basemap.map((region) => node("g", { class: "region", "data-code": region.code.code }, node("title", {}, regionTitle(region)), ...paths(region.shapes, "zone")));
   const children: MapNode[] = [node("g", { class: "basemap" }, ...regions)];
+  const words: MapNode[] = [];
   for (const incident of [...view.incidents].reverse()) {
+    const look = statusLook(incident.status);
+    // The edge of a status other than actual has the dash of the status. The lengths of the dash are in pixels of the screen.
+    const edge = look === undefined ? {} : { "stroke-dasharray": dashText(look), "vector-effect": "non-scaling-stroke" };
     const group = node(
       "g",
       {
         class: incidentClass(incident, options.selected),
         "data-anchor": incident.anchor,
-        ...(options.selectable === true ? { tabindex: 0, role: "button", "aria-label": `${incident.kind.label}, ${LEVEL_WORDS[incident.level]}` } : {}),
+        ...(options.selectable === true ? { tabindex: 0, role: "button", "aria-label": incidentTitle(incident) } : {}),
       },
-      node("title", {}, `${incident.kind.label}: ${LEVEL_WORDS[incident.level]}`),
-      ...paths(incident.shapes, "area"),
+      node("title", {}, incidentTitle(incident)),
+      ...paths(incident.shapes, "area", edge),
     );
     children.push(options.selectable === true ? { ...group, select: incident.anchor } : group);
+    if (look === undefined || incident.shapes.length === 0) continue;
+    const [x, y] = path.centroid(collection(incident.shapes.map(geometryOf)));
+    if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+    const at = { x: round(x), y: Math.min(round(y + STATUS_DROP), MAP_HEIGHT - PAD) };
+    const width = look.word.length * STATUS_WORD.letter;
+    // The word is in a box with a dashed edge, as the word on the globe is. Thus a reader does not take a real alert below the word for a test.
+    const dim = options.selected !== undefined && options.selected !== incident.anchor;
+    words.push(
+      node(
+        "g",
+        { class: dim ? "status-word dim" : "status-word", "data-status": incident.status },
+        node("rect", {
+          class: "status-box",
+          x: round(at.x - width / 2 - STATUS_WORD.space),
+          y: round(at.y - STATUS_WORD.height / 2),
+          width: width + 2 * STATUS_WORD.space,
+          height: STATUS_WORD.height,
+          rx: STATUS_WORD.corner,
+        }),
+        node("text", { class: "status-label", "data-status": incident.status, x: at.x, y: at.y, textLength: width, lengthAdjust: "spacingAndGlyphs" }, look.word),
+      ),
+    );
   }
+  // The word of a status is above each incident, so a higher incident does not hide it.
+  children.push(...words);
   // The name of a region is above the incidents, and below the places and their labels.
   if (options.regionNames === true) {
     for (const region of basemap) {
@@ -211,6 +265,20 @@ export function drawUnshaped(view: MapView): HTMLElement | null {
   );
 }
 
+/**
+ * This function puts an entry in the legend for each status other than `actual` that the map of a view shows.
+ * The entries are before the entry of the coverage gap. An entry has the dash of its status and the word of its status.
+ */
+export function drawStatusLegend(legend: Element, view: MapView): void {
+  for (const old of legend.querySelectorAll("li[data-status]")) old.remove();
+  const next = legend.querySelector(".swatch.gap")?.closest("li") ?? null;
+  for (const status of shownStatuses(view)) {
+    const look = STATUS_LOOKS[status];
+    const edge = s("rect", { x: 1.5, y: 1.5, width: 13, height: 13, rx: 2.5, "stroke-dasharray": dashText(look), "vector-effect": "non-scaling-stroke" });
+    legend.insertBefore(h("li", { "data-status": status }, s("svg", { class: "swatch status", viewBox: "0 0 16 16", "aria-hidden": "true" }, edge), look.word), next);
+  }
+}
+
 /** This function writes a time of an incident in the local time of the reader, for example `Nov 15, 06:30 PM`. */
 function localTime(at: number): string {
   return new Date(at).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
@@ -233,7 +301,7 @@ export function drawIncidentList(view: MapView, selected: string | undefined, se
     const card = h(
       "article",
       { class: `incident-card${chosen ? " selected" : ""}`, "data-anchor": incident.anchor, tabindex: 0, "aria-current": chosen ? "true" : null },
-      h("header", {}, h("h4", {}, incident.kind.label), levelChip(incident.level)),
+      h("header", {}, h("h4", {}, incident.kind.label), statusChip(incident.status), levelChip(incident.level)),
       h("p", { class: "facts" }, incidentFacts(incident, view)),
     );
     card.addEventListener("click", () => select(incident.anchor));

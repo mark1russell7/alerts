@@ -35,7 +35,24 @@ describe("the code of the demo", () => {
   it("makes no network call: it only reads the files of the site", () => {
     expect(SOURCES.length).toBeGreaterThan(3);
     expect(SOURCES).toContain(LOCAL_ENTRY);
-    for (const call of ["fetch(", "XMLHttpRequest", "WebSocket", "EventSource", "sendBeacon", "import("]) expect(demoCode).not.toContain(call);
+    for (const call of ["fetch(", "XMLHttpRequest", "WebSocket", "EventSource", "sendBeacon"]) expect(demoCode).not.toContain(call);
+  });
+
+  it("loads one file after its start: the code of the globe, which is a file of the site", () => {
+    // The text has "import(" two times: the type of the module, and the load.
+    expect(code.split("import(")).toHaveLength(3);
+    expect(read("globe-load.ts").split('import("./globe-stage.ts")')).toHaveLength(3);
+  });
+
+  it("has the code of the globe in no file that a page loads at its start", () => {
+    // A value that a file imports from these modules brings the code of the globe into the file.
+    const GLOBE_CODE = /^import (?!type\b)[^;]*from "(?:\.\/globe-stage\.ts|@mark1russell7\/visuals\/(?:three|globe|labels)|three(?:\/[^"]*)?)";/m;
+    expect('import { startGlobe } from "./globe-stage.ts";').toMatch(GLOBE_CODE);
+    expect('import { createGlobe, type GlobeStyle } from "@mark1russell7/visuals/globe";').toMatch(GLOBE_CODE);
+    expect('import type { GlobeArea, GlobePoint } from "@mark1russell7/visuals/globe";').not.toMatch(GLOBE_CODE);
+    expect('import { stageSupported } from "@mark1russell7/visuals";').not.toMatch(GLOBE_CODE);
+    // Only the module of the globe has it, and a page gets this module from the load.
+    expect(SOURCES.filter((name) => GLOBE_CODE.test(read(name)))).toEqual(["globe-stage.ts"]);
   });
 
   it("reads no configuration from the address of the page", () => {
@@ -55,7 +72,7 @@ describe("the local page", () => {
   it("calls fetch once, with the path of readMap, and names no URL with a host", () => {
     expect(entry.split("fetch(")).toHaveLength(2);
     expect(entry).toContain("readMap((path) => fetch(path, {");
-    for (const text of [entry, read("map-read.ts"), read("map-view.ts"), read("globe-view.ts"), read("globe-stage.ts"), local]) expect(text).not.toMatch(/https?:|\/\/[a-z0-9.-]+[.:]/i);
+    for (const text of [entry, read("map-read.ts"), read("map-view.ts"), read("globe-view.ts"), read("globe-stage.ts"), read("globe-load.ts"), local]) expect(text).not.toMatch(/https?:|\/\/[a-z0-9.-]+[.:]/i);
     for (const call of ["XMLHttpRequest", "WebSocket", "EventSource", "sendBeacon", "import("]) expect(entry).not.toContain(call);
   });
 

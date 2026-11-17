@@ -12,6 +12,7 @@ import { createLabels, type StageLabel } from "@mark1russell7/visuals/labels";
 import { createStage, stackContents, type Stage } from "@mark1russell7/visuals/three";
 import { areaKind, GAP_KIND, globeParts, incidentRecord, outlineKind, pinKind, ZONE_KIND, type GlobeName, type GlobeParts, type GlobePartsOptions, type GlobeValue } from "./globe-view.ts";
 import { mapSummary } from "./map-view.ts";
+import { OTHER_STATUSES, STATUS_LOOKS } from "./status.ts";
 
 /** The elements of the page that the globe uses. */
 export interface GlobeElements {
@@ -81,6 +82,8 @@ export function globeTheme(): GlobeTheme {
   for (const level of ASSESSED_LEVELS) {
     const tone = color(LEVEL_COLORS[level]);
     styles[areaKind(level)] = { fill: tone, opacity: AREA_OPACITY[level], line: tone };
+    // An incident with a status other than actual has no fill. Its edge keeps the color of its level, with the dash of its status.
+    for (const status of OTHER_STATUSES) styles[areaKind(level, status)] = { line: tone, dash: STATUS_LOOKS[status].dash };
     styles[outlineKind(level)] = { line: tone };
     styles[pinKind(level)] = { fill: tone, line: page };
   }

@@ -7,14 +7,15 @@
 
 import type { MapPayload } from "@mark1russell7/alerts";
 import { byId, setupTheme } from "@mark1russell7/site-pages/chrome";
-import { startGlobe } from "./globe-stage.ts";
+import { loadGlobe } from "./globe-load.ts";
 import { readLine, readMap, READ_EVERY_MS } from "./map-read.ts";
-import { drawIncidentList, drawMapView, drawUnshaped } from "./map-view.ts";
+import { drawIncidentList, drawMapView, drawStatusLegend, drawUnshaped } from "./map-view.ts";
 
 setupTheme(byId<HTMLButtonElement>("theme"), "theme");
 
 const mapBox = byId("map");
 const list = byId("incidents");
+const legend = byId("legend");
 const unshaped = byId("unshaped");
 const problem = byId("problem");
 const line = byId("read");
@@ -28,10 +29,18 @@ const time = (at: number): string => new Date(at).toLocaleTimeString(undefined, 
 
 // A pick on the globe selects its incident. The camera stays, because the person looks at the incident.
 // The draw also puts the mark of the selection on the incident, when the pick was a place or a region.
-const globe = startGlobe({ box: byId("globe"), tools: byId("globe-tools"), words: byId("words"), whole: byId<HTMLButtonElement>("whole") }, (anchor) => {
-  selected = anchor;
-  draw(false);
-});
+// The code of the globe is a file of the site. It comes after the first picture of the page, and then the page draws again.
+const globe = loadGlobe(
+  { box: byId("globe"), tools: byId("globe-tools"), words: byId("words"), whole: byId<HTMLButtonElement>("whole") },
+  (anchor) => {
+    selected = anchor;
+    draw(false);
+  },
+  {},
+  () => {
+    draw(false);
+  },
+);
 
 /** This function selects an incident of the list or of the flat map. A second selection of the incident removes the selection. */
 function select(anchor: string): void {
@@ -51,6 +60,8 @@ function draw(move: boolean): void {
   const onGlobe = globe.show(payload, selected, move);
   mapBox.hidden = onGlobe;
   mapBox.replaceChildren(...(onGlobe ? [] : [drawMapView(view, { basemap: payload.basemap, ...(selected === undefined ? {} : { selected }), select })]));
+  // The legend names each status other than actual that the map shows.
+  drawStatusLegend(legend, view);
   list.replaceChildren(drawIncidentList(view, selected, select));
   const codes = drawUnshaped(view);
   unshaped.replaceChildren(...(codes === null ? [] : [codes]));

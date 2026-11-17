@@ -2,8 +2,8 @@ import { byId, copyText, h, setupTheme } from "@mark1russell7/site-pages/chrome"
 import { COVERAGE_KINDS, FETCHES, FIRST_FETCH, PEOPLE, PLACES, SOURCES, STEPS } from "./demo.ts";
 import { frameMap } from "./demo-map.ts";
 import { clock, stepLabel } from "./explain.ts";
-import { startGlobe } from "./globe-stage.ts";
-import { drawMapView } from "./map-view.ts";
+import { loadGlobe } from "./globe-load.ts";
+import { drawMapView, drawStatusLegend } from "./map-view.ts";
 import { replay } from "./replay.ts";
 import { counts, drawIncidents, drawLevels, drawMessage, drawSources } from "./view.ts";
 
@@ -32,13 +32,17 @@ const mapBox = byId("map");
 
 // The map is a globe when the browser has WebGL 2. A pick on the globe selects its incident, and a pick on no incident selects nothing.
 // The made-up world has only four zones, so the map also shows the name of each zone.
-const globe = startGlobe(
+// The code of the globe comes after the first picture of the page. Then the page draws again.
+const globe = loadGlobe(
   { box: byId("globe"), tools: byId("globe-tools"), words: byId("words"), whole: byId<HTMLButtonElement>("whole") },
   (anchor) => {
     selected = anchor;
     draw(false);
   },
   { regionNames: true },
+  () => {
+    draw(false);
+  },
 );
 
 frames.forEach((frame, at) => {
@@ -96,6 +100,8 @@ function draw(move: boolean): void {
   const onGlobe = globe.show(payload, selected, move);
   mapBox.hidden = onGlobe;
   mapBox.replaceChildren(...(onGlobe ? [] : [drawMapView(payload.view, { basemap: payload.basemap, regionNames: true, ...(selected === undefined ? {} : { selected }), select })]));
+  // The legend names each status other than actual that the map shows.
+  drawStatusLegend(byId("legend"), payload.view);
   byId("levels").replaceChildren(drawLevels(frame));
   byId("sources").replaceChildren(drawSources(frame));
   byId("incidents").replaceChildren(drawIncidents(frame, selected, select));

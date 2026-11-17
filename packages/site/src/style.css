@@ -392,6 +392,37 @@ summary:focus-visible,
   font-style: italic;
 }
 
+/* The word of a status is a tag with a dashed edge, as the chip of the status in the lists. */
+.globe-box .visuals-label[data-kind^="status-"] {
+  outline: 1px dashed currentColor;
+  outline-offset: -1px;
+  font-weight: 650;
+}
+
+.globe-box .visuals-label[data-kind^="status-"]:not(.visuals-label-hovered, .visuals-label-selected) {
+  background: color-mix(in srgb, var(--page) 80%, transparent);
+  text-shadow: none;
+}
+
+/* The code of the globe is on its way. The text comes after a short time, so a fast load shows no text. */
+.globe-box[aria-busy="true"]::after {
+  content: "The globe starts.";
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--quiet);
+  font-size: 0.875rem;
+  opacity: 0;
+  animation: show-late 0s 0.8s forwards;
+}
+
+@keyframes show-late {
+  to {
+    opacity: 1;
+  }
+}
+
 .globe-box canvas:focus-visible {
   outline: 2px solid var(--link);
   outline-offset: -2px;
@@ -453,12 +484,47 @@ summary:focus-visible,
   fill-opacity: 0.16;
   stroke: var(--tone);
   stroke-width: 2;
-  stroke-dasharray: 10 8;
 }
 
 .map .incident.selected .area {
   fill-opacity: 0.26;
   stroke-width: 4;
+}
+
+/* An incident with a status other than actual: no fill, and the dash of its status. The fill stays, with no color, so a click in the area selects the incident. */
+.map .incident.status .area {
+  fill-opacity: 0;
+  stroke-width: 1.5px;
+}
+
+.map .incident.status.selected .area {
+  fill-opacity: 0;
+  stroke-width: 3px;
+}
+
+/* The word of a status is in a box with a dashed edge, as the word on the globe is. Thus it is not a part of a real alert below it. */
+.map .status-word {
+  pointer-events: none;
+}
+
+.map .status-word.dim {
+  opacity: 0.55;
+}
+
+.map .status-box {
+  fill: var(--page);
+  fill-opacity: 0.86;
+  stroke: var(--ink);
+  stroke-width: 1px;
+  stroke-dasharray: 3 2;
+  vector-effect: non-scaling-stroke;
+}
+
+.map .status-label {
+  fill: var(--ink);
+  font: 650 22px system-ui, sans-serif;
+  text-anchor: middle;
+  dominant-baseline: central;
 }
 
 .map .incident.dim {
@@ -501,9 +567,15 @@ summary:focus-visible,
   background: color-mix(in srgb, var(--none) 30%, transparent);
 }
 
-.swatch.test {
-  border-style: dashed;
+/* The entry of a status: an SVG with the dash of the status, and no fill. */
+.swatch.status {
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
   background: none;
+  fill: none;
+  stroke: var(--none);
+  stroke-width: 2px;
 }
 
 .swatch.level-life-safety { border-color: var(--ls); background: color-mix(in srgb, var(--ls) 35%, transparent); }
@@ -525,7 +597,7 @@ summary:focus-visible,
 
 .chip.live { border-color: var(--ok); color: var(--ok); }
 .chip.ended { color: var(--quiet); }
-.chip.test { border-style: dashed; }
+.chip.status { border-style: dashed; }
 .chip.level-life-safety { border-color: var(--ls); color: var(--ls); font-weight: 650; }
 .chip.level-urgent { border-color: var(--urgent); color: var(--urgent); font-weight: 650; }
 .chip.level-notice { border-color: var(--notice); color: var(--notice); font-weight: 650; }
@@ -1020,6 +1092,13 @@ main.local {
   .map .region-label {
     font-size: 38px;
     stroke-width: 9px;
+  }
+
+  /* The word of a status and its box grow together, about the middle of the box. */
+  .map .status-word {
+    transform-box: fill-box;
+    transform-origin: center;
+    transform: scale(1.6);
   }
 
   .live-map .pin circle {

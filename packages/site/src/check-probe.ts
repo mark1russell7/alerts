@@ -55,6 +55,10 @@ const texts = (list: readonly Element[]): string[] => list.map((one) => one.text
 const homes = (): string[] => texts(canvas === null ? $$("#map text.place-label") : names().filter((name) => (name.getAttribute("data-kind") ?? "").startsWith("pin-")));
 /** The names of the zones on the map. */
 const zones = (): string[] => texts(canvas === null ? $$("#map text.region-label") : names().filter((name) => name.getAttribute("data-kind") === "zone"));
+/** The words of the statuses in the legend. The legend has an entry only for a status that the map shows. */
+const statuses = (): string[] => texts($$("#legend li[data-status]"));
+/** The words of the statuses on the map: a text on the flat map, and a name on the globe. A name of the globe can be out of the picture when a home needs its position. */
+const statusWords = (): string[] => texts(canvas === null ? $$("#map text.status-label") : $$('#globe .visuals-label[data-kind^="status-"]'));
 /** The count of the homes that the map shows at a level. */
 const homesAt = (level: string): number => (canvas === null ? $$(`#map g.pin.level-${level}`) : names().filter((name) => name.getAttribute("data-kind") === `pin-${level}`)).length;
 /** The line of the page that tells the part of the globe below the pointer. */
@@ -139,8 +143,25 @@ const gaps = async (): Promise<number> => {
   return found.length;
 };
 
+// The files of the page. The code of the globe is large, so it is not in the files that the page loads at its start.
+// The page puts the mark `globe-code` on its time line when it starts the load of this code.
+const mark = performance.getEntriesByName("globe-code", "mark")[0];
+const scripts = (performance.getEntriesByType("resource") as PerformanceResourceTiming[]).filter((file) => new URL(file.name).pathname.endsWith(".js"));
+const first = scripts.filter((file) => mark === undefined || file.startTime < mark.startTime);
+const firstNames = new Set(first.map((file) => file.name));
+const later = scripts.filter((file) => mark !== undefined && file.startTime >= mark.startTime && !firstNames.has(file.name));
+const size = (files: readonly PerformanceResourceTiming[]): number => files.reduce((sum, file) => sum + file.decodedBodySize, 0);
+/** This value is true when the browser tells the size of each file. With no size, a check of the sizes fails. */
+const sized = first.length > 0 && scripts.every((file) => file.decodedBodySize > 0);
+const sizes = { first: size(first), later: size(later), files: scripts.map((file) => [new URL(file.name).pathname, file.decodedBodySize]) };
+
 // The first view: the step at index 4, with the wind incident and the flood incident.
 check("the page shows the map as a globe or as a flat map", picture, "The map has no canvas and no SVG.");
+if (canvas !== null) {
+  check("the code of the globe comes after the start files, and it is the larger part of the code", sized && later.length > 0 && size(later) > size(first), sizes);
+} else if (document.createElement("canvas").getContext("webgl2") === null) {
+  check("a browser with no WebGL 2 does not load the code of the globe", sized && mark === undefined && later.length === 0, sizes);
+}
 check("the map has a height of 150 pixels or more", (picture?.getBoundingClientRect().height ?? 0) >= 150, picture?.getBoundingClientRect().height);
 check("the rail shows the 10 steps", await until(() => $$(".rail .step").length === 10), $$(".rail .step").length);
 // The rail and the label count the steps from 1. The data-step indexes count from 0.
@@ -159,6 +180,8 @@ check("two people are at life-safety for the flood", count("life-safety") === 2,
 check("the rule of Person B keeps the wind at notice", count("notice") === 1, count("notice"));
 check("the map has the two live incidents", live() === 2, summary());
 check("the map names the two homes", await until(() => homes().sort().join(", ") === "Home of A, Home of B"), homes());
+// Each incident of this step is a real alert, so the legend has no entry of a status.
+check("the legend has no status when each incident on the map is a real alert", statuses().length === 0, statuses());
 check("both homes are at life-safety on the map", homesAt("life-safety") === 2, homesAt("life-safety"));
 if (canvas === null) {
   check("the flat map names the four zones", zones().join(", ") === "Lake Shore, Harbor, Valley, Ridge", zones());
@@ -204,7 +227,17 @@ check("nobody is urgent after the cancel", count("urgent") === 0, count("urgent"
 
 // The test message reaches nobody.
 await goTo(7);
-check("the test message is an incident with its status", $$(".incident-card .chip.test").length === 1);
+check("the test message is an incident with its status", texts($$('.incident-card .chip.status[data-status="test"]')).join() === "Test", texts($$(".incident-card .chip.status")));
+// A test does not look like a real alert: the legend names the status, and the map writes its word on the area.
+check("the legend names the test while the map shows it", await until(() => statuses().join() === "Test"), statuses());
+check("the map writes the word of the test on its area", await until(() => statusWords().join() === "Test"), statusWords());
+if (canvas === null) {
+  const areas = $$("#map g.incident.status-test path.area");
+  const edges = areas.map((area) => area.getAttribute("stroke-dasharray"));
+  check("the flat map draws the test with a dashed edge and no fill", edges.length >= 4 && edges.every((edge) => edge === "6 4") && areas.every((area) => getComputedStyle(area).fillOpacity === "0"), edges);
+  const real = $$("#map g.incident:not(.status) path.area");
+  check("the flat map draws each real alert with a solid edge", real.length >= 1 && real.every((area) => getComputedStyle(area).strokeDasharray === "none"), real.length);
+}
 check("the test message adds no level", count("life-safety") === 2 && count("notice") === 1);
 
 // The all clear ends the flood.

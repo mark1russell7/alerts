@@ -5,7 +5,7 @@
 
 import type { Assessment, HealthState, Incident, Report } from "@mark1russell7/alerts";
 import { h } from "@mark1russell7/site-pages/chrome";
-import { LEVEL_WORDS, levelChip } from "./draw.ts";
+import { LEVEL_WORDS, levelChip, statusChip } from "./draw.ts";
 import { SOURCES } from "./demo.ts";
 import {
   changeText,
@@ -95,7 +95,7 @@ export function drawIncidents(frame: Frame, selected: string | undefined, select
         {},
         h("h4", {}, incident.kind.label),
         h("span", { class: `chip ${incident.live ? "live" : "ended"}` }, incident.live ? "Live" : "Ended"),
-        incident.status === "actual" ? null : h("span", { class: "chip test" }, `Status: ${incident.status}`),
+        statusChip(incident.status),
         levelChip(level),
       ),
       h("p", { class: "facts" }, `Severity ${incident.severity}, urgency ${incident.urgency}, certainty ${incident.certainty}. ${String(reports.length)} message${reports.length === 1 ? "" : "s"}.`),
