@@ -1,13 +1,35 @@
 import { fakeWallClock } from "@mark1russell7/algebra/clock";
-import { reportId, TOMBSTONE_LIFE, type ChannelId, type Delivery, type Observation, type ObservationId, type PersonId, type PlaceId, type Report, type ReportId, type SourceId, type SourceProcedures, type WatchedPlace } from "@mark1russell7/alerts";
+import {
+  DEFAULT_LINK_POLICY,
+  incidents,
+  linkRule,
+  RETENTION_HORIZON,
+  reportId,
+  route,
+  TOMBSTONE_LIFE,
+  type ChannelDescriptor,
+  type ChannelId,
+  type Delivery,
+  type Observation,
+  type ObservationId,
+  type PersonId,
+  type PlaceId,
+  type Recipient,
+  type Report,
+  type ReportId,
+  type Route,
+  type SourceId,
+  type SourceProcedures,
+  type WatchedPlace,
+} from "@mark1russell7/alerts";
 import { random, seedsFrom, type Random } from "@mark1russell7/rigor-generators";
 import { describe, expect, it } from "vitest";
 import { envelope, type RuntimeEvent } from "./events.ts";
 import { importOf, sharedItem } from "./exchange.ts";
 import { openRuntimeLog } from "./log.ts";
-import { retention, RETIRE_EVERY } from "./retention.ts";
+import { retention, retiredEvent, RETIRE_EVERY } from "./retention.ts";
 import { openRuntime } from "./runtime.ts";
-import { EMPTY_RUNTIME, fold, rebuild, type FoldContext, type RuntimeState } from "./state.ts";
+import { cancelledKeys, EMPTY_RUNTIME, fold, rebuild, type FoldContext, type RuntimeState } from "./state.ts";
 
 const T0 = Date.UTC(2026, 3, 1, 18, 0, 0);
 const SECOND = 1000;
@@ -19,6 +41,14 @@ const PUSHOVER = "pushover" as ChannelId;
 const PERSON = "person-1" as PersonId;
 const CONTEXT: FoldContext = { sources: [] };
 const KANSAS: WatchedPlace = { id: "place:a" as PlaceId, codes: [{ system: "ugc", code: "KSZ083" }], bufferKm: 0 };
+/** A person who watches the place in Kansas, with one push for a life-safety warning. The address is fake. */
+const RECIPIENT: Recipient = {
+  watch: { person: PERSON, places: [KANSAS.id], rules: [] },
+  policies: [{ level: "life-safety", steps: [{ channel: PUSHOVER, at: 0 }], exhaustedAfter: 20 * MINUTE }],
+  addresses: { pushover: { user: "fake-user" } },
+};
+/** A push channel that the escalation polls for an acknowledgment. */
+const POLLED: ChannelDescriptor = { id: PUSHOVER, title: "Pushover", dependsOn: ["provider:pushover"], uses: ["internet", "power"], breaksThrough: true, repeats: true, ack: "poll", maxTitle: 250, maxBody: 1024 };
 const SEEDS = seedsFrom(process.env["SEED"], [1, 2, 3, 4, 5, 6, 7, 8]);
 
 /** One tornado warning for a county of Kansas, sent at `sent`, that a copy received at `received`. */
@@ -97,6 +127,8 @@ function expectNoRetiredPart(state: RuntimeState): void {
   // A key with a live tombstone is not a cancel of the state.
   const keys = new Set(state.cancelTombstones.map((tombstone) => tombstone.key));
   expect(state.cancelled.filter((key) => keys.has(key))).toEqual([]);
+  // Each time of entry is the time of a key of cancelled.
+  expect(Object.keys(state.cancelledSince).filter((key) => !state.cancelled.includes(key))).toEqual([]);
 }
 
 describe("the fold of a retirement (AL-47)", () => {
@@ -180,6 +212,12 @@ describe("the fold of a retirement (AL-47)", () => {
     const later = foldAll([...log, retired(until + HOUR, [W2], until + HOUR + TOMBSTONE_LIFE), imported(cancelled("k1", T0 + 5 * SECOND))]);
     expect(later.cancelTombstones).toEqual([]);
     expect(later.cancelled).toEqual(["k1", "k9"]);
+  });
+
+  it("gives each cancelled key its own time of entry, and a step of the clock moves it", () => {
+    // The cancel of k1 is at T0 + 5 s. The step of 5 minutes after it moves its time of entry.
+    expect(at(firstRetirement - 1).cancelledSince).toEqual({ k1: T0 + 5 * SECOND + 5 * MINUTE });
+    expect(at(firstRetirement).cancelledSince).toEqual({});
   });
 
   it("moves each tombstone at a step of the clock, as each own instant", () => {
@@ -333,5 +371,86 @@ describe("retention", () => {
     expect(() => retention({ horizon: -1 })).toThrow("The horizon of the retention is -1");
     expect(() => retention({ life: Number.NaN })).toThrow("The life of the retention is NaN");
     expect(() => retention({ every: 0 })).toThrow("The interval of the retirements is 0");
+  });
+});
+
+describe("the retirement of an orphan key (AL-47)", () => {
+  const options = retention();
+  const link = linkRule(DEFAULT_LINK_POLICY);
+  // An own delivery of k1, and its cancel from the other copy.
+  const first: RuntimeEvent[] = [
+    started("run-a", T0),
+    fetched("fetch:1", T0 + SECOND, [report("w1", T0 + SECOND)]),
+    delivered("k1", W1, T0 + 3 * SECOND),
+    imported(cancelled("k1", T0 + 4 * SECOND)),
+  ];
+  const foldWith = (events: readonly RuntimeEvent[], at: number): readonly RuntimeEvent[] => {
+    const event = retiredEvent(foldAll(events), at, link, options);
+    if (event === undefined) throw new Error(`No retirement at ${String(at)}.`);
+    return [...events, event];
+  };
+
+  it("drops an old cancel that a new read of the other copy brings back, at the horizon after its entry", () => {
+    // The incident retires with its key. The retirement after the life of the tombstones drops the key tombstone.
+    const retiredAt = T0 + 8 * DAY;
+    const once = foldWith(first, retiredAt);
+    expect(once.at(-1)).toMatchObject({ reports: [W1], cancelled: ["k1"] });
+    const until = retiredAt + TOMBSTONE_LIFE;
+    // A recovery sets each read position to 0, thus the next read imports the old cancel again. The own delivery stays out.
+    const recovery: RuntimeEvent = { ...envelope("recovered", "recovered:q-1", until + 2 * HOUR), quarantine: "q-1", fault: "corrupt", read: 4, added: 4, lost: 0, whole: true, problems: [] };
+    const log = [...once, retired(until + HOUR, [], until + HOUR + TOMBSTONE_LIFE), recovery, imported(cancelled("k1", T0 + 4 * SECOND))];
+    const state = foldAll(log);
+    expect(state.cancelled).toEqual(["k1"]);
+    expect(state.cancelledSince).toEqual({ k1: until + 2 * HOUR });
+    expect(state.merge.deliveries).toEqual([]);
+    // One millisecond before the horizon after its entry, the orphan stays.
+    const due = until + 2 * HOUR + RETENTION_HORIZON;
+    expect(retiredEvent(state, due - 1, link, options)).toBeUndefined();
+    const dropped = foldWith(log, due);
+    expect(dropped.at(-1)).toMatchObject({ type: "retired", reports: [], cancelled: ["k1"] });
+    const after = foldAll(dropped);
+    expect(after.cancelled).toEqual([]);
+    expect(after.cancelTombstones).toEqual([{ key: "k1", until: due + TOMBSTONE_LIFE }]);
+    expectNoRetiredPart(after);
+    expect(rebuild(dropped, CONTEXT)).toEqual(after);
+  });
+
+  it("keeps an old cancel with a delivery in the merge, and a cancel with no time of entry", () => {
+    // The warning expires at T0 + 1 h, thus its incident retires at the horizon after that. The key is older before then.
+    const state = foldAll(first);
+    expect(state.cancelledSince).toEqual({ k1: T0 + 3 * SECOND });
+    expect(retiredEvent(state, T0 + 3 * SECOND + RETENTION_HORIZON + MINUTE, link, options)).toBeUndefined();
+    expect(retiredEvent(state, T0 + HOUR + RETENTION_HORIZON, link, options)).toMatchObject({ reports: [W1], cancelled: ["k1"] });
+    // An import before each own event has no own time, thus its key has no age.
+    const early = foldAll([imported(cancelled("k6", T0))]);
+    expect(early.cancelled).toEqual(["k6"]);
+    expect(early.cancelledSince).toEqual({});
+    expect(retiredEvent(early, T0 + 100 * DAY, link, options)).toBeUndefined();
+  });
+
+  it("keeps a retired orphan key cancelled for the routes, thus its late delivery gives no poll and no cancel", () => {
+    // The cancel of k9 comes from the copy b. The copy that made the delivery stays out of reach past the horizon.
+    const due = T0 + RETENTION_HORIZON;
+    const orphan = foldWith([started("run-c", T0), imported(cancelled("k9", T0 + SECOND))], due);
+    expect(orphan.at(-1)).toMatchObject({ reports: [], cancelled: ["k9"] });
+    // Then a read brings the delivery of k9, with its receipt, in a live warning.
+    const w9 = report("w9", due + MINUTE, due + MINUTE);
+    const late: RuntimeEvent = { ...envelope("delivery", "delivery:k9", due + 2 * MINUTE), delivery: { ...delivery("k9", w9.id, due + 2 * MINUTE), receipt: { receipt: "r-9" } } };
+    const state = foldAll([...orphan, fetched("fetch:9", due + MINUTE, [w9]), imported(late)]);
+    expect(state.cancelled).toEqual([]);
+    expect(state.merge.deliveries.map((one) => one.key)).toEqual(["k9"]);
+    expect(cancelledKeys(state)).toEqual(new Set(["k9"]));
+    const routesOf = (keys: ReadonlySet<string>, now: number): Route[] =>
+      route({ state: state.merge, incidents: incidents(state.merge, now, { link }), recipients: [RECIPIENT], places: [KANSAS], starts: state.starts, ends: state.escalationEnds, cancelled: keys, channels: [POLLED], now });
+    const keysOf = (routes: readonly Route[], part: (one: Route) => readonly Delivery[]): string[] => routes.flatMap((one) => part(one).map((item) => item.key));
+    // With the keys of `cancelled` only, the route polls k9 while the warning is live, and cancels k9 again after it.
+    const live = due + 3 * MINUTE;
+    // The warning expires one hour after it was sent.
+    const over = due + MINUTE + HOUR + MINUTE;
+    expect(keysOf(routesOf(new Set(state.cancelled), live), (one) => one.polls)).toEqual(["k9"]);
+    expect(keysOf(routesOf(new Set(state.cancelled), over), (one) => one.plan.cancels)).toEqual(["k9"]);
+    // With the keys of the tombstones too, k9 gets no poll and no cancel, and the expired incident has no route.
+    expect(keysOf(routesOf(cancelledKeys(state), live), (one) => one.polls)).toEqual([]);
+    expect(routesOf(cancelledKeys(state), over)).toEqual([]);
   });
 });

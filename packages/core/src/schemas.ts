@@ -666,6 +666,7 @@ export const channelDescriptorSchema: z.ZodType<ChannelDescriptor, ChannelDescri
       maxBody: z.number(),
       costUsd: z.number().exactOptional(),
       maxInFlight: z.number().int().min(1).exactOptional(),
+      exclusive: z.boolean().exactOptional(),
       why: whyLimitSchema.exactOptional(),
       address: z.array(addressFieldSchema).readonly().exactOptional(),
     })
@@ -1365,6 +1366,7 @@ export const alertConfigSchema: z.ZodType<AlertConfig, AlertConfig> = schemaOf<A
       link: linkPolicySchema.exactOptional(),
       outage: outageConfigSchema.exactOptional(),
       rankDelay: rankDelaysSchema.exactOptional(),
+      rankFloor: durationSchema.exactOptional(),
       assess: assessPolicySchema.exactOptional(),
     })
     .readonly(),

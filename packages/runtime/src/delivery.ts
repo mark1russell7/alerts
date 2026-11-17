@@ -41,7 +41,7 @@ import { errorMessage } from "@mark1russell7/text";
 import { compareCodeUnits } from "@mark1russell7/text/order";
 import { envelope, frameTag, type ChannelFailureKind, type RefusalKind, type RefusedEvent, type RuntimeEvent } from "./events.ts";
 import { limited } from "./limit.ts";
-import type { RuntimeState } from "./state.ts";
+import { cancelledKeys, type RuntimeState } from "./state.ts";
 import { earliest } from "./view.ts";
 
 /** The options of the delivery. The private configuration gives the recipients and the addresses. */
@@ -76,6 +76,8 @@ export interface DeliveryOptions {
   readonly rankDelay?: Duration;
   /** The wait of one rank for each level, from the configuration. */
   readonly rankDelays?: RankDelays;
+  /** The least wait of one rank before a step of an exclusive channel. Without it, the channels have no floor. */
+  readonly rankFloor?: Duration;
   /**
    * The longest wait between two stop probes of a down channel. The wait starts at `retry` and doubles after each
    * failed probe, up to this time. The default is `PROBE_LIMIT` or `retry`, the longer one.
@@ -356,11 +358,12 @@ export function createDispatcher(options: DeliveryOptions, context: DeliveryCont
           assess: options.assess,
           starts: state.starts,
           ends: state.escalationEnds,
-          cancelled: new Set(state.cancelled),
+          cancelled: cancelledKeys(state),
           channels: descriptors,
           rank: options.rank,
           rankDelay: options.rankDelay,
           rankDelays: options.rankDelays,
+          rankFloor: options.rankFloor,
           now: at,
         });
       };

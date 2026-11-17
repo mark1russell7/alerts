@@ -5,11 +5,11 @@
  */
 import { localTime } from "@mark1russell7/algebra/clock";
 import { canonicalHash } from "@mark1russell7/rigor-generators";
-import type { Address, AssessPolicy, ChannelDescriptor, ChannelId, EscalationPolicy, Instant, InterestGraph, NodeKey, PersonId, PersonWatch, PlaceId, Position, RegionCode, SourceId, WatchedPlace } from "./contracts.ts";
+import type { Address, AssessPolicy, ChannelDescriptor, ChannelId, Duration, EscalationPolicy, Instant, InterestGraph, NodeKey, PersonId, PersonWatch, PlaceId, Position, RegionCode, SourceId, WatchedPlace } from "./contracts.ts";
 import { recipientProblems, type Recipient } from "./delivery.ts";
 import type { TryChain } from "./chain.ts";
 import type { Expectation } from "./lateness.ts";
-import { rankDelayProblems, type RankDelays } from "./escalation.ts";
+import { rankDelayProblems, rankFloorProblems, type RankDelays } from "./escalation.ts";
 import type { LinkPolicy } from "./link.ts";
 import { placeNode, placeOfNode, type WhyLabels } from "./why.ts";
 
@@ -119,6 +119,11 @@ export interface AlertConfig {
    * entry for a level waits the default.
    */
   readonly rankDelay?: RankDelays;
+  /**
+   * The least wait of one rank before a step of an exclusive channel, as a call. Without it, the runtime gives its
+   * default. A phone takes one call at a time. Thus a copy with rank 1 waits for the call of rank 0 in its ledger.
+   */
+  readonly rankFloor?: Duration;
   /**
    * The policy of the assessment: the statuses, the tables of the levels and the relevance policy. When it is absent,
    * the default policy of the core applies. A policy here replaces the full default policy.
@@ -324,6 +329,7 @@ export function loadConfig(config: AlertConfig, channels: readonly ChannelDescri
   }
 
   problems.push(...rankDelayProblems(config.rankDelay ?? {}));
+  problems.push(...rankFloorProblems(config.rankFloor));
 
   const called = new Set<string>();
   for (const { person, chain } of config.outage?.people ?? []) {

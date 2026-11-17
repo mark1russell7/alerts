@@ -392,6 +392,16 @@ Thus when each copy is up, the copy after gets the delivery of the copy before, 
 
 A copy with a higher rank sends first when it sees the incident `RANK_DELAY` or more before the other copies. Then the other copies get its delivery, and they do not send.
 
+The field `rankDelay` of the configuration gives the wait of one rank for a level. With 0 for `life-safety`, each copy sends each life-safety push at once. Thus the worst alerts come once from each copy.
+
+A phone takes one call at a time. Thus a channel with `exclusive` in its descriptor has a rank floor: the least wait of one rank before its step. The wait of a step is `rank × max(rank delay of the level, floor of the channel)`. The Twilio call channel is exclusive. The default floor `RANK_FLOOR` is 31 seconds, for the worst case:
+
+- the copy with rank 0 sees the incident one exchange after the copy with rank 1: 5 seconds and 3 seconds
+- the call of rank 0 ends in the call limit, 10 seconds
+- a read in progress misses the delivery, thus two periods and one time limit bring it to rank 1: 13 seconds
+
+The field `rankFloor` of the configuration replaces the default floor. A push channel has no floor.
+
 ### The exchange
 
 Each copy reads the log of each other copy, and adds the shared events to its own log:
@@ -864,6 +874,7 @@ The package `@mark1russell7/alerts-channel-twilio` operates the chain on the ser
 - The monthly cap is the spend cap of Twilio in whole calls of 4 cents, at most 1000. Each call of the number counts, also a call of the instance.
 - The setup of the runtime refuses an outage call with no spend entry for Twilio. Each problem of the monthly cap names no count, because the spend cap is private.
 - A gap stays open: the spend gate of the instance does not count the calls of the Functions. Thus one month can have more calls than the cap, by the calls of the Functions.
+- The end of the gap is AL-57. The gate also reads the usage records of Twilio for the local month, in whole UTC days. It uses the larger of that amount and its own count, by the rule of `@mark1russell7/stack-spend`.
 - If the move of the status callback fails, the end has no `acked=1`. Then the chain calls again. That is the safe side.
 - Each handler gives the script of the call as data. The Function renders it with the TwiML builders of `@procedures/notify/twilio`.
 - `outageListOf` makes the list from the field `outage` of the private configuration and the recipients of `loadConfig`. The number of each person is the contact of the person on `twilio-call`.

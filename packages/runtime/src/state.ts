@@ -98,6 +98,11 @@ export interface RuntimeState {
   /** The keys of the deliveries with no more repeats, sorted. */
   readonly cancelled: readonly string[];
   /**
+   * The own time of entry of each key of `cancelled`: the time of the state at the fold of its cancel. A retirement drops
+   * a key with no delivery in the merge only at the horizon after this time. A key with no time of entry stays.
+   */
+  readonly cancelledSince: Readonly<Record<string, Instant>>;
+  /**
    * The tombstones of the cancelled keys of the retired incidents, in the order of their keys. A cancel of a key with a
    * tombstone stays out of `cancelled`. Thus a new read of the log of another copy does not bring back old keys.
    */
@@ -172,6 +177,7 @@ export const EMPTY_RUNTIME: RuntimeState = {
   cursors: {},
   lines: NO_SYSTEM_LINES,
   cancelled: [],
+  cancelledSince: {},
   cancelTombstones: [],
   starts: [],
   escalationEnds: [],
@@ -338,7 +344,7 @@ function foldRest(state: RuntimeState, event: RuntimeEvent, context: FoldContext
       return { ...base, own, escalationEnds: joinedEnds(own, state.imported) };
     }
     case "cancelled":
-      return hasCancel(state, event.delivery) ? base : { ...base, cancelled: [...state.cancelled, event.delivery].sort(compareCodeUnits) };
+      return hasCancel(state, event.delivery) ? base : { ...base, ...withCancel(state, event.delivery, base.time) };
     case "attempt":
       return { ...base, copies: { ...state.copies, [event.copy]: { key: event.key, channel: event.channel } } };
     case "delivery": {
@@ -384,7 +390,8 @@ function foldImport(state: RuntimeState, { event }: ImportEvent): RuntimeState {
     case "delivery":
       return { ...state, refusals: without(state.refusals, event.delivery.key) };
     case "cancelled":
-      return hasCancel(state, event.delivery) ? state : { ...state, cancelled: [...state.cancelled, event.delivery].sort(compareCodeUnits) };
+      // The instants of the import come from another clock. Thus the time of entry is the own time of the state.
+      return hasCancel(state, event.delivery) ? state : { ...state, ...withCancel(state, event.delivery, state.time) };
     case "escalation-end": {
       if (isRetired(state.own.merge.retired, event.end.incident)) return state;
       const imported = { ...state.imported, escalationEnds: [...state.imported.escalationEnds, event.end] };
@@ -414,6 +421,7 @@ function foldRetired(state: RuntimeState, event: RetiredEvent): RuntimeState {
     ...joined(own, imported),
     starts: state.starts.filter((start) => !gone.has(start.incident)),
     cancelled: state.cancelled.filter((key) => !cancelled.has(key)),
+    cancelledSince: withoutAll(state.cancelledSince, cancelled),
     cancelTombstones: retireKeys(state.cancelTombstones, event.cancelled, event.until, event.time),
   };
 }
@@ -424,6 +432,22 @@ function retireKeys(tombstones: readonly CancelTombstone[], keys: readonly strin
   for (const key of keys) ends.set(key, Math.max(ends.get(key) ?? Number.NEGATIVE_INFINITY, until));
   const live = [...ends].filter(([, end]) => end > at).map(([key, end]): CancelTombstone => ({ key, until: end }));
   return live.sort((left, right) => compareCodeUnits(left.key, right.key));
+}
+
+// The cancelled keys with one more key, and its own time of entry. A time that is not finite gives no entry, thus the key has no age.
+function withCancel(state: RuntimeState, key: string, at: Instant): Pick<RuntimeState, "cancelled" | "cancelledSince"> {
+  return {
+    cancelled: [...state.cancelled, key].sort(compareCodeUnits),
+    cancelledSince: Number.isFinite(at) ? { ...state.cancelledSince, [key]: at } : state.cancelledSince,
+  };
+}
+
+/**
+ * This function gives each key with no more repeats: the keys of `cancelled` and the keys of the tombstones. A key of a
+ * tombstone was cancelled before its incident or its orphan retired. Thus a late delivery of the key gives no repeat.
+ */
+export function cancelledKeys(state: Pick<RuntimeState, "cancelled" | "cancelTombstones">): ReadonlySet<string> {
+  return new Set([...state.cancelled, ...state.cancelTombstones.map((tombstone) => tombstone.key)]);
 }
 
 // The state has the cancel of the key, or the key has a tombstone. A cancel of a key with a tombstone changes no delivery.
@@ -492,6 +516,7 @@ export function shiftState(state: RuntimeState, size: Duration): RuntimeState {
     health,
     fetched,
     refusals,
+    cancelledSince: Object.fromEntries(Object.entries(state.cancelledSince).map(([key, at]) => [key, at + size])),
     cancelTombstones: state.cancelTombstones.map((tombstone) => ({ ...tombstone, until: tombstone.until + size })),
     starts: state.starts.map((start) => shiftEscalationStart(start, size)),
     steps: state.steps.map((step) => ({ ...step, at: step.at + size })),
@@ -503,6 +528,11 @@ export function shiftState(state: RuntimeState, size: Duration): RuntimeState {
 function waiting(refusals: Readonly<Record<string, Refusal>>, at: Instant): Readonly<Record<string, Refusal>> {
   const kept = Object.entries(refusals).filter(([, refusal]) => refusal.retryAt > at);
   return kept.length === Object.keys(refusals).length ? refusals : Object.fromEntries(kept);
+}
+
+// The record with no entry for each id of gone.
+function withoutAll<T>(record: Readonly<Record<string, T>>, gone: ReadonlySet<string>): Readonly<Record<string, T>> {
+  return Object.keys(record).some((id) => gone.has(id)) ? Object.fromEntries(Object.entries(record).filter(([id]) => !gone.has(id))) : record;
 }
 
 // The record with no entry for one id.

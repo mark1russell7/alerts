@@ -9,7 +9,7 @@ describe("the descriptor", () => {
   it("is a valid descriptor of a voice call with no acknowledgment of its own", () => {
     const descriptor = twilioCallDescriptor();
     expect(channelDescriptorSchema.parse(descriptor)).toEqual(descriptor);
-    expect(descriptor).toMatchObject({ id: CHANNEL_ID, breaksThrough: true, repeats: false, ack: "none", maxInFlight: 1, costUsd: TWILIO_CALL_COST_USD });
+    expect(descriptor).toMatchObject({ id: CHANNEL_ID, breaksThrough: true, repeats: false, ack: "none", maxInFlight: 1, exclusive: true, costUsd: TWILIO_CALL_COST_USD });
     expect(descriptor.id).toBe("twilio-call");
     expect(descriptor.dependsOn).toEqual(["provider:twilio", "provider:carrier"]);
     // A call takes the why line of the call limit: 12 words.

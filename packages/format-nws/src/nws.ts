@@ -1,13 +1,21 @@
 /**
- * The facts of the NWS as an authority of the alert system: the origin of its messages, and the
- * office ids of its VTEC strings.
+ * The facts of the NWS as an authority of the alert system. These facts are the origin of its messages, the coverage of
+ * the US warning system and the office ids of its VTEC strings.
  */
+
+import type { Area } from "@mark1russell7/alerts";
 
 /**
  * The origin of each NWS message, in each source. The NWS API, IPAWS, IEM and the weather radio give
  * copies of the NWS messages. The core counts the copies of one origin as one voice of the event.
  */
 export const NWS_ORIGIN = "nws";
+
+/**
+ * The countries and territories of the US warning system, as ISO 3166 codes. The NWS and IPAWS send alerts for each of
+ * them. The NWS API, IPAWS and NWWS-OI sources use this coverage.
+ */
+export const US_COVERAGE: readonly Area[] = ["US", "PR", "GU", "AS", "VI", "MP"].map((code) => ({ type: "code", system: "iso3166", code }));
 
 /** The VTEC offices that do not have the form `K` and three letters, by their ids of three letters. */
 const OWN_OFFICES: Readonly<Record<string, string>> = {
