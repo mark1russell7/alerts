@@ -163,6 +163,11 @@ export interface DrillSnapshot {
    * failure with the reason `no-start`. Thus the path of the life-safety warnings does not lose its test with no report.
    */
   readonly noStart?: boolean;
+  /**
+   * The start that the drill missed (`missedDrillAt`). Such a drill is a condition, a failure with the reason `missed`.
+   * The next run ends it.
+   */
+  readonly missed?: Instant;
 }
 
 /** One snapshot of the system. */
@@ -353,6 +358,7 @@ export function systemReports(lines: SystemLines, snapshot: SystemSnapshot, at: 
     const { copy, drill, run } = entry;
     if (entry.noStart === true) conditions.set(`${drillName(copy, drill.id)}/no-start`, drillNoStartCondition(copy, drill));
     if (run === undefined || run.drill !== drill.id) continue;
+    if (entry.missed !== undefined) conditions.set(`${drillName(copy, drill.id)}/missed`, drillMissedCondition(copy, drill, run, entry.missed));
     const verdict = drillVerdict(drill, run, at);
     if (verdict.state === "pending") conditions.set(drillName(copy, drill.id), drillRunCondition(copy, drill, run));
     else if (verdict.state === "failed") conditions.set(`${drillName(copy, drill.id)}/failed`, drillFailedCondition(copy, drill, run, verdict.why));
@@ -517,6 +523,25 @@ function drillFailedCondition(copy: string, drill: DrillConfig, run: DrillRun, w
     description: `The drill started at ${new Date(run.at).toISOString()} on the channel ${drill.path.channel}, from the copy ${copy}. A real warning on this path can also go without an answer.`,
     instruction: "Examine the channel, the app and the settings of the phone. The next run of the drill tests the path again.",
     parameters: { drill: [drill.id], copy: [copy], why: [why] },
+  };
+}
+
+function drillMissedCondition(copy: string, drill: DrillConfig, run: DrillRun, due: Instant): Condition {
+  const code = `${DRILL_KIND}.failed`;
+  return {
+    // The missed start comes from the last run, thus it stays the same until the next run ends the line.
+    facts: { copy, drill: drill.id, due, why: "missed" },
+    kind: { code, label: kindLabel(code) },
+    severity: "moderate",
+    urgency: "expected",
+    response: ["assess"],
+    onset: due,
+    areas: [],
+    about: [{ system: DRILL_SUBJECT, id: drill.id, label: `Drill ${drill.id}` }],
+    headline: `The drill ${drill.id} did not start at its time.`,
+    description: `The drill was due at ${new Date(due).toISOString()} on the channel ${drill.path.channel}, from the copy ${copy}. No run started in its window. The last run started at ${new Date(run.at).toISOString()}.`,
+    instruction: "Examine why the copy did not operate in the window of the drill. The next run of the drill tests the path again.",
+    parameters: { drill: [drill.id], copy: [copy], why: ["missed"] },
   };
 }
 
