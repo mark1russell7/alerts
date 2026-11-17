@@ -857,6 +857,8 @@ describe("the private configuration", () => {
     fails(drillConfigSchema, { ...drill, id: "Push Weekly" });
     fails(drillConfigSchema, { ...drill, path: { kind: "outage" } });
     fails(drillConfigSchema, { ...drill, every: -1 });
+    holds(drillConfigSchema, { ...drill, copies: ["home", "cloud-2"] });
+    fails(drillConfigSchema, { ...drill, copies: ["Home"] });
   });
 
   it("refuses a wrong form, and leaves the references to the load", () => {

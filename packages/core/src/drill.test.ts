@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ChannelDescriptor, ChannelId, PersonId, QuietWindow } from "./contracts.ts";
-import { drillDue, drillProblems, drillVerdict, joinRuns, lastRun, nextDrillAt, type DrillConfig, type DrillRun } from "./drill.ts";
+import { drillDue, drillInCopy, drillProblems, drillVerdict, joinRuns, lastRun, nextDrillAt, type DrillConfig, type DrillRun } from "./drill.ts";
 
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
@@ -113,6 +113,17 @@ describe("nextDrillAt and drillDue", () => {
     expect(nextDrillAt({ ...WEEKLY, window: { zone: ZONE, start: "25:00", end: "17:00" } }, [], WEDNESDAY)).toBeUndefined();
     expect(nextDrillAt(WEEKLY, [], Number.NaN)).toBeUndefined();
     expect(drillDue(WEEKLY, [], Number.NaN)).toBe(false);
+  });
+});
+
+describe("drillInCopy", () => {
+  it("starts a drill only in the copy of rank 0, or in each copy of its list", () => {
+    expect(drillInCopy(WEEKLY, "home", 0)).toBe(true);
+    expect(drillInCopy(WEEKLY, "cloud", 1)).toBe(false);
+    const both: DrillConfig = { ...WEEKLY, copies: ["home", "cloud"] };
+    expect(drillInCopy(both, "cloud", 1)).toBe(true);
+    expect(drillInCopy({ ...WEEKLY, copies: ["cloud"] }, "home", 0)).toBe(false);
+    expect(drillInCopy({ ...WEEKLY, copies: [] }, "home", 0)).toBe(false);
   });
 });
 

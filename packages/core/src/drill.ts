@@ -36,6 +36,11 @@ export interface DrillConfig {
   readonly window: TimeWindow;
   /** The time from the start to the acknowledgment. With no acknowledgment in this time, the drill fails. */
   readonly ackWithin: Duration;
+  /**
+   * The ids of the copies that start the drill. Each of them starts its own runs. Without the list, only the copy of
+   * rank 0 starts the drill. Thus two copies do not send one drill at once.
+   */
+  readonly copies?: readonly string[];
 }
 
 /** One run of a drill: its start, and the first acknowledgment of a delivery on the channel of the path. */
@@ -109,6 +114,11 @@ export function nextDrillAt(drill: DrillConfig, runs: readonly DrillRun[], at: I
     time = boundary.at;
   }
   return undefined;
+}
+
+/** This function tells if the copy `copy` of the rank `rank` starts the drill. */
+export function drillInCopy(drill: DrillConfig, copy: string, rank: number): boolean {
+  return drill.copies === undefined ? rank === 0 : drill.copies.includes(copy);
 }
 
 /** This function tells if a drill starts at the time `at`: the next start of the drill is `at`. */

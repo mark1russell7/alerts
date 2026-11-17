@@ -268,10 +268,22 @@ A copy report has no area. Its subject is `{ system: "alerts.copy", id: <copy id
 - A snapshot with no copies keeps each open line of a copy.
 - The time of `unread` is a timer of the pass.
 
+A drill report has no area. Its subject is `{ system: "alerts.drill", id: <drill id> }` (`DRILL_SUBJECT`). Each copy has its own lines, thus the name of a line holds the copy id.
+
+| Line | Kind | Condition | Level |
+| --- | --- | --- | --- |
+| `drill/<copy>/<id>` | `system.drill.run` | The last run waits for its acknowledgment | `life-safety` (`extreme`, `immediate`) |
+| `drill/<copy>/<id>/failed` | `system.drill.failed` | The verdict of the last run is `failed` | `notice` at most |
+
+- `DrillSnapshot` gives the copy, the drill and its last run. A drill that is due has a run that starts at the time of the snapshot.
+- The facts of the run line are the copy, the drill and the start. An acknowledgment in the time cancels the line.
+- At the end of the time, the run line ends, and the failed line opens. A late acknowledgment gives an update of the failed line.
+- The next run ends the failed line. A snapshot with no drills keeps each open line of a drill.
+
 `latestIn(items, at, window)` gives the latest item in a window before a time. `recentStep` and `recentRecovery` use it.
 `threats(incidents, places)` gives the watches and the warnings. A threat is a live incident with the status `actual` at a watched place. Its stage is `watch`, `warning` or absent. A report of the core has the status `system`, so it is not a threat.
 
-The assessment policy holds two system classes, and each class admits only the status `system`. A class can name its statuses. Else the statuses of the policy apply. The NWS kinds `system.test` and `system.admin` are not in these classes, so the policy statuses apply to them.
+The assessment policy holds three system classes, and each class admits only the status `system`. The class `system-drill` holds the drill runs, and it reaches `life-safety`. A class can name its statuses. Else the statuses of the policy apply. The NWS kinds `system.test` and `system.admin` are not in these classes, so the policy statuses apply to them.
 
 ### Lateness across sources
 
@@ -909,13 +921,19 @@ The fakes and the fault cases of CI test the code. Only a drill tests the live p
 - The subject of the report is `alerts.drill` (`DRILL_SUBJECT`), with the id of the drill. Only a person who watches it gets the drill.
 - Thus a drill uses the route, the receipts and the escalation of a real warning. Only an acknowledgment on the channel of the path counts.
 - The window is a `TimeWindow` of `@mark1russell7/algebra/clock`, with the days of the week. A drill on one day of each week has `every` of 6 days and a window on that day.
+- `copies` gives the copies that start the drill. Without it, only the copy of rank 0 starts it (`drillInCopy`). Thus two copies do not send one drill at once.
 - A run (`DrillRun`) is a start, with the first acknowledgment of a delivery on the channel of the path. The log of each copy holds the runs.
 - `joinRuns` joins two runs of one start: the earlier acknowledgment counts. The join is idempotent, commutative and associative.
 - `nextDrillAt` gives the next start: in the window, not in the quiet window of the person, and `every` or more after the last start. A timer waits for it. A drill with a window in the quiet window has no start.
 - `drillVerdict` gives `pending` until the end of the time of the acknowledgment. Then it gives `passed`, or `failed` with `no-ack` or `late-ack`. A failed send gives no acknowledgment, thus it fails as `no-ack`.
 - `drillProblems` finds bad times, a bad window, an unknown channel and a channel with no acknowledgment. Such a drill cannot pass.
 
-The runtime starts no drill yet. The next step is the start of each drill as a system report in the runtime. Then come a system report for a failed drill and a drill of the outage call.
+The system fold gives the drill lines (the section of the system reports). The runtime starts no drill yet. The next steps are these:
+
+- A channel rule keeps a run on the channel of its path. A failure goes on each other channel. A rule does not apply to the status `actual`.
+- `loadConfig` refuses a drill window in the quiet window of the person. The check needs a window overlap in `@mark1russell7/algebra/clock`.
+- The runtime keeps the runs in its log, starts each due drill and wakes at the end of each time.
+- Then comes a drill of the outage call.
 
 ## People and places
 

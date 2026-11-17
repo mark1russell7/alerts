@@ -138,8 +138,14 @@ export const LOG_KIND = "system.log";
  */
 export const COPY_KIND = "system.copy";
 
-/** The table of the coverage of the kinds that can reach `life-safety`. */
-const COVERAGE_TABLE: LevelTable = {
+/**
+ * The prefix of the kinds of the drill reports of the core. `system.drill.run` is a run that waits for its
+ * acknowledgment, and `system.drill.failed` is a failed run. An adapter does not map a message to this prefix.
+ */
+export const DRILL_KIND = "system.drill";
+
+/** The table of the system reports that can reach `life-safety`: the coverage of a life-safety kind, and a drill run. */
+const LOUD_SYSTEM_TABLE: LevelTable = {
   severity: { extreme: "life-safety", severe: "urgent", moderate: "notice", minor: "digest", unknown: "urgent" },
   urgency: { immediate: "life-safety", expected: "urgent", future: "notice", past: "digest", unknown: "urgent" },
 };
@@ -155,8 +161,8 @@ const SYSTEM_TABLE: LevelTable = {
  * `LIFE_SAFETY_KINDS`. Its severity must be `severe`, `extreme` or `unknown`, and its urgency must
  * be `immediate`, `expected` or `unknown`. A place of the person must be in its areas.
  *
- * The two system classes hold the reports of the core, and they admit only the status `system`. The
- * coverage of a life-safety kind can reach `life-safety`. Each other report of the core reaches
+ * The three system classes hold the reports of the core, and they admit only the status `system`. The
+ * coverage of a life-safety kind and a drill run can reach `life-safety`. Each other report of the core reaches
  * `notice` at most. The NWS kinds `system.test` and `system.admin` are not in these classes.
  *
  * The earthquake class has its own table. In one hour after the onset, its urgency `past` counts as
@@ -168,8 +174,10 @@ export const DEFAULT_ASSESS_POLICY: AssessPolicy = {
     // The first class with a prefix of the kind applies. Thus an early warning stays in the life-safety class.
     { id: "life-safety", kinds: [...LIFE_SAFETY_KINDS.filter((kind) => !EARTHQUAKE_KINDS.includes(kind)), "geo.earthquake.early-warning"], ...LIFE_SAFETY_TABLE },
     { id: "earthquake", kinds: EARTHQUAKE_KINDS, ...EARTHQUAKE_TABLE },
-    { id: "system-coverage", kinds: LIFE_SAFETY_KINDS.map((kind) => `${COVERAGE_KIND}.${kind}`), statuses: ["system"], ...COVERAGE_TABLE },
-    { id: "system", kinds: [HEALTH_KIND, COVERAGE_KIND, QUOTA_KIND, BALANCE_KIND, CLOCK_KIND, LOG_KIND, COPY_KIND], statuses: ["system"], ...SYSTEM_TABLE },
+    { id: "system-coverage", kinds: LIFE_SAFETY_KINDS.map((kind) => `${COVERAGE_KIND}.${kind}`), statuses: ["system"], ...LOUD_SYSTEM_TABLE },
+    // A drill run tests the path of the life-safety warnings, thus it reaches `life-safety`. A failed drill gets `notice` at most.
+    { id: "system-drill", kinds: [`${DRILL_KIND}.run`], statuses: ["system"], ...LOUD_SYSTEM_TABLE },
+    { id: "system", kinds: [HEALTH_KIND, COVERAGE_KIND, QUOTA_KIND, BALANCE_KIND, CLOCK_KIND, LOG_KIND, COPY_KIND, DRILL_KIND], statuses: ["system"], ...SYSTEM_TABLE },
   ],
   otherwise: OTHER_TABLE,
 };
