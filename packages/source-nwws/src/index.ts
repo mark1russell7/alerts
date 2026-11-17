@@ -20,7 +20,7 @@ import { NWWS_DOMAIN, NWWS_ROOM, NWWS_SERVICE, openXmppSession, sessionNickname,
 import { createSupervisor, DEFAULT_BACKOFF, type NwwsAccount, type SupervisorState } from "./supervisor.ts";
 
 export { createProductBuffer, type BufferEntry, type BufferPosition, type BufferRead, type ProductBuffer } from "./buffer.ts";
-export { checkCanary, keepaliveSent } from "./check.ts";
+export { checkCanary, keepaliveSent, type CanarySession } from "./check.ts";
 export { NWWS_DESCRIPTOR } from "./descriptor.ts";
 export { fakeSessions, type FakeSession, type FakeSessions } from "./fake.ts";
 export { CONTENT_TYPE, createNwwsFetch, cursorOf, failureOf, markOf, observationOf, positionOf, type NwwsFetchOptions } from "./fetch.ts";
@@ -93,7 +93,8 @@ export function createNwwsSource(options: NwwsSourceOptions): NwwsSource {
     backoff: options.backoff ?? DEFAULT_BACKOFF,
     random: options.random ?? Math.random,
     stallAfter: options.stallAfter ?? STALL_AFTER_MS,
-    // The history of the first join holds the last keepalive, which comes each 10 minutes.
+    // At a join, the room sends again only its last 25 products, whatever the request. Thus the history fills only a
+    // short gap, and it holds a keepalive only by chance. The canary gives no read in the first minutes of a session.
     firstHistory: 15 * 60_000,
     historyMargin: 2 * 60_000,
     maxHistory: 1000,
@@ -107,7 +108,10 @@ export function createNwwsSource(options: NwwsSourceOptions): NwwsSource {
     describe: () => NWWS_DESCRIPTOR,
     fetch,
     map: ({ observation }) => mapObservation(observation),
-    check: ({ observations }) => checkCanary(observations),
+    check: ({ observations }) => {
+      const state = supervisor.state();
+      return checkCanary(observations, state.joined === undefined ? undefined : { joined: state.joined, now: clock.now() });
+    },
     state: () => supervisor.state(),
     close: () => supervisor.close(),
   };

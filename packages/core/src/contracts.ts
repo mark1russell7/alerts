@@ -381,7 +381,7 @@ export interface FetchRecord {
   readonly fatal: number;
   /** The count of lossy problems that the map gave for the observations of the fetch. An absent count is 0. */
   readonly lossy?: number;
-  /** The result of the canary check of the observations of the fetch, when the source has a canary. */
+  /** The result of the canary check of the observations of the fetch, when the source has a canary and the check decides. */
   readonly canary?: CanaryResult;
 }
 
@@ -412,7 +412,9 @@ export interface FetchSignal {
  *   It can then throw the reason of the signal.
  * - `map`: a pure, total function. It does not throw, and the same observation gives the same
  *   reports with the same ids.
- * - `check`: a pure function. It examines the observations of a fetch against the canary.
+ * - `check`: it examines the observations of a fetch against the canary, and sends no request. It gives `undefined`
+ *   when it cannot decide yet: no read. The health then gets no canary event. A stream gives no read until its session
+ *   had one full period of its test message.
  * - `locate`: optional. It reads `network` and is idempotent. It gives the region codes of a
  *   position, for a source that has a lookup: the `/points` query of the NWS API.
  * - `close`: optional. It ends the resources of the source, for example the session of a stream. The runtime starts
@@ -422,7 +424,7 @@ export interface SourceProcedures {
   describe(): SourceDescriptor;
   fetch(input: { readonly watch: Watch; readonly cursor?: Cursor }, signal?: FetchSignal): Promise<FetchOutcome>;
   map(input: { readonly observation: Observation }): MapResult;
-  check?(input: { readonly observations: readonly Observation[] }): CanaryResult;
+  check?(input: { readonly observations: readonly Observation[] }): CanaryResult | undefined;
   locate?(input: { readonly at: Position }): Promise<LocateOutcome>;
   close?(): Promise<void>;
 }

@@ -70,6 +70,8 @@ export interface SupervisorState {
   readonly failures: number;
   /** The place of the last product in the stream. */
   readonly mark?: StreamMark;
+  /** The time of the join of the session in the room. Only the state `joined` has it. */
+  readonly joined?: Instant;
 }
 
 /** The supervisor of the sessions. */
@@ -96,6 +98,8 @@ export function createSupervisor(options: SupervisorOptions): Supervisor {
   const serials = new Map<string, number>();
   const waiters = new Set<() => void>();
   let state: SupervisorState = { status: "idle", failures: 0 };
+  // The time of the last join. The state shows it only while a session is in the room.
+  let joinedAt: Instant | undefined;
   let session: Session | undefined;
   // Each session has a token. A handler of a session that is not the active one does nothing.
   let active: object | undefined;
@@ -194,6 +198,7 @@ export function createSupervisor(options: SupervisorOptions): Supervisor {
     const opened = options.open(sessionOptions, {
       joined: () => {
         if (active !== token) return;
+        joinedAt = options.clock.now();
         set({ status: "joined" });
         watchStall();
         settle();
@@ -236,7 +241,8 @@ export function createSupervisor(options: SupervisorOptions): Supervisor {
     },
     state: () => {
       const now = mark();
-      return now === undefined ? state : { ...state, mark: now };
+      const marked = now === undefined ? state : { ...state, mark: now };
+      return state.status === "joined" && joinedAt !== undefined ? { ...marked, joined: joinedAt } : marked;
     },
     async close() {
       if (state.status === "closed") return;
