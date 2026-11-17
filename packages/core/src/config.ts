@@ -160,7 +160,7 @@ export interface NamedPart {
 }
 
 /** The name of a part has small letters, digits and hyphens. It starts with a letter and has 40 characters or fewer. */
-export const PART_NAME = /^[a-z][a-z0-9-]{0,39}$/u;
+export const PART_NAME: RegExp = /^[a-z][a-z0-9-]{0,39}$/u;
 
 /**
  * This function merges the parts into the root configuration. The entries of the root come first. The entries of
