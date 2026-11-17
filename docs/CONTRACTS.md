@@ -420,6 +420,8 @@ The Twilio text channel `twilio-text` sends one SMS message for each send (AL-56
 
 The cap of the spend of a Twilio channel is two gates of `polite-crawler/api`, with one store, one key and one quota name:
 
+- The limit of the gates is the monthly cap less the fixed costs of the spend entry (`fixed`). A fixed cost is, for example, the rent of a phone number.
+- The reserve is a part of that limit. `loadConfig` refuses fixed costs that use all of the cap, and a reserve that is not below the rest.
 - The two gates count the same units. The gate of `life-safety` has no reserve. Thus only `life-safety` uses the last part of the cap.
 - A full cap gives `rate-limited`. A cap in its reserve gives `reserved` to a message below `life-safety`.
 - A call that Twilio refused, did not authorize or limited gives its units back. Twilio made no call.
@@ -978,7 +980,7 @@ The package `@mark1russell7/alerts-channel-twilio` operates the chain on the ser
 - Twilio signs each request to the press and end Functions. Thus a person outside Twilio cannot make a step. The entry is public, and it checks its own token.
 - A cap counts the calls of the Twilio number in a time window. A try above the cap makes no call.
 - A monthly cap counts the calls of the number from the start of the calendar month. The month starts in the time zone of the spend entry of Twilio.
-- The monthly cap is the spend cap of Twilio in whole calls of 4 cents, at most 1000. Each call of the number counts, also a call of the instance.
+- The monthly cap is the spend cap of Twilio less its fixed costs, in whole calls of 4 cents, at most 1000. Each call of the number counts, also a call of the instance.
 - Each cap counts a text as one call. The recent sends are the calls of `OUTAGE_FROM` and the texts of `OUTAGE_TEXT_FROM`.
 - The SMS message has at most `OUTAGE_TEXT_LIMIT` (160) code points. That is at most 3 segments of 1.4 cents, so a text costs no more than a call.
 - A failed read of the recent texts goes to the log, with no number. Then the caps count the calls only.

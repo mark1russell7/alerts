@@ -7,7 +7,7 @@
  * - Once in each day, the worker deploys again. A deploy with no change reads three lists. Thus a change on the side of Twilio heals in a day.
  * - A failed deploy goes again after a backoff. The worker runs beside the passes, so a slow build of Twilio holds no alert.
  */
-import type { Duration, Instant, ParsedConfig, SecretLookup, SpendConfig } from "@mark1russell7/alerts";
+import { sendCapUsd, type Duration, type Instant, type ParsedConfig, type SecretLookup, type SpendConfig } from "@mark1russell7/alerts";
 import {
   deployOutage,
   OUTAGE_MONTH_MAX,
@@ -60,10 +60,13 @@ export interface OutageKeys {
  * This function gives the monthly cap of the outage call from the spend entry of Twilio. The cap is the whole calls of
  * one month in the cap of the entry, and its month starts in the time zone of the entry. The reserve is a part of the
  * cap, and the outage call can use it. A cap above `OUTAGE_MONTH_MAX` calls takes that count. A text costs no more
- * than a call, and the cap counts it as one call.
+ * than a call, and the cap counts it as one call. The fixed costs of the entry come off the cap first. When they use
+ * all of it, the cap is 0 calls.
  */
-export function outageMonthCapOf(spend: Pick<SpendConfig, "monthlyUsd" | "timeZone">): OutageMonthCap {
-  const cents = spendQuota({ name: "Twilio spend", monthlyUsd: spend.monthlyUsd, timeZone: spend.timeZone }).limit;
+export function outageMonthCapOf(spend: Pick<SpendConfig, "monthlyUsd" | "fixed" | "timeZone">): OutageMonthCap {
+  const { monthlyUsd, fixed, timeZone } = spend;
+  if (!(sendCapUsd(spend) > 0)) return { maxCalls: 0, timeZone };
+  const cents = spendQuota({ name: "Twilio spend", monthlyUsd, ...(fixed === undefined ? {} : { fixed }), timeZone }).limit;
   return { maxCalls: Math.min(OUTAGE_MONTH_MAX, Math.floor(cents / spendUnits(TWILIO_CALL_COST_USD))), timeZone: spend.timeZone };
 }
 
