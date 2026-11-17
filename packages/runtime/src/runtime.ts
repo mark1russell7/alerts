@@ -5,10 +5,11 @@
  * that it gets.
  */
 import { isFrameClock, type WallClock } from "@mark1russell7/algebra/clock";
-import { DEFAULT_LINK_POLICY, linkRule, ONLY_COPY, type ChannelQuota, type CopyWatch, type Duration, type FetchOutcome, type Instant, type LatenessFolds, type ReportId, type SourceDescriptor, type SourceId, type SourceProcedures, type Watch } from "@mark1russell7/alerts";
+import { DEFAULT_LINK_POLICY, linkRule, ONLY_COPY, type ChannelQuota, type CopyWatch, type Duration, type EntryTimes, type FetchOutcome, type Instant, type LatenessFolds, type ReportId, type SourceDescriptor, type SourceId, type SourceProcedures, type Watch } from "@mark1russell7/alerts";
 import { errorMessage } from "@mark1russell7/text";
 import type { BalanceWatch } from "./balance.ts";
 import { createDispatcher, type DeliveryOptions, type DeliveryStep } from "./delivery.ts";
+import { entryIndex } from "./entries.ts";
 import { envelope, EVENT_TYPES, type RuntimeEvent } from "./events.ts";
 import { importPage, sharePage, type ExchangePage, type ReceivedPage } from "./exchange.ts";
 import { fetchEvents } from "./fetch.ts";
@@ -155,6 +156,11 @@ export interface Runtime {
    * write fails. Then the position stays, and the next read gets the page again.
    */
   take(page: ReceivedPage): PageTake;
+  /**
+   * This function gives the times of entry of the parts of the state on this copy (AL-18). An import gets the time of the
+   * read that brought it, not the time of the other copy. The history route reads them.
+   */
+  entered(): EntryTimes;
 }
 
 /**
@@ -170,16 +176,30 @@ export function openRuntime(options: RuntimeOptions): Runtime {
   if (repeated !== undefined) throw new Error(`Two sources have the id ${repeated}.`);
 
   let read = 0;
-  let state = rebuild(counted(log.read(), () => (read += 1)), config);
+  // The index of the times of entry is a fold of the same events as the state.
+  const entries = entryIndex();
+  let state = rebuild(
+    counted(log.read(), (event) => {
+      read += 1;
+      entries.add(event);
+    }),
+    config,
+  );
+  entries.prune(state.merge);
   const skipped = log.count() - read;
 
   // The fold runs on a draft before each write. The state changes only when the transaction commits.
   const append = (events: readonly RuntimeEvent[]): readonly string[] => {
     let draft = state;
+    const accepted: RuntimeEvent[] = [];
     const conflicts = log.appendAll(events, (event) => {
       draft = fold(draft, event, config);
+      accepted.push(event);
     });
     state = draft;
+    // The index gets the events only after the write. Thus a failed write, and the write again, move no stamp two times.
+    for (const event of accepted) entries.add(event);
+    if (accepted.some((event) => event.type === "retired")) entries.prune(state.merge);
     return conflicts;
   };
 
@@ -336,6 +356,7 @@ export function openRuntime(options: RuntimeOptions): Runtime {
       positions.set(page.copy, result.position);
       return { imports: result.imports, next: result.position.next, problems: result.problems, conflicts };
     },
+    entered: () => entries.times(state.own.merge),
   };
 }
 
@@ -355,9 +376,9 @@ export function bounded(work: Promise<FetchOutcome>, limit: Duration, clock: Wal
 }
 
 // The events of a log, with a call for each event.
-function* counted<T>(events: Iterable<T>, each: () => void): Generator<T> {
+function* counted<T>(events: Iterable<T>, each: (event: T) => void): Generator<T> {
   for (const event of events) {
-    each();
+    each(event);
     yield event;
   }
 }

@@ -82,6 +82,20 @@ export interface HistoryPayload {
   readonly regions: readonly HistoryRegion[];
 }
 
+/**
+ * The times of entry on this copy. A report or an end mark of another copy comes later than its own time. Also, the
+ * clock of the other copy is not the clock of this copy. Thus the history replays what this copy knew at each time.
+ */
+export interface EntryTimes {
+  /** This function gives the time of entry of a report on this copy. */
+  report(report: Report): Instant;
+  /** This function gives the time of entry of an end mark on this copy. */
+  mark(mark: EndMark): Instant;
+}
+
+/** The times of entry with no import: the time of receipt of each report, and the time of each end mark. */
+export const OWN_ENTRY_TIMES: EntryTimes = { report: (report) => report.received, mark: (mark) => mark.at };
+
 /** These are the inputs of the history payload. */
 export interface HistoryInput {
   /** The time of the history: the time of the last pass, or `null` before the first pass. */
@@ -90,11 +104,8 @@ export interface HistoryInput {
   readonly since?: Instant | null;
   /** The merge state of the copy. The history has the incidents of this state. */
   readonly merge: MergeState;
-  /**
-   * This function gives the time of entry of a report on this copy. The default is the time of receipt of the report.
-   * That time comes from the clock of the copy that fetched the report.
-   */
-  readonly entered?: (report: Report) => Instant;
+  /** The times of entry on this copy. The default `OWN_ENTRY_TIMES` reads the times of the copy that wrote each part. */
+  readonly entered?: EntryTimes;
   /** The watches of the people. The level of each change is the highest level over these people. */
   readonly people: readonly PersonWatch[];
   readonly places: readonly MapPlaceInput[];
@@ -113,12 +124,13 @@ export interface HistoryInput {
  */
 export function historyPayload(input: HistoryInput): HistoryPayload {
   const since = input.since ?? null;
-  const entered = input.entered ?? ((report: Report): Instant => report.received);
+  const entered = input.entered ?? OWN_ENTRY_TIMES;
   const options: IncidentOptions = input.link === undefined ? {} : { link: input.link };
   const byId = new Map(input.merge.reports.map((report) => [report.id, report]));
-  const entries = new Map(input.merge.reports.map((report) => [report.id, entered(report)]));
+  const entries = new Map(input.merge.reports.map((report) => [report.id, entered.report(report)]));
+  // Each end mark has its time of entry. Thus the parts at a time have only the marks that this copy knew at that time.
   const marks = new Map<ReportId, EndMark[]>();
-  for (const mark of input.merge.ends) marks.set(mark.report, [...(marks.get(mark.report) ?? []), mark]);
+  for (const mark of input.merge.ends) marks.set(mark.report, [...(marks.get(mark.report) ?? []), { ...mark, at: entered.mark(mark) }]);
   const lookups = new Map<string, readonly MapShape[] | undefined>();
   const lookup = (code: RegionCode): readonly MapShape[] | undefined => {
     const key = regionCodeKey(code);

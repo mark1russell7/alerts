@@ -7,8 +7,11 @@ import { delay, frameClock, wallClock, type Clock, type WallClock } from "@mark1
 import {
   CLOCK_STEP_ABOVE,
   configuredExpectations,
+  DEFAULT_LINK_POLICY,
   expectationProblems,
   healthPayload,
+  historyPayload,
+  linkRule,
   localPlaces,
   mapPayload,
   ONLY_COPY,
@@ -23,6 +26,7 @@ import {
   type Duration,
   type Expectation,
   type HealthPayload,
+  type HistoryPayload,
   type Instant,
   type MapPayload,
   type ParsedConfig,
@@ -489,6 +493,11 @@ export interface Instance {
    * the quotas and the balances are at the time of the read.
    */
   readonly health: () => HealthPayload;
+  /**
+   * This function gives the history payload of the merge state: the changes of each incident at each time of entry on this
+   * copy. The value `since` keeps only the incidents with a change at that time or later.
+   */
+  readonly history: (since: Instant | null) => HistoryPayload;
   /** The worker of the deploy of the outage call, when the configuration has an outage call. The service declares it. */
   readonly outage?: OutageDeployWorker;
   /** The exchange with the other copies, when the options give it. */
@@ -661,6 +670,20 @@ export function openInstance(options: InstanceOptions): Instance {
       quotas: quotas(),
       balances: balances.flatMap((watch) => watch.balance() ?? []),
     });
+  // The history reads the merge state at the time of the read, with the link rule of the view and the delivery.
+  const link = linkRule(runtime.config.link ?? DEFAULT_LINK_POLICY);
+  const history = (since: Instant | null): HistoryPayload =>
+    historyPayload({
+      at: latest?.at ?? null,
+      since,
+      merge: runtime.state().merge,
+      entered: runtime.entered(),
+      people,
+      places: placed.places,
+      ...(delivery.assess === undefined ? {} : { policy: delivery.assess }),
+      shape: shapes.lookup,
+      link,
+    });
   // A round that imports an event or changes the stage of a copy starts a pass soon.
   const rounds =
     worker === undefined
@@ -687,6 +710,7 @@ export function openInstance(options: InstanceOptions): Instance {
     balances,
     map,
     health,
+    history,
     ...(outage === undefined ? {} : { outage }),
     ...(copies === undefined ? {} : { copies }),
   };

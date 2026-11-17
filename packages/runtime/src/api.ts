@@ -1,6 +1,6 @@
 import { createServer } from "node:http";
 import { join } from "node:path";
-import type { HealthPayload, Instant, MapPayload, SourceId } from "@mark1russell7/alerts";
+import type { HealthPayload, HistoryPayload, Instant, MapPayload, SourceId } from "@mark1russell7/alerts";
 import type { ServiceBuilder } from "@mark1russell7/service";
 import { handle, httpTransport } from "@mark1russell7/service/http";
 import { folderHandler } from "@mark1russell7/service/http-folder";
@@ -26,6 +26,11 @@ export interface ApiOptions {
    * the ids of the places, thus only the loopback address serves it. Without the function, the API has no health route.
    */
   readonly health?: (() => HealthPayload) | undefined;
+  /**
+   * This function gives the payload of the route `GET /history` for a value of the query `since`. The levels come from the
+   * watches of the people, thus only the loopback address serves it. Without the function, the API has no history route.
+   */
+  readonly history?: ((since: Instant | null) => HistoryPayload) | undefined;
   /**
    * The folder of the built local page (`pageFolder`). The path `/` gives its file `PAGE_INDEX`. The page and the route
    * `GET /map` have one origin. Thus the policy of the folder lets the page read the map. Without the folder, the API serves no page.
@@ -67,6 +72,28 @@ export interface Status {
   readonly outage?: OutageDeployState;
   /** The files of the start. A runtime with no start files, for example a test, has no field. */
   readonly start?: StartStatus;
+}
+
+/** The answer of a route to a request with a bad query. The route gives it with the status 400. */
+export interface QueryProblem {
+  readonly problem: string;
+}
+
+// The digits of a time in milliseconds since the epoch: no sign, no fraction and no zero before another digit.
+const WHOLE = /^(0|[1-9][0-9]*)$/;
+
+/**
+ * This function reads the query `since` of the history route from the URL of a request. No value gives `null`. A value
+ * that is not a whole number of milliseconds, or two values, give a problem.
+ */
+export function sinceOf(url: string | undefined): Instant | null | QueryProblem {
+  const values = new URL(url ?? "/", "http://loopback").searchParams.getAll("since");
+  const [value] = values;
+  if (value === undefined) return null;
+  if (values.length > 1 || !WHOLE.test(value) || !Number.isSafeInteger(Number(value))) {
+    return { problem: "The query since is one time in milliseconds since the epoch: a whole number with no sign." };
+  }
+  return Number(value);
 }
 
 /** The file of the built local page that the path `/` gives. */
@@ -116,6 +143,15 @@ export const attachApi = (svc: ServiceBuilder, options: ApiOptions): ServiceBuil
   if (health !== undefined) {
     http.mount(handle("api", "GET /health", () => health()));
     api.route("GET /health", { idempotent: true });
+  }
+  const history = options.history;
+  if (history !== undefined) {
+    const work = (req: { readonly url?: string | undefined }): HistoryPayload | QueryProblem => {
+      const since = sinceOf(req.url);
+      return since !== null && typeof since === "object" ? since : history(since);
+    };
+    http.mount(handle("api", "GET /history", work, { done: (value) => ("problem" in value ? { status: 400 } : {}) }));
+    api.route("GET /history", { idempotent: true });
   }
   // The files of the page come after the routes. A path of no file goes to the next handler, thus it gets 404.
   if (options.page !== undefined) http.mount(folderHandler(options.page, { index: PAGE_INDEX }));

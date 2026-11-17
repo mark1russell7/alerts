@@ -1089,7 +1089,9 @@ The coverage holds the ids of the places. Thus only the loopback address gives t
 
 ### The history
 
-The function `historyPayload` gives the `HistoryPayload` of the route `GET /history`. A time scrubber of a page replays how each incident grew. `historyPayloadSchema` checks the payload. The runtime does not give the route at this time.
+The function `historyPayload` gives the `HistoryPayload` of the route `GET /history`. A time scrubber of a page replays how each incident grew. `historyPayloadSchema` checks the payload. The runtime gives the route on the loopback address only.
+
+The query `since` is one whole number of milliseconds since the epoch, with no sign. With no query, the route gives each incident. A bad query, or two values, get the status 400 with a `problem`.
 
 - `format`: `alerts-history/1` (`HISTORY_FORMAT`). A change that breaks a reader gets a new name.
 - `at`: the time of the last pass, or `null` before the first pass.
@@ -1102,7 +1104,15 @@ A change comes at each time of entry of a report of the incident on this copy. A
 
 - The level is the highest level over each person at that time, with the policy of the delivery and the mutes.
 - Two parts of an incident before their merge give one change. The change has the higher level and severity, and the areas of the two parts.
-- The time of entry comes from the clock of this copy. Thus a late import of a report of another copy comes after the `since` of a reader. Without the times of entry, the history uses the time of receipt.
+- The time of entry comes from the clock of this copy. Thus a late import of a report of another copy comes after the `since` of a reader.
+
+The input `entered` gives the time of entry of each report and each end mark (`EntryTimes`). Without it, the history uses `OWN_ENTRY_TIMES`: the time of receipt of each report and the time of each end mark. The runtime keeps an index of the times of entry next to its state:
+
+- An import gets the time of the exchange event of its read. The runtime writes that event after the imports of the read, with the time of this copy.
+- The first time stays. A later read of the same part changes nothing.
+- An own part keeps its own time. A part of the two sides gets the earlier time.
+- A step of the clock moves each time of the index, as it moves the own parts. A retired report loses its times.
+- The index is a fold of the log. Thus a restart gives the same times. A write that fails changes no time.
 
 A reader keeps its histories by anchor:
 
