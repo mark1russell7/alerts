@@ -188,6 +188,8 @@ The three baselines:
 1. **The schema checks the form.** `readingSchema` refuses a value that is not finite, an empty series id, a bad version and a line with one position.
 2. **The declaration checks the meaning.** `readingProblems` refuses a measure that the source does not declare, an area of another kind and the field of another baseline. It also refuses a value below 0 of a count, for example `{event}` or `{trip}/h`.
 3. **The time of a reading is the time of its value.** It is not the time of the fetch.
+   - A reading can give the cadence of its series, as the source states it. For example, each GBFS file states its ttl.
+   - This cadence replaces the cadence of the measure for the series. A general reader of many feeds needs it, because each feed has its own cadence.
 4. **A version keeps two methods apart.** A source changes the version of a series when its method changes, for example a new instrument. `seriesKey` holds the version, so a baseline does not cross a change of method.
 5. **A missing value is not a normal value.** A source with no backfill starts with an empty history. A series with no recent reading has no read, not a normal level.
 

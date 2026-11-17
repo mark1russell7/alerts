@@ -117,12 +117,14 @@ describe("the schema of a reading", () => {
     for (const kind of INDICATOR_AREA_KINDS) expect(problemsOf({ ...readingOf(LEVEL), area: AREAS[kind] })).toEqual([]);
   });
 
-  it("refuses a value that is not finite, an empty series, a bad version and a line with one position", () => {
+  it("refuses a value that is not finite, an empty series, a bad version, a cadence of 0 and a line with one position", () => {
     expect(problemsOf({ ...readingOf(LEVEL), value: Number.NaN })).toHaveLength(1);
     expect(problemsOf({ ...readingOf(LEVEL), value: Number.POSITIVE_INFINITY })).toHaveLength(1);
     expect(problemsOf({ ...readingOf(LEVEL), series: "" })).toEqual(["series: The id of a series is not empty."]);
     expect(problemsOf({ ...readingOf(LEVEL), version: "2025 07" })).toEqual([expect.stringMatching(/^version: /u)]);
     expect(problemsOf({ ...readingOf(LEVEL), version: "2025-07-01.b" })).toEqual([]);
+    expect(problemsOf({ ...readingOf(LEVEL), cadence: 30_000 })).toEqual([]);
+    expect(problemsOf({ ...readingOf(LEVEL), cadence: 0 })).toEqual(["cadence: The time is more than 0."]);
     expect(problemsOf({ ...readingOf(TRIPS), area: { type: "line", path: [[-95.68, 39.05]] } })).toEqual(["area.path: A line has two positions or more."]);
     expect(problemsOf({ ...readingOf(LEVEL), area: { type: "point", at: [200, 39] } })).toHaveLength(1);
   });
