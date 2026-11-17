@@ -4,7 +4,8 @@
  * session. The session sends no login on a link with no TLS, because the mechanism PLAIN of SASL sends the password.
  */
 
-// The reference puts the types of `@xmpp/client` in each program that imports this module, also in other packages.
+// The reference brings the types of the package into each program that compiles this module, also the program of a
+// package that imports this package.
 /// <reference path="./xmpp-client.d.ts" />
 
 import { randomBytes } from "node:crypto";

@@ -474,6 +474,12 @@
     "note": "The host of the feed of nrc-uscg-reports."
   },
   {
+    "id": "nwws-oi.weather.gov",
+    "name": "nwws-oi.weather.gov",
+    "kind": "host",
+    "note": "The XMPP server of nws-nwws-oi. A DNS lookup on 2026-11-16 gave the canonical name nwws-oi-bldr.weather.gov, a name of the NWS and not of a content network."
+  },
+  {
     "id": "ocrportal.hhs.gov",
     "name": "ocrportal.hhs.gov",
     "kind": "host",
