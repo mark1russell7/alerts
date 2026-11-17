@@ -913,6 +913,7 @@ The module `deploy.ts` of the package puts the three Functions and the list on o
 - The version of the plan is the start of the content hash of the files and of the build. A second deploy of the same plan reads three lists and changes nothing.
 - The variables are not in the version. A new token or a new number changes only the variables.
 - `deployOutage` makes the bundles with esbuild, and then it deploys the plan. It loads esbuild only when it deploys.
+- esbuild works in the folder of the package. Thus the start folder of the process does not change the bundles or the version (AL-44).
 - `outageEntryUrl` gives the address of the entry. The webhook of the outside check calls it with the parameter `token`.
 
 The runtime operates the deploy in the worker `outage` of its service (`outage.ts`), beside the worker `passes`.
