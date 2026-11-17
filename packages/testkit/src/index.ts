@@ -38,6 +38,7 @@ export {
   type SlowVerdict,
 } from "./slow-source.ts";
 export {
+  baselineAt,
   CASE_3_ID,
   CASE_3_LIMITS,
   changeOf,
