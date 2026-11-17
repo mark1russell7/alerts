@@ -1,7 +1,7 @@
 /**
- * The map of one CAP message of the NWS family to reports in the one format of the system. FEMA IPAWS and the
- * tsunami warning centers of the NWS send CAP messages with VTEC, UGC and SAME codes. This module is the one home
- * of their map.
+ * The map of one CAP message to reports in the one format of the system. This module is the one home of the map.
+ * FEMA IPAWS and the tsunami warning centers of the NWS send CAP messages with VTEC, UGC and SAME codes. The other
+ * alerting authorities send event codes of the OASIS list or the awareness types of MeteoAlarm.
  *
  * The map gives one report for each info block in the chosen language. A tsunami center puts a warning, an advisory
  * and a watch in three blocks of one message, each with its own areas. The reports of one message have the key of
@@ -16,6 +16,7 @@ import {
   type Category,
   type CorrelationKey,
   type Instant,
+  type Kind,
   type Observation,
   type Operation,
   type ProblemSink,
@@ -26,10 +27,11 @@ import {
   type Status,
   type Urgency,
 } from "@mark1russell7/alerts";
-import { parseVtec, resolveKind, vtecKey, type Vtec } from "@mark1russell7/alerts-format-nws";
+import { parseVtec, resolveKind, vtecKey, type ResolvedKind, type Vtec } from "@mark1russell7/alerts-format-nws";
 
 import { capCircle, capPolygon } from "./geometry.ts";
 import { chooseInfo } from "./info.ts";
+import { codedKind, type CodedKind } from "./kinds.ts";
 import type { CapAlert, CapInfo, CapPair } from "./read.ts";
 import { CAP_CATEGORIES, CAP_NOT_ALERTS, CAP_OPERATIONS, CAP_RESPONSES, CAP_SEVERITY, CAP_STATUS, CAP_URGENCY, capCertainty, capTime, capValue } from "./values.ts";
 
@@ -150,6 +152,19 @@ function knownValues<T extends string>(values: readonly string[], allowed: Reado
 }
 
 /**
+ * This function chooses the kind of one info block. The first choice is an event code of the OASIS list or an awareness
+ * type of MeteoAlarm. The next choices are the NWS tables, then the first CAP category of the block. A category of `other` gives the unknown
+ * kind of the NWS tables. The label is the event of the block, when the block has one.
+ */
+function kindOf(coded: CodedKind | undefined, resolved: ResolvedKind, categories: readonly Category[], name: string | undefined): Kind {
+  const label = name ?? resolved.kind.label;
+  if (coded !== undefined) return { code: coded.code, label };
+  if (resolved.known) return resolved.kind;
+  const category = categories.find((one) => one !== "other");
+  return category === undefined ? resolved.kind : { code: category, label };
+}
+
+/**
  * This function maps one info block to a report. With no block, the report has no kind and no area. The part names
  * the block in the id of the report when the message has two or more blocks in the language.
  */
@@ -168,16 +183,22 @@ function blockReport(alert: CapAlert, message: Message, block: Block | undefined
   const nwsCode = NWS_CODE_NAMES.map((name) => valuesOf(eventCodes, name)[0]).find((value) => value !== undefined);
   const sameCode = valuesOf(eventCodes, "SAME")[0];
   const name = info?.event.trim() === "" ? undefined : info?.event.trim();
+  const coded = info === undefined ? undefined : codedKind(info);
+  for (const code of coded?.unknown ?? []) problems.add(`${at}.eventCode`, `the kind tables do not know the event code ${JSON.stringify(code)}`);
   const resolved = resolveKind({
     vtec,
     ...(nwsCode === undefined ? {} : { nwsCode }),
     ...(sameCode === undefined ? {} : { sameCode }),
     ...(name === undefined ? {} : { name }),
   });
-  if (!resolved.known && info !== undefined) problems.add(`${at}.event`, `the kind tables do not know the event ${JSON.stringify(name ?? nwsCode ?? sameCode)}`);
-
   const categories = knownValues<Category>(info?.categories ?? [], CAP_CATEGORIES, `${at}.category`, "category", problems);
-  if (categories.length === 0) categories.push(categoryOf(resolved.kind.code));
+  const kind = kindOf(coded?.kind, resolved, categories, name);
+  if (coded?.kind === undefined && !resolved.known && info !== undefined) {
+    const event = JSON.stringify(name ?? nwsCode ?? sameCode);
+    const fallback = kind.code === resolved.kind.code ? "" : `: the report has the kind of its category, ${kind.code}`;
+    problems.add(`${at}.event`, `the kind tables do not know the event ${event}${fallback}`);
+  }
+  if (categories.length === 0) categories.push(categoryOf(kind.code));
   const response = knownValues<ResponseType>(info?.responseTypes ?? [], CAP_RESPONSES, `${at}.responseType`, "response", problems);
 
   // Only an operational VTEC (class O) names an event of the NWS. A test or an experiment does not join an incident.
@@ -213,7 +234,7 @@ function blockReport(alert: CapAlert, message: Message, block: Block | undefined
     correlation: [...correlation.values()],
     status: message.status,
     op: message.op,
-    kind: resolved.kind,
+    kind,
     categories,
     // The problem at `info` tells of a message with no info block, so its absent values give no more problems.
     severity: info === undefined ? "unknown" : capValue<Severity>(info.severity, CAP_SEVERITY, "unknown", `${at}.severity`, problems),

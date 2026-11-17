@@ -411,5 +411,45 @@
       "unknownPaths": 4,
       "cause": "Round 6 adopts the list of the SWPC for the four classes of space weather. Each class now has 1 adopted source on 1 path, with 1 origin, so the adopted, path and origin totals each gain 4. One source is below the cover of 2, so the cover does not change."
     }
+  },
+  {
+    "round": 7,
+    "date": "2026-11-16",
+    "by": "One session, for the kinds of the general CAP reader (AL-14), then a check of each kind in the tests of format-cap.",
+    "method": "The check of the WMO register before the general CAP reader. It read the register, 4 feeds, 10 messages, the OASIS Event Terms List and the CAP profile of MeteoAlarm. The tests map 2 real messages of the hub.",
+    "lists": [
+      "The WMO Register of Alerting Authorities, its RSS index: https://alertingauthority.wmo.int/rss.xml",
+      "The OASIS Event Terms List for CAP 1.2: https://docs.oasis-open.org/emergency/cap-etl/v1.2/cap-etl-v1.2.html",
+      "The MeteoAlarm feeds: https://feeds.meteoalarm.org/",
+      "The MeteoAlarm warnings and their CAP profile: https://meteoalarm.readthedocs.io/en/latest/warnings.html",
+      "The CAP profile of MET Norway: https://docs.api.met.no/doc/metalerts/CAP-v1-profile"
+    ],
+    "queries": [],
+    "notes": [
+      "The register had 303 alerting authorities on 2026-11-16. 224 of them gave a CAP feed, on 92 hosts. The repository keeps no copy of the register, because each entry names a person as its author.",
+      "The hub cap-sources.s3.amazonaws.com holds the feeds of many authorities. Each feed of the hub gives its copyright as public domain. 5 of the 6 messages of the hub in the round gave the OASIS event code OET:v1.2.",
+      "The OASIS list 1.2 has 224 terms, OET-000 to OET-223. The numbers of version 1.0 are different, so format-cap reads only the codes of version 1.2.",
+      "The CAP profile of MeteoAlarm gives the awareness type of each warning as a parameter, for example 10; rain. The CAP feed of the DWD gives no awareness type and no OASIS code.",
+      "The feed page of MeteoAlarm names more requirements for redistribution in its Terms and Conditions. That page needs JavaScript, so the round did not read it. The repository keeps no message of MeteoAlarm.",
+      "The taxonomy gains met.rain. Before this round, the rain warnings of MeteoAlarm and of the OASIS list had no code of their own."
+    ],
+    "studies": [],
+    "measures": {
+      "classes": 201,
+      "gaps": 131,
+      "cover": {
+        "adopted": 26,
+        "paths": 26,
+        "origins": 1
+      },
+      "total": {
+        "adopted": 83,
+        "paths": 83,
+        "origins": 56
+      },
+      "unknownOrigins": 3,
+      "unknownPaths": 5,
+      "cause": "Round 7 adds the class met.rain and the planned source wmo-cap-feeds. met.rain and met.lightning each have 2 planned sources with no risk, so the gaps go from 132 to 131 of 201 classes. No source is adopted, so the layers do not change. The path of wmo-cap-feeds is unknown, because its feeds are on 92 hosts."
+    }
   }
 ]

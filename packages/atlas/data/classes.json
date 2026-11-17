@@ -2291,7 +2291,7 @@
       "UNDRR-ISC HIPs 2025: MH0102 Lightning",
       "MeteoAlarm label: lightning"
     ],
-    "gap": "Round 1 found 1 adopted or planned source with no risk: noaa-goes-glm. blitzortung is reject: see the reason of each.",
+    "gap": null,
     "round": 1
   },
   {
@@ -2326,6 +2326,22 @@
     ],
     "gap": "Round 1 found 1 adopted or planned source with no risk: nws-alerts-api. ipaws-open has a risk, so the gate does not count it: see the risks of the record. Round 1 found no other source.",
     "round": 1
+  },
+  {
+    "id": "met.rain",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "MeteoAlarm rain warning",
+      "A heavy rain warning in the CAP feed of a national weather service"
+    ],
+    "references": [
+      "OASIS Event Terms List 1.2: OET-159 rain",
+      "MeteoAlarm awareness type: 10; rain"
+    ],
+    "gap": null,
+    "round": 7
   },
   {
     "id": "met.rip-current",
