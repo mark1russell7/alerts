@@ -377,7 +377,7 @@ Each copy loads the same `config.json` and `secrets.env`. The file `copy.json` o
 
 Without `copy.json`, the runtime is the only copy. It has rank 0 and no exchange. The key `COPY_TOKEN` of `secrets.env` gives the token of the exchange, the same for each copy. The check of the profile `daemon` needs it when the copy has other copies.
 
-The runtime reads `copy.json` only at its start. The reload hook watches only `config.json` and `secrets.env`. Thus, after a change of `copy.json`, start `node src/install.ts restart`. A problem of the file stops the start, and the problem holds no address and no URL.
+The runtime reads `copy.json` at its start, and the reload hook watches it with `config.json` and `secrets.env`. A change that passes the check restarts the runtime. A file with problems gives way to the last good set of the private files, and a problem holds no address and no URL.
 
 ### The rank wait
 
@@ -736,7 +736,7 @@ The service keeps the loop alive and safe:
 - The check `passes.progress` gates the liveness. It fails when a pass takes longer than its bound, or when the next pass is later than its bound. Then the supervisor stops the process and starts it again.
 - The drain holds the pass in flight. Its cap is the cap of the profile, plus the bound of a pass. Thus a shutdown does not cut a pass.
 - The service closes the log in the phase `tear down dependencies`, after the close of the worker. Thus no pass writes to a closed log.
-- The API on the loopback address gives `GET /status`: the time, the wake time, the sources, the sends and the conflicts of the last pass. It also gives the reason when the loop is stuck. The probes have a port of their own.
+- The API on the loopback address gives `GET /status`: the time, the wake time, the sources, the sends and the conflicts of the last pass. It also gives the reason when the loop is stuck, and the files of the start. The probes have a port of their own.
 - The API also gives `GET /map`, the `MapPayload` of the last pass. The section "The map" tells its parts.
 - The API also gives `GET /health`, the `HealthPayload` of each part of the system. The section "The health route" tells its parts.
 
@@ -900,6 +900,23 @@ The runtime operates the deploy in the worker `outage` of its service (`outage.t
 - A failed deploy goes again after a backoff: one minute, then double, up to one hour. The pass limit bounds one deploy, so the drain of the service holds it.
 - `GET /status` gives the state of the last deploy: `pending`, `current` or `failed`, with its stage and its count of failures. The state holds no private value.
 
+### Drills
+
+The fakes and the fault cases of CI test the code. Only a drill tests the live path: the provider, the phone and the person (AL-43). The module `drill.ts` of the core gives the drills as data and as pure functions. The functions read no clock.
+
+- A drill (`DrillConfig`) has an id, a person and a path. It also has the least time `every` between two starts, a window of the starts and the time `ackWithin` of the acknowledgment.
+- The path is one channel of the life-safety policy of the person. A drill goes as a system report of the level `life-safety`.
+- The subject of the report is `alerts.drill` (`DRILL_SUBJECT`), with the id of the drill. Only a person who watches it gets the drill.
+- Thus a drill uses the route, the receipts and the escalation of a real warning. Only an acknowledgment on the channel of the path counts.
+- The window is a `TimeWindow` of `@mark1russell7/algebra/clock`, with the days of the week. A drill on one day of each week has `every` of 6 days and a window on that day.
+- A run (`DrillRun`) is a start, with the first acknowledgment of a delivery on the channel of the path. The log of each copy holds the runs.
+- `joinRuns` joins two runs of one start: the earlier acknowledgment counts. The join is idempotent, commutative and associative.
+- `nextDrillAt` gives the next start: in the window, not in the quiet window of the person, and `every` or more after the last start. A timer waits for it. A drill with a window in the quiet window has no start.
+- `drillVerdict` gives `pending` until the end of the time of the acknowledgment. Then it gives `passed`, or `failed` with `no-ack` or `late-ack`. A failed send gives no acknowledgment, thus it fails as `no-ack`.
+- `drillProblems` finds bad times, a bad window, an unknown channel and a channel with no acknowledgment. Such a drill cannot pass.
+
+The runtime starts no drill yet. The next step is the start of each drill as a system report in the runtime. Then come a system report for a failed drill and a drill of the outage call.
+
 ## People and places
 
 The contracts carry only ids: `PersonId` and `PlaceId`. The runtime gets people, places, addresses and the night rule of each person from the private configuration.
@@ -916,6 +933,7 @@ The core gives the format of the private configuration, `AlertConfig` (`alerts-c
 - `link`: the policy of the link rule of the merge (rule 3). Without it, the instance uses `DEFAULT_LINK_POLICY`.
 - `outage`: the people of the outage call, each with a `TryChain`. Without it, an outage of the instance calls no person.
 - `assess`: the policy of the assessment, `AssessPolicy`. It replaces the full default policy of the core. With no field, the default policy applies.
+- `drills`: the drills of the live paths (the section Drills). Without them, the instance starts no drill.
 
 The times of the delivery and the rank of a copy are not in `AlertConfig`. They are settings of each copy.
 
@@ -928,6 +946,9 @@ The schema `alertConfigSchema` checks the JSON of the configuration first. Then 
 - a reserve of a spend entry that is not below its cap, and a time zone that is not an IANA name
 - an unknown person of the outage call, and a person two times in the call
 - a chain of the call with no step, and a step on a channel with no contact of the person
+- two drills with one id, a drill of an unknown person, and a drill on a channel with no contact of the person
+- a drill of a person who does not watch `alerts.drill`, or with no step on its channel in the life-safety policy
+- each problem of `drillProblems`
 - an interest graph of another person, and a place of the graph that the person does not watch
 - a rule of the life-safety warnings at a place that the person does not watch, and rules with no interest graph
 - each problem of `recipientProblems`
@@ -940,12 +961,23 @@ The runtime reads two private files in the folder `ALERTS_HOME`, or in `~/.alert
 
 The function `checkTexts` checks the texts of the two files, as the start does. It reads no file. The keys go through `parseEnvFile` of `@mark1russell7/service/host`, and `envSecrets` gives them as the secret store. The keys do not go into `process.env`, because each child process gets that environment. A read error gives only its code, because the path can hold a user name.
 
-The start keeps the last good configuration, and a change of the files restarts the runtime (`reload.ts`):
+The start keeps the last good set of the private files, and a change of the files restarts the runtime (`reload.ts`). The private files of a start are `config.json`, `secrets.env` and `copy.json`.
 
-- When `config.json` passes the check, the start uses it and writes it as the last good copy `config.good.json`. The write is atomic.
-- When `config.json` has problems, the start uses the last good copy and gives the problems. Thus a bad edit does not stop the alerts.
-- When the two copies have problems, `startConfig` throws `ConfigRefused`, and the process does not start.
-- In the profile `daemon`, the hook of each pass reads the two files again. A change that passes the check stops the runtime, and the supervisor starts it again.
+- When the three files pass the check, the start uses them. A ready runtime writes them as the last good set `start.good.json`. The write is atomic, with the permissions 0600, because the set holds the keys.
+- The last good set is a second copy of `secrets.env`. On Windows, the permissions do nothing, and the file gets the access list of the folder, as `secrets.env` does.
+- After a change of a key, the old key stays in the set until the next ready start. A start on the set uses the old keys.
+- The runtime is ready when its service operates and one pass ended. Thus a start that throws, or a startup that fails, does not write the set.
+- When the files have problems, the start uses the last good set and gives the problems. Thus a bad edit does not stop the alerts.
+- Before a start uses the files, it writes the start marker `start.pending`. The marker holds the key of the start: the SHA-256 of the three texts and of the restart request. A ready runtime removes the marker.
+- The marker counts the starts with its key that stopped before they were ready. One stop, for example a reboot or a power loss in the first pass, gives a second try of the files, with a note.
+- After `STOP_LIMIT` (2) stops in a row with one key, the start uses the last good set, and it keeps the marker. Thus each later start with the same files uses the set at once, and a crash loop stops.
+- A new restart request or a change of a file gives a new key. Then the next start uses the private files again.
+- When the last good set has the same texts as the files, the start uses the files again. Its note tells that the fault is not in the private files, for example new code that stops at each start.
+- When the files and the last good set both have problems, `startConfig` throws `ConfigRefused`, and the process does not start.
+- The marker does not find a stop after the runtime is ready. A runtime that stops later gives no way back to an older set.
+- `GET /status` gives the files of the start: `start.use` is `files` or `good`, with the count of the reasons. The reasons are in the output of the runtime.
+- `install.ts status` reads the marker and checks the three files. A runtime on the last good set, or files with problems, give the code 1.
+- In the profile `daemon`, the hook of each pass reads the three files again. A change that passes the check stops the runtime, and the supervisor starts it again.
 - A change with problems gives its problems one time, and the runtime keeps the files of its start.
 - A new text of the restart request `restart.request` in the folder stops the runtime with no check. Then the supervisor starts it again.
 - A read error of the request gives no restart. The start reads the request too, thus the new runtime does not restart for the same request.
@@ -954,8 +986,8 @@ A deploy of new code to the live checkout does these steps, with no elevated she
 
 1. Check out the new code, and install its dependencies.
 2. Start `node src/install.ts restart` in the runtime package. It checks the private files with the new code. A problem stops it before the request.
-3. The command writes a new request. Then it waits for a new process ID in `host/runtime.json`, and for the readiness of the new runtime.
-4. Code 0 tells that the new runtime is ready. Code 1 gives the problem, and code 2 gives a wrong command.
+3. The command writes a new request. Then it waits for a new process ID in `host/runtime.json`, for the readiness of the new runtime, and for the end of its start marker.
+4. Code 0 tells that the new runtime is ready with the private files. Code 1 gives the problem, for example a new runtime on the last good set. Code 2 gives a wrong command.
 
 The check of the profile `daemon` also needs the key `HEALTHCHECKS_PING_URL`, because the live instance needs its outside heartbeat.
 
@@ -1054,6 +1086,32 @@ The route `GET /health` of the runtime gives the `HealthPayload` of `healthPaylo
 - `copies`, `quotas` and `balances`: each watch with its stages. The stages come from `copyStages`, `quotaStages` and `balanceStages`, thus the page and the system reports agree.
 
 The coverage holds the ids of the places. Thus only the loopback address gives the route, as for the map.
+
+### The history
+
+The function `historyPayload` gives the `HistoryPayload` of the route `GET /history`. A time scrubber of a page replays how each incident grew. `historyPayloadSchema` checks the payload. The runtime does not give the route at this time.
+
+- `format`: `alerts-history/1` (`HISTORY_FORMAT`). A change that breaks a reader gets a new name.
+- `at`: the time of the last pass, or `null` before the first pass.
+- `since`: the payload has each incident with a change at this time or later. The value `null` gives each incident.
+- `next`: the time of the newest change of the merge state, or `null` with no change.
+- `incidents`: the history of each incident, in the order of the anchors. Each incident has each of its changes, from the oldest.
+- `regions`: the shapes of each region code of the changes, one time each. A change names its codes, and the shapes stay out of each change.
+
+A change comes at each time of entry of a report of the incident on this copy. An end mark of a known report also gives a change. The change has the parts of the incident that the copy knew at that time:
+
+- The level is the highest level over each person at that time, with the policy of the delivery and the mutes.
+- Two parts of an incident before their merge give one change. The change has the higher level and severity, and the areas of the two parts.
+- The time of entry comes from the clock of this copy. Thus a late import of a report of another copy comes after the `since` of a reader. Without the times of entry, the history uses the time of receipt.
+
+A reader keeps its histories by anchor:
+
+1. Read with no `since`. Keep `next`.
+2. Read again with `since` set to the last `next`. The payload gives the incident of the newest change again, because one time can get a later report.
+3. Replace the history of each incident of the payload. Drop each history whose anchor is a report of an incident of the payload, because these incidents merged.
+4. When `next` is below `since`, a step of the clock moved the times back. Read again with no `since`.
+
+The work for an incident with no change at `since` or later is only the read of its times. The levels come from the watches of the people, thus only the loopback address gives the route.
 
 ## Relevance
 

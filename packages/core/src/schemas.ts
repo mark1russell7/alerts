@@ -136,8 +136,11 @@ import {
 } from "./config.ts";
 import type { TryChain } from "./chain.ts";
 import type { EscalationEnd, Recipient } from "./delivery.ts";
+import type { DrillConfig, DrillPath } from "./drill.ts";
 import type { RankDelays } from "./escalation.ts";
 import { HEALTH_FORMAT, type BalanceHealth, type CopyHealth, type HealthPayload, type QuotaHealth, type SourceHealthView } from "./health-payload.ts";
+import { HISTORY_FORMAT, type HistoryChange, type HistoryIncident, type HistoryPayload, type HistoryRegion } from "./history.ts";
+import type { MapShape } from "./map.ts";
 import type { Lateness, LatenessLimit, LatenessState } from "./lateness.ts";
 import type { LinkFamily, LinkPolicy } from "./link.ts";
 import { COVERAGE_KIND } from "./assess.ts";
@@ -290,16 +293,20 @@ export const regionCodeSchema: z.ZodType<RegionCode, RegionCode> = schemaOf<Regi
   z.strictObject({ system: z.string(), code: z.string() }).readonly(),
 );
 
+// The polygon and the circle of an area. An area and a shape of the map share them.
+const polygonObject = z.strictObject({
+  type: z.literal("polygon"),
+  rings: z.array(z.array(positionSchema).readonly()).readonly(),
+  block: z.string().exactOptional(),
+});
+const circleObject = z.strictObject({ type: z.literal("circle"), center: positionSchema, radiusKm: z.number(), block: z.string().exactOptional() });
+
 /** This schema checks one area of an event: a polygon, a circle, a region code or a watched place. */
 export const areaSchema: z.ZodType<Area, Area> = schemaOf<Area>()(
   z
     .discriminatedUnion("type", [
-      z.strictObject({
-        type: z.literal("polygon"),
-        rings: z.array(z.array(positionSchema).readonly()).readonly(),
-        block: z.string().exactOptional(),
-      }),
-      z.strictObject({ type: z.literal("circle"), center: positionSchema, radiusKm: z.number(), block: z.string().exactOptional() }),
+      polygonObject,
+      circleObject,
       z.strictObject({ type: z.literal("code"), system: z.string(), code: z.string(), block: z.string().exactOptional() }),
       z.strictObject({ type: z.literal("place"), place: placeIdSchema }),
     ])
@@ -1342,6 +1349,38 @@ export const outageConfigSchema: z.ZodType<OutageConfig, OutageConfig> = schemaO
   z.strictObject({ people: z.array(outagePersonConfigSchema).readonly() }).readonly(),
 );
 
+/**
+ * This schema checks the window of the starts of a drill: the shape of `TimeWindow` of `@mark1russell7/algebra/clock`.
+ * It does not check the time zone or the local times. `drillProblems` finds a bad window.
+ */
+export const drillWindowSchema: z.ZodType<DrillConfig["window"], DrillConfig["window"]> = schemaOf<DrillConfig["window"]>()(
+  z
+    .strictObject({
+      zone: z.string(),
+      start: z.string(),
+      end: z.string(),
+      days: z.array(z.int().min(0).max(6, "A day of the week is from 0 (Sunday) to 6 (Saturday).")).readonly().optional(),
+    })
+    .readonly(),
+);
+
+/** This schema checks the path of a drill: one channel. `loadConfig` checks the channel and the contact of the person on it. */
+export const drillPathSchema: z.ZodType<DrillPath, DrillPath> = schemaOf<DrillPath>()(z.strictObject({ kind: z.literal("channel"), channel: channelIdSchema }).readonly());
+
+/** This schema checks one drill of the configuration. `loadConfig` checks the person, the channel and the times. */
+export const drillConfigSchema: z.ZodType<DrillConfig, DrillConfig> = schemaOf<DrillConfig>()(
+  z
+    .strictObject({
+      id: z.string().regex(/^[a-z0-9][a-z0-9-]{0,31}$/u, "The id of a drill is 1 to 32 lowercase letters, digits and hyphens."),
+      person: personIdSchema,
+      path: drillPathSchema,
+      every: durationSchema,
+      window: drillWindowSchema,
+      ackWithin: durationSchema,
+    })
+    .readonly(),
+);
+
 /** This schema checks a table of rank delays: a duration for some levels. `loadConfig` checks the bounds of each value. */
 export const rankDelaysSchema: z.ZodType<RankDelays, RankDelays> = schemaOf<RankDelays>()(
   z.strictObject({ digest: durationSchema.exactOptional(), notice: durationSchema.exactOptional(), urgent: durationSchema.exactOptional(), "life-safety": durationSchema.exactOptional() }).readonly(),
@@ -1350,7 +1389,7 @@ export const rankDelaysSchema: z.ZodType<RankDelays, RankDelays> = schemaOf<Rank
 /**
  * This schema checks the JSON of the private configuration at the load. It checks the form of each
  * value. Then `loadConfig` checks the references: the ids, the places of each person, the contacts,
- * the secrets and the outage call.
+ * the secrets, the outage call and the drills.
  */
 export const alertConfigSchema: z.ZodType<AlertConfig, AlertConfig> = schemaOf<AlertConfig>()(
   z
@@ -1368,6 +1407,7 @@ export const alertConfigSchema: z.ZodType<AlertConfig, AlertConfig> = schemaOf<A
       rankDelay: rankDelaysSchema.exactOptional(),
       rankFloor: durationSchema.exactOptional(),
       assess: assessPolicySchema.exactOptional(),
+      drills: z.array(drillConfigSchema).readonly().exactOptional(),
     })
     .readonly(),
 );
@@ -1503,6 +1543,59 @@ export const healthPayloadSchema: z.ZodType<HealthPayload, HealthPayload> = sche
       copies: z.array(copyHealthSchema).readonly(),
       quotas: z.array(quotaHealthSchema).readonly(),
       balances: z.array(balanceHealthSchema).readonly(),
+    })
+    .readonly(),
+);
+
+/** This schema checks a shape of the map: a polygon or a circle. */
+export const mapShapeSchema: z.ZodType<MapShape, MapShape> = schemaOf<MapShape>()(z.discriminatedUnion("type", [polygonObject, circleObject]).readonly());
+
+/** This schema checks one change of the history of an incident. */
+export const historyChangeSchema: z.ZodType<HistoryChange, HistoryChange> = schemaOf<HistoryChange>()(
+  z
+    .strictObject({
+      at: instantSchema,
+      reports: z.array(reportIdSchema).readonly(),
+      level: assessedLevelSchema,
+      severity: severitySchema,
+      live: z.boolean(),
+      onset: instantSchema.exactOptional(),
+      expires: instantSchema.exactOptional(),
+      codes: z.array(regionCodeSchema).readonly(),
+      shapes: z.array(mapShapeSchema).readonly(),
+      unshaped: z.array(regionCodeSchema).readonly(),
+    })
+    .readonly(),
+);
+
+/** This schema checks the history of one incident. */
+export const historyIncidentSchema: z.ZodType<HistoryIncident, HistoryIncident> = schemaOf<HistoryIncident>()(
+  z
+    .strictObject({
+      anchor: reportIdSchema,
+      reports: z.array(reportIdSchema).min(1, "An incident has one report or more.").readonly(),
+      status: statusSchema,
+      kind: kindSchema,
+      changes: z.array(historyChangeSchema).readonly(),
+    })
+    .readonly(),
+);
+
+/** This schema checks the shapes of one region code of the history. */
+export const historyRegionSchema: z.ZodType<HistoryRegion, HistoryRegion> = schemaOf<HistoryRegion>()(
+  z.strictObject({ code: regionCodeSchema, shapes: z.array(mapShapeSchema).readonly() }).readonly(),
+);
+
+/** This schema checks the answer of the history route of the runtime. */
+export const historyPayloadSchema: z.ZodType<HistoryPayload, HistoryPayload> = schemaOf<HistoryPayload>()(
+  z
+    .strictObject({
+      format: z.literal(HISTORY_FORMAT),
+      at: instantSchema.nullable(),
+      since: instantSchema.nullable(),
+      next: instantSchema.nullable(),
+      incidents: z.array(historyIncidentSchema).readonly(),
+      regions: z.array(historyRegionSchema).readonly(),
     })
     .readonly(),
 );

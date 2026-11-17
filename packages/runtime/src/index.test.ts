@@ -148,6 +148,9 @@ describe("the declaration of the service", () => {
     // The status shows the state of the deploy only for an instance with an outage call.
     expect(statusOf(loop, outage).outage).toEqual({ state: "pending" });
     expect("outage" in statusOf(loop)).toBe(false);
+    // The status shows the files of the start, thus a runtime on the last good set is plain to see.
+    expect(statusOf(loop, outage, { use: "good", reasons: 1 }).start).toEqual({ use: "good", reasons: 1 });
+    expect("start" in statusOf(loop, outage)).toBe(false);
   });
 
   it("declares the worker and the host of the exchange together, as a copy with peers and a listener has them", () => {

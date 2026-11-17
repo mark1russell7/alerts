@@ -22,7 +22,7 @@
  * `pnpm --filter ./packages/site build`. Without the build, the path `/` gives 404, and the routes still answer.
  *
  * The optional file `copy.json` gives the settings of this copy of the system (`copy.ts`): its rank and the key of its
- * first check. Without the file, the runtime is the only copy. A change of the file needs `install.ts restart`.
+ * first check. Without the file, the runtime is the only copy.
  *
  * The field `outage` of `config.json` gives the outage call. It needs the keys of Twilio and the key
  * `OUTAGE_TOKEN`. The worker `outage` deploys its Functions to Twilio (`outage.ts`).
@@ -30,11 +30,13 @@
  * A copy with other copies reads them over HTTP (`exchange-http.ts`). A copy with the address `listen` serves its
  * shared events on that address. Both need the key `COPY_TOKEN` of `secrets.env`, with 32 or more characters.
  *
- * A bad `config.json` gives way to the last good copy `config.good.json` (`reload.ts`). In the profile
- * `daemon`, a change of the private files that passes the check stops the runtime. The supervisor starts it again.
+ * The start uses the private files `config.json`, `secrets.env` and `copy.json` (`reload.ts`). Files with problems give way
+ * to the last good set `start.good.json`. A start that stopped before it was ready also gives way to it. The start is good
+ * when the service operates and one pass ended. In the profile `daemon`, a change of the private files that passes the
+ * check stops the runtime. The supervisor starts it again.
  */
 import { randomUUID } from "node:crypto";
-import { access } from "node:fs/promises";
+import { access, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { configHash } from "@mark1russell7/alerts";
@@ -49,7 +51,7 @@ import { fetchTransport, quotaGate } from "polite-crawler/api";
 import { writeFileAtomic } from "@procedures/fs/files";
 import { alertsHome, ConfigRefused, configPath, envSecrets } from "./config.ts";
 import { PAGE_INDEX, pageFolder } from "./api.ts";
-import { COPY_TOKEN_KEY, readCopySettings } from "./copy.ts";
+import { COPY_TOKEN_KEY } from "./copy.ts";
 import { EXCHANGE_TOKEN_LENGTH, exchangeCall, exchangeHost } from "./exchange-http.ts";
 import { heartbeat, heldOf, type PassSummary } from "./heartbeat.ts";
 import { quotaNote } from "./quota.ts";
@@ -57,7 +59,7 @@ import { PROFILES, declare } from "./index.ts";
 import { daemonCheck, INSTANCE_CHECK, LOUD_PING_URL_KEY, openInstance, pingKeyOf, pingTargets, userAgent } from "./instance.ts";
 import { openCheckedRuntimeLog } from "./log.ts";
 import type { ExchangeRound } from "./peers.ts";
-import { GOOD_CONFIG_FILE, privateFiles, reloadHook, startConfig } from "./reload.ts";
+import { GOOD_FILE, privateFiles, reloadHook, startConfig, type CheckOf } from "./reload.ts";
 import { shapeReport, zoneCodesText } from "./shapes.ts";
 import { supervisor } from "./supervise.ts";
 
@@ -77,19 +79,19 @@ async function runtime(): Promise<ServiceBuilder> {
 
   const home = alertsHome(process.env, process.cwd());
 
-  // The start checks config.json with the keys of secrets.env. A bad config.json gives way to the last good copy.
-  // A problem names the line and the key of a bad line, or the code of a read error. It holds no value and no path.
-  // The settings of this copy of the system. A problem stops the start, and it holds no address and no URL.
-  const copied = await readCopySettings(home);
-  if (copied.tag === "err") throw new ConfigRefused(copied.error);
-  const copy = copied.value;
+  // The start checks config.json with the keys of secrets.env and the settings of copy.json. Files with problems, or files
+  // of a start that stopped before it was ready, give way to the last good set. A problem names the line and the key of a
+  // bad line, or the code of a read error. It holds no value, no address, no URL and no path.
+  // The last good set holds the keys, thus each file that the start writes has the permissions 0600.
+  const checkOf: CheckOf = name === "daemon" ? daemonCheck : () => INSTANCE_CHECK;
+  const files = privateFiles(home, configPath(process.env, process.cwd()));
+  const loaded = await startConfig(files, checkOf, { write: (path, text) => writeFileAtomic(path, text, { mode: 0o600 }), remove: (path) => rm(path, { force: true }) });
+  if (loaded.use === "good") console.error(`The runtime uses the last good set ${GOOD_FILE} of the private files:\n- ${loaded.fallback.join("\n- ")}`);
+  for (const note of loaded.notes) console.error(note);
+  // The settings of this copy of the system, from the files of the start.
+  const copy = loaded.copy;
   const peers = copy.peers ?? [];
   if (peers.length > 0) console.log(`This runtime is the copy ${copy.id} with rank ${String(copy.rank)}. The other copies: ${peers.map((peer) => peer.id).join(", ")}.`);
-  const check = name === "daemon" ? daemonCheck(copy) : INSTANCE_CHECK;
-  const files = privateFiles(home, configPath(process.env, process.cwd()));
-  const loaded = await startConfig(files, check, (path, text) => writeFileAtomic(path, text));
-  if (loaded.fallback.length > 0) console.error(`The file config.json has problems. The runtime uses the last good copy ${GOOD_CONFIG_FILE}:\n- ${loaded.fallback.join("\n- ")}`);
-  for (const note of loaded.notes) console.error(note);
   const keys = loaded.keys;
   const values = Object.values(keys);
 
@@ -148,7 +150,7 @@ async function runtime(): Promise<ServiceBuilder> {
     name === "daemon"
       ? reloadHook({
           files,
-          check,
+          checkOf,
           started: loaded.texts,
           request: loaded.request,
           restart: (cause) => {
@@ -159,13 +161,18 @@ async function runtime(): Promise<ServiceBuilder> {
           onRefused: (problems) => console.error(`A change of the private files has problems. The runtime keeps its files:\n- ${problems.join("\n- ")}`),
         })
       : undefined;
-  const onPass =
-    beats.length === 0 && reload === undefined
-      ? undefined
-      : (pass: PassSummary) => {
-          for (const beat of beats) beat(pass);
-          reload?.onPass();
-        };
+  // The start is good after the startup of the service and one pass. Then the start writes the last good set, and it removes the
+  // start marker. A stop before that point gives way to the last good set at the next start with the same files.
+  let marked = false;
+  const onPass = (pass: PassSummary): void => {
+    for (const beat of beats) beat(pass);
+    reload?.onPass();
+    if (marked || service.lifecycle?.state !== "running") return;
+    marked = true;
+    void loaded.ready().then((notes) => {
+      for (const note of notes) console.error(note);
+    });
+  };
 
   // A broken log file goes into quarantine. The new file gets each event that the salvage reads, and a system report tells the loss.
   const { log, recovered } = openCheckedRuntimeLog(join(home, "runtime.sqlite"), { now: () => wall.now() });
@@ -189,7 +196,7 @@ async function runtime(): Promise<ServiceBuilder> {
     run: randomUUID(),
     copy,
     ...(token === undefined ? {} : { exchange: { call: exchangeCall({ token }), configHash: configHash(config.config) }, onExchange }),
-    ...(onPass === undefined ? {} : { onPass }),
+    onPass,
     // The output gets no secret, also when an error quotes a request.
     onError: (error, failures) => console.error(`A pass failed (${failures} in sequence): ${redactSecrets(errorMessage(error), values)}`),
     shapes,
@@ -241,6 +248,7 @@ async function runtime(): Promise<ServiceBuilder> {
     health: instance.health,
     page,
     ...(instance.outage === undefined ? {} : { outage: instance.outage }),
+    start: { use: loaded.use, reasons: loaded.fallback.length },
     exchange,
   });
   return service;

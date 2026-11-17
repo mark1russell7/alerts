@@ -159,6 +159,7 @@ export const TAXONOMY: Readonly<Record<string, KindEntry>> = {
   "met.marine.special": entry("Special marine weather", "A short warning for boats of strong wind, hail or waterspouts from a storm."),
   "met.marine.storm": entry("Storm at sea", "Wind of 48 to 63 knots at sea."),
   "met.outlook": entry("Hazardous weather outlook", "A daily forecast of the hazardous weather of the next days, before any watch."),
+  "met.rain": entry("Heavy rain", "Rain heavy enough to flood streets, cellars and low ground, below the level of a flood warning."),
   "met.rip-current": entry("Rip current", "A strong current that pulls swimmers away from the beach."),
   "met.severe-weather": entry("Severe weather", "An official weather watch, warning or advisory from a national meteorological service for an area."),
   "met.special": entry("Special weather", "A short statement of a weather service about weather below the level of a warning, for example a strong storm."),

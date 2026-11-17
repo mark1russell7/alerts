@@ -7,11 +7,13 @@
  * `chooseInfo` chooses one info block. `capPolygon` and `capCircle` give the areas in the order of the
  * core. The package also has the readers of the CAP values. The check of XML signatures comes later.
  *
- * `capReports` maps one message of the NWS family to one report for each info block in the chosen language.
+ * `capReports` maps one message to one report for each info block in the chosen language. `codedKind` reads the kind of
+ * a block from the event codes of the OASIS list and the awareness types of MeteoAlarm.
  */
 
 export { capCircle, capPolygon, capPosition } from "./geometry.ts";
 export { chooseInfo, DEFAULT_LANGUAGES, type ChosenInfo } from "./info.ts";
+export { codedKind, meteoalarmTypeName, METEOALARM_KINDS, METEOALARM_TYPE, OET_KINDS, OET_VERSION, type CodedKind, type CodedKinds } from "./kinds.ts";
 export {
   CAP_NAMESPACES,
   readCap,

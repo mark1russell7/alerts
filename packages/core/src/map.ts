@@ -156,8 +156,8 @@ export function mapPayload(input: MapPayloadInput): MapPayload {
   return { format: MAP_FORMAT, at, view: mapView({ ...view, assessments }), basemap };
 }
 
-/** The severities, from the highest. */
-const SEVERITY_ORDER: readonly Severity[] = ["extreme", "severe", "moderate", "minor", "unknown"];
+/** The severities, from the highest. The map and the history sort by this order. */
+export const SEVERITY_ORDER: readonly Severity[] = ["extreme", "severe", "moderate", "minor", "unknown"];
 
 /**
  * This function gives the rank of the size of a region code, from the smallest. An NWS zone (`KSZ083`)
@@ -201,7 +201,7 @@ export function mapView(input: MapInput): MapView {
           const found = input.shape(code);
           if (found === undefined) {
             missing.push(code);
-            unshaped.set(codeKey(code), code);
+            unshaped.set(regionCodeKey(code), code);
           } else shapes.push(...found);
         }
       }
@@ -242,7 +242,7 @@ export function mapView(input: MapInput): MapView {
   return {
     incidents,
     places,
-    unshaped: [...unshaped.values()].sort((a, b) => compareCodeUnits(a.system, b.system) || compareCodeUnits(a.code, b.code)),
+    unshaped: [...unshaped.values()].sort(compareRegionCodes),
   };
 }
 
@@ -256,6 +256,12 @@ function smallestShapes(codes: readonly RegionCode[], shape: ShapeLookup): reado
   return [];
 }
 
-function codeKey(code: RegionCode): string {
+/** This function gives the key of a region code: one text for each system and code. Two equal codes give one key. */
+export function regionCodeKey(code: RegionCode): string {
   return `${code.system}\u0000${code.code}`;
+}
+
+/** This function compares two region codes by the system, then by the code. */
+export function compareRegionCodes(a: RegionCode, b: RegionCode): number {
+  return compareCodeUnits(a.system, b.system) || compareCodeUnits(a.code, b.code);
 }

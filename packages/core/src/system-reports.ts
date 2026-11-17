@@ -61,6 +61,9 @@ export const LOG_SUBJECT = "alerts.log";
 /** The subject system of another copy of the system. The id of a subject is the id of the copy. */
 export const COPY_SUBJECT = "alerts.copy";
 
+/** The system of the subjects of the drill reports. The id of a subject is the id of a drill. */
+export const DRILL_SUBJECT = "alerts.drill";
+
 /** The stages of a quota, from the first to the last. */
 export const QUOTA_STAGES: readonly QuotaStage[] = ["low", "reserve", "spent"];
 

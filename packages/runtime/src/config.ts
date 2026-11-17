@@ -2,7 +2,7 @@
  * This module holds the check of the private files: the configuration and the keys. The check parses
  * the configuration with `parseConfig` of the core. A runtime does not start with a bad configuration,
  * because a runtime with a wrong place watches the wrong place in silence. The module `reload.ts` gives
- * the start its last good copy. No problem holds a value of the configuration, a value of a secret or a path.
+ * the start its last good set of the private files. No problem holds a value of the configuration, a value of a secret or a path.
  */
 import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";

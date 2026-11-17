@@ -33,6 +33,17 @@ export interface ApiOptions {
   readonly page?: string | undefined;
   /** The worker of the deploy of the outage call. The route `GET /status` reads its state. */
   readonly outage?: { state(): OutageDeployState };
+  /** The files of the start of the runtime. The route `GET /status` gives them. */
+  readonly start?: StartStatus;
+}
+
+/**
+ * The files of the start: the private files, or the last good set (`reload.ts`). A runtime on the last good set has the count
+ * of the reasons. The reasons are in the output of the runtime, and the status holds no reason.
+ */
+export interface StartStatus {
+  readonly use: "files" | "good";
+  readonly reasons: number;
 }
 
 /**
@@ -54,6 +65,8 @@ export interface Status {
   readonly stuck: string | null;
   /** The state of the deploy of the outage call. An instance with no outage call has no field. */
   readonly outage?: OutageDeployState;
+  /** The files of the start. A runtime with no start files, for example a test, has no field. */
+  readonly start?: StartStatus;
 }
 
 /** The file of the built local page that the path `/` gives. */
@@ -62,8 +75,8 @@ export const PAGE_INDEX = "local.html";
 /** This function gives the folder of the built local page in a checkout, from the folder of the package `runtime`. */
 export const pageFolder = (root: string): string => join(root, "..", "site", "dist");
 
-/** This function gives the status of the loop, and of the deploy of the outage call, at the time of the request. */
-export function statusOf(loop: RuntimeLoop, outage?: { state(): OutageDeployState }): Status {
+/** This function gives the status of the loop, of the deploy of the outage call and of the start, at the time of the request. */
+export function statusOf(loop: RuntimeLoop, outage?: { state(): OutageDeployState }, start?: StartStatus): Status {
   const last = loop.last();
   return {
     at: last?.at ?? null,
@@ -73,6 +86,7 @@ export function statusOf(loop: RuntimeLoop, outage?: { state(): OutageDeployStat
     conflicts: last?.conflicts.length ?? 0,
     stuck: loop.stuck() ?? null,
     ...(outage === undefined ? {} : { outage: outage.state() }),
+    ...(start === undefined ? {} : { start }),
   };
 }
 
@@ -90,7 +104,7 @@ export const attachApi = (svc: ServiceBuilder, options: ApiOptions): ServiceBuil
     { listen: { port: options.port, host: LOOPBACK } },
   );
   // Each request of a route goes through the service. Thus the drain waits for it, and the shutdown can cut it.
-  http.mount(handle("api", "GET /status", () => statusOf(options.loop, options.outage)));
+  http.mount(handle("api", "GET /status", () => statusOf(options.loop, options.outage, options.start)));
   // Each route declares if a client can send it again.
   const api = svc.controller("api").route("GET /status", { idempotent: true });
   const map = options.map;
