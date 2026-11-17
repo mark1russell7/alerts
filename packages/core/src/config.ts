@@ -379,7 +379,7 @@ export function loadConfig(config: AlertConfig, channels: readonly ChannelDescri
       const policy = recipient.policies.find((entry) => entry.level === "life-safety");
       if (policy?.steps.some((step) => step.channel === path.channel) !== true) problems.push(`The drill ${id} uses the channel ${path.channel}, and the life-safety policy of the person ${person} has no step on it.`);
     }
-    problems.push(...drillProblems(drill, channels));
+    problems.push(...drillProblems(drill, channels, recipient?.watch.quiet));
   }
   return { recipients, problems };
 }
