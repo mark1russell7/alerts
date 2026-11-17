@@ -489,6 +489,7 @@ const SCHEMA_NAMES = [
   "observationIdSchema",
   "observationSchema",
   "operationSchema",
+  "optInConfigSchema",
   "outageConfigSchema",
   "outagePersonConfigSchema",
   "ownBaselineSchema",
@@ -880,6 +881,26 @@ describe("the private configuration", () => {
     holds(drillConfigSchema, { ...drill, copies: ["home"] });
   });
 
+  it("checks the failure of a drill with the policy of a subject, and a real notice keeps its policy", () => {
+    const drill = { id: "push-weekly", person: PERSON, path: { kind: "channel", channel: PUSHOVER }, every: 6 * 86_400_000, window: { zone: "America/Chicago", start: "11:00", end: "17:00", days: [6] }, ackWithin: 1_800_000 } as const;
+    const watcher = { watch: { person: PERSON, places: [KANSAS.id], rules: [], subjects: [{ system: DRILL_SUBJECT }] }, label: "Person A" };
+    const second: ChannelDescriptor = { ...CHANNEL, id: "sms" as ChannelId, title: "SMS", ack: "none" };
+    // The notices of the person go only on the channel of the drill. Thus the failure of the drill sends nothing.
+    const notice = { level: "notice" as const, steps: [{ channel: PUSHOVER, at: 0 }], exhaustedAfter: 600_000 };
+    const contacts = [...CONFIG.contacts, { person: PERSON, channel: second.id, address: { to: { secret: "SMS_TO" } } }];
+    const secret = (name: string): string | undefined => (name === "PUSHOVER_USER" || name === "SMS_TO" ? "value-test" : undefined);
+    const load = (policies: readonly unknown[]) => loadConfig(alertConfigSchema.parse(JSON.parse(JSON.stringify({ ...CONFIG, people: [watcher], drills: [drill], policies, contacts }))), [CHANNEL, second], secret).problems;
+    expect(load([ESCALATION, notice])).toEqual([
+      `The failure of the drill push-weekly reaches the person ${PERSON} at the level notice, and its policy has no step on a channel other than pushover. It sends nothing.`,
+    ]);
+    // A policy of notice about the drills adds a step on the second channel for the drill reports only.
+    const drills = { ...notice, about: { system: DRILL_SUBJECT }, steps: [...notice.steps, { channel: second.id, at: 0 }] };
+    holds(escalationPolicySchema, drills);
+    expect(load([ESCALATION, notice, drills])).toEqual([]);
+    fails(escalationPolicySchema, { ...drills, about: { id: "push-weekly" } });
+    fails(escalationPolicySchema, { ...drills, about: { system: DRILL_SUBJECT, extra: 1 } });
+  });
+
   it("refuses a wrong form, and leaves the references to the load", () => {
     fails(alertConfigSchema, { ...CONFIG, format: "alerts-config/2" });
     fails(alertConfigSchema, { ...CONFIG, extra: 1 });
@@ -908,6 +929,10 @@ describe("the private configuration", () => {
     for (const bad of [{ monthlyUsd: 0 }, { monthlyUsd: -1 }, { reserveUsd: -1 }, { floor: "5" }, { timeZone: "" }, { provider: "" }, { currency: "USD" }]) fails(spendConfigSchema, { ...spend, ...bad });
     // A reserve above the cap and a bad zone are problems of the load, with the names of the fields.
     holds(spendConfigSchema, { ...spend, reserveUsd: 20, timeZone: "Mars/Olympus" });
+    // The fixed costs: each one has a name and a cost of 0 or more. Fixed costs above the cap are a problem of the load.
+    holds(spendConfigSchema, { ...spend, fixed: [{ what: "toll-free number", usd: 2.15 }, { what: "free", usd: 0 }] });
+    holds(spendConfigSchema, { ...spend, fixed: [{ what: "rent", usd: 50 }] });
+    for (const bad of [[{ what: "", usd: 1 }], [{ what: "rent", usd: -1 }], [{ what: "rent" }], [{ what: "rent", usd: 1, extra: 1 }], {}]) fails(spendConfigSchema, { ...spend, fixed: bad });
   });
 
   it("checks the form of the outage call, and leaves the people and the channels to the load", () => {

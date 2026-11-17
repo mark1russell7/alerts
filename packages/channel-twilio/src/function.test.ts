@@ -228,9 +228,10 @@ describe("endedFunction", () => {
 describe("the text after a chain", () => {
   const cursor = { outage: String(AT), person: "1", step: "1", round: "0", list: "v1" };
   const TEXT = "The alert system is down. The calls got no confirmation.";
+  const TEXTED: OutageList = { ...LIST, textMessage: TEXT, people: LIST.people.map((person) => ({ ...person, text: true })) };
 
   it("sends the text of the list at the end of a chain with no confirmation, and the log line has no number", async () => {
-    const f = fake({ list: async () => ({ ...LIST, textMessage: TEXT }) });
+    const f = fake({ list: async () => TEXTED });
     const reply = await endedFunction(f.ports, { base: BASE, params: { ...cursor, CallStatus: "no-answer" } });
     expect(reply.body).toBe(JSON.stringify({ calls: 0, texts: 1 }));
     expect(f.texts).toEqual([{ to: "+15555550124", body: TEXT }]);
@@ -239,11 +240,11 @@ describe("the text after a chain", () => {
   });
 
   it("sends no text after a confirmation, and logs a failed text with no number", async () => {
-    const acked = fake({ list: async () => ({ ...LIST, textMessage: TEXT }) });
+    const acked = fake({ list: async () => TEXTED });
     await endedFunction(acked.ports, { base: BASE, params: { ...cursor, CallStatus: "completed", acked: "1" } });
     expect(acked.texts).toEqual([]);
     const failing = fake({
-      list: async () => ({ ...LIST, textMessage: TEXT }),
+      list: async () => TEXTED,
       text: (text) => Promise.reject(new Error(`The 'To' number ${text.to} is not valid.`)),
     });
     const reply = await endedFunction(failing.ports, { base: BASE, params: { ...cursor, CallStatus: "busy" } });

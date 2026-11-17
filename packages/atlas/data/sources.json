@@ -665,6 +665,45 @@
     "round": 1
   },
   {
+    "id": "bom-sws-api",
+    "name": "Australian Bureau of Meteorology Space Weather API",
+    "classes": [
+      "geo.space-weather.geomagnetic-storm"
+    ],
+    "url": "https://sws-data.sws.bom.gov.au/api-docs",
+    "access": "api",
+    "auth": "key",
+    "terms": {
+      "url": "https://sws-data.sws.bom.gov.au/register",
+      "automated": "allowed",
+      "redistribution": "unclear",
+      "note": "The registration page gives a key for the API, and the data is at no charge, though this remains subject to change. The copyright page of the Bureau was not opened."
+    },
+    "cost": "free",
+    "delay": "unknown",
+    "history": "unknown",
+    "rateLimit": "unknown",
+    "calibration": null,
+    "coverage": "The Australian region: the K and A indices of Australia, and the magnetic alerts and warnings of the region. A geomagnetic storm is a planetary event, so the alerts are a signal of the storm in the whole Earth.",
+    "subjectIds": [],
+    "origins": [
+      "bom-sws"
+    ],
+    "path": [
+      "sws-data.sws.bom.gov.au",
+      "cdn:akamai"
+    ],
+    "risks": [],
+    "decision": "plan",
+    "adapter": null,
+    "reason": "A third origin of the geomagnetic storm, with a free key. The key needs a registration with a name and an email address.",
+    "evidence": [
+      "https://sws-data.sws.bom.gov.au/register",
+      "https://sws-data.sws.bom.gov.au/api-docs"
+    ],
+    "round": 9
+  },
+  {
     "id": "canada-recalls",
     "name": "Recalls and safety alerts (Government of Canada)",
     "classes": [
@@ -3102,6 +3141,46 @@
     "round": 1
   },
   {
+    "id": "gfz-kp-hpo",
+    "name": "GFZ geomagnetic indices Kp, Hp30 and Hp60 (web service)",
+    "classes": [
+      "geo.space-weather.geomagnetic-storm"
+    ],
+    "url": "https://kp.gfz.de/en/data",
+    "access": "api",
+    "auth": "none",
+    "terms": {
+      "url": "https://kp.gfz.de/en/",
+      "automated": "allowed",
+      "redistribution": "allowed",
+      "note": "The home page puts Kp and its derived indices under CC BY 4.0, with GFZ German Research Centre for Geosciences as the data source. The JSON gives the license and the source in its field meta. The sunspot numbers of the nowcast file are CC BY-NC, and the source does not use them."
+    },
+    "cost": "free",
+    "delay": "Hp30 each 30 minutes and Kp each 3 hours, as nowcast values with the status pre. One read at 01:22 UTC on 2026-11-17 had the Hp30 interval from 00:30 to 01:00 UTC as its last value.",
+    "history": "Kp from 1932. The nowcast values change to definitive values later.",
+    "rateLimit": "No published limit. The data page tells users to use the HTTPS files for large amounts of data.",
+    "calibration": null,
+    "coverage": "The whole Earth: one planetary index from 13 geomagnetic observatories. A Kp of 5 or more is a storm on the G scale of NOAA, from G1 at 5 to G5 at 9.",
+    "subjectIds": [],
+    "origins": [
+      "gfz"
+    ],
+    "path": [
+      "kp.gfz.de"
+    ],
+    "risks": [],
+    "decision": "plan",
+    "adapter": null,
+    "reason": "A second origin of the geomagnetic storm, apart from the SWPC, with no key. Hp30 gives a storm in 30 minutes, before the 3-hour Kp.",
+    "evidence": [
+      "https://kp.gfz.de/en/",
+      "https://kp.gfz.de/en/data",
+      "https://kp.gfz.de/app/format/json.txt",
+      "https://kp.gfz.de/app/json/"
+    ],
+    "round": 9
+  },
+  {
     "id": "github-advisories-api",
     "name": "GitHub global security advisories REST API",
     "classes": [
@@ -3547,17 +3626,17 @@
       "infra.internet.outage",
       "infra.internet.shutdown"
     ],
-    "url": "https://github.com/InetIntel/ioda-api",
+    "url": "https://api.ioda.inetintel.cc.gatech.edu/v2/",
     "access": "api",
-    "auth": "unknown",
+    "auth": "none",
     "terms": {
       "url": null,
       "automated": "unclear",
       "redistribution": "unclear",
-      "note": "The repository license covers the software (free for research and education, other use needs UC San Diego). Data terms not opened."
+      "note": "The OpenAPI page of the API and the site of IODA give no terms for the data. The license of the repository covers only the software: free for research and education, and other use needs UC San Diego. Round 9 found no data terms."
     },
-    "cost": "unknown",
-    "delay": "unknown",
+    "cost": "free",
+    "delay": "The alerts have a time on a step of 5 minutes. One read at 01:24 UTC on 2026-11-17 gave alerts of the last 6 hours.",
     "history": "unknown",
     "rateLimit": "unknown",
     "calibration": null,
@@ -3568,15 +3647,20 @@
     "path": [
       "api.ioda.inetintel.cc.gatech.edu"
     ],
-    "subjectIds": null,
+    "subjectIds": [
+      "iso3166",
+      "asn"
+    ],
     "risks": [],
-    "decision": "later",
+    "decision": "plan",
     "adapter": null,
-    "reason": "Research-grade outage detection; endpoints and data terms need round 2. The decision is later because the auth is unknown.",
+    "reason": "Outage alerts by country, region and AS from BGP, active probes and a network telescope, with no key. The adapter waits for written data terms or an answer of the IODA team.",
     "evidence": [
+      "https://api.ioda.inetintel.cc.gatech.edu/v2/",
+      "https://api.ioda.inetintel.cc.gatech.edu/v2/outages/alerts",
       "https://github.com/InetIntel/ioda-api"
     ],
-    "round": 1
+    "round": 9
   },
   {
     "id": "ipaws-open",
@@ -4918,6 +5002,101 @@
     "round": 1
   },
   {
+    "id": "nws-nwws-oi",
+    "name": "NOAA Weather Wire Service Open Interface (NWWS-OI)",
+    "classes": [
+      "geo.earthquake",
+      "geo.earthquake.early-warning",
+      "geo.tsunami",
+      "geo.volcano",
+      "geo.volcano.ashfall",
+      "met.severe-weather",
+      "met.tornado",
+      "met.thunderstorm",
+      "met.tropical",
+      "met.winter",
+      "met.flood",
+      "met.flood.flash",
+      "met.flood.river",
+      "met.flood.coastal",
+      "met.heat",
+      "met.cold",
+      "met.wind",
+      "met.fog",
+      "met.dust-storm",
+      "met.marine",
+      "met.surf",
+      "met.rip-current",
+      "met.beach-hazards",
+      "geo.avalanche",
+      "fire.wildfire",
+      "fire.weather",
+      "fire.structure",
+      "env.air-quality",
+      "env.air-quality.smoke",
+      "cbrne.nuclear-plant",
+      "infra.dam.failure",
+      "infra.telecom.911-outage",
+      "security.child-abduction",
+      "security.blue-alert",
+      "security.law-enforcement",
+      "safety.shelter-in-place",
+      "safety.evacuation",
+      "safety.civil-emergency",
+      "cbrne.hazardous-materials",
+      "cbrne.radiological",
+      "system.test",
+      "env.air-stagnation",
+      "env.smoke",
+      "met.blowing-dust",
+      "met.freeze",
+      "met.frost",
+      "met.outlook",
+      "met.special",
+      "met.surge",
+      "safety.civil-danger",
+      "safety.local-emergency"
+    ],
+    "url": "https://www.weather.gov/nwws/",
+    "access": "stream",
+    "auth": "account",
+    "terms": {
+      "url": "https://www.weather.gov/disclaimer",
+      "automated": "allowed",
+      "redistribution": "allowed",
+      "note": "The NWS gives an account for NWWS-OI at no cost, after a request. The products are works of the US government, in the public domain. The page of NWWS tells the users to read it together with a second ingest."
+    },
+    "cost": "free",
+    "delay": "seconds: an XMPP push stream. The NWS calls NWWS its fastest method for the text of its alerts and warnings.",
+    "history": "A join of the room gives only the last 25 products again. There is no archive.",
+    "rateLimit": "No published limit. The adapter keeps one session for each account.",
+    "calibration": null,
+    "coverage": "Each product of the NWS forecast offices and national centers: the US states and territories, and the coastal and offshore waters. The CAP messages are the CAP messages of the NWS API.",
+    "origins": [
+      "nws",
+      "us-alerting-authorities"
+    ],
+    "path": [
+      "nwws-oi.weather.gov"
+    ],
+    "subjectIds": [
+      "ugc",
+      "same",
+      "polygon",
+      "cap-category"
+    ],
+    "risks": [],
+    "decision": "adopt",
+    "adapter": "@mark1russell7/alerts-source-nwws",
+    "reason": "The second path of the NWS warnings: a push stream on servers apart from the NWS API and its content network.",
+    "evidence": [
+      "https://www.weather.gov/nwws/",
+      "https://www.weather.gov/disclaimer",
+      "https://www.weather.gov/nwws/configuration"
+    ],
+    "round": 8
+  },
+  {
     "id": "nyse-halts-csv",
     "name": "NYSE current trade halts download",
     "classes": [
@@ -5849,14 +6028,14 @@
     ],
     "url": "https://ris-live.ripe.net/",
     "access": "stream",
-    "auth": "unknown",
+    "auth": "none",
     "terms": {
-      "url": null,
-      "automated": "unclear",
-      "redistribution": "unclear",
-      "note": "Both RIS Live pages returned a 404 page. Facts not confirmed."
+      "url": "https://www.ripe.net/about-us/legal/terms-of-service",
+      "automated": "allowed",
+      "redistribution": "limited",
+      "note": "The terms of service of the public RIPE NCC services cover automated use. Article 3.5 limits a copy of the data. A derived product needs the credit of the RIS page: the logo, a link and its text."
     },
-    "cost": "unknown",
+    "cost": "free",
     "delay": "unknown",
     "history": "unknown",
     "rateLimit": "unknown",
@@ -5872,9 +6051,12 @@
     "risks": [],
     "decision": "later",
     "adapter": null,
-    "reason": "Raw BGP updates need a detector; Cloudflare Radar gives events directly.",
-    "evidence": [],
-    "round": 1
+    "reason": "Raw BGP updates need a detector of hijacks, leaks and lost prefixes. Cloudflare Radar gives the events directly. The terms are known since round 9, and the RIS Live manual page did not load.",
+    "evidence": [
+      "https://www.ripe.net/about-us/legal/terms-of-service",
+      "https://www.ripe.net/analyse/internet-measurements/routing-information-service-ris/commercial-use/"
+    ],
+    "round": 9
   },
   {
     "id": "sec-enforcement-rss",
@@ -5954,6 +6136,44 @@
       "https://www.sec.gov/privacy"
     ],
     "round": 1
+  },
+  {
+    "id": "sidc-alerts-email",
+    "name": "SIDC (RWC-Belgium) alerts by email: Presto, the flare alert and the halo CME alert",
+    "classes": [
+      "geo.space-weather",
+      "geo.space-weather.radio-blackout"
+    ],
+    "url": "https://sidc.be/registration/registration_main.php",
+    "access": "email",
+    "auth": "account",
+    "terms": {
+      "url": null,
+      "automated": "unclear",
+      "redistribution": "unclear",
+      "note": "The product list marks each alert as public. The round found no terms for the use of the messages."
+    },
+    "cost": "free",
+    "delay": "As soon as possible: Presto when needed, the flare alert when a flare above M5 shows in the GOES data, the CME alert at a halo CME.",
+    "history": "unknown",
+    "rateLimit": "Not applicable: a subscription by email.",
+    "calibration": null,
+    "coverage": "The Sun and the space near the Earth. The flare alert reads the X-ray data of the GOES satellites of NOAA.",
+    "subjectIds": [],
+    "origins": [
+      "sidc"
+    ],
+    "path": [
+      "unknown"
+    ],
+    "risks": [],
+    "decision": "later",
+    "adapter": null,
+    "reason": "The alerts come only by email in plain text. The system has no email input, and a subscription needs an address.",
+    "evidence": [
+      "https://sidc.be/registration/registration_main.php"
+    ],
+    "round": 9
   },
   {
     "id": "smarkets-api",

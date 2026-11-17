@@ -4,6 +4,10 @@
  * session. The session refuses a link that is not secure, because the server gets the password in SASL.
  */
 
+// The reference brings the types of the package into each program that compiles this module, also the program of a
+// package that imports this package.
+/// <reference path="./xmpp-client.d.ts" />
+
 import { randomBytes } from "node:crypto";
 import type { Cancel, WallClock } from "@mark1russell7/algebra/clock";
 import { errorMessage } from "@mark1russell7/text";

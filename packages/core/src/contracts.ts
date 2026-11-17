@@ -708,6 +708,11 @@ export interface AddressField {
   readonly pattern: string;
   /** The form in words, for the text of a problem, for example `a phone number in E.164 form`. It tells no value. */
   readonly form: string;
+  /**
+   * True: each value of the field needs a record of the opt-in list of the configuration (`optIn`). A send to a value
+   * with no opt-in fails with the kind `consent`. The default is false.
+   */
+  readonly optIn?: boolean;
 }
 
 /** The facts of a channel. The core uses them for the escalation and the coverage of delivery. */
@@ -908,12 +913,13 @@ export interface ProviderBalance {
  * - `rate-limited`: the provider refuses each message until the retry.
  * - `reserved`: the channel keeps the last units of its quota for a higher level. It still sends a message of that level.
  * - `auth` and `refused`: the provider refused the key or the message.
+ * - `consent`: the address has no opt-in, or its person took the opt-in back with a STOP reply. The channel sent nothing.
  */
 export type SendOutcome =
   | { readonly ok: true; readonly receipt: Receipt; readonly accepted: Instant }
   | {
       readonly ok: false;
-      readonly kind: "network" | "timeout" | "server" | "rate-limited" | "reserved" | "auth" | "refused";
+      readonly kind: "network" | "timeout" | "server" | "rate-limited" | "reserved" | "auth" | "refused" | "consent";
       readonly message: string;
       readonly retryAfter?: Duration;
     };
@@ -970,9 +976,15 @@ export interface EscalationStep {
   readonly at: Duration;
 }
 
-/** The escalation of one level: the steps, until a person acknowledges. */
+/**
+ * The escalation of one level: the steps, until a person acknowledges. A policy with a subject (`about`) applies only
+ * to the incidents about that subject with the status `system`, `test` or `exercise`. For them, it replaces the policy
+ * of the level with no subject. Thus no policy with a subject changes the plan of a real warning.
+ */
 export interface EscalationPolicy {
   readonly level: Level;
+  /** The subject of the policy, as a subject watch. A subject watch with no id matches each subject of its system. */
+  readonly about?: SubjectWatch;
   readonly steps: readonly EscalationStep[];
   /** The time after the last step at which the escalation is exhausted. Exhausted is a system alert. */
   readonly exhaustedAfter: Duration;

@@ -20,6 +20,7 @@ export * from "./delivery.ts";
 export * from "./drill.ts";
 export * from "./why.ts";
 export * from "./config.ts";
+export * from "./opt-in.ts";
 export * from "./health.ts";
 export * from "./coverage.ts";
 export * from "./lateness.ts";

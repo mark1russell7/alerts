@@ -48,12 +48,21 @@ describe("outageListOf", () => {
     expect(outageListSchema.safeParse(JSON.parse(JSON.stringify(list))).success).toBe(true);
   });
 
-  it("adds the text message, and counts one text for each person in the default cap", () => {
-    const { list, problems } = outageListOf(OUTAGE, RECIPIENTS, MONTH, { textMessage: OUTAGE_TEXT_MESSAGE });
+  it("adds the text message, and counts one text for each person with the opt-in in the default cap", () => {
+    const { list, problems } = outageListOf(OUTAGE, RECIPIENTS, MONTH, { textMessage: OUTAGE_TEXT_MESSAGE, optIn: () => true });
     expect(problems).toEqual([]);
     expect(list.textMessage).toBe(OUTAGE_TEXT_MESSAGE);
+    expect(list.people.map((person) => person.text)).toEqual([true, true]);
     // 5 calls and 2 texts in one outage.
     expect(list.maxCalls).toBe(OUTAGE_CAP_OUTAGES * 7);
+    // Only the number of the opt-in list gets the text. Without the opt-in, no person gets it.
+    const one = outageListOf(OUTAGE, RECIPIENTS, MONTH, { textMessage: OUTAGE_TEXT_MESSAGE, optIn: (number) => number === "+15555550124" }).list;
+    expect(one.people.map((person) => person.text)).toEqual([undefined, true]);
+    expect(one.maxCalls).toBe(OUTAGE_CAP_OUTAGES * 6);
+    const none = outageListOf(OUTAGE, RECIPIENTS, MONTH, { textMessage: OUTAGE_TEXT_MESSAGE }).list;
+    expect(none.people.map((person) => person.text)).toEqual([undefined, undefined]);
+    expect(none.maxCalls).toBe(OUTAGE_CAP_OUTAGES * 5);
+    expect(outageListOf(OUTAGE, RECIPIENTS, MONTH, { optIn: () => true }).list.people.map((person) => person.text)).toEqual([undefined, undefined]);
     expect(list.version).not.toBe(outageListOf(OUTAGE, RECIPIENTS, MONTH).list.version);
     expect(outageListSchema.safeParse(JSON.parse(JSON.stringify(list))).success).toBe(true);
   });

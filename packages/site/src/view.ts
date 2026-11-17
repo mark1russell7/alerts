@@ -3,14 +3,13 @@
  * message of the step. The view only draws: the frames hold each decision. The map of a frame is in `demo-map.ts`.
  */
 
-import type { Assessment, HealthState, Incident, Report } from "@mark1russell7/alerts";
+import type { Assessment, Incident, Report } from "@mark1russell7/alerts";
 import { h } from "@mark1russell7/site-pages/chrome";
 import { LEVEL_WORDS, levelChip, statusChip } from "./draw.ts";
 import { SOURCES } from "./demo.ts";
 import {
   changeText,
   clock,
-  HEALTH_WORDS,
   incidentLabel,
   joinFacts,
   KIND_WORDS,
@@ -20,6 +19,7 @@ import {
   reasonText,
   shortName,
 } from "./explain.ts";
+import { HEALTH_LOOKS } from "./health-look.ts";
 import { LEVELS_DOWN, topLevel, type Frame } from "./replay.ts";
 
 /** This function gives the assessments of one incident. */
@@ -179,16 +179,6 @@ export function counts(frames: readonly Frame[], index: number): { messages: num
   };
 }
 
-/** The class of the chip of each health state. */
-const STATE_TONES: Readonly<Record<HealthState, string>> = {
-  unknown: "quiet",
-  healthy: "good",
-  slow: "warn",
-  failing: "bad",
-  silent: "bad",
-  changed: "bad",
-};
-
 /**
  * This function draws the sources of one frame. It shows the health of each source and the
  * coverage of each kind at each home. It also shows the system reports and the level of each person.
@@ -203,7 +193,7 @@ export function drawSources(frame: Frame): HTMLElement {
       h(
         "li",
         { class: "source", "data-source": entry.source, "data-state": entry.state },
-        h("div", { class: "row" }, h("strong", {}, shortName(entry.source)), h("span", { class: `chip state ${STATE_TONES[entry.state]}` }, HEALTH_WORDS[entry.state])),
+        h("div", { class: "row" }, h("strong", {}, shortName(entry.source)), h("span", { class: `chip state ${HEALTH_LOOKS[entry.state].tone}` }, HEALTH_LOOKS[entry.state].word)),
         h("p", { class: "facts" }, `Since ${clock(entry.since)}. ${entry.reason}`),
         descriptor === undefined ? null : h("p", { class: "domains" }, "Outside domains: ", ...descriptor.dependsOn.flatMap((domain, index) => [index === 0 ? "" : ", ", h("code", {}, domain)])),
         ...sources.transitions.filter((change) => change.instance === entry.source).map((change) => h("p", { class: "change" }, changeText(change))),

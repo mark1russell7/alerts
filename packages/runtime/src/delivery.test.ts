@@ -1020,6 +1020,16 @@ describe("the delivery step of a pass", () => {
     log.close();
   });
 
+  it("does not give a send that the person refused with a STOP reply as overdue", async () => {
+    const stopped: Script = { send: () => ({ ok: false, kind: "consent", message: "The number replied STOP." }) };
+    const { clock, runtime, log } = open({ pushover: stopped }, openRuntimeLog(":memory:"), fakeWallClock(T0), { overdueAfter: 60 * SECOND });
+    const first = await runtime.pass();
+    expect(first.delivery?.failures.map((failure) => failure.kind)).toEqual(["consent"]);
+    await clock.advance(120 * SECOND);
+    expect((await runtime.pass()).delivery?.overdue).toEqual([]);
+    log.close();
+  });
+
   it("keeps the later flight of a key when an earlier flight fails after it started", async () => {
     const clock = fakeWallClock(T0);
     // The first send fails at 50 s. The second send starts at 40 s and hangs.

@@ -154,6 +154,18 @@ describe("the quota of the spend", () => {
     }
   });
 
+  it("takes the fixed costs off the cap in cents, and refuses fixed costs that use all of the cap", () => {
+    const fixed = [
+      { what: "toll-free number", usd: 2.15 },
+      { what: "local number", usd: 1.15 },
+    ];
+    expect(spendQuota({ name: "Twilio spend", monthlyUsd: 15, fixed, reserveUsd: 3, timeZone: "UTC" })).toMatchObject({ limit: 1170, reserve: 300 });
+    expect(spendQuota({ name: "Twilio spend", monthlyUsd: 15, fixed: [], timeZone: "UTC" }).limit).toBe(1500);
+    for (const extra of [{ monthlyUsd: 3.3 }, { monthlyUsd: 3 }, { reserveUsd: 11.7 }, { fixed: [{ what: "refund", usd: -1 }] }]) {
+      expect(() => spendQuota({ name: "Twilio spend", monthlyUsd: 15, fixed, timeZone: "UTC", ...extra }), JSON.stringify(extra)).toThrow();
+    }
+  });
+
   it("refuses a cap of 0 or less, and a reserve that is not below the cap", () => {
     const cap = { name: "Twilio spend", monthlyUsd: 20, timeZone: "UTC" };
     expect(spendQuota(cap).reserve).toBe(0);
