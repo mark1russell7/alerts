@@ -489,6 +489,7 @@ const SCHEMA_NAMES = [
   "observationIdSchema",
   "observationSchema",
   "operationSchema",
+  "optInConfigSchema",
   "outageConfigSchema",
   "outagePersonConfigSchema",
   "ownBaselineSchema",

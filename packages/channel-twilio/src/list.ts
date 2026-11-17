@@ -42,6 +42,11 @@ export interface OutageListOptions {
   readonly texts?: Partial<OutageTexts>;
   /** The text message after a chain with no confirmation, for example `OUTAGE_TEXT_MESSAGE`. Without it, the list has no text. */
   readonly textMessage?: string;
+  /**
+   * This function tells if a number is on the opt-in list of the texts. Only a person with such a number gets the text.
+   * Without it, no person gets the text.
+   */
+  readonly optIn?: (number: string) => boolean;
 }
 
 /** The list of the outage call, and the problems that stop its deploy. */
@@ -55,6 +60,7 @@ export interface OutageListResult {
  * This function gives the list of the outage call from the configuration and the recipients of `loadConfig`.
  *
  * - The number of each person is the address `to` of the person on the channel of the calls.
+ * - A person gets the text of the list only when the number is on the opt-in list (`optIn`).
  * - The monthly cap `month` comes from the cap of the spend of Twilio. The list has no default for it.
  * - The version is the start of the content hash of the rest of the list. Thus a change of the list gives a new version.
  * - The problems are the problems of `outageListProblems`, and a person with no recipient.
@@ -67,7 +73,9 @@ export function outageListOf(outage: OutageConfig, recipients: readonly Recipien
   const people = outage.people.map(({ person, chain }) => {
     const recipient = byPerson.get(person);
     if (recipient === undefined) problems.push(`The outage call names the person ${person}, and no recipient has that id.`);
-    return { person, to: recipient?.addresses[CHANNEL_ID]?.["to"] ?? "", chain: { steps: [...chain.steps] } };
+    const to = recipient?.addresses[CHANNEL_ID]?.["to"] ?? "";
+    const text = options.textMessage !== undefined && to !== "" && options.optIn?.(to) === true;
+    return { person, to, chain: { steps: [...chain.steps] }, ...(text ? { text } : {}) };
   });
   const perOutage = outageSends({ people, ...(options.textMessage === undefined ? {} : { textMessage: options.textMessage }) });
   const content = {
