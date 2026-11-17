@@ -4,7 +4,8 @@
  */
 
 import { addressProblems, type Address, type DeliveryStatus, type Instant, type Message, type SendOutcome } from "@mark1russell7/alerts";
-import { errorMessage, textLength, truncate } from "@mark1russell7/text";
+import { errorMessage } from "@mark1russell7/text";
+import { textLength, truncate } from "@mark1russell7/text/length";
 import { type TwilioCall, type TwilioCallRead, type TwilioFailure, twilioSayTwiml } from "@procedures/notify/twilio";
 import { twilioCallDescriptor } from "./descriptor.ts";
 
