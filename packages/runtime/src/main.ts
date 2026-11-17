@@ -246,6 +246,7 @@ async function runtime(): Promise<ServiceBuilder> {
     quotas,
     map: instance.map,
     health: instance.health,
+    history: instance.history,
     page,
     ...(instance.outage === undefined ? {} : { outage: instance.outage }),
     start: { use: loaded.use, reasons: loaded.fallback.length },

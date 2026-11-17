@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { assess, reachedAssessment } from "./assess.ts";
 import type { MergeState, ObservationId, PersonId, PersonWatch, PlaceId, RegionCode, Report, ReportId, SourceId } from "./contracts.ts";
-import { HISTORY_FORMAT, historyPayload, type HistoryInput } from "./history.ts";
+import { HISTORY_FORMAT, historyPayload, OWN_ENTRY_TIMES, type EntryTimes, type HistoryInput } from "./history.ts";
 import { reportId } from "./ids.ts";
 import type { MapPlaceInput, MapShape, ShapeLookup } from "./map.ts";
 import { EMPTY_STATE, incidents } from "./merge.ts";
@@ -142,11 +142,25 @@ describe("historyPayload", () => {
     const imported = report({ key: "w3", sent: T0 + 50 * MINUTE, received: T0 + 50 * MINUTE, op: "update", references: ["w2"] });
     const state = merge([first, update, imported]);
     const own = new Map([[imported.id, T0 + 90 * MINUTE]]);
-    const entered = (one: Report): number => own.get(one.id) ?? one.received;
+    const entered: EntryTimes = { ...OWN_ENTRY_TIMES, report: (one) => own.get(one.id) ?? one.received };
     const payload = historyPayload(input(state, { since: T0 + 60 * MINUTE, entered }));
     expect(payload.incidents[0]?.changes.at(-1)).toMatchObject({ at: T0 + 90 * MINUTE, reports: [imported.id] });
     // The flip: with the time of receipt, the import is before the since.
     expect(historyPayload(input(state, { since: T0 + 60 * MINUTE })).incidents).toEqual([]);
+  });
+
+  it("uses the time of entry of an end mark, thus the incident stays live until this copy knew the mark", () => {
+    const ended = { report: update.id, at: T0 + 20 * MINUTE, ended: true };
+    const state = merge([first, update], { ends: [ended] });
+    const entered: EntryTimes = { ...OWN_ENTRY_TIMES, mark: (mark) => (mark === ended ? T0 + 50 * MINUTE : mark.at) };
+    const changes = historyPayload(input(state, { entered })).incidents[0]?.changes ?? [];
+    expect(changes.map((change) => [change.at, change.live])).toEqual([
+      [T0, true],
+      [T0 + 10 * MINUTE, true],
+      [T0 + 50 * MINUTE, false],
+    ]);
+    // The flip: with the own time of the mark, the end is at 20 minutes.
+    expect(historyPayload(input(state)).incidents[0]?.changes.at(-1)).toMatchObject({ at: T0 + 20 * MINUTE, live: false });
   });
 
   it("tells a step of the clock back: next is below since", () => {
