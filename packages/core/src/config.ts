@@ -74,12 +74,33 @@ export interface SpendConfig {
   readonly provider: string;
   /** The most that the channels of the account spend in one calendar month, in US dollars. */
   readonly monthlyUsd: number;
-  /** The last part of the monthly cap that only `life-safety` messages use, in US dollars. The default is 0. */
+  /**
+   * The fixed costs of the account in each month, for example the rent of each phone number. The sends of a month get
+   * the monthly cap less these costs (`sendCapUsd`). The default is no fixed cost.
+   */
+  readonly fixed?: readonly FixedCost[];
+  /** The last part of the cap of the sends that only `life-safety` messages use, in US dollars. The default is 0. */
   readonly reserveUsd?: number;
   /** Below this balance of the account, in the currency of the account, the system reports the line `low`. */
   readonly floor: number;
   /** The time zone of the start of the month, as an IANA name: for example `America/New_York`. */
   readonly timeZone: string;
+}
+
+/** One fixed cost of a provider account in each month, for example the rent of one phone number. */
+export interface FixedCost {
+  /** The name of the cost, for example `toll-free number`. */
+  readonly what: string;
+  /** The cost in each month, in US dollars. */
+  readonly usd: number;
+}
+
+/**
+ * This function gives the part of the monthly cap of a spend entry that the sends get, in US dollars. That part is the
+ * cap less the fixed costs. The value is 0 or less when the fixed costs use all of the cap.
+ */
+export function sendCapUsd(spend: Pick<SpendConfig, "monthlyUsd" | "fixed">): number {
+  return spend.monthlyUsd - (spend.fixed ?? []).reduce((sum, cost) => sum + cost.usd, 0);
 }
 
 /** One person of the outage call, with the chain of the tries of the person. */
@@ -337,7 +358,10 @@ export function loadConfig(config: AlertConfig, channels: readonly ChannelDescri
     providers.add(provider);
     // A typo of a provider gives a cap that no send takes from.
     if (!channels.some((channel) => channel.dependsOn.includes(provider))) problems.push(`The spend entry of ${provider} names a provider that no channel depends on.`);
-    if (!((spend.reserveUsd ?? 0) < spend.monthlyUsd)) problems.push(`The reserve of the spend of ${provider} is not below its monthly cap.`);
+    // The fixed costs come first. Thus the reserve is a part of the cap of the sends, and the sends get more than 0.
+    const sends = sendCapUsd(spend);
+    if (!(sends > 0)) problems.push(`The fixed costs of the spend of ${provider} use all of its monthly cap. No send can go.`);
+    else if (!((spend.reserveUsd ?? 0) < sends)) problems.push(`The reserve of the spend of ${provider} is not below its monthly cap less its fixed costs.`);
     if (localTime(0, spend.timeZone) === undefined) problems.push(`The time zone of the spend of ${provider} is not an IANA name.`);
   }
 
