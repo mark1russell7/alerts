@@ -36,6 +36,7 @@ export const TWILIO_CALL_ADDRESS: readonly AddressField[] = [
  *
  * - A call rings through silent mode and Do Not Disturb on an iPhone only when the contact of the Twilio number has Emergency Bypass on.
  * - The channel has no acknowledgment of its own (`ack` is `none`). An acknowledgment in another channel stops the next calls.
+ * - The channel is exclusive: a phone takes one call at a time. Thus a copy with a rank above 0 waits the rank floor before its call.
  */
 export function twilioCallDescriptor(): ChannelDescriptor {
   return {
@@ -50,6 +51,7 @@ export function twilioCallDescriptor(): ChannelDescriptor {
     maxBody: 600,
     costUsd: TWILIO_CALL_COST_USD,
     maxInFlight: TWILIO_CALL_MAX_IN_FLIGHT,
+    exclusive: true,
     why: WHY_LIMITS.call,
     address: TWILIO_CALL_ADDRESS,
   };

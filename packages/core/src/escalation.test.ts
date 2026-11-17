@@ -1,13 +1,15 @@
 import { machineProblems, replay } from "@mark1russell7/algebra";
 import { fakeClock } from "@mark1russell7/algebra/clock";
 import { describe, expect, it } from "vitest";
-import type { Acknowledgment, ChannelId, Delivery, EscalationPolicy, Level, PersonId, QuietWindow, ReportId } from "./contracts.ts";
+import type { Acknowledgment, ChannelDescriptor, ChannelId, Delivery, EscalationPolicy, Level, PersonId, QuietWindow, ReportId } from "./contracts.ts";
 import {
   ESCALATION_MACHINE,
   escalate,
   escalationProblems,
   inQuietWindow,
   quietWindowProblems,
+  rankFloorProblems,
+  rankFloors,
   type EscalationInput,
   type EscalationPlan,
 } from "./escalation.ts";
@@ -55,6 +57,9 @@ const delivery = (step: number, at: number, extra: Partial<Delivery> = {}): Deli
 });
 
 const ack = (at: number, extra: Partial<Acknowledgment> = {}): Acknowledgment => ({ incident: anchor, level: "life-safety", person, at, via: pushover, ...extra });
+
+// The time of a step of a policy.
+const nonNegativeAt = (each: EscalationPolicy, step: number): number => each.steps[step]?.at ?? 0;
 
 describe("ESCALATION_MACHINE", () => {
   it("is a consistent machine document", () => {
@@ -159,6 +164,60 @@ describe("escalate", () => {
     expect(escalate(input({ rank: 1, rankDelay: 20_000, now: T0 + 20_000 })).sends.map((send) => send.step)).toEqual([0]);
   });
 
+  describe("the rank floor of an exclusive channel (AL-15)", () => {
+    // A push and a call at once, at life-safety with a rank delay of 0.
+    const both: EscalationPolicy = { level: "life-safety", steps: [{ channel: pushover, at: 0 }, { channel: voice, at: 0 }], exhaustedAfter: 20 * MINUTE };
+    const floors = new Map([[voice, 31_000]]);
+    const due = (plan: EscalationPlan) => plan.sends.map((send) => [send.channel, send.due, send.wait]);
+
+    it("sends the push of rank 1 at once, and its call one floor later", () => {
+      const first = escalate(input({ policy: both, rank: 1, rankDelay: 0, floors }));
+      expect(due(first)).toEqual([[pushover, T0, 0]]);
+      expect(first.state).toBe("sent");
+      expect(first.wakeAt).toBe(T0 + 31_000);
+      const later = escalate(input({ policy: both, rank: 1, rankDelay: 0, floors, deliveries: [delivery(0, T0, { channel: pushover })], now: T0 + 31_000 }));
+      expect(due(later)).toEqual([[voice, T0 + 31_000, 31_000]]);
+      expect(later.state).toBe("last");
+      // The exhaustion comes after the latest due time of a step.
+      expect(later.wakeAt).toBe(T0 + 31_000 + 20 * MINUTE);
+    });
+
+    it("sends the push and the call of rank 0 at once", () => {
+      expect(due(escalate(input({ policy: both, rank: 0, rankDelay: 0, floors })))).toEqual([
+        [pushover, T0, 0],
+        [voice, T0, 0],
+      ]);
+    });
+
+    it("waits the rank delay when it is above the floor, and the floor for each rank", () => {
+      const slow = escalate(input({ policy: both, rank: 1, rankDelay: 40_000, floors, now: T0 + 40_000 }));
+      expect(due(slow)).toEqual([
+        [pushover, T0 + 40_000, 40_000],
+        [voice, T0 + 40_000, 40_000],
+      ]);
+      expect(escalate(input({ policy: both, rank: 2, rankDelay: 0, floors })).wakeAt).toBe(T0 + 62_000);
+    });
+
+    it("gives no floor to a channel with no entry, and a floor that is not a number of 0 or more counts as 0", () => {
+      expect(due(escalate(input({ policy: both, rank: 1, rankDelay: 0 })))).toEqual([
+        [pushover, T0, 0],
+        [voice, T0, 0],
+      ]);
+      expect(due(escalate(input({ policy: both, rank: 1, rankDelay: 0, floors: new Map([[voice, Number.NaN]]) })))).toEqual([
+        [pushover, T0, 0],
+        [voice, T0, 0],
+      ]);
+    });
+
+    it("does not call from rank 1 when the call of rank 0 is in the ledger at the due time", () => {
+      const called = delivery(1, T0 + 18_000, { channel: voice });
+      const plan = escalate(input({ policy: both, rank: 1, rankDelay: 0, floors, deliveries: [delivery(0, T0, { channel: pushover }), called], now: T0 + 31_000 }));
+      expect(plan.sends).toEqual([]);
+      // The call of rank 0 came after the start of rank 1, thus the start stays.
+      expect(plan.start).toBe(T0);
+    });
+  });
+
   it("takes the start of a copy that started first from its delivery", () => {
     const plan = escalate(input({ since: T0 + 2 * MINUTE, deliveries: [delivery(0, T0)], now: T0 + 5 * MINUTE }));
     expect(plan.start).toBe(T0);
@@ -208,6 +267,8 @@ describe("escalate over a grid of inputs", () => {
   const acks = [undefined, 0, 4 * MINUTE, 26 * MINUTE];
   const ends = [undefined, 6 * MINUTE, 35 * MINUTE];
   const ranks = [0, 2];
+  // At rank 2, a floor of 7 minutes moves the voice step from 10 to 24 minutes: after the fourth step of the second policy.
+  const floorsList = [undefined, new Map([[voice, 7 * MINUTE]])];
   const silents = [false, true];
   const times = Array.from({ length: 41 }, (_, minute) => minute * MINUTE);
 
@@ -216,7 +277,7 @@ describe("escalate over a grid of inputs", () => {
     for (const each of policies)
       for (const ackAt of acks)
         for (const endAt of ends)
-          for (const [rank, silent] of ranks.flatMap((item) => silents.map((mode) => [item, mode] as const))) {
+          for (const [rank, silent, floors] of ranks.flatMap((item) => silents.flatMap((mode) => floorsList.map((each) => [item, mode, each] as const)))) {
             let before: EscalationPlan | undefined;
             for (const time of times) {
               const plan = escalate(
@@ -224,6 +285,7 @@ describe("escalate over a grid of inputs", () => {
                   policy: each,
                   rank,
                   rankDelay: 15_000,
+                  floors,
                   silent,
                   acknowledgments: ackAt === undefined || ackAt > time ? [] : [ack(T0 + ackAt)],
                   ...(endAt === undefined ? {} : { endsAt: T0 + endAt }),
@@ -235,6 +297,8 @@ describe("escalate over a grid of inputs", () => {
               if (final) expect(plan.sends).toEqual([]);
               else expect(plan.cancels).toEqual([]);
               if (plan.wakeAt !== undefined) expect(plan.wakeAt).toBeGreaterThan(T0 + time);
+              // Each send was due at or before now, and its due time holds its wait.
+              for (const send of plan.sends) expect([send.due <= T0 + time, send.due - send.wait]).toEqual([true, plan.start + nonNegativeAt(each, send.step)]);
               // The silent mode of a mute makes each send quiet, and it never exhausts.
               if (silent) expect([plan.sends.every((send) => send.quiet), plan.state === "exhausted"]).toEqual([true, false]);
               if (before !== undefined) expect(plan.transitions.slice(0, before.transitions.length)).toEqual(before.transitions);
@@ -242,7 +306,35 @@ describe("escalate over a grid of inputs", () => {
               count += 1;
             }
           }
-    expect(count).toBe(policies.length * acks.length * ends.length * ranks.length * silents.length * times.length);
+    expect(count).toBe(policies.length * acks.length * ends.length * ranks.length * silents.length * floorsList.length * times.length);
+  });
+});
+
+describe("rankFloors", () => {
+  const descriptor = (id: ChannelId, exclusive?: boolean): ChannelDescriptor => ({
+    id,
+    title: id,
+    dependsOn: [],
+    uses: ["internet"],
+    breaksThrough: true,
+    repeats: false,
+    ack: "none",
+    maxTitle: 250,
+    maxBody: 1024,
+    ...(exclusive === undefined ? {} : { exclusive }),
+  });
+
+  it("gives the floor to each exclusive channel only", () => {
+    const channels = [descriptor(pushover), descriptor(voice, true), descriptor(sms, false)];
+    expect([...rankFloors(channels, 31_000)]).toEqual([[voice, 31_000]]);
+    expect([...rankFloors(channels, undefined)]).toEqual([]);
+  });
+
+  it("refuses a floor that is not a whole number of milliseconds from 0 to one hour", () => {
+    expect(rankFloorProblems(undefined)).toEqual([]);
+    expect(rankFloorProblems(0)).toEqual([]);
+    expect(rankFloorProblems(60 * MINUTE)).toEqual([]);
+    for (const bad of [-1, 1.5, 60 * MINUTE + 1, Number.NaN]) expect(rankFloorProblems(bad)).toEqual(["The rank floor is not a whole number of milliseconds from 0 to 3600000."]);
   });
 });
 

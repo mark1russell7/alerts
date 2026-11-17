@@ -28,7 +28,7 @@ import {
   type WatchedPlace,
   type WhyRecord,
 } from "./contracts.ts";
-import { escalate, escalationProblems, quietWindowProblems, rankDelayOf, type EscalationPlan, type EscalationSend, type RankDelays } from "./escalation.ts";
+import { escalate, escalationProblems, quietWindowProblems, rankDelayOf, rankFloors, type EscalationPlan, type EscalationSend, type RankDelays } from "./escalation.ts";
 import { messageKey } from "./ids.ts";
 import { unknownKinds } from "./taxonomy.ts";
 import { assessmentWhy } from "./why.ts";
@@ -108,6 +108,11 @@ export interface RouteInput {
   readonly rankDelay?: Duration | undefined;
   /** The wait of one rank for each level. With 0 for `life-safety`, each copy sends a life-safety step at once. */
   readonly rankDelays?: RankDelays | undefined;
+  /**
+   * The least wait of one rank before a step of an exclusive channel, as a call. A step of the channel waits
+   * `rank × max(rankDelay, rankFloor)`. Without it, the channels have no floor.
+   */
+  readonly rankFloor?: Duration | undefined;
   readonly now: Instant;
 }
 
@@ -167,6 +172,7 @@ export function route(input: RouteInput): Route[] {
   const { state, now } = input;
   const policy = input.assess ?? DEFAULT_ASSESS_POLICY;
   const polling = new Set(input.channels.filter((channel) => channel.ack === "poll").map((channel) => channel.id as string));
+  const floors = rankFloors(input.channels, input.rankFloor);
   const routes: Route[] = [];
   for (const incident of input.incidents) {
     const reports = new Set<string>([incident.anchor, ...incident.reports]);
@@ -255,6 +261,7 @@ export function route(input: RouteInput): Route[] {
             cancelled: input.cancelled,
             rank: input.rank,
             rankDelay: rankDelayOf(level, input.rankDelays, input.rankDelay),
+            floors,
             quiet: recipient.watch.quiet,
             episode,
             silent,

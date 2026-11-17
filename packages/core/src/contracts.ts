@@ -588,6 +588,11 @@ export interface ChannelDescriptor {
    */
   readonly maxInFlight?: number;
   /**
+   * True: a person takes one message of the channel at a time, as with a phone call. A second phone call during the
+   * first gets a busy line. Thus a copy with a rank above 0 waits at least the rank floor before a step of the channel.
+   */
+  readonly exclusive?: boolean;
+  /**
    * The limit of the why line of the channel. `WHY_LIMITS` in `why.ts` holds the limit of each kind of channel.
    * When it is absent, the messages of the channel have no why line.
    */
