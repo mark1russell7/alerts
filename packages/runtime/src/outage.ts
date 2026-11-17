@@ -77,6 +77,7 @@ export function outageMonthCapOf(spend: Pick<SpendConfig, "monthlyUsd" | "fixed"
  * - The outage call needs the keys of Twilio and the key `OUTAGE_TOKEN`. Without them, or with a bad list, it gives the problems.
  * - The outage call needs a spend entry for Twilio. The monthly cap of its Functions comes from it.
  * - With the number of the texts in the keys, the list has the text `OUTAGE_TEXT_MESSAGE`, and the deploy gives the number to the Functions.
+ *   Only a person whose number is on the opt-in list gets the text.
  *
  * A problem names keys, fields and ids, and no value.
  */
@@ -94,7 +95,9 @@ export function outageSetup(parsed: ParsedConfig, secret: SecretLookup, keys: Ou
     return err(problems);
   }
   const textFrom = keys?.textFrom;
-  const list = outageListOf(outage, parsed.recipients, outageMonthCapOf(spend), textFrom === undefined ? {} : { textMessage: OUTAGE_TEXT_MESSAGE });
+  // The text goes only to a number with a record of the opt-in list. A STOP reply stops it at Twilio.
+  const optIn = (number: string): boolean => parsed.optIn.some((record) => record.number === number);
+  const list = outageListOf(outage, parsed.recipients, outageMonthCapOf(spend), textFrom === undefined ? {} : { textMessage: OUTAGE_TEXT_MESSAGE, optIn });
   problems.push(...list.problems);
   if (problems.length > 0 || keys === undefined) return err(problems);
   return ok({ credentials: keys.credentials, from: keys.from, list: list.list, token, ...(textFrom === undefined ? {} : { textFrom }) });
