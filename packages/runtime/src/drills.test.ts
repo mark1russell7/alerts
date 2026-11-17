@@ -184,6 +184,31 @@ describe("the drills in the passes of the runtime (AL-43)", () => {
     log.close();
   });
 
+  it("passes two runs in sequence, each with its own send and its own acknowledgment on the path", async () => {
+    // Each run is its own incident. A link rule that joins the runs gives the second run no send, and this test fails.
+    const clock = fakeWallClock(T0);
+    const { log, runtime, pushover, sms } = open({ clock, status: () => ({ state: "acknowledged", at: clock.now() }) });
+    const second = Date.UTC(2026, 3, 11, 16, 0, 0);
+    for (const start of [T0, second]) {
+      await clock.advance(start - clock.now());
+      await runtime.pass();
+      await clock.advance(30 * SECOND);
+      await runtime.pass();
+      await clock.advance(SECOND);
+      await runtime.pass();
+      expect(drillRunOf(runtime.state(), COPY, DRILL)).toEqual({ drill: DRILL.id, at: start, acked: start + 30 * SECOND });
+      expect(drillLines(runtime.state().lines)).toEqual([]);
+    }
+    expect(drillEvents(log)).toEqual([T0, second].map((start) => `drill:${COPY}:${DRILL.id}:${String(start)}`));
+    expect(pushover.send.map((message) => message.title)).toEqual([RUN.headline, RUN.headline]);
+    // After the time of the acknowledgment of the second run, no failure goes.
+    await clock.advance(DRILL.ackWithin);
+    await runtime.pass();
+    expect(drillLines(runtime.state().lines)).toEqual([]);
+    expect(sms.send).toEqual([]);
+    log.close();
+  });
+
   it("sends a failure on each channel other than the path when no acknowledgment comes", async () => {
     const { clock, log, runtime, pushover, sms } = open();
     await runtime.pass();

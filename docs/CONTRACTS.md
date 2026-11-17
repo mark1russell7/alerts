@@ -645,6 +645,7 @@ A channel rule (`ChannelRule`) of a person keeps or removes the steps of a plan 
 - A rule applies only to an incident with the status `system`, `test` or `exercise` (`RULED_STATUSES`). No rule changes the plan of a real warning.
 - When two rules apply, a step stays only when each rule keeps it. Thus the order of the rules has no effect.
 - The route keeps the indexes of the rules that apply and of the removed steps in `Route.ruled`. A route with no rule that applies has no field `ruled`.
+- The indexes are of the configuration of the pass. A reload that changes the path of a drill during a run gives other indexes for the same run.
 - The rules do not change the why record of the route.
 - A plan with no step sends nothing. `escalate` gives it the state `exhausted` at its end.
 
@@ -660,7 +661,7 @@ The message of a send takes its text from one report of the incident. That repor
 One part waits:
 
 - The exhaustion alert to the next person waits for a second person (AL-21). Until then, the repeats continue after the exhaustion, and the routes of each pass show it.
-- The exhaustion alert skips a plan with no step, because a channel rule empties such a plan on purpose.
+- When the exhaustion alert comes (AL-21), it skips a plan with no step, because a channel rule empties such a plan on purpose. A test of AL-21 holds this rule.
 
 ## Levels and the first night rule
 
