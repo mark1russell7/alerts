@@ -792,6 +792,12 @@ The instance does not start when it finds one of these problems:
 
 The environment gives `PORT` (8080), `PROBE_PORT` (9090) and `SERVICE_PROFILE` (`local`, `daemon` or `pod`). The folder `ALERTS_HOME` (`.alerts` in the home folder) holds the private files: `config.json`, `secrets.env`, the log `runtime.sqlite` and the outlines of the zones `shapes.sqlite`. It also holds the counts of the quotas, `quotas.sqlite`. No repository holds them. A problem of `secrets.env` names its line and its key, and no value. The output of a failed pass shows no value of `secrets.env`.
 
+Each runtime takes the lock `home.lock` of the folder at its start, before it reads or writes a file of the folder (AL-58). The lock is the instance lock of `@mark1russell7/service/host`:
+
+- While a live runtime holds the lock, a second runtime on the folder stops at its start. It writes no event, it fetches nothing and it sends nothing. The supervisor starts it again after its backoff.
+- The shutdown releases the lock last, after the log closes. A lock of a process that stopped is stale, and the next start removes it.
+- The test `home-lock.test.ts` starts the entry on a folder that the test holds. The entry stops with the error `HomeHeld` and writes no file.
+
 After each pass, the runtime gets the outlines of the zones of the watched states. It stops before the next fetch of the alerts. A broken file of outlines goes into quarantine, and the runtime gets the outlines again.
 
 ### Steps of the wall clock
