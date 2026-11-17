@@ -19,9 +19,10 @@ import type {
   WatchedPlace,
 } from "./contracts.ts";
 import { LEVELS } from "./contracts.ts";
-import { acknowledgmentOf, addressProblems, messageOf, recipientProblems, route, RULED_STATUSES, ruleSteps, type ChannelRule, type EscalationEnd, type EscalationStart, type Recipient, type Route, type RouteInput } from "./delivery.ts";
+import { acknowledgmentOf, addressProblems, messageOf, policyFor, policyName, recipientProblems, route, RULED_STATUSES, ruleSteps, type ChannelRule, type EscalationEnd, type EscalationStart, type Recipient, type Route, type RouteInput } from "./delivery.ts";
 import { RANK_DELAY_LIMIT, rankDelayProblems } from "./escalation.ts";
 import { messageKey } from "./ids.ts";
+import { matchSubjects } from "./assess.ts";
 import { DRILL_SUBJECT } from "./system-reports.ts";
 import { placeWhy } from "./why.ts";
 
@@ -786,6 +787,86 @@ describe("ruleSteps: the channel rules of a person (AL-43)", () => {
     // With no rule that applies, the route has no field ruled.
     expect(route(input({ incidents: [drillRun], recipients: [{ ...watcher, channelRules: [except] }] }))[0]?.ruled).toEqual({ rules: [0], dropped: [0] });
     expect(route(input({ incidents: [drillRun], recipients: [{ ...watcher, channelRules: [] }] }))[0]?.ruled).toBeUndefined();
+  });
+});
+
+describe("policyFor: the policy of a subject (AL-43)", () => {
+  const about = { system: DRILL_SUBJECT, id: "push-weekly" };
+  const drillRun = incident({ status: "system", kind: { code: "system.drill.run", label: "Drill" }, about: [about], areas: [] });
+  const anyDrill: EscalationPolicy = { ...LIFE_SAFETY, about: { system: DRILL_SUBJECT }, steps: [{ channel: sms, at: 0 }] };
+  const thisDrill: EscalationPolicy = { ...LIFE_SAFETY, about, steps: [{ channel: pushover, at: 0 }] };
+
+  it("gives the first policy of the level whose subject matches, and else the policy with no subject", () => {
+    expect(policyFor([LIFE_SAFETY, URGENT], "urgent", drillRun)).toBe(URGENT);
+    expect(policyFor([LIFE_SAFETY, anyDrill], "life-safety", drillRun)).toBe(anyDrill);
+    // When two policies of the level match the incident, the first one in the list applies.
+    expect(policyFor([anyDrill, thisDrill, LIFE_SAFETY], "life-safety", drillRun)).toBe(anyDrill);
+    expect(policyFor([thisDrill, anyDrill, LIFE_SAFETY], "life-safety", drillRun)).toBe(thisDrill);
+    // A subject that does not match gives the policy with no subject. With no such policy, the level has no policy.
+    expect(policyFor([thisDrill, LIFE_SAFETY], "life-safety", { ...drillRun, about: [{ system: DRILL_SUBJECT, id: "other" }] })).toBe(LIFE_SAFETY);
+    expect(policyFor([thisDrill], "life-safety", { ...drillRun, about: [] })).toBeUndefined();
+  });
+
+  it("gives no policy with a subject to a real warning", () => {
+    expect(policyFor([anyDrill, LIFE_SAFETY], "life-safety", { ...drillRun, status: "actual" })).toBe(LIFE_SAFETY);
+    expect(policyFor([anyDrill], "life-safety", { ...drillRun, status: "actual" })).toBeUndefined();
+    for (const status of RULED_STATUSES) expect(policyFor([LIFE_SAFETY, anyDrill], "life-safety", { ...drillRun, status })).toBe(anyDrill);
+  });
+
+  it("holds its laws over seeded lists of policies", () => {
+    const statuses = ["actual", "system", "test", "exercise"] as const;
+    for (const seed of SEEDS) {
+      const r = random(`policies:${seed}`);
+      for (let round = 0; round < 50; round += 1) {
+        const policies: EscalationPolicy[] = Array.from({ length: r.int(0, 5) }, () => ({
+          level: r.pick(["life-safety", "urgent", "notice"] as const),
+          ...(r.chance(0.5) ? { about: { system: DRILL_SUBJECT, ...(r.chance(0.5) ? { id: r.pick(["a", "b"]) } : {}) } } : {}),
+          steps: [{ channel: r.pick([pushover, sms]), at: 0 }],
+          exhaustedAfter: MINUTE,
+        }));
+        const level = r.pick(["life-safety", "urgent", "notice"] as const);
+        const current = incident({ status: r.pick(statuses), about: r.chance(0.5) ? [{ system: DRILL_SUBJECT, id: r.pick(["a", "b"]) }] : [] });
+        const found = policyFor(policies, level, current);
+        const context = `seed ${seed}, round ${round}`;
+        const plain = policies.find((policy) => policy.level === level && policy.about === undefined);
+        // The policy is of the level, and it is one of the list.
+        if (found !== undefined) expect(found.level === level && policies.includes(found), context).toBe(true);
+        // A real warning gets the first policy of the level with no subject.
+        if (current.status === "actual") expect(found, context).toBe(plain);
+        // A policy with a subject applies only when the subject matches the incident.
+        if (found?.about !== undefined) expect(matchSubjects(current, [found.about]).length, context).toBeGreaterThan(0);
+        // With no policy with a subject that matches, the policy with no subject applies.
+        if (!policies.some((policy) => policy.level === level && policy.about !== undefined && matchSubjects(current, [policy.about]).length > 0)) expect(found, context).toBe(plain);
+      }
+    }
+  });
+
+  it("gives the route the policy of the subject, and the channel rules apply to it", () => {
+    const watcher: Recipient = { ...recipient("person-1", [LIFE_SAFETY, anyDrill]), watch: { ...recipient().watch, subjects: [{ system: DRILL_SUBJECT }] } };
+    const view = (routes: readonly Route[]) => routes.map((entry) => ({ about: entry.policy.about, sends: entry.plan.sends.map((send) => send.channel) }));
+    expect(view(route(input({ incidents: [drillRun], recipients: [watcher] })))).toEqual([{ about: anyDrill.about, sends: [sms] }]);
+    // A real warning at the place of the person gets the policy with no subject.
+    expect(view(route(input({ incidents: [incident()], recipients: [watcher] })))).toEqual([{ about: undefined, sends: [pushover] }]);
+    // A rule that keeps only the channel pushover removes the step of the policy of the subject.
+    const only: ChannelRule = { kinds: ["system.drill.run"], about, keep: "only", channels: [pushover] };
+    expect(route(input({ incidents: [drillRun], recipients: [{ ...watcher, channelRules: [only] }] }))[0]?.ruled).toEqual({ rules: [0], dropped: [0] });
+  });
+
+  it("finds two policies of one level and one subject, and a life-safety policy only with a subject", () => {
+    expect(policyName(anyDrill)).toBe(`life-safety about ${DRILL_SUBJECT}`);
+    expect(policyName(thisDrill)).toBe(`life-safety about ${DRILL_SUBJECT} push-weekly`);
+    expect(recipientProblems(recipient("person-1", [LIFE_SAFETY, anyDrill, thisDrill]), CHANNELS)).toEqual([]);
+    expect(recipientProblems(recipient("person-1", [LIFE_SAFETY, anyDrill, { ...anyDrill, steps: [{ channel: pushover, at: 0 }] }]), CHANNELS)).toEqual([
+      `Two policies have the level life-safety about ${DRILL_SUBJECT}. Only the first one applies.`,
+    ]);
+    expect(recipientProblems(recipient("person-1", [anyDrill, URGENT]), CHANNELS)).toEqual([
+      "The person watches a place or a subject, and has no policy of the level life-safety. A life-safety alert sends nothing to the person.",
+    ]);
+    const fax = "fax" as ChannelId;
+    expect(recipientProblems(recipient("person-1", [LIFE_SAFETY, { ...thisDrill, steps: [{ channel: fax, at: 0 }] }]), CHANNELS)).toEqual([
+      `Step 0 of life-safety about ${DRILL_SUBJECT} push-weekly uses the channel fax, and the system has no such channel.`,
+      `Step 0 of life-safety about ${DRILL_SUBJECT} push-weekly uses the channel fax, and the person has no address on it.`,
+    ]);
   });
 });
 

@@ -10,13 +10,14 @@ import type { OutageDeployWorker } from "./outage.ts";
 export { LOOPBACK, PAGE_INDEX, attachApi, pageFolder, statusOf, type ApiOptions, type StartStatus, type Status } from "./api.ts";
 export * from "./balance.ts";
 export * from "./config.ts";
+export { CLOCK_SKEW_LIMIT, COPY_MAX_AGE, EXCHANGE_EVERY, EXCHANGE_LIMIT } from "./copy.ts";
 export * from "./delivery.ts";
 export * from "./drills.ts";
 export * from "./events.ts";
 export * from "./exchange.ts";
 export * from "./exchange-http.ts";
 export * from "./heartbeat.ts";
-export { DELIVERY_TIMES, SOURCE_POLICY, sourcePace } from "./instance.ts";
+export { DELIVERY_TIMES, RANK_DELAY, RANK_FLOOR, SOURCE_POLICY, sourcePace } from "./instance.ts";
 export * from "./fetch.ts";
 export * from "./limit.ts";
 export * from "./log.ts";
@@ -71,6 +72,11 @@ export interface Options {
   readonly shapes?: { close(): Promise<void> };
   /** The store of the counts of the quotas of the channels. The service closes it in the phase `tear down dependencies`. */
   readonly quotas?: { close(): void };
+  /**
+   * The lock of the home folder (`holdHome`). The service releases it last in the phase `tear down dependencies`, after
+   * the log closes. Thus a next runtime starts only after the last event of this runtime.
+   */
+  readonly home?: { release(): Promise<void> };
   /** This function gives the payload of the route `GET /map`. Without it, the API has no map route. */
   readonly map?: (() => MapPayload) | undefined;
   /** This function gives the payload of the route `GET /health`. Without it, the API has no health route. */
@@ -130,6 +136,8 @@ export const declare = (options: Options): ServiceBuilder => {
 const parts = (options: Options): ServiceBuilder =>
   withOutage(
     attachApi(service("runtime"), { port: options.port, loop: options.loop, map: options.map, health: options.health, history: options.history, page: options.page, ...(options.outage === undefined ? {} : { outage: options.outage }), ...(options.start === undefined ? {} : { start: options.start }) })
+      // The dependencies close in the reverse sequence of their connect. Thus the lock of the home folder goes after the log.
+      .dependency("home", { system: null, knobs: {}, operations: {} }, { connect: () => undefined, close: () => options.home?.release() })
       .dependency("log", { system: null, knobs: {}, operations: {} }, { connect: () => undefined, close: () => options.log.close() })
       .dependency("shapes", { system: null, knobs: {}, operations: {} }, { connect: () => undefined, close: () => options.shapes?.close() })
       .dependency("quotas", { system: null, knobs: {}, operations: {} }, { connect: () => undefined, close: () => options.quotas?.close() })

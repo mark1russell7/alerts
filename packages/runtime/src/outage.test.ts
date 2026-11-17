@@ -1,6 +1,6 @@
 import { fakeClock, type FakeClock, type WallClock } from "@mark1russell7/algebra/clock";
 import { CONFIG_FORMAT, parseConfig, type AlertConfig, type ChannelId, type EscalationPolicy, type PersonId, type PlaceId, type SecretLookup, type SpendConfig } from "@mark1russell7/alerts";
-import type { TwilioFetch, TwilioServerlessDeployResult } from "@mark1russell7/alerts-channel-twilio";
+import { OUTAGE_TEXT_MESSAGE, type TwilioFetch, type TwilioServerlessDeployResult } from "@mark1russell7/alerts-channel-twilio";
 import { detachedLifecycle } from "@mark1russell7/service/testing";
 import { afterEach, describe, expect, it } from "vitest";
 import { INSTANCE_CHANNELS } from "./instance.ts";
@@ -70,6 +70,18 @@ describe("outageSetup", () => {
     expect(setup.value.list.people).toEqual([{ person, to: SECRETS.PHONE, chain: { steps: [call, call] } }]);
     // 10 US dollars at 4 cents a call give 250 calls in the calendar month of the time zone of the spend.
     expect(setup.value.list.month).toEqual({ maxCalls: 250, timeZone: "America/Chicago" });
+  });
+
+  it("gives the text and its sender with the number of the texts in the keys", () => {
+    const secret = store(SECRETS);
+    const setup = outageSetup(parse(withOutage([call, call]), secret), secret, { ...KEYS, textFrom: "+99900000003" });
+    if (setup.tag === "err" || setup.value === undefined) throw new Error("The setup has problems.");
+    expect(setup.value.textFrom).toBe("+99900000003");
+    expect(setup.value.list.textMessage).toBe(OUTAGE_TEXT_MESSAGE);
+    const none = outageSetup(parse(withOutage([call, call]), secret), secret, KEYS);
+    if (none.tag === "err" || none.value === undefined) throw new Error("The setup has problems.");
+    expect(none.value).not.toHaveProperty("textFrom");
+    expect(none.value.list).not.toHaveProperty("textMessage");
   });
 
   it("gives the problem of an outage call with no spend entry for Twilio", () => {

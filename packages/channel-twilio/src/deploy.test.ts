@@ -67,6 +67,13 @@ describe("outageDeployPlan", () => {
     expect(next.variables).toEqual({ OUTAGE_TOKEN: "u".repeat(40), OUTAGE_FROM: "+99900000003" });
   });
 
+  it("sets the variable OUTAGE_TEXT_FROM only for an input with a sender of texts, and keeps the version", () => {
+    const plan = outageDeployPlan(INPUT);
+    const texts = outageDeployPlan({ ...INPUT, textFrom: "+99900000004" });
+    expect(texts.variables).toEqual({ OUTAGE_TOKEN: TOKEN, OUTAGE_FROM: FROM, OUTAGE_TEXT_FROM: "+99900000004" });
+    expect(texts.version).toBe(plan.version);
+  });
+
   it("throws unless the bundles have each path of the outage call one time", () => {
     expect(() => outageDeployPlan({ ...INPUT, bundles: BUNDLES.slice(0, 2) })).toThrow(/need/u);
     expect(() => outageDeployPlan({ ...INPUT, bundles: [...BUNDLES, BUNDLES[0] as FunctionBundle] })).toThrow(/each one time/u);

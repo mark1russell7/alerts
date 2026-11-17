@@ -454,6 +454,7 @@ const SCHEMA_NAMES = [
   "historyChangeSchema",
   "historyIncidentSchema",
   "historyPayloadSchema",
+  "historyPlaceSchema",
   "historyRegionSchema",
   "incidentLineSchema",
   "incidentSchema",
@@ -870,6 +871,26 @@ describe("the private configuration", () => {
     // An empty list starts the drill in no copy. The flip is a list of one copy.
     fails(drillConfigSchema, { ...drill, copies: [] });
     holds(drillConfigSchema, { ...drill, copies: ["home"] });
+  });
+
+  it("checks the failure of a drill with the policy of a subject, and a real notice keeps its policy", () => {
+    const drill = { id: "push-weekly", person: PERSON, path: { kind: "channel", channel: PUSHOVER }, every: 6 * 86_400_000, window: { zone: "America/Chicago", start: "11:00", end: "17:00", days: [6] }, ackWithin: 1_800_000 } as const;
+    const watcher = { watch: { person: PERSON, places: [KANSAS.id], rules: [], subjects: [{ system: DRILL_SUBJECT }] }, label: "Person A" };
+    const second: ChannelDescriptor = { ...CHANNEL, id: "sms" as ChannelId, title: "SMS", ack: "none" };
+    // The notices of the person go only on the channel of the drill. Thus the failure of the drill sends nothing.
+    const notice = { level: "notice" as const, steps: [{ channel: PUSHOVER, at: 0 }], exhaustedAfter: 600_000 };
+    const contacts = [...CONFIG.contacts, { person: PERSON, channel: second.id, address: { to: { secret: "SMS_TO" } } }];
+    const secret = (name: string): string | undefined => (name === "PUSHOVER_USER" || name === "SMS_TO" ? "value-test" : undefined);
+    const load = (policies: readonly unknown[]) => loadConfig(alertConfigSchema.parse(JSON.parse(JSON.stringify({ ...CONFIG, people: [watcher], drills: [drill], policies, contacts }))), [CHANNEL, second], secret).problems;
+    expect(load([ESCALATION, notice])).toEqual([
+      `The failure of the drill push-weekly reaches the person ${PERSON} at the level notice, and its policy has no step on a channel other than pushover. It sends nothing.`,
+    ]);
+    // A policy of notice about the drills adds a step on the second channel for the drill reports only.
+    const drills = { ...notice, about: { system: DRILL_SUBJECT }, steps: [...notice.steps, { channel: second.id, at: 0 }] };
+    holds(escalationPolicySchema, drills);
+    expect(load([ESCALATION, notice, drills])).toEqual([]);
+    fails(escalationPolicySchema, { ...drills, about: { id: "push-weekly" } });
+    fails(escalationPolicySchema, { ...drills, about: { system: DRILL_SUBJECT, extra: 1 } });
   });
 
   it("refuses a wrong form, and leaves the references to the load", () => {
