@@ -10,11 +10,16 @@
  * - The rules of the values that a type cannot hold are refinements. Each rule tells the line of the
  *   contract that states it.
  */
+import { tryParseUnit } from "@mark1russell7/quantity";
 import { z } from "zod";
 import {
   ASSESSED_LEVELS,
   CELL_RESOURCES,
+  DIMENSION_IDS,
+  INDICATOR_AREA_KINDS,
   LEVELS,
+  MOVES,
+  OWN_BASELINES,
   type Acknowledgment,
   type Address,
   type AddressField,
@@ -38,6 +43,7 @@ import {
   type Coverage,
   type Cursor,
   type Delivery,
+  type DimensionId,
   type DeliveryState,
   type DeliveryStatus,
   type EndMark,
@@ -52,12 +58,16 @@ import {
   type HealthState,
   type Id,
   type Incident,
+  type IndicatorArea,
+  type IndicatorAreaKind,
   type IncidentLine,
   type Instant,
   type Kind,
   type KindClass,
   type KindPrior,
   type Level,
+  type MeasureDeclaration,
+  type Move,
   type LevelRule,
   type LevelTable,
   type LocateOutcome,
@@ -71,7 +81,9 @@ import {
   type PersonId,
   type PersonWatch,
   type PlaceId,
+  type OwnBaseline,
   type Position,
+  type Reading,
   type ProviderBalance,
   type QuietWindow,
   type QuotaStage,
@@ -112,6 +124,7 @@ import {
   type WhyRecord,
   type WatchedPlace,
 } from "./contracts.ts";
+import { MEASURE_ID, SERIES_VERSION } from "./indicators.ts";
 import { err, ok, tryCatch, type Result } from "@mark1russell7/optional";
 import { compareCodeUnits } from "@mark1russell7/text/order";
 import {
@@ -392,6 +405,81 @@ export const reportSchema: z.ZodType<Report, Report> = schemaOf<Report>()(
 );
 
 // =============================================================================
+// The indicator contract
+// =============================================================================
+
+/** This schema checks the id of a dimension. The values come from `DIMENSION_IDS`. */
+export const dimensionIdSchema: z.ZodType<DimensionId, DimensionId> = schemaOf<DimensionId>()(z.enum(DIMENSION_IDS));
+
+/** This schema checks the kind of the area of a measure. The values come from `INDICATOR_AREA_KINDS`. */
+export const indicatorAreaKindSchema: z.ZodType<IndicatorAreaKind, IndicatorAreaKind> = schemaOf<IndicatorAreaKind>()(z.enum(INDICATOR_AREA_KINDS));
+
+/** This schema checks the direction of a change that is a signal. The values come from `MOVES`. */
+export const moveSchema: z.ZodType<Move, Move> = schemaOf<Move>()(z.enum(MOVES));
+
+/** This schema checks the baseline that a source gives. The values come from `OWN_BASELINES`. */
+export const ownBaselineSchema: z.ZodType<OwnBaseline, OwnBaseline> = schemaOf<OwnBaseline>()(z.enum(OWN_BASELINES));
+
+/** This schema checks the area of one reading. A line has two positions or more. */
+export const indicatorAreaSchema: z.ZodType<IndicatorArea, IndicatorArea> = schemaOf<IndicatorArea>()(
+  z
+    .discriminatedUnion("type", [
+      z.strictObject({ type: z.literal("code"), system: z.string(), code: z.string() }),
+      z.strictObject({ type: z.literal("point"), at: positionSchema }),
+      z.strictObject({ type: z.literal("line"), path: z.array(positionSchema).min(2, "A line has two positions or more.").readonly() }),
+      z.strictObject({ type: z.literal("polygon"), rings: z.array(z.array(positionSchema).readonly()).readonly() }),
+      z.strictObject({ type: z.literal("zone"), system: z.string(), code: z.string() }),
+      z.strictObject({ type: z.literal("world") }),
+    ])
+    .readonly(),
+);
+
+// A time that is more than 0. A cadence of 0 is not a cadence, and a backfill of 0 is no backfill.
+const positiveDuration = z.number().positive("The time is more than 0.");
+
+/** This schema checks one measure of a source. Its unit is in the grammar of `@mark1russell7/quantity`. */
+export const measureDeclarationSchema: z.ZodType<MeasureDeclaration, MeasureDeclaration> = schemaOf<MeasureDeclaration>()(
+  z
+    .strictObject({
+      id: z.string().regex(MEASURE_ID, "The id of a measure is small letters, digits and hyphens, with a letter first, up to 40 characters."),
+      dimension: dimensionIdSchema,
+      title: z.string(),
+      unit: z.string().refine((unit) => tryParseUnit(unit) !== undefined, "The unit is not in the grammar of @mark1russell7/quantity."),
+      area: indicatorAreaKindSchema,
+      moves: moveSchema,
+      baseline: ownBaselineSchema,
+      cadence: positiveDuration.exactOptional(),
+      delay: durationSchema.exactOptional(),
+      backfill: positiveDuration.exactOptional(),
+    })
+    .readonly(),
+);
+
+// The measures of a source. Two measures of one source do not have one id, because a reading names its measure by the id.
+const sourceMeasures = z
+  .array(measureDeclarationSchema)
+  .readonly()
+  .refine((measures) => new Set(measures.map((measure) => measure.id)).size === measures.length, "Two measures of the source have one id.");
+
+/** This schema checks one value of one series of a measure. The values are finite numbers. */
+export const readingSchema: z.ZodType<Reading, Reading> = schemaOf<Reading>()(
+  z
+    .strictObject({
+      source: sourceIdSchema,
+      measure: z.string(),
+      series: z.string().min(1, "The id of a series is not empty."),
+      version: z.string().regex(SERIES_VERSION, "The version of a series is letters, digits, dots and hyphens, up to 40 characters.").exactOptional(),
+      at: instantSchema,
+      value: z.number(),
+      area: indicatorAreaSchema,
+      expected: z.number().exactOptional(),
+      flagged: z.boolean().exactOptional(),
+      observation: observationIdSchema,
+    })
+    .readonly(),
+);
+
+// =============================================================================
 // The source contract
 // =============================================================================
 
@@ -430,6 +518,7 @@ export const sourceDescriptorSchema: z.ZodType<SourceDescriptor, SourceDescripto
       auth: z.enum(["none", "key", "oauth"]),
       listing: z.literal("snapshot").exactOptional(),
       canary: z.string().exactOptional(),
+      measures: sourceMeasures.exactOptional(),
     })
     .readonly(),
 );
