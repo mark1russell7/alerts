@@ -137,6 +137,7 @@ import {
 import type { TryChain } from "./chain.ts";
 import type { EscalationEnd, Recipient } from "./delivery.ts";
 import type { DrillConfig, DrillPath } from "./drill.ts";
+import { OPT_IN_WAYS, type OptInConfig, type OptInRecord } from "./opt-in.ts";
 import type { RankDelays } from "./escalation.ts";
 import { HEALTH_FORMAT, type BalanceHealth, type CopyHealth, type HealthPayload, type QuotaHealth, type SourceHealthView } from "./health-payload.ts";
 import { HISTORY_FORMAT, type HistoryChange, type HistoryIncident, type HistoryPayload, type HistoryPlace, type HistoryRegion } from "./history.ts";
@@ -655,6 +656,7 @@ export const addressFieldSchema: z.ZodType<AddressField, AddressField> = schemaO
       required: z.boolean(),
       pattern: z.string().refine(isPattern, "The pattern of an address field is a regular expression with the flag u."),
       form: z.string().min(1, "The form of an address field is a non-empty text."),
+      optIn: z.boolean().exactOptional(),
     })
     .readonly(),
 );
@@ -716,7 +718,7 @@ export const sendOutcomeSchema: z.ZodType<SendOutcome, SendOutcome> = schemaOf<S
       z.strictObject({ ok: z.literal(true), receipt: receiptSchema, accepted: instantSchema }),
       z.strictObject({
         ok: z.literal(false),
-        kind: z.enum(["network", "timeout", "server", "rate-limited", "reserved", "auth", "refused"]),
+        kind: z.enum(["network", "timeout", "server", "rate-limited", "reserved", "auth", "refused", "consent"]),
         message: z.string(),
         retryAfter: durationSchema.exactOptional(),
       }),
@@ -1306,6 +1308,11 @@ export const contactConfigSchema: z.ZodType<ContactConfig, ContactConfig> = sche
   z.strictObject({ person: personIdSchema, channel: channelIdSchema, address: z.record(z.string(), addressValueSchema).readonly() }).readonly(),
 );
 
+/** This schema checks the form of one record of the opt-in list. `loadConfig` checks the number, the time and the words. */
+export const optInConfigSchema: z.ZodType<OptInConfig, OptInConfig> = schemaOf<OptInConfig>()(
+  z.strictObject({ number: addressValueSchema, at: z.string().min(1), way: z.enum(OPT_IN_WAYS), words: z.string().min(1) }).readonly(),
+);
+
 /**
  * This schema checks the money rules of one paid provider account, with its fixed costs. `loadConfig` checks the
  * provider, the fixed costs against the cap, the reserve and the time zone.
@@ -1422,6 +1429,7 @@ export const alertConfigSchema: z.ZodType<AlertConfig, AlertConfig> = schemaOf<A
       rankFloor: durationSchema.exactOptional(),
       assess: assessPolicySchema.exactOptional(),
       drills: z.array(drillConfigSchema).readonly().exactOptional(),
+      optIn: z.array(optInConfigSchema).readonly().exactOptional(),
     })
     .readonly(),
 );
@@ -1651,6 +1659,8 @@ function pathText(path: readonly PropertyKey[]): string {
 export interface ParsedConfig {
   readonly config: AlertConfig;
   readonly recipients: readonly Recipient[];
+  /** The opt-in list of the texts, with the value of each number. */
+  readonly optIn: readonly OptInRecord[];
 }
 
 /**
@@ -1665,5 +1675,5 @@ export function parseConfig(text: string, channels: readonly ChannelDescriptor[]
   const checked = checkWith(alertConfigSchema, json.value);
   if (checked.tag === "err") return checked;
   const loaded = loadConfig(checked.value, channels, secret);
-  return loaded.problems.length > 0 ? err(loaded.problems) : ok({ config: checked.value, recipients: loaded.recipients });
+  return loaded.problems.length > 0 ? err(loaded.problems) : ok({ config: checked.value, recipients: loaded.recipients, optIn: loaded.optIn });
 }

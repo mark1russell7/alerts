@@ -15,6 +15,9 @@ import {
   twilioSetupProblems,
   twilioTextDescriptor,
   twilioTextOf,
+  TWILIO_TEXT_ADDRESS,
+  TWILIO_UNSUBSCRIBED,
+  type TextOptIn,
   type TwilioSpendGates,
 } from "./index.ts";
 
@@ -51,8 +54,11 @@ const server = (...answers: Answer[]) => {
   return { calls, fetch };
 };
 
+// The opt-in of each number, for the tests of the other rules.
+const EVERY: TextOptIn = { has: () => true, stopped: () => undefined };
+
 const channelOf = (fake: ReturnType<typeof server>, extra: Partial<Parameters<typeof createTwilioTextChannel>[0]> = {}) =>
-  createTwilioTextChannel({ credentials: CREDENTIALS, from: FROM, fetch: fake.fetch, now: () => AT, ...extra });
+  createTwilioTextChannel({ credentials: CREDENTIALS, from: FROM, fetch: fake.fetch, now: () => AT, optIn: EVERY, ...extra });
 
 const accepted: Answer = { status: 201, body: { sid: SID, status: "queued" } };
 const NUMBERS = /\+?99900000/u;
@@ -138,6 +144,40 @@ describe("the send of a text", () => {
     expect(outcome.message).toContain("[number]");
     expect(outcome.message).toContain("Twilio error 21211");
     expect(outcome.message).not.toMatch(NUMBERS);
+  });
+
+  it("sends no text to a number with no opt-in: the kind is consent, Twilio gets no request, and the cap takes no units", async () => {
+    const QUOTA: Quota = { name: "Twilio spend", limit: 20, reserve: 0, window: { kind: "calendar", unit: "month", timeZone: "UTC" } };
+    const store = memoryQuotaStore();
+    const gate = quotaGate(QUOTA, { key: "twilio:account", store, now: () => AT });
+    const asked: Array<[string, number]> = [];
+    const optIn: TextOptIn = { has: (number, at) => (asked.push([number, at]), false), stopped: () => undefined };
+    const fake = server(accepted);
+    const outcome = await channelOf(fake, { optIn, spend: { gate, lifeSafety: gate, units: 4 } }).send({ message: message("life-safety"), address: ADDRESS });
+    expect(outcome).toEqual({ ok: false, kind: "consent", message: "The number is not on the opt-in list, or it replied STOP. The channel sent no text." });
+    expect(asked).toEqual([[ADDRESS.to, AT]]);
+    expect(fake.calls).toEqual([]);
+    expect(gate.state().used).toBe(0);
+  });
+
+  it("records the STOP of a number that Twilio refuses as unsubscribed, gives consent, and gives the units back", async () => {
+    const QUOTA: Quota = { name: "Twilio spend", limit: 20, reserve: 0, window: { kind: "calendar", unit: "month", timeZone: "UTC" } };
+    const gate = quotaGate(QUOTA, { key: "twilio:account", store: memoryQuotaStore(), now: () => AT });
+    const stops: Array<[string, number]> = [];
+    const optIn: TextOptIn = { has: () => true, stopped: (number, at) => void stops.push([number, at]) };
+    const fake = server({ status: 400, body: { code: TWILIO_UNSUBSCRIBED, message: `Attempt to send to unsubscribed recipient ${ADDRESS.to}` } }, { status: 400, body: { code: 21211, message: "Invalid To" } });
+    const channel = channelOf(fake, { optIn, spend: { gate, lifeSafety: gate, units: 4 } });
+    const outcome = await channel.send({ message: message("urgent"), address: ADDRESS });
+    expect(outcome).toEqual({ ok: false, kind: "consent", message: "The number replied STOP, and Twilio refuses each text to it (Twilio error 21610)." });
+    expect(stops).toEqual([[ADDRESS.to, AT]]);
+    expect(gate.state().used).toBe(0);
+    // Another refusal of Twilio is not a STOP.
+    expect(await channel.send({ message: message("urgent"), address: ADDRESS })).toMatchObject({ ok: false, kind: "refused" });
+    expect(stops).toHaveLength(1);
+    // The address of a text needs the opt-in. The address of a call does not.
+    expect(twilioTextDescriptor().address).toEqual(TWILIO_TEXT_ADDRESS);
+    expect(TWILIO_TEXT_ADDRESS.map((field) => field.optIn)).toEqual([true]);
+    expect(TWILIO_CALL_ADDRESS.map((field) => field.optIn)).toEqual([undefined]);
   });
 
   it("takes the units of a text from the gate of its level, and gives them back when Twilio sends no text", async () => {

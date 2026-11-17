@@ -371,6 +371,20 @@ The Twilio text channel `twilio-text` sends one SMS message for each send (AL-56
 - A text that the carrier delivered is `delivered`. A text that did not go, or that the carrier did not deliver, is `failed`.
 - `cancel` does nothing. Twilio cannot stop a text in its queue.
 - A text costs `TWILIO_TEXT_COST_USD` (4 cents): 3 segments and the carrier fees, rounded up. Thus a text costs no more than a call.
+- A text goes only to a number with the opt-in. Each other send fails with the kind `consent`, and Twilio gets no request.
+- Twilio refuses a text to a number that replied STOP (Twilio error 21610). The channel then records the STOP and gives `consent`.
+
+The opt-in list of the texts is the field `optIn` of the private configuration (`opt-in.ts`). The list holds phone numbers, so the repository holds only its form and its checks:
+
+- A record has the number, the time of the yes in UTC with seconds, the way (`written` or `spoken`) and the version of the consent words.
+- The number is a phone number in E.164 form, or the name of a secret, as the address of a contact.
+- The opt-in page of the site gives the consent words of each version, `texts-consent/1` first.
+- An address field of a descriptor with `optIn` needs a record for each value. The address of `twilio-text` has it, and the address of a call does not.
+- `optedIn` folds the record of a number and its STOP and START replies. The last reply decides, and a STOP wins a tie.
+- A number with no record has no opt-in. A START reply does not add a number. A new yes is a record with a later time.
+- The kind `consent` does not stop the deliveries of the channel to the other people, as `reserved` does not.
+- Twilio keeps its own STOP handling. Until the read of the replies, the runtime does not keep a STOP. Twilio refuses each later text, and a START works at once.
+- The read of the STOP and START replies comes next (AL-56). Then the runtime keeps each reply, and the fold uses it.
 
 The cap of the spend of a Twilio channel is two gates of `polite-crawler/api`, with one store, one key and one quota name:
 
@@ -897,7 +911,7 @@ The runtime cannot tell the person that it stopped. A check of Healthchecks.io t
 - A pass in which a channel gave `auth`, `refused` or `rate-limited` to a send pings `/fail`, because then the system cannot tell the person.
 - A pass with an overdue send pings `/fail`, whatever the kind of its failures. An overdue send is due, and it has no delivery `overdueAfter` after its due time. A reset or a server error that lasts thus also pings `/fail`.
 - `overdueLimit` gives `overdueAfter`: one pass limit and two full tries, each to its flight limit and its retry. It is 140 seconds for the instance. The due time comes from the log, thus a restart keeps it.
-- A send that a channel gave `reserved` does not ping `/fail`, and it is not overdue. The channel keeps the last units of its quota for `life-safety`, thus it still tells the person of the highest level.
+- A send that a channel gave `reserved` or `consent` does not ping `/fail`, and it is not overdue. A `consent` refusal is the choice of the person: a STOP reply. The channel keeps the last units of its quota for `life-safety`, thus it still tells the person of the highest level.
 - The body of each ping also gives the state of the quota of each channel with a quota.
 - The fail of a channel holds until a send on the channel goes, or until the pass of the retry has no refusal on it. The delivery step sends a failed call again at the first pass at or after its `retryAt`. Thus the check does not go down and up at each retry.
 - The fail of a channel holds across a restart. At its first pass, the hook starts from `heldOf` of the log. It gives each refusal with a retry after that pass and with no later delivery on its channel. The order of the log decides, not the times. Thus a restart does not ping `success` while the channel refuses.
@@ -929,7 +943,7 @@ The package `@mark1russell7/alerts-channel-twilio` operates the chain on the ser
 - `outageStart` gets the webhook of the outside check. It starts the first call of each person.
 - `outagePress` gets the key of the person. A 1 moves the status callback of the live call to a URL with `acked=1`.
 - `outageEnded` gets the status callback at the end of each call. It gives the next call by `chainNext`.
-- A chain that ends with no key press sends one SMS message to the person, when the list has `textMessage` (AL-56). A chain with a key press sends no text.
+- A chain that ends with no key press sends one SMS message to the person (AL-56). The list must have `textMessage`, and the person must have `text`. A chain with a key press sends no text.
 - The URL of each callback holds the outage, the person, the step and the version of the list. A callback of another version starts no call.
 - Twilio signs each request to the press and end Functions. Thus a person outside Twilio cannot make a step. The entry is public, and it checks its own token.
 - A cap counts the calls of the Twilio number in a time window. A try above the cap makes no call.
@@ -965,6 +979,7 @@ The runtime operates the deploy in the worker `outage` of its service (`outage.t
 - `outageSetup` reads the field `outage`, the keys of Twilio and the key `OUTAGE_TOKEN`. A missing key, a token of a bad form or a bad list stops the start.
 - The setup of Twilio reads the key `TWILIO_TEXT_FROM` for the outage call and the text channel. A value that is not in E.164 form stops the start.
 - With the key, the list has the text `OUTAGE_TEXT_MESSAGE`, and the deploy gives the number to the Functions. Without the key, the outage call sends no text.
+- Only a person whose number is on the opt-in list gets the text. The list then has `text` for the person, and the cap counts one text for the person.
 - The worker deploys after the startup. A change of the private files restarts the runtime, so a new list deploys at once.
 - Once in each day, the worker deploys again. Thus a change on the side of Twilio heals in a day.
 - A failed deploy goes again after a backoff: one minute, then double, up to one hour. The pass limit bounds one deploy, so the drain of the service holds it.
@@ -1041,6 +1056,7 @@ The schema `alertConfigSchema` checks the JSON of the configuration first. Then 
 - two places or two people with one id, and a place with no region code
 - a place of a person or of a rule that the configuration or the person does not have
 - a contact of an unknown person, two contacts of a person on one channel, and a secret with no value
+- each problem of `optInProblems`, a record whose secret has no value, and a value of an opt-in field with no record
 - two spend entries of one provider, and a provider that no channel depends on
 - a reserve of a spend entry that is not below its cap, and a time zone that is not an IANA name
 - an unknown person of the outage call, and a person two times in the call
@@ -1055,7 +1071,7 @@ The schema `alertConfigSchema` checks the JSON of the configuration first. Then 
 
 A problem names ids, fields and the names of secrets. It does not hold the value of a secret, a label or a position.
 
-The function `parseConfig` reads the JSON text of the configuration. It checks the JSON, then the schema, then the references. Its result is a `Result` of `@mark1russell7/optional`: the configuration and the recipients, or the problems. The runtime starts only with an `ok` result. A problem of the JSON does not quote the text, because the text can hold a private value.
+The function `parseConfig` reads the JSON text of the configuration. It checks the JSON, then the schema, then the references. Its result is a `Result` of `@mark1russell7/optional`: the configuration, the recipients and the opt-in list with the value of each number, or the problems. The runtime starts only with an `ok` result. A problem of the JSON does not quote the text, because the text can hold a private value.
 
 The runtime reads two private files in the folder `ALERTS_HOME`, or in `~/.alerts` with no variable: the configuration `config.json` and the keys `secrets.env`. A procedure that gives the configuration replaces the file later.
 
