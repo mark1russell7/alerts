@@ -1304,12 +1304,19 @@ export const contactConfigSchema: z.ZodType<ContactConfig, ContactConfig> = sche
   z.strictObject({ person: personIdSchema, channel: channelIdSchema, address: z.record(z.string(), addressValueSchema).readonly() }).readonly(),
 );
 
-/** This schema checks the money rules of one paid provider account. `loadConfig` checks the provider, the reserve and the time zone. */
+/**
+ * This schema checks the money rules of one paid provider account, with its fixed costs. `loadConfig` checks the
+ * provider, the fixed costs against the cap, the reserve and the time zone.
+ */
 export const spendConfigSchema: z.ZodType<SpendConfig, SpendConfig> = schemaOf<SpendConfig>()(
   z
     .strictObject({
       provider: z.string().min(1),
       monthlyUsd: z.number().positive(),
+      fixed: z
+        .array(z.strictObject({ what: z.string().min(1), usd: z.number().nonnegative() }).readonly())
+        .readonly()
+        .exactOptional(),
       reserveUsd: z.number().nonnegative().exactOptional(),
       floor: z.number(),
       timeZone: z.string().min(1),

@@ -135,7 +135,7 @@ export function balanceWatch(options: BalanceWatchOptions): BalanceWatch {
 }
 
 /** A monthly cap of the spend of a provider account: the fields of a `SpendConfig` of the configuration, and a name. */
-export interface SpendCap extends Pick<SpendConfig, "monthlyUsd" | "reserveUsd" | "timeZone"> {
+export interface SpendCap extends Pick<SpendConfig, "monthlyUsd" | "fixed" | "reserveUsd" | "timeZone"> {
   /** The name of the quota in a message: for example `Twilio spend`. */
   readonly name: string;
 }
@@ -153,14 +153,17 @@ export const SPEND_UNIT = "cents";
 
 /**
  * This function gives the quota of a cap for a gate of `polite-crawler/api`. The units are cents, and
- * the window is the calendar month. A send takes `spendUnits` of its cost.
+ * the window is the calendar month. A send takes `spendUnits` of its cost. The limit is the monthly cap less the fixed
+ * costs, in cents.
  *
- * @throws Error when the cap or the reserve is not valid.
+ * @throws Error when the cap, a fixed cost or the reserve is not valid.
  */
 export function spendQuota(cap: SpendCap): Quota {
-  const limit = cents(cap.monthlyUsd);
+  const fixed = (cap.fixed ?? []).map((cost) => cents(cost.usd));
+  if (!fixed.every((value) => value >= 0)) throw new Error(`A fixed cost of ${cap.name} is not 0 or more US dollars.`);
+  const limit = cents(cap.monthlyUsd) - fixed.reduce((sum, value) => sum + value, 0);
   const reserve = cents(cap.reserveUsd ?? 0);
-  if (!(limit > 0)) throw new Error(`The monthly cap of ${cap.name} is not above 0 US dollars.`);
+  if (!(limit > 0)) throw new Error(`The monthly cap of ${cap.name} less its fixed costs is not above 0 US dollars.`);
   if (!(reserve >= 0 && reserve < limit)) throw new Error(`The reserve of ${cap.name} is not 0 or more and less than the cap.`);
   return { name: cap.name, limit, reserve, window: { kind: "calendar", unit: "month", timeZone: cap.timeZone } };
 }

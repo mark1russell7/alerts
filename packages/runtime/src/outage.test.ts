@@ -97,6 +97,9 @@ describe("outageSetup", () => {
     expect(outageMonthCapOf({ monthlyUsd: 1000, timeZone: "UTC" }).maxCalls).toBe(1000);
     // A cap below one call gives 0 calls. The list then gives a problem, and no Function deploys.
     expect(outageMonthCapOf({ monthlyUsd: 0.03, timeZone: "UTC" }).maxCalls).toBe(0);
+    // The fixed costs come off the cap first: 15 US dollars less 3.30 is 1170 cents, or 292 whole calls.
+    expect(outageMonthCapOf({ monthlyUsd: 15, fixed: [{ what: "toll-free number", usd: 2.15 }, { what: "local number", usd: 1.15 }], timeZone: "UTC" }).maxCalls).toBe(292);
+    expect(outageMonthCapOf({ monthlyUsd: 3.3, fixed: [{ what: "numbers", usd: 3.3 }], timeZone: "UTC" }).maxCalls).toBe(0);
     const secret = store(SECRETS);
     const low = outageSetup(parse(withOutage([call], [{ ...SPEND, monthlyUsd: 0.03, reserveUsd: 0, floor: 0 }]), secret), secret, KEYS);
     expect(low.tag === "err" ? low.error : []).toContain("The monthly cap of calls is not a whole number from 1 to 1000.");
