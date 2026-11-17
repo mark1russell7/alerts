@@ -6,6 +6,7 @@
  * - The state of each try is in the URLs of its callbacks: the outage, the person, the step and the version of the list.
  * - A key press of 1 is the confirmation. The press handler moves the status callback of the live call to a URL with `acked=1`.
  * - The end of each call gives the next step by `chainNext` of the core.
+ * - A chain that ends with no confirmation sends one text to the person when the list has `textMessage`. Thus a missed call leaves a message.
  * - A callback of another version of the list starts no try. Thus a deploy during an outage stops its chains.
  *
  * Each handler is pure. It gives the script of the call as data and the actions of the Function as data.
@@ -73,6 +74,15 @@ export interface OutageMonthCap {
 /** The highest monthly cap of calls. One read of the calls list gives at most this count of calls. */
 export const OUTAGE_MONTH_MAX = 1000;
 
+/**
+ * The most code points of the text message of an outage.
+ *
+ * - A text of this length has at most 3 segments, also in UCS-2.
+ * - One segment in the United States costs at most 1.4 cents with the carrier fee, from the price page of Twilio.
+ * - Thus one text costs no more than one call, and each cap counts a text as one call.
+ */
+export const OUTAGE_TEXT_LIMIT = 160;
+
 /** The list of the outage call. The deploy of the Function copies it from the private configuration. */
 export interface OutageList {
   /** The version of the list, for example the content hash of the list. A callback of another version starts no try. */
@@ -85,11 +95,16 @@ export interface OutageList {
   readonly repeats: number;
   /** The seconds that a phone rings before the call ends with no answer. */
   readonly ringSeconds: number;
-  /** The most calls in the time `capWindow`. A try above the cap makes no call. */
+  /** The most calls in the time `capWindow`. A text counts as one call. A try above the cap makes no call. */
   readonly maxCalls: number;
   readonly capWindow: Duration;
-  /** The monthly cap of the calls of the Twilio number. A try above the cap makes no call. */
+  /** The monthly cap of the calls of the Twilio number. A text counts as one call. A try above the cap makes no call. */
   readonly month: OutageMonthCap;
+  /**
+   * The text message to a person after the chain of the person ends with no confirmation: `OUTAGE_TEXT_LIMIT` code points or fewer.
+   * Without it, the outage call sends no text. The deploy sets it only when the secrets name a sender of texts.
+   */
+  readonly textMessage?: string;
   /** The voice of the text, for example `Polly.Joanna`. Without it, Twilio uses its default voice. */
   readonly voice?: string;
   /** The language of the text, for example `en-US`. */
@@ -114,6 +129,7 @@ export const outageListSchema: z.ZodType<OutageList, OutageList> = schemaOf<Outa
     maxCalls: z.number(),
     capWindow: durationSchema,
     month: z.strictObject({ maxCalls: z.number(), timeZone: z.string() }).readonly(),
+    textMessage: z.string().exactOptional(),
     voice: z.string().exactOptional(),
     language: z.string().exactOptional(),
     texts: z
@@ -165,20 +181,24 @@ export type CallScript =
  * An action of the Function.
  * - `call`: the Function starts a call to `to` with the script, and sets the status callback of the call.
  * - `ack`: the Function moves the status callback of the live call to `statusCallback`, before it replies.
+ * - `text`: the Function sends the text message `body` to `to`.
  */
 export type OutageAction =
   | { readonly kind: "call"; readonly person: PersonId; readonly to: string; readonly script: CallScript; readonly statusCallback: string; readonly ringSeconds: number }
-  | { readonly kind: "ack"; readonly person: PersonId; readonly statusCallback: string };
+  | { readonly kind: "ack"; readonly person: PersonId; readonly statusCallback: string }
+  | { readonly kind: "text"; readonly person: PersonId; readonly to: string; readonly body: string };
 
 /**
  * A note of a handler for the log of the Function.
  * - `capped`: a cap stopped a try of the person. The cap `window` is the cap of `capWindow`, and the cap `month` is the monthly cap.
+ * - `text-capped`: a cap stopped the text to the person after the chain.
  * - `acked` and `exhausted`: the chain of the person ended.
  * - `stale`: the callback has no valid cursor, or the cursor has another version of the list.
  * - `open`: the status is not the end of a call, so no step follows.
  */
 export type OutageNote =
   | { readonly kind: "capped"; readonly person: PersonId; readonly cap: "window" | "month" }
+  | { readonly kind: "text-capped"; readonly person: PersonId; readonly cap: "window" | "month" }
   | { readonly kind: "acked"; readonly person: PersonId; readonly step: number }
   | { readonly kind: "exhausted"; readonly person: PersonId }
   | { readonly kind: "stale" }
@@ -193,22 +213,19 @@ export interface OutageStep {
 
 /**
  * This function gives the result of the webhook of the outside check: the first call of each person.
- * `recent` holds the times of the calls of the Twilio number, from the calls list of Twilio. A call in
- * the time `capWindow` before `at` counts against the cap. A call in the calendar month of `at` counts against the monthly cap.
+ * `recent` holds the times of the calls and the texts of the Twilio numbers, from the lists of Twilio. A send in
+ * the time `capWindow` before `at` counts against the cap. A send in the calendar month of `at` counts against the monthly cap.
  */
 export function outageStart(list: OutageList, base: string, at: Instant, recent: readonly Instant[]): OutageStep {
-  let calls = callCounts(list, at, recent);
+  let sends = callCounts(list, at, recent);
   const actions: OutageAction[] = [];
   const notes: OutageNote[] = [];
   list.people.forEach((person, index) => {
     const state = chainNext(person.chain);
-    const tried = tryOf(list, base, person, { outage: at, person: index, step: 0, round: 0 }, state, calls);
-    if (tried.kind === "note") {
-      notes.push(tried.note);
-      return;
-    }
-    calls = { window: calls.window + 1, month: calls.month + 1 };
-    actions.push(tried.action);
+    const tried = tryOf(list, base, person, { outage: at, person: index, step: 0, round: 0 }, state, sends);
+    notes.push(...tried.notes);
+    actions.push(...tried.actions);
+    sends = { window: sends.window + tried.actions.length, month: sends.month + tried.actions.length };
   });
   return { actions, notes };
 }
@@ -236,6 +253,7 @@ export function outagePress(list: OutageList, base: string, params: Readonly<Rec
  * This function gives the result of the status callback at the end of a call. The result is the next
  * call of the chain of the person, or no call. A `completed` call with `acked=1` is confirmed. A `completed`
  * call with no press, `busy` and `no-answer` are unconfirmed. `failed` and `canceled` are failed.
+ * A chain that ends with no confirmation gives the text of the list to the person, when the caps permit it.
  */
 export function outageEnded(list: OutageList, base: string, params: Readonly<Record<string, unknown>>, at: Instant, recent: readonly Instant[]): OutageStep {
   const cursor = parseCursor(params, list.version);
@@ -245,8 +263,7 @@ export function outageEnded(list: OutageList, base: string, params: Readonly<Rec
   const end = callEnd(status, params["acked"] === "1");
   if (end === undefined) return { actions: [], notes: [{ kind: "open", status }] };
   const state = chainNext(person.chain, cursor.step, end);
-  const tried = tryOf(list, base, person, { ...cursor, round: 0 }, state, callCounts(list, at, recent));
-  return tried.kind === "note" ? { actions: [], notes: [tried.note] } : { actions: [tried.action], notes: [] };
+  return tryOf(list, base, person, { ...cursor, round: 0 }, state, callCounts(list, at, recent));
 }
 
 /** This function maps the final status of a Twilio call and the flag of a key press to the end of the try. A status that is not final gives `undefined`. */
@@ -271,7 +288,8 @@ export function callEnd(status: string, acked: boolean): TryEnd | undefined {
  * - an empty version or message, or a text that a call cannot say
  * - a bad phone number, or a step on another channel
  * - two entries of one person
- * - a bad count, or a cap below the calls of one outage
+ * - an empty SMS message, an SMS message above `OUTAGE_TEXT_LIMIT` code points, or a control character in it
+ * - a bad count, or a cap below the calls and the texts of one outage
  * - a monthly cap with a time zone that is not an IANA time zone.
  *
  * Each problem names ids and fields, and no number.
@@ -286,6 +304,11 @@ export function outageListProblems(list: OutageList): string[] {
     if (UNSPEAKABLE.test(text)) problems.push(`The text ${field} has a control character, and TwiML cannot hold it.`);
   }
   if (`${list.message} ${texts.prompt}`.length > descriptor.maxBody) problems.push(`The message and the prompt have more than ${descriptor.maxBody} characters.`);
+  if (list.textMessage !== undefined) {
+    if (list.textMessage.trim() === "") problems.push("The SMS message is empty.");
+    if ([...list.textMessage].length > OUTAGE_TEXT_LIMIT) problems.push(`The SMS message has more than ${OUTAGE_TEXT_LIMIT} code points, so one text can cost more than one call.`);
+    if (UNSPEAKABLE.test(list.textMessage)) problems.push("The SMS message has a control character.");
+  }
   const seen = new Set<string>();
   for (const person of list.people) {
     if (seen.has(person.person)) problems.push(`The list has the person ${person.person} two times.`);
@@ -301,13 +324,20 @@ export function outageListProblems(list: OutageList): string[] {
   if (!isCount(list.ringSeconds, 5, 600)) problems.push("The ring seconds are not a whole number from 5 to 600.");
   if (!isCount(list.maxCalls, 1, 1000)) problems.push("The cap of calls is not a whole number from 1 to 1000.");
   if (!(list.capWindow > 0)) problems.push("The time of the cap is not more than 0.");
-  const perOutage = list.people.reduce((sum, person) => sum + person.chain.steps.length, 0);
-  if (list.maxCalls < perOutage) problems.push(`The cap of ${list.maxCalls} calls is below the ${perOutage} calls of one outage, so the cap stops tries of one outage.`);
+  const perOutage = outageSends(list);
+  const sends = list.textMessage === undefined ? "calls" : "calls and texts";
+  if (list.maxCalls < perOutage) problems.push(`The cap of ${list.maxCalls} calls is below the ${perOutage} ${sends} of one outage, so the cap stops tries of one outage.`);
   // The monthly cap comes from the private cap of the spend. Thus its problems name no count.
   if (!isCount(list.month.maxCalls, 1, OUTAGE_MONTH_MAX)) problems.push(`The monthly cap of calls is not a whole number from 1 to ${OUTAGE_MONTH_MAX}.`);
-  else if (list.month.maxCalls < perOutage) problems.push("The monthly cap of calls is below the calls of one outage, so the cap stops tries of one outage.");
+  else if (list.month.maxCalls < perOutage) problems.push(`The monthly cap of calls is below the ${sends} of one outage, so the cap stops tries of one outage.`);
   if (localTime(0, list.month.timeZone) === undefined) problems.push("The time zone of the monthly cap is not an IANA time zone.");
   return problems;
+}
+
+/** This function gives the most sends of one outage: each step of each chain. With an SMS message, each person also gets one text. */
+export function outageSends(list: Pick<OutageList, "people" | "textMessage">): number {
+  const calls = list.people.reduce((sum, person) => sum + person.chain.steps.length, 0);
+  return list.textMessage === undefined ? calls : calls + list.people.length;
 }
 
 /** This function gives the query of a cursor, with the version of the list. */
@@ -382,13 +412,13 @@ export function monthStartOf(at: Instant, zone: string): Instant {
   return start ?? at - 31 * DAY;
 }
 
-/** The counts of the recent calls for the two caps. */
+/** The counts of the recent sends for the two caps: the calls and the texts. */
 interface CallCounts {
   readonly window: number;
   readonly month: number;
 }
 
-// A call in the time `capWindow` before `at` counts for the cap of the window. A call from the start of the month counts for the monthly cap.
+// A send in the time `capWindow` before `at` counts for the cap of the window. A send from the start of the month counts for the monthly cap.
 function callCounts(list: OutageList, at: Instant, recent: readonly Instant[]): CallCounts {
   const from = monthStartOf(at, list.month.timeZone);
   return {
@@ -397,17 +427,31 @@ function callCounts(list: OutageList, at: Instant, recent: readonly Instant[]): 
   };
 }
 
-type Tried = { readonly kind: "call"; readonly action: OutageAction } | { readonly kind: "note"; readonly note: OutageNote };
+// The cap that a new send breaks, or `undefined` when both caps permit it.
+function capOf(list: OutageList, sends: CallCounts): "window" | "month" | undefined {
+  if (sends.window >= list.maxCalls) return "window";
+  if (sends.month >= list.month.maxCalls) return "month";
+  return undefined;
+}
 
-// The try of the state: a call when the chain tries and the cap permits it, else a note.
-function tryOf(list: OutageList, base: string, person: OutagePerson, cursor: OutageCursor, state: ChainState, calls: CallCounts): Tried {
-  if (state.kind === "acked") return { kind: "note", note: { kind: "acked", person: person.person, step: state.step } };
-  if (state.kind === "exhausted") return { kind: "note", note: { kind: "exhausted", person: person.person } };
-  if (calls.window >= list.maxCalls) return { kind: "note", note: { kind: "capped", person: person.person, cap: "window" } };
-  if (calls.month >= list.month.maxCalls) return { kind: "note", note: { kind: "capped", person: person.person, cap: "month" } };
+// The try of the state: a call when the chain tries and the caps permit it. A chain with no confirmation at its end gives the text.
+function tryOf(list: OutageList, base: string, person: OutagePerson, cursor: OutageCursor, state: ChainState, sends: CallCounts): OutageStep {
+  if (state.kind === "acked") return { actions: [], notes: [{ kind: "acked", person: person.person, step: state.step }] };
+  if (state.kind === "exhausted") return textOf(list, person, sends);
+  const cap = capOf(list, sends);
+  if (cap !== undefined) return { actions: [], notes: [{ kind: "capped", person: person.person, cap }] };
   const at = { ...cursor, step: state.step };
   return {
-    kind: "call",
-    action: { kind: "call", person: person.person, to: person.to, script: gather(list, base, at), statusCallback: urlOf(base, OUTAGE_PATHS.ended, at, list.version), ringSeconds: list.ringSeconds },
+    actions: [{ kind: "call", person: person.person, to: person.to, script: gather(list, base, at), statusCallback: urlOf(base, OUTAGE_PATHS.ended, at, list.version), ringSeconds: list.ringSeconds }],
+    notes: [],
   };
+}
+
+// The end of a chain with no confirmation: the note, and the text of the list when the caps permit it.
+function textOf(list: OutageList, person: OutagePerson, sends: CallCounts): OutageStep {
+  const exhausted: OutageNote = { kind: "exhausted", person: person.person };
+  if (list.textMessage === undefined) return { actions: [], notes: [exhausted] };
+  const cap = capOf(list, sends);
+  if (cap !== undefined) return { actions: [], notes: [exhausted, { kind: "text-capped", person: person.person, cap }] };
+  return { actions: [{ kind: "text", person: person.person, to: person.to, body: list.textMessage }], notes: [exhausted] };
 }

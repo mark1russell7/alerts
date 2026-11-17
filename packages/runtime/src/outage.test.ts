@@ -1,10 +1,10 @@
 import { fakeClock, type FakeClock, type WallClock } from "@mark1russell7/algebra/clock";
 import { CONFIG_FORMAT, parseConfig, type AlertConfig, type ChannelId, type EscalationPolicy, type PersonId, type PlaceId, type SecretLookup, type SpendConfig } from "@mark1russell7/alerts";
-import type { TwilioFetch, TwilioServerlessDeployResult } from "@mark1russell7/alerts-channel-twilio";
+import { OUTAGE_TEXT_MESSAGE, type TwilioFetch, type TwilioServerlessDeployResult } from "@mark1russell7/alerts-channel-twilio";
 import { detachedLifecycle } from "@mark1russell7/service/testing";
 import { afterEach, describe, expect, it } from "vitest";
 import { INSTANCE_CHANNELS } from "./instance.ts";
-import { OUTAGE_TOKEN_KEY, outageDeploy, outageDeployWorker, outageMonthCapOf, outageSetup, type OutageDeployOptions, type OutageDeployWorker, type OutageKeys } from "./outage.ts";
+import { OUTAGE_TOKEN_KEY, TWILIO_TEXT_FROM_KEY, outageDeploy, outageDeployWorker, outageMonthCapOf, outageSetup, type OutageDeployOptions, type OutageDeployWorker, type OutageKeys } from "./outage.ts";
 
 const SECOND = 1000;
 const MINUTE = 60 * SECOND;
@@ -70,6 +70,21 @@ describe("outageSetup", () => {
     expect(setup.value.list.people).toEqual([{ person, to: SECRETS.PHONE, chain: { steps: [call, call] } }]);
     // 10 US dollars at 4 cents a call give 250 calls in the calendar month of the time zone of the spend.
     expect(setup.value.list.month).toEqual({ maxCalls: 250, timeZone: "America/Chicago" });
+  });
+
+  it("gives the text and its sender with the key of the sender of texts, and the problem of a sender of a bad form", () => {
+    const texts = store({ ...SECRETS, [TWILIO_TEXT_FROM_KEY]: "+99900000003" });
+    const setup = outageSetup(parse(withOutage([call, call]), texts), texts, KEYS);
+    if (setup.tag === "err" || setup.value === undefined) throw new Error("The setup has problems.");
+    expect(setup.value.textFrom).toBe("+99900000003");
+    expect(setup.value.list.textMessage).toBe(OUTAGE_TEXT_MESSAGE);
+    const secret = store(SECRETS);
+    const none = outageSetup(parse(withOutage([call, call]), secret), secret, KEYS);
+    if (none.tag === "err" || none.value === undefined) throw new Error("The setup has problems.");
+    expect(none.value).not.toHaveProperty("textFrom");
+    expect(none.value.list).not.toHaveProperty("textMessage");
+    const bad = store({ ...SECRETS, [TWILIO_TEXT_FROM_KEY]: "5550100" });
+    expect(outageSetup(parse(withOutage([call, call]), bad), bad, KEYS)).toEqual({ tag: "err", error: [`The value of ${TWILIO_TEXT_FROM_KEY} is not a phone number in E.164 form.`] });
   });
 
   it("gives the problem of an outage call with no spend entry for Twilio", () => {
