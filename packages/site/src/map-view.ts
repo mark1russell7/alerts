@@ -98,8 +98,8 @@ export function incidentTitle(incident: Pick<MapIncident, "status" | "kind" | "l
  */
 const STATUS_DROP = 34;
 /**
- * The sizes of the word of a status, in the units of the view box: the width of one letter, the space at each side
- * of the word, the height of its box and the radius of a corner. The text has the width of its letters exactly.
+ * The sizes of the word of a status, in the units of the view box. The word has a width for each letter and a space
+ * at each side. Its box has a height and a radius of the corners. The text has the width of its letters exactly.
  */
 const STATUS_WORD = { letter: 13, space: 10, height: 34, corner: 8 } as const;
 
