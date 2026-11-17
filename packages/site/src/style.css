@@ -1,4 +1,5 @@
 @import "@mark1russell7/visuals/labels.css";
+@import "@mark1russell7/visuals/scrubber.css";
 
 :root {
   --page: #fbfbfa;
@@ -1014,6 +1015,39 @@ main.local {
 .panel h2 {
   margin: 0 0 0.25rem;
   font-size: 1.05rem;
+}
+
+/* The time scrubber of the local page. It is below the map, so a hand on it does not hide the map. */
+
+.time-box {
+  --scrubber-surface: var(--page);
+  --scrubber-focus: var(--link);
+  margin-top: 0.75rem;
+}
+
+/* The note of a past time. Its line has the color of the axis, because it tells the time of the scrubber. */
+.past {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  margin: 0.5rem 0 0;
+  padding: 0.5rem 0 0.5rem 0.75rem;
+  border-left: 0.2rem solid var(--ink);
+  font-size: 0.875rem;
+}
+
+.past[hidden] {
+  display: none;
+}
+
+.past span {
+  flex: 1 1 16rem;
+}
+
+.time-problem {
+  margin: 0.5rem 0 0;
 }
 
 .map .incident:focus-visible {

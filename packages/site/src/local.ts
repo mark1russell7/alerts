@@ -2,14 +2,19 @@
  * The local page. It reads the map from the alert runtime on this computer every 30 seconds, and when the page
  * comes back into view. It draws the map, the list of the incidents and the region codes with no shape.
  * The map is a globe that a person can move. A browser with no WebGL 2 gets the flat map.
- * It sends each request to the origin of the page only.
+ * A time scrubber below the map sets the time of the page. Its end is the present, and each other time is from the
+ * history of the runtime. It sends each request to the origin of the page only.
  */
 
-import type { MapPayload } from "@mark1russell7/alerts";
+import { NO_HISTORIES, type Histories, type MapPayload } from "@mark1russell7/alerts";
 import { byId, setupTheme } from "@mark1russell7/site-pages/chrome";
+import { replayOf, replayPause, replaySeek, replaySpan, type Replay } from "@mark1russell7/visuals";
+import { createScrubber, type Scrubber } from "@mark1russell7/visuals/scrubber";
 import { loadGlobe } from "./globe-load.ts";
+import { readHistories, WHOLE_READ_EVERY_MS } from "./history-read.ts";
 import { readLine, readMap, READ_EVERY_MS } from "./map-read.ts";
 import { drawIncidentList, drawMapView, drawStatusLegend, drawUnshaped } from "./map-view.ts";
+import { scrubKey, scrubLabels, scrubPayload, scrubRange, scrubText, scrubWords, timeForm, type ScrubRange, type TimeForm } from "./scrub.ts";
 
 setupTheme(byId<HTMLButtonElement>("theme"), "theme");
 
@@ -19,13 +24,40 @@ const legend = byId("legend");
 const unshaped = byId("unshaped");
 const problem = byId("problem");
 const line = byId("read");
+const mapTitle = byId("map-h");
+const listTitle = byId("incidents-h");
+const timeBox = byId("time");
+const timeProblem = byId("time-problem");
+const past = byId("past");
+const pastText = byId("past-text");
 
+/** The live map: the last good read of the runtime. */
 let payload: MapPayload | undefined;
+/** The map of the picture: the live map, or the map of the time of the scrubber. */
+let picture: MapPayload | undefined;
+/** The histories of the incidents, from the reads of the history. */
+let kept: Histories = NO_HISTORIES;
+/** The range of the scrubber. The page shows no scrubber with no range. */
+let range: ScrubRange | undefined;
+let scrubber: Scrubber | undefined;
+/** The key of the picture. A time with the same key has the same picture. */
+let drawn = -1;
+/** The time of the last read of the whole history. */
+let wholeAt = -Infinity;
 let selected: string | undefined;
 let lastGood: number | undefined;
 let reading = false;
 
 const time = (at: number): string => new Date(at).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+
+const FORMS: Readonly<Record<TimeForm, Intl.DateTimeFormatOptions>> = {
+  time: { hour: "2-digit", minute: "2-digit" },
+  weekday: { weekday: "short", hour: "2-digit", minute: "2-digit" },
+  date: { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" },
+};
+const day = (at: number): string => new Date(at).toDateString();
+/** This function gives the text of a past time for a reader at the present. A time of a different day has its day. */
+const clock = (at: number, present: number): string => new Date(at).toLocaleString(undefined, FORMS[timeForm(at, present, day)]);
 
 // A pick on the globe selects its incident. The camera stays, because the person looks at the incident.
 // The draw also puts the mark of the selection on the incident, when the pick was a place or a region.
@@ -53,13 +85,13 @@ function select(anchor: string): void {
 
 /** This function draws the page. With `move`, the camera of the globe goes to the selected incident. */
 function draw(move: boolean): void {
-  if (payload === undefined) return;
-  const view = payload.view;
+  if (picture === undefined) return;
+  const view = picture.view;
   if (selected !== undefined && !view.incidents.some((incident) => incident.anchor === selected)) selected = undefined;
   // The globe shows the payload when it can. If not, the flat map shows it.
-  const onGlobe = globe.show(payload, selected, move);
+  const onGlobe = globe.show(picture, selected, move);
   mapBox.hidden = onGlobe;
-  mapBox.replaceChildren(...(onGlobe ? [] : [drawMapView(view, { basemap: payload.basemap, ...(selected === undefined ? {} : { selected }), select })]));
+  mapBox.replaceChildren(...(onGlobe ? [] : [drawMapView(view, { basemap: picture.basemap, ...(selected === undefined ? {} : { selected }), select })]));
   // The legend names each status other than actual that the map shows.
   drawStatusLegend(legend, view);
   list.replaceChildren(drawIncidentList(view, selected, select));
@@ -67,14 +99,84 @@ function draw(move: boolean): void {
   unshaped.replaceChildren(...(codes === null ? [] : [codes]));
 }
 
+/** This function writes the words of the time of the map: the two headings, and the note of a past time. */
+function setWords(replay: Replay | undefined): void {
+  const words = scrubWords(replay, clock);
+  // A replay starts this function for each picture of the browser. The page changes only when a text is new.
+  if (mapTitle.textContent !== words.map) mapTitle.textContent = words.map;
+  if (listTitle.textContent !== words.list) listTitle.textContent = words.list;
+  if (words.past !== undefined && pastText.textContent !== words.past) pastText.textContent = words.past;
+  past.hidden = words.past === undefined;
+}
+
+/** This function sets the map of the picture from the live map and the time of the scrubber. */
+function setPicture(): void {
+  const replay = scrubber?.replay();
+  picture = payload === undefined ? undefined : scrubPayload(payload, kept, replay);
+  drawn = scrubKey(replay, range?.times ?? []);
+  setWords(replay);
+}
+
+/** This function gives the scrubber the range of the last read. With no range, the page has no scrubber and shows the present. */
+function setRange(absent: boolean): void {
+  range = payload === undefined || absent ? undefined : scrubRange(payload, kept);
+  timeBox.hidden = range === undefined;
+  if (range === undefined) {
+    scrubber?.dispose();
+    scrubber = undefined;
+    return;
+  }
+  const labels = scrubLabels(range.span, clock);
+  if (scrubber === undefined) {
+    scrubber = createScrubber(timeBox, {
+      label: "Time of the map",
+      replay: replayOf(range.span),
+      times: range.times,
+      labels,
+      format: (at, replay) => scrubText(at, replay, clock),
+      onChange: (replay) => {
+        setWords(replay);
+        if (scrubKey(replay, range?.times ?? []) === drawn) return;
+        setPicture();
+        draw(false);
+      },
+    });
+    return;
+  }
+  // A scrubber at the present stays at the present. A past time stays the same time.
+  scrubber.setReplay(replaySpan(scrubber.replay(), range.span));
+  scrubber.setTimes(range.times);
+  scrubber.setLabels(labels);
+}
+
+byId<HTMLButtonElement>("now").addEventListener("click", () => {
+  if (scrubber === undefined) return;
+  const replay = scrubber.replay();
+  scrubber.setReplay(replayPause(replaySeek(replay, replay.span.to)));
+  setPicture();
+  draw(false);
+  // The button leaves the page with its note. The keyboard goes to the slider of the scrubber.
+  scrubber.element.querySelector<HTMLElement>('input[type="range"]')?.focus();
+});
+
 async function refresh(): Promise<void> {
   if (reading || document.hidden) return;
   reading = true;
   try {
-    const result = await readMap((path) => fetch(path, { cache: "no-store", credentials: "same-origin" }));
+    const get = (path: string): Promise<Response> => fetch(path, { cache: "no-store", credentials: "same-origin" });
+    const result = await readMap(get);
     if (result.ok) {
       payload = result.payload;
       lastGood = Date.now();
+      // The history comes after a good map. Thus a runtime that does not answer gets one request, and the page tells one problem.
+      const whole = lastGood - wholeAt >= WHOLE_READ_EVERY_MS;
+      const histories = await readHistories(get, kept, whole);
+      kept = histories.kept;
+      if (whole && histories.text === undefined) wholeAt = lastGood;
+      timeProblem.textContent = histories.text ?? "";
+      timeProblem.hidden = histories.text === undefined;
+      setRange(histories.absent);
+      setPicture();
       draw(false);
     }
     problem.textContent = result.ok ? "" : result.text;

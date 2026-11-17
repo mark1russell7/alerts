@@ -3,7 +3,7 @@
  * the tests give a fake fetch. The path has no host, so the read stays on the origin of the page.
  */
 
-import { HISTORY_FORMAT, type HistoryPayload } from "@mark1russell7/alerts";
+import { addHistory, HISTORY_FORMAT, NO_HISTORIES, type Histories, type HistoryPayload } from "@mark1russell7/alerts";
 
 /** The path of the history route of the runtime. */
 export const HISTORY_PATH = "/history";
@@ -64,4 +64,35 @@ export async function readHistory(get: (path: string) => Promise<Response>, sinc
   if (!isObject(data) || typeof data["format"] !== "string") return fail("The answer of the runtime is not a history.");
   if (data["format"] !== HISTORY_FORMAT) return { ok: false, absent: false, text: OTHER_FORMAT_TEXT };
   return isPayload(data) ? { ok: true, payload: data as unknown as HistoryPayload } : fail("The answer of the runtime is not a history.");
+}
+
+/** The time between two reads of the whole history, in milliseconds. A read of the whole history drops each incident that left the runtime. */
+export const WHOLE_READ_EVERY_MS = 600_000;
+
+/** The result of the reads of one refresh of the page. */
+export interface HistoriesRead {
+  /** The histories after the reads. After a failure, they are the histories before the failed read. */
+  readonly kept: Histories;
+  /** This value is true when the runtime has no history route. Then the page shows no time scrubber. */
+  readonly absent: boolean;
+  /** The words of the failure, when a read failed. */
+  readonly text?: string;
+}
+
+/**
+ * This function reads the changes of the history since the last read, and adds them to the histories of the page.
+ * With `whole`, and before the first read, it reads the whole history.
+ *
+ * A step of the clock of the runtime puts the newest change before the query. Then the function reads the whole
+ * history one time more. Thus one refresh makes two reads at most.
+ */
+export async function readHistories(get: (path: string) => Promise<Response>, kept: Histories, whole = false): Promise<HistoriesRead> {
+  const since = whole ? null : kept.since;
+  const first = await readHistory(get, since);
+  if (!first.ok) return first.absent ? { kept: NO_HISTORIES, absent: true } : { kept, absent: false, text: first.text };
+  const added = addHistory(kept, first.payload);
+  if (since === null || added.since !== null) return { kept: added, absent: false };
+  const second = await readHistory(get, null);
+  if (!second.ok) return second.absent ? { kept: NO_HISTORIES, absent: true } : { kept: added, absent: false, text: second.text };
+  return { kept: addHistory(added, second.payload), absent: false };
 }
