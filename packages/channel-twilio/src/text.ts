@@ -56,8 +56,8 @@ export interface TwilioTextMapOptions {
  * - The address has the fields of `TWILIO_CALL_ADDRESS`: `addressProblems` of the core examines it. A refusal names the field, not its value.
  */
 export function twilioTextOf(message: Message, address: Address, at: Instant, options: TwilioTextMapOptions): TwilioText | Refusal {
-  if (message.quiet) return { refused: "A text plays the tone of the phone, thus a quiet message gets no text." };
-  if (message.expires !== undefined && message.expires <= at) return { refused: "The message expired before the send." };
+  if (message.quiet) return { refused: "A text plays the tone of the phone, thus a quiet message gets no text.", kind: "quiet" };
+  if (message.expires !== undefined && message.expires <= at) return { refused: "The message expired before the send.", kind: "expired" };
   const problems = addressProblems(address, twilioTextDescriptor());
   const to = address["to"];
   if (problems.length > 0 || to === undefined) return { refused: problems.join(" ") };
@@ -127,7 +127,7 @@ export function createTwilioTextChannel(options: TwilioTextChannelOptions): Chan
       const at = now();
       if (!TWILIO_ACCOUNT_SID.test(options.credentials.accountSid)) return { ok: false, kind: "auth", message: "The account SID is not AC and 32 hexadecimal digits." };
       const mapped = twilioTextOf(message, address, at, options);
-      if ("refused" in mapped) return { ok: false, kind: "refused", message: mapped.refused };
+      if ("refused" in mapped) return { ok: false, kind: mapped.kind ?? "refused", message: mapped.refused };
       if (!options.optIn.has(mapped.to, at)) return { ok: false, kind: "consent", message: "The number is not on the opt-in list, or it replied STOP. The channel sent no text." };
       let request: TwilioRequest;
       try {

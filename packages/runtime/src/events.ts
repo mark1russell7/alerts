@@ -11,6 +11,25 @@ export type ChannelFailureKind = Extract<SendOutcome, { readonly ok: false }>["k
 /** The kinds of a send that the channel refused. After such a send, the channel has no message. */
 export type RefusalKind = Exclude<ChannelFailureKind, "network" | "timeout" | "server">;
 
+/**
+ * The record has each kind of `RefusalKind`, thus no list of the kinds can lose a kind. True: the kind is a fault of
+ * the channel, and it stops each delivery to the person until the owner acts. The heartbeat then pings `/fail`.
+ *
+ * - `reserved`: the channel still sends a `life-safety` message.
+ * - `consent`: the choice of one person, a STOP reply. The deliveries to the other people go on.
+ * - `quiet`: a quiet message on a channel with no silent mode. The step goes at the first try after the quiet window.
+ * - `expired`: a message that expired before the send. The channel is not the cause.
+ */
+export const REFUSAL_FAULTS: Readonly<Record<RefusalKind, boolean>> = {
+  auth: true,
+  refused: true,
+  "rate-limited": true,
+  reserved: false,
+  consent: false,
+  quiet: false,
+  expired: false,
+};
+
 /** The fields of each event. The log of `@mark1russell7/sqlite` reads `id`, `at` and `type`. */
 interface Envelope<T extends string> {
   /** The id of the event. The log keeps one event for each id, thus an append that repeats changes nothing. */
