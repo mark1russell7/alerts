@@ -91,6 +91,20 @@ const across = (zone: string): number => {
   return frame === undefined || box === undefined ? -1 : (box.left + box.width / 2 - frame.left) / frame.width;
 };
 /**
+ * This function waits until the name of a zone is in the picture and does not move. It gives the position of the name.
+ * The globe puts the names of a new step in the picture at its next frame, and a slow browser gives that frame late.
+ */
+const still = async (zone: string): Promise<number> => {
+  let last = -1;
+  await until(async () => {
+    const before = across(zone);
+    await frames(2);
+    last = across(zone);
+    return last >= 0 && Math.abs(last - before) < 0.001;
+  }, 8000);
+  return last;
+};
+/**
  * This function moves the pointer to the dot of a home on the globe, and gives the words of the home.
  * The name of a home is next to its dot, on one of its four sides. So the probe looks on each side of the name.
  */
@@ -223,7 +237,7 @@ if (canvas === null) {
 } else {
   // The globe shows each zone: the flood is in its west part, and the zone Lake Shore of the wind is in its east part.
   const west = await until(() => point(0.3, 0.5) === FLOOD);
-  const before = across("Lake Shore");
+  const before = await still("Lake Shore");
   check("the first picture of the globe shows each zone", west && before > 0.6, [words(), before]);
   // A card moves the camera to its incident. Then the middle of the wind is the middle of the picture.
   click(cards[0]!);
