@@ -207,7 +207,7 @@ describe("loadConfig", () => {
     // The quiet window of the person covers the window of the drill: the drill has no start. The flip is a good drill.
     const sleeper = (start: string, end: string) => person(p1, [home], { watch: { person: p1, places: [home], rules: [], subjects, quiet: { zone: "America/Chicago", start, end } } });
     expect(loadConfig(config({ people: [sleeper("10:00", "18:00")], drills: [drill] }), polled, store).problems).toEqual([
-      "The drill push-weekly has no start: each time of its window is in the quiet window of the person, or too near to it.",
+      "The drill push-weekly has no start in the weeks from 2026-01-05 and 2026-07-06: each time of its window is in the quiet window of the person, or too near to it.",
     ]);
     expect(loadConfig(config({ people: [sleeper("18:00", "10:00")], drills: [drill] }), polled, store).problems).toEqual([]);
     const problems = loadConfig(

@@ -929,6 +929,8 @@ The fakes and the fault cases of CI test the code. Only a drill tests the live p
 - `drillVerdict` gives `pending` until the end of the time of the acknowledgment. Then it gives `passed`, or `failed` with `no-ack` or `late-ack`. A failed send gives no acknowledgment, thus it fails as `no-ack`.
 - `drillProblems` finds bad times, a bad window, an unknown channel and a channel with no acknowledgment. Such a drill cannot pass.
 - `drillProblems` also finds a drill with no start: its full window is in the quiet window of the person, or too near to it.
+- The search for a start runs in January and in July (`DRILL_PROBES`). Two windows in two zones move by an hour at a change of an offset.
+- `drillProblems` also finds an empty list of copies and a copy that the list names two times. Such a drill starts in no copy, or the list has a typo.
 
 The system fold gives the drill lines (the section of the system reports). The runtime starts no drill yet. The next steps are these:
 

@@ -147,7 +147,7 @@ describe("drillProblems", () => {
 
   it("finds a drill with no start out of the quiet window of the person, and a near drill is good", () => {
     const quiet: QuietWindow = { zone: ZONE, start: "22:00", end: "08:00" };
-    const late = "The drill push-weekly has no start: each time of its window is in the quiet window of the person, or too near to it.";
+    const late = "The drill push-weekly has no start in the weeks from 2026-01-05 and 2026-07-06: each time of its window is in the quiet window of the person, or too near to it.";
     // A window in the quiet window has no start.
     expect(drillProblems({ ...WEEKLY, window: { zone: ZONE, start: "23:00", end: "05:00", days: [6] } }, [channel("poll")], quiet)).toEqual([late]);
     // The time of the acknowledgment of each start ends in the quiet window.
@@ -156,6 +156,23 @@ describe("drillProblems", () => {
     expect(drillProblems({ ...WEEKLY, window: { zone: ZONE, start: "21:30", end: "22:00", days: [6] } }, [channel("poll")], quiet)).toEqual([]);
     expect(drillProblems({ ...WEEKLY, window: { zone: ZONE, start: "21:45", end: "22:00", days: [6] } }, [channel("poll")])).toEqual([]);
     expect(drillProblems({ ...WEEKLY, ackWithin: 15 * MINUTE, window: { zone: ZONE, start: "21:45", end: "22:00", days: [6] } }, [channel("poll")], quiet)).toEqual([]);
+  });
+
+  it("finds a drill with a start in one season only, when the window and the quiet window have two zones", () => {
+    // The quiet window starts at 22:00 in New York: 03:00 UTC in January, and 02:00 UTC in July.
+    const quiet: QuietWindow = { zone: "America/New_York", start: "22:00", end: "08:00" };
+    const utc = (start: string, end: string): DrillConfig => ({ ...WEEKLY, window: { zone: "UTC", start, end, days: [6] } });
+    expect(drillProblems(utc("02:00", "02:30"), [channel("poll")], quiet)).toEqual([
+      "The drill push-weekly has no start in the weeks from 2026-07-06: each time of its window is in the quiet window of the person, or too near to it.",
+    ]);
+    // The flip: a window from 01:00 UTC ends its time of the acknowledgment before 02:00 UTC.
+    expect(drillProblems(utc("01:00", "01:30"), [channel("poll")], quiet)).toEqual([]);
+  });
+
+  it("finds an empty list of copies and a copy that the list names two times", () => {
+    expect(drillProblems({ ...WEEKLY, copies: [] }, [channel("poll")])).toEqual(["The drill push-weekly has an empty list of copies. No copy starts it."]);
+    expect(drillProblems({ ...WEEKLY, copies: ["home", "cloud", "home"] }, [channel("poll")])).toEqual(["The drill push-weekly names the copy home two times."]);
+    expect(drillProblems({ ...WEEKLY, copies: ["home"] }, [channel("poll")])).toEqual([]);
   });
 
   it("finds bad times, a bad window, an unknown channel and a channel with no acknowledgment", () => {

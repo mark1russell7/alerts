@@ -134,9 +134,15 @@ export function drillDue(drill: DrillConfig, runs: readonly DrillRun[], at: Inst
   return nextDrillAt(drill, runs, at, quiet) === at;
 }
 
-// The start of the search for a start of each drill in `drillProblems`: Monday 5 January 2026, 00:00 UTC. The windows
-// repeat each week in local time. Thus each start of the search gives the same answer, except at a change of an offset.
-const PROBE_FROM: Instant = Date.UTC(2026, 0, 5);
+/**
+ * The starts of the searches for a start of a drill: Monday 5 January and Monday 6 July 2026, 00:00 UTC. The windows
+ * repeat each week in local time. Two windows in two zones move by an hour at a change of an offset. Thus each season
+ * has its own search of 8 days, with no change of an offset in it.
+ */
+export const DRILL_PROBES: readonly Instant[] = [Date.UTC(2026, 0, 5), Date.UTC(2026, 6, 6)];
+
+// A weekly window has each of its starts in 7 days. One more day keeps a start at the edge of the week.
+const PROBE_SPAN: Duration = 8 * 24 * 3_600_000;
 
 /**
  * This function gives the problems of one drill that a schema cannot find. `loadConfig` also checks the person, the
@@ -144,7 +150,9 @@ const PROBE_FROM: Instant = Date.UTC(2026, 0, 5);
  *
  * - The time of the acknowledgment is above 0, and the least time between two starts is above it.
  * - The window has a good time zone and good local times.
- * - The drill has a start out of the quiet window of the person, with the time of the acknowledgment before it.
+ * - The drill has a start out of the quiet window of the person in each season (`DRILL_PROBES`). The time of the
+ *   acknowledgment ends before the quiet window.
+ * - The list of the copies is not empty, and it names each copy one time.
  * - The instance has the channel of the path, and the channel tells of an acknowledgment.
  */
 export function drillProblems(drill: DrillConfig, channels: readonly ChannelDescriptor[], quiet?: QuietWindow): string[] {
@@ -156,9 +164,14 @@ export function drillProblems(drill: DrillConfig, channels: readonly ChannelDesc
   const windowed = windowProblems(drill.window);
   for (const problem of windowed) problems.push(`${name}: the window: ${problem}`);
   const timed = Number.isFinite(drill.ackWithin) && drill.ackWithin > 0;
-  if (windowed.length === 0 && timed && nextDrillAt(drill, [], PROBE_FROM, quiet) === undefined) {
-    problems.push(`${name} has no start: each time of its window is in the quiet window of the person, or too near to it.`);
+  const missing = windowed.length === 0 && timed ? DRILL_PROBES.filter((from) => !((nextDrillAt(drill, [], from, quiet) ?? Infinity) < from + PROBE_SPAN)) : [];
+  if (missing.length > 0) {
+    const weeks = missing.map((from) => new Date(from).toISOString().slice(0, 10)).join(" and ");
+    problems.push(`${name} has no start in the weeks from ${weeks}: each time of its window is in the quiet window of the person, or too near to it.`);
   }
+  // An empty list of copies starts the drill in no copy, and nothing tells of it.
+  if (drill.copies !== undefined && drill.copies.length === 0) problems.push(`${name} has an empty list of copies. No copy starts it.`);
+  for (const copy of new Set((drill.copies ?? []).filter((copy, index, all) => all.indexOf(copy) !== index))) problems.push(`${name} names the copy ${copy} two times.`);
   const channel = channels.find((known) => known.id === drill.path.channel);
   if (channel === undefined) problems.push(`${name} uses the channel ${drill.path.channel}, and the instance has no such channel.`);
   else if (channel.ack === "none") problems.push(`${name} uses the channel ${drill.path.channel}, and the channel does not tell of an acknowledgment. The drill cannot pass.`);

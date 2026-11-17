@@ -1375,7 +1375,7 @@ export const drillConfigSchema: z.ZodType<DrillConfig, DrillConfig> = schemaOf<D
       every: durationSchema,
       window: drillWindowSchema,
       ackWithin: durationSchema,
-      copies: z.array(copyIdSchema).readonly().exactOptional(),
+      copies: z.array(copyIdSchema).min(1).readonly().exactOptional(),
     })
     .readonly(),
 );
