@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  baselineAt,
   changeOf,
   FORMAT_ARMS,
   type FormatArm,
@@ -170,10 +171,21 @@ describe("formatVerdictOf", () => {
   });
 });
 
+describe("baselineAt", () => {
+  it("gives the newest sent time of the actual reports, and skips the test messages", () => {
+    const at = Date.parse("2026-11-14T22:47:00Z");
+    const keepalive = { status: "test", sent: Date.parse("2099-01-01T00:00:00Z") } as const;
+    expect(baselineAt([{ status: "actual", sent: at - 60_000 }, keepalive, { status: "actual", sent: at }, { status: "exercise", sent: at + 1 }])).toBe(at);
+    expect(baselineAt([keepalive])).toBe(0);
+  });
+});
+
 describe("runChangedFormat", () => {
   it("answers the main query of each arm with its changed body, and reads", async () => {
     const run = await runChangedFormat();
     expect(run.baseline).toMatchObject({ whole: true, health: "healthy", outcome: { ok: true, complete: true } });
+    // The newest actual alert of the fixtures is nws-srw.json. The keepalive of the canary has the time of the run, and does not count.
+    expect(run.baseline.at).toBe(Date.parse("2026-11-14T14:47:00-08:00"));
     expect(run.records.map((r) => [r.arm, r.answered, r.canary])).toEqual(FORMAT_ARMS.map((arm) => [arm, true, true]));
     expect(run.records.find((r) => r.arm === "field-added")?.reports).toBe(run.baseline.reports);
     expect(run.verdict.read).toBe(true);
