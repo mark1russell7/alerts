@@ -1,6 +1,6 @@
 # Contracts
 
-This file gives the three contracts of the alert system: the event, the source and the channel. The sources effort and the delivery effort start from them. The types are in [`packages/core/src/contracts.ts`](../packages/core/src/contracts.ts), in the package `@mark1russell7/alerts`.
+This file gives the contracts of the alert system: the event, the indicator, the source and the channel. The sources effort and the delivery effort start from them. The types are in [`packages/core/src/contracts.ts`](../packages/core/src/contracts.ts), in the package `@mark1russell7/alerts`.
 
 Status: draft, 2026-11-14. The core effort owns this file. To change a contract, write to the core effort first.
 
@@ -146,6 +146,52 @@ The rules of each adapter:
 8. **The kinds are codes of the taxonomy.** Each kind that `map` gives is a code of `TAXONOMY`. A kind that the tables do not know is `other.unknown`, with a problem. A gate test of the adapter holds this rule with `unknownKinds`.
 
 The testkit gives one conformance suite, and each adapter passes it. The suite examines the laws of `map` on the fixtures and on mutated fixtures. It examines the outcomes of `fetch` behind a fault proxy: cut, delay, reset, 429, 500 and a changed body. It also examines the descriptor.
+
+## The indicator contract
+
+An indicator is a measure that is not an event, for example road traffic, rail delays or grid frequency. One indicator alone tells little. Many indicators that leave their normal level at one time in one area are a signal. This signal can come before an official alert. The types are in `contracts.ts`, and the checks are in `indicators.ts`.
+
+- `DIMENSIONS` is the closed list of the 36 dimensions. A dimension is one kind of measure, for example `rail` or `grid-frequency`. A new dimension is a change of the contract.
+- A source declares its measures in the field `measures` of its `SourceDescriptor`. A source with no measures gives only events.
+- A `Reading` is one value of one series of a measure at one time. A series is a station, a link or a zone of the source.
+
+### The declaration of a measure
+
+| Field | Rule |
+| --- | --- |
+| `id` | Small letters, digits and hyphens, with a letter first. It is unique in its source. |
+| `dimension` | One id of `DIMENSIONS`. |
+| `unit` | A unit in the grammar of `@mark1russell7/quantity`, for example `{vehicle}/h`, `km/h`, `Hz` or `m^3/s`. |
+| `area` | The kind of the area of each reading: `code`, `point`, `line`, `polygon`, `zone` or `world`. |
+| `moves` | The direction of a change that is a signal: `rise`, `drop` or `both`. A cancelled train is a rise, and a station that goes offline is a drop. |
+| `baseline` | The baseline that the source gives: `none`, `expected` or `flag`. |
+| `cadence`, `delay`, `backfill` | Optional times in milliseconds. An absent time is not known. A cadence and a backfill are more than 0. |
+
+The direction belongs to the measure, not to the dimension. For example, the delays of a rail line rise and its trips in service drop.
+
+The three baselines:
+
+- With `none`, the core computes the normal level of each series from its history.
+- With `expected`, each reading holds the expected value of the source, for example a load forecast or a timetable.
+- With `flag`, each reading tells if the source marks the value as an anomaly.
+
+### The areas of a reading
+
+- A `code` area is a region code, for example a country (`iso3166-1`), a subdivision (`iso3166-2`) or an NWS zone (`ugc`).
+- A `point` is a station, a gauge, a sensor or a vehicle. A `line` is a road link or a rail line, with two positions or more.
+- A `polygon` is a grid cell or a box that the caller chose.
+- A `zone` is a zone of the domain of the source, for example an electricity bidding zone. A table of the atlas gives the regions of each zone.
+- A `world` area has no place, for example a market series or a service of the world.
+
+### The rules of a reading
+
+1. **The schema checks the form.** `readingSchema` refuses a value that is not finite, an empty series id, a bad version and a line with one position.
+2. **The declaration checks the meaning.** `readingProblems` refuses a measure that the source does not declare, an area of another kind and the field of another baseline. It also refuses a value below 0 of a count, for example `{event}` or `{trip}/h`.
+3. **The time of a reading is the time of its value.** It is not the time of the fetch.
+   - A reading can give the cadence of its series, as the source states it. For example, each GBFS file states its ttl.
+   - This cadence replaces the cadence of the measure for the series. A general reader of many feeds needs it, because each feed has its own cadence.
+4. **A version keeps two methods apart.** A source changes the version of a series when its method changes, for example a new instrument. `seriesKey` holds the version, so a baseline does not cross a change of method.
+5. **A missing value is not a normal value.** A source with no backfill starts with an empty history. A series with no recent reading has no read, not a normal level.
 
 ## Health and coverage
 
@@ -1291,6 +1337,8 @@ The file `schemas.ts` of the core has one zod 4 schema for each data type of the
 
 ## Open points
 
+- The indicator contract has no score yet. The next changes add the baseline and the score of each series. Then they add the store of the readings and the breadth of the signals in the threat level.
+- Some units of the indicator sources are not in the grammar of `@mark1russell7/quantity`. They are `MW`, `MWh`, `µSv/h`, `µg`, `hPa`, `Bq`, `ppm` and each currency other than `USD`. A measure in such a unit fails its schema until the package adds the unit.
 - The procedure tools take the schema of each input and output from `schemas.ts`.
 - The link rule has one family, the earthquakes. Each other kind with two sources of different ids gets its family with its second source.
 - The calculation of the level from probabilities and costs (AL-31), with the base rates from the event log.
