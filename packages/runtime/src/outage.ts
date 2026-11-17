@@ -7,7 +7,7 @@
  * - Once in each day, the worker deploys again. A deploy with no change reads three lists. Thus a change on the side of Twilio heals in a day.
  * - A failed deploy goes again after a backoff. The worker runs beside the passes, so a slow build of Twilio holds no alert.
  */
-import type { Duration, Instant, ParsedConfig, SecretLookup, SpendConfig } from "@mark1russell7/alerts";
+import { sendCapUsd, type Duration, type Instant, type ParsedConfig, type SecretLookup, type SpendConfig } from "@mark1russell7/alerts";
 import {
   deployOutage,
   OUTAGE_MONTH_MAX,
@@ -60,10 +60,13 @@ export interface OutageKeys {
  * This function gives the monthly cap of the outage call from the spend entry of Twilio. The cap is the whole calls of
  * one month in the cap of the entry, and its month starts in the time zone of the entry. The reserve is a part of the
  * cap, and the outage call can use it. A cap above `OUTAGE_MONTH_MAX` calls takes that count. A text costs no more
- * than a call, and the cap counts it as one call.
+ * than a call, and the cap counts it as one call. The fixed costs of the entry come off the cap first. When they use
+ * all of it, the cap is 0 calls.
  */
-export function outageMonthCapOf(spend: Pick<SpendConfig, "monthlyUsd" | "timeZone">): OutageMonthCap {
-  const cents = spendQuota({ name: "Twilio spend", monthlyUsd: spend.monthlyUsd, timeZone: spend.timeZone }).limit;
+export function outageMonthCapOf(spend: Pick<SpendConfig, "monthlyUsd" | "fixed" | "timeZone">): OutageMonthCap {
+  const { monthlyUsd, fixed, timeZone } = spend;
+  if (!(sendCapUsd(spend) > 0)) return { maxCalls: 0, timeZone };
+  const cents = spendQuota({ name: "Twilio spend", monthlyUsd, ...(fixed === undefined ? {} : { fixed }), timeZone }).limit;
   return { maxCalls: Math.min(OUTAGE_MONTH_MAX, Math.floor(cents / spendUnits(TWILIO_CALL_COST_USD))), timeZone: spend.timeZone };
 }
 
@@ -74,6 +77,7 @@ export function outageMonthCapOf(spend: Pick<SpendConfig, "monthlyUsd" | "timeZo
  * - The outage call needs the keys of Twilio and the key `OUTAGE_TOKEN`. Without them, or with a bad list, it gives the problems.
  * - The outage call needs a spend entry for Twilio. The monthly cap of its Functions comes from it.
  * - With the number of the texts in the keys, the list has the text `OUTAGE_TEXT_MESSAGE`, and the deploy gives the number to the Functions.
+ *   Only a person whose number is on the opt-in list gets the text.
  *
  * A problem names keys, fields and ids, and no value.
  */
@@ -91,7 +95,9 @@ export function outageSetup(parsed: ParsedConfig, secret: SecretLookup, keys: Ou
     return err(problems);
   }
   const textFrom = keys?.textFrom;
-  const list = outageListOf(outage, parsed.recipients, outageMonthCapOf(spend), textFrom === undefined ? {} : { textMessage: OUTAGE_TEXT_MESSAGE });
+  // The text goes only to a number with a record of the opt-in list. A STOP reply stops it at Twilio.
+  const optIn = (number: string): boolean => parsed.optIn.some((record) => record.number === number);
+  const list = outageListOf(outage, parsed.recipients, outageMonthCapOf(spend), textFrom === undefined ? {} : { textMessage: OUTAGE_TEXT_MESSAGE, optIn });
   problems.push(...list.problems);
   if (problems.length > 0 || keys === undefined) return err(problems);
   return ok({ credentials: keys.credentials, from: keys.from, list: list.list, token, ...(textFrom === undefined ? {} : { textFrom }) });

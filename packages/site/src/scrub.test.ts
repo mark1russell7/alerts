@@ -136,12 +136,15 @@ describe("the words of the scrubber", () => {
   });
 
   it("tells the time in the two headings and in a note for a past time only", () => {
-    expect(scrubWords(undefined, clock)).toEqual({ map: "Map", list: "Live incidents", past: undefined });
-    expect(scrubWords(replayOf(RANGE.span), clock)).toEqual({ map: "Map", list: "Live incidents", past: undefined });
+    const present = { map: "Map", list: "Live incidents", sources: "Sources", past: undefined, health: undefined };
+    expect(scrubWords(undefined, clock)).toEqual(present);
+    expect(scrubWords(replayOf(RANGE.span), clock)).toEqual(present);
     expect(scrubWords(at("17:00"), clock)).toEqual({
       map: "Map at 17:00",
       list: "Incidents at 17:00",
+      sources: "Sources at the present",
       past: "The map shows the incidents, their areas and the level of each place at 17:00. It does not show the coverage of that time.",
+      health: "This panel shows the sources at the present, not at 17:00. The page has no health of a past time.",
     });
   });
 });

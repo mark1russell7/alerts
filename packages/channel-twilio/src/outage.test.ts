@@ -10,6 +10,7 @@ import {
   OUTAGE_TEXTS,
   outageEnded,
   outageListProblems,
+  outageListSchema,
   outageSends,
   outagePress,
   outageStart,
@@ -132,7 +133,7 @@ describe("outageEnded", () => {
 
 describe("the text after a chain", () => {
   const TEXT = "The alert system is down. The calls got no confirmation.";
-  const WITH_TEXT: OutageList = { ...LIST, textMessage: TEXT };
+  const WITH_TEXT: OutageList = { ...LIST, textMessage: TEXT, people: LIST.people.map((person) => ({ ...person, text: true })) };
   const ended = (list: OutageList, step: number, CallStatus: string, recent: number[] = [], acked = false) =>
     outageEnded(list, BASE, { ...Object.fromEntries(cursorQuery({ outage: AT, person: 0, step, round: 0 }, "v1", acked)), CallStatus }, AT + MINUTE, recent);
 
@@ -150,6 +151,12 @@ describe("the text after a chain", () => {
     expect(ended(LIST, 2, "no-answer").actions).toEqual([]);
   });
 
+  it("gives no text to a person with no opt-in", () => {
+    const optedOut: OutageList = { ...WITH_TEXT, people: LIST.people };
+    expect(ended(optedOut, 2, "no-answer")).toEqual({ actions: [], notes: [{ kind: "exhausted", person: p1 }] });
+    expect(outageListSchema.safeParse(WITH_TEXT).success).toBe(true);
+  });
+
   it("counts a text as one call in each cap", () => {
     const full = Array.from({ length: WITH_TEXT.maxCalls }, () => AT);
     expect(ended(WITH_TEXT, 2, "busy", full)).toEqual({ actions: [], notes: [{ kind: "exhausted", person: p1 }, { kind: "text-capped", person: p1, cap: "window" }] });
@@ -161,6 +168,8 @@ describe("the text after a chain", () => {
     const callsOf = LIST.people.reduce((sum, person) => sum + person.chain.steps.length, 0);
     expect(outageSends(LIST)).toBe(callsOf);
     expect(outageSends(WITH_TEXT)).toBe(callsOf + LIST.people.length);
+    // Only a person with the opt-in counts a text.
+    expect(outageSends({ ...WITH_TEXT, people: [WITH_TEXT.people[0]!, LIST.people[1]!] })).toBe(callsOf + 1);
   });
 
   it("finds the problems of a text message: empty, too long, a control character, and a cap below the sends of one outage", () => {

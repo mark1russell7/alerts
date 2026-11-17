@@ -6,7 +6,7 @@
  * - The state of each try is in the URLs of its callbacks: the outage, the person, the step and the version of the list.
  * - A key press of 1 is the confirmation. The press handler moves the status callback of the live call to a URL with `acked=1`.
  * - The end of each call gives the next step by `chainNext` of the core.
- * - A chain that ends with no confirmation sends one text to the person when the list has `textMessage`. Thus a missed call leaves a message.
+ * - A chain that ends with no confirmation sends one text to the person when the list has `textMessage` and the person has `text`. Thus a missed call leaves a message.
  * - A callback of another version of the list starts no try. Thus a deploy during an outage stops its chains.
  *
  * Each handler is pure. It gives the script of the call as data and the actions of the Function as data.
@@ -38,6 +38,8 @@ export interface OutagePerson {
   /** The phone number in E.164 form. */
   readonly to: string;
   readonly chain: TryChain;
+  /** True: the number is on the opt-in list of the texts, thus the person gets the text of the list. The default is false. */
+  readonly text?: boolean;
 }
 
 /** The texts of the outage call. */
@@ -122,7 +124,11 @@ export const outageListSchema: z.ZodType<OutageList, OutageList> = schemaOf<Outa
     version: z.string(),
     message: z.string(),
     people: z
-      .array(z.strictObject({ person: personIdSchema, to: z.string(), chain: z.strictObject({ steps: z.array(channelIdSchema).readonly() }).readonly() }).readonly())
+      .array(
+        z
+          .strictObject({ person: personIdSchema, to: z.string(), chain: z.strictObject({ steps: z.array(channelIdSchema).readonly() }).readonly(), text: z.boolean().exactOptional() })
+          .readonly(),
+      )
       .readonly(),
     repeats: z.number(),
     ringSeconds: z.number(),
@@ -337,7 +343,7 @@ export function outageListProblems(list: OutageList): string[] {
 /** This function gives the most sends of one outage: each step of each chain. With an SMS message, each person also gets one text. */
 export function outageSends(list: Pick<OutageList, "people" | "textMessage">): number {
   const calls = list.people.reduce((sum, person) => sum + person.chain.steps.length, 0);
-  return list.textMessage === undefined ? calls : calls + list.people.length;
+  return list.textMessage === undefined ? calls : calls + list.people.filter((person) => person.text === true).length;
 }
 
 /** This function gives the query of a cursor, with the version of the list. */
@@ -450,7 +456,7 @@ function tryOf(list: OutageList, base: string, person: OutagePerson, cursor: Out
 // The end of a chain with no confirmation: the note, and the text of the list when the caps permit it.
 function textOf(list: OutageList, person: OutagePerson, sends: CallCounts): OutageStep {
   const exhausted: OutageNote = { kind: "exhausted", person: person.person };
-  if (list.textMessage === undefined) return { actions: [], notes: [exhausted] };
+  if (list.textMessage === undefined || person.text !== true) return { actions: [], notes: [exhausted] };
   const cap = capOf(list, sends);
   if (cap !== undefined) return { actions: [], notes: [exhausted, { kind: "text-capped", person: person.person, cap }] };
   return { actions: [{ kind: "text", person: person.person, to: person.to, body: list.textMessage }], notes: [exhausted] };

@@ -95,21 +95,30 @@ export interface ScrubWords {
   readonly map: string;
   /** The heading of the list of the incidents. */
   readonly list: string;
+  /** The heading of the panel of the sources. */
+  readonly sources: string;
   /** The note below the scrubber for a past time, or `undefined` for the present. */
   readonly past: string | undefined;
+  /** The note of the panel of the sources for a past time, or `undefined` for the present. */
+  readonly health: string | undefined;
 }
 
 /**
  * This function gives the words of the page for the time of the map. For a past time, the two headings tell the time,
  * and a note tells that the map is not the live map. A change of the history names no place. Thus the note also tells
  * that a past time has no level for a place.
+ *
+ * The runtime gives the health of the present only. Thus the panel of the sources stays at the present, and its heading
+ * and its note tell that fact.
  */
 export function scrubWords(replay: Replay | undefined, clock: (at: number, present: number) => string): ScrubWords {
-  if (replay === undefined || atPresent(replay)) return { map: "Map", list: "Live incidents", past: undefined };
+  if (replay === undefined || atPresent(replay)) return { map: "Map", list: "Live incidents", sources: "Sources", past: undefined, health: undefined };
   const text = clock(replay.at, replay.span.to);
   return {
     map: `Map at ${text}`,
     list: `Incidents at ${text}`,
+    sources: "Sources at the present",
     past: `The map shows the incidents, their areas and the level of each place at ${text}. It does not show the coverage of that time.`,
+    health: `This panel shows the sources at the present, not at ${text}. The page has no health of a past time.`,
   };
 }
