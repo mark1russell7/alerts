@@ -24,7 +24,7 @@ export const REFUSAL_KINDS = Object.keys(REFUSALS) as readonly RefusalKind[];
 
 /**
  * The kinds of a refused send that stop each delivery to the person until the owner acts. The kinds
- * `reserved`, `consent`, `quiet` and `expired` are not faults of the channel (`REFUSAL_FAULTS`). The kind `consent` is not one of them either.
+ * `reserved`, `consent`, `quiet` and `expired` are not faults of the channel (`REFUSAL_FAULTS`).
  */
 export const UNREACHABLE: readonly RefusalKind[] = REFUSAL_KINDS.filter((kind) => REFUSALS[kind]);
 const unreachable: ReadonlySet<string> = new Set(UNREACHABLE);
