@@ -135,6 +135,22 @@ export function drillDue(drill: DrillConfig, runs: readonly DrillRun[], at: Inst
 }
 
 /**
+ * This function gives the start that a drill missed, or `undefined`. The missed start is the next start after the last
+ * run. It is before `at`, and the drill is not due at `at`. Thus the window of that start ended with no run.
+ *
+ * - A copy that stops for the full window misses the start. At its next pass, the missed start is a fact.
+ * - A late start in the same window is not a miss: the drill is due, and it tests the path.
+ * - Before the first run, no start is missed: the configuration gives no time from which to count.
+ * - A reload that makes a drill due earlier also gives a missed start, until the next run.
+ */
+export function missedDrillAt(drill: DrillConfig, runs: readonly DrillRun[], at: Instant, quiet?: QuietWindow): Instant | undefined {
+  const last = lastRun(runs, drill.id);
+  if (last === undefined) return undefined;
+  const expected = nextDrillAt(drill, [last], last.at, quiet);
+  return expected !== undefined && expected < at && !drillDue(drill, runs, at, quiet) ? expected : undefined;
+}
+
+/**
  * The starts of the searches for a start of a drill: Monday 5 January and Monday 6 July 2026, 00:00 UTC. The windows
  * repeat each week in local time. Two windows in two zones move by an hour at a change of an offset. Thus each season
  * has its own search of 8 days, with no change of an offset in it.

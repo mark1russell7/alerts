@@ -275,12 +275,15 @@ A drill report has no area. Its subject is `{ system: "alerts.drill", id: <drill
 | `drill/<copy>/<id>` | `system.drill.run` | The last run waits for its acknowledgment | `life-safety` (`extreme`, `immediate`) |
 | `drill/<copy>/<id>/failed` | `system.drill.failed` | The verdict of the last run is `failed` | `notice` at most |
 | `drill/<copy>/<id>/no-start` | `system.drill.failed` | The drill has no next start | `notice` at most |
+| `drill/<copy>/<id>/missed` | `system.drill.failed` | The window of the next start after the last run ended with no run | `notice` at most |
 
 - `DrillSnapshot` gives the copy, the drill and its last run. A drill that is due has a run that starts at the time of the snapshot.
 - The facts of the run line are the copy, the drill and the start. An acknowledgment in the time cancels the line.
 - At the end of the time, the run line ends, and the failed line opens. A late acknowledgment gives an update of the failed line.
 - The next run ends the failed line. A snapshot with no drills keeps each open line of a drill.
 - A snapshot with `noStart` opens the line `no-start`, with the reason `no-start`. A next start ends it.
+- A snapshot with `missed` opens the line `missed`, with the reason `missed` and the missed start as its onset. The next run ends it.
+- `missedDrillAt(drill, runs, at, quiet)` gives the missed start. A late start in the same window is not a miss, and before the first run nothing is missed.
 
 `latestIn(items, at, window)` gives the latest item in a window before a time. `recentStep` and `recentRecovery` use it.
 `threats(incidents, places)` gives the watches and the warnings. A threat is a live incident with the status `actual` at a watched place. Its stage is `watch`, `warning` or absent. A report of the core has the status `system`, so it is not a threat.
@@ -964,11 +967,12 @@ The system fold gives the drill lines (the section of the system reports). The m
 - An acknowledgment in the user interface or on another channel does not test the path, thus it does not count.
 - `drillStep` gives the snapshots of the view and the next wake: the next start, or the end of the time of the acknowledgment.
 - A drill with no next start gets `noStart`, and the system fold opens its line `no-start`.
+- A drill whose last window ended with no run gets `missed`. A copy that stops for the full window sends this failure at its next pass.
+- A stopped copy cannot send. The outage call tells of a stopped copy, and `missed` tells later that the drill did not test the path.
 - The event `drill` stays in its copy, because each copy has its own drill lines.
 
 The next steps are these:
 
-- A watchdog finds a drill that does not start in its window, for example when the runtime stops for the full window.
 - The map and the explanation of a route show the steps that the channel rules remove (`Route.ruled`).
 - Then comes a drill of the outage call.
 
