@@ -28,6 +28,25 @@ export function areasWithoutBlocks(areas: readonly Area[]): Area[] {
   return [...byText.values()];
 }
 
+/**
+ * This function gives each shape one time, in the order of the first. Two shapes are equal by reference or by value, with no
+ * block key. A zone and a county of one message can give the same outline from the store. The map draws it one time.
+ */
+export function distinctShapes(shapes: readonly MapShape[]): MapShape[] {
+  const seen = new Set<MapShape>();
+  const texts = new Set<string>();
+  const out: MapShape[] = [];
+  for (const shape of shapes) {
+    if (seen.has(shape)) continue;
+    seen.add(shape);
+    const text = canonicalJson(withoutBlock(shape), { form: "json" });
+    if (texts.has(text)) continue;
+    texts.add(text);
+    out.push(shape);
+  }
+  return out;
+}
+
 function withoutBlock(area: Area): Area {
   if (area.type === "place" || area.block === undefined) return area;
   if (area.type === "polygon") return { type: "polygon", rings: area.rings };
