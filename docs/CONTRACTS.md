@@ -1173,6 +1173,10 @@ The API also serves the built local page (`packages/site/dist`) on the same addr
 - Each file gets the policy of the folder: no inline script, no inline style and no connection to another origin.
 - The theme before the first paint is the classic script `theme.js`, not an inline script. The plugin `themeFile` of `packages/site/theme-file.ts` adds it to the build and to the head of each page.
 - Build the page before the start of the runtime: `pnpm --filter ./packages/site build`. Without the build, the path `/` gives 404.
+- After each move of the checkout to a new commit, build the page again. The build needs no restart of the runtime.
+- The start line, `install.ts status` and `install.ts restart` tell if the page is not built, or older than its source files (`readPageState`).
+- The page is stale when a source file of a package is newer than `local.html`. The source files are `PAGE_SOURCES`.
+- An install with `--prod` has no `vite`, thus a copy on that install serves no page. The warning does not change the exit code of `status`.
 
 ### The health route
 
