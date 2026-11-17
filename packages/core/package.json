@@ -14,12 +14,12 @@
   "dependencies": {
     "@mark1russell7/algebra": "^0.9.5",
     "@mark1russell7/collections": "^0.11.2",
-    "@mark1russell7/geo": "^0.3.0",
+    "@mark1russell7/geo": "^0.5.3",
     "@mark1russell7/interval": "^0.1.0",
     "@mark1russell7/optional": "^1.2.0",
     "@mark1russell7/rigor-generators": "^0.1.18",
     "@mark1russell7/rigor-statistics": "^0.2.1",
-    "@mark1russell7/text": "^0.0.10",
+    "@mark1russell7/text": "^0.0.13",
     "zod": "^4.6.7"
   },
   "devDependencies": {

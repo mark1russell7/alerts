@@ -192,10 +192,10 @@ importers:
         version: 2.1.4
       '@mark1russell7/ste-lint':
         specifier: ^0.3.0
-        version: 0.3.1
+        version: 0.3.2
       '@mark1russell7/template-cli':
         specifier: ^0.1.7
-        version: 0.1.7
+        version: 0.1.9
       '@swc/core':
         specifier: ^1.15.0
         version: 1.16.22
@@ -221,8 +221,8 @@ importers:
         specifier: workspace:*
         version: link:../core
       '@mark1russell7/text':
-        specifier: ^0.0.10
-        version: 0.0.10
+        specifier: ^0.0.13
+        version: 0.0.13
     devDependencies:
       '@mark1russell7/alerts-source-emsc':
         specifier: workspace:*
@@ -267,8 +267,8 @@ importers:
         specifier: workspace:*
         version: link:../core
       '@mark1russell7/text':
-        specifier: ^0.0.10
-        version: 0.0.10
+        specifier: ^0.0.13
+        version: 0.0.13
       '@procedures/notify':
         specifier: ^0.56.0
         version: 0.56.0
@@ -304,8 +304,8 @@ importers:
         specifier: ^0.1.18
         version: 0.1.19
       '@mark1russell7/text':
-        specifier: ^0.0.10
-        version: 0.0.10
+        specifier: ^0.0.13
+        version: 0.0.13
       '@procedures/notify':
         specifier: ^0.60.0
         version: 0.60.0(@mark1russell7/rigor-testkit@0.1.16(@mark1russell7/rigor-chaos@0.3.3)(@mark1russell7/rigor-generators@0.1.19)(@opentelemetry/api@1.10.0)(fast-check@4.10.2))
@@ -344,8 +344,8 @@ importers:
         specifier: ^0.11.2
         version: 0.11.2(zod@4.6.7)
       '@mark1russell7/geo':
-        specifier: ^0.3.0
-        version: 0.3.0
+        specifier: ^0.5.3
+        version: 0.5.3
       '@mark1russell7/interval':
         specifier: ^0.1.0
         version: 0.1.0
@@ -359,8 +359,8 @@ importers:
         specifier: ^0.2.1
         version: 0.2.1
       '@mark1russell7/text':
-        specifier: ^0.0.10
-        version: 0.0.10
+        specifier: ^0.0.13
+        version: 0.0.13
       zod:
         specifier: ^4.6.7
         version: 4.6.7
@@ -390,8 +390,8 @@ importers:
         specifier: workspace:*
         version: link:../core
       '@mark1russell7/text':
-        specifier: ^0.0.10
-        version: 0.0.10
+        specifier: ^0.0.13
+        version: 0.0.13
       polite-crawler:
         specifier: ^0.7.3
         version: 0.7.4(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
@@ -511,8 +511,8 @@ importers:
         specifier: ^0.2.1
         version: 0.2.4
       '@mark1russell7/text':
-        specifier: ^0.0.10
-        version: 0.0.10
+        specifier: ^0.0.13
+        version: 0.0.13
       '@procedures/json':
         specifier: ^0.57.0
         version: 0.57.0
@@ -581,8 +581,8 @@ importers:
         specifier: ^0.9.5
         version: 0.9.6(zod@4.6.7)
       '@mark1russell7/files':
-        specifier: ^0.0.3
-        version: 0.0.3
+        specifier: ^0.0.4
+        version: 0.0.4
       '@mark1russell7/optional':
         specifier: ^1.2.0
         version: 1.2.0
@@ -594,10 +594,10 @@ importers:
         version: 0.9.3(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
       '@mark1russell7/sqlite':
         specifier: ^0.3.8
-        version: 0.3.8
+        version: 0.3.9
       '@mark1russell7/text':
-        specifier: ^0.0.10
-        version: 0.0.10
+        specifier: ^0.0.13
+        version: 0.0.13
       '@procedures/client':
         specifier: ^0.60.0
         version: 0.60.0
@@ -648,14 +648,14 @@ importers:
         specifier: workspace:*
         version: link:../source-nws-api
       '@mark1russell7/geo':
-        specifier: ^0.3.0
-        version: 0.3.0
+        specifier: ^0.5.3
+        version: 0.5.3
       '@mark1russell7/sqlite':
         specifier: ^0.3.8
-        version: 0.3.8
+        version: 0.3.9
       '@mark1russell7/text':
-        specifier: ^0.0.10
-        version: 0.0.10
+        specifier: ^0.0.13
+        version: 0.0.13
       polite-crawler:
         specifier: ^0.7.3
         version: 0.7.4(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
@@ -692,13 +692,13 @@ importers:
         version: 2.1.4
       '@mark1russell7/geo':
         specifier: ^0.5.2
-        version: 0.5.2
+        version: 0.5.3
       '@mark1russell7/site-pages':
-        specifier: ^0.4.8
-        version: 0.4.8
+        specifier: ^0.7.0
+        version: 0.7.0
       '@mark1russell7/text':
-        specifier: ^0.0.10
-        version: 0.0.10
+        specifier: ^0.0.13
+        version: 0.0.13
       '@mark1russell7/visuals':
         specifier: ^0.3.1
         version: 0.3.1(three@0.187.0)
@@ -742,8 +742,8 @@ importers:
         specifier: workspace:*
         version: link:../format-cap
       '@mark1russell7/text':
-        specifier: ^0.0.10
-        version: 0.0.10
+        specifier: ^0.0.13
+        version: 0.0.13
       polite-crawler:
         specifier: ^0.7.3
         version: 0.7.4(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
@@ -779,8 +779,8 @@ importers:
         specifier: workspace:*
         version: link:../quake
       '@mark1russell7/text':
-        specifier: ^0.0.10
-        version: 0.0.10
+        specifier: ^0.0.13
+        version: 0.0.13
       polite-crawler:
         specifier: ^0.7.3
         version: 0.7.4(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
@@ -822,8 +822,8 @@ importers:
         specifier: workspace:*
         version: link:../format-nws
       '@mark1russell7/text':
-        specifier: ^0.0.10
-        version: 0.0.10
+        specifier: ^0.0.13
+        version: 0.0.13
       polite-crawler:
         specifier: ^0.7.3
         version: 0.7.4(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
@@ -874,8 +874,8 @@ importers:
         specifier: workspace:*
         version: link:../format-nws
       '@mark1russell7/text':
-        specifier: ^0.0.10
-        version: 0.0.10
+        specifier: ^0.0.13
+        version: 0.0.13
       polite-crawler:
         specifier: ^0.7.3
         version: 0.7.4(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
@@ -917,8 +917,8 @@ importers:
         specifier: workspace:*
         version: link:../format-nws
       '@mark1russell7/text':
-        specifier: ^0.0.10
-        version: 0.0.10
+        specifier: ^0.0.13
+        version: 0.0.13
       polite-crawler:
         specifier: ^0.7.3
         version: 0.7.4(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
@@ -960,8 +960,8 @@ importers:
         specifier: ^0.9.3
         version: 0.9.3(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
       '@mark1russell7/text':
-        specifier: ^0.0.10
-        version: 0.0.10
+        specifier: ^0.0.13
+        version: 0.0.13
       '@xmpp/client':
         specifier: ^0.14.0
         version: 0.14.0
@@ -997,11 +997,11 @@ importers:
         specifier: workspace:*
         version: link:../format-nws
       '@mark1russell7/geo':
-        specifier: ^0.3.0
-        version: 0.3.0
+        specifier: ^0.5.3
+        version: 0.5.3
       '@mark1russell7/text':
-        specifier: ^0.0.6
-        version: 0.0.6
+        specifier: ^0.0.13
+        version: 0.0.13
       polite-crawler:
         specifier: ^0.7.3
         version: 0.7.4(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
@@ -1040,8 +1040,8 @@ importers:
         specifier: workspace:*
         version: link:../format-nws
       '@mark1russell7/text':
-        specifier: ^0.0.10
-        version: 0.0.10
+        specifier: ^0.0.13
+        version: 0.0.13
       polite-crawler:
         specifier: ^0.7.3
         version: 0.7.4(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
@@ -1077,8 +1077,8 @@ importers:
         specifier: workspace:*
         version: link:../quake
       '@mark1russell7/text':
-        specifier: ^0.0.10
-        version: 0.0.10
+        specifier: ^0.0.13
+        version: 0.0.13
       polite-crawler:
         specifier: ^0.7.3
         version: 0.7.4(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
@@ -1145,10 +1145,10 @@ importers:
         version: 0.9.3(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
       '@mark1russell7/sqlite':
         specifier: ^0.3.8
-        version: 0.3.8
+        version: 0.3.9
       '@mark1russell7/text':
-        specifier: ^0.0.10
-        version: 0.0.10
+        specifier: ^0.0.13
+        version: 0.0.13
       '@procedures/notify':
         specifier: ^0.57.0
         version: 0.57.0(@mark1russell7/rigor-testkit@0.1.16(@mark1russell7/rigor-chaos@0.3.3)(@mark1russell7/rigor-generators@0.1.19)(@opentelemetry/api@1.10.0)(fast-check@4.10.2))
@@ -1450,12 +1450,12 @@ packages:
     resolution: {integrity: sha512-FiiKK/sAbp39ypGv+2XzYRc+s911pdCtu97UQ4LiKmQKHjqPiyocGO48r2YObucxUkQhnm9mCdkiQxW6rFjiAg==}
     engines: {node: '>=22'}
 
-  '@mark1russell7/geo@0.3.0':
-    resolution: {integrity: sha512-CIG42TK4o9r0FQgP5BZwFfnVba579/oaTaHbQ+UmVrzMGWEz3LLZcIQ2hNYvWOQ+PXuukTefCiKEyUl5jWovmg==}
-    engines: {node: '>=22.12'}
+  '@mark1russell7/files@0.0.4':
+    resolution: {integrity: sha512-Pb978ZnvlAxzcdWtRtqTGb7mZFCvlNrdKnpZqhxQ7gafzeNGf1JqYFuB4RWiLbJzRuFUWjEoAVG5f2TndCIlSg==}
+    engines: {node: '>=22'}
 
-  '@mark1russell7/geo@0.5.2':
-    resolution: {integrity: sha512-hr8rFQLIQ0MbzdZUDhQ10A6dKUtVsSXHhpXng8xzkR9NFnwy9dXSgfx1E5dgXF4GjGIFmd4TD/4ZYOwl5YUoiQ==}
+  '@mark1russell7/geo@0.5.3':
+    resolution: {integrity: sha512-3NUmhjBQXQadIxbjnfIOMGaRaKroTLtY94CMJxLTFXlItXbAU94cTFsnAPt8bBJoJbHfmf9xbmaNcnRn3MfLsw==}
     engines: {node: '>=22.12'}
 
   '@mark1russell7/interval@0.1.0':
@@ -1469,10 +1469,6 @@ packages:
   '@mark1russell7/optional@1.2.0':
     resolution: {integrity: sha512-vS5jF21WC/VApRv4p8afRZahcMl9cuNp03LxbVngY9nYkzq+S7Oit6ksySt2baML+tp46UF60sxnHxn1jlwtTg==}
     engines: {node: '>=22.12'}
-
-  '@mark1russell7/predicates@0.1.2':
-    resolution: {integrity: sha512-ANUaJ6npqn1AaEZgydHn8dgqBN9vyO5lrCkwV6DfnWRQ0E4wIwkMIOnBnPpquOZo10FmeNPimLx80oYYlMqTmg==}
-    engines: {node: '>=22'}
 
   '@mark1russell7/predicates@0.1.5':
     resolution: {integrity: sha512-WXgTOliDm5650i3adkTjAj85Uzp22LD7KQFqwhETlQWG4CK3pDnd4I4ef9YrOAfzik1uTdChVk8RZaqdeP+YxA==}
@@ -1592,17 +1588,17 @@ packages:
       zod:
         optional: true
 
-  '@mark1russell7/site-pages@0.4.8':
-    resolution: {integrity: sha512-uN7SV7VxrsMyH7/cPOUClFOnJhw24S2+qVaMIoNK+7AtJe3FB4l5qN2NowKAYvYgLcDpY4gUBlw9meJ6/Gq2pQ==}
+  '@mark1russell7/site-pages@0.7.0':
+    resolution: {integrity: sha512-nFiaxs1D/IAxj54KUow0AkU35fxWj6iCHAcQ2GG2ISv0yD+YwnOoDHNmO1mV1g+roRV7G5czJNZlzv+3lcT2vg==}
     engines: {node: '>=22'}
     hasBin: true
 
-  '@mark1russell7/sqlite@0.3.8':
-    resolution: {integrity: sha512-cDIB84Zh/J+GuNaXJALUl4pqOVx8G8JakxafIlHB2uwYNSPUWXZKWGe9T47u1eNIEezMPn9FkGLvbugCBzWL3g==}
+  '@mark1russell7/sqlite@0.3.9':
+    resolution: {integrity: sha512-H+dMOGwhOLFvxDfodTJvFjIIQaHcm5YaLCh5HC72NxSIJCZ8xRIoGFVPNMgGjTqe+6KEb71nUU2GE7N7Hw7LPg==}
     engines: {node: '>=22.13'}
 
-  '@mark1russell7/ste-lint@0.3.1':
-    resolution: {integrity: sha512-J9tDcjOC1lMDCEuGumRzDJ5RJ/uXtLUpv93wzFlRMl4hGtI371HtPCQHwB7d0VhetJ6UBkkzLj+XCezctrEgpQ==}
+  '@mark1russell7/ste-lint@0.3.2':
+    resolution: {integrity: sha512-0WRNon1oYKX1mmTP/AhrPnpoGAGolmpkJWHaTkHXc4SKe1tQhUvPrY/0TQ4gvu7aN+TEPpypiZDIkOjYZG8qBA==}
     engines: {node: '>=22'}
     hasBin: true
 
@@ -1610,13 +1606,13 @@ packages:
     resolution: {integrity: sha512-E3zTfOPDRFE/KdvETa4PqXMu5Vm9eG7Ipy+oMAptB1kDMAQX9y2By+sH17sIezHoqODFWldi2+GwPNMaW301Vg==}
     engines: {node: '>=22'}
 
-  '@mark1russell7/template-cli@0.1.7':
-    resolution: {integrity: sha512-Wy4xa6OgNXyMunSyXOArxmrspLSCuyw1pf1P5X45Uiwe1aWHzn0LJptUYVGUSwT3GTp9FGVDhFMeOnKlapD3Xw==}
+  '@mark1russell7/template-cli@0.1.9':
+    resolution: {integrity: sha512-7ebtLlCmT6KYhbpoI2SZHXCQC6/7Rc660SvKwQvfslseSQrXMRlmBj+1/F5KOCep6aB+LtvGWg+HmTKi6uZjyQ==}
     engines: {node: '>=22.12'}
     hasBin: true
 
-  '@mark1russell7/text@0.0.10':
-    resolution: {integrity: sha512-ugLHCAcllSOlNZ0oz5Q8Wf3OkqfnSvwxgx8FL2gQ3EX7K1IS9oW9k2Jq77Obwa2ZtpzhNV47lJL2bGgvFVB14A==}
+  '@mark1russell7/text@0.0.13':
+    resolution: {integrity: sha512-8Tu7DTTpfmpXIy0F2JCyOW1RD91X7tm38c5xiqz3cLdmEkUQViH/06kTBLj+hrzuQPMBGVyxd7snqVG6EpNLdQ==}
     engines: {node: '>=22.12'}
 
   '@mark1russell7/text@0.0.6':
@@ -3099,12 +3095,9 @@ snapshots:
 
   '@mark1russell7/files@0.0.3': {}
 
-  '@mark1russell7/geo@0.3.0':
-    dependencies:
-      '@mark1russell7/optional': 1.2.0
-      '@mark1russell7/predicates': 0.1.2
+  '@mark1russell7/files@0.0.4': {}
 
-  '@mark1russell7/geo@0.5.2':
+  '@mark1russell7/geo@0.5.3':
     dependencies:
       '@mark1russell7/optional': 1.2.0
       '@mark1russell7/predicates': 0.1.5
@@ -3122,8 +3115,6 @@ snapshots:
       - zod
 
   '@mark1russell7/optional@1.2.0': {}
-
-  '@mark1russell7/predicates@0.1.2': {}
 
   '@mark1russell7/predicates@0.1.5': {}
 
@@ -3194,13 +3185,13 @@ snapshots:
       ws: 8.23.0
       zod: 4.6.7
 
-  '@mark1russell7/site-pages@0.4.8':
+  '@mark1russell7/site-pages@0.7.0':
     dependencies:
-      '@mark1russell7/rigor-statistics': 0.1.29
+      '@mark1russell7/rigor-statistics': 0.2.8
 
-  '@mark1russell7/sqlite@0.3.8': {}
+  '@mark1russell7/sqlite@0.3.9': {}
 
-  '@mark1russell7/ste-lint@0.3.1':
+  '@mark1russell7/ste-lint@0.3.2':
     dependencies:
       typescript: 6.0.3
 
@@ -3209,11 +3200,11 @@ snapshots:
       '@mark1russell7/rigor-generators': 0.1.19
       '@mark1russell7/rigor-statistics': 0.1.29
 
-  '@mark1russell7/template-cli@0.1.7':
+  '@mark1russell7/template-cli@0.1.9':
     dependencies:
       '@clack/prompts': 1.9.0
 
-  '@mark1russell7/text@0.0.10': {}
+  '@mark1russell7/text@0.0.13': {}
 
   '@mark1russell7/text@0.0.6': {}
 
@@ -3226,7 +3217,7 @@ snapshots:
 
   '@mark1russell7/visuals@0.3.1(three@0.187.0)':
     dependencies:
-      '@mark1russell7/geo': 0.5.2
+      '@mark1russell7/geo': 0.5.3
       '@mark1russell7/layout-contract': 0.10.2
     optionalDependencies:
       three: 0.187.0
@@ -4182,7 +4173,7 @@ snapshots:
     dependencies:
       '@mark1russell7/algebra': 0.8.9(zod@4.6.7)
       '@mark1russell7/service': 0.9.3(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
-      '@mark1russell7/sqlite': 0.3.8
+      '@mark1russell7/sqlite': 0.3.9
       '@mozilla/readability': 0.6.0
       linkedom: 0.18.15
       undici: 8.12.4
