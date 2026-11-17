@@ -58,12 +58,16 @@ describe("the read of the history", () => {
       incident('{"anchor":"a","reports":[],"changes":[{"at":1,"codes":[]}]}'),
       // A runtime before the places of a change gives a change with no list of places.
       incident('{"anchor":"a","reports":[],"changes":[{"at":1,"codes":[],"shapes":[]}]}'),
+      // The reader finds the change of a time by the sequence of the changes. Thus an earlier change after a later change is not a history.
+      incident('{"anchor":"a","reports":[],"changes":[{"at":2,"codes":[],"shapes":[],"places":[]},{"at":1,"codes":[],"shapes":[],"places":[]}]}'),
     ];
     for (const body of bodies) {
       expect(await readHistory(answer(body), null), body).toEqual({ ok: false, absent: false, text: `${SOURCE} The answer of the runtime is not a history.` });
     }
     // The flip: an incident with each field of the outside is a history.
     expect(await readHistory(answer(incident(`{"anchor":"a","reports":["a"],"changes":[${change}]}`)), null)).toMatchObject({ ok: true });
+    // Two changes of one time are in sequence.
+    expect(await readHistory(answer(incident(`{"anchor":"a","reports":["a"],"changes":[${change},${change},{"at":2,"codes":[],"shapes":[],"places":[]}]}`)), null)).toMatchObject({ ok: true });
   });
 });
 
@@ -85,6 +89,19 @@ describe("the reads of one refresh", () => {
   const newer = (since: number, next: number): HistoryPayload => {
     const tornado = HISTORY_FIXTURE.incidents.filter((incident) => incident.anchor === ANCHORS.tornado);
     return { ...HISTORY_FIXTURE, since, next, incidents: tornado.map((incident) => ({ ...incident, changes: [...incident.changes, ...incident.changes.slice(-1).map((change) => ({ ...change, at: next }))] })), regions: [] };
+  };
+
+  /**
+   * An answer after a step of the clock of the runtime. The step moved each time back by the same amount.
+   * Thus the changes of the tornado warning stay in sequence, and its newest change is at `next`, before the query.
+   */
+  const stepped = (since: number, next: number): HistoryPayload => {
+    const tornado = HISTORY_FIXTURE.incidents.filter((incident) => incident.anchor === ANCHORS.tornado);
+    const moved = tornado.map((incident) => {
+      const back = (incident.changes.at(-1)?.at ?? next) - next;
+      return { ...incident, changes: incident.changes.map((change) => ({ ...change, at: change.at - back })) };
+    });
+    return { ...HISTORY_FIXTURE, since, next, incidents: moved, regions: [] };
   };
 
   it("reads the whole history first, and then only the changes since the newest change", async () => {
@@ -110,7 +127,7 @@ describe("the reads of one refresh", () => {
 
   it("reads the whole history one time more after a step of the clock of the runtime", async () => {
     // The newest change of the answer is before the query. So the times of the kept histories are not correct.
-    const { asked, get } = runtime(newer(NEXT, NEXT - 60_000), HISTORY_FIXTURE);
+    const { asked, get } = runtime(stepped(NEXT, NEXT - 60_000), HISTORY_FIXTURE);
     expect(await readHistories(get, KEPT)).toEqual({ kept: KEPT, absent: false });
     expect(asked).toEqual([`/history?since=${String(NEXT)}`, "/history"]);
   });
@@ -124,7 +141,7 @@ describe("the reads of one refresh", () => {
     expect(failed.kept).toBe(KEPT);
     expect(failed).toMatchObject({ absent: false, text: "The time scrubber reads the history from the alert runtime on this computer. The runtime answers with the status 503." });
     // The second read of a refresh can also fail. The histories of the first read stay.
-    const half = await readHistories(runtime(newer(NEXT, NEXT - 60_000), 503).get, KEPT);
+    const half = await readHistories(runtime(stepped(NEXT, NEXT - 60_000), 503).get, KEPT);
     expect(half.kept.since).toBeNull();
     expect(half.kept.incidents).toHaveLength(7);
     expect(half.text).toContain("status 503");

@@ -22,10 +22,22 @@ export const OTHER_FORMAT_TEXT = `${SOURCE_TEXT} The runtime has a different ver
 const isObject = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null;
 const isTime = (value: unknown): boolean => value === null || (typeof value === "number" && Number.isFinite(value));
 
-/** This function examines the history of one incident: an anchor, a list of reports and a list of changes. Each change has a time, its areas and its places. */
+/**
+ * This function examines the history of one incident: an anchor, a list of reports and a list of changes.
+ * Each change has a time, its areas and its places. The changes are in the sequence of their times.
+ * The reader finds the change of a time by that sequence, so a different sequence is not a history.
+ */
 function isIncident(value: unknown): boolean {
   if (!isObject(value) || typeof value["anchor"] !== "string" || !Array.isArray(value["reports"]) || !Array.isArray(value["changes"])) return false;
-  return value["changes"].every((change) => isObject(change) && typeof change["at"] === "number" && Array.isArray(change["codes"]) && Array.isArray(change["shapes"]) && Array.isArray(change["places"]));
+  let last = -Infinity;
+  for (const change of value["changes"] as readonly unknown[]) {
+    if (!isObject(change) || !Array.isArray(change["codes"]) || !Array.isArray(change["shapes"]) || !Array.isArray(change["places"])) return false;
+    const at = change["at"];
+    // A time that is not a number is not after the last time, so this test refuses it also.
+    if (typeof at !== "number" || !(at >= last)) return false;
+    last = at;
+  }
+  return true;
 }
 
 /**
