@@ -472,6 +472,7 @@ export const readingSchema: z.ZodType<Reading, Reading> = schemaOf<Reading>()(
       at: instantSchema,
       value: z.number(),
       area: indicatorAreaSchema,
+      cadence: positiveDuration.exactOptional(),
       expected: z.number().exactOptional(),
       flagged: z.boolean().exactOptional(),
       observation: observationIdSchema,

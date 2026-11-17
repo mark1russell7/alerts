@@ -359,6 +359,11 @@ export interface Reading {
   readonly at: Instant;
   readonly value: number;
   readonly area: IndicatorArea;
+  /**
+   * The cadence of the series, as the source states it, for example the ttl of a GBFS file. When it is present, it
+   * replaces the cadence of the measure for this series. A general reader of many feeds gives it.
+   */
+  readonly cadence?: Duration;
   /** The expected value of the source. It is present only for a measure with the baseline `expected`. */
   readonly expected?: number;
   /** True when the source marks the value as an anomaly. It is present only for a measure with the baseline `flag`. */
