@@ -15,13 +15,13 @@ The target is the whole vision. The milestones give the order of the work.
   - They reach the person by push, then by a call. At night, only life-safety warnings wake the person.
   - A copy on one computer and a copy in the cloud send them. An outside heartbeat watches both copies.
   - The fault tests gate each change, and drills test each live path. A weather radio is the backup alarm with no network.
-  - Items: AL-1 to AL-13, AL-15 to AL-18, AL-28 to AL-30, AL-32, AL-37, AL-39, AL-42 to AL-45, AL-47 to AL-50, AL-52 and AL-54.
+  - Items: AL-1 to AL-13, AL-15 to AL-18, AL-28 to AL-30, AL-32, AL-37, AL-39, AL-42 to AL-45, AL-47 to AL-50, AL-52, AL-54 and AL-56.
 - **v2: each class of signal, ranked by its real cost.**
   - The coverage grows to each class of signal in the world: more hazards, outages, news and radio.
   - The priority comes from the chance and the cost of each event. The relevance comes from the interest graph of each person.
   - The copies come from code, and the availability algebra gives their places. The alerts go to other people too.
   - Items: AL-35 first, then AL-14, AL-19, AL-21, AL-22, AL-25, AL-26, AL-31, AL-33, AL-34, AL-36, AL-38, AL-40, AL-41, AL-46, AL-51, AL-53 and AL-55.
-- **Later:** AL-20, AL-23, AL-24, AL-27, AL-56 and AL-57.
+- **Later:** AL-20, AL-23, AL-24, AL-27 and AL-57.
 
 ## Phase 1: the live slice
 
@@ -50,7 +50,7 @@ The target is the whole vision. The milestones give the order of the work.
 | AL-48 | A restart of the live runtime with no elevated shell | done | A new text of the restart request restarts the runtime. `install.ts restart` checks the files with the new code, writes the request and waits for the ready runtime. Live since 2026-11-16: each deploy uses it. |
 | AL-49 | The runtime follows a step of the wall clock | done | A correction of the system time moves the wall clock. The runtime writes each step to its log and moves its own times by it. Thus each timer keeps its time, and the times of the sources do not move. A system report tells the step in the digest. Fault case 11 holds it. |
 | AL-44 | The outage call | done | When the instance is down, the outside check starts three Functions on the server of Twilio. They call each person in the order of the list, until the person presses 1. A voicemail does not count. The private configuration holds the list (`outage`). The worker `outage` of the runtime deploys the Functions and the list at each start and once in each day. The Functions stop at a monthly cap of calls from the spend cap of Twilio. On 2026-11-16, the outage call went live, and a drill rang each phone of the list. AL-56 is the text after the calls. |
-| AL-56 | A text after the outage calls | later | After the calls of an outage, each person also gets a text. A text to a number in the United States needs a registered sender. The owner registers it first. |
+| AL-56 | A text after the outage calls | in progress | When the calls of a person end with no key press, the person gets one SMS message. Each cap counts a text as one call. The code and its tests on a fake Twilio come first. The live text waits on the owner: a registered sender (10DLC or toll-free) and the key `TWILIO_TEXT_FROM`. |
 | AL-57 | The usage of Twilio in the spend gate | blocked | The spend gate of the instance counts only its own sends, not the calls of the outage Functions. The gate also reads the usage records of Twilio for the local month, and it uses the larger amount. It waits for the release of `@mark1russell7/stack-spend` 0.1.2, which has the rule of the larger amount. |
 | AL-50 | A broken log file at the boot | done | At the boot, the runtime checks its log file. A broken file goes into a quarantine folder, and a new file gets each event that the salvage reads. A system report names the folder. A loss of events gets `notice`, and a whole salvage gets `digest`. The checked open is in `@mark1russell7/sqlite`. Fault case 12 is a gate of CI, and it holds the boot of a broken file. |
 | AL-29 | A standalone weather radio | waiting | The owner sets up a SAME weather radio at the bed. It needs no internet and no part of this system. |

@@ -97,7 +97,7 @@ function fakeCalls(created: RuntimeCallOptions[]): RuntimeCalls {
 }
 
 async function invoke(loaded: Loaded, event: Record<string, unknown>, created: RuntimeCallOptions[] = []): Promise<FakeResponse> {
-  const context: RuntimeContext = { DOMAIN_NAME: "outage-0000.twil.io", OUTAGE_TOKEN: "token-0000", OUTAGE_FROM: "+15555550100", getTwilioClient: () => ({ calls: fakeCalls(created) }) };
+  const context: RuntimeContext = { DOMAIN_NAME: "outage-0000.twil.io", OUTAGE_TOKEN: "token-0000", OUTAGE_FROM: "+15555550100", getTwilioClient: () => ({ calls: fakeCalls(created), messages: { create: async () => ({ sid: "SM0000" }), list: async () => [] } }) };
   return new Promise((resolve, reject) => {
     loaded.handler(context, event, (error, response) => (error === null && response instanceof FakeResponse ? resolve(response) : reject(error)));
   });

@@ -893,11 +893,15 @@ The package `@mark1russell7/alerts-channel-twilio` operates the chain on the ser
 - `outageStart` gets the webhook of the outside check. It starts the first call of each person.
 - `outagePress` gets the key of the person. A 1 moves the status callback of the live call to a URL with `acked=1`.
 - `outageEnded` gets the status callback at the end of each call. It gives the next call by `chainNext`.
+- A chain that ends with no key press sends one SMS message to the person, when the list has `textMessage` (AL-56). A chain with a key press sends no text.
 - The URL of each callback holds the outage, the person, the step and the version of the list. A callback of another version starts no call.
 - Twilio signs each request to the press and end Functions. Thus a person outside Twilio cannot make a step. The entry is public, and it checks its own token.
 - A cap counts the calls of the Twilio number in a time window. A try above the cap makes no call.
 - A monthly cap counts the calls of the number from the start of the calendar month. The month starts in the time zone of the spend entry of Twilio.
 - The monthly cap is the spend cap of Twilio in whole calls of 4 cents, at most 1000. Each call of the number counts, also a call of the instance.
+- Each cap counts a text as one call. The recent sends are the calls of `OUTAGE_FROM` and the texts of `OUTAGE_TEXT_FROM`.
+- The SMS message has at most `OUTAGE_TEXT_LIMIT` (160) code points. That is at most 3 segments of 1.4 cents, so a text costs no more than a call.
+- A failed read of the recent texts goes to the log, with no number. Then the caps count the calls only.
 - The setup of the runtime refuses an outage call with no spend entry for Twilio. Each problem of the monthly cap names no count, because the spend cap is private.
 - A gap stays open: the spend gate of the instance does not count the calls of the Functions. Thus one month can have more calls than the cap, by the calls of the Functions.
 - The end of the gap is AL-57. The gate also reads the usage records of Twilio for the local month, in whole UTC days. It uses the larger of that amount and its own count, by the rule of `@mark1russell7/stack-spend`.
@@ -913,6 +917,7 @@ The package `@mark1russell7/alerts-channel-twilio` operates the chain on the ser
 The module `deploy.ts` of the package puts the three Functions and the list on one service of Twilio Serverless. `twilioServerlessDeploy` of `@procedures/notify/twilio-serverless` sends the requests.
 
 - `outageDeployPlan` gives the plan: the bundles of the Functions, the list as a private asset, the build, and the variables `OUTAGE_TOKEN` and `OUTAGE_FROM`.
+- A plan with a sender of texts also sets the variable `OUTAGE_TEXT_FROM`.
 - The version of the plan is the start of the content hash of the files and of the build. A second deploy of the same plan reads three lists and changes nothing.
 - The variables are not in the version. A new token or a new number changes only the variables.
 - `deployOutage` makes the bundles with esbuild, and then it deploys the plan. It loads esbuild only when it deploys.
@@ -922,6 +927,9 @@ The module `deploy.ts` of the package puts the three Functions and the list on o
 The runtime operates the deploy in the worker `outage` of its service (`outage.ts`), beside the worker `passes`.
 
 - `outageSetup` reads the field `outage`, the keys of Twilio and the key `OUTAGE_TOKEN`. A missing key, a token of a bad form or a bad list stops the start.
+- The key `TWILIO_TEXT_FROM` holds the registered sender of texts: a phone of a 10DLC campaign or a verified toll-free phone.
+- With the key, the list has the text `OUTAGE_TEXT_MESSAGE`, and the deploy gives the number to the Functions. Without the key, the outage call sends no text.
+- A value of the key that is not in E.164 form stops the start.
 - The worker deploys after the startup. A change of the private files restarts the runtime, so a new list deploys at once.
 - Once in each day, the worker deploys again. Thus a change on the side of Twilio heals in a day.
 - A failed deploy goes again after a backoff: one minute, then double, up to one hour. The pass limit bounds one deploy, so the drain of the service holds it.
