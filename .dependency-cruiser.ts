@@ -4,7 +4,7 @@ import { boundaries, defaultOptions, type Config } from "@mark1russell7/boundari
 
 // The default options exclude each path in node_modules, so no rule sees an import of a package. The walk
 // still stops at node_modules, because the option doNotFollow of the defaults names it.
-const exclude = defaultOptions(import.meta.dirname).exclude as { path: string[] };
+const exclude = defaultOptions(import.meta.dirname)["exclude"] as { path: string[] };
 
 const config: Config = boundaries(import.meta.dirname, {
   options: { exclude: { path: exclude.path.filter((path) => path !== "(^|/)node_modules/") } },
