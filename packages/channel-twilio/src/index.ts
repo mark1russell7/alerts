@@ -1,7 +1,7 @@
 /**
- * The Twilio voice call channel of the alert system. It gives the procedures of the channel contract of
- * `@mark1russell7/alerts`: `describe`, `send`, `status` and `cancel`, and the read of the balance of the
- * account. The calls of the Twilio API come from `@procedures/notify/twilio`.
+ * The Twilio voice call channel and the Twilio text channel of the alert system. They give the procedures of the channel
+ * contract of `@mark1russell7/alerts`: `describe`, `send`, `status` and `cancel`. The package also reads the balance of the
+ * account. The requests of the Twilio API come from `@procedures/notify/twilio`.
  */
 
 import { COPY_ID, type ChannelProcedures, type Instant, type SendOutcome } from "@mark1russell7/alerts";
@@ -21,13 +21,26 @@ import {
   type TwilioFetch,
   type TwilioRequest,
 } from "@procedures/notify/twilio";
-import { isQuotaError, type QuotaError, type QuotaGate, type QuotaState } from "polite-crawler/api";
 import { TWILIO_PHONE_PATTERN, twilioCallDescriptor } from "./descriptor.ts";
 import { callFailureOf, callStatusOf, twilioCallOf, type TwilioCallMapOptions } from "./map.ts";
+import { takeSpend, type TwilioSpendGates } from "./spend.ts";
 
-export { CHANNEL_ID, TWILIO_CALL_ADDRESS, TWILIO_CALL_COST_USD, TWILIO_CALL_MAX_IN_FLIGHT, TWILIO_PHONE_PATTERN, twilioCallDescriptor } from "./descriptor.ts";
-export { CALL_LAST_SENTENCE, CALL_REPEATS, CALL_SAY_LIMIT, callFailureOf, callStatusOf, spokenTextOf, twilioCallOf } from "./map.ts";
+export {
+  CHANNEL_ID,
+  TEXT_CHANNEL_ID,
+  TWILIO_CALL_ADDRESS,
+  TWILIO_CALL_COST_USD,
+  TWILIO_CALL_MAX_IN_FLIGHT,
+  TWILIO_PHONE_PATTERN,
+  TWILIO_TEXT_COST_USD,
+  TWILIO_TEXT_LIMIT,
+  twilioCallDescriptor,
+  twilioTextDescriptor,
+} from "./descriptor.ts";
+export { CALL_LAST_SENTENCE, CALL_REPEATS, CALL_SAY_LIMIT, callFailureOf, callStatusOf, messageTextOf, spokenTextOf, twilioCallOf } from "./map.ts";
 export type { Refusal, TwilioCallMapOptions } from "./map.ts";
+export type { TwilioSpendGates } from "./spend.ts";
+export * from "./text.ts";
 export type { TwilioCredentials, TwilioFetch } from "@procedures/notify/twilio";
 
 /** The time limit of one request to Twilio. */
@@ -37,10 +50,10 @@ export const TWILIO_CALL_TIMEOUT_MS = 10_000;
 const FROM_NUMBER = new RegExp(`^(?:${TWILIO_PHONE_PATTERN})$`, "u");
 
 /**
- * This function gives the problems of the setup of the channel: the credentials and the number that calls.
- * It makes no request. A problem names the field, and no value.
+ * This function gives the problems of the setup of the channels: the credentials, the number that calls and the number
+ * that texts. It makes no request. A problem names the field, and no value.
  */
-export function twilioSetupProblems(credentials: TwilioCredentials, from: string): string[] {
+export function twilioSetupProblems(credentials: TwilioCredentials, from: string, textFrom?: string): string[] {
   const problems: string[] = [];
   try {
     // The builder of each request checks the form of the credentials. This request goes nowhere.
@@ -49,20 +62,8 @@ export function twilioSetupProblems(credentials: TwilioCredentials, from: string
     problems.push(errorMessage(error));
   }
   if (!FROM_NUMBER.test(from)) problems.push("The number that calls is not a phone number in E.164 form.");
+  if (textFrom !== undefined && !FROM_NUMBER.test(textFrom)) problems.push("The number that texts is not a phone number in E.164 form.");
   return problems;
-}
-
-/**
- * The cap of the spend of the account, as two gates of `polite-crawler/api`. The two gates have one store,
- * one key and one quota name, thus they count the same units.
- */
-export interface TwilioSpendGates {
-  /** The gate of each message below `life-safety`. Its quota keeps the reserve. */
-  readonly gate: QuotaGate;
-  /** The gate of a `life-safety` message: the same quota with no reserve. Thus only `life-safety` uses the reserve. */
-  readonly lifeSafety: QuotaGate;
-  /** The units of one call in the quota: for example 4 cents. */
-  readonly units: number;
 }
 
 /** The options of the Twilio call channel. */
@@ -116,21 +117,13 @@ export function createTwilioCallChannel(options: TwilioCallChannelOptions): Chan
       } catch (error) {
         return { ok: false, kind: "refused", message: `The call breaks a rule of the Twilio API: ${errorMessage(error)}` };
       }
-      const gate = spend === undefined ? undefined : message.level === "life-safety" ? spend.lifeSafety : spend.gate;
-      let taken: QuotaState | undefined;
-      if (spend !== undefined && gate !== undefined) {
-        try {
-          taken = gate.take(spend.units);
-        } catch (error) {
-          // A refusal of the gate stops the call. A fault of the store of the gate does not: the call goes with no count.
-          if (isQuotaError(error)) return spendRefusal(gate, error, spend, at);
-        }
-      }
+      const taken = takeSpend(spend, message.level, at);
+      if (!taken.ok) return taken.refusal;
       const result = await call(request);
       // Twilio makes no call for these answers. A network fault, a time-out and a server error can come after the start of a call.
       const notStarted = !result.ok && (result.kind === "auth" || result.kind === "refused" || result.kind === "rate-limited");
-      if (notStarted && spend !== undefined && gate !== undefined && taken?.at !== undefined) giveBack(gate, spend.units, taken.at);
-      if (!result.ok) return callFailureOf(result);
+      if (notStarted) taken.giveBack();
+      if (!result.ok) return callFailureOf(result, [mapped.to, mapped.from]);
       return { ok: true, receipt: { call: result.sid }, accepted: at };
     },
 
@@ -200,23 +193,4 @@ export async function readTwilioBalance(options: TwilioBalanceOptions, signal?: 
   const result = await callTwilio(options.fetch, request, extractTwilioBalance, signal === undefined ? { timeoutMs } : { timeoutMs, signal });
   if (!result.ok) return { ok: false, message: `Twilio did not give the balance (${result.kind}): ${result.errors.join(" ")}` };
   return { ok: true, balance: result.balance, currency: result.currency };
-}
-
-/**
- * This function gives the refusal of a gate of the spend. The gate of `life-safety` has no reserve, thus
- * its refusal is a full cap. The other gate refuses a call that only `life-safety` can still make.
- */
-function spendRefusal(gate: QuotaGate, error: QuotaError, spend: TwilioSpendGates, at: Instant): Extract<SendOutcome, { readonly ok: false }> {
-  const state = gate.state();
-  const full = gate === spend.lifeSafety || state.blockedUntil !== undefined || state.used + spend.units > gate.quota.limit;
-  return { ok: false, kind: full ? "rate-limited" : "reserved", message: error.message, retryAfter: Math.max(0, error.resetAt - at) };
-}
-
-/** This function gives back the units of a call that did not start. A failed write changes no outcome of the send. */
-function giveBack(gate: QuotaGate, units: number, at: number): void {
-  try {
-    gate.giveBack?.(units, at);
-  } catch {
-    // The count stays high by one call until the end of the window. Thus the cap can stop one call too early, never too late.
-  }
 }

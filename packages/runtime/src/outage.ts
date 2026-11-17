@@ -14,7 +14,6 @@ import {
   outageListOf,
   OUTAGE_TEXT_MESSAGE,
   TWILIO_CALL_COST_USD,
-  TWILIO_PHONE_PATTERN,
   twilioCallDescriptor,
   type OutageList,
   type OutageMonthCap,
@@ -35,17 +34,8 @@ const DAY = 24 * HOUR;
 /** The name of the key of `secrets.env` that holds the token of the entry of the outage call. */
 export const OUTAGE_TOKEN_KEY = "OUTAGE_TOKEN";
 
-/**
- * The name of the key of `secrets.env` that holds the Twilio phone of the texts. A text to a phone in the United States
- * needs a registered sender: a phone of a 10DLC campaign or a verified toll-free phone. Without the key, the outage call sends no text.
- */
-export const TWILIO_TEXT_FROM_KEY = "TWILIO_TEXT_FROM";
-
 // A token of 32 or more characters of the URL alphabet. The webhook sends it in the query, so it needs no escape.
 const TOKEN_FORM = /^[A-Za-z0-9_-]{32,128}$/u;
-
-// The whole value, in the form of a number of a person.
-const PHONE_FORM = new RegExp(`^(?:${TWILIO_PHONE_PATTERN})$`, "u");
 
 /** The setup of the outage call. Each value is private. */
 export interface OutageSetup {
@@ -54,14 +44,16 @@ export interface OutageSetup {
   readonly token: string;
   /** The Twilio number that makes the calls. It is the number of the call channel. */
   readonly from: string;
-  /** The Twilio number that sends the texts, from the key `TWILIO_TEXT_FROM_KEY`. Without it, the list has no text. */
+  /** The Twilio number that sends the texts, from the keys. Without it, the list has no text. */
   readonly textFrom?: string;
 }
 
-/** The keys of Twilio that the outage call reads: the credentials and the number of the call channel. */
+/** The keys of Twilio that the outage call reads: the credentials, the number of the call channel and the number of the texts. */
 export interface OutageKeys {
   readonly credentials: TwilioCredentials;
   readonly from: string;
+  /** The number of the text channel. The function `twilioSetup` of the instance reads it from `secrets.env`, and checks its form. */
+  readonly textFrom?: string | undefined;
 }
 
 /**
@@ -81,7 +73,7 @@ export function outageMonthCapOf(spend: Pick<SpendConfig, "monthlyUsd" | "timeZo
  * - With no field `outage` in the configuration, it gives `undefined`. The instance then deploys nothing.
  * - The outage call needs the keys of Twilio and the key `OUTAGE_TOKEN`. Without them, or with a bad list, it gives the problems.
  * - The outage call needs a spend entry for Twilio. The monthly cap of its Functions comes from it.
- * - With the key `TWILIO_TEXT_FROM_KEY`, the list has the text `OUTAGE_TEXT_MESSAGE`, and the deploy gives the number to the Functions.
+ * - With the number of the texts in the keys, the list has the text `OUTAGE_TEXT_MESSAGE`, and the deploy gives the number to the Functions.
  *
  * A problem names keys, fields and ids, and no value.
  */
@@ -98,12 +90,11 @@ export function outageSetup(parsed: ParsedConfig, secret: SecretLookup, keys: Ou
     problems.push("The configuration has an outage call, and no spend entry for the provider of the calls. The monthly cap of the Functions comes from it.");
     return err(problems);
   }
-  const textFrom = secret(TWILIO_TEXT_FROM_KEY) ?? "";
-  if (textFrom !== "" && !PHONE_FORM.test(textFrom)) problems.push(`The value of ${TWILIO_TEXT_FROM_KEY} is not a phone number in E.164 form.`);
-  const list = outageListOf(outage, parsed.recipients, outageMonthCapOf(spend), textFrom === "" ? {} : { textMessage: OUTAGE_TEXT_MESSAGE });
+  const textFrom = keys?.textFrom;
+  const list = outageListOf(outage, parsed.recipients, outageMonthCapOf(spend), textFrom === undefined ? {} : { textMessage: OUTAGE_TEXT_MESSAGE });
   problems.push(...list.problems);
   if (problems.length > 0 || keys === undefined) return err(problems);
-  return ok({ credentials: keys.credentials, from: keys.from, list: list.list, token, ...(textFrom === "" ? {} : { textFrom }) });
+  return ok({ credentials: keys.credentials, from: keys.from, list: list.list, token, ...(textFrom === undefined ? {} : { textFrom }) });
 }
 
 /** The state of the deploy of the outage call. It holds no private value, so the status of the instance can show it. */
