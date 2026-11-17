@@ -64,8 +64,28 @@ describe("the spoken text", () => {
     const text = spokenTextOf(message("life-safety", { body: "word ".repeat(400) }));
     expect(text.endsWith(CALL_LAST_SENTENCE)).toBe(true);
     const said = text.slice(0, -CALL_LAST_SENTENCE.length - 1);
-    expect([...said].length).toBeLessThanOrEqual(CALL_SAY_LIMIT + 1);
+    expect([...said].length).toBeLessThanOrEqual(CALL_SAY_LIMIT);
     expect(said.endsWith("word.")).toBe(true);
+  });
+
+  it("removes the punctuation at the cut before the stop", () => {
+    const said = spokenTextOf(message("life-safety", { body: "Road, ".repeat(200) })).slice(0, -CALL_LAST_SENTENCE.length - 1);
+    expect([...said].length).toBeLessThanOrEqual(CALL_SAY_LIMIT);
+    expect(said.endsWith("Road.")).toBe(true);
+  });
+
+  it("keeps a flag whole at the cut", () => {
+    const flag = "\u{1F1FA}\u{1F1F8}";
+    const said = spokenTextOf(message("life-safety", { body: (flag + " ").repeat(300) })).slice(0, -CALL_LAST_SENTENCE.length - 1);
+    expect([...said].length).toBeLessThanOrEqual(CALL_SAY_LIMIT);
+    expect(said.endsWith(flag + ".")).toBe(true);
+  });
+
+  it("cuts a text with no space at the end of a grapheme", () => {
+    const family = "\u{1F468}‍\u{1F469}‍\u{1F467}";
+    const said = spokenTextOf(message("life-safety", { body: family.repeat(200) })).slice(0, -CALL_LAST_SENTENCE.length - 1);
+    expect([...said].length).toBeLessThanOrEqual(CALL_SAY_LIMIT);
+    expect(said.endsWith(`${family}.`)).toBe(true);
   });
 });
 
