@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import { COVERAGE_KINDS, FETCHES, FIRST_FETCH, OUTAGE, PEOPLE, PLACES, SOURCES, STEPS, ZONES } from "./demo.ts";
 import { incidentLabel, joinFacts, reasonText, stepLabel } from "./explain.ts";
 import { observe, replay, type Frame } from "./replay.ts";
-import { zonesOf } from "./view.ts";
+import { zonesOf } from "./demo-map.ts";
 
 const WORLD = { sources: SOURCES, fetches: FETCHES, start: FIRST_FETCH, kinds: COVERAGE_KINDS };
 const frames = replay(STEPS, PEOPLE, PLACES, WORLD);

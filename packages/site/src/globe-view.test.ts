@@ -2,7 +2,24 @@ import { ASSESSED_LEVELS } from "@mark1russell7/alerts";
 import { bboxOfGeoJson } from "@mark1russell7/geo";
 import { regionSurface } from "@mark1russell7/visuals/globe";
 import { describe, expect, it } from "vitest";
-import { areaKind, GAP_KIND, GAP_SIZE, globeParts, GRID_STEPS, gridOf, incidentRecord, levelRank, outlineKind, PIN_SIZE, pinKind, placeRecord, regionOf, ZONE_KIND } from "./globe-view.ts";
+import {
+  areaKind,
+  GAP_KIND,
+  GAP_SIZE,
+  globeParts,
+  GRID_STEPS,
+  gridOf,
+  incidentRecord,
+  levelRank,
+  outlineKind,
+  PIN_SIZE,
+  pinKind,
+  placeRecord,
+  REGION_RANK,
+  regionOf,
+  regionRecord,
+  ZONE_KIND,
+} from "./globe-view.ts";
 import { ANCHORS, box, EMPTY_FIXTURE, MAP_FIXTURE } from "./map-view.fixture.ts";
 
 const parts = globeParts(MAP_FIXTURE);
@@ -117,6 +134,35 @@ describe("globeParts", () => {
     const found = globeParts({ ...MAP_FIXTURE, view: { ...MAP_FIXTURE.view, places } });
     expect(found.names.map((name) => name.text)).toEqual(["Shop"]);
     expect(found.points).toHaveLength(parts.points.length);
+  });
+
+  it("has no name of a region by default, and the name of each region of the basemap with `regionNames`", () => {
+    expect(parts.names.some((name) => name.kind === ZONE_KIND)).toBe(false);
+    const found = globeParts(MAP_FIXTURE, { regionNames: true });
+    const regions = found.names.filter((name) => name.kind === ZONE_KIND);
+    expect(regions.map((name) => [name.text, name.record, name.rank, name.size])).toEqual(MAP_FIXTURE.basemap.map((region) => [region.name, regionRecord(region), REGION_RANK, 0]));
+    // The names of the places stay, after the names of the regions. The parts of the picture do not change.
+    expect(found.names.slice(regions.length)).toEqual(parts.names);
+    expect(found.areas).toEqual(parts.areas);
+    expect(found.points).toEqual(parts.points);
+    // The name of a region is below the name of each place when two names need one position.
+    expect(REGION_RANK).toBeLessThan(levelRank("none"));
+  });
+
+  it("has one name for a region of two shapes, at the middle of the box of both", () => {
+    const side = MAP_FIXTURE.basemap.find((region) => region.shapes.length === 2);
+    const box = bboxOfGeoJson({ type: "GeometryCollection", geometries: (side?.shapes ?? []).map(regionOf) });
+    if (side === undefined || box === undefined) throw new Error("The fixture has no region of two shapes.");
+    const names = globeParts(MAP_FIXTURE, { regionNames: true }).names.filter((name) => name.record === regionRecord(side));
+    expect(names).toHaveLength(1);
+    expect(names[0]?.place.lat).toBeCloseTo((box.south + box.north) / 2, 9);
+    expect(names[0]?.place.lon).toBeCloseTo((box.west + box.east) / 2, 9);
+  });
+
+  it("has no name for a region with no name, and no name for a region with no shape", () => {
+    const basemap = MAP_FIXTURE.basemap.map((region, index) => (index === 0 ? { ...region, name: " " } : index === 1 ? { ...region, shapes: [] } : region));
+    const found = globeParts({ ...MAP_FIXTURE, basemap }, { regionNames: true });
+    expect(found.names.filter((name) => name.kind === ZONE_KIND).map((name) => name.text)).toEqual(MAP_FIXTURE.basemap.slice(2).map((region) => region.name));
   });
 
   it("keeps a name off the mark of its place: the dot, or the gap ring of a place with a short coverage", () => {

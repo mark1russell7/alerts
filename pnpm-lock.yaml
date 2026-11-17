@@ -700,8 +700,8 @@ importers:
         specifier: ^0.0.10
         version: 0.0.10
       '@mark1russell7/visuals':
-        specifier: ^0.2.3
-        version: 0.2.3(three@0.187.0)
+        specifier: ^0.3.1
+        version: 0.3.1(three@0.187.0)
       '@types/d3-geo':
         specifier: ^3.1.1
         version: 3.1.1
@@ -1590,8 +1590,8 @@ packages:
     resolution: {integrity: sha512-uKmmt2icpkn2k9Wn/y1fRZvBml80dgwRLRhI72e6SkGVSF3UWCiuPZdYTJA2WEstRolq0viSLRJjXb/o8NF8JQ==}
     engines: {node: '>=22.12'}
 
-  '@mark1russell7/visuals@0.2.3':
-    resolution: {integrity: sha512-gfgIQAsKaSCKnS2w4NzCDU17y87phR6R2wY4MkDAq+bmacUEL5V8R5XqlaCFAWaa/LfC6NA0Drj4+mh8D7tVjg==}
+  '@mark1russell7/visuals@0.3.1':
+    resolution: {integrity: sha512-syFFEuw2cb1PlAuippo/Up991iDMDLCvfYIT8nU2IR//6Vt+unnn78Gqkw6g0wAsh+TGezhhkM9rDEx3Cpb+9w==}
     engines: {node: '>=22'}
     peerDependencies:
       three: '>=0.187.0'
@@ -3187,7 +3187,7 @@ snapshots:
     transitivePeerDependencies:
       - zod
 
-  '@mark1russell7/visuals@0.2.3(three@0.187.0)':
+  '@mark1russell7/visuals@0.3.1(three@0.187.0)':
     dependencies:
       '@mark1russell7/geo': 0.5.2
       '@mark1russell7/layout-contract': 0.10.2
