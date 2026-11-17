@@ -3,15 +3,19 @@
  * the configuration with `parseConfig` of the core. A runtime does not start with a bad configuration,
  * because a runtime with a wrong place watches the wrong place in silence. The module `reload.ts` gives
  * the start its last good set of the private files. No problem holds a value of the configuration, a value of a secret or a path.
+ *
+ * The folder `parts` of the private folder holds the parts of the configuration: one file `<name>.json` for each writer.
+ * The check merges them into `config.json` with `parseConfig` of the core.
  */
-import { readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { parseConfig, type ChannelDescriptor, type ParsedConfig, type SecretLookup } from "@mark1russell7/alerts";
+import { parseConfig, partLabel, type ChannelDescriptor, type ParsedConfig, type PartText, type SecretLookup } from "@mark1russell7/alerts";
 import { resolvePath } from "@mark1russell7/files";
 import { err, ok, tryCatchAsync, type Result } from "@mark1russell7/optional";
 import { parseEnvFile } from "@mark1russell7/service/host";
 import { countOf } from "@mark1russell7/text";
+import { compareCodeUnits } from "@mark1russell7/text/order";
 
 /**
  * A source gives the JSON text of the configuration. Today the source is a private file. A procedure
@@ -39,6 +43,12 @@ export const CONFIG_FILE = "config.json";
 
 /** This name is the name of the file of keys in the private folder. */
 export const SECRETS_FILE = "secrets.env";
+
+/** This name is the name of the folder of the parts of the configuration in the private folder. */
+export const PARTS_FOLDER = "parts";
+
+/** The end of the name of each file of a part. The folder `parts` ignores each other file, for example a new file before its check. */
+export const PART_FILE_END = ".json";
 
 /**
  * This function gives the private folder from the environment. The path can start with `~`. A relative
@@ -74,10 +84,55 @@ export function envSecrets(env: Readonly<Record<string, string | undefined>>): S
 /** The text of a file, or the code of the error of its read. The code holds no path. */
 export type FileText = { readonly text: string } | { readonly code: string };
 
-/** The texts of the two private files that the start reads: `config.json` and `secrets.env`. */
+/** The text of one file of the folder `parts`, with the name of its part: the name of the file with no `.json`. */
+export interface PartFileText {
+  readonly name: string;
+  readonly file: FileText;
+}
+
+/** The texts of the files of the folder `parts` in the order of the names. A read error of the folder gives its code. */
+export type PartsTexts = { readonly files: readonly PartFileText[] } | { readonly code: string };
+
+/** The texts of a folder `parts` with no files. A missing folder gives this value. */
+export const NO_PARTS: PartsTexts = { files: [] };
+
+/** This function gives true if the texts of the parts are the texts of a folder with no files. */
+export function noParts(parts: PartsTexts | undefined): boolean {
+  return parts === undefined || ("files" in parts && parts.files.length === 0);
+}
+
+/** The texts of the private files that the start reads: `config.json`, `secrets.env` and the folder `parts`. */
 export interface PrivateTexts {
   readonly config: FileText;
   readonly secrets: FileText;
+  /** The texts of the parts of the configuration. When it is absent, the configuration has no parts. */
+  readonly parts?: PartsTexts;
+}
+
+/**
+ * This function reads the folder of the parts: each file whose name ends with `.json`, in the order of the names.
+ * A missing folder gives `NO_PARTS`. Another error of the read of the folder gives its code.
+ */
+export async function readParts(folder: string): Promise<PartsTexts> {
+  const names = await tryCatchAsync(() => readdir(folder), codeOf);
+  if (names.tag === "err") return names.error === "ENOENT" ? NO_PARTS : { code: names.error };
+  const parts = names.value.filter((name) => name.endsWith(PART_FILE_END)).sort(compareCodeUnits);
+  const files = await Promise.all(
+    parts.map(async (name): Promise<PartFileText> => ({ name: name.slice(0, -PART_FILE_END.length), file: await readText(() => readFile(join(folder, name), "utf8")) })),
+  );
+  return { files };
+}
+
+// The texts of the parts for the parse, or the problems of their reads. A problem gives the code of the error, not a path.
+function partTexts(parts: PartsTexts): Result<readonly PartText[], readonly string[]> {
+  if ("code" in parts) return err([`The folder ${PARTS_FOLDER} cannot be read (${parts.code}).`]);
+  const texts: PartText[] = [];
+  const problems: string[] = [];
+  parts.files.forEach(({ name, file }, index) => {
+    if ("code" in file) problems.push(`${partLabel(name, index)} cannot be read (${file.code}).`);
+    else texts.push({ name, text: file.text });
+  });
+  return problems.length > 0 ? err(problems) : ok(texts);
 }
 
 /** This function gives the text of a read, or the code of its error. */
@@ -103,31 +158,50 @@ export interface CheckedConfig {
 }
 
 /**
- * This function checks the texts of the two private files, as the start of the runtime does. It reads no
- * file. The problems of `secrets.env` come first, and the check of the instance comes after the check of
- * the format. The text `name` names the configuration at the start of a problem.
+ * This function checks the texts of the private files, as the start of the runtime does. It reads no file.
+ * The problems of `secrets.env` come first, then the read errors of the parts. The check of the instance comes
+ * after the check of the format. The text `name` names the configuration at the start of a problem.
  */
 export function checkTexts(texts: PrivateTexts, check: InstanceCheck, name = "The configuration file"): Result<CheckedConfig, readonly string[]> {
   const keys = parseSecrets(texts.secrets);
   if (keys.tag === "err") return keys;
   if ("code" in texts.config) return err([`${name} cannot be read (${texts.config.code}).`]);
+  const parts = partTexts(texts.parts ?? NO_PARTS);
+  if (parts.tag === "err") return parts;
   const secret = envSecrets(keys.value);
-  const parsed = parseConfig(texts.config.text, check.channels, secret);
+  const parsed = parseConfig(texts.config.text, check.channels, secret, parts.value);
   if (parsed.tag === "err") return parsed;
   const problems = check.problems(parsed.value, secret);
   return problems.length > 0 ? err(problems) : ok({ parsed: parsed.value, keys: keys.value });
 }
 
+/** A new text of one part for `checkConfig`. The check uses it in place of the file of the part, or as a new part. */
+export interface PartSource {
+  readonly name: string;
+  readonly source: ConfigSource;
+}
+
+/** This function puts `part` in place of the file with its name. With no such file, the new part goes in the order of the names. */
+export function withPart(parts: PartsTexts, part: PartFileText): PartsTexts {
+  if ("code" in parts) return parts;
+  return { files: [...parts.files.filter(({ name }) => name !== part.name), part].sort((a, b) => compareCodeUnits(a.name, b.name)) };
+}
+
 /**
- * This function checks a configuration with the keys of the private folder, as the start of the runtime
- * does. A writer of the configuration uses it before its new file replaces `config.json`, because a
- * bad `config.json` stops the next start. It reads the source only when `secrets.env` has no problem.
+ * This function checks a configuration with the keys and the parts of the private folder, as the start of the runtime
+ * does. A writer of the configuration uses it before its new file replaces `config.json`, because a bad `config.json`
+ * stops the next start. It reads the source only when `secrets.env` has no problem.
+ *
+ * With `part`, the check uses the new text of that part in place of its file. Thus a writer of a part checks its new
+ * file before the file replaces the old part.
  */
-export async function checkConfig(source: ConfigSource, home: string, check: InstanceCheck): Promise<Result<ParsedConfig, readonly string[]>> {
+export async function checkConfig(source: ConfigSource, home: string, check: InstanceCheck, part?: PartSource): Promise<Result<ParsedConfig, readonly string[]>> {
   const secrets = await readText(() => readFile(join(home, SECRETS_FILE), "utf8"));
   const keys = parseSecrets(secrets);
   if (keys.tag === "err") return keys;
-  const checked = checkTexts({ config: await readText(() => source.read()), secrets }, check, source.name);
+  const folder = await readParts(join(home, PARTS_FOLDER));
+  const parts = part === undefined ? folder : withPart(folder, { name: part.name, file: await readText(() => part.source.read()) });
+  const checked = checkTexts({ config: await readText(() => source.read()), secrets, parts }, check, source.name);
   return checked.tag === "ok" ? ok(checked.value.parsed) : checked;
 }
 

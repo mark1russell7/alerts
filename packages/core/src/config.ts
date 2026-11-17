@@ -162,6 +162,11 @@ export interface NamedPart {
 /** The name of a part has small letters, digits and hyphens. It starts with a letter and has 40 characters or fewer. */
 export const PART_NAME: RegExp = /^[a-z][a-z0-9-]{0,39}$/u;
 
+/** This function gives the name of a part at the start of a problem. A bad name can hold any text, thus the label gives the index of the part. */
+export function partLabel(name: string, index: number): string {
+  return PART_NAME.test(name) ? `The part ${name}` : `Part ${String(index)}`;
+}
+
 /**
  * This function merges the parts into the root configuration. The entries of the root come first. The entries of
  * the parts come after them, in the order of the names. Thus the order of the reads does not change the merge or its hash.

@@ -1037,18 +1037,22 @@ Two writers of one file overwrite each other. Thus each writer of places, people
 
 `parseConfig` takes the texts of the parts as its fourth argument. It checks the JSON and the schema of the root and of each part, and gives all their problems together. Then it merges the parts and checks the references of the merge with `loadConfig`. A problem of a part starts with the name of the part. With no parts, the result is the same as before.
 
-The runtime reads two private files in the folder `ALERTS_HOME`, or in `~/.alerts` with no variable: the configuration `config.json` and the keys `secrets.env`. A procedure that gives the configuration replaces the file later.
+The runtime reads its private files in the folder `ALERTS_HOME`, or in `~/.alerts` with no variable. The files are the configuration `config.json`, the keys `secrets.env` and the folder `parts`. A procedure that gives the configuration replaces the files later.
 
-The function `checkTexts` checks the texts of the two files, as the start does. It reads no file. The keys go through `parseEnvFile` of `@mark1russell7/service/host`, and `envSecrets` gives them as the secret store. The keys do not go into `process.env`, because each child process gets that environment. A read error gives only its code, because the path can hold a user name.
+- The folder `parts` holds one file `<name>.json` for each part. The name of the file without `.json` is the name of the part.
+- The runtime reads only the files whose names end with `.json`, in the order of the names. It ignores each other file.
+- A missing folder gives a configuration with no parts. A read error of the folder or of a part gives its code, and the check refuses the files.
 
-The start keeps the last good set of the private files, and a change of the files restarts the runtime (`reload.ts`). The private files of a start are `config.json`, `secrets.env` and `copy.json`.
+The function `checkTexts` checks the texts of the private files, as the start does. It reads no file. The keys go through `parseEnvFile` of `@mark1russell7/service/host`, and `envSecrets` gives them as the secret store. The keys do not go into `process.env`, because each child process gets that environment. A read error gives only its code, because the path can hold a user name.
 
-- When the three files pass the check, the start uses them. A ready runtime writes them as the last good set `start.good.json`. The write is atomic, with the permissions 0600, because the set holds the keys.
+The start keeps the last good set of the private files, and a change of the files restarts the runtime (`reload.ts`). The private files of a start are `config.json`, `secrets.env`, `copy.json` and the parts.
+
+- When the private files pass the check, the start uses them. A ready runtime writes them as the last good set `start.good.json`. The write is atomic, with the permissions 0600, because the set holds the keys.
 - The last good set is a second copy of `secrets.env`. On Windows, the permissions do nothing, and the file gets the access list of the folder, as `secrets.env` does.
 - After a change of a key, the old key stays in the set until the next ready start. A start on the set uses the old keys.
 - The runtime is ready when its service operates and one pass ended. Thus a start that throws, or a startup that fails, does not write the set.
 - When the files have problems, the start uses the last good set and gives the problems. Thus a bad edit does not stop the alerts.
-- Before a start uses the files, it writes the start marker `start.pending`. The marker holds the key of the start: the SHA-256 of the three texts and of the restart request. A ready runtime removes the marker.
+- Before a start uses the files, it writes the start marker `start.pending`. The marker holds the key of the start: the SHA-256 of the texts and of the restart request. A ready runtime removes the marker.
 - The marker counts the starts with its key that stopped before they were ready. One stop, for example a reboot or a power loss in the first pass, gives a second try of the files, with a note.
 - After `STOP_LIMIT` (2) stops in a row with one key, the start uses the last good set, and it keeps the marker. Thus each later start with the same files uses the set at once, and a crash loop stops.
 - A new restart request or a change of a file gives a new key. Then the next start uses the private files again.
@@ -1056,8 +1060,9 @@ The start keeps the last good set of the private files, and a change of the file
 - When the files and the last good set both have problems, `startConfig` throws `ConfigRefused`, and the process does not start.
 - The marker does not find a stop after the runtime is ready. A runtime that stops later gives no way back to an older set.
 - `GET /status` gives the files of the start: `start.use` is `files` or `good`, with the count of the reasons. The reasons are in the output of the runtime.
-- `install.ts status` reads the marker and checks the three files. A runtime on the last good set, or files with problems, give the code 1.
-- In the profile `daemon`, the hook of each pass reads the three files again. A change that passes the check stops the runtime, and the supervisor starts it again.
+- With no parts, the keys and the last good set are the same as before the parts. Thus an update of the code does not restart a runtime or change its set.
+- `install.ts status` reads the marker and checks the private files. A runtime on the last good set, or files with problems, give the code 1.
+- In the profile `daemon`, the hook of each pass reads the private files again. A change that passes the check stops the runtime, and the supervisor starts it again.
 - A change with problems gives its problems one time, and the runtime keeps the files of its start.
 - A new text of the restart request `restart.request` in the folder stops the runtime with no check. Then the supervisor starts it again.
 - A read error of the request gives no restart. The start reads the request too, thus the new runtime does not restart for the same request.
@@ -1078,6 +1083,12 @@ A writer of the configuration does these steps, thus the live instance does not 
 3. Rename the file to `config.json` only when the exit code is 0. Code 1 gives the problems, and code 2 gives a wrong command.
 
 The output of the check gives the count of the places, the people, the contacts and the policies, or the problems. It holds no value and no path.
+
+A writer of a part does these steps. The check reads `config.json` and the other parts, thus it finds an entry that is in two files.
+
+1. Write the new part in the folder `ALERTS_HOME`, not in the folder `parts`.
+2. Start `node src/check.ts --part <name> <file>` in the runtime package. The check uses the file in place of the part `<name>`.
+3. Rename the file to `parts/<name>.json` only when the exit code is 0. A bad name of a part gives the code 2.
 
 The runtime adds the codes of the zones near each place with a position (`withZoneCodes`). Thus a writer gives a position and one code of the state of the place. A `same` code of the county is better, because the IPAWS and radio alerts use it.
 
