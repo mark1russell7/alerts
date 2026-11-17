@@ -3,6 +3,7 @@ import { EMSC_DESCRIPTOR } from "@mark1russell7/alerts-source-emsc";
 import { IEM_DESCRIPTOR } from "@mark1russell7/alerts-source-iem";
 import { IPAWS_DESCRIPTOR } from "@mark1russell7/alerts-source-ipaws";
 import { NWS_DESCRIPTOR } from "@mark1russell7/alerts-source-nws-api";
+import { NWWS_DESCRIPTOR } from "@mark1russell7/alerts-source-nwws";
 import { SWPC_DESCRIPTOR } from "@mark1russell7/alerts-source-swpc";
 import { descriptorOf, TSUNAMI_CENTERS } from "@mark1russell7/alerts-source-tsunami";
 import { USGS_DESCRIPTOR } from "@mark1russell7/alerts-source-usgs";
@@ -15,6 +16,7 @@ const DESCRIPTORS: Readonly<Record<string, readonly SourceDescriptor[]>> = {
   "@mark1russell7/alerts-source-iem": [IEM_DESCRIPTOR],
   "@mark1russell7/alerts-source-ipaws": [IPAWS_DESCRIPTOR],
   "@mark1russell7/alerts-source-nws-api": [NWS_DESCRIPTOR],
+  "@mark1russell7/alerts-source-nwws": [NWWS_DESCRIPTOR],
   "@mark1russell7/alerts-source-swpc": [SWPC_DESCRIPTOR],
   "@mark1russell7/alerts-source-tsunami": [descriptorOf(TSUNAMI_CENTERS.ntwc), descriptorOf(TSUNAMI_CENTERS.ptwc)],
   "@mark1russell7/alerts-source-usgs": [USGS_DESCRIPTOR],

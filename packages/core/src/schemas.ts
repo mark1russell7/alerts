@@ -751,11 +751,6 @@ export const escalationStepSchema: z.ZodType<EscalationStep, EscalationStep> = s
   z.strictObject({ channel: channelIdSchema, at: durationSchema }).readonly(),
 );
 
-/** This schema checks the escalation of one level. */
-export const escalationPolicySchema: z.ZodType<EscalationPolicy, EscalationPolicy> = schemaOf<EscalationPolicy>()(
-  z.strictObject({ level: levelSchema, steps: z.array(escalationStepSchema).readonly(), exhaustedAfter: durationSchema }).readonly(),
-);
-
 /** This schema checks one accepted send. The step is an index from 0 (`contracts.ts`, line 593). */
 export const deliverySchema: z.ZodType<Delivery, Delivery> = schemaOf<Delivery>()(
   z
@@ -884,6 +879,13 @@ export const subjectWatchSchema: z.ZodType<SubjectWatch, SubjectWatch> = schemaO
     .strictObject({ system: z.string(), id: z.string().exactOptional() })
     .overwrite((subject) => (subject.system === "topic" && subject.id !== undefined ? { ...subject, id: canonicalKind(subject.id) } : subject))
     .refine((subject) => subject.system !== "topic" || subject.id === undefined || knownKind(subject.id), TOPIC_PROBLEM)
+    .readonly(),
+);
+
+/** This schema checks the escalation of one level, with its optional subject. */
+export const escalationPolicySchema: z.ZodType<EscalationPolicy, EscalationPolicy> = schemaOf<EscalationPolicy>()(
+  z
+    .strictObject({ level: levelSchema, about: subjectWatchSchema.exactOptional(), steps: z.array(escalationStepSchema).readonly(), exhaustedAfter: durationSchema })
     .readonly(),
 );
 
@@ -1309,12 +1311,19 @@ export const contactConfigSchema: z.ZodType<ContactConfig, ContactConfig> = sche
   z.strictObject({ person: personIdSchema, channel: channelIdSchema, address: z.record(z.string(), addressValueSchema).readonly() }).readonly(),
 );
 
-/** This schema checks the money rules of one paid provider account. `loadConfig` checks the provider, the reserve and the time zone. */
+/**
+ * This schema checks the money rules of one paid provider account, with its fixed costs. `loadConfig` checks the
+ * provider, the fixed costs against the cap, the reserve and the time zone.
+ */
 export const spendConfigSchema: z.ZodType<SpendConfig, SpendConfig> = schemaOf<SpendConfig>()(
   z
     .strictObject({
       provider: z.string().min(1),
       monthlyUsd: z.number().positive(),
+      fixed: z
+        .array(z.strictObject({ what: z.string().min(1), usd: z.number().nonnegative() }).readonly())
+        .readonly()
+        .exactOptional(),
       reserveUsd: z.number().nonnegative().exactOptional(),
       floor: z.number(),
       timeZone: z.string().min(1),

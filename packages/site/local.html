@@ -6,7 +6,7 @@
 <meta name="color-scheme" content="light dark">
 <meta name="robots" content="noindex">
 <title>alerts: the live map</title>
-<meta name="description" content="The live map of the alert runtime on this computer: the incidents, their levels and the watched places.">
+<meta name="description" content="The live map of the alert runtime on this computer: the incidents, their levels, the watched places and the map of each past time.">
 <link rel="stylesheet" href="./src/style.css">
 </head>
 <body>
@@ -29,6 +29,9 @@
       <h2 id="map-h">Map</h2>
       <div id="globe" class="globe-box" hidden></div>
       <div id="map" class="map-box"></div>
+      <div id="time" class="time-box" hidden></div>
+      <p id="past" class="past" hidden><span id="past-text"></span> <button id="now" type="button">Show the live map</button></p>
+      <p id="time-problem" class="hint time-problem" role="status" hidden></p>
       <div id="globe-tools" class="globe-tools" hidden>
         <p id="words" class="map-words"></p>
         <button id="whole" type="button">Show all</button>
