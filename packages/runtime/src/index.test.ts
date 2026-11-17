@@ -104,7 +104,7 @@ describe("the declaration of the service", () => {
     it(`passes describe() and lint() with the profile ${name}`, () => {
       // describe() throws when the declaration lacks a policy, the startup budget, the phases or the effect of a second signal
       const description = declare({ port: 0, probePort: 0, profile, loop: loopOf(), log: { close: () => undefined } }).describe();
-      expect(description.dependencies.map((dependency) => dependency.name)).toEqual(["log", "shapes", "quotas"]);
+      expect(description.dependencies.map((dependency) => dependency.name)).toEqual(["home", "log", "shapes", "quotas"]);
       expect(description.transports.map((transport) => [transport.kind, transport.name])).toEqual([
         ["server", "http"],
         ["worker", "passes"],
@@ -183,7 +183,20 @@ describe("the lifecycle of the service", () => {
     // embeddedProcess() adds no signal handler and does not end the process of the test
     const loop = loopOf();
     let closes = 0;
-    const log = { close: () => (closes += 1) };
+    // The shutdown closes the log, and then it releases the lock of the home folder.
+    const closed: string[] = [];
+    const log = {
+      close: () => {
+        closes += 1;
+        closed.push("log");
+      },
+    };
+    const home = {
+      release: () => {
+        closed.push("home");
+        return Promise.resolve();
+      },
+    };
     // A built page with one file. The path / gives it.
     const page = await mkdtemp(join(tmpdir(), "alerts-page-"));
     await writeFile(join(page, PAGE_INDEX), "<!doctype html><title>the map</title>");
@@ -193,7 +206,7 @@ describe("the lifecycle of the service", () => {
       asked.push(since);
       return historyOf(since);
     };
-    const life = await declare({ port, probePort, profile: localDev, loop, log, map: () => EMPTY_MAP, health: () => EMPTY_HEALTH, history, page }).run({ process: embeddedProcess() });
+    const life = await declare({ port, probePort, profile: localDev, loop, log, home, map: () => EMPTY_MAP, health: () => EMPTY_HEALTH, history, page }).run({ process: embeddedProcess() });
     try {
       // The probe answers after the start of each transport. The worker starts the first pass at the start of the service.
       await waitUntil(() => answers(`http://127.0.0.1:${probePort}/readiness`), "the readiness probe");
@@ -238,5 +251,6 @@ describe("the lifecycle of the service", () => {
     expect(await life.done).toBe(0);
     expect(life.errors).toEqual([]);
     expect(closes).toBe(1);
+    expect(closed).toEqual(["log", "home"]);
   }, 3 * WAIT_LIMIT_MS);
 });

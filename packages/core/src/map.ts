@@ -219,12 +219,7 @@ export function mapView(input: MapInput): MapView {
         places: matchPlaces(incident, input.places).map((match) => match.place),
       };
     })
-    .sort(
-      (a, b) =>
-        ASSESSED_LEVELS.indexOf(b.level) - ASSESSED_LEVELS.indexOf(a.level) ||
-        SEVERITY_ORDER.indexOf(a.severity) - SEVERITY_ORDER.indexOf(b.severity) ||
-        compareCodeUnits(a.anchor, b.anchor),
-    );
+    .sort(compareMapIncidents);
 
   const places = input.places.map((place): MapPlace => {
     const gaps = input.coverage.filter((entry) => entry.place === place.id && coverageShort(entry)).map((entry) => entry.kind);
@@ -254,6 +249,11 @@ function smallestShapes(codes: readonly RegionCode[], shape: ShapeLookup): reado
     if (found !== undefined && found.length > 0) return found;
   }
   return [];
+}
+
+/** This function compares two incidents of the map: the higher level first. In one level, the order is the severity, then the anchor. */
+export function compareMapIncidents(a: MapIncident, b: MapIncident): number {
+  return ASSESSED_LEVELS.indexOf(b.level) - ASSESSED_LEVELS.indexOf(a.level) || SEVERITY_ORDER.indexOf(a.severity) - SEVERITY_ORDER.indexOf(b.severity) || compareCodeUnits(a.anchor, b.anchor);
 }
 
 /** This function gives the key of a region code: one text for each system and code. Two equal codes give one key. */

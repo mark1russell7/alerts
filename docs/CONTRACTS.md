@@ -359,15 +359,28 @@ The Twilio call channel makes one voice call for each send:
 - A call that nobody answered, and a call that Twilio could not make, are `failed`. The escalation goes to its next step.
 - `cancel` ends the call in each state. Twilio refuses the end of a call that it does not know, and the cancel ends with no error.
 - `readTwilioBalance` reads the balance of the account. It gives each failure as a value.
-- `twilioSetupProblems` checks the credentials and the number that calls, with no request. A problem names the field, and no value.
+- `twilioSetupProblems` checks the credentials, the number that calls and the number that texts, with no request. A problem names the field, and no value.
+- A failure of a send has the mark `[number]` in place of each phone number of the send. An error of Twilio can quote a number.
 
-The cap of the spend of a call channel is two gates of `polite-crawler/api`, with one store, one key and one quota name:
+The Twilio text channel `twilio-text` sends one SMS message for each send (AL-56):
+
+- The text has the title, the why line and the body as sentences, with `TWILIO_TEXT_LIMIT` (160) code points or fewer. The cut is at the end of a word.
+- The address is the address of a call: the field `to`, in E.164 form. The sender is the registered number of the texts.
+- A quiet message, a message that expired and an address with a problem get no text. The outcome is `refused`.
+- The channel does not break through the silent mode, and it does not repeat. Its `ack` is `none`.
+- A text that the carrier delivered is `delivered`. A text that did not go, or that the carrier did not deliver, is `failed`.
+- `cancel` does nothing. Twilio cannot stop a text in its queue.
+- A text costs `TWILIO_TEXT_COST_USD` (4 cents): 3 segments and the carrier fees, rounded up. Thus a text costs no more than a call.
+
+The cap of the spend of a Twilio channel is two gates of `polite-crawler/api`, with one store, one key and one quota name:
 
 - The two gates count the same units. The gate of `life-safety` has no reserve. Thus only `life-safety` uses the last part of the cap.
 - A full cap gives `rate-limited`. A cap in its reserve gives `reserved` to a message below `life-safety`.
 - A call that Twilio refused, did not authorize or limited gives its units back. Twilio made no call.
 - A network fault, a time-out and a server error keep the units, because the call can have started.
 - A fault of the store of a gate does not stop a call. The call goes with no count.
+- The text channel takes its units from the same gates as the call channel. Thus one cap holds the calls and the texts of the account.
+- `takeSpend` in `spend.ts` takes the units for each channel. The quota line of the status is the line of `twilio-call`.
 
 ## The delivery promise
 
@@ -652,9 +665,19 @@ A channel rule (`ChannelRule`) of a person keeps or removes the steps of a plan 
 - The rules do not change the why record of the route.
 - A plan with no step sends nothing. `escalate` gives it the state `exhausted` at its end.
 
+A policy can have a subject (`EscalationPolicy.about`, AL-43). The function `policyFor` gives the policy of a level for an incident in `route` and in the check of a drill:
+
+- An incident with the status `system`, `test` or `exercise` gets the first policy of the level whose subject matches a subject of the incident. The match is `matchSubjects`, the match of the channel rules.
+- Each other incident, and an incident with no such policy, gets the first policy of the level with no subject. Thus no policy with a subject changes the plan of a real warning.
+- When two policies of a level match one incident, the first one in the list applies. An example is a policy about `alerts.drill` and a policy about `alerts.drill` with an id.
+- The channel rules apply to the chosen policy. The why record does not change.
+- A person with policies of their own gets no policy of the configuration, also no policy with a subject.
+- An example: a policy of `notice` about `alerts.drill` with a call. The failure of a push drill then calls the person, and a real notice stays a push.
+
 A recipient has no problem from `recipientProblems` before it gets alerts:
 
-- A person who watches a place or a subject has a policy of the level `life-safety`.
+- A person who watches a place or a subject has a policy of the level `life-safety` with no subject.
+- No two policies have the same level and the same subject.
 - No rule keeps a life-safety kind, or the coverage of one, below `life-safety`. A rule with no kinds applies to each kind.
 - Each rule names kinds of the taxonomy, and the quiet window has a good time zone and good local times.
 - Each channel rule has one or more kinds of the taxonomy, and each of its channels is a channel of the instance.
@@ -773,6 +796,7 @@ The function `openInstance` makes the instance of the owner from the private con
 
 - The sources are the NWS API and IPAWS. The channels are Pushover, and the Twilio call channel when `secrets.env` has its keys.
 - The keys of Twilio are `TWILIO_ACCOUNT_SID`, `TWILIO_API_KEY_SID`, `TWILIO_API_KEY_SECRET` and `TWILIO_FROM`. An API key signs each request.
+- The optional key `TWILIO_TEXT_FROM` adds the text channel. It holds the registered sender of texts: a phone of a 10DLC campaign or a verified toll-free phone.
 - A spend entry of a provider of a channel gives the cap of the channel. The count of the cap is in `quotas.sqlite`.
 - The spend entry of Twilio also gives the watch of the balance: one read each day, and its floor.
 - Each source gets the watch of `sourcePlaces`. Thus a source gets the region codes, and a position only when the place shares it with that source.
@@ -786,11 +810,18 @@ The instance does not start when it finds one of these problems:
 - a missing secret, or an API token that does not have the form of a Pushover key (30 letters and digits)
 - each problem of `parseConfig`: the JSON, the schema, the references and the fields of each address on its channel
 - some keys of Twilio and not all, or a key of Twilio with a bad form
-- a step of a policy on a channel that the instance has no sender for. Without the keys of Twilio, the call channel has no sender.
+- the key `TWILIO_TEXT_FROM` with no keys of Twilio, or a value of the key that is not in E.164 form
+- a step of a policy on a channel that the instance has no sender for. Without the keys of Twilio, the call channel has no sender. Without `TWILIO_TEXT_FROM`, the text channel has no sender.
 - a step on a channel with a cost, when the configuration has no spend entry for a provider of the channel
 - a place that no regional source covers. Usually the place does not have a code of each level: the zone, the county, SAME, the state and the country. A source with the coverage `global`, for example the SWPC, covers each place with no code. Thus the check does not count it.
 
 The environment gives `PORT` (8080), `PROBE_PORT` (9090) and `SERVICE_PROFILE` (`local`, `daemon` or `pod`). The folder `ALERTS_HOME` (`.alerts` in the home folder) holds the private files: `config.json`, `secrets.env`, the log `runtime.sqlite` and the outlines of the zones `shapes.sqlite`. It also holds the counts of the quotas, `quotas.sqlite`. No repository holds them. A problem of `secrets.env` names its line and its key, and no value. The output of a failed pass shows no value of `secrets.env`.
+
+Each runtime takes the lock `home.lock` of the folder at its start, before it reads or writes a file of the folder (AL-58). The lock is the instance lock of `@mark1russell7/service/host`:
+
+- While a live runtime holds the lock, a second runtime on the folder stops at its start. It writes no event, it fetches nothing and it sends nothing. The supervisor starts it again after its backoff.
+- The shutdown releases the lock last, after the log closes. A lock of a process that stopped is stale, and the next start removes it.
+- The test `home-lock.test.ts` starts the entry on a folder that the test holds. The entry stops with the error `HomeHeld` and writes no file.
 
 After each pass, the runtime gets the outlines of the zones of the watched states. It stops before the next fetch of the alerts. A broken file of outlines goes into quarantine, and the runtime gets the outlines again.
 
@@ -930,9 +961,8 @@ The module `deploy.ts` of the package puts the three Functions and the list on o
 The runtime operates the deploy in the worker `outage` of its service (`outage.ts`), beside the worker `passes`.
 
 - `outageSetup` reads the field `outage`, the keys of Twilio and the key `OUTAGE_TOKEN`. A missing key, a token of a bad form or a bad list stops the start.
-- The key `TWILIO_TEXT_FROM` holds the registered sender of texts: a phone of a 10DLC campaign or a verified toll-free phone.
+- The setup of Twilio reads the key `TWILIO_TEXT_FROM` for the outage call and the text channel. A value that is not in E.164 form stops the start.
 - With the key, the list has the text `OUTAGE_TEXT_MESSAGE`, and the deploy gives the number to the Functions. Without the key, the outage call sends no text.
-- A value of the key that is not in E.164 form stops the start.
 - The worker deploys after the startup. A change of the private files restarts the runtime, so a new list deploys at once.
 - Once in each day, the worker deploys again. Thus a change on the side of Twilio heals in a day.
 - A failed deploy goes again after a backoff: one minute, then double, up to one hour. The pass limit bounds one deploy, so the drain of the service holds it.
@@ -1194,6 +1224,15 @@ A reader keeps its histories by anchor:
 2. Read again with `since` set to the last `next`. The payload gives the incident of the newest change again, because one time can get a later report.
 3. Replace the history of each incident of the payload. Drop each history whose anchor is a report of an incident of the payload, because these incidents merged.
 4. When `next` is below `since`, a step of the clock moved the times back. Read again with no `since`.
+5. Read with no `since` at intervals. Only this read removes the history of an incident that the runtime retired.
+
+The module `history-reader.ts` of the core is this reader as a pure calculation:
+
+- `addHistory` adds one answer to the histories of a reader (`Histories`). It does the steps 3 and 4, and it gives the `since` of the next read.
+- `historyTimes` gives the times of the changes. A time scrubber shows a tick at each time.
+- `historyView` gives the view of the map at a time. It has the last change of each incident at or before that time, when that change is live.
+
+The reader has no rule of its own for an expiry, because a time edge gives a change. The view has the type of the view of the map route (`MapView`), so one renderer draws the two. The level of a place is the highest level of the place in the changes of the view. A place of the view has no gap, because the history has no coverage. The test `history-replay.test.ts` holds this view equal to the view of the map at each time.
 
 The work for an incident with no change and no time edge at `since` or later is only the read of its times. The levels come from the watches of the people, thus only the loopback address gives the route.
 
