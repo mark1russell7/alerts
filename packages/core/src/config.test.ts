@@ -204,6 +204,12 @@ describe("loadConfig", () => {
     // A watch with no id matches each drill.
     const all = person(p1, [home], { watch: { person: p1, places: [home], rules: [], subjects: [{ system: DRILL_SUBJECT }] } });
     expect(loadConfig(config({ people: [all], drills: [{ ...drill, id: "any" }] }), polled, store).problems).toEqual([]);
+    // The quiet window of the person covers the window of the drill: the drill has no start. The flip is a good drill.
+    const sleeper = (start: string, end: string) => person(p1, [home], { watch: { person: p1, places: [home], rules: [], subjects, quiet: { zone: "America/Chicago", start, end } } });
+    expect(loadConfig(config({ people: [sleeper("10:00", "18:00")], drills: [drill] }), polled, store).problems).toEqual([
+      "The drill push-weekly has no start: each time of its window is in the quiet window of the person, or too near to it.",
+    ]);
+    expect(loadConfig(config({ people: [sleeper("18:00", "10:00")], drills: [drill] }), polled, store).problems).toEqual([]);
     const problems = loadConfig(
       config({
         people: [watcher, person(p2, [work], { policies: [URGENT] })],

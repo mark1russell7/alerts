@@ -924,14 +924,15 @@ The fakes and the fault cases of CI test the code. Only a drill tests the live p
 - `copies` gives the copies that start the drill. Without it, only the copy of rank 0 starts it (`drillInCopy`). Thus two copies do not send one drill at once.
 - A run (`DrillRun`) is a start, with the first acknowledgment of a delivery on the channel of the path. The log of each copy holds the runs.
 - `joinRuns` joins two runs of one start: the earlier acknowledgment counts. The join is idempotent, commutative and associative.
-- `nextDrillAt` gives the next start: in the window, not in the quiet window of the person, and `every` or more after the last start. A timer waits for it. A drill with a window in the quiet window has no start.
+- `nextDrillAt` gives the next start: in the window, and `every` or more after the last start. A timer waits for it.
+- The time of the acknowledgment from the start ends before the next quiet window of the person. Thus a drill does not wake the person at night.
 - `drillVerdict` gives `pending` until the end of the time of the acknowledgment. Then it gives `passed`, or `failed` with `no-ack` or `late-ack`. A failed send gives no acknowledgment, thus it fails as `no-ack`.
 - `drillProblems` finds bad times, a bad window, an unknown channel and a channel with no acknowledgment. Such a drill cannot pass.
+- `drillProblems` also finds a drill with no start: its full window is in the quiet window of the person, or too near to it.
 
 The system fold gives the drill lines (the section of the system reports). The runtime starts no drill yet. The next steps are these:
 
 - A channel rule keeps a run on the channel of its path. A failure goes on each other channel. A rule does not apply to the status `actual`.
-- `loadConfig` refuses a drill window in the quiet window of the person. The check needs a window overlap in `@mark1russell7/algebra/clock`.
 - The runtime keeps the runs in its log, starts each due drill and wakes at the end of each time.
 - Then comes a drill of the outage call.
 
