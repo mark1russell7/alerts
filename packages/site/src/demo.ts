@@ -57,17 +57,6 @@ export const ZONES: readonly Zone[] = [
   { code: "XXZ004", name: "Ridge", county: "XXC002", ring: [[0, 0.6], [0.5, 0.6], [0.55, 0.3], [0, 0.28]] },
 ];
 
-/** The river of the map, from the ridge to the sea. The map only draws it. */
-export const RIVER: readonly Position[] = [
-  [0.14, 0.56],
-  [0.24, 0.4],
-  [0.32, 0.26],
-  [0.42, 0.13],
-  [0.58, 0.09],
-  [0.74, 0.06],
-  [0.9, 0.0],
-];
-
 const codes = (zone: string, county: County): RegionCode[] => [
   { system: "ugc", code: zone },
   { system: "ugc", code: county.code },

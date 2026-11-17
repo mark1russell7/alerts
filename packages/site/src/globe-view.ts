@@ -1,14 +1,14 @@
 /**
- * The parts of the globe of the local page, as data. The function `globeParts` is a pure calculation. It gives the
+ * The parts of the globe of the demo and of the local page, as data. The function `globeParts` is a pure calculation. It gives the
  * areas, the points, the names and the regions of a map payload for the globe of `@mark1russell7/visuals`. Thus the
  * tests examine them with no browser. The globe shows the same view as the flat map of `map-view.ts`.
  */
 
-import { ASSESSED_LEVELS, type AssessedLevel, type MapPayload, type MapPlace, type MapRegion, type MapShape } from "@mark1russell7/alerts";
+import { ASSESSED_LEVELS, type AssessedLevel, type MapPayload, type MapPlace, type MapRegion, type MapShape, type Status } from "@mark1russell7/alerts";
 import { bboxCenter, bboxOfGeoJson, circleKm, fromPosition, type LatLon, type Region } from "@mark1russell7/geo";
 import type { GlobeArea, GlobePoint } from "@mark1russell7/visuals/globe";
-import { LEVEL_WORDS } from "./draw.ts";
-import { PIN_PAD_KM, placeTitle, regionTitle } from "./map-view.ts";
+import { incidentTitle, PIN_PAD_KM, placeTitle, regionTitle } from "./map-view.ts";
+import { STATUS_LOOKS, type OtherStatus } from "./status.ts";
 
 /**
  * The value that a pick of a part of the globe gives to the page. A part is an incident, a watched place or a region
@@ -19,23 +19,36 @@ export type GlobeValue =
   | { readonly type: "place"; readonly words: string; readonly id: string; readonly incident: string | undefined }
   | { readonly type: "region"; readonly words: string; readonly code: string };
 
-/** The name of a watched place on the globe. The text is next to the dot of the place, or in the region of a place with no position. */
+/**
+ * A name on the globe. It is the name of a watched place, the name of a region, or the word of a status. The text of
+ * a place is next to its dot. The text of a region, and of a place with no position, is in the region. The word of a
+ * status is in the area of its incident.
+ */
 export interface GlobeName {
-  /** The record of the place. The text gets the highlight of the record. */
+  /** The record of the place, of the region or of the incident. The text gets the highlight of the record. */
   readonly record: string;
-  /** The position of the place. For a place with no position, it is the middle of the box of its region. */
+  /** The position of the name: the position of the place, or the middle of the box of the region or of the incident. */
   readonly place: LatLon;
-  /** The label of the place. */
+  /** The label of the place, the name of the region, or the word of the status. */
   readonly text: string;
-  /** The name of the style of the part of the place: its dot, or the outline of its region. */
+  /** The style of the name. A place has the style of its dot or of the outline of its region. A region has `ZONE_KIND`, and a status has its `statusKind`. */
   readonly kind: string;
-  /** The rank of the level of the place. When two texts need one position, the text of the higher rank stays. */
+  /** The rank of the name: the rank of the level of a place, `STATUS_RANK` or `REGION_RANK`. When two texts need one position, the text of the higher rank stays. */
   readonly rank: number;
   /**
-   * The width of the mark of the place, in CSS pixels: the dot, or the gap ring around it. The text stays off the mark.
-   * A place with no position has no mark. Its value is 0, and its text is on its position.
+   * The width of the mark of a place, in CSS pixels: the dot, or the gap ring around it. The text stays off the mark.
+   * A region has no mark, and a place with no position has no mark. The value is then 0, and the text is on its position.
    */
   readonly size: number;
+}
+
+/** The options of the parts of the globe. */
+export interface GlobePartsOptions {
+  /**
+   * This value is true for a map that shows the name of each region of the basemap. The default is false.
+   * A map of a state has many regions, so it shows only the names of the places.
+   */
+  readonly regionNames?: boolean | undefined;
 }
 
 /** The parts of the globe for one map payload. */
@@ -44,7 +57,10 @@ export interface GlobeParts {
   readonly areas: readonly GlobeArea<GlobeValue>[];
   /** One point for each place with a position. A place with a short coverage has a larger point below it: the gap ring. */
   readonly points: readonly GlobePoint<GlobeValue>[];
-  /** One name for each place with a label. A place with no position and no shape has no name. */
+  /**
+   * One name for each place with a label. A place with no position and no shape has no name. With `regionNames`, each region with a name is also here.
+   * An incident with a shape and a status other than `actual` has the word of its status as a name.
+   */
   readonly names: readonly GlobeName[];
   /** Each region of the picture, and a circle around each point. The first view of the globe shows them. */
   readonly regions: readonly Region[];
@@ -81,8 +97,14 @@ export const placeRecord = (id: string): string => `place:${id}`;
 /** This function gives the name of the record of a region of the basemap on the globe. */
 export const regionRecord = (region: MapRegion): string => `region:${region.code.system}:${region.code.code}`;
 
-/** This function gives the name of the style of the area of an incident of a level. */
-export const areaKind = (level: AssessedLevel): string => `level-${level}`;
+/** This function gives the name of the style of the word of a status. */
+export const statusKind = (status: OtherStatus): string => `status-${status}`;
+
+/**
+ * This function gives the name of the style of the area of an incident of a level and a status.
+ * The default status is `actual`. Each other status has a style of its own at each level.
+ */
+export const areaKind = (level: AssessedLevel, status: Status = "actual"): string => (status === "actual" ? `level-${level}` : `${statusKind(status)}-${level}`);
 
 /** This function gives the name of the style of the outline of a place of a level. */
 export const outlineKind = (level: AssessedLevel): string => `outline-${level}`;
@@ -104,6 +126,18 @@ const hasGap = (place: MapPlace): boolean => place.gaps.length > 0;
 
 /** This function gives the rank of a level for the names: a higher level gives a larger number. */
 export const levelRank = (level: AssessedLevel): number => ASSESSED_LEVELS.indexOf(level);
+
+/** The rank of the name of a region. It is below the rank of each level, so the name of a place stays before the name of a region. */
+export const REGION_RANK = -1;
+
+/** The rank of the word of a status. It is above the rank of a region and below the rank of each level. */
+export const STATUS_RANK = -0.5;
+
+/** This function gives the middle of the box of some regions, or `undefined` for no region. */
+function middleOf(regions: readonly Region[]): LatLon | undefined {
+  const box = bboxOfGeoJson({ type: "GeometryCollection", geometries: [...regions] });
+  return box === undefined ? undefined : bboxCenter(box);
+}
 
 /**
  * This function gives the angle between two lines of the grid for the regions of a picture, in degrees.
@@ -127,7 +161,7 @@ export function gridOf(regions: readonly Region[]): number {
  * region. The outline takes no pick, so a pick in it finds the incident below it. A shape that is not correct makes
  * the function throw the error of `@mark1russell7/geo`.
  */
-export function globeParts(payload: MapPayload): GlobeParts {
+export function globeParts(payload: MapPayload, options: GlobePartsOptions = {}): GlobeParts {
   const { view, basemap } = payload;
   const areas: GlobeArea<GlobeValue>[] = [];
   const points: GlobePoint<GlobeValue>[] = [];
@@ -136,16 +170,26 @@ export function globeParts(payload: MapPayload): GlobeParts {
   const incidents = new Map<string, readonly Region[]>();
 
   for (const region of basemap) {
+    const record = regionRecord(region);
     const value: GlobeValue = { type: "region", words: regionTitle(region), code: region.code.code };
-    for (const shape of region.shapes) areas.push({ record: regionRecord(region), region: regionOf(shape), kind: ZONE_KIND, value });
+    const shapes = region.shapes.map(regionOf);
+    for (const shape of shapes) areas.push({ record, region: shape, kind: ZONE_KIND, value });
+    const text = region.name.trim();
+    const middle = options.regionNames === true && text !== "" ? middleOf(shapes) : undefined;
+    if (middle !== undefined) names.push({ record, place: middle, text, kind: ZONE_KIND, rank: REGION_RANK, size: 0 });
   }
   // The view has the highest level first. The globe draws the last area on top, as the flat map does.
   for (const incident of [...view.incidents].reverse()) {
     const record = incidentRecord(incident.anchor);
     const shapes = incident.shapes.map(regionOf);
-    const value: GlobeValue = { type: "incident", words: `${incident.kind.label}: ${LEVEL_WORDS[incident.level]}`, anchor: incident.anchor };
+    const value: GlobeValue = { type: "incident", words: incidentTitle(incident), anchor: incident.anchor };
     incidents.set(incident.anchor, shapes);
-    for (const region of shapes) areas.push({ record, region, kind: areaKind(incident.level), value });
+    for (const region of shapes) areas.push({ record, region, kind: areaKind(incident.level, incident.status), value });
+    // The word of a status other than actual is at the middle of the box of the incident.
+    const middle = incident.status === "actual" ? undefined : middleOf(shapes);
+    if (incident.status !== "actual" && middle !== undefined) {
+      names.push({ record, place: middle, text: STATUS_LOOKS[incident.status].word, kind: statusKind(incident.status), rank: STATUS_RANK, size: 0 });
+    }
   }
   for (const place of view.places) {
     const record = placeRecord(place.id);
@@ -164,8 +208,8 @@ export function globeParts(payload: MapPayload): GlobeParts {
       const shapes = place.shapes.map(regionOf);
       for (const region of shapes) areas.push({ record, region, kind: outlineKind(place.level), value, pick: false });
       // A place with no position has no mark. Its name is at the middle of the box of its region.
-      const box = bboxOfGeoJson({ type: "GeometryCollection", geometries: shapes });
-      if (text !== "" && box !== undefined) names.push({ record, place: bboxCenter(box), text, kind: outlineKind(place.level), rank, size: 0 });
+      const middle = text === "" ? undefined : middleOf(shapes);
+      if (middle !== undefined) names.push({ record, place: middle, text, kind: outlineKind(place.level), rank, size: 0 });
     }
   }
   const all = [...areas.map((area) => area.region), ...regions];

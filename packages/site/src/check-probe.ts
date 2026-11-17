@@ -3,6 +3,11 @@
  * deploy. A failed check stops the deploy.
  *
  * The probe drives the replay as a reader does. It reads the levels, the incidents and the map that each step draws.
+ *
+ * The map is a globe in a browser with WebGL 2, and a flat map of the same data in each other browser. The probe
+ * reads the picture that it finds. The flat map has an element for each part. The globe is one canvas, so the probe
+ * reads the names above it. It also moves a pointer on the globe, and reads the words of the part below the pointer.
+ *
  * The site check reads this TypeScript file directly. It removes the types, and it starts the result as the body of
  * an async function.
  */
@@ -13,6 +18,7 @@ declare const until: <T>(fn: () => T | Promise<T>, ms?: number) => Promise<T>;
 declare const $: (selector: string) => Element | null;
 declare const $$: (selector: string) => Element[];
 declare const click: (target: string | Element) => void;
+declare const wait: (ms: number) => Promise<void>;
 
 const count = (level: string): number => Number($(`.lane[data-level="${level}"] .count`)?.textContent ?? "-1");
 const current = (): string => $(".rail .step[aria-current]")?.getAttribute("data-step") ?? "";
@@ -23,8 +29,140 @@ const goTo = async (step: number): Promise<boolean> => {
 const title = (): string => $("#step-title")?.textContent ?? "";
 const state = (source: string): string => $(`#sources .source[data-source="${source}"]`)?.getAttribute("data-state") ?? "";
 const fits = (): boolean => document.documentElement.scrollWidth <= window.innerWidth;
+/** This function waits for `count` frames of the page. Thus a wait does not change with the speed of the browser. */
+const frames = (count: number): Promise<void> =>
+  new Promise((done) => {
+    const next = (left: number): void => {
+      if (left <= 0) done();
+      else requestAnimationFrame(() => next(left - 1));
+    };
+    next(count);
+  });
+
+// The map. The probe finds the picture one time: a page does not change between the globe and the flat map.
+const picture = (await until(() => $("#globe canvas") ?? $("#map svg.live-map"), 15000)) as Element | null;
+const canvas = $("#globe canvas");
+const FLOOD = "Flash Flood Warning: Life-safety";
+const WIND = "High Wind Warning: Notice";
+/** The words of the map for a reader of the screen. The two pictures have the same words. */
+const summary = (): string => ($("#globe canvas") ?? $("#map svg.live-map"))?.getAttribute("aria-label") ?? "";
+/** The count of the live incidents that the map tells. */
+const live = (): number => Number(/Live incidents: (\d+)\./.exec(summary())?.[1] ?? "-1");
+/** The names on the globe that are in the picture. */
+const names = (): Element[] => $$("#globe .visuals-label").filter((name) => !name.classList.contains("visuals-label-off"));
+const texts = (list: readonly Element[]): string[] => list.map((one) => one.textContent ?? "");
+/** The names of the homes on the map. On the globe, the kind of the name of a home starts with `pin-`. */
+const homes = (): string[] => texts(canvas === null ? $$("#map text.place-label") : names().filter((name) => (name.getAttribute("data-kind") ?? "").startsWith("pin-")));
+/** The names of the zones on the map. */
+const zones = (): string[] => texts(canvas === null ? $$("#map text.region-label") : names().filter((name) => name.getAttribute("data-kind") === "zone"));
+/** The words of the statuses in the legend. The legend has an entry only for a status that the map shows. */
+const statuses = (): string[] => texts($$("#legend li[data-status]"));
+/** The words of the statuses on the map: a text on the flat map, and a name on the globe. A name of the globe can be out of the picture when a home needs its position. */
+const statusWords = (): string[] => texts(canvas === null ? $$("#map text.status-label") : $$('#globe .visuals-label[data-kind^="status-"]'));
+/** The count of the homes that the map shows at a level. */
+const homesAt = (level: string): number => (canvas === null ? $$(`#map g.pin.level-${level}`) : names().filter((name) => name.getAttribute("data-kind") === `pin-${level}`)).length;
+/** The line of the page that tells the part of the globe below the pointer. */
+const words = (): string => $("#words")?.textContent ?? "";
+const send = (type: string, x: number, y: number, buttons: number): void => {
+  const button = type === "pointermove" ? -1 : 0;
+  canvas?.dispatchEvent(new PointerEvent(type, { pointerId: 1, pointerType: "mouse", isPrimary: true, bubbles: true, cancelable: true, clientX: x, clientY: y, button, buttons }));
+};
+/** This function moves the pointer to a position of the globe, as parts of its width and its height. It gives the words of the part there. */
+const point = (across: number, down: number): string => {
+  const box = canvas?.getBoundingClientRect();
+  if (box === undefined) return "";
+  send("pointermove", box.left + box.width * across, box.top + box.height * down, 0);
+  return words();
+};
+/** This function presses and releases the pointer at a position of the globe. */
+const press = (across: number, down: number): void => {
+  const box = canvas?.getBoundingClientRect();
+  if (box === undefined) return;
+  const [x, y] = [box.left + box.width * across, box.top + box.height * down];
+  send("pointermove", x, y, 0);
+  send("pointerdown", x, y, 1);
+  send("pointerup", x, y, 0);
+};
+/**
+ * This function gives the position of a name of a zone across the globe: 0 at the left edge and 1 at the right edge.
+ * The middle of the name of a zone is on the middle of the zone, so the name shows where the camera looks.
+ */
+const across = (zone: string): number => {
+  const frame = canvas?.getBoundingClientRect();
+  const box = names()
+    .find((name) => name.textContent === zone)
+    ?.getBoundingClientRect();
+  return frame === undefined || box === undefined ? -1 : (box.left + box.width / 2 - frame.left) / frame.width;
+};
+/**
+ * This function waits until the name of a zone is in the picture and does not move. It gives the position of the name.
+ * The globe puts the names of a new step in the picture at its next frame, and a slow browser gives that frame late.
+ */
+const still = async (zone: string): Promise<number> => {
+  let last = -1;
+  await until(async () => {
+    const before = across(zone);
+    await frames(2);
+    last = across(zone);
+    return last >= 0 && Math.abs(last - before) < 0.001;
+  }, 8000);
+  return last;
+};
+/**
+ * This function moves the pointer to the dot of a home on the globe, and gives the words of the home.
+ * The name of a home is next to its dot, on one of its four sides. So the probe looks on each side of the name.
+ */
+const homeWords = (home: string): string => {
+  const box = names()
+    .find((name) => name.textContent === home)
+    ?.getBoundingClientRect();
+  if (box === undefined) return "";
+  const [x, y] = [box.left + box.width / 2, box.top + box.height / 2];
+  for (const far of [6, 10, 14, 18, 22]) {
+    const sides: (readonly [number, number])[] = [
+      [box.left - far, y],
+      [box.right + far, y],
+      [x, box.top - far],
+      [x, box.bottom + far],
+    ];
+    for (const [px, py] of sides) {
+      send("pointermove", px, py, 0);
+      if (words().startsWith(`${home}:`)) return words();
+    }
+  }
+  return "";
+};
+/** The count of the homes that the map marks with a gap of the coverage. The mark is a ring on the flat map, and the words of the home on the globe. */
+const gaps = async (): Promise<number> => {
+  if (canvas === null) return $$("#map circle.gap.short").length;
+  // The globe puts the names of a new step at its next frame.
+  await frames(3);
+  await until(() => homes().length === 2);
+  const found = ["Home of A", "Home of B"].filter((home) => homeWords(home).includes("The coverage is short for"));
+  send("pointerleave", 0, 0, 0);
+  return found.length;
+};
+
+// The files of the page. The code of the globe is large, so it is not in the files that the page loads at its start.
+// The page puts the mark `globe-code` on its time line when it starts the load of this code.
+const mark = performance.getEntriesByName("globe-code", "mark")[0];
+const scripts = (performance.getEntriesByType("resource") as PerformanceResourceTiming[]).filter((file) => new URL(file.name).pathname.endsWith(".js"));
+const first = scripts.filter((file) => mark === undefined || file.startTime < mark.startTime);
+const firstNames = new Set(first.map((file) => file.name));
+const later = scripts.filter((file) => mark !== undefined && file.startTime >= mark.startTime && !firstNames.has(file.name));
+const size = (files: readonly PerformanceResourceTiming[]): number => files.reduce((sum, file) => sum + file.decodedBodySize, 0);
+/** This value is true when the browser tells the size of each file. With no size, a check of the sizes fails. */
+const sized = first.length > 0 && scripts.every((file) => file.decodedBodySize > 0);
+const sizes = { first: size(first), later: size(later), files: scripts.map((file) => [new URL(file.name).pathname, file.decodedBodySize]) };
 
 // The first view: the step at index 4, with the wind incident and the flood incident.
+check("the page shows the map as a globe or as a flat map", picture, "The map has no canvas and no SVG.");
+if (canvas !== null) {
+  check("the code of the globe comes after the start files, and it is the larger part of the code", sized && later.length > 0 && size(later) > size(first), sizes);
+} else if (document.createElement("canvas").getContext("webgl2") === null) {
+  check("a browser with no WebGL 2 does not load the code of the globe", sized && mark === undefined && later.length === 0, sizes);
+}
+check("the map has a height of 150 pixels or more", (picture?.getBoundingClientRect().height ?? 0) >= 150, picture?.getBoundingClientRect().height);
 check("the rail shows the 10 steps", await until(() => $$(".rail .step").length === 10), $$(".rail .step").length);
 // The rail and the label count the steps from 1. The data-step indexes count from 0.
 const steps = $$(".rail .step").length;
@@ -40,9 +178,28 @@ check("each coverage is met before the outage", $$("#sources .coverage li.short"
 check("no system report before the outage", $$("#sources .system-card").length === 0);
 check("two people are at life-safety for the flood", count("life-safety") === 2, count("life-safety"));
 check("the rule of Person B keeps the wind at notice", count("notice") === 1, count("notice"));
-check("the map draws the two live incidents", $$("#map g.incident").length === 2, $$("#map g.incident").length);
-check("the map draws the shape of the flood", $$("#map g.incident path.shape").length >= 1, $$("#map g.incident path.shape").length);
-check("both homes are at life-safety on the map", $$("#map g.pin.level-life-safety").length === 2, $$("#map g.pin.level-life-safety").length);
+check("the map has the two live incidents", live() === 2, summary());
+check("the map names the two homes", await until(() => homes().sort().join(", ") === "Home of A, Home of B"), homes());
+// Each incident of this step is a real alert, so the legend has no entry of a status.
+check("the legend has no status when each incident on the map is a real alert", statuses().length === 0, statuses());
+check("both homes are at life-safety on the map", homesAt("life-safety") === 2, homesAt("life-safety"));
+if (canvas === null) {
+  check("the flat map names the four zones", zones().join(", ") === "Lake Shore, Harbor, Valley, Ridge", zones());
+  check("the flat map draws the flood above the wind", $$("#map g.incident").map((one) => one.getAttribute("class")).join(", ") === "incident level-notice dim, incident level-life-safety selected");
+  check("the flat map draws the polygon of the flood and the zones of its codes", $$("#map g.incident.level-life-safety path.area").length >= 5, $$("#map g.incident.level-life-safety path.area").length);
+} else {
+  // A name of a zone goes out of the picture when a name of a home needs its position. A wide picture has space for each name.
+  check("the globe names the zones", zones().length >= 1 && zones().every((zone) => ["Lake Shore", "Harbor", "Valley", "Ridge"].includes(zone)), zones());
+  const frame = canvas.getBoundingClientRect();
+  const out = names()
+    .map((name) => name.getBoundingClientRect())
+    .filter((box) => box.left < frame.left - 1 || box.top < frame.top - 1 || box.right > frame.right + 1 || box.bottom > frame.bottom + 1);
+  check("each name is in the picture of the globe", out.length === 0, out.map((box) => [box.left, box.top, box.right, box.bottom]));
+  // The flood covers each zone at this step, and the highest level is on top.
+  check("the pointer finds the flood at the middle of the globe", await until(() => point(0.5, 0.5) === FLOOD), words());
+  send("pointerleave", 0, 0, 0);
+  check("the line of the globe is empty with no pointer in the picture", words() === "", words());
+}
 check("the map function found no problem", $("#message [data-problems]")?.getAttribute("data-problems") === "0");
 check("the flood incident shows merge rules 1 and 2", $$(".incident-card .join").length === 3, $$(".incident-card .join").length);
 
@@ -56,19 +213,31 @@ check("the core shows 3 live system reports", $$("#sources .system-card:not(.end
 check("each person is urgent for the gap at the home", count("urgent") === 2, count("urgent"));
 check("Person A gets the health report at notice", count("notice") === 2, count("notice"));
 check("the flood stays at life-safety", count("life-safety") === 2, count("life-safety"));
-check("the map rings the two homes", $$("#map circle.gap.level-urgent").length === 2, $$("#map circle.gap").length);
+check("the map has the three system reports as live incidents", live() === 5, summary());
+check("the map marks a gap of the coverage at the two homes", await until(async () => (await gaps()) === 2), words());
 check("the outage step fits the width of the page", fits(), [document.documentElement.scrollWidth, window.innerWidth]);
 
 // The API is back: the core cancels each system report.
 await goTo(6);
 check("the API is healthy again", state("nws-api") === "healthy", state("nws-api"));
 check("each coverage is met again", $$("#sources .coverage li.short").length === 0);
-check("each system report ended", $$("#sources .system-card.ended").length === 3 && $$("#map circle.gap").length === 0);
+check("each system report ended", $$("#sources .system-card.ended").length === 3 && live() === 2, summary());
+check("the map marks no gap of the coverage", (await gaps()) === 0);
 check("nobody is urgent after the cancel", count("urgent") === 0, count("urgent"));
 
 // The test message reaches nobody.
 await goTo(7);
-check("the test message is an incident with its status", $$(".incident-card .chip.test").length === 1);
+check("the test message is an incident with its status", texts($$('.incident-card .chip.status[data-status="test"]')).join() === "Test", texts($$(".incident-card .chip.status")));
+// A test does not look like a real alert: the legend names the status, and the map writes its word on the area.
+check("the legend names the test while the map shows it", await until(() => statuses().join() === "Test"), statuses());
+check("the map writes the word of the test on its area", await until(() => statusWords().join() === "Test"), statusWords());
+if (canvas === null) {
+  const areas = $$("#map g.incident.status-test path.area");
+  const edges = areas.map((area) => area.getAttribute("stroke-dasharray"));
+  check("the flat map draws the test with a dashed edge and no fill", edges.length >= 4 && edges.every((edge) => edge === "6 4") && areas.every((area) => getComputedStyle(area).fillOpacity === "0"), edges);
+  const real = $$("#map g.incident:not(.status) path.area");
+  check("the flat map draws each real alert with a solid edge", real.length >= 1 && real.every((area) => getComputedStyle(area).strokeDasharray === "none"), real.length);
+}
 check("the test message adds no level", count("life-safety") === 2 && count("notice") === 1);
 
 // The all clear ends the flood.
@@ -78,16 +247,52 @@ check("the flood card shows that it ended", $$(".incident-card.ended").length ==
 
 // The start: no incident.
 await goTo(0);
-check("the step at index 0 has no incident", $$(".incident-card").length === 0 && $$("#map g.incident").length === 0);
+check("the step at index 0 has no incident", $$(".incident-card").length === 0 && live() === 0, summary());
+check("the map shows the homes with no level", await until(() => homesAt("none") === 2), homesAt("none"));
 check("the first step reads Step 1 of N", title().startsWith(`Step 1 of ${String(steps)}: `), title());
 check("Back is off at the start", ($("#back") as HTMLButtonElement | null)?.disabled === true);
 
-// A selection dims the other incidents on the map.
+// A selection. At the step at index 2 the flood is in the west and the wind is in the east. The step selects the flood: the incident of its new message.
 await goTo(2);
 const cards = $$(".incident-card");
+const anchors = cards.map((card) => card.getAttribute("data-anchor"));
+const chosen = (): (string | null)[] => $$(".incident-card.selected").map((card) => card.getAttribute("data-anchor"));
 check("the step at index 2 has two incidents", cards.length === 2, cards.length);
-click(cards[0]!);
-check("a selected card selects its incident on the map", await until(() => $$("#map g.incident.selected").length === 1 && $$("#map g.incident.dim").length === 1));
+check("the step selects the flood", chosen().join() === String(anchors[1]), chosen());
+if (canvas === null) {
+  // The flat map dims each other incident, and an incident of the map takes a click.
+  click(cards[0]!);
+  check("a selected card selects its incident on the map", await until(() => $$("#map g.incident.selected").length === 1 && $$("#map g.incident.dim").length === 1));
+  check("the map selects the incident of the card", $("#map g.incident.selected")?.getAttribute("data-anchor") === anchors[0], anchors);
+  // An element of an SVG has no method `click`, so the probe sends the event.
+  $("#map g.incident.dim")?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+  check("an incident of the map selects its card", await until(() => chosen().join() === String(anchors[1])), chosen());
+} else {
+  // The globe shows each zone: the flood is in its west part, and the zone Lake Shore of the wind is in its east part.
+  const west = await until(() => point(0.3, 0.5) === FLOOD);
+  const before = await still("Lake Shore");
+  check("the first picture of the globe shows each zone", west && before > 0.6, [words(), before]);
+  // A card moves the camera to its incident. Then the middle of the wind is the middle of the picture.
+  click(cards[0]!);
+  const moved = await until(async () => {
+    await wait(100);
+    return Math.abs(across("Lake Shore") - 0.5) < 0.06 && point(0.5, 0.5) === WIND;
+  }, 8000);
+  check("a selected card moves the camera of the globe to its incident", moved, [across("Lake Shore"), words()]);
+  // The button shows each zone again, and it keeps the selection.
+  click("#whole");
+  const back = await until(async () => {
+    await wait(100);
+    return Math.abs(across("Lake Shore") - before) < 0.02 && point(0.3, 0.5) === FLOOD;
+  }, 8000);
+  check("the button Show all moves the camera back", back && chosen().join() === String(anchors[0]), [across("Lake Shore"), before, words(), chosen()]);
+  press(0.3, 0.5);
+  check("a press on an incident of the globe selects its card", await until(() => chosen().join() === String(anchors[1])), chosen());
+  // The corner of the picture is the sea, with no incident.
+  press(0.01, 0.01);
+  check("a press on no incident removes the selection", await until(() => chosen().length === 0), [chosen(), words()]);
+  send("pointerleave", 0, 0, 0);
+}
 
 // Play starts the replay, and a second press stops it.
 click("#play");
