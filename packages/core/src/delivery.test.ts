@@ -19,9 +19,10 @@ import type {
   WatchedPlace,
 } from "./contracts.ts";
 import { LEVELS } from "./contracts.ts";
-import { acknowledgmentOf, addressProblems, messageOf, recipientProblems, route, type EscalationEnd, type EscalationStart, type Recipient, type Route, type RouteInput } from "./delivery.ts";
+import { acknowledgmentOf, addressProblems, messageOf, recipientProblems, route, RULED_STATUSES, ruleSteps, type ChannelRule, type EscalationEnd, type EscalationStart, type Recipient, type Route, type RouteInput } from "./delivery.ts";
 import { RANK_DELAY_LIMIT, rankDelayProblems } from "./escalation.ts";
 import { messageKey } from "./ids.ts";
+import { DRILL_SUBJECT } from "./system-reports.ts";
 import { placeWhy } from "./why.ts";
 
 // The mute of each assessment. `assess` gives `Assessment.muted` from the graph of the person. The mock adds the mute
@@ -717,6 +718,74 @@ describe("route: a mute of the person (AL-35)", () => {
     // The histories reach each case of the laws.
     expect(counts.silentSends).toBeGreaterThan(0);
     expect(counts.modeEnds).toBeGreaterThan(0);
+  });
+});
+
+describe("ruleSteps: the channel rules of a person (AL-43)", () => {
+  const about = { system: DRILL_SUBJECT, id: "push-weekly" };
+  const drillRun = incident({ status: "system", kind: { code: "system.drill.run", label: "Drill" }, about: [about], areas: [] });
+  const only: ChannelRule = { kinds: ["system.drill.run"], about, keep: "only", channels: [pushover] };
+  const except: ChannelRule = { kinds: ["system.drill"], about, keep: "except", channels: [pushover] };
+  const none = { policy: LIFE_SAFETY, rules: [], dropped: [] };
+
+  it("keeps only the steps on the channels of an only rule, and removes the steps of an except rule", () => {
+    expect(ruleSteps(LIFE_SAFETY, [only], drillRun)).toEqual({ policy: { ...LIFE_SAFETY, steps: [LIFE_SAFETY.steps[0]] }, rules: [0], dropped: [1] });
+    expect(ruleSteps(LIFE_SAFETY, [except], drillRun)).toEqual({ policy: { ...LIFE_SAFETY, steps: [LIFE_SAFETY.steps[1]] }, rules: [0], dropped: [0] });
+    // Each rule that applies keeps a step. An only rule and an except rule on one channel keep no step.
+    expect(ruleSteps(LIFE_SAFETY, [only, except], drillRun)).toEqual({ policy: { ...LIFE_SAFETY, steps: [] }, rules: [0, 1], dropped: [0, 1] });
+  });
+
+  it("applies a rule only to its kinds and its subject", () => {
+    expect(ruleSteps(LIFE_SAFETY, [only], { ...drillRun, kind: { code: "system.drill.failed", label: "Failed drill" } })).toEqual(none);
+    expect(ruleSteps(LIFE_SAFETY, [only], { ...drillRun, about: [{ system: DRILL_SUBJECT, id: "other" }] })).toEqual(none);
+    // A rule with no subject applies to each incident of its kinds.
+    const anyDrill: ChannelRule = { kinds: ["system.drill.run"], keep: "only", channels: [pushover] };
+    expect(ruleSteps(LIFE_SAFETY, [anyDrill], { ...drillRun, about: [] }).dropped).toEqual([1]);
+    expect(ruleSteps(LIFE_SAFETY, undefined, drillRun)).toEqual(none);
+  });
+
+  it("changes no step of an incident with the status actual, and applies to the statuses system, test and exercise", () => {
+    const rule: ChannelRule = { kinds: ["met.tornado"], keep: "only", channels: [] };
+    expect(ruleSteps(LIFE_SAFETY, [rule], incident())).toEqual(none);
+    expect(RULED_STATUSES).toEqual(["system", "test", "exercise"]);
+    for (const status of RULED_STATUSES) expect(ruleSteps(LIFE_SAFETY, [rule], incident({ status })).dropped).toEqual([0, 1]);
+  });
+
+  it("holds its laws over seeded rules and incidents", () => {
+    const kinds = ["system.drill", "system.drill.run", "system.drill.failed", "met.tornado", "system"];
+    const statuses = ["actual", "system", "test", "exercise"] as const;
+    for (const seed of SEEDS) {
+      const r = random(`rules:${seed}`);
+      for (let round = 0; round < 50; round += 1) {
+        const rules: ChannelRule[] = Array.from({ length: r.int(0, 3) }, () => ({
+          kinds: r.sample(kinds, r.int(1, 2)),
+          ...(r.chance(0.5) ? { about: { system: DRILL_SUBJECT, id: r.pick(["a", "b"]) } } : {}),
+          keep: r.pick(["only", "except"] as const),
+          channels: r.sample([pushover, sms], r.int(0, 2)),
+        }));
+        const code = r.pick(["system.drill.run", "system.drill.failed", "met.tornado", "system.health"]);
+        const current = incident({ status: r.pick(statuses), kind: { code, label: code }, about: r.chance(0.5) ? [{ system: DRILL_SUBJECT, id: r.pick(["a", "b"]) }] : [] });
+        const ruled = ruleSteps(LIFE_SAFETY, rules, current);
+        const context = `seed ${seed}, round ${round}`;
+        // A real warning keeps its policy as it is.
+        if (current.status === "actual") expect(ruled, context).toEqual(none);
+        // The kept steps and the dropped steps split the steps of the policy, in their order.
+        expect(ruled.policy.steps, context).toEqual(LIFE_SAFETY.steps.filter((_, index) => !ruled.dropped.includes(index)));
+        // Each rule that applies keeps each step that stays.
+        for (const step of ruled.policy.steps) for (const index of ruled.rules) expect(rules[index]!.channels.includes(step.channel) === (rules[index]!.keep === "only"), context).toBe(true);
+        // The order of the rules has no effect on the steps.
+        expect(ruleSteps(LIFE_SAFETY, [...rules].reverse(), current).policy.steps, context).toEqual(ruled.policy.steps);
+      }
+    }
+  });
+
+  it("gives the plan with the kept steps, and tells the rules and the dropped steps in Route.ruled", () => {
+    const watcher: Recipient = { ...recipient(), watch: { ...recipient().watch, subjects: [{ system: DRILL_SUBJECT }] }, channelRules: [only] };
+    const view = (routes: readonly Route[]) => routes.map((entry) => ({ level: entry.policy.level, steps: entry.policy.steps, ruled: entry.ruled, sends: entry.plan.sends.map((send) => send.channel) }));
+    expect(view(route(input({ incidents: [drillRun], recipients: [watcher] })))).toEqual([{ level: "life-safety", steps: [LIFE_SAFETY.steps[0]], ruled: { rules: [0], dropped: [1] }, sends: [pushover] }]);
+    // With no rule that applies, the route has no field ruled.
+    expect(route(input({ incidents: [drillRun], recipients: [{ ...watcher, channelRules: [except] }] }))[0]?.ruled).toEqual({ rules: [0], dropped: [0] });
+    expect(route(input({ incidents: [drillRun], recipients: [{ ...watcher, channelRules: [] }] }))[0]?.ruled).toBeUndefined();
   });
 });
 

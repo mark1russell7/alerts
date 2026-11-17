@@ -4,7 +4,7 @@
  * the runtime does each call of a channel.
  */
 import { compareCodeUnits } from "@mark1russell7/text/order";
-import { assess, COVERAGE_KIND, DEFAULT_ASSESS_POLICY, hasKind, LIFE_SAFETY_KINDS, QUOTA_KIND, reachedAssessment } from "./assess.ts";
+import { assess, COVERAGE_KIND, DEFAULT_ASSESS_POLICY, hasKind, LIFE_SAFETY_KINDS, matchSubjects, QUOTA_KIND, reachedAssessment } from "./assess.ts";
 import {
   LEVELS,
   type Acknowledgment,
@@ -12,6 +12,7 @@ import {
   type AssessedLevel,
   type AssessPolicy,
   type ChannelDescriptor,
+  type ChannelId,
   type Delivery,
   type DeliveryStatus,
   type Duration,
@@ -25,6 +26,8 @@ import {
   type PersonWatch,
   type Report,
   type ReportId,
+  type Status,
+  type SubjectWatch,
   type WatchedPlace,
   type WhyRecord,
 } from "./contracts.ts";
@@ -41,6 +44,49 @@ export interface Recipient {
   readonly policies: readonly EscalationPolicy[];
   /** The address of the person on each channel, by the channel id. */
   readonly addresses: Readonly<Record<string, Address>>;
+  /** The channel rules of the person. `loadConfig` makes two rules for each drill of the person. */
+  readonly channelRules?: readonly ChannelRule[];
+}
+
+/** The statuses of the incidents that a channel rule can change. A rule does not change the steps of a real warning. */
+export const RULED_STATUSES: readonly Status[] = ["system", "test", "exercise"];
+
+/**
+ * A channel rule of a person: the channels of the steps for the incidents of some kinds. A rule applies only to an
+ * incident with a status of `RULED_STATUSES`. A rule has no status field, thus no rule changes an incident `actual`.
+ */
+export interface ChannelRule {
+  /** The kinds of the rule: prefixes of the taxonomy. */
+  readonly kinds: readonly string[];
+  /** The subject of the rule. Without it, the rule applies to each incident of its kinds. */
+  readonly about?: SubjectWatch;
+  /** With `only`, only the steps on the channels stay. With `except`, the steps on the channels go. */
+  readonly keep: "only" | "except";
+  readonly channels: readonly ChannelId[];
+}
+
+/** The policy of an incident after the channel rules of a person. */
+export interface RuledPolicy {
+  /** The policy with only the steps that stay. */
+  readonly policy: EscalationPolicy;
+  /** The indexes of the rules that apply to the incident. */
+  readonly rules: readonly number[];
+  /** The indexes of the steps of the policy that the rules remove. */
+  readonly dropped: readonly number[];
+}
+
+/**
+ * This function applies the channel rules of a person to the policy of an incident. Each rule that matches the kind and
+ * the subject of the incident applies. A step stays only when each of these rules keeps it. An incident with a status
+ * out of `RULED_STATUSES` keeps each step.
+ */
+export function ruleSteps(policy: EscalationPolicy, rules: readonly ChannelRule[] | undefined, incident: Pick<Incident, "status" | "kind" | "about">): RuledPolicy {
+  if (rules === undefined || rules.length === 0 || !RULED_STATUSES.includes(incident.status)) return { policy, rules: [], dropped: [] };
+  const matched = rules.flatMap((rule, index) => (hasKind(rule.kinds, incident.kind.code) && (rule.about === undefined || matchSubjects(incident, [rule.about]).length > 0) ? [index] : []));
+  if (matched.length === 0) return { policy, rules: [], dropped: [] };
+  const keeps = (channel: ChannelId): boolean => matched.every((index) => rules[index]!.channels.includes(channel) === (rules[index]!.keep === "only"));
+  const dropped = policy.steps.flatMap((step, index) => (keeps(step.channel) ? [] : [index]));
+  return { policy: dropped.length === 0 ? policy : { ...policy, steps: policy.steps.filter((step) => keeps(step.channel)) }, rules: matched, dropped };
 }
 
 /**
@@ -120,7 +166,13 @@ export interface RouteInput {
 export interface Route {
   readonly incident: Incident;
   readonly person: PersonId;
+  /** The policy of the plan: the policy of the person for the level, with only the steps that the channel rules keep. */
   readonly policy: EscalationPolicy;
+  /**
+   * The channel rules of the person that apply to the incident (`ruleSteps`), and the steps of the policy of the person
+   * that they remove. Thus the explain and the map can tell why a step is absent.
+   */
+  readonly ruled?: { readonly rules: readonly number[]; readonly dropped: readonly number[] };
   /** The start of the escalation. When `fresh` is true, the log does not have it, and the runtime writes it. */
   readonly start: EscalationStart;
   readonly fresh: boolean;
@@ -167,6 +219,7 @@ export interface Route {
  * - An earlier episode gets an escalation only when one of its deliveries has no cancel. Its end is its end in the log.
  * - An incident that is not live gets an escalation only when one of its deliveries has no cancel. Its end is its expiry, or `now`.
  * - The start of an escalation is the start in the log. A new escalation starts at `now`, or earlier when the ledger shows an earlier start.
+ * - The channel rules of the person (`ruleSteps`) remove steps of a system, test or exercise incident before the plan.
  */
 export function route(input: RouteInput): Route[] {
   const { state, now } = input;
@@ -247,7 +300,9 @@ export function route(input: RouteInput): Route[] {
         ordered.forEach((level, index) => {
           const endsAt = earliest([end, closing?.at, ...startAt.slice(index + 1)]);
           // A level of the log with no policy now gets a policy with no step: it sends nothing, and its end still stops its repeats.
-          const chosen = policyOf(level) ?? { level, steps: [], exhaustedAfter: 0 };
+          // The channel rules of the person remove some steps of a system, test or exercise incident.
+          const ruled = ruleSteps(policyOf(level) ?? { level, steps: [], exhaustedAfter: 0 }, recipient.channelRules, incident);
+          const chosen = ruled.policy;
           // The silent mode sends step 0 only, and only when the person has no other delivery of the incident.
           const others = silent && mine(deliveries).some((item) => item.level !== level || episodeOf(item.at) !== episode);
           const plan = escalate({
@@ -283,6 +338,7 @@ export function route(input: RouteInput): Route[] {
             polls,
             plan,
             episode,
+            ...(ruled.rules.length === 0 ? {} : { ruled: { rules: ruled.rules, dropped: ruled.dropped } }),
             ...(closing === undefined ? {} : { end: closing }),
             freshEnd,
             ...(why === undefined ? {} : { why }),
@@ -375,6 +431,11 @@ export function recipientProblems(recipient: Recipient, channels: readonly Chann
     if (rule.max === "life-safety" || (rule.places !== undefined && !rule.places.some((place) => recipient.watch.places.includes(place)))) return;
     const capped = rule.kinds === undefined ? ["each kind"] : rule.kinds.filter((kind) => LIFE_SAFETY_CODES.some((code) => overlap(kind, code)));
     if (capped.length > 0) problems.push(`Rule ${index} keeps ${capped.join(", ")} at ${rule.max} or lower. A life-safety kind is in it, and a rule does not keep a life-safety kind below life-safety.`);
+  });
+  (recipient.channelRules ?? []).forEach((rule, index) => {
+    for (const code of unknownKinds(rule.kinds)) problems.push(`Channel rule ${index} names the kind ${code}, and the taxonomy has no such code.`);
+    if (rule.kinds.length === 0) problems.push(`Channel rule ${index} has no kind. It applies to no incident.`);
+    for (const channel of rule.channels) if (!known.has(channel)) problems.push(`Channel rule ${index} names the channel ${channel}, and the system has no such channel.`);
   });
   if (recipient.watch.quiet !== undefined) for (const problem of quietWindowProblems(recipient.watch.quiet)) problems.push(`The quiet window: ${problem}`);
   return problems;
