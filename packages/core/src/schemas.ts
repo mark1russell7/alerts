@@ -1349,6 +1349,10 @@ export const outageConfigSchema: z.ZodType<OutageConfig, OutageConfig> = schemaO
   z.strictObject({ people: z.array(outagePersonConfigSchema).readonly() }).readonly(),
 );
 
+// The id of a copy: a short name of lowercase letters, digits and hyphens, thus a log line and a file name can hold it.
+/** This schema checks the id of a copy of the system: 1 to 32 lowercase letters, digits and hyphens. */
+export const copyIdSchema: z.ZodType<string, string> = z.string().regex(/^[a-z0-9][a-z0-9-]{0,31}$/u, "The id of a copy is 1 to 32 lowercase letters, digits and hyphens.");
+
 /**
  * This schema checks the window of the starts of a drill: the shape of `TimeWindow` of `@mark1russell7/algebra/clock`.
  * It does not check the time zone or the local times. `drillProblems` finds a bad window.
@@ -1377,6 +1381,7 @@ export const drillConfigSchema: z.ZodType<DrillConfig, DrillConfig> = schemaOf<D
       every: durationSchema,
       window: drillWindowSchema,
       ackWithin: durationSchema,
+      copies: z.array(copyIdSchema).min(1).readonly().exactOptional(),
     })
     .readonly(),
 );
@@ -1412,9 +1417,6 @@ export const alertConfigSchema: z.ZodType<AlertConfig, AlertConfig> = schemaOf<A
     .readonly(),
 );
 
-// The id of a copy: a short name of lowercase letters, digits and hyphens, thus a log line and a file name can hold it.
-/** This schema checks the id of a copy of the system: 1 to 32 lowercase letters, digits and hyphens. */
-export const copyIdSchema: z.ZodType<string, string> = z.string().regex(/^[a-z0-9][a-z0-9-]{0,31}$/u, "The id of a copy is 1 to 32 lowercase letters, digits and hyphens.");
 
 // The URL of the exchange of another copy. The tailnet carries it, thus `http` is also a valid protocol. The host is a
 // name with one label or more, an IPv4 address or an IPv6 address in brackets. The URL has no user, no query and no fragment.

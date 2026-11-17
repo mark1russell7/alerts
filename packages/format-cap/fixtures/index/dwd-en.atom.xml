@@ -1,0 +1,552 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xmlns:dc="http://purl.org/dc/elements/1.1/">
+  <title>Official Warnings</title>
+  <link rel="alternate" href="https://www.dwd.de/DWD/warnungen/cap-feed/en/atom.xml" />
+  <author>
+    <name>opendata@dwd.de (Deutscher Wetterdienst)</name>
+    <email>opendata@dwd.de</email>
+  </author>
+  <subtitle>Official Warnings from the Deutscher Wetterdienst</subtitle>
+  <id>https://www.dwd.de/DWD/warnungen/cap-feed/en/atom.xml</id>
+  <rights>public domain</rights>
+  <updated>2026-11-16T22:08:00Z</updated>
+  <dc:date>2026-11-16T22:08:00Z</dc:date>
+  <dc:rights>public domain</dc:rights>
+  <entry>
+    <title>(Update) Official WARNING of FROST</title>
+    <link rel="alternate" href="https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794855720000.241e8ba4-013f-47fa-9a1f-6289fabdb92b.ENG.xml" />
+    <link rel="related" type="application/cap+xml" href="https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794855720000.241e8ba4-013f-47fa-9a1f-6289fabdb92b.ENG.xml" />
+    <author>
+      <name>opendata@dwd.de (Deutscher Wetterdienst)</name>
+      <email>opendata@dwd.de</email>
+    </author>
+    <id>https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794855720000.241e8ba4-013f-47fa-9a1f-6289fabdb92b.ENG.xml</id>
+    <updated>2026-11-16T19:02:00Z</updated>
+    <published>2026-11-16T19:02:00Z</published>
+    <summary type="text">There is a risk of frost (level 1 of 2).
+Minimum temperature: ~ -1 °C - Affected areas: Gemeinde Tastungen, Gemeinde Steinbach, Gemeinde Steinheuterode, Stadt Kelbra (Kyffhäuser), Gemeinde Wachstedt, Gemeinde Klostermansfeld, Gemeinde Wahlhausen, Gemeinde Wehnde, Gemeinde Thalwenden, Gemeinde Uder...</summary>
+    <dc:date>2026-11-16T19:02:00Z</dc:date>
+  </entry>
+  <entry>
+    <title>(Alert) Official WARNING of GALE-FORCE GUSTS</title>
+    <link rel="alternate" href="https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794855000000.fdabf7bf-4361-4e59-823a-47938038d304.ENG.xml" />
+    <link rel="related" type="application/cap+xml" href="https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794855000000.fdabf7bf-4361-4e59-823a-47938038d304.ENG.xml" />
+    <author>
+      <name>opendata@dwd.de (Deutscher Wetterdienst)</name>
+      <email>opendata@dwd.de</email>
+    </author>
+    <id>https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794855000000.fdabf7bf-4361-4e59-823a-47938038d304.ENG.xml</id>
+    <updated>2026-11-16T18:50:00Z</updated>
+    <published>2026-11-16T18:50:00Z</published>
+    <summary type="text">There is a risk of gale-force gusts (level 2 of 4).
+Height range: &gt; 600 m; Max. gusts: 55-65 km/h; Wind direction: south-west; Increased gusts: near showers and in exposed locations &lt; 80 km/h - Affected areas: Gemeinde Altheim (Alb), Gemeinde Oberreichenbach, Gemeinde Altheim, Gemeinde Straubenhardt, Gemeinde Allmendingen, Gemeinde Neuweiler, Stadt Neubulach, Stadt Blaubeuren, Stadt Baden-Baden, Gemeinde Schömberg...</summary>
+    <dc:date>2026-11-16T18:50:00Z</dc:date>
+  </entry>
+  <entry>
+    <title>(Alert) Official WARNING of WIND GUSTS</title>
+    <link rel="alternate" href="https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794855000000.bb6a0755-91fe-4c25-b516-d4928cc1891b.ENG.xml" />
+    <link rel="related" type="application/cap+xml" href="https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794855000000.bb6a0755-91fe-4c25-b516-d4928cc1891b.ENG.xml" />
+    <author>
+      <name>opendata@dwd.de (Deutscher Wetterdienst)</name>
+      <email>opendata@dwd.de</email>
+    </author>
+    <id>https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794855000000.bb6a0755-91fe-4c25-b516-d4928cc1891b.ENG.xml</id>
+    <updated>2026-11-16T18:50:00Z</updated>
+    <published>2026-11-16T18:50:00Z</published>
+    <summary type="text">There is a risk of wind gusts (level 1 of 4).
+Max. gusts: &lt; 60 km/h; Wind direction: south-west; Increased gusts: near showers and in exposed locations &lt; 75 km/h - Affected areas: Mitgliedsgemeinde in Verwaltungsgemeinschaft Wörth, Gemeinde Taufkirchen (Vils), Mitgliedsgemeinde in Verwaltungsgemeinschaft Steinkirchen, Stadt Erwitte, Gemeinde Sankt Wolfgang, Mitgliedsgemeinde in Verwaltungsgemeinschaft Wartenberg, Mitgliedsgemeinde in Verwaltungsgemeinschaft Walpertskirchen, Mitgliedsgemeinde in Verwaltungsgemeinschaft Neuching, Gemeinde Moosinning, Stadt Soest...</summary>
+    <dc:date>2026-11-16T18:50:00Z</dc:date>
+  </entry>
+  <entry>
+    <title>(Alert) Official WARNING of STORM-FORCE GUSTS</title>
+    <link rel="alternate" href="https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794855000000.74c601a0-5c40-4b0f-8fd7-ac4c1de6f277.ENG.xml" />
+    <link rel="related" type="application/cap+xml" href="https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794855000000.74c601a0-5c40-4b0f-8fd7-ac4c1de6f277.ENG.xml" />
+    <author>
+      <name>opendata@dwd.de (Deutscher Wetterdienst)</name>
+      <email>opendata@dwd.de</email>
+    </author>
+    <id>https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794855000000.74c601a0-5c40-4b0f-8fd7-ac4c1de6f277.ENG.xml</id>
+    <updated>2026-11-16T18:50:00Z</updated>
+    <published>2026-11-16T18:50:00Z</published>
+    <summary type="text">There is a risk of storm-force gusts (level 2 of 4).
+Height range: &gt; 1000 m; Max. gusts: 80-100 km/h; Wind direction: south-west then west - Affected areas: Gemeinde Grainet, Gemeinde Haidmühle, Stadt Zwiesel, Gemeinde Rimbach, Gemeinde Neukirchen b. Hl. Blut, Gemeinde Sankt Englmar, Gemeinde Lam, Mitgliedsgemeinde in Verwaltungsgemeinschaft Schwarzach, Gemeinde Lindberg, Gemeinde Drachselsried...</summary>
+    <dc:date>2026-11-16T18:50:00Z</dc:date>
+  </entry>
+  <entry>
+    <title>(Alert) Official WARNING of GALE-FORCE GUSTS</title>
+    <link rel="alternate" href="https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794855000000.0cd9d482-ad67-446a-a979-4d298022796d.ENG.xml" />
+    <link rel="related" type="application/cap+xml" href="https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794855000000.0cd9d482-ad67-446a-a979-4d298022796d.ENG.xml" />
+    <author>
+      <name>opendata@dwd.de (Deutscher Wetterdienst)</name>
+      <email>opendata@dwd.de</email>
+    </author>
+    <id>https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794855000000.0cd9d482-ad67-446a-a979-4d298022796d.ENG.xml</id>
+    <updated>2026-11-16T18:50:00Z</updated>
+    <published>2026-11-16T18:50:00Z</published>
+    <summary type="text">There is a risk of gale-force gusts (level 2 of 4).
+Max. gusts: 55-65 km/h; Wind direction: south-west; Increased gusts: near showers and in exposed locations &lt; 75 km/h - Affected areas: Stadt Herzogenrath, Gemeinde Inden, Gemeinde Grefrath, Stadt Jülich, Gemeinde Brüggen, Stadt Stolberg (Rhld.), Gemeinde Langerwehe, Stadt Erkelenz, Stadt Würselen, Stadt Bedburg...</summary>
+    <dc:date>2026-11-16T18:50:00Z</dc:date>
+  </entry>
+  <entry>
+    <title>(Alert) Official WARNING of GALE-FORCE GUSTS</title>
+    <link rel="alternate" href="https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794855000000.edbf435d-c85f-4a90-8aa6-3b9db9d3fb62.ENG.xml" />
+    <link rel="related" type="application/cap+xml" href="https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794855000000.edbf435d-c85f-4a90-8aa6-3b9db9d3fb62.ENG.xml" />
+    <author>
+      <name>opendata@dwd.de (Deutscher Wetterdienst)</name>
+      <email>opendata@dwd.de</email>
+    </author>
+    <id>https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794855000000.edbf435d-c85f-4a90-8aa6-3b9db9d3fb62.ENG.xml</id>
+    <updated>2026-11-16T18:50:00Z</updated>
+    <published>2026-11-16T18:50:00Z</published>
+    <summary type="text">There is a risk of gale-force gusts (level 2 of 4).
+Height range: &gt; 400 m; Max. gusts: 55-65 km/h; Wind direction: south-west; Increased gusts: near showers and in exposed locations &lt; 75 km/h - Affected areas: Gemeinde Wilgartswiesen, Gemeinde Königsau, Gemeinde Weselberg, Gemeinde Kellenbach, Gemeinde Waldfischbach-Burgalben, Gemeinde Bruschied, Gemeinde Vinningen, Gemeinde Trulben, Gemeinde Steinalben, Gemeinde Schwarzerden...</summary>
+    <dc:date>2026-11-16T18:50:00Z</dc:date>
+  </entry>
+  <entry>
+    <title>(Alert) Official WARNING of GALE-FORCE GUSTS</title>
+    <link rel="alternate" href="https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794855000000.15daa79d-f8ed-4727-87af-c70c75d3f270.ENG.xml" />
+    <link rel="related" type="application/cap+xml" href="https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794855000000.15daa79d-f8ed-4727-87af-c70c75d3f270.ENG.xml" />
+    <author>
+      <name>opendata@dwd.de (Deutscher Wetterdienst)</name>
+      <email>opendata@dwd.de</email>
+    </author>
+    <id>https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794855000000.15daa79d-f8ed-4727-87af-c70c75d3f270.ENG.xml</id>
+    <updated>2026-11-16T18:50:00Z</updated>
+    <published>2026-11-16T18:50:00Z</published>
+    <summary type="text">There is a risk of gale-force gusts (level 2 of 4).
+Height range: &gt; 600 m; Max. gusts: &lt; 70 km/h; Increased gusts: near showers and in exposed locations &lt; 80 km/h - Affected areas: Stadt Herbstein, Gemeinde Lautertal (Vogelsberg), Stadt Ulrichstein, Stadt Schotten, Gemeinde Grebenhain</summary>
+    <dc:date>2026-11-16T18:50:00Z</dc:date>
+  </entry>
+  <entry>
+    <title>(Alert) Official WARNING of STORM-FORCE GUSTS</title>
+    <link rel="alternate" href="https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794855000000.c2b68045-88f7-41a9-8e64-3d72417e08eb.ENG.xml" />
+    <link rel="related" type="application/cap+xml" href="https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794855000000.c2b68045-88f7-41a9-8e64-3d72417e08eb.ENG.xml" />
+    <author>
+      <name>opendata@dwd.de (Deutscher Wetterdienst)</name>
+      <email>opendata@dwd.de</email>
+    </author>
+    <id>https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794855000000.c2b68045-88f7-41a9-8e64-3d72417e08eb.ENG.xml</id>
+    <updated>2026-11-16T18:50:00Z</updated>
+    <published>2026-11-16T18:50:00Z</published>
+    <summary type="text">There is a risk of storm-force gusts (level 2 of 4).
+Height range: &gt; 1500 m; Max. gusts: 85-100 km/h; Wind direction: south-west; Increased gusts: in exposed locations ~ 110 km/h - Affected areas: Gemeinde Schliersee, Gemeinde Rottach-Egern, Gemeinde Brannenburg, Gemeinde Aschau i. Chiemgau, Gemeinde Unterwössen, Gemeinde Kreuth, gemeindefreies Gebiet Ettaler Forst, Gemeinde Schneizlreuth, Gemeinde Fischbachau, Gemeinde Ramsau b. Berchtesgaden...</summary>
+    <dc:date>2026-11-16T18:50:00Z</dc:date>
+  </entry>
+  <entry>
+    <title>(Alert) Official WARNING of WIND GUSTS</title>
+    <link rel="alternate" href="https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794855000000.3c7f38b9-8321-4eda-8967-6951e63224d8.ENG.xml" />
+    <link rel="related" type="application/cap+xml" href="https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794855000000.3c7f38b9-8321-4eda-8967-6951e63224d8.ENG.xml" />
+    <author>
+      <name>opendata@dwd.de (Deutscher Wetterdienst)</name>
+      <email>opendata@dwd.de</email>
+    </author>
+    <id>https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794855000000.3c7f38b9-8321-4eda-8967-6951e63224d8.ENG.xml</id>
+    <updated>2026-11-16T18:50:00Z</updated>
+    <published>2026-11-16T18:50:00Z</published>
+    <summary type="text">There is a risk of wind gusts (level 1 of 4).
+Max. gusts: &lt; 60 km/h; Wind direction: south-west; Increased gusts: near showers and in exposed locations &lt; 75 km/h - Affected areas: Gemeinde Königsbach-Stein, Gemeinde Oberreichenbach, Gemeinde Straubenhardt, Gemeinde Neulingen, Gemeinde Neuweiler, Gemeinde Kämpfelbach, Gemeinde Ölbronn-Dürrn, Gemeinde Wurmberg, Stadt Nagold, Gemeinde Keltern...</summary>
+    <dc:date>2026-11-16T18:50:00Z</dc:date>
+  </entry>
+  <entry>
+    <title>(Alert) Official WARNING of GALE-FORCE GUSTS</title>
+    <link rel="alternate" href="https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794855000000.2394f12f-90fc-4c6c-9c0a-7e017fb97bae.ENG.xml" />
+    <link rel="related" type="application/cap+xml" href="https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794855000000.2394f12f-90fc-4c6c-9c0a-7e017fb97bae.ENG.xml" />
+    <author>
+      <name>opendata@dwd.de (Deutscher Wetterdienst)</name>
+      <email>opendata@dwd.de</email>
+    </author>
+    <id>https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794855000000.2394f12f-90fc-4c6c-9c0a-7e017fb97bae.ENG.xml</id>
+    <updated>2026-11-16T18:50:00Z</updated>
+    <published>2026-11-16T18:50:00Z</published>
+    <summary type="text">There is a risk of gale-force gusts (level 2 of 4).
+Height range: &gt; 800 m; Max. gusts: &lt; 65 km/h; Wind direction: south-west; Increased gusts: near showers and in exposed locations &lt; 80 km/h - Affected areas: Gemeinde Sandberg, Stadt Zella-Mehlis, Gemeinde Großbreitenbach, Mitgliedsgemeinde in Verwaltungsgemeinschaft Weiding, Gemeinde Flossenbürg, Mitgliedsgemeinde in Verwaltungsgemeinschaft Georgenberg, Gemeinde Schleusegrund, Stadt Schleusingen, gemeindefreies Gebiet Weißenstadter Forst-Süd, gemeindefreies Gebiet Weißenstadter Forst-Nord...</summary>
+    <dc:date>2026-11-16T18:50:00Z</dc:date>
+  </entry>
+  <entry>
+    <title>(Alert) Official SEVERE WEATHER WARNING of VIOLENT STORM GUSTS</title>
+    <link rel="alternate" href="https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794855000000.37bbfd6b-b7e2-4177-bbb4-f3d973b3b85f.ENG.xml" />
+    <link rel="related" type="application/cap+xml" href="https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794855000000.37bbfd6b-b7e2-4177-bbb4-f3d973b3b85f.ENG.xml" />
+    <author>
+      <name>opendata@dwd.de (Deutscher Wetterdienst)</name>
+      <email>opendata@dwd.de</email>
+    </author>
+    <id>https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794855000000.37bbfd6b-b7e2-4177-bbb4-f3d973b3b85f.ENG.xml</id>
+    <updated>2026-11-16T18:50:00Z</updated>
+    <published>2026-11-16T18:50:00Z</published>
+    <summary type="text">There is a risk of violent storm gusts (level 3 of 4).
+Height range: &gt; 1000 m; Max. gusts: &lt; 110 km/h; Wind direction: south-west; Increased gusts: in exposed locations &lt; 130 km/h - Affected areas: Gemeinde Hinterzarten, Stadt Triberg im Schwarzwald, Stadt Oppenau, Gemeinde Schönwald im Schwarzwald, Gemeinde Schonach im Schwarzwald, Gemeinde Glottertal, Gemeinde Ibach, Gemeinde Sasbach, Gemeinde Lenzkirch, Gemeinde Sasbachwalden...</summary>
+    <dc:date>2026-11-16T18:50:00Z</dc:date>
+  </entry>
+  <entry>
+    <title>(Alert) Official WARNING of STORM-FORCE GUSTS</title>
+    <link rel="alternate" href="https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794855000000.ef8a4562-2910-4b83-99b5-53d41f2c7cc3.ENG.xml" />
+    <link rel="related" type="application/cap+xml" href="https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794855000000.ef8a4562-2910-4b83-99b5-53d41f2c7cc3.ENG.xml" />
+    <author>
+      <name>opendata@dwd.de (Deutscher Wetterdienst)</name>
+      <email>opendata@dwd.de</email>
+    </author>
+    <id>https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794855000000.ef8a4562-2910-4b83-99b5-53d41f2c7cc3.ENG.xml</id>
+    <updated>2026-11-16T18:50:00Z</updated>
+    <published>2026-11-16T18:50:00Z</published>
+    <summary type="text">There is a risk of storm-force gusts (level 2 of 4).
+Height range: &gt; 1000 m; Max. gusts: &lt; 90 km/h; Wind direction: south-west - Affected areas: Stadt Oberwiesenthal</summary>
+    <dc:date>2026-11-16T18:50:00Z</dc:date>
+  </entry>
+  <entry>
+    <title>(Alert) Official WARNING of GALE-FORCE GUSTS</title>
+    <link rel="alternate" href="https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794855000000.4ff0c1f8-1196-4842-826b-56cbe22d8d2e.ENG.xml" />
+    <link rel="related" type="application/cap+xml" href="https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794855000000.4ff0c1f8-1196-4842-826b-56cbe22d8d2e.ENG.xml" />
+    <author>
+      <name>opendata@dwd.de (Deutscher Wetterdienst)</name>
+      <email>opendata@dwd.de</email>
+    </author>
+    <id>https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794855000000.4ff0c1f8-1196-4842-826b-56cbe22d8d2e.ENG.xml</id>
+    <updated>2026-11-16T18:50:00Z</updated>
+    <published>2026-11-16T18:50:00Z</published>
+    <summary type="text">There is a risk of gale-force gusts (level 2 of 4).
+Height range: &gt; 400 m; Max. gusts: 55-65 km/h; Wind direction: south-west; Increased gusts: near showers and in exposed locations &lt; 75 km/h - Affected areas: Stadt Balve, Stadt Hatzfeld (Eder), Stadt Korbach, Stadt Warstein, Stadt Halver, Stadt Frankenberg (Eder), Gemeinde Willingen (Upland), Stadt Lichtenfels, Stadt Rüthen, Stadt Altena...</summary>
+    <dc:date>2026-11-16T18:50:00Z</dc:date>
+  </entry>
+  <entry>
+    <title>(Alert) Official WARNING of STORM-FORCE GUSTS</title>
+    <link rel="alternate" href="https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794855000000.2c0288f7-09c5-469a-83a1-366b694b5f06.ENG.xml" />
+    <link rel="related" type="application/cap+xml" href="https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794855000000.2c0288f7-09c5-469a-83a1-366b694b5f06.ENG.xml" />
+    <author>
+      <name>opendata@dwd.de (Deutscher Wetterdienst)</name>
+      <email>opendata@dwd.de</email>
+    </author>
+    <id>https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794855000000.2c0288f7-09c5-469a-83a1-366b694b5f06.ENG.xml</id>
+    <updated>2026-11-16T18:50:00Z</updated>
+    <published>2026-11-16T18:50:00Z</published>
+    <summary type="text">There is a risk of storm-force gusts (level 2 of 4).
+Height range: &gt; 1000 m; Max. gusts: 80-100 km/h; Wind direction: south-west then west - Affected areas: Stadt Wernigerode</summary>
+    <dc:date>2026-11-16T18:50:00Z</dc:date>
+  </entry>
+  <entry>
+    <title>(Alert) Official WARNING of ICY SURFACES</title>
+    <link rel="alternate" href="https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794851760000.f29a1d73-081f-41ba-addc-27e33cefd1b6.ENG.xml" />
+    <link rel="related" type="application/cap+xml" href="https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794851760000.f29a1d73-081f-41ba-addc-27e33cefd1b6.ENG.xml" />
+    <author>
+      <name>opendata@dwd.de (Deutscher Wetterdienst)</name>
+      <email>opendata@dwd.de</email>
+    </author>
+    <id>https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794851760000.f29a1d73-081f-41ba-addc-27e33cefd1b6.ENG.xml</id>
+    <updated>2026-11-16T17:56:00Z</updated>
+    <published>2026-11-16T17:56:00Z</published>
+    <summary type="text">There is a slight risk of icy surfaces (level 1 of 4).
+ - Affected areas: Gemeinde Bovenden, Gemeinde Stolzenau, Gemeinde Bodensee, Gemeinde Derental, Gemeinde Uchte, Gemeinde Bilshausen, Gemeinde Warmsen, Gemeinde Wietzen, Gemeinde Bad Grund (Harz), Gemeinde Adelebsen...</summary>
+    <dc:date>2026-11-16T17:56:00Z</dc:date>
+  </entry>
+  <entry>
+    <title>(Alert) Official WARNING of FROST</title>
+    <link rel="alternate" href="https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794851640000.389b2598-6154-4c75-8034-b119adddbeeb.ENG.xml" />
+    <link rel="related" type="application/cap+xml" href="https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794851640000.389b2598-6154-4c75-8034-b119adddbeeb.ENG.xml" />
+    <author>
+      <name>opendata@dwd.de (Deutscher Wetterdienst)</name>
+      <email>opendata@dwd.de</email>
+    </author>
+    <id>https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794851640000.389b2598-6154-4c75-8034-b119adddbeeb.ENG.xml</id>
+    <updated>2026-11-16T17:54:00Z</updated>
+    <published>2026-11-16T17:54:00Z</published>
+    <summary type="text">There is a risk of frost (level 1 of 2).
+Occurence: particularly as the sky clears; Minimum temperature: &gt; -1 °C - Affected areas: Gemeinde Bovenden, Gemeinde Bodensee, Gemeinde Bilshausen, Stadt Bad Sachsa, Stadt Bad Lauterberg im Harz, Gemeinde Bad Grund (Harz), Gemeinde Adelebsen, Gemeinde Tinningstedt, Gemeinde Süderlügum, Gemeindefreies Gebiet Harz (Landkreis Göttingen)...</summary>
+    <dc:date>2026-11-16T17:54:00Z</dc:date>
+  </entry>
+  <entry>
+    <title>(Alert) Official WARNING of FROST</title>
+    <link rel="alternate" href="https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794851400000.51d58ea6-d375-4312-a8ab-9098133ec679.ENG.xml" />
+    <link rel="related" type="application/cap+xml" href="https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794851400000.51d58ea6-d375-4312-a8ab-9098133ec679.ENG.xml" />
+    <author>
+      <name>opendata@dwd.de (Deutscher Wetterdienst)</name>
+      <email>opendata@dwd.de</email>
+    </author>
+    <id>https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794851400000.51d58ea6-d375-4312-a8ab-9098133ec679.ENG.xml</id>
+    <updated>2026-11-16T17:50:00Z</updated>
+    <published>2026-11-16T17:50:00Z</published>
+    <summary type="text">There is a risk of frost (level 1 of 2).
+Occurence: particularly as the sky clears; Minimum temperature: 0 - -2 °C - Affected areas: Stadt Detmold, Stadt Blomberg, Gemeinde Extertal, Gemeinde Dörentrup, Stadt Borgholzhausen, Stadt Bad Oeynhausen, Gemeinde Kalletal, Stadt Horn-Bad Meinberg, Stadt Halle (Westf.), Gemeinde Hille...</summary>
+    <dc:date>2026-11-16T17:50:00Z</dc:date>
+  </entry>
+  <entry>
+    <title>(Alert) Official WARNING of FROST</title>
+    <link rel="alternate" href="https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794851400000.49b0f07b-eb3a-4780-92c3-226b40015dfd.ENG.xml" />
+    <link rel="related" type="application/cap+xml" href="https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794851400000.49b0f07b-eb3a-4780-92c3-226b40015dfd.ENG.xml" />
+    <author>
+      <name>opendata@dwd.de (Deutscher Wetterdienst)</name>
+      <email>opendata@dwd.de</email>
+    </author>
+    <id>https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794851400000.49b0f07b-eb3a-4780-92c3-226b40015dfd.ENG.xml</id>
+    <updated>2026-11-16T17:50:00Z</updated>
+    <published>2026-11-16T17:50:00Z</published>
+    <summary type="text">There is a risk of frost (level 1 of 2).
+Occurence: particularly as the sky clears; Minimum temperature: 0 - -2 °C - Affected areas: Stadt Fritzlar, Stadt Gudensberg, Stadt Borken (Hessen), Gemeinde Edermünde, Stadt Felsberg, Gemeinde Körle, Gemeinde Malsfeld, Stadt Melsungen, Gemeinde Morschen, Gemeinde Guxhagen...</summary>
+    <dc:date>2026-11-16T17:50:00Z</dc:date>
+  </entry>
+  <entry>
+    <title>(Alert) Official WARNING of ICY SURFACES</title>
+    <link rel="alternate" href="https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794851400000.ed2b458f-4ba2-4c36-b41c-799ce192e41d.ENG.xml" />
+    <link rel="related" type="application/cap+xml" href="https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794851400000.ed2b458f-4ba2-4c36-b41c-799ce192e41d.ENG.xml" />
+    <author>
+      <name>opendata@dwd.de (Deutscher Wetterdienst)</name>
+      <email>opendata@dwd.de</email>
+    </author>
+    <id>https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794851400000.ed2b458f-4ba2-4c36-b41c-799ce192e41d.ENG.xml</id>
+    <updated>2026-11-16T17:50:00Z</updated>
+    <published>2026-11-16T17:50:00Z</published>
+    <summary type="text">There is a risk of icy surfaces (level 1 of 4).
+ - Affected areas: Stadt Fritzlar, Stadt Gudensberg, Stadt Borken (Hessen), Gemeinde Edermünde, Stadt Felsberg, Gemeinde Körle, Gemeinde Malsfeld, Stadt Melsungen, Gemeinde Morschen, Gemeinde Guxhagen...</summary>
+    <dc:date>2026-11-16T17:50:00Z</dc:date>
+  </entry>
+  <entry>
+    <title>(Update) Official WARNING of STORM-FORCE GUSTS</title>
+    <link rel="alternate" href="https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794851280000.0a8a53d6-ac56-49db-a45c-5269036133a5.ENG.xml" />
+    <link rel="related" type="application/cap+xml" href="https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794851280000.0a8a53d6-ac56-49db-a45c-5269036133a5.ENG.xml" />
+    <author>
+      <name>opendata@dwd.de (Deutscher Wetterdienst)</name>
+      <email>opendata@dwd.de</email>
+    </author>
+    <id>https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794851280000.0a8a53d6-ac56-49db-a45c-5269036133a5.ENG.xml</id>
+    <updated>2026-11-16T17:48:00Z</updated>
+    <published>2026-11-16T17:48:00Z</published>
+    <summary type="text">There is a risk of storm-force gusts (level 2 of 4).
+Height range: &gt; 1500 m; Max. gusts: 85-100 km/h; Wind direction: south-west - Affected areas: Gemeinde Schliersee, Gemeinde Rottach-Egern, Gemeinde Brannenburg, Gemeinde Aschau i. Chiemgau, Gemeinde Unterwössen, Gemeinde Kreuth, gemeindefreies Gebiet Ettaler Forst, Gemeinde Schneizlreuth, Gemeinde Fischbachau, Gemeinde Ramsau b. Berchtesgaden...</summary>
+    <dc:date>2026-11-16T17:48:00Z</dc:date>
+  </entry>
+  <entry>
+    <title>(Update) Official NEAR GALE WARNING</title>
+    <link rel="alternate" href="https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794849960000.240cb9ba-f520-4a2e-ab8f-b05d0ac87804.ENG.xml" />
+    <link rel="related" type="application/cap+xml" href="https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794849960000.240cb9ba-f520-4a2e-ab8f-b05d0ac87804.ENG.xml" />
+    <author>
+      <name>opendata@dwd.de (Deutscher Wetterdienst)</name>
+      <email>opendata@dwd.de</email>
+    </author>
+    <id>https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794849960000.240cb9ba-f520-4a2e-ab8f-b05d0ac87804.ENG.xml</id>
+    <updated>2026-11-16T17:26:00Z</updated>
+    <published>2026-11-16T17:26:00Z</published>
+    <summary type="text">There is a risk of near gale. - Affected areas: Östlich Fehmarn bis Rügen</summary>
+    <dc:date>2026-11-16T17:26:00Z</dc:date>
+  </entry>
+  <entry>
+    <title>(Alert) Official NEAR GALE WARNING</title>
+    <link rel="alternate" href="https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794849960000.e594445b-df02-4413-b435-fcd7f59a5c5b.ENG.xml" />
+    <link rel="related" type="application/cap+xml" href="https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794849960000.e594445b-df02-4413-b435-fcd7f59a5c5b.ENG.xml" />
+    <author>
+      <name>opendata@dwd.de (Deutscher Wetterdienst)</name>
+      <email>opendata@dwd.de</email>
+    </author>
+    <id>https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794849960000.e594445b-df02-4413-b435-fcd7f59a5c5b.ENG.xml</id>
+    <updated>2026-11-16T17:26:00Z</updated>
+    <published>2026-11-16T17:26:00Z</published>
+    <summary type="text">There is a risk of near gale. - Affected areas: Östlich Rügen</summary>
+    <dc:date>2026-11-16T17:26:00Z</dc:date>
+  </entry>
+  <entry>
+    <title>(Update) Official NEAR GALE WARNING</title>
+    <link rel="alternate" href="https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794849960000.47930994-1cd3-424f-b9d9-f429f5f74a13.ENG.xml" />
+    <link rel="related" type="application/cap+xml" href="https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794849960000.47930994-1cd3-424f-b9d9-f429f5f74a13.ENG.xml" />
+    <author>
+      <name>opendata@dwd.de (Deutscher Wetterdienst)</name>
+      <email>opendata@dwd.de</email>
+    </author>
+    <id>https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794849960000.47930994-1cd3-424f-b9d9-f429f5f74a13.ENG.xml</id>
+    <updated>2026-11-16T17:26:00Z</updated>
+    <published>2026-11-16T17:26:00Z</published>
+    <summary type="text">There is a risk of near gale. - Affected areas: Flensburg bis Fehmarn</summary>
+    <dc:date>2026-11-16T17:26:00Z</dc:date>
+  </entry>
+  <entry>
+    <title>(Alert) Official WARNING of WIND GUSTS</title>
+    <link rel="alternate" href="https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794841980000.7dbec1ea-1b90-42ff-897c-4fe78e159bd1.ENG.xml" />
+    <link rel="related" type="application/cap+xml" href="https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794841980000.7dbec1ea-1b90-42ff-897c-4fe78e159bd1.ENG.xml" />
+    <author>
+      <name>opendata@dwd.de (Deutscher Wetterdienst)</name>
+      <email>opendata@dwd.de</email>
+    </author>
+    <id>https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794841980000.7dbec1ea-1b90-42ff-897c-4fe78e159bd1.ENG.xml</id>
+    <updated>2026-11-16T15:13:00Z</updated>
+    <published>2026-11-16T15:13:00Z</published>
+    <summary type="text">There is a risk of wind gusts (level 1 of 4).
+Max. gusts: ~ 55 km/h; Wind direction: west then north-west - Affected areas: Stadt Heiligenhafen, Gemeinde Großenbrode, Stadt Fehmarn</summary>
+    <dc:date>2026-11-16T15:13:00Z</dc:date>
+  </entry>
+  <entry>
+    <title>(Update) Official WARNING of PERSISTANT RAIN</title>
+    <link rel="alternate" href="https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794838320000.98547a4b-3306-4da8-9098-caed792455b1.ENG.xml" />
+    <link rel="related" type="application/cap+xml" href="https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794838320000.98547a4b-3306-4da8-9098-caed792455b1.ENG.xml" />
+    <author>
+      <name>opendata@dwd.de (Deutscher Wetterdienst)</name>
+      <email>opendata@dwd.de</email>
+    </author>
+    <id>https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794838320000.98547a4b-3306-4da8-9098-caed792455b1.ENG.xml</id>
+    <updated>2026-11-16T14:12:00Z</updated>
+    <published>2026-11-16T14:12:00Z</published>
+    <summary type="text">There is a risk of persistent rain (level 2 of 4).
+Precipitation amounts: 30-40 l/m² - Affected areas: Gemeinde Nordhalben, Mitgliedsgemeinde in Verwaltungsgemeinschaft Mitwitz, Stadt Ludwigsstadt, Gemeinde Geroldsgrün, Mitgliedsgemeinde in Verwaltungsgemeinschaft Gattendorf, Mitgliedsgemeinde in Verwaltungsgemeinschaft Feilitzsch, Gemeinde Küps, Stadt Kronach, Gemeinde Döhlau, Mitgliedsgemeinde in Verwaltungsgemeinschaft Wonsees...</summary>
+    <dc:date>2026-11-16T14:12:00Z</dc:date>
+  </entry>
+  <entry>
+    <title>(Update) Official WARNING of PERSISTANT RAIN</title>
+    <link rel="alternate" href="https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794834660000.a708c378-d03a-49ba-b031-f82bc06147a3.ENG.xml" />
+    <link rel="related" type="application/cap+xml" href="https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794834660000.a708c378-d03a-49ba-b031-f82bc06147a3.ENG.xml" />
+    <author>
+      <name>opendata@dwd.de (Deutscher Wetterdienst)</name>
+      <email>opendata@dwd.de</email>
+    </author>
+    <id>https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794834660000.a708c378-d03a-49ba-b031-f82bc06147a3.ENG.xml</id>
+    <updated>2026-11-16T13:11:00Z</updated>
+    <published>2026-11-16T13:11:00Z</published>
+    <summary type="text">There is a risk of persistent rain (level 2 of 4).
+Precipitation amounts: 30-40 l/m² - Affected areas: Mitgliedsgemeinde in Verwaltungsgemeinschaft Burgsinn, Mitgliedsgemeinde in Verwaltungsgemeinschaft Bischbrunn, Mitgliedsgemeinde in Verwaltungsgemeinschaft Esselbach, Gemeinde Eußenheim, Mitgliedsgemeinde in Verwaltungsgemeinschaft Erlenbach b. Marktheidenfeld, Stadt Gemünden a. Main, Mitgliedsgemeinde in Verwaltungsgemeinschaft Fellen, Stadt Aschaffenburg, Gemeinde Frammersbach, Mitgliedsgemeinde in Verwaltungsgemeinschaft Remlingen...</summary>
+    <dc:date>2026-11-16T13:11:00Z</dc:date>
+  </entry>
+  <entry>
+    <title>(Update) Official WARNING of PERSISTANT RAIN</title>
+    <link rel="alternate" href="https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794834060000.0c6c19fb-7df8-4acd-a448-df57e7564029.ENG.xml" />
+    <link rel="related" type="application/cap+xml" href="https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794834060000.0c6c19fb-7df8-4acd-a448-df57e7564029.ENG.xml" />
+    <author>
+      <name>opendata@dwd.de (Deutscher Wetterdienst)</name>
+      <email>opendata@dwd.de</email>
+    </author>
+    <id>https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794834060000.0c6c19fb-7df8-4acd-a448-df57e7564029.ENG.xml</id>
+    <updated>2026-11-16T13:01:00Z</updated>
+    <published>2026-11-16T13:01:00Z</published>
+    <summary type="text">There is a risk of persistent rain (level 2 of 4).
+Precipitation amounts: 30-50 l/m² - Affected areas: Mitgliedsgemeinde in Verwaltungsgemeinschaft Hinterschmiding, Gemeinde Hohenau, Gemeinde Grainet, Gemeinde Haidmühle, Stadt Zwiesel, Gemeinde Rimbach, Stadt Freyung, Stadt Viechtach, Gemeinde Neukirchen b. Hl. Blut, Gemeinde Breitenberg...</summary>
+    <dc:date>2026-11-16T13:01:00Z</dc:date>
+  </entry>
+  <entry>
+    <title>(Alert) Official WARNING of PERSISTANT RAIN</title>
+    <link rel="alternate" href="https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794829920000.57e93283-05bb-4c68-84f1-7a518815ca02.ENG.xml" />
+    <link rel="related" type="application/cap+xml" href="https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794829920000.57e93283-05bb-4c68-84f1-7a518815ca02.ENG.xml" />
+    <author>
+      <name>opendata@dwd.de (Deutscher Wetterdienst)</name>
+      <email>opendata@dwd.de</email>
+    </author>
+    <id>https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794829920000.57e93283-05bb-4c68-84f1-7a518815ca02.ENG.xml</id>
+    <updated>2026-11-16T11:52:00Z</updated>
+    <published>2026-11-16T11:52:00Z</published>
+    <summary type="text">There is a risk of persistent rain (level 2 of 4).
+Precipitation amounts: &lt; 35 l/m² - Affected areas: Gemeinde Neunkirchen, Gemeinde Heddesheim, Gemeinde Heiligkreuzsteinach, Gemeinde Neckargerach, Gemeinde Aglasterhausen, Gemeinde Heddesbach, Gemeinde Gaiberg, Gemeinde Spechbach, Stadt Schönau, Gemeinde Epfenbach...</summary>
+    <dc:date>2026-11-16T11:52:00Z</dc:date>
+  </entry>
+  <entry>
+    <title>(Alert) Official WARNING of PERSISTANT RAIN</title>
+    <link rel="alternate" href="https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794829920000.09af47c9-792a-4d3d-a347-65dbdd273d40.ENG.xml" />
+    <link rel="related" type="application/cap+xml" href="https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794829920000.09af47c9-792a-4d3d-a347-65dbdd273d40.ENG.xml" />
+    <author>
+      <name>opendata@dwd.de (Deutscher Wetterdienst)</name>
+      <email>opendata@dwd.de</email>
+    </author>
+    <id>https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794829920000.09af47c9-792a-4d3d-a347-65dbdd273d40.ENG.xml</id>
+    <updated>2026-11-16T11:52:00Z</updated>
+    <published>2026-11-16T11:52:00Z</published>
+    <summary type="text">There is a risk of persistent rain (level 2 of 4).
+Precipitation amounts: &lt; 35 l/m² - Affected areas: Gemeinde Ahorn, Gemeinde Höpfingen, Gemeinde Hardheim, Gemeinde Mudau, Stadt Wertheim, Stadt Külsheim, Gemeinde Werbach, Stadt Freudenberg, Gemeinde Seckach, Gemeinde Limbach...</summary>
+    <dc:date>2026-11-16T11:52:00Z</dc:date>
+  </entry>
+  <entry>
+    <title>(Alert) Official WARNING of PERSISTANT RAIN</title>
+    <link rel="alternate" href="https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794828840000.cbd8dcd3-1bfc-4d0d-97df-a9929651c0a3.ENG.xml" />
+    <link rel="related" type="application/cap+xml" href="https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794828840000.cbd8dcd3-1bfc-4d0d-97df-a9929651c0a3.ENG.xml" />
+    <author>
+      <name>opendata@dwd.de (Deutscher Wetterdienst)</name>
+      <email>opendata@dwd.de</email>
+    </author>
+    <id>https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794828840000.cbd8dcd3-1bfc-4d0d-97df-a9929651c0a3.ENG.xml</id>
+    <updated>2026-11-16T11:34:00Z</updated>
+    <published>2026-11-16T11:34:00Z</published>
+    <summary type="text">There is a risk of persistent rain (level 2 of 4).
+Precipitation amounts: 30-40 l/m² - Affected areas: Gemeinde Wilgartswiesen, Gemeinde Weselberg, Gemeinde Waldfischbach-Burgalben, Gemeinde Vinningen, Gemeinde Trulben, Gemeinde Thaleischweiler-Fröschen, Gemeinde Niersbach, Gemeinde Steinalben, Gemeinde Spirkelbach, Gemeinde Schweix...</summary>
+    <dc:date>2026-11-16T11:34:00Z</dc:date>
+  </entry>
+  <entry>
+    <title>(Alert) Official WARNING of PERSISTANT RAIN</title>
+    <link rel="alternate" href="https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794828840000.19ef9ca0-febb-4d35-a784-de211383f4e6.ENG.xml" />
+    <link rel="related" type="application/cap+xml" href="https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794828840000.19ef9ca0-febb-4d35-a784-de211383f4e6.ENG.xml" />
+    <author>
+      <name>opendata@dwd.de (Deutscher Wetterdienst)</name>
+      <email>opendata@dwd.de</email>
+    </author>
+    <id>https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794828840000.19ef9ca0-febb-4d35-a784-de211383f4e6.ENG.xml</id>
+    <updated>2026-11-16T11:34:00Z</updated>
+    <published>2026-11-16T11:34:00Z</published>
+    <summary type="text">There is a risk of persistent rain (level 2 of 4).
+Precipitation amounts: 30-40 l/m² - Affected areas: Gemeinde Höchst i. Odw., Gemeinde Otzberg, Stadt Ober-Ramstadt, Stadt Michelstadt, Stadt Reinheim, Gemeinde Lützelbach, Stadt Pfungstadt, Gemeinde Reichelsheim (Odenwald), Gemeinde Schaafheim, Gemeinde Mossautal...</summary>
+    <dc:date>2026-11-16T11:34:00Z</dc:date>
+  </entry>
+  <entry>
+    <title>(Alert) Official WARNING of PERSISTANT RAIN</title>
+    <link rel="alternate" href="https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794828840000.526d5d0c-1d16-421f-bba3-dba37e91336c.ENG.xml" />
+    <link rel="related" type="application/cap+xml" href="https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794828840000.526d5d0c-1d16-421f-bba3-dba37e91336c.ENG.xml" />
+    <author>
+      <name>opendata@dwd.de (Deutscher Wetterdienst)</name>
+      <email>opendata@dwd.de</email>
+    </author>
+    <id>https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794828840000.526d5d0c-1d16-421f-bba3-dba37e91336c.ENG.xml</id>
+    <updated>2026-11-16T11:34:00Z</updated>
+    <published>2026-11-16T11:34:00Z</published>
+    <summary type="text">There is a risk of persistent rain (level 2 of 4).
+Precipitation amounts: 30-40 l/m² - Affected areas: Stadt Solingen, Gemeinde Berod bei Hachenburg, Stadt Bergneustadt, Gemeinde Engelskirchen, Stadt Gummersbach, Stadt Hückeswagen, Stadt Nidda, Stadt Ortenberg, Gemeinde Lindlar, Stadt Rosbach v.d. Höhe...</summary>
+    <dc:date>2026-11-16T11:34:00Z</dc:date>
+  </entry>
+  <entry>
+    <title>(Alert) Official WARNING of PERSISTANT RAIN</title>
+    <link rel="alternate" href="https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794828660000.7f18a757-90d0-484c-8795-788afb3ec2ce.ENG.xml" />
+    <link rel="related" type="application/cap+xml" href="https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794828660000.7f18a757-90d0-484c-8795-788afb3ec2ce.ENG.xml" />
+    <author>
+      <name>opendata@dwd.de (Deutscher Wetterdienst)</name>
+      <email>opendata@dwd.de</email>
+    </author>
+    <id>https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794828660000.7f18a757-90d0-484c-8795-788afb3ec2ce.ENG.xml</id>
+    <updated>2026-11-16T11:31:00Z</updated>
+    <published>2026-11-16T11:31:00Z</published>
+    <summary type="text">There is a risk of persistent rain (level 2 of 4).
+Precipitation amounts: 30-40 l/m² - Affected areas: Gemeinde Marisfeld, Stadt Hildburghausen, Stadt Stadtilm, Gemeinde Kloster Veßra, Gemeinde Lengfeld, Gemeinde Reurieth, Gemeinde Geratal, Gemeinde Großbreitenbach, Gemeinde Oberstadt, Gemeinde Schmeheim...</summary>
+    <dc:date>2026-11-16T11:31:00Z</dc:date>
+  </entry>
+  <entry>
+    <title>(Alert) Official SEVERE WEATHER WARNING of HEAVY PERSISTENT RAIN</title>
+    <link rel="alternate" href="https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794822360000.a1cd35a9-eedc-4def-9afa-eca4522257bd.ENG.xml" />
+    <link rel="related" type="application/cap+xml" href="https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794822360000.a1cd35a9-eedc-4def-9afa-eca4522257bd.ENG.xml" />
+    <author>
+      <name>opendata@dwd.de (Deutscher Wetterdienst)</name>
+      <email>opendata@dwd.de</email>
+    </author>
+    <id>https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794822360000.a1cd35a9-eedc-4def-9afa-eca4522257bd.ENG.xml</id>
+    <updated>2026-11-16T09:46:00Z</updated>
+    <published>2026-11-16T09:46:00Z</published>
+    <summary type="text">There is a risk of heavy persistent rain (level 3 of 4).
+Precipitation amounts: 90-120 l/m² - Affected areas: Gemeinde Oberreichenbach, Gemeinde Neuweiler, Stadt Baden-Baden, Gemeinde Simmersfeld, Gemeinde Dobel, Stadt Neuenbürg, Stadt Bad Herrenalb, Gemeinde Höfen an der Enz, Gemeinde Seewald, Gemeinde Enzklösterle...</summary>
+    <dc:date>2026-11-16T09:46:00Z</dc:date>
+  </entry>
+  <entry>
+    <title>(Alert) Official WARNING of WIND GUSTS</title>
+    <link rel="alternate" href="https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794813240000.cbba8748-3fb7-4ede-be46-698bc53e8cde.ENG.xml" />
+    <link rel="related" type="application/cap+xml" href="https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794813240000.cbba8748-3fb7-4ede-be46-698bc53e8cde.ENG.xml" />
+    <author>
+      <name>opendata@dwd.de (Deutscher Wetterdienst)</name>
+      <email>opendata@dwd.de</email>
+    </author>
+    <id>https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794813240000.cbba8748-3fb7-4ede-be46-698bc53e8cde.ENG.xml</id>
+    <updated>2026-11-16T07:14:00Z</updated>
+    <published>2026-11-16T07:14:00Z</published>
+    <summary type="text">There is a risk of wind gusts (level 1 of 4).
+Max. gusts: &lt; 60 km/h; Wind direction: west; Increased gusts: in exposed locations &lt; 70 km/h - Affected areas: Gemeinde Buschvitz, Gemeinde Born a. Darß, Gemeinde Wittenbeck, Gemeinde Breege, Stadt Bergen auf Rügen, Gemeinde Binz, Stadt Barth, Gemeinde Dreschvitz, Gemeinde Divitz-Spoldershagen, Stadt Rostock...</summary>
+    <dc:date>2026-11-16T07:14:00Z</dc:date>
+  </entry>
+  <entry>
+    <title>(Alert) Official WARNING of STORM-FORCE GUSTS</title>
+    <link rel="alternate" href="https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794760920000.09d5ab98-57c8-43d1-b817-0a5102797ebe.ENG.xml" />
+    <link rel="related" type="application/cap+xml" href="https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794760920000.09d5ab98-57c8-43d1-b817-0a5102797ebe.ENG.xml" />
+    <author>
+      <name>opendata@dwd.de (Deutscher Wetterdienst)</name>
+      <email>opendata@dwd.de</email>
+    </author>
+    <id>https://www.dwd.de/DWD/warnungen/cap-feed/en/2.49.0.0.276.0.DWD.PVW.1794760920000.09d5ab98-57c8-43d1-b817-0a5102797ebe.ENG.xml</id>
+    <updated>2026-11-15T16:42:00Z</updated>
+    <published>2026-11-15T16:42:00Z</published>
+    <summary type="text">There is a risk of storm-force gusts (level 2 of 4).
+Height range: &gt; 1000 m; Max. gusts: 80-100 km/h; Wind direction: south-west; Increased gusts: in exposed locations ~ 110 km/h - Affected areas: Gemeinde Hinterzarten, Stadt Triberg im Schwarzwald, Stadt Oppenau, Gemeinde Schönwald im Schwarzwald, Gemeinde Schonach im Schwarzwald, Gemeinde Glottertal, Gemeinde Ibach, Gemeinde Sasbach, Gemeinde Lenzkirch, Gemeinde Sasbachwalden...</summary>
+    <dc:date>2026-11-15T16:42:00Z</dc:date>
+  </entry>
+</feed>

@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?xml-stylesheet type="text/xsl" href="https://cap-sources.s3.amazonaws.com/nu-gov-en/alert-style.xsl" ?>
+<cap:alert xmlns:cap="urn:oasis:names:tc:emergency:cap:1.2">
+  <cap:identifier>urn:oid:2.49.0.1.570.0.2026.10.15.23.2.27</cap:identifier>
+  <cap:sender>niuemet@gov.nu</cap:sender>
+  <cap:sent>2026-10-15T12:02:27-11:00</cap:sent>
+  <cap:status>Actual</cap:status>
+  <cap:msgType>Update</cap:msgType>
+  <cap:scope>Public</cap:scope>
+  <cap:references>niuemet@gov.nu,urn:oid:2.49.0.1.570.0.2026.10.15.22.58.57,2026-10-15T11:59:12-11:00</cap:references>
+  <cap:info>
+    <cap:language>en</cap:language>
+    <cap:category>Met</cap:category>
+    <cap:event>Strong Winds</cap:event>
+    <cap:responseType>Monitor</cap:responseType>
+    <cap:urgency>Immediate</cap:urgency>
+    <cap:severity>Moderate</cap:severity>
+    <cap:certainty>Observed</cap:certainty>
+    <cap:eventCode>
+      <cap:valueName>OET:v1.2</cap:valueName>
+      <cap:value>OET-218</cap:value>
+    </cap:eventCode>
+    <cap:expires>2026-10-18T12:00:00-11:00</cap:expires>
+    <cap:senderName>Niue Meteorological Service</cap:senderName>
+    <cap:headline>STRONG WIND WARNING FOR NIUE LAND AREAS AND COASTAL WATERS</cap:headline>
+    <cap:description>Strong winds are expected across Niue and surrounding coastal waters. Strong gusts may damage loose objects, tree branches and weak structures. Rough and hazardous sea conditions are also expected.</cap:description>
+    <cap:instruction>Secure loose outdoor objects and take care when outdoors or driving. Avoid exposed coastal areas. Mariners and small craft operators should exercise caution and avoid unnecessary travel at sea. Continue to monitor official weather updates.</cap:instruction>
+    <cap:contact>Niue Meteorological Service</cap:contact>
+    <cap:area>
+      <cap:areaDesc>Niue Island</cap:areaDesc>
+      <cap:circle>-19.0487,-169.8619 14</cap:circle>
+    </cap:area>
+  </cap:info>
+</cap:alert>
+

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ChannelDescriptor, ChannelId, PersonId, QuietWindow } from "./contracts.ts";
-import { drillDue, drillProblems, drillVerdict, joinRuns, lastRun, nextDrillAt, type DrillConfig, type DrillRun } from "./drill.ts";
+import { drillDue, drillInCopy, drillProblems, drillVerdict, joinRuns, lastRun, nextDrillAt, type DrillConfig, type DrillRun } from "./drill.ts";
 
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
@@ -105,6 +105,19 @@ describe("nextDrillAt and drillDue", () => {
     expect(nextDrillAt({ ...morning, window: { zone: ZONE, start: "06:00", end: "14:00" } }, [], WEDNESDAY, late)).toBe(WEDNESDAY + 7 * HOUR);
   });
 
+  it("starts only when the time of the acknowledgment ends before the next quiet window", () => {
+    const evening: DrillConfig = { ...WEEKLY, every: DAY, window: { zone: ZONE, start: "21:00", end: "22:30" } };
+    const quiet: QuietWindow = { zone: ZONE, start: "22:00", end: "08:00" };
+    // 21:00 gives 30 minutes before the quiet window at 22:00, so the drill starts at 21:00.
+    expect(nextDrillAt(evening, [], WEDNESDAY, quiet)).toBe(WEDNESDAY + 15 * HOUR);
+    // At 21:40, the time of the acknowledgment ends at 22:10, in the quiet window. The drill waits for 21:00 of the next day.
+    expect(nextDrillAt(evening, [], WEDNESDAY + 15 * HOUR + 40 * MINUTE, quiet)).toBe(WEDNESDAY + DAY + 15 * HOUR);
+    expect(drillDue(evening, [], WEDNESDAY + 15 * HOUR + 40 * MINUTE, quiet)).toBe(false);
+    // The last start for this time is 21:30.
+    expect(drillDue(evening, [], WEDNESDAY + 15 * HOUR + 30 * MINUTE, quiet)).toBe(true);
+    expect(drillDue(evening, [], WEDNESDAY + 15 * HOUR + 31 * MINUTE, quiet)).toBe(false);
+  });
+
   it("gives no start for a window in the quiet window, a quiet full day or a bad window", () => {
     const quiet: QuietWindow = { zone: ZONE, start: "22:00", end: "08:00" };
     expect(nextDrillAt({ ...WEEKLY, window: { zone: ZONE, start: "23:00", end: "05:00" } }, [], WEDNESDAY, quiet)).toBeUndefined();
@@ -116,9 +129,50 @@ describe("nextDrillAt and drillDue", () => {
   });
 });
 
+describe("drillInCopy", () => {
+  it("starts a drill only in the copy of rank 0, or in each copy of its list", () => {
+    expect(drillInCopy(WEEKLY, "home", 0)).toBe(true);
+    expect(drillInCopy(WEEKLY, "cloud", 1)).toBe(false);
+    const both: DrillConfig = { ...WEEKLY, copies: ["home", "cloud"] };
+    expect(drillInCopy(both, "cloud", 1)).toBe(true);
+    expect(drillInCopy({ ...WEEKLY, copies: ["cloud"] }, "home", 0)).toBe(false);
+    expect(drillInCopy({ ...WEEKLY, copies: [] }, "home", 0)).toBe(false);
+  });
+});
+
 describe("drillProblems", () => {
   it("finds no problem in a good drill", () => {
     expect(drillProblems(WEEKLY, [channel("poll")])).toEqual([]);
+  });
+
+  it("finds a drill with no start out of the quiet window of the person, and a near drill is good", () => {
+    const quiet: QuietWindow = { zone: ZONE, start: "22:00", end: "08:00" };
+    const late = "The drill push-weekly has no start in the weeks from 2026-01-05 and 2026-07-06: each time of its window is in the quiet window of the person, or too near to it.";
+    // A window in the quiet window has no start.
+    expect(drillProblems({ ...WEEKLY, window: { zone: ZONE, start: "23:00", end: "05:00", days: [6] } }, [channel("poll")], quiet)).toEqual([late]);
+    // The time of the acknowledgment of each start ends in the quiet window.
+    expect(drillProblems({ ...WEEKLY, window: { zone: ZONE, start: "21:45", end: "22:00", days: [6] } }, [channel("poll")], quiet)).toEqual([late]);
+    // A start at 21:30 or before gives the full time of the acknowledgment. The flips are good drills.
+    expect(drillProblems({ ...WEEKLY, window: { zone: ZONE, start: "21:30", end: "22:00", days: [6] } }, [channel("poll")], quiet)).toEqual([]);
+    expect(drillProblems({ ...WEEKLY, window: { zone: ZONE, start: "21:45", end: "22:00", days: [6] } }, [channel("poll")])).toEqual([]);
+    expect(drillProblems({ ...WEEKLY, ackWithin: 15 * MINUTE, window: { zone: ZONE, start: "21:45", end: "22:00", days: [6] } }, [channel("poll")], quiet)).toEqual([]);
+  });
+
+  it("finds a drill with a start in one season only, when the window and the quiet window have two zones", () => {
+    // The quiet window starts at 22:00 in New York: 03:00 UTC in January, and 02:00 UTC in July.
+    const quiet: QuietWindow = { zone: "America/New_York", start: "22:00", end: "08:00" };
+    const utc = (start: string, end: string): DrillConfig => ({ ...WEEKLY, window: { zone: "UTC", start, end, days: [6] } });
+    expect(drillProblems(utc("02:00", "02:30"), [channel("poll")], quiet)).toEqual([
+      "The drill push-weekly has no start in the weeks from 2026-07-06: each time of its window is in the quiet window of the person, or too near to it.",
+    ]);
+    // The flip: a window from 01:00 UTC ends its time of the acknowledgment before 02:00 UTC.
+    expect(drillProblems(utc("01:00", "01:30"), [channel("poll")], quiet)).toEqual([]);
+  });
+
+  it("finds an empty list of copies and a copy that the list names two times", () => {
+    expect(drillProblems({ ...WEEKLY, copies: [] }, [channel("poll")])).toEqual(["The drill push-weekly has an empty list of copies. No copy starts it."]);
+    expect(drillProblems({ ...WEEKLY, copies: ["home", "cloud", "home"] }, [channel("poll")])).toEqual(["The drill push-weekly names the copy home two times."]);
+    expect(drillProblems({ ...WEEKLY, copies: ["home"] }, [channel("poll")])).toEqual([]);
   });
 
   it("finds bad times, a bad window, an unknown channel and a channel with no acknowledgment", () => {

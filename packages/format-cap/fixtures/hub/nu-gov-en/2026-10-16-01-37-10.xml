@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?xml-stylesheet type="text/xsl" href="https://cap-sources.s3.amazonaws.com/nu-gov-en/alert-style.xsl" ?>
+<cap:alert xmlns:cap="urn:oasis:names:tc:emergency:cap:1.2">
+  <cap:identifier>urn:oid:2.49.0.1.570.0.2026.10.16.1.37.10</cap:identifier>
+  <cap:sender>niuemet@gov.nu</cap:sender>
+  <cap:sent>2026-10-15T14:37:10-11:00</cap:sent>
+  <cap:status>Actual</cap:status>
+  <cap:msgType>Update</cap:msgType>
+  <cap:scope>Public</cap:scope>
+  <cap:references>niuemet@gov.nu,urn:oid:2.49.0.1.570.0.2026.10.16.1.33.25,2026-10-15T14:33:30-11:00</cap:references>
+  <cap:info>
+    <cap:language>en</cap:language>
+    <cap:category>Met</cap:category>
+    <cap:event>drought</cap:event>
+    <cap:responseType>Monitor</cap:responseType>
+    <cap:urgency>Immediate</cap:urgency>
+    <cap:severity>Severe</cap:severity>
+    <cap:certainty>Observed</cap:certainty>
+    <cap:eventCode>
+      <cap:valueName>OET:v1.2</cap:valueName>
+      <cap:value>OET-063</cap:value>
+    </cap:eventCode>
+    <cap:expires>2026-10-29T14:00:00-11:00</cap:expires>
+    <cap:senderName>Niue Meteorological Service</cap:senderName>
+    <cap:headline>Drought: YELLOW ALERT REMAINS IN FORCE FOR NIUE</cap:headline>
+    <cap:description>Dry and windy conditions continue across Niue. Below-normal rainfall is forecast for the next three months, while strong winds may further increase the risk of bushfires.</cap:description>
+    <cap:instruction>Use water wisely and avoid unnecessary water use. Avoid activities that could start a fire and follow the Yellow Alert and fire ban advice issued by NDMO.</cap:instruction>
+    <cap:contact>Niue Meteorological Service</cap:contact>
+    <cap:area>
+      <cap:areaDesc>Niue Island</cap:areaDesc>
+      <cap:circle>-19.0487,-169.8619 14</cap:circle>
+    </cap:area>
+  </cap:info>
+</cap:alert>
+

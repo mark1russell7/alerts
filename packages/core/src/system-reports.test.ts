@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { assess } from "./assess.ts";
 import { messageOf } from "./delivery.ts";
 import type { ChannelId, ChannelQuota, CopyRead, CopyWatch, Coverage, HealthState, Incident, Observation, PersonId, PersonWatch, PlaceId, ProviderBalance, Report, ReportId, SourceDescriptor, SourceHealth, SourceId, WatchedPlace } from "./contracts.ts";
+import type { DrillConfig, DrillRun } from "./drill.ts";
 import type { Lateness } from "./lateness.ts";
 import { incidents, normalize } from "./merge.ts";
 import {
@@ -13,6 +14,7 @@ import {
   CLOCK_STEP_WINDOW,
   CLOCK_SUBJECT,
   COPY_SUBJECT,
+  DRILL_SUBJECT,
   copyStages,
   copyUnreadAt,
   gapGrade,
@@ -594,6 +596,78 @@ describe("the log reports", () => {
     expect(none.reports).toMatchObject([{ severity: "moderate", urgency: "expected" }]);
     expect(none.reports[0]!.description).toContain("It kept 0 events, and it could not read each part of the file. A lost event");
     expect(levels(none.reports, WATCHER, START)).toEqual(["notice"]);
+  });
+});
+
+describe("the drill reports", () => {
+  const MINUTE = 60_000;
+  const DAY = 24 * 60 * MINUTE;
+  const START = Date.UTC(2026, 10, 21, 17);
+  const WATCHER: PersonWatch = { ...NEIGHBOR, subjects: [{ system: DRILL_SUBJECT, id: "push-weekly" }] };
+  const DRILL: DrillConfig = {
+    id: "push-weekly",
+    person: WATCHER.person,
+    path: { kind: "channel", channel: "pushover" as ChannelId },
+    every: 6 * 24 * 60 * MINUTE,
+    window: { zone: "America/Chicago", start: "11:00", end: "17:00", days: [6] },
+    ackWithin: 30 * MINUTE,
+  };
+  const codes = (reports: readonly Report[]) => reports.map((report) => [report.op, report.kind.code, report.key.slice(0, report.key.lastIndexOf("#"))]);
+  const drills = (run?: Partial<DrillRun>, copy = "home") => ({ drills: [{ copy, drill: DRILL, ...(run === undefined ? {} : { run: { drill: DRILL.id, at: START, ...run } }) }] });
+
+  it("opens the run line at the start, and cancels it at the acknowledgment", () => {
+    const started = systemReports(NO_SYSTEM_LINES, snapshot(drills({})), START);
+    expect(codes(started.reports)).toEqual([["alert", "system.drill.run", "drill/home/push-weekly"]]);
+    expect(started.reports[0]).toMatchObject({ severity: "extreme", urgency: "immediate", onset: START, areas: [], about: [{ system: DRILL_SUBJECT, id: "push-weekly" }] });
+    expect(started.reports[0]!.headline).toBe("Drill push-weekly: acknowledge this message. This is not a warning.");
+    // The same run later gives no report, and an acknowledgment in the time passes the drill.
+    expect(systemReports(started.lines, snapshot(drills({})), START + 29 * MINUTE).reports).toEqual([]);
+    const passed = systemReports(started.lines, snapshot(drills({ acked: START + 5 * MINUTE })), START + 5 * MINUTE);
+    expect(codes(passed.reports)).toEqual([["cancel", "system.drill.run", "drill/home/push-weekly"]]);
+    expect(passed.lines.open).toEqual({});
+  });
+
+  it("ends the run line and opens the failed line at the end of the time, and updates it for a late acknowledgment", () => {
+    const started = systemReports(NO_SYSTEM_LINES, snapshot(drills({})), START);
+    const failed = systemReports(started.lines, snapshot(drills({})), START + 30 * MINUTE);
+    // The fold gives the reports in the order of the names of the lines.
+    expect(codes(failed.reports)).toEqual([
+      ["cancel", "system.drill.run", "drill/home/push-weekly"],
+      ["alert", "system.drill.failed", "drill/home/push-weekly/failed"],
+    ]);
+    expect(failed.reports[1]!.headline).toBe("The drill push-weekly failed: no acknowledgment came.");
+    const late = systemReports(failed.lines, snapshot(drills({ acked: START + 40 * MINUTE })), START + 40 * MINUTE);
+    expect(codes(late.reports)).toEqual([["update", "system.drill.failed", "drill/home/push-weekly/failed"]]);
+    expect(late.reports[0]!.headline).toBe("The drill push-weekly failed: the acknowledgment came late.");
+    // The next run ends the failed line, and its own verdict decides again.
+    const next = systemReports(late.lines, snapshot(drills({ at: START + DRILL.every + DAY })), START + DRILL.every + DAY);
+    expect(codes(next.reports)).toEqual([
+      ["alert", "system.drill.run", "drill/home/push-weekly"],
+      ["cancel", "system.drill.failed", "drill/home/push-weekly/failed"],
+    ]);
+  });
+
+  it("keeps the lines with no drills in the snapshot, ends them for a drill that is gone, and starts no line with no run", () => {
+    const started = systemReports(NO_SYSTEM_LINES, snapshot(drills({})), START);
+    expect(systemReports(started.lines, snapshot(), START + 40 * MINUTE).reports).toEqual([]);
+    expect(codes(systemReports(started.lines, snapshot({ drills: [] }), START + MINUTE).reports)).toEqual([["cancel", "system.drill.run", "drill/home/push-weekly"]]);
+    expect(systemReports(NO_SYSTEM_LINES, snapshot(drills()), START).reports).toEqual([]);
+    // A run of another drill is not a run of this drill.
+    expect(systemReports(NO_SYSTEM_LINES, snapshot(drills({ drill: "other" })), START).reports).toEqual([]);
+    // Each copy has its own lines.
+    const two = systemReports(NO_SYSTEM_LINES, snapshot({ drills: [...drills({}).drills, ...drills({}, "cloud").drills] }), START);
+    expect(Object.keys(two.lines.open)).toEqual(["drill/cloud/push-weekly", "drill/home/push-weekly"]);
+  });
+
+  it("reaches life-safety for the person who watches the drill, notice for a failure, and rebuilds from its reports", () => {
+    const started = systemReports(NO_SYSTEM_LINES, snapshot(drills({})), START);
+    expect(levels(started.reports, WATCHER, START)).toEqual(["life-safety"]);
+    expect(levels(started.reports, NEIGHBOR, START)).toEqual(["none"]);
+    expect(levels(started.reports, { ...NEIGHBOR, subjects: [{ system: DRILL_SUBJECT, id: "other" }] }, START)).toEqual(["none"]);
+    const failed = systemReports(started.lines, snapshot(drills({})), START + 30 * MINUTE);
+    const failure = failed.reports.filter((report) => report.op === "alert");
+    expect(levels(failure, WATCHER, START + 30 * MINUTE)).toEqual(["notice"]);
+    expect(addSystemReports(started.lines, failed.reports, failed.observations)).toEqual(failed.lines);
   });
 });
 

@@ -9,7 +9,7 @@
  */
 import { canonicalJson } from "@mark1russell7/rigor-generators";
 import { compareCodeUnits } from "@mark1russell7/text/order";
-import { BALANCE_KIND, CLOCK_KIND, COPY_KIND, COVERAGE_KIND, hasKind, HEALTH_KIND, LOG_KIND, matchPlaces, QUOTA_KIND } from "./assess.ts";
+import { BALANCE_KIND, CLOCK_KIND, COPY_KIND, COVERAGE_KIND, DRILL_KIND, hasKind, HEALTH_KIND, LOG_KIND, matchPlaces, QUOTA_KIND } from "./assess.ts";
 import type {
   Area,
   BalanceStage,
@@ -39,6 +39,7 @@ import type {
   WatchedPlace,
 } from "./contracts.ts";
 import { coverageShort } from "./coverage.ts";
+import { drillVerdict, type DrillConfig, type DrillRun } from "./drill.ts";
 import { observationId, reportId } from "./ids.ts";
 import type { Lateness } from "./lateness.ts";
 import { kindLabel } from "./taxonomy.ts";
@@ -150,6 +151,15 @@ export interface Threat {
   readonly kind: string;
 }
 
+/** One drill of one copy in a snapshot. */
+export interface DrillSnapshot {
+  /** The id of the copy that starts the drill. */
+  readonly copy: string;
+  readonly drill: DrillConfig;
+  /** The last run of the drill in the copy. A drill that is due has a run that starts at the time of the snapshot. */
+  readonly run?: DrillRun;
+}
+
 /** One snapshot of the system. */
 export interface SystemSnapshot {
   /** The descriptors of the sources. The reports take their titles. */
@@ -179,6 +189,11 @@ export interface SystemSnapshot {
   readonly steps?: readonly ClockStep[];
   /** The recoveries of the log. The latest recovery in `LOG_RECOVERY_WINDOW` before the time of the snapshot is a condition. */
   readonly recoveries?: readonly LogRecovery[];
+  /**
+   * The drills of the copy. A run that waits for its acknowledgment is a condition, and a failed last run is a condition.
+   * With no drills, each open line of a drill stays open.
+   */
+  readonly drills?: readonly DrillSnapshot[];
 }
 
 /** The result of one step of the fold. */
@@ -298,6 +313,7 @@ export function gapGrade(entry: Coverage, threatened: boolean): { readonly sever
  * - Each stage of a quota, each stage of a balance and each stage of another copy.
  * - The latest step of the wall clock in `CLOCK_STEP_WINDOW` before `at`.
  * - The latest recovery of the log in `LOG_RECOVERY_WINDOW` before `at`.
+ * - Each run of a drill that waits for its acknowledgment, and each drill whose last run failed.
  *
  * An open line with no condition in the snapshot ends with a cancel. Equal snapshots give no new report.
  */
@@ -328,6 +344,13 @@ export function systemReports(lines: SystemLines, snapshot: SystemSnapshot, at: 
   if (step !== undefined) conditions.set(CLOCK_LINE, clockCondition(step));
   const recovery = recentRecovery(snapshot.recoveries ?? [], at);
   if (recovery !== undefined) conditions.set(LOG_LINE, logCondition(recovery));
+  for (const entry of snapshot.drills ?? []) {
+    const { copy, drill, run } = entry;
+    if (run === undefined || run.drill !== drill.id) continue;
+    const verdict = drillVerdict(drill, run, at);
+    if (verdict.state === "pending") conditions.set(drillName(copy, drill.id), drillRunCondition(copy, drill, run));
+    else if (verdict.state === "failed") conditions.set(`${drillName(copy, drill.id)}/failed`, drillFailedCondition(copy, drill, run, verdict.why));
+  }
   const names = [...new Set([...Object.keys(lines.open), ...conditions.keys()])].sort(compareCodeUnits);
   let count = lines.count;
   const open = new Map(Object.entries(lines.open));
@@ -339,6 +362,7 @@ export function systemReports(lines: SystemLines, snapshot: SystemSnapshot, at: 
     if (condition === undefined && snapshot.quotas === undefined && name.startsWith(QUOTA_LINE)) continue;
     if (condition === undefined && snapshot.balances === undefined && name.startsWith(BALANCE_LINE)) continue;
     if (condition === undefined && snapshot.copies === undefined && name.startsWith(COPY_LINE)) continue;
+    if (condition === undefined && snapshot.drills === undefined && name.startsWith(DRILL_LINE)) continue;
     const draft = condition === undefined ? (line === undefined ? undefined : cancelOf(line)) : condition;
     if (draft === undefined) continue;
     const facts = canonicalJson(draft.facts, { form: "json" });
@@ -434,6 +458,13 @@ function copyName(copy: string, stage: CopyStage): string {
   return `${COPY_LINE}${encodeURIComponent(copy)}/${stage}`;
 }
 
+// The start of the name of each line of a drill. The id of the copy is in the name, because each copy starts its own runs.
+const DRILL_LINE = "drill/";
+
+function drillName(copy: string, drill: string): string {
+  return `${DRILL_LINE}${encodeURIComponent(copy)}/${encodeURIComponent(drill)}`;
+}
+
 // The name of the line of the steps of the wall clock. A step in the window of an open line gives an update.
 const CLOCK_LINE = "clock";
 
@@ -442,6 +473,45 @@ const LOG_LINE = "log";
 
 function coverageName(place: PlaceId, kind: string): string {
   return `coverage/${encodeURIComponent(place)}/${encodeURIComponent(kind)}`;
+}
+
+function drillRunCondition(copy: string, drill: DrillConfig, run: DrillRun): Condition {
+  const code = `${DRILL_KIND}.run`;
+  return {
+    // The start is the only fact. Thus a run gives one alert, and the end of the wait gives its cancel.
+    facts: { copy, drill: drill.id, at: run.at },
+    kind: { code, label: kindLabel(code) },
+    severity: "extreme",
+    urgency: "immediate",
+    response: ["none"],
+    onset: run.at,
+    areas: [],
+    about: [{ system: DRILL_SUBJECT, id: drill.id, label: `Drill ${drill.id}` }],
+    headline: `Drill ${drill.id}: acknowledge this message. This is not a warning.`,
+    description: `This message tests the path of the life-safety warnings from the copy ${copy}. An acknowledgment in ${String(Math.round(drill.ackWithin / 60_000))} minutes passes the drill.`,
+    instruction: "Acknowledge the message.",
+    parameters: { drill: [drill.id], copy: [copy] },
+  };
+}
+
+function drillFailedCondition(copy: string, drill: DrillConfig, run: DrillRun, why: "no-ack" | "late-ack"): Condition {
+  const code = `${DRILL_KIND}.failed`;
+  const late = why === "late-ack";
+  return {
+    // Each run and each reason is a new fact. Thus a late acknowledgment after a failure gives an update.
+    facts: { copy, drill: drill.id, at: run.at, why },
+    kind: { code, label: kindLabel(code) },
+    severity: "moderate",
+    urgency: "expected",
+    response: ["assess"],
+    onset: run.at + drill.ackWithin,
+    areas: [],
+    about: [{ system: DRILL_SUBJECT, id: drill.id, label: `Drill ${drill.id}` }],
+    headline: `The drill ${drill.id} failed: ${late ? "the acknowledgment came late" : "no acknowledgment came"}.`,
+    description: `The drill started at ${new Date(run.at).toISOString()} on the channel ${drill.path.channel}, from the copy ${copy}. A real warning on this path can also go without an answer.`,
+    instruction: "Examine the channel, the app and the settings of the phone. The next run of the drill tests the path again.",
+    parameters: { drill: [drill.id], copy: [copy], why: [why] },
+  };
 }
 
 function healthCondition(health: SourceHealth, title: string): Condition {
