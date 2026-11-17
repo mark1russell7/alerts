@@ -94,6 +94,9 @@ function expectNoRetiredPart(state: RuntimeState): void {
     expect(merge.ends.filter((one) => gone.has(one.report))).toEqual([]);
   }
   expect(state.imported.merge.retired).toEqual([]);
+  // A key with a live tombstone is not a cancel of the state.
+  const keys = new Set(state.cancelTombstones.map((tombstone) => tombstone.key));
+  expect(state.cancelled.filter((key) => keys.has(key))).toEqual([]);
 }
 
 describe("the fold of a retirement (AL-47)", () => {
@@ -164,9 +167,25 @@ describe("the fold of a retirement (AL-47)", () => {
     expect(ids(state.merge.reports)).toEqual([W1]);
   });
 
+  it("keeps an old cancel of a retired incident out after a recovery and a new read of the other copy, until the next retirement", () => {
+    // The recovery sets each read position to 0. Thus the next read imports each old event of the other copy again.
+    const recovery: RuntimeEvent = { ...envelope("recovered", "recovered:q-1", T0 + 8 * DAY + HOUR), quarantine: "q-1", fault: "corrupt", read: 9, added: 9, lost: 0, whole: true, problems: [] };
+    const again = [recovery, imported(cancelled("k1", T0 + 5 * SECOND)), imported(cancelled("k9", T0 + 5 * SECOND)), cancelled("k1", T0 + 8 * DAY + 2 * HOUR)];
+    const log = [...events.slice(0, firstRetirement), ...again];
+    const state = foldAll(log);
+    expect(state.cancelTombstones).toEqual([{ key: "k1", until }]);
+    expect(state.cancelled).toEqual(["k9"]);
+    expect(rebuild(log, CONTEXT)).toEqual(state);
+    // The retirement after the end drops the key tombstone, as it drops the tombstone of the report. Then the key can come back.
+    const later = foldAll([...log, retired(until + HOUR, [W2], until + HOUR + TOMBSTONE_LIFE), imported(cancelled("k1", T0 + 5 * SECOND))]);
+    expect(later.cancelTombstones).toEqual([]);
+    expect(later.cancelled).toEqual(["k1", "k9"]);
+  });
+
   it("moves each tombstone at a step of the clock, as each own instant", () => {
     const state = foldAll([...events.slice(0, firstRetirement), stepped(2, T0 + 9 * DAY, -2 * MINUTE)]);
     expect(state.own.merge.retired).toEqual([{ report: W1, until: until - 2 * MINUTE }]);
+    expect(state.cancelTombstones).toEqual([{ key: "k1", until: until - 2 * MINUTE }]);
     expect(rebuild([...events.slice(0, firstRetirement), stepped(2, T0 + 9 * DAY, -2 * MINUTE)], CONTEXT)).toEqual(state);
   });
 });

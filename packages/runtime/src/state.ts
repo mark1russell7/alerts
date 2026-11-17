@@ -97,6 +97,11 @@ export interface RuntimeState {
   readonly lines: SystemLines;
   /** The keys of the deliveries with no more repeats, sorted. */
   readonly cancelled: readonly string[];
+  /**
+   * The tombstones of the cancelled keys of the retired incidents, in the order of their keys. A cancel of a key with a
+   * tombstone stays out of `cancelled`. Thus a new read of the log of another copy does not bring back old keys.
+   */
+  readonly cancelTombstones: readonly CancelTombstone[];
   /** The start of each escalation, in the order of the log. */
   readonly starts: readonly EscalationStart[];
   /**
@@ -123,6 +128,15 @@ export interface RuntimeState {
   readonly steps: readonly ClockStep[];
   /** The recoveries of the log from a broken file, in the order of the log. A later step of the wall clock moves their times. */
   readonly recoveries: readonly LogRecovery[];
+}
+
+/**
+ * The tombstone of a cancelled key of a retired incident. A delivery key does not name its incident, thus the key has a
+ * tombstone of its own. It has the end of the tombstones of its retirement, and the next retirement after that end drops it.
+ */
+export interface CancelTombstone {
+  readonly key: string;
+  readonly until: Instant;
 }
 
 /** The last refusal of a delivery key. */
@@ -158,6 +172,7 @@ export const EMPTY_RUNTIME: RuntimeState = {
   cursors: {},
   lines: NO_SYSTEM_LINES,
   cancelled: [],
+  cancelTombstones: [],
   starts: [],
   escalationEnds: [],
   copies: {},
@@ -323,7 +338,7 @@ function foldRest(state: RuntimeState, event: RuntimeEvent, context: FoldContext
       return { ...base, own, escalationEnds: joinedEnds(own, state.imported) };
     }
     case "cancelled":
-      return state.cancelled.includes(event.delivery) ? base : { ...base, cancelled: [...state.cancelled, event.delivery].sort(compareCodeUnits) };
+      return hasCancel(state, event.delivery) ? base : { ...base, cancelled: [...state.cancelled, event.delivery].sort(compareCodeUnits) };
     case "attempt":
       return { ...base, copies: { ...state.copies, [event.copy]: { key: event.key, channel: event.channel } } };
     case "delivery": {
@@ -369,7 +384,7 @@ function foldImport(state: RuntimeState, { event }: ImportEvent): RuntimeState {
     case "delivery":
       return { ...state, refusals: without(state.refusals, event.delivery.key) };
     case "cancelled":
-      return state.cancelled.includes(event.delivery) ? state : { ...state, cancelled: [...state.cancelled, event.delivery].sort(compareCodeUnits) };
+      return hasCancel(state, event.delivery) ? state : { ...state, cancelled: [...state.cancelled, event.delivery].sort(compareCodeUnits) };
     case "escalation-end": {
       if (isRetired(state.own.merge.retired, event.end.incident)) return state;
       const imported = { ...state.imported, escalationEnds: [...state.imported.escalationEnds, event.end] };
@@ -399,7 +414,21 @@ function foldRetired(state: RuntimeState, event: RetiredEvent): RuntimeState {
     ...joined(own, imported),
     starts: state.starts.filter((start) => !gone.has(start.incident)),
     cancelled: state.cancelled.filter((key) => !cancelled.has(key)),
+    cancelTombstones: retireKeys(state.cancelTombstones, event.cancelled, event.until, event.time),
   };
+}
+
+// The key tombstones after a retirement. Each key of the event gets the end `until`, and each tombstone that ended at `at` goes.
+function retireKeys(tombstones: readonly CancelTombstone[], keys: readonly string[], until: Instant, at: Instant): readonly CancelTombstone[] {
+  const ends = new Map(tombstones.map((tombstone) => [tombstone.key, tombstone.until]));
+  for (const key of keys) ends.set(key, Math.max(ends.get(key) ?? Number.NEGATIVE_INFINITY, until));
+  const live = [...ends].filter(([, end]) => end > at).map(([key, end]): CancelTombstone => ({ key, until: end }));
+  return live.sort((left, right) => compareCodeUnits(left.key, right.key));
+}
+
+// The state has the cancel of the key, or the key has a tombstone. A cancel of a key with a tombstone changes no delivery.
+function hasCancel(state: RuntimeState, key: string): boolean {
+  return state.cancelled.includes(key) || sortedHas(state.cancelTombstones, (tombstone) => tombstone.key, key);
 }
 
 // The merge parts with no part of a report of gone. A merge state in normal form keeps its form, because the function only removes parts.
@@ -426,11 +455,16 @@ function withoutRetired(parts: MergeParts | undefined, retired: readonly Tombsto
 
 // The report has a tombstone. The tombstones of a merge state in normal form are in the order of their reports.
 function isRetired(retired: readonly Tombstone[], report: ReportId): boolean {
+  return sortedHas(retired, (tombstone) => tombstone.report, report);
+}
+
+// A binary search for the key in a list in the order of the keys by code units.
+function sortedHas<T>(list: readonly T[], keyOf: (item: T) => string, key: string): boolean {
   let low = 0;
-  let high = retired.length - 1;
+  let high = list.length - 1;
   while (low <= high) {
     const middle = (low + high) >> 1;
-    const order = compareCodeUnits(retired[middle]!.report, report);
+    const order = compareCodeUnits(keyOf(list[middle]!), key);
     if (order === 0) return true;
     if (order < 0) low = middle + 1;
     else high = middle - 1;
@@ -458,6 +492,7 @@ export function shiftState(state: RuntimeState, size: Duration): RuntimeState {
     health,
     fetched,
     refusals,
+    cancelTombstones: state.cancelTombstones.map((tombstone) => ({ ...tombstone, until: tombstone.until + size })),
     starts: state.starts.map((start) => shiftEscalationStart(start, size)),
     steps: state.steps.map((step) => ({ ...step, at: step.at + size })),
     recoveries: state.recoveries.map((recovery) => ({ ...recovery, at: recovery.at + size })),
