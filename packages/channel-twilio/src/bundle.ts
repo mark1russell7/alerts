@@ -8,7 +8,7 @@
  */
 
 import { fileURLToPath } from "node:url";
-import { build } from "esbuild";
+import { build, stop } from "esbuild";
 import { OUTAGE_PATHS } from "./outage.ts";
 
 /**
@@ -29,6 +29,23 @@ export const FUNCTION_DEPENDENCIES: Readonly<Record<string, string>> = { "@twili
  */
 const PACKAGE_ROOT = fileURLToPath(new URL("..", import.meta.url));
 
+/**
+ * This pattern finds the folder of a package in the store of pnpm, in a module path of a bundle. The tool pnpm names this
+ * folder from the package, its version and its peers. It shortens a long name with a hash, and the longest name is shorter on Windows.
+ * Thus the same commit gives different module paths on two hosts.
+ */
+const STORE_FOLDER = /node_modules\/\.pnpm\/[^/"'`\s]+\/node_modules\//gu;
+
+/**
+ * This function removes the folders of the store of pnpm from the module paths of a bundle. Each module path then names
+ * only the package and its file. Thus each host gives the same code and the same version of the plan for one commit.
+ *
+ * esbuild writes a module path only in a comment and in the key of a module wrapper. Thus the change keeps the behavior of the code.
+ */
+export function withoutStoreFolders(code: string): string {
+  return code.replace(STORE_FOLDER, () => "node_modules/");
+}
+
 /** The bundle of one Function. */
 export interface FunctionBundle {
   /** The path of the Function on the domain of the service. */
@@ -48,9 +65,20 @@ const SOURCES = [
 
 /**
  * This function makes the bundle of each Function. The same sources, the same packages and the same esbuild give the
- * same code from each start folder.
+ * same code from each start folder and on each host.
+ *
+ * After the bundles, the function stops the service of esbuild. The service is a child process that keeps approximately
+ * 160 MB until its stop, and a deploy comes once a day. The next bundle starts a new service.
  */
 export async function bundleFunctions(): Promise<FunctionBundle[]> {
+  try {
+    return await bundleEach();
+  } finally {
+    await stop();
+  }
+}
+
+function bundleEach(): Promise<FunctionBundle[]> {
   return Promise.all(
     SOURCES.map(async (source) => {
       const result = await build({
@@ -68,7 +96,7 @@ export async function bundleFunctions(): Promise<FunctionBundle[]> {
       });
       const [file] = result.outputFiles;
       if (file === undefined || result.outputFiles.length !== 1) throw new Error(`The bundle of ${source.path} is not one file.`);
-      return { path: source.path, visibility: source.visibility, code: file.text };
+      return { path: source.path, visibility: source.visibility, code: withoutStoreFolders(file.text) };
     }),
   );
 }

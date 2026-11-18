@@ -14,6 +14,8 @@ import {
   digestDeliveries,
   digestMessageOf,
   exhaustions,
+  holdKey,
+  limitRoutes,
   graphLabels,
   incidents,
   linkRule,
@@ -37,7 +39,9 @@ import {
   type LinkPolicy,
   type RankDelays,
   type Recipient,
+  type LimitResult,
   type Route,
+  type SendLimits,
   type ScorePriors,
   type SendOutcome,
   type WatchedPlace,
@@ -93,6 +97,13 @@ export interface DeliveryOptions {
    */
   readonly probeLimit?: Duration;
   /**
+   * The longest wait between two tries of a refused send. The wait starts at `retry` and doubles after each refusal of
+   * the send in a row, up to this time. The default is `REFUSAL_LIMIT` or `retry`, the longer one.
+   */
+  readonly refusalLimit?: Duration;
+  /** The send limit of each person (`limitRoutes` of the core, AL-72). The default is `DEFAULT_SEND_LIMITS`. */
+  readonly sendLimits?: SendLimits;
+  /**
    * The private labels of the nodes of the why records, for the why line of each message. The labels stay in the
    * runtime: no record and no log event holds them. Without them, each why line uses plain nouns.
    */
@@ -101,6 +112,12 @@ export interface DeliveryOptions {
 
 /** The default longest wait between two stop probes of a down channel: 60 seconds. */
 export const PROBE_LIMIT: Duration = 60_000;
+
+/**
+ * The default longest wait between two tries of a refused send: 10 minutes. On 2026-11-18 a refused send went again
+ * each 10 seconds through a burst (AL-72). A refusal tells that the channel has no message, thus a quick retry helps little.
+ */
+export const REFUSAL_LIMIT: Duration = 600_000;
 
 /** A call of a channel that failed. The decision stays, thus the call goes again at `retryAt` or later. */
 export interface DeliveryFailure {
@@ -194,6 +211,11 @@ export interface DeliveryContext {
   append(events: readonly RuntimeEvent[]): readonly string[];
   /** The step starts this function when a late send ends with a delivery. The next pass then writes it soon. */
   readonly wake?: (() => void) | undefined;
+  /**
+   * This function gives the share of the send limit for this copy at a time (`limitShare` of the core). Without it,
+   * the share is 1.
+   */
+  readonly share?: ((at: Instant) => number) | undefined;
 }
 
 /** The dispatcher of the deliveries: one step for each pass. */
@@ -303,6 +325,8 @@ export function createDispatcher(options: DeliveryOptions, context: DeliveryCont
   if (!(probeLimit >= options.retry)) throw new Error(`The probe limit (${probeLimit} ms) is shorter than the retry (${options.retry} ms).`);
   // The probes of a down channel back off. There is one client, thus the waits need no jitter.
   const probeWait: Backoff = { base: options.retry, factor: 2, cap: probeLimit };
+  const refusalLimit = options.refusalLimit ?? Math.max(REFUSAL_LIMIT, options.retry);
+  if (!(refusalLimit >= options.retry)) throw new Error(`The refusal limit (${refusalLimit} ms) is shorter than the retry (${options.retry} ms).`);
   // The most calls in progress of each channel with a limit, and the places of its calls in progress.
   const limits = new Map<ChannelId, number>();
   for (const descriptor of descriptors) {
@@ -362,9 +386,10 @@ export function createDispatcher(options: DeliveryOptions, context: DeliveryCont
       // A wait that is over keeps nothing. Thus the map holds only the waits of the last retry time.
       for (const [call, until] of waits) if (until <= at) waits.delete(call);
       const found = incidents(context.state().merge, at, { link });
-      const routesNow = (): Route[] => {
+      // The routes at the time of the step, after the send limit of each person. The new holds go to the log in step 2.
+      const routesNow = (): LimitResult => {
         const state = context.state();
-        return route({
+        const routes = route({
           state: state.merge,
           incidents: found,
           recipients: options.recipients,
@@ -380,6 +405,7 @@ export function createDispatcher(options: DeliveryOptions, context: DeliveryCont
           rankFloor: options.rankFloor,
           now: at,
         });
+        return limitRoutes({ routes, deliveries: state.merge.deliveries, holds: state.holds, limits: options.sendLimits, share: context.share?.(at), now: at });
       };
       const failures: DeliveryFailure[] = [];
       const conflicts: string[] = [];
@@ -387,7 +413,11 @@ export function createDispatcher(options: DeliveryOptions, context: DeliveryCont
         if (events.length > 0) conflicts.push(...context.append(events));
       };
       const fail = (call: DeliveryFailure["call"], target: { readonly key: string; readonly channel: ChannelId; readonly copy?: string }, kind: string, message: string, after?: Duration): Instant => {
-        const retryAt = at + Math.max(options.retry, after ?? 0);
+        // A refused send backs off: its wait doubles after each refusal of its key in a row, up to the refusal limit.
+        // The log keeps the last refusal of the key until its retry time, thus the wait also holds across a restart.
+        const before = call === "send" && refusal(kind as ChannelFailureKind) ? context.state().refusals[target.key] : undefined;
+        const backoff = before === undefined ? 0 : Math.min(refusalLimit, 2 * (before.retryAt - before.at));
+        const retryAt = at + Math.max(options.retry, after ?? 0, backoff);
         waits.set(later(call, target.copy ?? target.key), retryAt);
         failures.push({ call, key: target.key, ...(target.copy === undefined ? {} : { copy: target.copy }), channel: target.channel, kind, message, retryAt });
         return retryAt;
@@ -460,7 +490,7 @@ export function createDispatcher(options: DeliveryOptions, context: DeliveryCont
       // 1. The polls. An acknowledgment changes the escalations, thus the routes come again after it.
       const first = routesNow();
       const due: { readonly delivery: Delivery; readonly release: () => void }[] = [];
-      for (const delivery of first.flatMap((entry) => entry.polls)) {
+      for (const delivery of first.routes.flatMap((entry) => entry.polls)) {
         if (!((polled.get(delivery.key) ?? Number.NEGATIVE_INFINITY) + options.pollEvery <= at && ready("status", delivery.key))) continue;
         const release = place(delivery.channel);
         if (release !== undefined) due.push({ delivery, release });
@@ -479,7 +509,8 @@ export function createDispatcher(options: DeliveryOptions, context: DeliveryCont
       });
       write(acks);
       const acknowledged = acks.map((event) => event.acknowledgment);
-      const routes = acknowledged.length === 0 ? first : routesNow();
+      const capped = acknowledged.length === 0 ? first : routesNow();
+      const routes = capped.routes;
 
       // 2. The start of each new escalation, before its first send. The end of each person that the incident no longer
       // reaches, before its cancels: the routes of each level of the person give the same end, and the log keeps it once.
@@ -492,6 +523,8 @@ export function createDispatcher(options: DeliveryOptions, context: DeliveryCont
       const ending = new Map<string, EscalationEnd>();
       for (const entry of routes) if (entry.freshEnd && entry.end !== undefined) ending.set(endId(entry), entry.end);
       write([...ending].map(([id, end]) => ({ ...envelope("escalation-end", id, at), end })));
+      // The holds of the send limit, after the start of each escalation. A held escalation has no send in this step.
+      write(capped.holds.map((hold) => ({ ...envelope("hold", `hold:${holdKey(hold)}`, at), hold })));
 
       // 3. The sends and the cancels. Each result goes to the log at once, thus a crash loses the fewest results.
       const cancelled: string[] = [];
@@ -655,6 +688,7 @@ export function createDispatcher(options: DeliveryOptions, context: DeliveryCont
         rankDelay: options.rankDelay,
         rankDelays: options.rankDelays,
         rankFloor: options.rankFloor,
+        holds: context.state().holds,
         now: at,
       });
       for (const send of digests.sends) {
@@ -833,7 +867,7 @@ export function createDispatcher(options: DeliveryOptions, context: DeliveryCont
       write([...closed].filter((copy) => Object.hasOwn(unended, copy)).map((copy) => ({ ...envelope("settled", `settled:${copy}`, clock.now()), copy })));
       closed.clear();
 
-      const after = routesNow();
+      const after = routesNow().routes;
       const open = after.flatMap((entry) => entry.polls);
       // Only an open receipt needs the time of its last poll. Each other entry goes, thus the map grows with the open receipts only.
       const keep = new Set(open.map((delivery) => delivery.key));

@@ -11,6 +11,7 @@ import type {
   Delivery,
   Duration,
   EscalationEnd,
+  EscalationHold,
   EscalationStart,
   FetchRecord,
   Instant,
@@ -165,6 +166,14 @@ export interface EscalationEndEvent extends Envelope<"escalation-end"> {
 }
 
 /**
+ * The send limit of the person held an escalation (`limitRoutes` of the core, AL-72). The escalation sends nothing in
+ * its episode, and the next digest tells its incident. This event is not shared: each copy keeps its own holds.
+ */
+export interface HoldEvent extends Envelope<"hold"> {
+  readonly hold: EscalationHold;
+}
+
+/**
  * The wall clock stepped against the monotonic clock, back or forward. The fold moves each own instant of the state by
  * `size`. Thus each timer keeps its distance on the monotonic clock, and a rebuild gives the same state.
  */
@@ -273,6 +282,7 @@ export type RuntimeEvent =
   | SystemEvent
   | EscalationEvent
   | EscalationEndEvent
+  | HoldEvent
   | DeliveryEvent
   | AcknowledgmentEvent
   | CancelledEvent
@@ -296,6 +306,7 @@ export const EVENT_TYPES: readonly RuntimeEvent["type"][] = [
   "system",
   "escalation",
   "escalation-end",
+  "hold",
   "delivery",
   "acknowledgment",
   "cancelled",

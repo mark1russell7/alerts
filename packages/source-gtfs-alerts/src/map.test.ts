@@ -1,11 +1,29 @@
 import { readFileSync } from "node:fs";
-import { checkWith, observationId, readingProblems, readingSchema, reportSchema, type Observation, type SourceId } from "@mark1russell7/alerts";
+import { checkWith, DEFAULT_ASSESS_POLICY, observationId, readingProblems, readingSchema, reportSchema, tableLevel, type Observation, type SourceId } from "@mark1russell7/alerts";
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import { gtfsDescriptor } from "./descriptor.ts";
 import { boxArea, sourceIdOf, type GtfsFeed } from "./feed.ts";
 import { BODY_TYPE, feedBodies } from "./fetch.ts";
-import { ACTIVE_ALERTS, alertText, censusText, ended, GTFS_KIND, inEffect, mapObservation, MAX_PARAMETER_VALUES, NO_SERVICE_ALERTS, severityOf, textIn } from "./map.ts";
+import {
+  ACTIVE_ALERTS,
+  alertText,
+  areasOf,
+  censusText,
+  ended,
+  FEED_SUBJECT,
+  GTFS_KIND,
+  inEffect,
+  mapObservation,
+  MAX_PARAMETER_VALUES,
+  NO_SERVICE_ALERTS,
+  ROUTE_SUBJECT,
+  severityOf,
+  STOP_RADIUS_KM,
+  STOP_SUBJECT,
+  subjectsOf,
+  textIn,
+} from "./map.ts";
 import { decodeFeed, type Alert, type TimeRange } from "./proto.ts";
 
 /** The real bytes of two feeds (`fixtures/README.md`), and the time of their fetch. */
@@ -84,19 +102,12 @@ describe("mapObservation of the real feeds", () => {
       web: "https://www.zditm.szczecin.pl/en/passenger/disruptions/other/1124",
       parameters: { effect: ["MODIFIED_SERVICE"], cause: ["OTHER_CAUSE"], route: ["85", "904"], language: ["pl", "en", "de", "uk"] },
     });
-    expect(route?.areas).toEqual([
-      {
-        type: "polygon",
-        rings: [
-          [
-            [14.4, 53.3],
-            [14.8, 53.3],
-            [14.8, 53.6],
-            [14.4, 53.6],
-            [14.4, 53.3],
-          ],
-        ],
-      },
+    // The config has no places of stops or routes, so the report has no area. The box of the feed is never an area.
+    expect(route?.areas).toEqual([]);
+    expect(route?.about.filter((subject) => subject.system !== STOP_SUBJECT)).toEqual([
+      { system: FEED_SUBJECT, id: "mdb-1967", label: "ZDiTM Szczecin" },
+      { system: ROUTE_SUBJECT, id: "mdb-1967/85" },
+      { system: ROUTE_SUBJECT, id: "mdb-1967/904" },
     ]);
     // The stop moved with no end: the report has no expiry.
     expect(reports[1]?.expires).toBeUndefined();
@@ -127,6 +138,89 @@ describe("mapObservation of the real feeds", () => {
     const first = observationsOf(RUTER_FEED, RUTER);
     const again = observationsOf(RUTER_FEED, RUTER);
     expect(again.map((observation) => observation.id)).toEqual(first.map((observation) => observation.id));
+  });
+
+  it("gives the area of each known route of an alert, and keeps the report valid", () => {
+    const feed: GtfsFeed = { ...ZDITM_FEED, places: { routes: { "85": { west: 14.5, south: 53.4, east: 14.6, north: 53.45 } } } };
+    const [route] = observationsOf(feed, ZDITM).slice(1).flatMap((observation) => mapObservation(feed, observation).reports);
+    expect(route?.areas).toEqual([boxArea({ west: 14.5, south: 53.4, east: 14.6, north: 53.45 })]);
+    expect(checkWith(reportSchema, route).tag).toBe("ok");
+  });
+});
+
+describe("the id of a transit report (AL-73)", () => {
+  it("has no fetch time: a later fetch of the same text gives the same id", () => {
+    const ids = (fetched: number): Map<string, string> =>
+      new Map(
+        observationsOf(RUTER_FEED, RUTER, fetched)
+          .slice(1)
+          .flatMap((observation) => mapObservation(RUTER_FEED, observation).reports)
+          .map((report) => [report.key, report.id]),
+      );
+    const first = ids(RUTER_FETCHED);
+    expect(first.size).toBe(59);
+    // One hour later, 3 alerts ended, so they give no report. Each other alert keeps its id.
+    const later = ids(RUTER_FETCHED + 3_600_000);
+    expect(later.size).toBe(56);
+    for (const [key, id] of later) expect(first.get(key)).toBe(id);
+  });
+
+  it("gives a new id with the same key to a new text of an alert", () => {
+    const report = (text: string) => mapObservation(ZDITM_FEED, observationOf(alertText("mdb-1967", "7", { headerText: { translation: [{ text }] } }))).reports[0];
+    const [before, after] = [report("Trams stop."), report("Trams stop until noon.")];
+    expect(after?.key).toBe(before?.key);
+    expect(after?.id).not.toBe(before?.id);
+    expect(report("Trams stop.")?.id).toBe(before?.id);
+  });
+});
+
+describe("the areas and the subjects of an alert (AL-73)", () => {
+  const box = { west: 14.5, south: 53.4, east: 14.6, north: 53.45 };
+  const places: GtfsFeed["places"] = { stops: { s1: [14.55, 53.42] }, routes: { r1: box } };
+
+  it("gives a circle for a known stop, else the box of a known route, and no area for each other selector", () => {
+    const areas = areasOf({ places }, [{ stopId: "s1", routeId: "r1" }, { routeId: "r1" }, { trip: { routeId: "r2" } }, { agencyId: "a" }, { stopId: "s9" }]);
+    expect(areas).toEqual([
+      { type: "circle", center: [14.55, 53.42], radiusKm: STOP_RADIUS_KM },
+      boxArea(box),
+    ]);
+    expect(areasOf({ places }, [{ trip: { tripId: "t", routeId: "r1" } }])).toEqual([boxArea(box)]);
+  });
+
+  it("never gives the box of the feed: a feed with no places gives no area for any selector", () => {
+    for (const selectors of [[], [{ agencyId: "a" }], [{ routeId: "85" }, { stopId: "1" }]]) {
+      expect(areasOf(ZDITM_FEED, selectors)).toEqual([]);
+      expect(areasOf({ places }, selectors)).not.toContainEqual(boxArea(ZDITM_FEED.box));
+    }
+  });
+
+  it("gives no more than the most areas, and one area for a stop named twice", () => {
+    const stops = Object.fromEntries(Array.from({ length: 60 }, (_, index) => [`s${String(index)}`, [14.5, 53.4] as const]));
+    const selectors = Object.keys(stops).map((stopId) => ({ stopId }));
+    expect(areasOf({ places: { stops } }, selectors)).toHaveLength(MAX_PARAMETER_VALUES);
+    expect(areasOf({ places }, [{ stopId: "s1" }, { stopId: "s1" }])).toHaveLength(1);
+  });
+
+  it("gives the feed, then each route and each stop, with the id of the feed in each id", () => {
+    expect(subjectsOf(ZDITM_FEED, [{ routeId: "85", stopId: "1" }, { trip: { routeId: "904" } }, { agencyId: "a" }])).toEqual([
+      { system: FEED_SUBJECT, id: "mdb-1967", label: "ZDiTM Szczecin" },
+      { system: ROUTE_SUBJECT, id: "mdb-1967/85" },
+      { system: ROUTE_SUBJECT, id: "mdb-1967/904" },
+      { system: STOP_SUBJECT, id: "mdb-1967/1" },
+    ]);
+    expect(subjectsOf(ZDITM_FEED, [])).toEqual([{ system: FEED_SUBJECT, id: "mdb-1967", label: "ZDiTM Szczecin" }]);
+  });
+
+  it("gives each report of the two feeds the digest at most with the default policy, also at the worst severity", () => {
+    const reports = [
+      ...observationsOf(ZDITM_FEED, ZDITM).slice(1).flatMap((observation) => mapObservation(ZDITM_FEED, observation).reports),
+      ...observationsOf(RUTER_FEED, RUTER, RUTER_FETCHED).slice(1).flatMap((observation) => mapObservation(RUTER_FEED, observation).reports),
+    ];
+    expect(reports).toHaveLength(61);
+    for (const report of reports) {
+      expect(["none", "digest"]).toContain(tableLevel(DEFAULT_ASSESS_POLICY, report).level);
+      expect(tableLevel(DEFAULT_ASSESS_POLICY, { ...report, severity: "extreme", urgency: "immediate" }).level).toBe("digest");
+    }
   });
 });
 

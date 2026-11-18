@@ -3,12 +3,14 @@ import { valueIn } from "@mark1russell7/quantity";
 import { groupProblems, renderSystemdUnit, renderTaskXml, serviceProblems, superviseGroup } from "@mark1russell7/service/host";
 import { fakeHost } from "@mark1russell7/service/testing";
 import { describe, expect, it } from "vitest";
+import { addStartTime, BOOTSTRAP_WINDOW_MS, startTimesPath } from "./start-times.ts";
 import {
   declareSupervisor,
   discoveryPid,
   HOST_PORTS,
   hostFolder,
   hostGroup,
+  hostReadyWindow,
   hostTask,
   READY_WITHIN,
   readinessProbe,
@@ -75,6 +77,16 @@ describe("the host of the instance", () => {
     expect(readinessProbe()).toEqual({ kind: "http", url: `${PROBES}/readiness` });
     expect(ready?.probe).toEqual(readinessProbe());
     expect(ready?.within).toEqual(READY_WITHIN);
+  });
+
+  it("gives the supervisor the ready window of the measured starts of its host", () => {
+    expect(hostGroup({ ...OPTIONS, readyWithin: { value: 90_000, unit: "ms" } }).programs[0]?.ready?.within).toEqual({ value: 90_000, unit: "ms" });
+    const starts = [40_000, 44_000, 52_000, 41_000, 47_000].map((ms, index) => ({ at: `2026-11-18T21:0${String(index)}:00.000Z`, ms }));
+    const text = starts.reduce<string | undefined>((file, start) => addStartTime(file, start), undefined);
+    const read = (path: string) => (path === startTimesPath(hostFolder(HOME)) ? text : undefined);
+    // The worst start is 52 s, and the spread is 12 s.
+    expect(hostReadyWindow(HOME, read)).toEqual({ ms: 64_000, starts: 5, measured: true });
+    expect(hostReadyWindow(join(HOME, "other"), read)).toEqual({ ms: BOOTSTRAP_WINDOW_MS, starts: 0, measured: false });
   });
 
   it("gives a group and a boot task with no problems", () => {

@@ -41,7 +41,8 @@ import { pageWarning, readPageState } from "./api.ts";
 import { alertsHome, configPath, readText, SECRETS_FILE } from "./config.ts";
 import { readCopySettings } from "./copy.ts";
 import { checkOfPingUrl, checksRequest, checkTimesProblem, heartbeatGap } from "./heartbeat.ts";
-import { discoveryPid, hostTask, READY_WITHIN, readinessProbe, RUNTIME_GRACE, runtimeDiscovery, supervisorDiscovery } from "./host.ts";
+import { discoveryPid, hostReadyWindow, hostTask, readinessProbe, RUNTIME_GRACE, runtimeDiscovery, supervisorDiscovery } from "./host.ts";
+import { hostFileText } from "./start-times.ts";
 import { checksKeys, daemonCheck, INSTANCE_TIMES, USER_AGENT_NAME } from "./instance.ts";
 import { checkStart, GOOD_FILE, privateFiles, readStartTexts, requestRestart, restartUse, type RestartOutcome } from "./reload.ts";
 
@@ -76,8 +77,11 @@ function report(outcome: ServiceOutcome): number {
 // The longest time of one readiness probe of the status.
 const PROBE_TIMEOUT_MS = 2000;
 
+// The ready window of the supervisor: the window of the measured starts of this host.
+const READY_WINDOW_MS = hostReadyWindow(home, hostFileText).ms;
+
 // The longest wait of a restart: the longest gap of two passes, the stop of the old runtime, and the readiness of the new one.
-const RESTART_WAIT_MS = heartbeatGap(INSTANCE_TIMES) + valueIn(RUNTIME_GRACE, "ms") + valueIn(READY_WITHIN, "ms");
+const RESTART_WAIT_MS = heartbeatGap(INSTANCE_TIMES) + valueIn(RUNTIME_GRACE, "ms") + READY_WINDOW_MS;
 
 /** This function prints the outcome of a restart request, and gives the exit code. No line holds a value of a private file. */
 function reportRestart(outcome: RestartOutcome): number {
@@ -149,7 +153,7 @@ async function outsideCheck(key: string, url: string, secrets: readonly string[]
 
 if (action === "install") {
   const code = report(await installService(spec, ports, { start: true }));
-  if (code === 0) console.log(`The runtime is ready in ${valueIn(READY_WITHIN, "s")} s or less. Then start: node src/install.ts status`);
+  if (code === 0) console.log(`The runtime is ready in ${String(Math.ceil(READY_WINDOW_MS / 1000))} s or less. Then start: node src/install.ts status`);
   process.exitCode = code;
 } else if (action === "remove") {
   process.exitCode = report(await uninstallService(spec, ports, { discovery }));

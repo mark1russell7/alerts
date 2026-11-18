@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { compileFunction, createContext, runInContext } from "node:vm";
 import type { ChannelId, PersonId } from "@mark1russell7/alerts";
 import { beforeAll, describe, expect, it } from "vitest";
-import { bundleFunctions, type FunctionBundle } from "./bundle.ts";
+import { bundleFunctions, type FunctionBundle, withoutStoreFolders } from "./bundle.ts";
 import { CHANNEL_ID } from "./descriptor.ts";
 import { OUTAGE_PATHS, OUTAGE_TEXTS, type OutageList } from "./outage.ts";
 import { OUTAGE_LIST_ASSET, type RuntimeCallOptions, type RuntimeCalls, type RuntimeContext, type RuntimeHandler } from "./twilio-runtime.ts";
@@ -103,6 +103,33 @@ async function invoke(loaded: Loaded, event: Record<string, unknown>, created: R
   });
 }
 
+describe("withoutStoreFolders", () => {
+  it("removes the folder of the store from each module path, with a short and a long name of the folder", () => {
+    const code = [
+      `// ../../node_modules/.pnpm/twilio@5.0.0/node_modules/twilio/lib/index.js`,
+      `var require_index = __commonJS({ "../../node_modules/.pnpm/@scope+name@1.2.3_@_0123456789abcdef0123456789abcdef/node_modules/@scope/name/x.js"(exports) {} });`,
+      `// src/functions/outage.ts`,
+    ].join("\n");
+    expect(withoutStoreFolders(code)).toBe(
+      [
+        `// ../../node_modules/twilio/lib/index.js`,
+        `var require_index = __commonJS({ "../../node_modules/@scope/name/x.js"(exports) {} });`,
+        `// src/functions/outage.ts`,
+      ].join("\n"),
+    );
+  });
+
+  it("gives the same text for the names of a store on two hosts", () => {
+    const windows = `// ../../node_modules/.pnpm/@scope+name@1.2.3_@_0123456789abcdef/node_modules/@scope/name/x.js`;
+    const linux = `// ../../node_modules/.pnpm/@scope+name@1.2.3_@scope+peer@4.5.6_other@7.8.9/node_modules/@scope/name/x.js`;
+    expect(withoutStoreFolders(windows)).toBe(withoutStoreFolders(linux));
+  });
+
+  it("keeps a text with no folder of the store", () => {
+    for (const text of ["", "// src/functions/outage.ts", "node_modules/twilio/x.js", "a .pnpm b"]) expect(withoutStoreFolders(text)).toBe(text);
+  });
+});
+
 describe("bundleFunctions", () => {
   let bundles: FunctionBundle[] = [];
   beforeAll(async () => {
@@ -139,6 +166,13 @@ describe("bundleFunctions", () => {
       expect(paths.filter((path) => /^(?:[a-z]:)?[\\/]|\\/iu.test(path)), bundle.path).toEqual([]);
     }
   }, 60_000);
+
+  it("gives code with no folder of the store of pnpm, thus each host gives the same version for one commit", () => {
+    for (const bundle of bundles) {
+      expect(bundle.code, bundle.path).not.toContain("node_modules/.pnpm/");
+      expect(bundle.code, bundle.path).toMatch(/^\/\/ \.\.\/\.\.\/node_modules\/[^.]/mu);
+    }
+  });
 
   it("gives bundles that require only the Node built-ins, and that hold no send code of the channel", () => {
     for (const bundle of bundles) {

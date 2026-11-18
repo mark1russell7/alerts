@@ -1482,3 +1482,88 @@ describe("the down channels in the passes of the runtime (AL-65)", () => {
     log.close();
   });
 });
+
+describe("the send limit in the passes of the runtime (AL-72)", () => {
+  const BURST = 20;
+  const LIMITS = { window: 60 * MINUTE, notice: 2, urgent: 2 };
+  const NOTICE: EscalationPolicy = { level: "notice", steps: [{ channel: SMS, at: 0 }], exhaustedAfter: 60 * MINUTE };
+  const URGENT: EscalationPolicy = { level: "urgent", steps: [{ channel: SMS, at: 0 }], exhaustedAfter: 60 * MINUTE };
+  const reader: Recipient = { ...RECIPIENT, policies: [LIFE_SAFETY, URGENT, NOTICE] };
+  // A burst of made-up flood statements for the place: one observation with 20 reports of 20 incidents.
+  const burst: SourceProcedures = {
+    ...SOURCE,
+    map: ({ observation }) => ({
+      reports: Array.from({ length: BURST }, (_, index) => ({
+        ...warning(observation),
+        id: reportId({ source: API, key: `f${index}`, sent: T0 }),
+        key: `f${index}`,
+        kind: { code: "met.flood", label: "Flood Statement" },
+        severity: "moderate" as const,
+        urgency: "expected" as const,
+        response: ["monitor" as const],
+        expires: T0 + 6 * 60 * MINUTE,
+        headline: `Flood Statement ${index}`,
+      })),
+      problems: [],
+    }),
+  };
+
+  function openBurst(sms: Script = {}, extra: Partial<DeliveryOptions> = { sendLimits: LIMITS }) {
+    const clock = fakeWallClock(T0);
+    const log = openRuntimeLog(":memory:");
+    const pushover = channel(PUSHOVER, "poll", () => clock.now());
+    const text = channel(SMS, "none", () => clock.now(), sms);
+    const runtime = openRuntime({
+      log,
+      clock,
+      sources: [burst],
+      watch: () => ({ places: [KANSAS], kinds: ["met"] }),
+      view: VIEW,
+      run: `run-${clock.now()}`,
+      delivery: { ...DELIVERY, recipients: [reader], channels: [pushover.procedures, text.procedures], ...extra },
+    });
+    return { clock, log, runtime, sms: text.calls };
+  }
+  const holds = (log: RuntimeLog) => [...log.read()].flatMap((event) => (event.type === "hold" ? [event.hold] : []));
+
+  it("sends a burst of new incidents up to the limit of the person, and holds the rest once", async () => {
+    const { clock, log, runtime, sms } = openBurst();
+    await runtime.pass();
+    expect(sms.send).toHaveLength(2);
+    expect(new Set(sms.send.map((message) => message.level))).toEqual(new Set(["notice"]));
+    expect(holds(log)).toHaveLength(BURST - 2);
+    for (let minute = 1; minute <= 5; minute += 1) {
+      await clock.advance(MINUTE);
+      await runtime.pass();
+    }
+    expect(sms.send).toHaveLength(2);
+    expect(holds(log)).toHaveLength(BURST - 2);
+    // The fold of the log gives the same holds.
+    expect(runtime.state()).toEqual(rebuild(log.read(), runtime.config));
+    expect(runtime.state().holds).toHaveLength(BURST - 2);
+    log.close();
+  });
+
+  it("gives the default limit with no limit in the options", async () => {
+    const { log, runtime, sms } = openBurst({}, {});
+    await runtime.pass();
+    expect(sms.send).toHaveLength(6);
+    log.close();
+  });
+
+  it("doubles the wait of a refused send after each refusal of its key in a row, up to the refusal limit", async () => {
+    const refuse: Script = { send: () => ({ ok: false, kind: "refused", message: "The number is not valid." }) };
+    const { clock, log, runtime } = openBurst(refuse, { sendLimits: { ...LIMITS, notice: 1 }, refusalLimit: 60 * SECOND });
+    const waits: number[] = [];
+    for (let round = 0; round < 5; round += 1) {
+      const pass = await runtime.pass();
+      const failure = pass.delivery?.failures[0];
+      expect(failure?.kind).toBe("refused");
+      const wait = (failure?.retryAt ?? clock.now()) - clock.now();
+      waits.push(wait);
+      await clock.advance(wait);
+    }
+    expect(waits).toEqual([15 * SECOND, 30 * SECOND, 60 * SECOND, 60 * SECOND, 60 * SECOND]);
+    log.close();
+  });
+});

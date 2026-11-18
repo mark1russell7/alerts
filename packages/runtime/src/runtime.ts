@@ -5,7 +5,7 @@
  * that it gets.
  */
 import { isFrameClock, type WallClock } from "@mark1russell7/algebra/clock";
-import { channelDownPolicy, DEFAULT_LINK_POLICY, downChannels, indicatorBreadth, linkRule, ONLY_COPY, type ChannelQuota, type ChannelSnapshot, type CopyWatch, type Duration, type EntryTimes, type Exhaustion, type FetchOutcome, type IndicatorBreadth, type Instant, type LatenessFolds, type ReportId, type SourceDescriptor, type SourceId, type SourceProcedures, type Watch, type ZoneRegions } from "@mark1russell7/alerts";
+import { channelDownPolicy, DEFAULT_LINK_POLICY, downChannels, indicatorBreadth, limitShare, linkRule, ONLY_COPY, type ChannelQuota, type ChannelSnapshot, type CopyWatch, type Duration, type EntryTimes, type Exhaustion, type FetchOutcome, type IndicatorBreadth, type Instant, type LatenessFolds, type ReportId, type SourceDescriptor, type SourceId, type SourceProcedures, type Watch, type ZoneRegions } from "@mark1russell7/alerts";
 import { errorMessage } from "@mark1russell7/text";
 import type { BalanceWatch } from "./balance.ts";
 import { channelWatch, lastFetchSuccess } from "./channel-watch.ts";
@@ -263,7 +263,18 @@ export function openRuntime(options: RuntimeOptions): Runtime {
   // The position of the next read of each other copy. It starts at the position of the log, and it moves at each page.
   const positions = new Map<string, ExchangeCursor>();
 
-  const dispatcher = options.delivery === undefined ? undefined : createDispatcher(options.delivery, { clock, run: options.run, places: config.places, link: config.link, state: () => state, append, wake: options.wake });
+  const copies = options.copies;
+  const dispatcher = options.delivery === undefined ? undefined : createDispatcher(options.delivery, {
+          clock,
+          run: options.run,
+          places: config.places,
+          link: config.link,
+          state: () => state,
+          append,
+          wake: options.wake,
+          // The share of the send limit (AL-72): a copy that does not read another copy takes a part of the limit.
+          ...(copies === undefined ? {} : { share: (at: Instant) => limitShare(copies.watches(), at) }),
+        });
 
   // The folds of the lateness of the last view, in memory only. A pass folds only the new checks. A restart folds each check again, with the same result.
   let folds: LatenessFolds | undefined;

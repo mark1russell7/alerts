@@ -19,6 +19,7 @@ import { CHANNEL_SUBJECT, DRILL_SUBJECT, NO_SYSTEM_LINES, systemReports } from "
 import type { TryChain } from "./chain.ts";
 import type { Expectation } from "./lateness.ts";
 import { rankDelayProblems, rankFloorProblems, type RankDelays } from "./escalation.ts";
+import { sendLimitProblems, type SendLimitConfig } from "./send-limit.ts";
 import type { LinkPolicy } from "./link.ts";
 import { kindOfNode, placeNode, placeOfNode, type WhyLabels } from "./why.ts";
 
@@ -207,6 +208,11 @@ export interface AlertConfig {
    * least 60 s open a line (`DEFAULT_CHANNEL_DOWN`).
    */
   readonly channelDown?: ChannelDownConfig;
+  /**
+   * The send limit of each person (AL-72): the most new escalations of each level below `life-safety` in one window,
+   * over all the copies. Each field that is absent keeps its default (`DEFAULT_SEND_LIMITS`).
+   */
+  readonly sendLimit?: SendLimitConfig;
 }
 
 /** The name of the format of a part of the configuration. A change that breaks a part gets a new name. */
@@ -422,6 +428,7 @@ export interface LoadedConfig {
  * - an unknown person of the outage call, a person two times in it, and a chain with no step
  * - a step of the outage call on a channel with no contact of the person
  * - a rank delay that is not a whole number of milliseconds up to `RANK_DELAY_LIMIT`
+ * - a window of the send limit that is not one minute to one day, and a count of the send limit below 1
  * - two drills with one id, a drill of an unknown person, and a drill on a channel with no contact of the person
  * - a drill of a person who does not watch `DRILL_SUBJECT`
  * - a run or a failure of a drill that sends nothing to its person: no policy of its level, or no step after the rules
@@ -516,6 +523,7 @@ export function loadConfig(config: AlertConfig, channels: readonly ChannelDescri
 
   problems.push(...rankDelayProblems(config.rankDelay ?? {}));
   problems.push(...rankFloorProblems(config.rankFloor));
+  problems.push(...sendLimitProblems(config.sendLimit ?? {}));
 
   const called = new Set<string>();
   for (const { person, chain } of config.outage?.people ?? []) {

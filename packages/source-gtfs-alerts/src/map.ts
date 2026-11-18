@@ -4,15 +4,20 @@
  * stop a service. Each alert that has not ended gives one report of `transport.transit.service-alert`.
  *
  * The key of a report is the id of the entity of the alert. An alert has no time of its own, so the time of a report is
- * the fetch of the first observation with its text. A new text of an alert is a new observation, and a new report with
- * the same key. The feed is a snapshot, so an alert that leaves the feed ends its report.
+ * the fetch of the first observation with its text. The id of a report has no fetch time: its version is the id of the
+ * observation. Thus each copy and each start of the runtime give one id to one text. A new text of an alert is a new
+ * observation, and a new report with the same key. The feed is a snapshot, so an alert that leaves the feed ends its report.
+ *
+ * The areas of a report are the stops and the routes of its alert with a known place (`areasOf`). The box of the
+ * feed is not an area of a report. The subjects of a report are the feed, its routes and its stops (`subjectsOf`). With the default
+ * policy, a transit report reaches the digest at most.
  */
 
-import { categoryOf, kindLabel, Problems, reportId, type Area, type Instant, type MapResult, type Observation, type Reading, type Report, type Severity } from "@mark1russell7/alerts";
+import { categoryOf, kindLabel, Problems, reportId, type Area, type Instant, type MapResult, type Observation, type Reading, type Report, type Severity, type Subject } from "@mark1russell7/alerts";
 import { errorMessage } from "@mark1russell7/text";
 
 import { boxArea, intervalOf, sourceIdOf, type GtfsFeed } from "./feed.ts";
-import type { Alert, TimeRange, TranslatedString } from "./proto.ts";
+import type { Alert, EntitySelector, TimeRange, TranslatedString } from "./proto.ts";
 
 /** The taxonomy code of each report. */
 export const GTFS_KIND = "transport.transit.service-alert";
@@ -65,6 +70,18 @@ export const SEVERITY_LEVELS: Readonly<Record<number, Severity>> = { 2: "minor",
 
 /** The most values of one parameter of a report. A long list of stops says little more than its start. */
 export const MAX_PARAMETER_VALUES = 50;
+
+/** The radius of the area of one stop, in kilometers: the stop and its platforms. */
+export const STOP_RADIUS_KM = 0.2;
+
+/** The system of the subject of a feed. Its id is the id of the feed. */
+export const FEED_SUBJECT = "gtfs-feed";
+
+/** The system of the subject of a route. Its id is the id of the feed, a slash and the `route_id`. */
+export const ROUTE_SUBJECT = "gtfs-route";
+
+/** The system of the subject of a stop. Its id is the id of the feed, a slash and the `stop_id`. */
+export const STOP_SUBJECT = "gtfs-stop";
 
 /** The census of one fetch of a feed: the counts of its alerts at the time of the feed. */
 export interface CensusBody {
@@ -172,6 +189,47 @@ export function severityOf(alert: Alert): Severity {
   return alert.effect === NO_SERVICE ? "moderate" : "minor";
 }
 
+/**
+ * This function gives the areas of the stops and the routes that an alert names, from the places of the feed. A known stop
+ * gives a circle at the stop. Else a known route gives the box of the route. A selector with no known stop or route gives
+ * no area. The function does not give the box of the feed, so an alert of an agency or of a whole network has no area.
+ */
+export function areasOf(feed: Pick<GtfsFeed, "places">, selectors: readonly EntitySelector[]): readonly Area[] {
+  const stops = feed.places?.stops ?? {};
+  const routes = feed.places?.routes ?? {};
+  const areas = new Map<string, Area>();
+  for (const selector of selectors) {
+    const stop = selector.stopId;
+    const route = selector.routeId ?? selector.trip?.routeId;
+    if (stop !== undefined && Object.hasOwn(stops, stop)) areas.set(`stop:${stop}`, { type: "circle", center: stops[stop]!, radiusKm: STOP_RADIUS_KM });
+    else if (route !== undefined && Object.hasOwn(routes, route)) areas.set(`route:${route}`, boxArea(routes[route]!));
+  }
+  return [...areas.values()].slice(0, MAX_PARAMETER_VALUES);
+}
+
+/** This function gives the routes that the selectors of an alert name: the route of a selector, or else the route of its trip. */
+function routesOf(selectors: readonly EntitySelector[]): readonly string[] {
+  return distinct(selectors.map((selector) => selector.routeId ?? selector.trip?.routeId));
+}
+
+/** This function gives the stops that the selectors of an alert name. */
+function stopsOf(selectors: readonly EntitySelector[]): readonly string[] {
+  return distinct(selectors.map((selector) => selector.stopId));
+}
+
+/**
+ * This function gives the subjects of an alert: the feed, then each route and each stop that the alert names. The id of a
+ * route or a stop starts with the id of the feed, because two feeds can use one id. A person can watch a line by its
+ * subject. Each report has a subject, so a report with no area is valid. A subject reaches no watched place.
+ */
+export function subjectsOf(feed: Pick<GtfsFeed, "id" | "title">, selectors: readonly EntitySelector[]): readonly Subject[] {
+  return [
+    { system: FEED_SUBJECT, id: feed.id, label: feed.title },
+    ...routesOf(selectors).map((route) => ({ system: ROUTE_SUBJECT, id: `${feed.id}/${route}` })),
+    ...stopsOf(selectors).map((stop) => ({ system: STOP_SUBJECT, id: `${feed.id}/${stop}` })),
+  ];
+}
+
 type Fields = Readonly<Record<string, unknown>>;
 
 // This reader is a copy of the reader of each source package. The copy ends when the readers of JSON fields have one home.
@@ -247,10 +305,10 @@ function reportOf(feed: GtfsFeed, observation: Observation, key: string, alert: 
   const cause = nameAt(CAUSES, alert.cause);
   const link = textIn(alert.url);
   const selectors = alert.informedEntity ?? [];
-  const areas: Area[] = [boxArea(feed.box)];
+  const areas = areasOf(feed, selectors);
   const headline = header ?? (effect ?? "SERVICE_ALERT").toLowerCase().replaceAll("_", " ");
   return {
-    id: reportId({ source: sourceIdOf(feed), key, sent }),
+    id: reportId({ source: sourceIdOf(feed), key, version: observation.id }),
     source: sourceIdOf(feed),
     origin: feed.origin,
     key,
@@ -270,7 +328,7 @@ function reportOf(feed: GtfsFeed, observation: Observation, key: string, alert: 
     ...(onset === undefined ? {} : { onset }),
     ...(expires === undefined ? {} : { expires }),
     areas,
-    about: [],
+    about: subjectsOf(feed, selectors),
     sender: feed.title,
     headline: `${feed.title}: ${headline}`,
     ...(description === undefined || description === header ? {} : { description }),
@@ -279,8 +337,8 @@ function reportOf(feed: GtfsFeed, observation: Observation, key: string, alert: 
     parameters: withValues({
       effect: distinct([effect]),
       cause: distinct([cause]),
-      route: distinct(selectors.map((selector) => selector.routeId ?? selector.trip?.routeId)),
-      stop: distinct(selectors.map((selector) => selector.stopId)),
+      route: routesOf(selectors),
+      stop: stopsOf(selectors),
       agency: distinct(selectors.map((selector) => selector.agencyId)),
       language: languagesOf(alert),
     }),

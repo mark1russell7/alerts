@@ -76,6 +76,16 @@ describe("reportId", () => {
     expect(reportId({ ...report, key: "k", part: "1" })).not.toBe(reportId({ ...report, key: "k1" }));
   });
 
+  it("gives one id to one version with no sent time, a new id to a new version, and never the id of a sent time", () => {
+    const { source, key } = report;
+    const version = reportId({ source, key, version: "v1" });
+    expect(reportId({ source, key, version: "v1" })).toBe(version);
+    expect(reportId({ source, key, version: "v2" })).not.toBe(version);
+    expect(reportId({ source, key: `${key}.2`, version: "v1" })).not.toBe(version);
+    expect(reportId({ source, key, version: "0" })).not.toBe(reportId({ source, key, sent: 0 }));
+    expect(reportId({ source, key, version: "v1", part: "info[1]" })).not.toBe(version);
+  });
+
   it("does not mix fields that a separator character can join", () => {
     const a = reportId({ source: "a|b" as SourceId, key: "c", sent: 0 });
     const b = reportId({ source: "a" as SourceId, key: "b|c", sent: 0 });

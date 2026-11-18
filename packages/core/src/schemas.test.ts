@@ -529,6 +529,7 @@ const SCHEMA_NAMES = [
   "scoreFactorSchema",
   "scorePriorsSchema",
   "secretRefSchema",
+  "sendLimitConfigSchema",
   "sendOutcomeSchema",
   "severitySchema",
   "shadowScoreSchema",

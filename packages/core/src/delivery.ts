@@ -152,6 +152,20 @@ export interface EscalationEnd {
   readonly reason?: EndReason;
 }
 
+/**
+ * A hold of an escalation by the send limit of the person (`limitRoutes`, AL-72). The escalation sends nothing in its
+ * episode, and the next digest tells its incident. The runtime keeps each hold in its own log.
+ */
+export interface EscalationHold {
+  /** The report of the start of the escalation. */
+  readonly incident: ReportId;
+  readonly level: Level;
+  readonly person: PersonId;
+  /** The episode of the escalation. A later episode of the incident is a new escalation, and it needs a new place. */
+  readonly episode: number;
+  readonly at: Instant;
+}
+
 /** The input of `route`. */
 export interface RouteInput {
   /** The merge state. Its deliveries and its acknowledgments go to each escalation. */
@@ -217,6 +231,8 @@ export interface Route {
    * `PersonWatch.subjects` has no why.
    */
   readonly why?: WhyRecord;
+  /** The hold of the send limit (`limitRoutes`). A held route has no send in its plan. Its cancels stay. */
+  readonly held?: EscalationHold;
 }
 
 /**
@@ -415,6 +431,7 @@ export function asksForAck(policy: EscalationPolicy, channels: readonly ChannelD
  * - The state of its plan is `exhausted`. An acknowledgment or the end of the incident ends the exhaustion.
  * - Its policy has a step after the channel rules. A plan that a channel rule empties sent nothing to the person.
  * - A step of its policy asks for an acknowledgment (`asksForAck`). Without such a step, no acknowledgment can come.
+ * - The send limit did not hold it (`Route.held`). A held escalation sent nothing, and the digest tells it.
  *
  * The reports give the title of each warning (`incidentTitle`).
  */
@@ -422,7 +439,7 @@ export function exhaustions(routes: readonly Route[], channels: readonly Channel
   const found: Exhaustion[] = [];
   for (const entry of routes) {
     const { incident, plan, policy } = entry;
-    if (incident.status !== "actual" || plan.state !== "exhausted" || plan.exhaustedAt === undefined) continue;
+    if (entry.held !== undefined || incident.status !== "actual" || plan.state !== "exhausted" || plan.exhaustedAt === undefined) continue;
     if (policy.steps.length === 0 || !asksForAck(policy, channels)) continue;
     found.push({ incident: entry.start.incident, person: entry.person, level: policy.level, episode: entry.episode, at: plan.exhaustedAt, kind: incident.kind, title: incidentTitle(incident, reports) });
   }

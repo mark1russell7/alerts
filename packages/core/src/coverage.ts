@@ -34,7 +34,7 @@ export interface CoveragePolicy {
 /**
  * The first policy. A source counts when it is `healthy` or `slow`. Each life-safety kind needs 2
  * independent domains, so no single outside fault stops it. A kind of context (`CONTEXT_KINDS`) needs none,
- * because its reports reach no person. Each other kind needs 1.
+ * because its reports reach the digest at most. Each other kind needs 1.
  */
 export const DEFAULT_COVERAGE_POLICY: CoveragePolicy = {
   up: ["healthy", "slow"],
