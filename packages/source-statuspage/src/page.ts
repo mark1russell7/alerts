@@ -88,7 +88,6 @@ export function regionKey(id: string, name: string, path: string): ComponentKey 
   return { id, name, subject: { system: REGION_SYSTEM, id: path } };
 }
 
-
 /**
  * This function tells if a URL is a base URL of a page. A base URL has `https:` and a host. It has no user, port, path,
  * query or fragment.
