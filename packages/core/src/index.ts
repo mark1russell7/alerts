@@ -36,6 +36,7 @@ export * from "./history-reader.ts";
 export * from "./map.ts";
 export * from "./problems.ts";
 export * from "./interest-defaults.ts";
+export * from "./interests-payload.ts";
 export * from "./relevance.ts";
 export * from "./schemas.ts";
 export * from "./shapes.ts";
