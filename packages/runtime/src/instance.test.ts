@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -34,13 +34,14 @@ import { fakeSessions, NWWS_DESCRIPTOR } from "@mark1russell7/alerts-source-nwws
 import { SWPC_KINDS } from "@mark1russell7/alerts-source-swpc";
 import { KEV_KINDS } from "@mark1russell7/alerts-source-cisa-kev";
 import { AWS_DESCRIPTOR } from "@mark1russell7/alerts-source-aws";
+import { BOM_SWS_DESCRIPTOR, bomTimeText } from "@mark1russell7/alerts-source-bom-sws";
 import { GCP_DESCRIPTOR } from "@mark1russell7/alerts-source-gcp";
 import { descriptorOf as statusPageDescriptor, STATUS_PAGES, type StatusPage } from "@mark1russell7/alerts-source-statuspage";
 import { ENERGY_CHARTS_MEASURES, SOURCE_ID as ENERGY_CHARTS_SOURCE, WINDOW_MINUTES } from "@mark1russell7/alerts-source-energy-charts";
 import { memoryQuotaStore, quotaGate, type Exchange, type Transport } from "polite-crawler/api";
 import { DEFAULT_POLICY } from "polite-crawler/politeness";
 import { afterEach, describe, expect, it } from "vitest";
-import { ACCOUNT_SOURCES, CHECKS_KEY, checksKeys, DAEMON_CHECK, daemonCheck, DELIVERY_TIMES, INSTANCE_CHANNELS, INSTANCE_CHECK, INSTANCE_EXPECTATIONS, INSTANCE_FETCH_LIMIT, INSTANCE_SOURCES, INSTANCE_TIMES, instanceCheck, instanceProblems, LOUD_PING_URL_KEY, nwwsKeys, nwwsSetup, openInstance, PING_URL_KEY, pingKeyOf, pingTargets, RANK_DELAY, RANK_FLOOR, SOURCE_POLICY, sourcePace, twilioSetup, USER_AGENT_NAME, type Instance, type InstanceOptions } from "./instance.ts";
+import { ACCOUNT_SOURCES, BOM_SWS_KEY, CHECKS_KEY, checksKeys, DAEMON_CHECK, daemonCheck, DELIVERY_TIMES, INSTANCE_CHANNELS, INSTANCE_CHECK, INSTANCE_EXPECTATIONS, INSTANCE_FETCH_LIMIT, INSTANCE_SOURCES, INSTANCE_TIMES, instanceCheck, instanceProblems, LOUD_PING_URL_KEY, nwwsKeys, nwwsSetup, openInstance, PING_URL_KEY, pingKeyOf, pingTargets, RANK_DELAY, RANK_FLOOR, SOURCE_POLICY, sourcePace, twilioSetup, USER_AGENT_NAME, type Instance, type InstanceOptions } from "./instance.ts";
 import { heartbeatGap } from "./heartbeat.ts";
 import { spendGates, spendQuota } from "./balance.ts";
 import { CLOCK_SKEW_LIMIT, COPY_TOKEN_KEY, EXCHANGE_EVERY, EXCHANGE_LIMIT } from "./copy.ts";
@@ -201,6 +202,15 @@ function awsAnswer(): string {
   return `<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"><channel><title><![CDATA[Amazon Web Services Service Status]]></title><link>https://status.aws.amazon.com/</link><ttl>5</ttl>${item}</channel></rss>`;
 }
 
+/**
+ * The answer of BoM to a POST of one method, made from the documented schema of the API. It holds no text of BoM. The
+ * K index has one value of the hour before the time of the tests. The alerts and the warnings are empty.
+ */
+function bomAnswer(url: URL): string {
+  if (!url.pathname.endsWith("/get-k-index")) return JSON.stringify({ data: [] });
+  return JSON.stringify({ data: [{ index: 2, valid_time: bomTimeText(T0 - 60 * MINUTE), analysis_time: bomTimeText(T0 - 50 * MINUTE) }] });
+}
+
 /** The status page of each host. */
 const STATUS_HOSTS: ReadonlyMap<string, StatusPage> = new Map(STATUS_PAGES.map((page) => [new URL(page.base).hostname, page]));
 
@@ -214,6 +224,8 @@ const STATUS_HOSTS: ReadonlyMap<string, StatusPage> = new Map(STATUS_PAGES.map((
  *
  * GFZ gives a quiet value of the index Kp for each interval of the window of the query (`gfzAnswer`). Energy-Charts gives
  * the nominal frequency for each second of the query (`energyChartsAnswer`). CISA gives a catalog with one live entry (`kevAnswer`).
+ * BoM gives one K index, and no alert and no warning (`bomAnswer`).
+ *
  * Each status page gives its summary (`statusPageAnswer`). Google Cloud gives one live incident (`gcpAnswer`). AWS gives
  * one live event (`awsAnswer`).
  *
@@ -237,6 +249,7 @@ function network(delay = 0) {
     if (statusPage !== undefined) return { status: 200, statusText: "OK", headers: { "content-type": "application/json; charset=utf-8" }, body: statusPageAnswer(statusPage) };
     if (url.hostname === "status.cloud.google.com") return { status: 200, statusText: "OK", headers: { "content-type": "application/json" }, body: gcpAnswer() };
     if (url.hostname === "status.aws.amazon.com") return { status: 200, statusText: "OK", headers: { "content-type": "application/rss+xml" }, body: awsAnswer() };
+    if (url.hostname === "sws-data.sws.bom.gov.au") return { status: 200, statusText: "OK", headers: { "content-type": "application/json" }, body: bomAnswer(url) };
     if (url.hostname === "www.cisa.gov") return { status: 200, statusText: "OK", headers: { "content-type": "application/json" }, body: kevAnswer() };
     if (url.hostname === "api.energy-charts.info") return { status: 200, statusText: "OK", headers: { "content-type": "application/json" }, body: energyChartsAnswer(url) };
     if (url.hostname === "www.tsunami.gov") {
@@ -574,9 +587,29 @@ describe("openInstance", () => {
     expect(instance.runtime.config.sources.some((source) => source.id.startsWith("statuspage-") || ["gcp-status", "aws-health"].includes(source.id))).toBe(false);
   });
 
+  it("reads BoM only when the secrets have its key, and the key goes only into the body of each POST to BoM", async () => {
+    const key = "bom-test-key-5d1f";
+    const { instance, clock, net } = open(store({ ...SECRETS, [BOM_SWS_KEY]: key }));
+    const pass = await finish(clock, instance.runtime.pass());
+    expect(pass.fetched).toEqual(["nws-api", "ipaws", "usgs", "emsc", "tsunami-ntwc", "tsunami-ptwc", "swpc", "gfz", "bom-sws", "energy-charts", "cisa-kev"]);
+    expect(instance.runtime.config.sources.map((source) => source.id)).toContain(BOM_SWS_DESCRIPTOR.id);
+    expect(pass.view.health.find((health) => health.source === BOM_SWS_DESCRIPTOR.id)?.state).toBe("healthy");
+    const bom = net.exchanges.filter((exchange) => new URL(exchange.url).hostname === "sws-data.sws.bom.gov.au");
+    expect(bom.map((exchange) => [exchange.method, new URL(exchange.url).pathname])).toEqual([
+      ["POST", "/api/v1/get-mag-alert"],
+      ["POST", "/api/v1/get-mag-warning"],
+      ["POST", "/api/v1/get-k-index"],
+    ]);
+    for (const exchange of bom) expect((JSON.parse(exchange.body ?? "{}") as { api_key?: unknown }).api_key).toBe(key);
+    for (const exchange of net.exchanges.filter((exchange) => !bom.includes(exchange))) expect(JSON.stringify(exchange)).not.toContain(key);
+    // The files of the runtime log hold no key: no observation, no failure and no record.
+    const folder = opened.at(-1)!.folder;
+    for (const name of readdirSync(folder)) expect(readFileSync(join(folder, name)).includes(key), name).toBe(false);
+  });
+
   it("keeps the times of the loop with each status page: each page has a longer interval than the shortest of the list", () => {
     const shortest = Math.min(...INSTANCE_SOURCES.map((source) => source.interval));
-    for (const descriptor of [GCP_DESCRIPTOR, AWS_DESCRIPTOR]) {
+    for (const descriptor of [GCP_DESCRIPTOR, AWS_DESCRIPTOR, BOM_SWS_DESCRIPTOR]) {
       expect(descriptor.interval, descriptor.id).toBeGreaterThanOrEqual(shortest);
       expect(INSTANCE_FETCH_LIMIT(descriptor), descriptor.id).toBe(shortest);
     }

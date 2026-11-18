@@ -69,6 +69,7 @@ import { createGfzSource, GFZ_DESCRIPTOR } from "@mark1russell7/alerts-source-gf
 import { createEnergyChartsSource, ENERGY_CHARTS_DESCRIPTOR } from "@mark1russell7/alerts-source-energy-charts";
 import { createKevSource, KEV_DESCRIPTOR } from "@mark1russell7/alerts-source-cisa-kev";
 import { AWS_DOMAIN, AWS_KIND, createAwsSource } from "@mark1russell7/alerts-source-aws";
+import { createBomSwsSource, type BomSwsFetchOptions } from "@mark1russell7/alerts-source-bom-sws";
 import { createGcpSource, GCP_DOMAIN, GCP_KIND } from "@mark1russell7/alerts-source-gcp";
 import { createStatusPageSource, pagesFor, watchReads, type StatusPage, type StatusPageFetchOptions } from "@mark1russell7/alerts-source-statuspage";
 import { createSwpcSource, SWPC_DESCRIPTOR } from "@mark1russell7/alerts-source-swpc";
@@ -286,6 +287,18 @@ const statusPageFactory =
     createStatusPageSource({ ...options, page });
 
 /**
+ * The name of the key of `secrets.env` that holds the API key of the Space Weather Services of BoM. With the key, the
+ * instance reads BoM: a third origin of the geomagnetic storm, apart from the SWPC and GFZ.
+ */
+export const BOM_SWS_KEY = "BOM_SWS_API_KEY";
+
+/** This function gives the factory of the BoM source with the key of the secrets. The key goes only into the body of each POST. */
+const bomFactory =
+  (apiKey: string) =>
+  (options: Omit<BomSwsFetchOptions, "apiKey">): SourceProcedures =>
+    createBomSwsSource({ ...options, apiKey });
+
+/**
  * The feeds of the cloud providers: Google Cloud and AWS. A report of such a feed has no area. Thus the instance reads a
  * feed only when one of its persons can get its reports, with the rule of a status page (`watchReads`).
  */
@@ -309,8 +322,10 @@ const PROVIDER_FEEDS = [
  *
  * The instance also reads the status pages that one of its persons can get (`pagesFor` of `source-statuspage`). They are
  * not in this list, because the persons choose them. The feeds of Google Cloud (`source-gcp`) and AWS (`source-aws`)
- * have the same rule. Each page and each feed have a longer interval than the shortest interval of the list. Thus the
- * times of the loop stay the same.
+ * have the same rule.
+ *
+ * BoM (`source-bom-sws`) is a source only when the secrets have its key. Thus it is not in the list. Each page, each
+ * feed and BoM have a longer interval than the shortest interval of the list. Thus the times of the loop stay the same.
  */
 export const INSTANCE_SOURCES: readonly SourceDescriptor[] = [
   NWS_DESCRIPTOR,
@@ -654,10 +669,11 @@ export interface Instance {
  *
  * - The sources are the NWS API, IPAWS, the USGS, EMSC, the two tsunami warning centers, the SWPC, GFZ,
  *   Energy-Charts and CISA KEV. The stream of NWWS-OI is a source when the secrets have the keys of the account of the
- *   copy (`nwwsSetup`). Each status page that one of the persons can get is a source (`pagesFor`). The feed of Google
- *   Cloud or AWS is a source when one of the persons can get its reports (`watchReads`).
+ *   copy (`nwwsSetup`). BoM is a source when the secrets have its key (`BOM_SWS_KEY`). Each status page that one of the
+ *   persons can get is a source (`pagesFor`). The feed of Google Cloud or AWS is a source when one of the persons can
+ *   get its reports (`watchReads`).
  * - Each source gets the codes of the places. It gets the position of a place only when the place shares it with that
- *   source. The USGS, EMSC, the centers, the SWPC, GFZ, Energy-Charts, CISA KEV, Google Cloud, AWS and the status pages ask
+ *   source. The USGS, EMSC, the centers, the SWPC, GFZ, BoM, Energy-Charts, CISA KEV, Google Cloud, AWS and the status pages ask
  *   for no place.
  * - The channels are Pushover, and the Twilio call channel when the secrets have its keys. Each time of the delivery comes
  *   from a fact of the channels.
@@ -673,6 +689,8 @@ export function openInstance(options: InstanceOptions): Instance {
   const pages = pagesFor(watches);
   // The feeds of the cloud providers have no area either. Their domains and their kinds choose them with the same rule.
   const feeds = PROVIDER_FEEDS.filter((feed) => watches.some((watch) => watchReads(watch, feed)));
+  // BoM gives its data only with a key of an account. With no key, the instance does not read BoM.
+  const bomKey = options.secret(BOM_SWS_KEY) ?? "";
   const factories = [
     createNwsSource,
     createIpawsSource,
@@ -681,6 +699,7 @@ export function openInstance(options: InstanceOptions): Instance {
     ...TSUNAMI.map((center) => tsunamiFactory(center)),
     createSwpcSource,
     createGfzSource,
+    ...(bomKey === "" ? [] : [bomFactory(bomKey)]),
     createEnergyChartsSource,
     createKevSource,
     ...feeds.map((feed) => feed.create),

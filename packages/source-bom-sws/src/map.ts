@@ -10,8 +10,8 @@
  * BoM is an origin apart from the NOAA and GFZ. The link rule of the merge (rule 3) joins its reports with the reports
  * of the SWPC and GFZ for one storm.
  *
- * Under the terms of BoM, use is personal or in an organisation, with no supply to another person. Thus the reports
- * hold only facts: the level, the times, the cause and the short forecast words. They hold no comments of the
+ * BoM permits personal use with no commercial use, under the license CC BY 4.0 with its attribution (`BOM_CREDIT`).
+ * The reports hold only facts: the level, the times, the cause and the short forecast words. They hold no comments of the
  * forecaster. The repository holds no answer of the API: the tests use answers made from the documented schema.
  */
 
@@ -31,8 +31,11 @@ export const BOM_SWS_KINDS: readonly string[] = [GEOMAGNETIC_STORM_KIND];
 /** The sender of each report. */
 export const BOM_SENDER = "Bureau of Meteorology, Space Weather Services";
 
-/** The credit that the copyright page of BoM asks for, at a minimum, for content with no license of its own. */
-export const BOM_CREDIT = "© Bureau of Meteorology";
+/**
+ * The attribution that BoM gave for its data. BoM permits personal use with no commercial use under the license CC BY 4.0,
+ * with these words.
+ */
+export const BOM_CREDIT = "Bureau of Meteorology, © Commonwealth of Australia. Licensed from the Commonwealth of Australia under a Creative Commons Attribution 4.0 International licence.";
 
 /** The page of the space weather services of BoM for a person. */
 export const BOM_PAGE = "https://www.sws.bom.gov.au/";
