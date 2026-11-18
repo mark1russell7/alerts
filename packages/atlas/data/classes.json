@@ -3166,7 +3166,7 @@
     "references": [
       "No hazard list names this class. Found by the search for missing classes."
     ],
-    "gap": "The CBP page showed only a title.",
+    "gap": null,
     "round": 1
   },
   {
@@ -3183,7 +3183,7 @@
       "FEMA Lifelines: Transportation > Highway/Roadway",
       "EM-DAT: Transport > Road"
     ],
-    "gap": "The WZDx page returned 403. Each state runs its own 511 system, and each system needs its own adapter.",
+    "gap": null,
     "round": 1
   },
   {
@@ -3213,7 +3213,7 @@
     "references": [
       "No hazard list names this class. Found by the search for missing classes."
     ],
-    "gap": "One source. FAA launch closure notices were not opened.",
+    "gap": null,
     "round": 1
   },
   {

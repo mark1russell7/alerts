@@ -691,5 +691,46 @@
       "dimensions": 2,
       "cause": "Round 11 adopts gfz-kp-hpo, a second origin of the geomagnetic storm. The cover of the adopted sources and of the paths goes from 51 to 53 classes. The cover of the origins goes from 1 to 3. Round 9 planned this source, so the gaps do not change."
     }
+  },
+  {
+    "round": 12,
+    "date": "2026-11-17",
+    "by": "One session, for the transport classes with no source, after the reads of round 1 that failed.",
+    "method": "One read of each endpoint and each page of terms with a script, with a DNS lookup of each host. The script records the status, the type, the size and the names of the headers of a content network.",
+    "lists": [
+      "The current border wait times of the CBSA on the open data portal of Canada: https://open.canada.ca/data/en/dataset/d4a716f5-a2fc-4c3c-88ed-451fe05900e4",
+      "The open data files of NDW: https://opendata.ndw.nu/",
+      "The traffic message API of Digitraffic: https://tie.digitraffic.fi/api/traffic-message/v1/messages",
+      "The API page of RocketLaunch.Live: https://www.rocketlaunch.live/api",
+      "The API of the Maritime Safety Information portal of the NGA: https://msi.nga.mil/api/publications/broadcast-warn"
+    ],
+    "queries": [],
+    "notes": [
+      "The border waits get two origins, one on each side of the border of Canada and the US: the XML file of the CBP and the CSV file of the CBSA.",
+      "The road incidents get two open sources: the traffic messages of Digitraffic (Finland, CC BY 4.0) and the situation file of NDW (the Netherlands, CC0). The NDW file uses DATEX II version 3, so the end of the version 2.3 files in 2027 is no longer a risk.",
+      "The launches get a second list: the free URL of RocketLaunch.Live gives the next five launches with no key.",
+      "The portal of the NGA answered 503 with a page of maintenance. UKMTO answered 403 with a bot check, and the research does not go around a bot check. The navigational warnings and the threats to ships stay gaps.",
+      "The Digitraffic marine API has no nautical warnings in its OpenAPI document of 2026-11-17.",
+      "The RSS feed of MARAD holds pages of 2020, not the advisories. The advisories of MARAD are a web page."
+    ],
+    "studies": [],
+    "measures": {
+      "classes": 201,
+      "gaps": 109,
+      "cover": {
+        "adopted": 53,
+        "paths": 53,
+        "origins": 3
+      },
+      "total": {
+        "adopted": 136,
+        "paths": 136,
+        "origins": 58
+      },
+      "unknownOrigins": 4,
+      "unknownPaths": 30,
+      "dimensions": 5,
+      "cause": "Round 12 plans cbsa-bwt and rocketlaunch-live, and moves cbp-bwt, digitraffic-road and ndw-open-data from later to plan. The gaps go from 112 to 109. The dimensions with two live sources go from 2 to 5. This is a gain of research: no adapter changed, so the layers do not change."
+    }
   }
 ]
