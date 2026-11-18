@@ -16,10 +16,10 @@ import { COW_PHENOMENA } from "./cow.ts";
 import type { Range, RatesFile } from "./rates.ts";
 
 /**
- * The formats of a committed file that the gate reads. The formats 3 and 4 change only the section `under`, and the gate
- * reads only the sections `cow` and `ncei`. Thus a committed file of format 2 or 3 is still a base for the gate.
+ * The formats of a committed file that the gate reads. The formats 3, 4 and 5 change only the section `under`, and the
+ * gate reads only the sections `cow` and `ncei`. Thus a committed file of format 2, 3 or 4 is still a base for the gate.
  */
-export const GATE_FORMATS: readonly string[] = ["alerts-rates/2", "alerts-rates/3", "alerts-rates/4"];
+export const GATE_FORMATS: readonly string[] = ["alerts-rates/2", "alerts-rates/3", "alerts-rates/4", "alerts-rates/5"];
 
 /** The sections of a file of the base rates that the gate reads. */
 export type GateFile = Pick<RatesFile, "cow" | "ncei">;

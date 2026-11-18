@@ -14,7 +14,7 @@
 import { PHENOMENA, STATE_POSTAL } from "@mark1russell7/alerts-format-nws";
 
 import { NCEI_KINDS, nceiKind, type HarmRow, type NceiLocalTime, type YearHarm } from "./ncei.ts";
-import { ALERT_SIGNIFICANCES, MARINE_PHENOMENA, MARINE_REASON, NATIONAL_NUMBERS, WATCHWARN_PARAMS, WATCHWARN_URL, type AlertCounts, type AlertSignificance, type NumberingCheck } from "./watchwarn.ts";
+import { ALERT_SIGNIFICANCES, MARINE_PHENOMENA, MARINE_REASON, NATIONAL_NUMBERS, WATCHWARN_PARAMS, WATCHWARN_URL, type AlertCounts, type AlertSignificance, type CodeCounts, type NumberingCheck } from "./watchwarn.ts";
 import { eachYear, type Years } from "./years.ts";
 
 /**
@@ -327,6 +327,11 @@ export interface UnderSection {
   readonly rows: number;
   /** The rows with each fault. */
   readonly faults: Readonly<Record<string, number>>;
+  /**
+   * The distinct UGC codes of the rows of each year, in counties and in zones (`AlertCounts.codes`). A file of format 4
+   * or earlier does not have them.
+   */
+  readonly codes?: Readonly<Record<string, CodeCounts>>;
   /** The events with harm of the years that the join cannot place, by reason. */
   readonly unplaced: Readonly<Record<string, HarmCount>>;
   /** The measure of each alert kind with one or more alerts, in the order of the codes. */
@@ -445,6 +450,7 @@ export function underSection(input: UnderInput): UnderSection {
     numbering: input.counts.numbering,
     rows: input.counts.rows,
     faults: input.counts.faults,
+    codes: input.counts.codes,
     unplaced: sorted(unplaced),
     kinds: sorted(kinds),
   };
