@@ -932,6 +932,16 @@ The shadow score (`shadowScore`) is the first step. It operates next to the tabl
 - A factor that the priors do not give makes a score with no read. The score names each missing factor. It does not take 0 or a default value.
 - `assessWithShadow` adds the score as the last reason of an assessment with a reason of the table. The level and the other reasons stay those of `assess`. A seeded gate test holds this.
 
+The priors come from the base rates of the package `rates` (`priorsOf`). The file `packages/rates/data/priors.json` holds them. A test holds it equal to the priors of `data/rates.json`:
+
+- The verified share of a kind is the own share of IEM Cow. It is the share of the warnings that a storm report of the same hazard verified. Its interval is the gate interval of the share.
+- A share with a reason of no read gives no prior. A phenomenon that Cow does not verify gives no prior.
+- The deaths of one event of a kind are its deaths over its events. Each sum adds the NCEI types of the kind. The injuries are the same.
+- The interval of the deaths and of the injuries is the hull of two intervals and the value. The exact Poisson interval of the count over the events (`poissonInterval` of `@mark1russell7/rigor-statistics`) holds a small count. Thus a count of 0 gets a wide interval, not a point at 0.
+- The percentile bootstrap over the years holds the change from year to year. Its seed comes from the kind and the field. It applies only when each year has an event. Otherwise a draw of the years can have no event.
+- A kind with no event in the years gives no prior of deaths and no prior of injuries. Thus the score has no read for that kind.
+- The probability of a CAP certainty is the middle of its band. Its interval is the band.
+
 ## The service
 
 The runtime operates as one service of `@mark1russell7/service`. Its entry is `packages/runtime/src/main.ts`. Only that file uses `run()`, and only that file reads a real clock.
