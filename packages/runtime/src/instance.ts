@@ -64,6 +64,7 @@ import { createIpawsSource, IPAWS_DESCRIPTOR, WEA_EXPECTATION } from "@mark1russ
 import { createShapeStore, type ShapeCache, type ShapeStore } from "@mark1russell7/alerts-shapes-nws";
 import { createNwsSource, NWS_DESCRIPTOR } from "@mark1russell7/alerts-source-nws-api";
 import { createNwwsSource, SOURCE_ID as NWWS_SOURCE, type NwwsAccount, type OpenSession } from "@mark1russell7/alerts-source-nwws";
+import { createGfzSource, GFZ_DESCRIPTOR } from "@mark1russell7/alerts-source-gfz";
 import { createSwpcSource, SWPC_DESCRIPTOR } from "@mark1russell7/alerts-source-swpc";
 import { createTsunamiSource, descriptorOf as tsunamiDescriptor, TSUNAMI_CENTERS, type TsunamiCenter, type TsunamiFetchOptions } from "@mark1russell7/alerts-source-tsunami";
 import { createUsgsSource, USGS_DESCRIPTOR } from "@mark1russell7/alerts-source-usgs";
@@ -78,7 +79,7 @@ import { CLOCK_SKEW_LIMIT, COPY_FILE, COPY_TOKEN_KEY, EXCHANGE_EVERY, EXCHANGE_L
 import { overdueLimit, type DeliveryOptions } from "./delivery.ts";
 import { copyDrills } from "./drills.ts";
 import type { RuntimeLog } from "./log.ts";
-import { createLoop, loopTimes, type LoopTimes, type RuntimeLoop } from "./loop.ts";
+import { createLoop, loopTimes, shortestFetchLimit, type LoopTimes, type RuntimeLoop } from "./loop.ts";
 import { outageDeploy, outageDeployWorker, outageSetup, type OutageDeployWorker } from "./outage.ts";
 import { exchangeLoop, exchangeWorker, type EntriesSource, type ExchangeCall, type ExchangeRound, type ExchangeWorker } from "./peers.ts";
 import { channelQuota } from "./quota.ts";
@@ -276,6 +277,8 @@ const tsunamiFactory =
  * The descriptors of the sources of the instance. The function `describe` of each source gives the same descriptor.
  * The USGS and EMSC give the earthquakes. Merge rule 3 (`linkRule` of the core) joins their reports of one event.
  * The two tsunami warning centers give the tsunami messages. The SWPC gives the space weather messages.
+ *
+ * GFZ gives the index Kp, a second origin of the geomagnetic storms. Merge rule 3 joins its storms to the storms of the SWPC.
  */
 export const INSTANCE_SOURCES: readonly SourceDescriptor[] = [
   NWS_DESCRIPTOR,
@@ -284,6 +287,7 @@ export const INSTANCE_SOURCES: readonly SourceDescriptor[] = [
   EMSC_DESCRIPTOR,
   ...TSUNAMI.map((center) => tsunamiDescriptor(center)),
   SWPC_DESCRIPTOR,
+  GFZ_DESCRIPTOR,
 ];
 
 /** The expectations of the instance. The field `expectations` of the configuration sets their `since`. */
@@ -312,13 +316,19 @@ export function sourcePace(clock: Clock, wall: WallClock, sources: number): Pace
 const CALL_LIMIT = Math.max(PUSHOVER_TIMEOUT_MS, TWILIO_CALL_TIMEOUT_MS);
 
 /**
- * The times of the loop of the instance. They come from the intervals of the sources and the time
+ * The longest time of one fetch of a source of the instance: its interval, up to the shortest interval of the sources.
+ * Thus the fetch of GFZ, with an interval of 10 minutes, does not hold the messages of the NWS for 10 minutes.
+ */
+export const INSTANCE_FETCH_LIMIT: (source: SourceDescriptor) => Duration = shortestFetchLimit(INSTANCE_SOURCES);
+
+/**
+ * The times of the loop of the instance. They come from the fetch limits of the sources and the time
  * limit of the Pushover channel. The host reads them before a start: the stop grace holds one pass.
  *
  * The stream of NWWS-OI has a shorter interval. It makes only the cap of the retry of its instance shorter, thus these
  * times stay a bound of the times of each instance.
  */
-export const INSTANCE_TIMES: LoopTimes = loopTimes(INSTANCE_SOURCES, { delivery: { callLimit: CALL_LIMIT, retry: CALL_LIMIT } });
+export const INSTANCE_TIMES: LoopTimes = loopTimes(INSTANCE_SOURCES, { delivery: { callLimit: CALL_LIMIT, retry: CALL_LIMIT }, fetchLimit: INSTANCE_FETCH_LIMIT });
 
 /** The times of the delivery step of an instance. The fault cases of the channel use these times. */
 export const DELIVERY_TIMES: Pick<DeliveryOptions, "pollEvery" | "retry" | "callLimit" | "flightLimit"> & { readonly overdueAfter: Duration } = {
@@ -512,8 +522,8 @@ export interface InstanceOptions {
   /** The loop gives each failed pass to this function. */
   readonly onError?: (error: unknown, failures: number) => void;
   /**
-   * This function gives the longest time of one fetch of a source. The default is the interval of the
-   * source. A test with a fake clock gives a long limit, because a slow runner moves the fake clock during a fetch.
+   * This function gives the longest time of one fetch of a source. The default is `INSTANCE_FETCH_LIMIT`. A test with a
+   * fake clock gives a long limit, because a slow runner moves the fake clock during a fetch.
    */
   readonly fetchLimit?: RuntimeOptions["fetchLimit"];
   /**
@@ -603,10 +613,10 @@ export interface Instance {
  * problem. A problem is a missing token, a key with a bad form, or a place that no regional source covers.
  * The message names ids, fields and the names of secrets, and no value.
  *
- * - The sources are the NWS API, IPAWS, the USGS, EMSC, the two tsunami warning centers and the SWPC. The stream of
+ * - The sources are the NWS API, IPAWS, the USGS, EMSC, the two tsunami warning centers, the SWPC and GFZ. The stream of
  *   NWWS-OI is a source when the secrets have the keys of the account of the copy (`nwwsSetup`). Each source gets the
  *   codes of the places. It gets the position of a place only when the place shares it with that source. The USGS,
- *   EMSC, the centers and the SWPC ask for no place.
+ *   EMSC, the centers, the SWPC and GFZ ask for no place.
  * - The channels are Pushover, and the Twilio call channel when the secrets have its keys. Each time of the delivery comes
  *   from a fact of the channels.
  * - A spend entry of a channel gives its cap and the watch of the balance of its account.
@@ -616,7 +626,7 @@ export function openInstance(options: InstanceOptions): Instance {
   const { clock } = options;
   // A change of the wall clock of CLOCK_STEP_ABOVE or less is a drift. A larger change is a step of the clock.
   const wall = frameClock(options.wall, clock, { driftLimit: CLOCK_STEP_ABOVE });
-  const factories = [createNwsSource, createIpawsSource, createUsgsSource, createEmscSource, ...TSUNAMI.map((center) => tsunamiFactory(center)), createSwpcSource] as const;
+  const factories = [createNwsSource, createIpawsSource, createUsgsSource, createEmscSource, ...TSUNAMI.map((center) => tsunamiFactory(center)), createSwpcSource, createGfzSource] as const;
   const pace = sourcePace(clock, wall, factories.length);
   // One User-Agent for each request of the instance: the sources and the store of shapes.
   const agent = userAgent(options.config.config.contact);
@@ -750,13 +760,13 @@ export function openInstance(options: InstanceOptions): Instance {
       shapes.afterPass(pass.view.incidents, earliest(runtime.config.sources.map((descriptor) => nextFetch(runtime.state(), descriptor))));
       await options.onPass?.(pass);
     },
-    ...(options.fetchLimit === undefined ? {} : { fetchLimit: options.fetchLimit }),
+    fetchLimit: options.fetchLimit ?? INSTANCE_FETCH_LIMIT,
   });
   const loop = createLoop({
     pass: (stop) => runtime.pass(stop),
     clock,
     wall,
-    times: loopTimes(runtime.config.sources, { delivery }),
+    times: loopTimes(runtime.config.sources, { delivery, fetchLimit: INSTANCE_FETCH_LIMIT }),
     ...(options.onError === undefined ? {} : { onError: options.onError }),
   });
   // The map assesses each live incident with the policy of the delivery. Thus the level on the map is the level of the person.

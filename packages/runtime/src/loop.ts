@@ -42,6 +42,17 @@ export function loopTimes<S extends { readonly interval: Duration }>(sources: re
   return { passLimit: Math.max(...fetches) + calls, retryBase: Math.min(limits.delivery?.retry ?? retryCap, retryCap), retryCap };
 }
 
+/**
+ * This function gives the limit of each fetch: the interval of its source, up to the shortest interval of the sources.
+ * A pass waits for each of its fetches. Thus a source with a long interval holds the other sources for one short
+ * interval at most, and the pass limit of `loopTimes` stays short.
+ */
+export function shortestFetchLimit<S extends { readonly interval: Duration }>(sources: readonly S[]): (source: S) => Duration {
+  if (sources.length === 0) throw new Error("The limit needs a source. Without one, no interval sets it.");
+  const shortest = Math.min(...sources.map((source) => source.interval));
+  return (source) => Math.min(source.interval, shortest);
+}
+
 /** The options of the loop. */
 export interface LoopOptions {
   /** This function does one pass: `Runtime.pass`. The signal of the iteration aborts at the drain, at the bound of the pass and at the close. */

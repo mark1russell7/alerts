@@ -2,7 +2,7 @@ import { fakeClock, type FakeClock, type WallClock } from "@mark1russell7/algebr
 import type { Instant } from "@mark1russell7/alerts";
 import { detachedLifecycle } from "@mark1russell7/service/testing";
 import { afterEach, describe, expect, it } from "vitest";
-import { createLoop, loopTimes, type LoopTimes, type RuntimeLoop } from "./loop.ts";
+import { createLoop, loopTimes, shortestFetchLimit, type LoopTimes, type RuntimeLoop } from "./loop.ts";
 import type { Pass } from "./runtime.ts";
 
 const SECOND = 1000;
@@ -80,6 +80,19 @@ describe("loopTimes", () => {
     // A retry of the delivery that is longer than the shortest interval does not make a failed pass wait longer.
     expect(loopTimes(sources, { delivery: { callLimit: SECOND, retry: 2 * MINUTE } }).retryBase).toBe(MINUTE);
     expect(() => loopTimes([], {})).toThrow("The loop needs a source.");
+  });
+});
+
+describe("shortestFetchLimit", () => {
+  it("bounds each fetch by its interval, up to the shortest interval, so a slow source does not make the pass long", () => {
+    const sources = [{ interval: 15 * SECOND }, { interval: MINUTE }, { interval: 10 * MINUTE }];
+    const limit = shortestFetchLimit(sources);
+    expect(sources.map(limit)).toEqual([15 * SECOND, 15 * SECOND, 15 * SECOND]);
+    const polled = shortestFetchLimit(sources.slice(1));
+    expect(sources.map(polled)).toEqual([15 * SECOND, MINUTE, MINUTE]);
+    expect(loopTimes(sources.slice(1), { fetchLimit: polled }).passLimit).toBe(MINUTE);
+    expect(loopTimes(sources.slice(1), {}).passLimit).toBe(10 * MINUTE);
+    expect(() => shortestFetchLimit([])).toThrow("The limit needs a source.");
   });
 });
 
