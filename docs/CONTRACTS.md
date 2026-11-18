@@ -959,9 +959,11 @@ A new source starts in the observe mode (AL-73). It sends nothing below `life-sa
 - The mode of a source is an event `mode` of the log of the copy. Its id is `mode:<source>:<mode>`, so each mode keeps its first time.
 - A source that went live does not observe again. Each copy judges its own sources, so the event is not shared.
 - The first start with modes seeds each source of the configuration as `live`. A source of context only starts in the observe mode.
-- An incident is held when each of its reports comes from a source that observes, and it has no delivery.
+- An incident is held when each of its reports comes from a source that observes. A source that this copy does not operate counts as live.
+- An incident with a delivery, an escalation start or a hold is not held. A send in flight has a start and no delivery.
 - A held incident starts no escalation and no digest entry. The cut comes before the routes and the digest of the delivery step.
 - An incident that reaches a person at `life-safety` goes out. The operator gets a note: the kind `system.health.observe-life-safety`.
+- The note stays open while the incident reaches a person at `life-safety`, also after its send.
 - The verdict (`observeVerdict`) replays the incidents of the source from the last 24 hours. Each person gets the level of each incident.
 - Each cap is the send limit of the person times `limitShare`, with 1 at least. The digest cap is 20 entries in one day.
 - The verdict passes when the source has 24 hours in the observe mode and no person passes a cap. Then the source goes live.

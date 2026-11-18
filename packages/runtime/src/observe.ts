@@ -17,6 +17,7 @@ import {
   type ObserveCut,
   type ObserveVerdict,
   type PersonWatch,
+  type ReportId,
   type SendLimits,
   type SourceDescriptor,
   type SourceId,
@@ -39,6 +40,9 @@ export function modeEvent(source: SourceId, mode: SourceMode, reason: string, at
  * - At the first start with modes, the state has no mode. Each source of the configuration operated before this build, thus it
  *   goes live with the reason `seed`. A source of context only (`contextSource`) starts in the observe mode.
  * - After that, each source with no mode is new, and it starts in the observe mode.
+ *
+ * A copy with no source at its first start writes no mode. Thus its first sources get the seed later. The state keeps no
+ * other mark of the seed.
  */
 export function modeEvents(state: Pick<RuntimeState, "modes">, sources: readonly SourceDescriptor[], at: Instant): ModeEvent[] {
   const seed = Object.keys(state.modes).length === 0;
@@ -99,12 +103,18 @@ export function observeStep(state: Pick<RuntimeState, "modes" | "merge">, incide
   return { verdicts, events };
 }
 
-/** This function gives the cut of the incidents of a delivery step (`observeCut` of the core), with the sources that observe in the state. */
-export function cutIncidents(state: Pick<RuntimeState, "modes">, merge: MergeState, found: readonly Incident[], parts: ObserveParts, at: Instant): ObserveCut {
+/**
+ * This function gives the cut of the incidents of a delivery step (`observeCut` of the core). It takes the sources that
+ * observe, and the escalation starts and the holds, from the state.
+ */
+export function cutIncidents(state: Pick<RuntimeState, "modes" | "starts" | "holds">, merge: MergeState, found: readonly Incident[], parts: ObserveParts, at: Instant): ObserveCut {
+  const observing = new Set(observingSources(state).keys());
+  if (observing.size === 0) return { sent: found, held: [], lifeSafety: [] };
   return observeCut({
     incidents: found,
     state: merge,
-    observing: new Set(observingSources(state).keys()),
+    observing,
+    started: new Set<ReportId>([...state.starts, ...state.holds].map((entry) => entry.incident)),
     people: parts.people,
     places: parts.places,
     ...(parts.assess === undefined ? {} : { assess: parts.assess }),

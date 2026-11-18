@@ -1,10 +1,14 @@
 import { fakeWallClock } from "@mark1russell7/algebra/clock";
 import {
+  incidents,
   reportId,
   type AssessPolicy,
   type ChannelId,
   type ChannelProcedures,
+  type EscalationHold,
   type EscalationPolicy,
+  type EscalationStart,
+  type MergeState,
   type Message,
   type Observation,
   type ObservationId,
@@ -20,7 +24,7 @@ import {
 } from "@mark1russell7/alerts";
 import { describe, expect, it } from "vitest";
 import { openRuntimeLog, type RuntimeLog } from "./log.ts";
-import { modeEvent, modeEvents, observingSources, SEED_REASON } from "./observe.ts";
+import { cutIncidents, modeEvent, modeEvents, observingSources, SEED_REASON } from "./observe.ts";
 import { openRuntime, type Pass, type RuntimeOptions } from "./runtime.ts";
 import { rebuild } from "./state.ts";
 
@@ -185,6 +189,22 @@ describe("the fold of the mode events", () => {
   });
 });
 
+describe("cutIncidents", () => {
+  it("cuts nothing with no source that observes, and holds no incident with an escalation start or a hold", () => {
+    const seen: Observation = { id: "obs" as ObservationId, source: NEW, fetched: T0, contentType: "application/json", body: "[]", transport: { latency: 0 } };
+    const reports = [report(seen, { key: "b1", issued: T0, severity: "moderate" }), report(seen, { key: "b2", issued: T0, severity: "moderate" }), report(seen, { key: "b3", issued: T0, severity: "moderate" })];
+    const merge: MergeState = { reports, deliveries: [], acks: [], ends: [], retired: [] };
+    const found = incidents(merge, T0);
+    const parts = { people: [RECIPIENT.watch], places: [KANSAS], assess: BY_SEVERITY };
+    const start: EscalationStart = { incident: reports[0]!.id, level: "notice", person: PERSON, at: T0 };
+    const hold: EscalationHold = { incident: reports[1]!.id, level: "notice", person: PERSON, episode: 0, at: T0 };
+    expect(cutIncidents({ modes: {}, starts: [start], holds: [hold] }, merge, found, parts, T0)).toEqual({ sent: found, held: [], lifeSafety: [] });
+    const cut = cutIncidents({ modes: { [NEW]: { since: T0 } }, starts: [start], holds: [hold] }, merge, found, parts, T0);
+    expect(cut.sent.map((incident) => incident.anchor)).toEqual([reports[0]!.id, reports[1]!.id]);
+    expect(cut.held.map((incident) => incident.anchor)).toEqual([reports[2]!.id]);
+  });
+});
+
 describe("the observe mode in the passes of the runtime (AL-73)", () => {
   it("holds each report of a new source, reads its start from the log after a restart, and sends after one day with no limit passed", async () => {
     const { clock, log, push, open, plan } = world();
@@ -251,7 +271,7 @@ describe("the observe mode in the passes of the runtime (AL-73)", () => {
     log.close();
   });
 
-  it("sends a life-safety incident of a new source, and gives a system note for it in the next pass", async () => {
+  it("sends a life-safety incident of a new source, and keeps a system note for it while the incident lives", async () => {
     const { clock, log, push, open, plan } = world();
     await open([OLD]).pass();
     await clock.advance(MINUTE);
@@ -263,6 +283,15 @@ describe("the observe mode in the passes of the runtime (AL-73)", () => {
     await clock.advance(1);
     const next = await runtime.pass();
     expect(kindsOf(next, "system.health.observe")).toEqual([["alert", "system.health.observe-life-safety"]]);
+    // The incident has a delivery now. The note stays open, because the incident still reaches the person at life-safety.
+    await clock.advance(MINUTE);
+    expect(kindsOf(await runtime.pass(), "system.health.observe")).toEqual([]);
+    expect(Object.keys(runtime.state().lines.open).filter((line) => line.startsWith("observe/"))).toEqual([`observe/${NEW}/life-safety`]);
+    // The incident expires after three days. The note ends in the pass after.
+    await clock.advance(3 * DAY);
+    await runtime.pass();
+    await clock.advance(1);
+    expect(kindsOf(await runtime.pass(), "system.health.observe")).toEqual([["cancel", "system.health.observe-life-safety"]]);
     expect(titles(push.sent)).toEqual(["Flood b1"]);
     log.close();
   });

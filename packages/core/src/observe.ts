@@ -34,8 +34,13 @@ export interface ObserveCutInput {
   /** The incidents of the merge state at `at`. */
   readonly incidents: readonly Incident[];
   readonly state: MergeState;
-  /** The sources in the observe mode. */
+  /** The sources in the observe mode. A source that this copy does not operate is not in the set, thus it counts as live. */
   readonly observing: ReadonlySet<SourceId>;
+  /**
+   * The reports of the incidents with an escalation start or a hold of the send limit. A send in flight has a start and no
+   * delivery. The cut does not hold these incidents, because the phone can have the message.
+   */
+  readonly started?: ReadonlySet<ReportId>;
   readonly people: readonly PersonWatch[];
   readonly places: readonly WatchedPlace[];
   readonly assess?: AssessPolicy;
@@ -48,7 +53,10 @@ export interface ObserveCut {
   readonly sent: readonly Incident[];
   /** The incidents that the observe mode holds. */
   readonly held: readonly Incident[];
-  /** The incidents of observing sources only that go on, because they reach a person at `life-safety`. Each one needs a note to the operator. */
+  /**
+   * The incidents of observing sources only that go on, because they reach a person at `life-safety`. Each one needs a note to
+   * the operator. An incident stays in the list after its send, while it reaches a person at `life-safety`.
+   */
   readonly lifeSafety: readonly Incident[];
 }
 
@@ -59,10 +67,11 @@ const reportsOf = (incident: Incident): readonly ReportId[] => [incident.anchor,
  * This function divides the incidents for the route and the digest. The observe mode holds an incident when each of its
  * reports comes from a source in the observe mode. These incidents go on:
  *
- * - An incident with a report of a live source, or with a report that the state does not have.
- * - An incident with a delivery in the log. Its escalation started before the observe mode, and the route continues or ends it.
+ * - An incident with a report of a live source, of a source that this copy does not operate, or that the state does not have.
  * - An incident that reaches a person at `life-safety`. A missed real warning is worse than a wrong one. The incident goes to
  *   the route for each person, and the send limit holds the lower levels. The operator gets a note of it (`lifeSafety`).
+ * - An incident with a delivery, an escalation start or a hold, for example a `life-safety` incident that went to a lower
+ *   level. The route continues or ends its escalation.
  */
 export function observeCut(input: ObserveCutInput): ObserveCut {
   if (input.observing.size === 0) return { sent: input.incidents, held: [], lifeSafety: [] };
@@ -77,7 +86,7 @@ export function observeCut(input: ObserveCutInput): ObserveCut {
       const source = sourceOf.get(id);
       return source !== undefined && input.observing.has(source);
     });
-    if (!observed || ids.some((id) => delivered.has(id))) {
+    if (!observed) {
       sent.push(incident);
       continue;
     }
@@ -85,6 +94,8 @@ export function observeCut(input: ObserveCutInput): ObserveCut {
     if (levels.includes("life-safety")) {
       sent.push(incident);
       lifeSafety.push(incident);
+    } else if (ids.some((id) => delivered.has(id) || input.started?.has(id) === true)) {
+      sent.push(incident);
     } else {
       held.push(incident);
     }

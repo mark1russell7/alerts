@@ -91,6 +91,20 @@ describe("observeCut", () => {
     expect(found.lifeSafety).toEqual([]);
   });
 
+  it("sends an incident of a source that this copy does not run, for example a report that the copy imported", () => {
+    // The copy observes its own new source. The report comes from a source of another copy, which is not in the set.
+    const imported = report(1, T0, { source: "home-only" as SourceId });
+    expect(cut([imported], [NEW]).sent.map((incident) => incident.anchor)).toEqual([idOf(1)]);
+    expect(cut([imported], []).sent.map((incident) => incident.anchor)).toEqual([idOf(1)]);
+  });
+
+  it("sends an incident with an escalation start or a hold and no delivery, because a send can be in flight", () => {
+    const state = stateOf([report(1, T0), report(2, T0)]);
+    const found = observeCut({ incidents: incidents(state, T0), state, observing: new Set([NEW]), started: new Set([idOf(1)]), people: [watch], places, assess: BY_SEVERITY, at: T0 });
+    expect(found.sent.map((incident) => incident.anchor)).toEqual([idOf(1)]);
+    expect(found.held.map((incident) => incident.anchor)).toEqual([idOf(2)]);
+  });
+
   it("sends an incident with a report of a live source, or with a report that the state does not have", () => {
     const state = stateOf([report(1, T0)]);
     const [one] = incidents(state, T0);
@@ -99,9 +113,13 @@ describe("observeCut", () => {
     expect(found.sent).toEqual([mixed]);
   });
 
-  it("sends an incident with a delivery in the log, because its escalation started before the observe mode", () => {
+  it("sends an incident with a delivery in the log, and keeps a life-safety incident in the list of the notes after its send", () => {
     const delivery = { key: "d", incident: idOf(1), level: "notice", person, channel: "pushover", step: 0, at: T0, receipt: {} } as unknown as Delivery;
-    expect(cut([report(1, T0)], [NEW], [delivery]).sent.map((incident) => incident.anchor)).toEqual([idOf(1)]);
+    const lower = cut([report(1, T0)], [NEW], [delivery]);
+    expect(lower.sent.map((incident) => incident.anchor)).toEqual([idOf(1)]);
+    expect(lower.lifeSafety).toEqual([]);
+    const sent = cut([report(1, T0, { severity: "extreme" })], [NEW], [{ ...delivery, level: "life-safety" }]);
+    expect(sent.lifeSafety.map((incident) => incident.anchor)).toEqual([idOf(1)]);
   });
 
   it("sends a live life-safety incident of an observing source, and names it for a note to the operator", () => {
