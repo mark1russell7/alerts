@@ -1,0 +1,139 @@
+import { readFileSync } from "node:fs";
+import { scorePriorsSchema, shadowScore, type ScorePriors } from "@mark1russell7/alerts";
+import { describe, expect, it } from "vitest";
+
+import { MIN_RATE_COUNT, priorsOf } from "./priors.ts";
+import type { RatesFile } from "./rates.ts";
+
+const RATES_TEXT = readFileSync(new URL("../data/rates.json", import.meta.url), "utf8");
+const PRIORS_TEXT = readFileSync(new URL("../data/priors.json", import.meta.url), "utf8");
+const RATES = JSON.parse(RATES_TEXT) as RatesFile;
+const PRIORS = priorsOf(RATES);
+
+type Mutable<T> = { -readonly [K in keyof T]: Mutable<T[K]> };
+const copy = (): Mutable<RatesFile> => structuredClone(RATES) as Mutable<RatesFile>;
+const text = (priors: ScorePriors): string => `${JSON.stringify(priors, null, 2)}\n`;
+
+describe("the committed priors", () => {
+  it("are the priors of the committed rates, to the byte", () => {
+    expect(PRIORS_TEXT).toBe(text(PRIORS));
+  });
+
+  it("pass the schema of the core", () => {
+    expect(scorePriorsSchema.parse(JSON.parse(PRIORS_TEXT))).toEqual(PRIORS);
+  });
+
+  it("give a shadow score with a read for a tornado warning", () => {
+    const score = shadowScore({ kind: { code: "met.tornado", significance: "warning", label: "Tornado Warning" }, certainty: "likely" }, PRIORS);
+    expect(score.read).toBe(true);
+    if (!score.read) return;
+    expect(score.probability.from).toEqual({ table: "kinds", key: "met.tornado" });
+    expect(score.deaths.from).toEqual({ table: "kinds", key: "met.tornado" });
+  });
+});
+
+describe("the verified share", () => {
+  it("is the own share of Cow, with its gate interval", () => {
+    const tornado = RATES.cow.phenomena.TO;
+    expect(PRIORS.kinds[tornado.kind]?.verified).toEqual({ value: tornado.ownShare.value, low: tornado.ownShare.gate[0], high: tornado.ownShare.gate[1] });
+  });
+
+  it("is absent when the gate cannot read the share", () => {
+    const rates = copy();
+    rates.cow.phenomena.TO.ownShare.noRead = "too few verified or unverified warnings in a year (2021: 3 verified of 9)";
+    expect(priorsOf(rates).kinds["met.tornado"]?.verified).toBeUndefined();
+    expect(priorsOf(rates).kinds["met.tornado"]?.deaths).toEqual(PRIORS.kinds["met.tornado"]?.deaths);
+  });
+
+  it("does not come from the phenomena that Cow does not verify", () => {
+    for (const rate of Object.values(RATES.cow.unverified)) expect(PRIORS.kinds[rate.kind]?.verified).toBeUndefined();
+  });
+
+  it("refuses two phenomena of one kind", () => {
+    const rates = copy();
+    rates.cow.phenomena.SV.kind = rates.cow.phenomena.TO.kind;
+    expect(() => priorsOf(rates)).toThrow(/Two Cow phenomena/);
+  });
+});
+
+describe("the deaths and injuries of one event", () => {
+  it("sum the event types of a kind over each year", () => {
+    const types = Object.values(RATES.ncei.types).filter((rate) => rate.kind === "met.thunderstorm.severe");
+    expect(types.length).toBeGreaterThan(1);
+    const sum = (part: "events" | "deaths" | "injuries"): number => types.reduce((total, rate) => total + Object.values(rate.byYear).reduce((s, year) => s + year[part], 0), 0);
+    expect(PRIORS.kinds["met.thunderstorm.severe"]?.deaths?.value).toBe(sum("deaths") / sum("events"));
+    expect(PRIORS.kinds["met.thunderstorm.severe"]?.injuries?.value).toBe(sum("injuries") / sum("events"));
+  });
+
+  it("have an interval that holds the value", () => {
+    for (const prior of Object.values(PRIORS.kinds)) {
+      for (const estimate of [prior.deaths, prior.injuries]) {
+        if (estimate === undefined) continue;
+        expect(estimate.low).toBeLessThanOrEqual(estimate.value);
+        expect(estimate.value).toBeLessThanOrEqual(estimate.high);
+        expect(estimate.low).toBeGreaterThanOrEqual(0);
+      }
+    }
+  });
+
+  it(`are absent for a kind with fewer than ${String(MIN_RATE_COUNT)} counts, and the other count stays`, () => {
+    const rates = copy();
+    const tornado = rates.ncei.types["Tornado"];
+    if (tornado === undefined) throw new Error("The rates have no Tornado type.");
+    const years = Object.keys(tornado.byYear);
+    for (const [index, year] of years.entries()) {
+      const counts = tornado.byYear[year];
+      if (counts !== undefined) counts.deaths = index === 0 ? MIN_RATE_COUNT - 1 : 0;
+    }
+    expect(priorsOf(rates).kinds["met.tornado"]?.deaths).toBeUndefined();
+    expect(priorsOf(rates).kinds["met.tornado"]?.injuries).toEqual(PRIORS.kinds["met.tornado"]?.injuries);
+    if (tornado.byYear[years[0] ?? ""] !== undefined) tornado.byYear[years[0] ?? ""]!.deaths = MIN_RATE_COUNT;
+    expect(priorsOf(rates).kinds["met.tornado"]?.deaths?.value).toBeGreaterThan(0);
+  });
+
+  it("are absent for a type with no kind", () => {
+    const keys = new Set(Object.keys(PRIORS.kinds));
+    expect(keys.has("null")).toBe(false);
+  });
+
+  it("refuse a year out of the years of the file", () => {
+    const rates = copy();
+    const tornado = rates.ncei.types["Tornado"];
+    if (tornado === undefined) throw new Error("The rates have no Tornado type.");
+    tornado.byYear["1990"] = { events: 1, deaths: 0, injuries: 0 };
+    expect(() => priorsOf(rates)).toThrow(/out of the years/);
+  });
+});
+
+describe("the certainty", () => {
+  it("is the middle of each CAP band, with the band as its interval", () => {
+    expect(PRIORS.certainty).toEqual({
+      observed: { value: 1, low: 1, high: 1 },
+      likely: { value: 0.75, low: 0.5, high: 1 },
+      possible: { value: 0.25, low: 0, high: 0.5 },
+      unlikely: { value: 0, low: 0, high: 0 },
+      unknown: { value: 0.5, low: 0, high: 1 },
+    });
+  });
+
+  it("refuses bands with no word for a certainty", () => {
+    const rates = copy();
+    const bands = rates.cap.bands as Record<string, unknown>;
+    delete bands["unknown"];
+    expect(() => priorsOf(rates)).toThrow(/no certainty unknown/);
+  });
+});
+
+describe("the order", () => {
+  it("of the types and the phenomena in the file does not change the priors", () => {
+    const rates = copy();
+    rates.ncei.types = Object.fromEntries(Object.entries(rates.ncei.types).reverse());
+    rates.cow.phenomena = Object.fromEntries(Object.entries(rates.cow.phenomena).reverse()) as typeof rates.cow.phenomena;
+    expect(text(priorsOf(rates))).toBe(text(PRIORS));
+  });
+
+  it("of the kinds of the priors is the order of the codes", () => {
+    const keys = Object.keys(PRIORS.kinds);
+    expect(keys).toEqual([...keys].sort());
+  });
+});

@@ -12,6 +12,7 @@
     "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.test.json"
   },
   "dependencies": {
+    "@mark1russell7/alerts": "workspace:*",
     "@mark1russell7/alerts-format-cap": "workspace:*",
     "@mark1russell7/alerts-format-nws": "workspace:*",
     "@mark1russell7/rigor-statistics": "^0.2.1",
@@ -19,7 +20,6 @@
     "@procedures/json": "^0.57.0"
   },
   "devDependencies": {
-    "@mark1russell7/alerts": "workspace:*",
     "@mark1russell7/alerts-fetch": "workspace:*",
     "@mark1russell7/cue": "^2.0.0",
     "@types/node": "^26.6.5",

@@ -378,6 +378,9 @@ importers:
 
   packages/rates:
     dependencies:
+      '@mark1russell7/alerts':
+        specifier: workspace:*
+        version: link:../core
       '@mark1russell7/alerts-format-cap':
         specifier: workspace:*
         version: link:../format-cap
@@ -394,9 +397,6 @@ importers:
         specifier: ^0.57.0
         version: 0.57.0
     devDependencies:
-      '@mark1russell7/alerts':
-        specifier: workspace:*
-        version: link:../core
       '@mark1russell7/alerts-fetch':
         specifier: workspace:*
         version: link:../fetch
