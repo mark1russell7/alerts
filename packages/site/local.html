@@ -76,6 +76,15 @@
       <p class="hint">An indicator is a measure with a normal level, for example the grid frequency. Many dimensions out of their normal level at one time is a strong sign. The indicators are of the present, also when the map shows a past time.</p>
     </section>
 
+    <section class="panel score-panel" aria-labelledby="score-h">
+      <h2 id="score-h">The shadow score</h2>
+      <div id="score-sum" class="verdicts" aria-live="polite">
+        <p class="verdict waiting" data-tone="quiet"><span>Reading the shadow score.</span></p>
+      </div>
+      <div id="differences" class="health-rows"></div>
+      <p class="hint">The shadow score is the probability of an event times its deaths and its injuries, from public measures. It does not set a level yet. This panel lists each pair where the table gives the higher level to the incident with clearly less expected harm. The score is of the present.</p>
+    </section>
+
     <section class="panel interest-panel" aria-labelledby="interests-h">
       <h2 id="interests-h">Interests</h2>
       <div id="interest-sum" class="verdicts" aria-live="polite">

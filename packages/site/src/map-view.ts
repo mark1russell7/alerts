@@ -10,6 +10,7 @@ import { kindLabel, MAP_VIEW, type MapIncident, type MapPlace, type MapRegion, t
 import { h } from "@mark1russell7/site-pages/chrome";
 import { geoArea, geoCircle, geoMercator, geoPath, type ExtendedGeometryCollection, type GeoGeometryObjects, type GeoPath } from "d3-geo";
 import { LEVEL_WORDS, levelChip, s, statusChip } from "./draw.ts";
+import { drawScore } from "./score-view.ts";
 import { dashText, shownStatuses, STATUS_LOOKS, statusLook } from "./status.ts";
 
 /** The width of the view box of the map. The core simplifies the basemap for this view box. */
@@ -292,7 +293,10 @@ export function incidentFacts(incident: MapIncident, view: MapView, time: (at: n
   return `Severity ${incident.severity}. ${end} ${places}`;
 }
 
-/** This function draws the list of the incidents, in the order of the view. A click on an incident selects it. */
+/**
+ * This function draws the list of the incidents, in the order of the view. A click on an incident selects it. An incident
+ * with a shadow score shows the score below its facts.
+ */
 export function drawIncidentList(view: MapView, selected: string | undefined, select: (anchor: string) => void): HTMLElement {
   const list = h("div", { class: "incidents" });
   if (view.incidents.length === 0) list.append(h("p", { class: "empty" }, "No live incident."));
@@ -303,6 +307,7 @@ export function drawIncidentList(view: MapView, selected: string | undefined, se
       { class: `incident-card${chosen ? " selected" : ""}`, "data-anchor": incident.anchor, tabindex: 0, "aria-current": chosen ? "true" : null },
       h("header", {}, h("h4", {}, incident.kind.label), statusChip(incident.status), levelChip(incident.level)),
       h("p", { class: "facts" }, incidentFacts(incident, view)),
+      incident.shadow === undefined ? null : drawScore(incident.shadow),
     );
     card.addEventListener("click", () => select(incident.anchor));
     card.addEventListener("keydown", (event) => {
