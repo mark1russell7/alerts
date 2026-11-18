@@ -69,6 +69,7 @@ import { createGfzSource, GFZ_DESCRIPTOR } from "@mark1russell7/alerts-source-gf
 import { createEnergyChartsSource, ENERGY_CHARTS_DESCRIPTOR } from "@mark1russell7/alerts-source-energy-charts";
 import { createKevSource, KEV_DESCRIPTOR } from "@mark1russell7/alerts-source-cisa-kev";
 import { AWS_DOMAIN, AWS_KIND, createAwsSource } from "@mark1russell7/alerts-source-aws";
+import { AZURE_DOMAIN, AZURE_KIND, createAzureSource } from "@mark1russell7/alerts-source-azure";
 import { createBomSwsSource, type BomSwsFetchOptions } from "@mark1russell7/alerts-source-bom-sws";
 import { createGcpSource, GCP_KIND, GOOGLE_DASHBOARDS, type GcpFetchOptions } from "@mark1russell7/alerts-source-gcp";
 import { createStatusPageSource, pagesFor, watchReads, type StatusPage, type StatusPageFetchOptions } from "@mark1russell7/alerts-source-statuspage";
@@ -299,9 +300,9 @@ const bomFactory =
     createBomSwsSource({ ...options, apiKey });
 
 /**
- * The feeds of the cloud providers: the dashboards of Google (Google Cloud and Firebase) and AWS. A report of such a feed
- * has no area. Thus the instance reads a feed only when one of its persons can get its reports, with the rule of a status
- * page (`watchReads`). The keys of the products of a dashboard are its keys of components.
+ * The feeds of the cloud providers: the dashboards of Google (Google Cloud and Firebase), AWS and Azure. A report of such
+ * a feed has no area. Thus the instance reads a feed only when one of its persons can get its reports, with the rule of a
+ * status page (`watchReads`). The keys of the products of a dashboard are its keys of components.
  */
 const PROVIDER_FEEDS = [
   ...GOOGLE_DASHBOARDS.map((dashboard) => ({
@@ -311,6 +312,7 @@ const PROVIDER_FEEDS = [
     create: (options: Omit<GcpFetchOptions, "dashboard">) => createGcpSource({ ...options, dashboard }),
   })),
   { domain: AWS_DOMAIN, kind: AWS_KIND, create: createAwsSource },
+  { domain: AZURE_DOMAIN, kind: AZURE_KIND, create: createAzureSource },
 ];
 
 /**
@@ -327,8 +329,8 @@ const PROVIDER_FEEDS = [
  * names their kind.
  *
  * The instance also reads the status pages that one of its persons can get (`pagesFor` of `source-statuspage`). They are
- * not in this list, because the persons choose them. The feeds of Google Cloud (`source-gcp`) and AWS (`source-aws`)
- * have the same rule.
+ * not in this list, because the persons choose them. The feeds of Google Cloud (`source-gcp`), AWS (`source-aws`)
+ * and Azure (`source-azure`) have the same rule.
  *
  * BoM (`source-bom-sws`) is a source only when the secrets have its key. Thus it is not in the list. Each page, each
  * feed and BoM have a longer interval than the shortest interval of the list. Thus the times of the loop stay the same.
@@ -676,10 +678,10 @@ export interface Instance {
  * - The sources are the NWS API, IPAWS, the USGS, EMSC, the two tsunami warning centers, the SWPC, GFZ,
  *   Energy-Charts and CISA KEV. The stream of NWWS-OI is a source when the secrets have the keys of the account of the
  *   copy (`nwwsSetup`). BoM is a source when the secrets have its key (`BOM_SWS_KEY`). Each status page that one of the
- *   persons can get is a source (`pagesFor`). The feed of Google Cloud or AWS is a source when one of the persons can
- *   get its reports (`watchReads`).
+ *   persons can get is a source (`pagesFor`). The feed of Google Cloud, AWS or Azure is a source when one of the persons
+ *   can get its reports (`watchReads`).
  * - Each source gets the codes of the places. It gets the position of a place only when the place shares it with that
- *   source. The USGS, EMSC, the centers, the SWPC, GFZ, BoM, Energy-Charts, CISA KEV, Google Cloud, AWS and the status pages ask
+ *   source. The USGS, EMSC, the centers, the SWPC, GFZ, BoM, Energy-Charts, CISA KEV, Google Cloud, AWS, Azure and the status pages ask
  *   for no place.
  * - The channels are Pushover, and the Twilio call channel when the secrets have its keys. Each time of the delivery comes
  *   from a fact of the channels.

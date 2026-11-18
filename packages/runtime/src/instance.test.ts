@@ -34,6 +34,7 @@ import { fakeSessions, NWWS_DESCRIPTOR } from "@mark1russell7/alerts-source-nwws
 import { SWPC_KINDS } from "@mark1russell7/alerts-source-swpc";
 import { KEV_KINDS } from "@mark1russell7/alerts-source-cisa-kev";
 import { AWS_DESCRIPTOR } from "@mark1russell7/alerts-source-aws";
+import { AZURE_DESCRIPTOR } from "@mark1russell7/alerts-source-azure";
 import { BOM_SWS_DESCRIPTOR, bomTimeText } from "@mark1russell7/alerts-source-bom-sws";
 import { FIREBASE_DESCRIPTOR, GCP_DESCRIPTOR } from "@mark1russell7/alerts-source-gcp";
 import { descriptorOf as statusPageDescriptor, pagePath, STATUS_PAGES, type StatusPage } from "@mark1russell7/alerts-source-statuspage";
@@ -235,6 +236,25 @@ function bomAnswer(url: URL): string {
   return JSON.stringify({ data: [{ index: 2, valid_time: bomTimeText(T0 - 60 * MINUTE), analysis_time: bomTimeText(T0 - 50 * MINUTE) }] });
 }
 
+/**
+ * The answer of Azure Status to the request of its feed, in the shape of the recorded feeds of the package `source-azure`.
+ * It has one live incident of virtual machines in the region West Europe, 10 minutes before the time of the tests.
+ */
+function azureAnswer(): string {
+  const published = new Date(T0 - 10 * MINUTE).toUTCString().replace(/GMT$/, "Z");
+  const item = [
+    "<item>",
+    '<guid isPermaLink="false">active-virtual-machines-west-europe</guid>',
+    "<link>https://status.azure.com/en-us/status/</link>",
+    "<category>Virtual Machines</category><category>West Europe</category><category>Public Non-Regional</category>",
+    "<title>Active - Virtual Machines in West Europe</title>",
+    "<description>&lt;p&gt;We are investigating an issue in West Europe.&lt;/p&gt;</description>",
+    `<pubDate>${published}</pubDate>`,
+    "</item>",
+  ].join("");
+  return `<?xml version="1.0" encoding="utf-8"?><rss version="2.0"><channel><title>Azure Status</title><link>https://status.azure.com/en-us/status/</link>${item}</channel></rss>`;
+}
+
 /** The status page of each host. */
 const STATUS_HOSTS: ReadonlyMap<string, StatusPage> = new Map(STATUS_PAGES.map((page) => [new URL(page.base).hostname, page]));
 
@@ -251,7 +271,8 @@ const STATUS_HOSTS: ReadonlyMap<string, StatusPage> = new Map(STATUS_PAGES.map((
  * BoM gives one K index, and no alert and no warning (`bomAnswer`).
  *
  * Each status page gives its summary or its feed (`statusPageAnswer`). Google Cloud gives one live incident (`gcpAnswer`). Firebase
- * gives one live incident of Cloud Messaging (`firebaseAnswer`). AWS gives one live event (`awsAnswer`).
+ * gives one live incident of Cloud Messaging (`firebaseAnswer`). AWS gives one live event (`awsAnswer`). Azure gives one
+ * live incident (`azureAnswer`).
  *
  * Each exchange takes `delay` milliseconds of real time, as on a busy runner. With `Infinity`, no exchange ends.
  */
@@ -275,6 +296,7 @@ function network(delay = 0) {
     if (url.hostname === "status.firebase.google.com") return { status: 200, statusText: "OK", headers: { "content-type": "application/json" }, body: firebaseAnswer() };
     if (url.hostname === "status.aws.amazon.com") return { status: 200, statusText: "OK", headers: { "content-type": "application/rss+xml" }, body: awsAnswer() };
     if (url.hostname === "sws-data.sws.bom.gov.au") return { status: 200, statusText: "OK", headers: { "content-type": "application/json" }, body: bomAnswer(url) };
+    if (url.hostname === "rssfeed.azure.status.microsoft") return { status: 200, statusText: "OK", headers: { "content-type": "text/xml; charset=utf-8" }, body: azureAnswer() };
     if (url.hostname === "www.cisa.gov") return { status: 200, statusText: "OK", headers: { "content-type": "application/json" }, body: kevAnswer() };
     if (url.hostname === "api.energy-charts.info") return { status: 200, statusText: "OK", headers: { "content-type": "application/json" }, body: energyChartsAnswer(url) };
     if (url.hostname === "www.tsunami.gov") {
@@ -573,14 +595,14 @@ describe("openInstance", () => {
     expect(server.calls.map((call) => call.fields["title"])).toEqual([expect.stringContaining("Flood Warning")]);
   });
 
-  it("reads the status pages and the feeds of Google Cloud, Firebase and AWS that a person with the work software can get, with the services, the endpoints and the regions as subjects", async () => {
+  it("reads the status pages and the feeds of Google Cloud, Firebase, AWS and Azure that a person with the work software can get, with the services, the endpoints and the regions as subjects", async () => {
     const software: AlertConfig = { ...CONFIG, people: CONFIG.people.map((entry) => ({ ...entry, defaults: { works: ["software"] } })) };
     const { instance, clock, net } = open(store(SECRETS), software);
     const pass = await finish(clock, instance.runtime.pass());
     const pages = STATUS_PAGES.filter((page) => ["infra.saas.outage", "infra.cloud.outage", "infra.internet.dns-cdn"].includes(page.kind));
     expect(pages.length).toBeGreaterThan(20);
-    expect(pass.fetched).toEqual(["nws-api", "ipaws", "usgs", "emsc", "tsunami-ntwc", "tsunami-ptwc", "swpc", "gfz", "energy-charts", "cisa-kev", "gcp-status", "firebase-status", "aws-health", ...pages.map((page) => page.id)]);
-    for (const source of ["gcp-status", "firebase-status", "aws-health"]) expect(pass.view.health.find((health) => health.source === source)?.state, source).toBe("healthy");
+    expect(pass.fetched).toEqual(["nws-api", "ipaws", "usgs", "emsc", "tsunami-ntwc", "tsunami-ptwc", "swpc", "gfz", "energy-charts", "cisa-kev", "gcp-status", "firebase-status", "aws-health", "azure-status", ...pages.map((page) => page.id)]);
+    for (const source of ["gcp-status", "firebase-status", "aws-health", "azure-status"]) expect(pass.view.health.find((health) => health.source === source)?.state, source).toBe("healthy");
     expect(pass.view.health.filter((health) => health.source.startsWith("statuspage-")).map((health) => [health.source, health.state])).toEqual(pages.map((page) => [page.id, "healthy"]));
     const asked = new Set(net.exchanges.map((exchange) => new URL(exchange.url)).filter((url) => STATUS_HOSTS.has(url.hostname)).map((url) => url.origin + url.pathname));
     expect(asked).toEqual(new Set(pages.map((page) => `${page.base}${pagePath(page)}`)));
@@ -604,6 +626,13 @@ describe("openInstance", () => {
         [
           { system: "domain", id: "aws.amazon.com", label: "Amazon Web Services" },
           { system: "provider-region", id: "aws/eu-west-1" },
+        ],
+      ],
+      [
+        [],
+        [
+          { system: "domain", id: "azure.microsoft.com", label: "Microsoft Azure" },
+          { system: "provider-region", id: "azure/westeurope", label: "West Europe" },
         ],
       ],
       [
@@ -655,8 +684,8 @@ describe("openInstance", () => {
   it("reads no status page and no feed of a cloud provider for persons with no work, no service and no subject watch", async () => {
     const { instance, clock, net } = open();
     await finish(clock, instance.runtime.pass());
-    expect(net.exchanges.filter((exchange) => STATUS_HOSTS.has(new URL(exchange.url).hostname) || ["status.cloud.google.com", "status.firebase.google.com", "status.aws.amazon.com"].includes(new URL(exchange.url).hostname))).toEqual([]);
-    expect(instance.runtime.config.sources.some((source) => source.id.startsWith("statuspage-") || ["gcp-status", "firebase-status", "aws-health"].includes(source.id))).toBe(false);
+    expect(net.exchanges.filter((exchange) => STATUS_HOSTS.has(new URL(exchange.url).hostname) || ["status.cloud.google.com", "status.firebase.google.com", "status.aws.amazon.com", "rssfeed.azure.status.microsoft"].includes(new URL(exchange.url).hostname))).toEqual([]);
+    expect(instance.runtime.config.sources.some((source) => source.id.startsWith("statuspage-") || ["gcp-status", "firebase-status", "aws-health", "azure-status"].includes(source.id))).toBe(false);
   });
 
   it("reads BoM only when the secrets have its key, and the key goes only into the body of each POST to BoM", async () => {
@@ -681,7 +710,7 @@ describe("openInstance", () => {
 
   it("keeps the times of the loop with each status page: each page has a longer interval than the shortest of the list", () => {
     const shortest = Math.min(...INSTANCE_SOURCES.map((source) => source.interval));
-    for (const descriptor of [GCP_DESCRIPTOR, FIREBASE_DESCRIPTOR, AWS_DESCRIPTOR, BOM_SWS_DESCRIPTOR]) {
+    for (const descriptor of [GCP_DESCRIPTOR, FIREBASE_DESCRIPTOR, AWS_DESCRIPTOR, AZURE_DESCRIPTOR, BOM_SWS_DESCRIPTOR]) {
       expect(descriptor.interval, descriptor.id).toBeGreaterThanOrEqual(shortest);
       expect(INSTANCE_FETCH_LIMIT(descriptor), descriptor.id).toBe(shortest);
     }
