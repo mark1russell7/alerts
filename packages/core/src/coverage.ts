@@ -8,7 +8,7 @@
  */
 import { minimumHittingSet, type HittingSetChoice } from "@mark1russell7/collections/graph";
 import { CONTEXT_KINDS, hasKind, LIFE_SAFETY_KINDS, regionContains } from "./assess.ts";
-import type { Coverage, HealthState, SourceDescriptor, SourceHealth, SourceId, WatchedPlace } from "./contracts.ts";
+import type { Coverage, HealthState, RegionCode, SourceDescriptor, SourceHealth, SourceId, WatchedPlace } from "./contracts.ts";
 import { CELL_RESOURCES } from "./contracts.ts";
 import { isShape, shapeDistanceKm } from "./shapes.ts";
 
@@ -58,6 +58,39 @@ export interface CoverageInput {
   readonly places: readonly WatchedPlace[];
   /** The taxonomy codes or prefixes to examine at each place. */
   readonly kinds: readonly string[];
+  /**
+   * The codes of the regions that hold all of the region of a code, for example the state of a zone. The coverage adds them
+   * to the codes of each place, and then the codes of those codes. Without it, a place has only its own codes. The core knows
+   * no system of codes, so the package of a format gives this function.
+   */
+  readonly containing?: (code: RegionCode) => readonly RegionCode[];
+}
+
+/** The largest count of codes of one place, with the codes that `containing` adds. */
+export const MAX_PLACE_CODES = 1000;
+
+/**
+ * This function gives the codes of a place and each code that `containing` gives for them, again and again, with no
+ * code two times. The codes of the place stay first, in their order.
+ *
+ * @throws RangeError when the place gets more than `MAX_PLACE_CODES` codes, because the function gives codes with no end.
+ */
+export function placeCodesWithContaining(codes: readonly RegionCode[], containing: (code: RegionCode) => readonly RegionCode[]): RegionCode[] {
+  const all: RegionCode[] = [];
+  const seen = new Set<string>();
+  const add = (code: RegionCode): void => {
+    const key = JSON.stringify([code.system, code.code]);
+    if (seen.has(key)) return;
+    if (all.length >= MAX_PLACE_CODES) throw new RangeError(`A place has more than ${MAX_PLACE_CODES} codes with the codes that contain them.`);
+    seen.add(key);
+    all.push({ system: code.system, code: code.code });
+  };
+  codes.forEach(add);
+  for (let at = 0; at < all.length; at += 1) {
+    const code = all[at];
+    if (code !== undefined) containing(code).forEach(add);
+  }
+  return all;
 }
 
 /**
@@ -97,13 +130,18 @@ export function requiredFor(policy: CoveragePolicy, kind: string): number {
 
 /**
  * This function gives the coverage of each kind at each place, in the order of the places and then
- * of the kinds. The sources of each coverage are in the order of the input.
+ * of the kinds. The sources of each coverage are in the order of the input. With `containing`, a
+ * source of a region that holds a code of a place covers that place.
+ *
+ * @throws RangeError when `containing` gives more than `MAX_PLACE_CODES` codes for one place.
  */
 export function coverage(input: CoverageInput, policy: CoveragePolicy = DEFAULT_COVERAGE_POLICY): Coverage[] {
   const states = new Map<SourceId, HealthState>(input.health.map((entry) => [entry.source, entry.state]));
   const late = new Set(input.late ?? []);
   const up = input.sources.filter((source) => policy.up.includes(states.get(source.id) ?? "unknown") && !late.has(source.id));
-  return input.places.flatMap((place) =>
+  const { containing } = input;
+  const places = containing === undefined ? input.places : input.places.map((place) => ({ ...place, codes: placeCodesWithContaining(place.codes, containing) }));
+  return places.flatMap((place) =>
     input.kinds.map((kind) => coverageOf(place.id, kind, up.filter((source) => sourceCovers(source, place, kind)), requiredFor(policy, kind), policy)),
   );
 }

@@ -1,7 +1,7 @@
 import { random, seedsFrom } from "@mark1russell7/rigor-generators";
 import { describe, expect, it } from "vitest";
-import type { Area, HealthState, PlaceId, SourceDescriptor, SourceHealth, SourceId, WatchedPlace } from "./contracts.ts";
-import { coverage, coverageShort, DEFAULT_COVERAGE_POLICY, failureDomains, requiredFor, sourceCovers } from "./coverage.ts";
+import type { Area, HealthState, PlaceId, RegionCode, SourceDescriptor, SourceHealth, SourceId, WatchedPlace } from "./contracts.ts";
+import { coverage, coverageShort, DEFAULT_COVERAGE_POLICY, failureDomains, MAX_PLACE_CODES, placeCodesWithContaining, requiredFor, sourceCovers } from "./coverage.ts";
 
 const SEEDS = seedsFrom(process.env["SEED"], [1, 2, 3, 4, 5, 6, 7, 8]);
 const TORNADO = "met.tornado";
@@ -203,6 +203,44 @@ describe("coverage", () => {
       expect(entry!.independent, label).toBe(smallestCut(up.map(failureDomains)));
       expect(entry!.commonResources, label).toEqual(up.length === 0 ? [] : up.every((one) => one.uses.includes("internet")) ? ["internet", "dns", "power"] : up.every((one) => one.uses.includes("receiver")) ? ["power", "receiver"] : ["power"]);
     }
+  });
+});
+
+describe("the codes that contain the codes of a place", () => {
+  // A table of two levels: a zone is in a state, and a state is in a country. The marine zone is in no state.
+  const PARENTS: Readonly<Record<string, readonly RegionCode[]>> = {
+    "ugc:KSZ083": [{ system: "state", code: "KS" }],
+    "state:KS": [{ system: "iso3166", code: "US" }],
+  };
+  const containing = (code: RegionCode): readonly RegionCode[] => PARENTS[`${code.system}:${code.code}`] ?? [];
+  const ZONE_ONLY: WatchedPlace = { id: "place:z" as PlaceId, codes: [{ system: "ugc", code: "KSZ083" }], bufferKm: 0 };
+  const MARINE: WatchedPlace = { id: "place:m" as PlaceId, codes: [{ system: "ugc", code: "GMZ550" }], bufferKm: 0 };
+  const health = [healthOf("api", "healthy")];
+
+  it("adds the codes of the regions that hold each code, and their codes, with no code two times", () => {
+    expect(placeCodesWithContaining(ZONE_ONLY.codes, containing)).toEqual([
+      { system: "ugc", code: "KSZ083" },
+      { system: "state", code: "KS" },
+      { system: "iso3166", code: "US" },
+    ]);
+    expect(placeCodesWithContaining([{ system: "state", code: "KS" }, { system: "iso3166", code: "US" }], containing)).toEqual([
+      { system: "state", code: "KS" },
+      { system: "iso3166", code: "US" },
+    ]);
+    expect(placeCodesWithContaining(MARINE.codes, containing)).toEqual(MARINE.codes);
+  });
+
+  it("covers a place with only a zone code by a source of its country, and shows the gap without the function", () => {
+    const [without] = coverage({ sources: [API], health, places: [ZONE_ONLY], kinds: [TORNADO] });
+    expect(without!.sources).toEqual([]);
+    const [withCodes, marine] = coverage({ sources: [API], health, places: [ZONE_ONLY, MARINE], kinds: [TORNADO], containing });
+    expect(withCodes!.sources).toEqual(["api"]);
+    expect(marine!.sources).toEqual([]);
+  });
+
+  it("refuses a function that gives codes with no end", () => {
+    const endless = (code: RegionCode): readonly RegionCode[] => [{ system: "n", code: `${code.code}1` }];
+    expect(() => placeCodesWithContaining([{ system: "n", code: "1" }], endless)).toThrow(`A place has more than ${MAX_PLACE_CODES} codes with the codes that contain them.`);
   });
 });
 

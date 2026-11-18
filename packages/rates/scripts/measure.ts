@@ -101,11 +101,22 @@ function requester(source: string, baseUrl: string, minIntervalMs: number, timeo
  * This function reads robots.txt of the host of a URL. It throws an error when robots.txt does not
  * permit the path of the URL. It gives the time between two requests: the longer of the pace of the
  * script and the crawl delay of robots.txt.
+ *
+ * A network fault gets the same count of tries as each request of the data. The pace of the host keeps the time between two tries.
  */
 async function allow(url: string): Promise<number> {
   const { origin, host, pathname } = new URL(url);
   const transport = fetchTransport({ userAgent: USER_AGENT });
-  const answer = await send(pace, transport, { source: "robots", host, minIntervalMs: MIN_INTERVAL_MS, what: "robots.txt", exchange: { method: "GET", url: `${origin}/robots.txt`, headers: {}, body: null } });
+  const read = () => send(pace, transport, { source: "robots", host, minIntervalMs: MIN_INTERVAL_MS, what: "robots.txt", exchange: { method: "GET", url: `${origin}/robots.txt`, headers: {}, body: null } });
+  let answer: Awaited<ReturnType<typeof read>> | undefined;
+  for (let attempt = 1; answer === undefined; attempt += 1) {
+    try {
+      answer = await read();
+    } catch (error) {
+      if (attempt >= TRIES) throw error;
+      log(`robots.txt of ${host}: try ${String(attempt)} failed: ${(error as Error).message}`);
+    }
+  }
   const robots = robotsFromResponse(answer.reply.status, answer.reply.headers["content-type"], answer.reply.body);
   const decision = decide(robots, [USER_AGENT], pathname);
   if (!decision.allowed) throw new Error(`robots.txt of ${host} does not permit ${pathname}.`);

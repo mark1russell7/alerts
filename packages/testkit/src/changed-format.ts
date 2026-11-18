@@ -224,12 +224,12 @@ function recordOf(result: FetchResult, at: Instant, took: number, known: Readonl
 
 const outcomeOf = (result: FetchResult): OutcomeSummary => ("thrown" in result ? { ok: false, kind: "thrown", message: result.thrown } : summaryOf(result.outcome));
 
-/** The person of the case: one place for each alert of the baseline, with the UGC codes of the alert, and no rule. */
+/** The person of the case: one place for each alert of the baseline, with its UGC and fire zone codes, and no rule. */
 export function watchOf(reports: readonly Report[]): { readonly person: PersonWatch; readonly places: readonly WatchedPlace[] } {
   const places = reports
     .map((report, index): WatchedPlace => ({
       id: `alert-${String(index)}` as PlaceId,
-      codes: report.areas.flatMap((area) => (area.type === "code" && area.system === "ugc" ? [{ system: "ugc", code: area.code }] : [])),
+      codes: report.areas.flatMap((area) => (area.type === "code" && (area.system === "ugc" || area.system === "ugc-fire") ? [{ system: area.system, code: area.code }] : [])),
       bufferKm: 0,
     }))
     .filter((place) => place.codes.length > 0);

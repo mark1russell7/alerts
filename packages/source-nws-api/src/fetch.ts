@@ -94,7 +94,7 @@ export function queriesOf(watch: Watch, options: QueryOptions = {}): Query[] {
       continue;
     }
     const ugc = place.codes
-      .filter((code) => code.system === "ugc")
+      .filter((code) => code.system === "ugc" || code.system === "ugc-fire")
       .map((code) => code.code.trim().toUpperCase())
       .filter((code) => isUgcCode(code));
     if (ugc.length > 0) for (const zone of ugc) zones.add(zone);

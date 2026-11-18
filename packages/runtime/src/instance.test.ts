@@ -1023,10 +1023,10 @@ describe("openInstance", () => {
   });
 
   it("does not start when no regional source covers a place", () => {
-    // The place has no code of the country. The coverage of each regional source is a list of countries.
+    // A marine zone is in no state and no country, so no code of a country holds it. The coverage of each regional source is a list of countries.
     // The SWPC and GFZ cover the whole Earth, so they cover the place with no code. The check does not count them.
     const place = CONFIG.places[0]!;
-    const config: AlertConfig = { ...CONFIG, places: [{ ...place, codes: place.codes.filter((code) => code.system !== "iso3166") }] };
+    const config: AlertConfig = { ...CONFIG, places: [{ ...place, codes: [{ system: "ugc", code: "GMZ550" }] }] };
     expect(messageOf(() => open(store(SECRETS), config))).toContain("No regional source covers the place place-1.");
   });
 
@@ -1398,7 +1398,7 @@ describe("the check of the instance", () => {
 
   it("finds each problem that stops the start, and no message holds a value of a secret", () => {
     const place = CONFIG.places[0]!;
-    const uncovered: AlertConfig = { ...CONFIG, places: [{ ...place, codes: place.codes.filter((code) => code.system !== "iso3166") }] };
+    const uncovered: AlertConfig = { ...CONFIG, places: [{ ...place, codes: [{ system: "ugc", code: "GMZ550" }] }] };
     const bad = store({ ...SECRETS, PUSHOVER_APP_TOKEN: "bad-token-value" });
     const problems = INSTANCE_CHECK.problems(parse(uncovered, bad), bad);
     expect(problems).toEqual([expect.stringContaining("The value of PUSHOVER_APP_TOKEN is not a key of Pushover"), expect.stringContaining("No regional source covers the place place-1.")]);
@@ -1408,6 +1408,14 @@ describe("the check of the instance", () => {
 
   it("finds no problem in a configuration that starts", () => {
     expect(instanceProblems(parse(CONFIG, store(SECRETS)), store(SECRETS), INSTANCE_SOURCES, 0)).toEqual([]);
+  });
+
+  it("finds no problem in a place that has only its county code, because the county is in a state of the country", () => {
+    const place = CONFIG.places[0]!;
+    for (const codes of [[{ system: "ugc", code: "TXC311" }], [{ system: "same", code: "048311" }], [{ system: "state", code: "TX" }]]) {
+      const config: AlertConfig = { ...CONFIG, places: [{ ...place, codes }] };
+      expect(instanceProblems(parse(config, store(SECRETS)), store(SECRETS), INSTANCE_SOURCES, 0)).toEqual([]);
+    }
   });
 
   it("does not count a global source as the cover of a place", () => {

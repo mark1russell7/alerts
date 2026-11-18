@@ -94,6 +94,15 @@ describe("mapObservation", () => {
     expect(report.correlation).toEqual([{ system: "vtec", id: "PAFC.WS.A.0007.2026" }]);
   });
 
+  it("gives a zone of a fire weather event a fire zone code, and a county of that event its county code (AL-33)", () => {
+    const fire = { ...ROW, wfo: "ICT", phenomena: "FW", significance: "W", eventid: 4, ph_sig: "FW.W", event_label: "Red Flag Warning" };
+    expect(mapOne(observationOfRow({ ...fire, ugc: "KSZ083" })).areas).toEqual([{ type: "code", system: "ugc-fire", code: "KSZ083" }]);
+    expect(mapOne(observationOfRow({ ...fire, ugc: "KSC173" })).areas).toEqual([
+      { type: "code", system: "ugc", code: "KSC173" },
+      { type: "code", system: "same", code: "020173" },
+    ]);
+  });
+
   it("gives the year of the earlier time of the row: the start or the product", () => {
     const kansas = { ...ROW, wfo: "TOP", phenomena: "WS", significance: "W", eventid: 3, ugc: "KSZ083", utc_expire: "2026-01-02T18:00:00Z" };
     // A start in the old year and a product in the new year
