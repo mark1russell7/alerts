@@ -197,6 +197,19 @@ describe("planDigests", () => {
     expect(planDigests(input({ recipients: [twoSteps], merge: { deliveries: record } })).sends.map((item) => item.channel)).toEqual([sms]);
   });
 
+  it("sends one digest for each digest time across the copies, and the entries that only this copy knows wait for the next digest", () => {
+    // Another copy knew only the first incident, and its digest told it. This copy also knows the second incident.
+    const [other] = planDigests(input()).sends;
+    const record = digestDeliveries(other!, DIGEST + 18_000, { receipt: "r-cloud" });
+    const both = [incident(first), incident(second)];
+    expect(anchors({ incidents: both })).toEqual([["a:digest", "b:digest"]]);
+    expect(planDigests(input({ incidents: both, merge: { deliveries: record }, now: DIGEST + 30_000 })).sends).toEqual([]);
+    expect(anchors({ incidents: both, merge: { deliveries: record }, now: DIGEST + 24 * HOUR })).toEqual([["b:digest"]]);
+    // A digest of the day before does not keep the digest of today quiet.
+    const yesterday = digestDeliveries(other!, DIGEST - 24 * HOUR + 18_000, { receipt: "r-old" }).map((delivery) => ({ ...delivery, incident: third }));
+    expect(anchors({ incidents: both, merge: { deliveries: yesterday } })).toEqual([["a:digest", "b:digest"]]);
+  });
+
   it("keeps an incident that came after the digest time for the next digest", () => {
     const late = report(third, DIGEST + HOUR, "Flood Statement");
     const merge = { reports: [...REPORTS.slice(0, 2), late] };

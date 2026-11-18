@@ -103,6 +103,8 @@ export interface DigestPlan {
  *   the digest time before, and at or before the digest time. The entry has the highest such level. A digest of this
  *   digest time that told the incident keeps it out.
  * - A digest with no incident sends nothing.
+ * - Each step of a person sends one digest for each digest time, across the copies. A digest delivery of the step at or
+ *   after the digest time keeps the step quiet. Thus the entries that only this copy knows wait for the next digest.
  * - A runtime that was down at the digest time sends the digest when it comes back, until the next digest time.
  */
 export function planDigests(input: DigestInput): DigestPlan {
@@ -134,6 +136,8 @@ export function planDigests(input: DigestInput): DigestPlan {
     const before = dailyInstant(daily, at - 1);
     const mine = state.deliveries.filter((delivery) => delivery.person === person);
     digest.steps.forEach((step, index) => {
+      // Another copy, or this copy before a restart, sent the digest of this time and step. Its record is in the shared ledger.
+      if (mine.some((delivery) => delivery.level === "digest" && delivery.step === index && delivery.at >= at)) return;
       const entries: DigestEntry[] = [];
       for (const incident of input.incidents) {
         const reports = new Set<string>([incident.anchor, ...incident.reports]);
