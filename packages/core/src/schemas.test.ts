@@ -534,6 +534,7 @@ const SCHEMA_NAMES = [
   "severitySchema",
   "shadowScoreSchema",
   "significanceSchema",
+  "sourceClearConfigSchema",
   "sourceDescriptorSchema",
   "sourceHealthSchema",
   "sourceHealthViewSchema",

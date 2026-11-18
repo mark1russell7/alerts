@@ -83,6 +83,52 @@ export const COPY_STAGES: readonly CopyStage[] = ["skew", "config", "unread"];
 /** The health states that start a line of health reports. */
 export const DOWN_STATES: readonly HealthState[] = ["failing", "silent", "changed"];
 
+/**
+ * The policy of the end of the line of a down source (AL-75). The line ends only after the source is up for its clear
+ * time: the larger of `floor` and `fetches` intervals of the source. A source that is down again in that time keeps its
+ * line. Thus a source that flaps gives one incident, not one incident for each failure.
+ */
+export interface SourceClearPolicy {
+  /** The shortest clear time. At 0 with `fetches` at 0, the line ends at the first state that is not down. */
+  readonly floor: Duration;
+  /** The count of intervals of the source in the clear time. */
+  readonly fetches: number;
+}
+
+/** The default policy of the end of the line of a down source: 15 minutes, or 3 intervals of the source when that is longer. */
+export const DEFAULT_SOURCE_CLEAR: SourceClearPolicy = { floor: 15 * 60_000, fetches: 3 };
+
+/** The policy of the end of the line of a down source in the configuration. Each absent field has its value of `DEFAULT_SOURCE_CLEAR`. */
+export interface SourceClearConfig {
+  readonly floor?: Duration;
+  readonly fetches?: number;
+}
+
+/** This function gives the policy of the end of the line of a down source, with the defaults for the absent fields. */
+export function sourceClearPolicy(config?: SourceClearConfig): SourceClearPolicy {
+  return { floor: config?.floor ?? DEFAULT_SOURCE_CLEAR.floor, fetches: config?.fetches ?? DEFAULT_SOURCE_CLEAR.fetches };
+}
+
+/** This function gives the clear time of a source under a policy: the larger of the floor and the intervals of the source. */
+export function sourceClearTime(policy: SourceClearPolicy, source: SourceDescriptor | undefined): Duration {
+  return Math.max(policy.floor, policy.fetches * (source?.interval ?? 0));
+}
+
+/**
+ * This function gives the end times after `at` of the open lines of the sources that are up. Each end time is the start
+ * of the state of the source plus its clear time. The runtime wakes at these times. Thus a line ends on time, also when
+ * no fetch is due.
+ */
+export function sourceClearAt(lines: SystemLines, snapshot: Pick<SystemSnapshot, "sources" | "health" | "sourceClear">, at: Instant): Instant[] {
+  const policy = sourceClearPolicy(snapshot.sourceClear);
+  const descriptors = new Map(snapshot.sources.map((source) => [source.id, source]));
+  return snapshot.health.flatMap((health) => {
+    if (DOWN_STATES.includes(health.state) || lines.open[healthName(health.source)] === undefined) return [];
+    const end = health.since + sourceClearTime(policy, descriptors.get(health.source));
+    return end > at ? [end] : [];
+  });
+}
+
 /** The stages of an incident that make a gap of the coverage more dangerous. An incident with no stage also counts. */
 export const THREAT_STAGES: readonly Significance[] = ["warning", "watch"];
 
@@ -225,6 +271,8 @@ export interface SystemSnapshot {
   readonly channels?: readonly ChannelSnapshot[];
   /** The policy of a down channel. Each absent field has its value of `DEFAULT_CHANNEL_DOWN`. */
   readonly channelDown?: ChannelDownConfig;
+  /** The policy of the end of the line of a down source (AL-75). Each absent field has its value of `DEFAULT_SOURCE_CLEAR`. */
+  readonly sourceClear?: SourceClearConfig;
 }
 
 /** The result of one step of the fold. */
@@ -377,7 +425,8 @@ export function gapGrade(entry: Coverage, threatened: boolean): { readonly sever
 /**
  * This function adds one snapshot to the fold at the time `at`. Each of these is a condition:
  *
- * - Each source in `DOWN_STATES`, each late expectation and each coverage that is short.
+ * - Each source in `DOWN_STATES`, each late expectation and each coverage that is short. The open line of a source that is
+ *   up stays a condition for the clear time of the source (`sourceClearTime`).
  * - Each stage of a quota, each stage of a balance and each stage of another copy. Only one copy reports the stages
  *   `low` and `empty` of a balance (`reportsShared`). The stage `unread` is a fact of each copy.
  * - The latest step of the wall clock in `CLOCK_STEP_WINDOW` before `at`.
@@ -392,8 +441,14 @@ export function systemReports(lines: SystemLines, snapshot: SystemSnapshot, at: 
   const conditions = new Map<string, Condition>();
   const titles = new Map(snapshot.sources.map((source) => [source.id, source.title]));
   const context = new Set(snapshot.sources.filter(contextSource).map((source) => source.id));
+  const descriptors = new Map(snapshot.sources.map((source) => [source.id, source]));
+  const clear = sourceClearPolicy(snapshot.sourceClear);
   for (const health of snapshot.health) {
-    if (DOWN_STATES.includes(health.state)) conditions.set(healthName(health.source), healthCondition(health, titles.get(health.source) ?? health.source, context.has(health.source)));
+    const name = healthName(health.source);
+    // A source that is up keeps its open line for its clear time, with the facts of the line. Thus a source that flaps
+    // gives no cancel and no new alert (AL-75). On 2026-11-18, a source that failed 2 fetches of 4 gave one incident for each flap.
+    const state = DOWN_STATES.includes(health.state) ? health.state : heldState(lines.open[name], health, at, sourceClearTime(clear, descriptors.get(health.source)));
+    if (state !== undefined) conditions.set(name, healthCondition({ ...health, state }, titles.get(health.source) ?? health.source, context.has(health.source)));
   }
   for (const entry of snapshot.lateness ?? []) {
     if (entry.state === "late") conditions.set(lateName(entry.expectation), lateCondition(entry, titles));
@@ -778,6 +833,15 @@ function drillNoStartCondition(copy: string, drill: DrillConfig): Condition {
  */
 export function contextSource(source: SourceDescriptor): boolean {
   return source.kinds.length > 0 && source.kinds.every((kind) => hasKind(CONTEXT_KINDS, kind));
+}
+
+// The down state of the open line of a source that is up, while the source is up for less than its clear time. The state
+// of the line comes from its facts. A source that is slow after it was up has a later start of its state, so its line
+// stays open for longer: this error keeps a line, and it never ends a line early.
+function heldState(line: SystemLine | undefined, health: SourceHealth, at: Instant, clear: Duration): HealthState | undefined {
+  if (line === undefined || at - health.since >= clear) return undefined;
+  const { state } = JSON.parse(line.facts) as { readonly state?: unknown };
+  return DOWN_STATES.find((down) => down === state);
 }
 
 function healthCondition(health: SourceHealth, title: string, context: boolean): Condition {

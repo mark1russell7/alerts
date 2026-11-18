@@ -159,6 +159,7 @@ import {
 } from "./config.ts";
 import type { TryChain } from "./chain.ts";
 import type { ChannelDownConfig, ChannelRun } from "./channel-down.ts";
+import type { SourceClearConfig } from "./system-reports.ts";
 import type { SendLimitConfig } from "./send-limit.ts";
 import type { EscalationEnd, Recipient } from "./delivery.ts";
 import type { DrillConfig, DrillPath } from "./drill.ts";
@@ -1596,6 +1597,11 @@ export const channelDownConfigSchema: z.ZodType<ChannelDownConfig, ChannelDownCo
   z.strictObject({ failures: z.number().int().min(1).exactOptional(), span: durationSchema.exactOptional() }).readonly(),
 );
 
+/** This schema checks the policy of the end of the line of a down source (AL-75). At 0 and 0, a line ends at the first state that is up. */
+export const sourceClearConfigSchema: z.ZodType<SourceClearConfig, SourceClearConfig> = schemaOf<SourceClearConfig>()(
+  z.strictObject({ floor: durationSchema.exactOptional(), fetches: z.number().int().min(0).exactOptional() }).readonly(),
+);
+
 /**
  * This schema checks the JSON of the private configuration at the load. It checks the form of each
  * value. Then `loadConfig` checks the references: the ids, the places of each person, the contacts,
@@ -1620,6 +1626,7 @@ export const alertConfigSchema: z.ZodType<AlertConfig, AlertConfig> = schemaOf<A
       drills: z.array(drillConfigSchema).readonly().exactOptional(),
       optIn: z.array(optInConfigSchema).readonly().exactOptional(),
       channelDown: channelDownConfigSchema.exactOptional(),
+      sourceClear: sourceClearConfigSchema.exactOptional(),
       sendLimit: sendLimitConfigSchema.exactOptional(),
     })
     .readonly(),
