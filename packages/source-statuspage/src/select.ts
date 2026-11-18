@@ -11,9 +11,9 @@ import { STATUS_PAGES } from "./register.ts";
 const TOPIC = "topic:";
 
 /**
- * This function tells if a person can get the reports of a page. The interest graph of the person has an edge that is
- * on at the node of the domain of the service, or an edge from a topic of the kind of the page. Or the person watches
- * the subjects of the system `domain`, or the domain of the service.
+ * This function tells if a person can get the reports of a page. One edge of the interest graph is on at the domain of
+ * the service. Or one edge that is on comes from a topic of the kind of the page. Or the person watches the system
+ * `domain`, or the domain of the service.
  */
 export function watchReads(watch: PersonWatch, page: StatusPage): boolean {
   const node = `${SUBJECT_SYSTEM}:${page.domain}`;
