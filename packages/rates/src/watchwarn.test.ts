@@ -176,6 +176,7 @@ describe("the count of the alerts", () => {
         "TO.A": { counties: { "2024": 2, "2025": 0 }, zones: { "2024": 0, "2025": 0 } },
         "TO.W": { counties: { "2024": 3, "2025": 0 }, zones: { "2024": 0, "2025": 0 } },
       },
+      codes: { "2024": { counties: 2, zones: 0 }, "2025": { counties: 0, zones: 1 } },
       numbering: {
         "TO.A": { national: true, numbers: 1, shared: 1, together: 1 },
         "TO.W": { national: false, numbers: 1, shared: 1, together: 0 },
@@ -188,6 +189,15 @@ describe("the count of the alerts", () => {
     const tally = new AlertTally({ first: 2024, last: 2025 });
     tally.add({ rows: [row(), row(), row({ ugc: "KSZ083" }), row({ year: 2025, eventId: 7 })], faults: {} });
     expect(tally.counts().areas["TO.W"]).toEqual({ counties: { "2024": 1, "2025": 1 }, zones: { "2024": 1, "2025": 0 } });
+  });
+
+  it("counts each UGC code one time in each year, over the pairs, and gives each year", () => {
+    const tally = new AlertTally({ first: 2024, last: 2026 });
+    tally.add({
+      rows: [row(), row({ significance: "A", eventId: 200 }), row({ ugc: "KSZ083" }), row({ eventId: 7, ugc: "KSC177" }), row({ year: 2025, eventId: 8 }), row({ year: 2023, eventId: 9, ugc: "KSC001" }), row({ eventId: 10, ugc: "" })],
+      faults: {},
+    });
+    expect(tally.counts().codes).toEqual({ "2024": { counties: 2, zones: 1 }, "2025": { counties: 1, zones: 0 }, "2026": { counties: 0, zones: 0 } });
   });
 
   it("tells a doubt of the list of the national numbers only with enough shared numbers", () => {

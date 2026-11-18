@@ -1,7 +1,7 @@
 import { fakeWallClock } from "@mark1russell7/algebra/clock";
-import { DEFAULT_CHANNEL_DOWN, type ChannelId, type ChannelProcedures, type Delivery, type HealthTrack, type ProbeOutcome, type SourceId } from "@mark1russell7/alerts";
+import { DEFAULT_CHANNEL_DOWN, runOpens, type ChannelId, type ChannelProcedures, type Delivery, type HealthTrack, type ProbeOutcome, type SourceId } from "@mark1russell7/alerts";
 import { describe, expect, it } from "vitest";
-import { channelWatch, lastFetchSuccess, PROBE_BACKOFF } from "./channel-watch.ts";
+import { channelWatch, lastFetchSuccess, PROBE_BACKOFF, PROBE_IDLE } from "./channel-watch.ts";
 import type { DeliveryFailure, DeliveryStep } from "./delivery.ts";
 
 // The watch of the channels of one copy (AL-65). Each name and endpoint is made up.
@@ -61,50 +61,69 @@ describe("the watch of the channels", () => {
     expect(watch.snapshots()[0]).not.toHaveProperty("run");
   });
 
-  it("probes a down channel on a backoff from 1 to 30 minutes, and a pass ends the run with no send", async () => {
+  it("probes each channel 1 minute after the start, 15 minutes after a good call, and on a backoff after failed probes", async () => {
     const clock = fakeWallClock(T0);
-    let up = false;
+    let up = true;
     const at: number[] = [];
     const probe = async (): Promise<ProbeOutcome> => {
       at.push(clock.now());
       return up ? { ok: true, at: clock.now() } : { ok: false, kind: "server", message: "The provider gave the status 503." };
     };
-    const watch = channelWatch({ copy: "copy-a", channels: [procedures(PUSH, probe)], policy: DEFAULT_CHANNEL_DOWN, clock, callLimit: 10 * SECOND });
-    watch.step({ ...EMPTY, failures: [failed(PUSH, "server")] }, T0, []);
-    // The first view of the line schedules the first probe, one backoff later.
-    expect(await watch.probe([PUSH], clock.now())).toBe(false);
+    const watch = channelWatch({ copy: "copy-a", channels: [procedures(PUSH, probe), procedures(TEXT)], policy: DEFAULT_CHANNEL_DOWN, clock, callLimit: 10 * SECOND });
+    expect(await watch.probe(T0)).toBe(false);
     expect(at).toEqual([]);
-    for (let index = 0; index < 7; index += 1) {
-      const next = watch.wakeAt();
-      if (next === undefined) throw new Error("The watch has no next probe.");
-      await clock.advance(next - clock.now());
-      expect(await watch.probe([PUSH], clock.now())).toBe(false);
-    }
-    const gaps = at.map((time, index) => time - (index === 0 ? T0 : at[index - 1]!));
-    expect(gaps).toEqual([1, 2, 4, 8, 16, 30, 30].map((minutes) => minutes * MINUTE));
-    expect(PROBE_BACKOFF).toEqual({ base: MINUTE, factor: 2, cap: 30 * MINUTE });
-    // A failed probe does not count in the run.
-    expect(watch.snapshots()[0]?.run?.failures).toBe(1);
-    up = true;
-    await clock.advance(watch.wakeAt()! - clock.now());
-    expect(await watch.probe([PUSH], clock.now())).toBe(true);
-    expect(watch.snapshots()[0]).toEqual({ copy: "copy-a", channel: PUSH, title: "The push channel", api: ["domain:push.example.com"], good: clock.now() });
-    expect(watch.wakeAt()).toBeUndefined();
-  });
-
-  it("gives a probe past the call limit as a time-out, and stops the probes of a line that ended", async () => {
-    const clock = fakeWallClock(T0);
-    const watch = channelWatch({ copy: "copy-a", channels: [procedures(PUSH, () => new Promise<ProbeOutcome>(() => undefined)), procedures(TEXT)], policy: DEFAULT_CHANNEL_DOWN, clock, callLimit: 10 * SECOND });
-    // The text channel has no probe: it keeps its line until an accepted send.
-    await watch.probe([PUSH, TEXT], T0);
     expect(watch.wakeAt()).toBe(T0 + MINUTE);
     await clock.advance(MINUTE);
-    const pending = watch.probe([PUSH, TEXT], clock.now());
+    expect(await watch.probe(clock.now())).toBe(true);
+    expect(watch.wakeAt()).toBe(T0 + MINUTE + PROBE_IDLE);
+    // An accepted send is a good call too: the next probe waits 15 minutes after it.
+    watch.step({ ...EMPTY, sent: [sent(PUSH, T0 + 10 * MINUTE)] }, T0 + 10 * MINUTE, []);
+    expect(watch.wakeAt()).toBe(T0 + 10 * MINUTE + PROBE_IDLE);
+
+    // The provider fails with no message to send. Each failed probe counts in the run, and the waits grow to 30 minutes.
+    up = false;
+    const first = at.length;
+    for (let index = 0; index < 8; index += 1) {
+      await clock.advance(watch.wakeAt()! - clock.now());
+      expect(await watch.probe(clock.now())).toBe(false);
+    }
+    const failed = at.slice(first);
+    expect(failed[0]).toBe(T0 + 10 * MINUTE + PROBE_IDLE);
+    expect(failed.slice(1).map((time, index) => time - failed[index]!)).toEqual([1, 2, 4, 8, 16, 30, 30].map((minutes) => minutes * MINUTE));
+    expect(PROBE_BACKOFF).toEqual({ base: MINUTE, factor: 2, cap: 30 * MINUTE });
+    const run = watch.snapshots()[0]?.run;
+    expect(run).toMatchObject({ failures: 8, first: failed[0], last: failed[7], kind: "server", reached: true });
+    expect(runOpens(run!, DEFAULT_CHANNEL_DOWN)).toBe(true);
+
+    // The provider comes back. The next probe passes and ends the run with no send.
+    up = true;
+    await clock.advance(watch.wakeAt()! - clock.now());
+    expect(await watch.probe(clock.now())).toBe(true);
+    expect(watch.snapshots()[0]).toEqual({ copy: "copy-a", channel: PUSH, title: "The push channel", api: ["domain:push.example.com"], good: clock.now() });
+    expect(watch.wakeAt()).toBe(clock.now() + PROBE_IDLE);
+  });
+
+  it("gives a probe past the call limit as a time-out and a probe that throws as a network failure", async () => {
+    const clock = fakeWallClock(T0);
+    const CALL = "call" as ChannelId;
+    const thrower = async (): Promise<ProbeOutcome> => {
+      throw new Error("The socket closed.");
+    };
+    const watch = channelWatch({ copy: "copy-a", channels: [procedures(PUSH, () => new Promise<ProbeOutcome>(() => undefined)), procedures(TEXT), procedures(CALL, thrower)], policy: DEFAULT_CHANNEL_DOWN, clock, callLimit: 10 * SECOND });
+    await watch.probe(T0);
+    await clock.advance(MINUTE);
+    const pending = watch.probe(clock.now());
     await clock.advance(10 * SECOND);
     expect(await pending).toBe(false);
-    expect(watch.wakeAt()).toBe(T0 + MINUTE + 10 * SECOND + 2 * MINUTE);
-    await watch.probe([], clock.now());
-    expect(watch.wakeAt()).toBeUndefined();
+    // With no source success during the run, a time-out and a network failure do not reach the provider: the copy can be offline.
+    const runs = Object.fromEntries(watch.snapshots().map((snapshot) => [snapshot.channel, snapshot.run]));
+    expect(runs).toEqual({
+      push: { channel: PUSH, failures: 1, first: T0 + MINUTE + 10 * SECOND, last: T0 + MINUTE + 10 * SECOND, kind: "timeout", reached: false },
+      text: undefined,
+      call: { channel: CALL, failures: 1, first: T0 + MINUTE + 10 * SECOND, last: T0 + MINUTE + 10 * SECOND, kind: "network", reached: false },
+    });
+    // The text channel has no probe. It keeps a line until an accepted send.
+    expect(watch.wakeAt()).toBe(T0 + 2 * MINUTE + 10 * SECOND);
   });
 
   it("gives the time of the last passed fetch of any source", () => {

@@ -24,6 +24,7 @@ import {
   type TwilioText,
   type TwilioTextRead,
 } from "@procedures/notify/twilio";
+import { twilioTextServices } from "./carrier.ts";
 import { probeTwilioAccount } from "./probe.ts";
 import { TWILIO_TEXT_LIMIT, twilioTextDescriptor } from "./descriptor.ts";
 import { callFailureOf, messageTextOf, type Refusal } from "./map.ts";
@@ -110,6 +111,7 @@ export interface TwilioTextChannelOptions extends TwilioTextMapOptions {
  * - A refusal of Twilio with `TWILIO_UNSUBSCRIBED` records the STOP of the number, and `send` gives `consent`.
  * - `status` does not throw. A receipt that the channel cannot read keeps the state `accepted`.
  * - `cancel` does nothing.
+ * - `services` gives the carrier region of the phone of an address, with the type of the sender (`twilioTextServices`).
  */
 export function createTwilioTextChannel(options: TwilioTextChannelOptions): ChannelProcedures {
   const now = options.now ?? Date.now;
@@ -123,6 +125,8 @@ export function createTwilioTextChannel(options: TwilioTextChannelOptions): Chan
 
   return {
     describe: () => descriptor,
+
+    services: ({ address }) => twilioTextServices(address, options.from),
 
     async send({ message, address }): Promise<SendOutcome> {
       const at = now();

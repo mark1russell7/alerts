@@ -179,8 +179,13 @@ function streamingFetch(year: number, result: { harm?: YearHarm }): FetchLike {
 async function measureNcei(): Promise<{ files: DetailsFile[]; harms: YearHarm[] }> {
   const intervalMs = await allow(NCEI_FOLDER_URL);
   const folder = requester("ncei", NCEI_FOLDER_URL, intervalMs, NCEI_TIMEOUT_MS, fetchTransport({ userAgent: USER_AGENT }));
-  const listed = await folder.get({ path: "/", what: "the list of the Storm Events files" });
-  if (!listed.ok) throw new Error(`NCEI did not give the list of files: ${listed.failure.kind}: ${listed.failure.message}`);
+  // The NCEI server gives a 503 at times. The list gets the same tries as each file.
+  let listed = await folder.get({ path: "/", what: "the list of the Storm Events files" });
+  for (let attempt = 2; attempt <= TRIES && !listed.ok; attempt += 1) {
+    log(`ncei list: try ${String(attempt - 1)} failed: ${listed.failure.kind}: ${listed.failure.message}`);
+    listed = await folder.get({ path: "/", what: "the list of the Storm Events files" });
+  }
+  if (!listed.ok) throw new Error(`NCEI did not give the list of files in ${String(TRIES)} tries: ${listed.failure.kind}: ${listed.failure.message}`);
   const all = detailsFiles(listed.answer.reply.body);
   const files: DetailsFile[] = [];
   for (let year = nceiYears.first; year <= nceiYears.last; year += 1) {
