@@ -41,10 +41,11 @@ import { ANOMALIES_DESCRIPTOR as RADAR_ANOMALIES, OUTAGES_DESCRIPTOR as RADAR_OU
 import { FIREBASE_DESCRIPTOR, GCP_DESCRIPTOR } from "@mark1russell7/alerts-source-gcp";
 import { descriptorOf as statusPageDescriptor, pagePath, STATUS_PAGES, type StatusPage } from "@mark1russell7/alerts-source-statuspage";
 import { ENERGY_CHARTS_MEASURES, SOURCE_ID as ENERGY_CHARTS_SOURCE, WINDOW_MINUTES } from "@mark1russell7/alerts-source-energy-charts";
+import { DATE_FORMAT as EIA_DATE_FORMAT, EIA_930_DESCRIPTOR, HOUR_MS, periodEnd, periodText } from "@mark1russell7/alerts-source-eia-930";
 import { memoryQuotaStore, quotaGate, type Exchange, type Transport } from "polite-crawler/api";
 import { DEFAULT_POLICY } from "polite-crawler/politeness";
 import { afterEach, describe, expect, it } from "vitest";
-import { ACCOUNT_SOURCES, BOM_SWS_KEY, CHECKS_KEY, CLOUDFLARE_RADAR_KEY, checksKeys, DAEMON_CHECK, daemonCheck, DELIVERY_TIMES, INSTANCE_CHANNELS, INSTANCE_CHECK, INSTANCE_EXPECTATIONS, INSTANCE_FETCH_LIMIT, INSTANCE_SOURCES, INSTANCE_TIMES, instanceCheck, instanceProblems, instanceServices, shownNode, shownServices, LOUD_PING_URL_KEY, nwwsKeys, nwwsSetup, openInstance, PING_URL_KEY, pingKeyOf, pingTargets, RANK_DELAY, RANK_FLOOR, SOURCE_POLICY, sourcePace, twilioSetup, USER_AGENT_NAME, type Instance, type InstanceOptions } from "./instance.ts";
+import { ACCOUNT_SOURCES, BOM_SWS_KEY, CHECKS_KEY, EIA_KEY, CLOUDFLARE_RADAR_KEY, checksKeys, DAEMON_CHECK, daemonCheck, DELIVERY_TIMES, INSTANCE_CHANNELS, INSTANCE_CHECK, INSTANCE_EXPECTATIONS, INSTANCE_FETCH_LIMIT, INSTANCE_SOURCES, INSTANCE_TIMES, instanceCheck, instanceProblems, instanceServices, shownNode, shownServices, LOUD_PING_URL_KEY, nwwsKeys, nwwsSetup, openInstance, PING_URL_KEY, pingKeyOf, pingTargets, RANK_DELAY, RANK_FLOOR, SOURCE_POLICY, sourcePace, twilioSetup, USER_AGENT_NAME, type Instance, type InstanceOptions } from "./instance.ts";
 import { heartbeatGap } from "./heartbeat.ts";
 import { spendGates, spendQuota } from "./balance.ts";
 import { CLOCK_SKEW_LIMIT, COPY_TOKEN_KEY, EXCHANGE_EVERY, EXCHANGE_LIMIT } from "./copy.ts";
@@ -144,6 +145,24 @@ function energyChartsAnswer(url: URL): string {
     license: "CC BY 4.0 (creativecommons.org/licenses/by/4.0), attribution: energy-charts.info",
     deprecated: false,
   });
+}
+
+/**
+ * The answer of EIA to a query of the hourly demand. Each hour of the query has the demand and the forecast of one
+ * balancing authority, PJM, and of the sum US48. The demand of each hour is 1,000 MWh above its forecast.
+ */
+function eiaAnswer(url: URL): string {
+  const start = periodEnd(url.searchParams.get("start"));
+  const end = periodEnd(url.searchParams.get("end"));
+  if (start === undefined || end === undefined) throw new Error("the query of EIA has no hours");
+  const data: Record<string, string>[] = [];
+  for (let at = start; at <= end; at += HOUR_MS) {
+    for (const [respondent, forecast] of [["PJM", 90_000], ["US48", 430_000]] as const) {
+      data.push({ period: periodText(at), respondent, type: "D", value: String(forecast + 1000), "value-units": "megawatthours" });
+      data.push({ period: periodText(at), respondent, type: "DF", value: String(forecast), "value-units": "megawatthours" });
+    }
+  }
+  return JSON.stringify({ response: { total: String(data.length), dateFormat: EIA_DATE_FORMAT, frequency: "hourly", data }, apiVersion: "2.1.14" });
 }
 
 /**
@@ -312,6 +331,7 @@ function network(delay = 0) {
     if (url.hostname === "rssfeed.azure.status.microsoft") return { status: 200, statusText: "OK", headers: { "content-type": "text/xml; charset=utf-8" }, body: azureAnswer() };
     if (url.hostname === "www.cisa.gov") return { status: 200, statusText: "OK", headers: { "content-type": "application/json" }, body: kevAnswer() };
     if (url.hostname === "api.energy-charts.info") return { status: 200, statusText: "OK", headers: { "content-type": "application/json" }, body: energyChartsAnswer(url) };
+    if (url.hostname === "api.eia.gov") return { status: 200, statusText: "OK", headers: { "content-type": "application/json" }, body: eiaAnswer(url) };
     if (url.hostname === "www.tsunami.gov") {
       const name = url.pathname.endsWith("/PHEBCAP.xml") ? "PHEBCAP-20261116T1134Z.xml" : "PAAQCAP-20261116T1134Z.xml";
       return { status: 200, statusText: "OK", headers: { "content-type": "text/xml" }, body: fixture("alerts-source-tsunami", name) };
@@ -721,6 +741,35 @@ describe("openInstance", () => {
     for (const name of readdirSync(folder)) expect(readFileSync(join(folder, name)).includes(key), name).toBe(false);
   });
 
+  it("reads EIA-930 only when the secrets have its key, keeps its readings, and the key goes only into the query of each URL to EIA", async () => {
+    const key = "eia-test-key-3b9a";
+    const folder = mkdtempSync(join(tmpdir(), "alerts-readings-"));
+    const readings = openReadingStore(join(folder, READINGS_FILE));
+    try {
+      const { instance, clock, net } = open(store({ ...SECRETS, [EIA_KEY]: key }), CONFIG, 0, TEST_FETCH_LIMIT, { readings });
+      const pass = await finish(clock, instance.runtime.pass());
+      expect(pass.fetched).toEqual(["nws-api", "ipaws", "usgs", "emsc", "tsunami-ntwc", "tsunami-ptwc", "swpc", "gfz", "energy-charts", EIA_930_DESCRIPTOR.id, "cisa-kev"]);
+      expect(pass.view.health.find((health) => health.source === EIA_930_DESCRIPTOR.id)?.state).toBe("healthy");
+      // The first fetch reads the past hours and one day of history.
+      const eia = net.exchanges.filter((exchange) => new URL(exchange.url).hostname === "api.eia.gov");
+      expect(eia).toHaveLength(2);
+      for (const exchange of eia) expect(new URL(exchange.url).searchParams.get("api_key")).toBe(key);
+      for (const exchange of eia) expect(JSON.stringify(exchange.headers)).not.toContain(key);
+      for (const exchange of net.exchanges.filter((exchange) => !eia.includes(exchange))) expect(JSON.stringify(exchange)).not.toContain(key);
+      // The store keeps the hours of PJM, with the forecast as the expected value. The sum US48 gives no reading.
+      const refs = readings.refs().filter((ref) => ref.source === EIA_930_DESCRIPTOR.id);
+      expect(refs.map((ref) => ref.series)).toEqual(["PJM"]);
+      const series = readings.series(refs[0]!, 0);
+      expect(series.length).toBeGreaterThan(24);
+      for (const reading of series) expect(reading.value - (reading.expected ?? 0)).toBe(1000);
+      // The files of the runtime log and of the readings hold no key.
+      for (const where of [opened.at(-1)!.folder, folder]) for (const name of readdirSync(where)) expect(readFileSync(join(where, name)).includes(key), name).toBe(false);
+    } finally {
+      readings.close();
+      rmSync(folder, { recursive: true, force: true });
+    }
+  });
+
   it("reads Cloudflare Radar only when the secrets have its token, and the token goes only into the header authorization", async () => {
     const token = "radar-test-token-7c2e";
     const { instance, clock, net } = open(store({ ...SECRETS, [CLOUDFLARE_RADAR_KEY]: token }));
@@ -739,7 +788,7 @@ describe("openInstance", () => {
 
   it("keeps the times of the loop with each status page: each page has a longer interval than the shortest of the list", () => {
     const shortest = Math.min(...INSTANCE_SOURCES.map((source) => source.interval));
-    for (const descriptor of [GCP_DESCRIPTOR, FIREBASE_DESCRIPTOR, AWS_DESCRIPTOR, AZURE_DESCRIPTOR, BOM_SWS_DESCRIPTOR, RADAR_OUTAGES, RADAR_ANOMALIES]) {
+    for (const descriptor of [GCP_DESCRIPTOR, FIREBASE_DESCRIPTOR, AWS_DESCRIPTOR, AZURE_DESCRIPTOR, BOM_SWS_DESCRIPTOR, EIA_930_DESCRIPTOR, RADAR_OUTAGES, RADAR_ANOMALIES]) {
       expect(descriptor.interval, descriptor.id).toBeGreaterThanOrEqual(shortest);
       expect(INSTANCE_FETCH_LIMIT(descriptor), descriptor.id).toBe(shortest);
     }

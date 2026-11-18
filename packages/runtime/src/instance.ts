@@ -74,6 +74,7 @@ import { createNwwsSource, SOURCE_ID as NWWS_SOURCE, type NwwsAccount, type Open
 import { createGfzSource, GFZ_DESCRIPTOR } from "@mark1russell7/alerts-source-gfz";
 import { createCatalogFetch, createGtfsSource, type GtfsFeed, type GtfsFetchOptions } from "@mark1russell7/alerts-source-gtfs-alerts";
 import { createEnergyChartsSource, ENERGY_CHARTS_DESCRIPTOR } from "@mark1russell7/alerts-source-energy-charts";
+import { createEia930Source, type Eia930FetchOptions } from "@mark1russell7/alerts-source-eia-930";
 import { createKevSource, KEV_DESCRIPTOR } from "@mark1russell7/alerts-source-cisa-kev";
 import { createRadarAnomaliesSource, createRadarOutagesSource, type RadarSourceOptions } from "@mark1russell7/alerts-source-cloudflare-radar";
 import { AWS_DOMAIN, AWS_KIND, createAwsSource } from "@mark1russell7/alerts-source-aws";
@@ -315,6 +316,21 @@ const bomFactory =
     createBomSwsSource({ ...options, apiKey });
 
 /**
+ * The name of the key of `secrets.env` that holds the API key of EIA. With the key, the instance reads EIA-930: the hourly
+ * demand of each balancing authority of the United States, with its day-ahead forecast.
+ */
+export const EIA_KEY = "EIA_API_KEY";
+
+/**
+ * This function gives the factory of the EIA-930 source with the key of the secrets. The API takes the key only in the
+ * query of the URL. The source removes it from each URL and each message that it gives.
+ */
+const eiaFactory =
+  (apiKey: string) =>
+  (options: Omit<Eia930FetchOptions, "apiKey">): SourceProcedures =>
+    createEia930Source({ ...options, apiKey });
+
+/**
  * The name of the key of `secrets.env` that holds the API token of Cloudflare Radar. With the token, the instance reads
  * the confirmed internet outages and the traffic anomalies of Radar.
  */
@@ -361,9 +377,9 @@ const PROVIDER_FEEDS = [
  * not in this list, because the persons choose them. The feeds of Google Cloud (`source-gcp`), AWS (`source-aws`)
  * and Azure (`source-azure`) have the same rule.
  *
- * BoM (`source-bom-sws`) and the two sources of Cloudflare Radar (`source-cloudflare-radar`) are sources only when the
- * secrets have their keys. Thus they are not in the list. Each page, each feed, BoM and Radar have a longer interval
- * than the shortest interval of the list. Thus the times of the loop stay the same.
+ * BoM (`source-bom-sws`), EIA-930 (`source-eia-930`) and the two sources of Cloudflare Radar (`source-cloudflare-radar`)
+ * are sources only when the secrets have their keys. Thus they are not in the list. Each page, each feed, BoM, EIA-930
+ * and Radar have a longer interval than the shortest interval of the list. Thus the times of the loop stay the same.
  */
 export const INSTANCE_SOURCES: readonly SourceDescriptor[] = [
   NWS_DESCRIPTOR,
@@ -761,13 +777,13 @@ export interface Instance {
  *
  * - The sources are the NWS API, IPAWS, the USGS, EMSC, the two tsunami warning centers, the SWPC, GFZ,
  *   Energy-Charts and CISA KEV. The stream of NWWS-OI is a source when the secrets have the keys of the account of the
- *   copy (`nwwsSetup`). BoM is a source when the secrets have its key (`BOM_SWS_KEY`). The outages and the traffic
+ *   copy (`nwwsSetup`). BoM is a source when the secrets have its key (`BOM_SWS_KEY`), and so is EIA-930 (`EIA_KEY`). The outages and the traffic
  *   anomalies of Cloudflare Radar are sources when the secrets have its token (`CLOUDFLARE_RADAR_KEY`). Each status page that one of the
  *   persons can get is a source (`pagesFor`). The feed of Google Cloud, AWS or Azure is a source when one of the persons
  *   can get its reports (`watchReads`). Each transit feed of the copy of the catalog whose box meets a place is a source.
  * - Each source gets the codes of the places. It gets the position of a place only when the place shares it with that
- *   source. The USGS, EMSC, the centers, the SWPC, GFZ, BoM, Energy-Charts, CISA KEV, Radar, Google Cloud, AWS, Azure and the
- *   status pages ask for no place. The transit feeds also ask for no place.
+ *   source. The USGS, EMSC, the centers, the SWPC, GFZ, BoM, Energy-Charts, EIA-930, CISA KEV, Radar, Google Cloud, AWS, Azure
+ *   and the status pages ask for no place. The transit feeds also ask for no place.
  * - The channels are Pushover, and the Twilio call channel when the secrets have its keys. Each time of the delivery comes
  *   from a fact of the channels.
  * - A spend entry of a channel gives its cap and the watch of the balance of its account.
@@ -784,6 +800,8 @@ export function openInstance(options: InstanceOptions): Instance {
   const feeds = PROVIDER_FEEDS.filter((feed) => watches.some((watch) => watchReads(watch, feed)));
   // BoM gives its data only with a key of an account. With no key, the instance does not read BoM.
   const bomKey = options.secret(BOM_SWS_KEY) ?? "";
+  // EIA gives its data only with a key. With no key, the instance does not read EIA-930.
+  const eiaKey = options.secret(EIA_KEY) ?? "";
   // Radar gives its data only with a token of an account. With no token, the instance does not read Radar.
   const radarToken = options.secret(CLOUDFLARE_RADAR_KEY) ?? "";
   // The transit feeds come from the copy of the catalog. Only this choice reads the positions of the places, and no request holds them.
@@ -799,6 +817,7 @@ export function openInstance(options: InstanceOptions): Instance {
     createGfzSource,
     ...(bomKey === "" ? [] : [bomFactory(bomKey)]),
     createEnergyChartsSource,
+    ...(eiaKey === "" ? [] : [eiaFactory(eiaKey)]),
     createKevSource,
     ...(radarToken === "" ? [] : radarFactories(radarToken)),
     ...feeds.map((feed) => feed.create),
