@@ -400,7 +400,7 @@ export function openRuntime(options: RuntimeOptions): Runtime {
       if (started.length > 0) conflicts.push(...append(started));
       const drilled = drillStep(state, drills, self, at);
       const quotas = readQuotas();
-      const view = systemView(state, config, at, { drills: drilled.snapshots, ...(quotas === undefined ? {} : { quotas }), balances: watches.flatMap((watch) => watch.balance() ?? []), ...(options.copies === undefined ? {} : { copies: options.copies.watches() }), ...(folds === undefined ? {} : { folds }) });
+      const view = systemView(state, config, at, { drills: drilled.snapshots, ...(quotas === undefined ? {} : { quotas }), balances: watches.flatMap((watch) => watch.balance() ?? []), ...(options.copies === undefined ? {} : { copies: options.copies.watches(), copy: self }), ...(folds === undefined ? {} : { folds }) });
       folds = view.folds;
       const event = systemEvent(view);
       if (event !== undefined) conflicts.push(...append([event]));

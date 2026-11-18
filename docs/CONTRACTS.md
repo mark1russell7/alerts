@@ -354,6 +354,7 @@ A balance report has no area. Its subjects are `{ system: "alerts.channel", id: 
 - Money above a floor cancels the line of that floor. `balanceFloorsBelow` gives the floors above the read, from the highest.
 - `low` and `empty` come from the last read that passed, also when the read is old. A read that passes ends `unread`.
 - A snapshot with no balances keeps each open line of a balance.
+- With two copies, only one copy reports `low` and `empty` (see "The facts of a shared account"). Each copy reports its own `unread`.
 - The runtime gives `balanceWatch` for each account. Each pass checks each watch, and a watch reads once a day. A failed read tries again after one hour.
 - The time of the next read and the time of `unread` are timers of the pass.
 
@@ -620,6 +621,20 @@ The exchange also checks the copies. Each of these faults is a line of system re
 - the time of another copy differs from the time of this copy by more than 2 seconds, at the middle of the call
 - another copy has a different hash of the configuration: then the copies can route an alert in two ways
 - the reads of another copy fail for 60 seconds: then the two copies can both send
+
+### The facts of a shared account
+
+The copies read the same provider accounts. Thus only one copy reports the stages `low` and `empty` of a balance (AL-62):
+
+- The copy with the smallest id of the copies that answer reports them (`reportsShared`). The ids are in the order of code units.
+- Another copy answers until `SHARED_HANDOVER` (15 minutes) after its last read that passed, or after the start of its watch.
+- 15 minutes is longer than a restart. Thus a restart does not move the reports to another copy.
+- The other copies cancel their open lines `low` and `empty`. A cancel of a system line sends no new message.
+- When the copy that reports stops, the next copy reports after the handover. Thus a failover can send the alert one more time.
+- The handover time (`sharedHandoverAt`) is a timer of the pass.
+- Each copy reports its own stage `unread`, because it tells that the reads of that copy fail.
+- Each copy reports its own lines of a quota, because each copy counts its own sends.
+- A snapshot with no id of its copy, or with no watches of other copies, reports each stage, as one copy does.
 
 The worker of the exchange (`exchangeWorker` of the runtime) does the reads:
 
