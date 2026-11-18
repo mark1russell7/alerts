@@ -510,6 +510,7 @@ The watch of the replies (`replyWatch` of the runtime, AL-56) gives the opt-in o
 The cap of the spend of a Twilio channel is two gates of `polite-crawler/api`, with one store, one key and one quota name:
 
 - The limit of the gates is the monthly cap less the fixed costs of the spend entry (`fixed`). A fixed cost is, for example, the rent of a phone number.
+- Give fixed costs only for a cap of the whole bill. With no fixed cost, the whole cap is for the sends.
 - The reserve is a part of that limit. `loadConfig` refuses fixed costs that use all of the cap, and a reserve that is not below the rest.
 - The two gates count the same units. The gate of `life-safety` has no reserve. Thus only `life-safety` uses the last part of the cap.
 - A full cap gives `rate-limited`. A cap in its reserve gives `reserved` to a message below `life-safety`.
@@ -968,6 +969,7 @@ The function `openInstance` makes the instance of the owner from the private con
 - The sources are the NWS API and IPAWS. The channels are Pushover, and the Twilio call channel when `secrets.env` has its keys.
 - The keys of Twilio are `TWILIO_ACCOUNT_SID`, `TWILIO_API_KEY_SID`, `TWILIO_API_KEY_SECRET` and `TWILIO_FROM`. An API key signs each request.
 - The optional key `TWILIO_TEXT_FROM` adds the text channel. It holds the registered sender of texts: a phone of a 10DLC campaign or a verified toll-free phone.
+- The instance never texts from `TWILIO_FROM`. Without `TWILIO_TEXT_FROM`, the text channel and the texts of the outage call are off.
 - A spend entry of a provider of a channel gives the cap of the channel. The count of the cap is in `quotas.sqlite`.
 - The spend entry of Twilio also gives the watch of the balance: one read each day, and its floor.
 - Each source gets the watch of `sourcePlaces`. Thus a source gets the region codes, and a position only when the place shares it with that source.
@@ -1111,7 +1113,7 @@ The package `@mark1russell7/alerts-channel-twilio` operates the chain on the ser
 - The setup of the runtime refuses an outage call with no spend entry for Twilio. Each problem of the monthly cap names no count, because the spend cap is private.
 - The spend gate of the instance does not count the calls of the Functions as sends. The watch of the spend adds them (AL-57).
 - The gate also reads the usage records of Twilio for the local month, in whole UTC days. It uses the larger of that amount and its own count, by the rule of `@mark1russell7/stack-spend`.
-- `readTwilioSpend` gives the record `totalprice` less the record `phonenumbers`, from the GMT day of the start of the month. The rent of the numbers is in the fixed costs.
+- `readTwilioSpend` gives the record `totalprice` less the record `phonenumbers`, from the GMT day of the start of the month. Thus the read has no rent of a number. The cap holds the rent only when the spend entry lists it in `fixed`.
 - The first GMT day can hold some hours of the month before. The cap can then stop a send early, but not late.
 - `spendWatch` of the runtime reads the spend of the provider each hour, from the start of the month of the cap. It notes the spend in the count of the gates. The count does not become smaller, thus the gate keeps the larger amount.
 - A failed read is a note in the body of each ping of the heartbeat, and the watch reads again after 15 minutes. A read that ends in the next month does not change the count.
@@ -1190,8 +1192,8 @@ The system fold gives the drill lines (the section of the system reports). The m
 
 The next steps are these:
 
-- The map and the explanation of a route show the steps that the channel rules remove (`Route.ruled`).
-- Then comes a drill of the outage call.
+- A drill of the outage call.
+- Later: a view of the plan of each person on the page. No page shows a plan today. That view also shows the steps that the channel rules remove (`Route.ruled`).
 
 ## People and places
 
@@ -1365,6 +1367,7 @@ The route `GET /map` of the runtime gives the `MapPayload` of `mapPayload`:
 - `at`: the time of the last pass, or `null` before the first pass.
 - `view`: the view of the last pass. The payload assesses each live incident for each person, with the policy of the delivery.
 - `basemap`: the regions under the view, simplified for the view box of the page.
+- `breadth`: the breadth of the indicator signals of the last pass, in the world and at each place. A runtime with no store of the readings has no field. The field is optional, thus the format keeps its name.
 
 Thus the level on the map is the level that the delivery gives. A mute with the effect `absent` gives `none`, as in `route` (`reachedAssessment`).
 
@@ -1394,6 +1397,14 @@ The route `GET /health` of the runtime gives the `HealthPayload` of `healthPaylo
 The coverage holds the ids of the places. Thus only the loopback address gives the route, as for the map.
 
 The local page shows the payload in the panel "Sources" (`packages/site/src/health-read.ts`, `health-view.ts`).
+
+The panel "Indicators" of the local page shows the field `breadth` of the live map (`packages/site/src/indicators-view.ts`).
+
+- The first row is the world, and each other row is a watched place. Each row tells the dimensions out of their normal level and the dimensions with a read.
+- Each row has one line for each dimension with a series: the series out of the normal level, and the series with no read.
+- The panel tells the counts, and no decision. The threat level (AL-24) reads the same counts.
+- The panel is of the present, also when the map shows a past time. The history keeps no breadth.
+- A runtime with no store of the readings gives no field, and the panel tells it. A breadth with no series tells that no source gives indicator readings yet.
 
 - The page reads the route after each good read of the map. A runtime with no `health` option gives 404, and the panel tells that it has no health.
 - Two sentences sum the payload: the sources, and the quotas and balances that stop or limit a message. A link at the top of the page has the same sentences.
