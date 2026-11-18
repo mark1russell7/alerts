@@ -592,6 +592,9 @@ importers:
       '@mark1russell7/alerts-source-nwws':
         specifier: workspace:*
         version: link:../source-nwws
+      '@mark1russell7/alerts-source-statuspage':
+        specifier: workspace:*
+        version: link:../source-statuspage
       '@mark1russell7/alerts-source-swpc':
         specifier: workspace:*
         version: link:../source-swpc
@@ -960,6 +963,9 @@ importers:
         specifier: ^0.7.3
         version: 0.7.4(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
     devDependencies:
+      '@mark1russell7/alerts-source-swpc':
+        specifier: workspace:*
+        version: link:../source-swpc
       '@mark1russell7/cue':
         specifier: ^2.0.0
         version: 2.1.4

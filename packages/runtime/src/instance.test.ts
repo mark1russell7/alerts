@@ -33,6 +33,7 @@ import { CANARY_PATH, createNwsSource } from "@mark1russell7/alerts-source-nws-a
 import { fakeSessions, NWWS_DESCRIPTOR } from "@mark1russell7/alerts-source-nwws";
 import { SWPC_KINDS } from "@mark1russell7/alerts-source-swpc";
 import { KEV_KINDS } from "@mark1russell7/alerts-source-cisa-kev";
+import { descriptorOf as statusPageDescriptor, STATUS_PAGES, type StatusPage } from "@mark1russell7/alerts-source-statuspage";
 import { ENERGY_CHARTS_MEASURES, SOURCE_ID as ENERGY_CHARTS_SOURCE, WINDOW_MINUTES } from "@mark1russell7/alerts-source-energy-charts";
 import { memoryQuotaStore, quotaGate, type Exchange, type Transport } from "polite-crawler/api";
 import { DEFAULT_POLICY } from "polite-crawler/politeness";
@@ -150,6 +151,27 @@ function kevAnswer(): string {
 }
 
 /**
+ * The answer of a status page to the request of its summary. It is the recorded summary of the page of OpenAI in the
+ * package `source-statuspage`, with its times moved to the time of the tests. The page of GitHub gives its incident,
+ * which the provider watches after a fix. Each other page gives no incident.
+ */
+function statusPageAnswer(page: StatusPage): string {
+  const summary = JSON.parse(fixture("alerts-source-statuspage", "openai-20261118.json")) as { page: Record<string, unknown>; incidents: Record<string, unknown>[] } & Record<string, unknown>;
+  const time = (minutes: number): string => new Date(T0 + minutes * 60_000).toISOString();
+  const live = summary.incidents.map((incident) => ({
+    ...incident,
+    created_at: time(-60),
+    updated_at: time(-10),
+    monitoring_at: time(-10),
+    incident_updates: (incident["incident_updates"] as Record<string, unknown>[]).map((update, index) => ({ ...update, created_at: time(-10 - 20 * index), updated_at: time(-10 - 20 * index), display_at: time(-10 - 20 * index) })),
+  }));
+  return JSON.stringify({ ...summary, page: { ...summary.page, updated_at: time(-10) }, incidents: page.id === "statuspage-github" ? live : [] });
+}
+
+/** The status page of each host. */
+const STATUS_HOSTS: ReadonlyMap<string, StatusPage> = new Map(STATUS_PAGES.map((page) => [new URL(page.base).hostname, page]));
+
+/**
  * A fake network with recorded answers. The NWS API gives the Flood Warning to the request of the
  * state, the keepalive to the canary, and no alert to the WEA request. The IPAWS feed has no alert.
  *
@@ -159,6 +181,7 @@ function kevAnswer(): string {
  *
  * GFZ gives a quiet value of the index Kp for each interval of the window of the query (`gfzAnswer`). Energy-Charts gives
  * the nominal frequency for each second of the query (`energyChartsAnswer`). CISA gives a catalog with one live entry (`kevAnswer`).
+ * Each status page gives its summary (`statusPageAnswer`).
  *
  * Each exchange takes `delay` milliseconds of real time, as on a busy runner. With `Infinity`, no exchange ends.
  */
@@ -176,6 +199,8 @@ function network(delay = 0) {
     if (url.hostname === "www.seismicportal.eu") return { status: 200, statusText: "OK", headers: { "content-type": "application/json" }, body: fixture("alerts-source-emsc", "query-2.5_day-20261116T0528Z.json") };
     if (url.hostname === "services.swpc.noaa.gov") return { status: 200, statusText: "OK", headers: { "content-type": "application/json" }, body: fixture("alerts-source-swpc", "alerts-20261116T1553Z.json") };
     if (url.hostname === "kp.gfz.de") return { status: 200, statusText: "OK", headers: { "content-type": "application/json" }, body: gfzAnswer(url) };
+    const statusPage = STATUS_HOSTS.get(url.hostname);
+    if (statusPage !== undefined) return { status: 200, statusText: "OK", headers: { "content-type": "application/json; charset=utf-8" }, body: statusPageAnswer(statusPage) };
     if (url.hostname === "www.cisa.gov") return { status: 200, statusText: "OK", headers: { "content-type": "application/json" }, body: kevAnswer() };
     if (url.hostname === "api.energy-charts.info") return { status: 200, statusText: "OK", headers: { "content-type": "application/json" }, body: energyChartsAnswer(url) };
     if (url.hostname === "www.tsunami.gov") {
@@ -472,6 +497,35 @@ describe("openInstance", () => {
     expect(flaws.map((incident) => [incident.areas, incident.about.map((subject) => subject.system)])).toEqual([[[], ["cve"]]]);
     expect(flaws[0]?.expires).toBe(Date.parse(new Date(T0 + 15 * 86_400_000).toISOString().slice(0, 10)));
     expect(server.calls.map((call) => call.fields["title"])).toEqual([expect.stringContaining("Flood Warning")]);
+  });
+
+  it("reads the status pages that a person with the work software can get, and gives an incident with the domain of the service as its subject", async () => {
+    const software: AlertConfig = { ...CONFIG, people: CONFIG.people.map((entry) => ({ ...entry, defaults: { works: ["software"] } })) };
+    const { instance, clock, net } = open(store(SECRETS), software);
+    const pass = await finish(clock, instance.runtime.pass());
+    const pages = STATUS_PAGES.filter((page) => ["infra.saas.outage", "infra.cloud.outage", "infra.internet.dns-cdn"].includes(page.kind));
+    expect(pages.length).toBeGreaterThan(20);
+    expect(pass.fetched).toEqual(["nws-api", "ipaws", "usgs", "emsc", "tsunami-ntwc", "tsunami-ptwc", "swpc", "gfz", "energy-charts", "cisa-kev", ...pages.map((page) => page.id)]);
+    expect(pass.view.health.filter((health) => health.source.startsWith("statuspage-")).map((health) => [health.source, health.state])).toEqual(pages.map((page) => [page.id, "healthy"]));
+    const asked = new Set(net.exchanges.map((exchange) => new URL(exchange.url)).filter((url) => STATUS_HOSTS.has(url.hostname)).map((url) => url.origin + url.pathname));
+    expect(asked).toEqual(new Set(pages.map((page) => `${page.base}/api/v2/summary.json`)));
+    const outages = pass.view.incidents.filter((incident) => incident.kind.code === "infra.saas.outage");
+    expect(outages.map((incident) => [incident.areas, incident.about])).toEqual([[[], [{ system: "domain", id: "github.com", label: "GitHub" }]]]);
+  });
+
+  it("reads no status page for persons with no work, no service and no subject watch", async () => {
+    const { instance, clock, net } = open();
+    await finish(clock, instance.runtime.pass());
+    expect(net.exchanges.filter((exchange) => STATUS_HOSTS.has(new URL(exchange.url).hostname))).toEqual([]);
+    expect(instance.runtime.config.sources.some((source) => source.id.startsWith("statuspage-"))).toBe(false);
+  });
+
+  it("keeps the times of the loop with each status page: each page has a longer interval than the shortest of the list", () => {
+    const shortest = Math.min(...INSTANCE_SOURCES.map((source) => source.interval));
+    for (const page of STATUS_PAGES) {
+      expect(statusPageDescriptor(page).interval, page.id).toBeGreaterThanOrEqual(shortest);
+      expect(INSTANCE_FETCH_LIMIT(statusPageDescriptor(page)), page.id).toBe(shortest);
+    }
   });
 
   it("gives no contact in the User-Agent without a contact in the configuration, and no request holds a position or an account", async () => {

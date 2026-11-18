@@ -1,0 +1,98 @@
+[
+  {
+    "file": "alerts_202408.html",
+    "message": "Space Weather Message Code: WARK04\nSerial Number: 4672\nIssue Time: 2024 Aug 27 2323 UTC\n\n\nWARNING: Geomagnetic K-index of 4 expected\nValid From: 2024 Aug 27 2323 UTC\nValid To: 2024 Aug 28 0900 UTC\nWarning Condition: Onset\nwww.swpc.noaa.gov/noaa-scales-explanation\nPotential Impacts: Area of impact primarily poleward of 65 degrees Geomagnetic Latitude.\nInduced Currents - Weak power grid fluctuations can occur.\nAurora - Aurora may be visible at high latitudes such as Canada and Alaska."
+  },
+  {
+    "file": "alerts_202408.html",
+    "message": "Space Weather Message Code: ALTK04\nSerial Number: 2467\nIssue Time: 2024 Aug 28 0004 UTC\n\n\nALERT: Geomagnetic K-index of 4\nSynoptic Period: 2100-2400 UTC\nActive Warning: Yes\nwww.swpc.noaa.gov/noaa-scales-explanation\nPotential Impacts: Area of impact primarily poleward of 65 degrees Geomagnetic Latitude.\nInduced Currents - Weak power grid fluctuations can occur.\nAurora - Aurora may be visible at high latitudes such as Canada and Alaska."
+  },
+  {
+    "file": "alerts_202408.html",
+    "message": "Space Weather Message Code: WARK05\nSerial Number: 1916\nIssue Time: 2024 Aug 28 0133 UTC\n\n\nWARNING: Geomagnetic K-index of 5 expected\nValid From: 2024 Aug 28 0133 UTC\nValid To: 2024 Aug 28 0900 UTC\nWarning Condition: Onset\nNOAA Scale: G1 - Minor\nwww.swpc.noaa.gov/noaa-scales-explanation\nPotential Impacts: Area of impact primarily poleward of 60 degrees Geomagnetic Latitude.\nInduced Currents - Weak power grid fluctuations can occur.\nSpacecraft - Minor impact on satellite operations possible.\nAurora - Aurora may be visible at high latitudes, i.e., northern tier of the U.S. such as northern Michigan and Maine."
+  },
+  {
+    "file": "alerts_202408.html",
+    "message": "Space Weather Message Code: ALTK05\nSerial Number: 1629\nIssue Time: 2024 Aug 28 0212 UTC\n\n\nALERT: Geomagnetic K-index of 5\nSynoptic Period: 0000-0300 UTC\nActive Warning: Yes\nNOAA Scale: G1 - Minor\nwww.swpc.noaa.gov/noaa-scales-explanation\nPotential Impacts: Area of impact primarily poleward of 60 degrees Geomagnetic Latitude.\nInduced Currents - Weak power grid fluctuations can occur.\nSpacecraft - Minor impact on satellite operations possible.\nAurora - Aurora may be visible at high latitudes, i.e., northern tier of the U.S. such as northern Michigan and Maine."
+  },
+  {
+    "file": "alerts_202408.html",
+    "message": "Space Weather Message Code: WARK06\nSerial Number: 540\nIssue Time: 2024 Aug 28 0223 UTC\n\n\nWARNING: Geomagnetic K-Index of 6 expected\nValid From: 2024 Aug 28 0223 UTC\nValid To: 2024 Aug 28 0900 UTC\nWarning Condition: Onset\nNOAA Scale: G2 - Moderate\nwww.swpc.noaa.gov/noaa-scales-explanation\nPotential Impacts: Area of impact primarily poleward of 55 degrees Geomagnetic Latitude.\nInduced Currents - Power grid fluctuations can occur. High-latitude power systems may experience voltage alarms.\nSpacecraft - Satellite orientation irregularities may occur; increased drag on low Earth-orbit satellites is possible.\nRadio - HF (high frequency) radio propagation can fade at higher latitudes.\nAurora - Aurora may be seen as low as New York to Wisconsin to Washington state."
+  },
+  {
+    "file": "alerts_202408.html",
+    "message": "Space Weather Message Code: ALTK06\nSerial Number: 589\nIssue Time: 2024 Aug 28 0301 UTC\n\n\nALERT: Geomagnetic K-index of 6\nSynoptic Period: 0000-0300 UTC\nActive Warning: Yes\nNOAA Scale: G2 - Moderate\nwww.swpc.noaa.gov/noaa-scales-explanation\nPotential Impacts: Area of impact primarily poleward of 55 degrees Geomagnetic Latitude.\nInduced Currents - Power grid fluctuations can occur. High-latitude power systems may experience voltage alarms.\nSpacecraft - Satellite orientation irregularities may occur; increased drag on low Earth-orbit satellites is possible.\nRadio - HF (high frequency) radio propagation can fade at higher latitudes.\nAurora - Aurora may be seen as low as New York to Wisconsin to Washington state."
+  },
+  {
+    "file": "alerts_202408.html",
+    "message": "Space Weather Message Code: ALTK05\nSerial Number: 1630\nIssue Time: 2024 Aug 28 0703 UTC\n\n\nALERT: Geomagnetic K-index of 5\nSynoptic Period: 0600-0900 UTC\nActive Warning: Yes\nNOAA Scale: G1 - Minor\nwww.swpc.noaa.gov/noaa-scales-explanation\nPotential Impacts: Area of impact primarily poleward of 60 degrees Geomagnetic Latitude.\nInduced Currents - Weak power grid fluctuations can occur.\nSpacecraft - Minor impact on satellite operations possible.\nAurora - Aurora may be visible at high latitudes, i.e., northern tier of the U.S. such as northern Michigan and Maine."
+  },
+  {
+    "file": "alerts_202408.html",
+    "message": "Space Weather Message Code: WARK04\nSerial Number: 4673\nIssue Time: 2024 Aug 28 0728 UTC\n\n\nEXTENDED WARNING: Geomagnetic K-index of 4 expected\nExtension to Serial Number: 4672\nValid From: 2024 Aug 27 2323 UTC\nNow Valid Until: 2024 Aug 28 2359 UTC\nWarning Condition: Persistence\nwww.swpc.noaa.gov/noaa-scales-explanation\nPotential Impacts: Area of impact primarily poleward of 65 degrees Geomagnetic Latitude.\nInduced Currents - Weak power grid fluctuations can occur.\nAurora - Aurora may be visible at high latitudes such as Canada and Alaska."
+  },
+  {
+    "file": "alerts_202408.html",
+    "message": "Space Weather Message Code: WARK05\nSerial Number: 1917\nIssue Time: 2024 Aug 28 0732 UTC\n\n\nEXTENDED WARNING: Geomagnetic K-index of 5 expected\nExtension to Serial Number: 1916\nValid From: 2024 Aug 28 0133 UTC\nNow Valid Until: 2024 Aug 28 1800 UTC\nWarning Condition: Persistence\nwww.swpc.noaa.gov/noaa-scales-explanation\nPotential Impacts: Area of impact primarily poleward of 60 degrees Geomagnetic Latitude.\nInduced Currents - Weak power grid fluctuations can occur.\nSpacecraft - Minor impact on satellite operations possible.\nAurora - Aurora may be visible at high latitudes, i.e., northern tier of the U.S. such as northern Michigan and Maine."
+  },
+  {
+    "file": "alerts_202408.html",
+    "message": "Space Weather Message Code: WATA20\nSerial Number: 1011\nIssue Time: 2024 Aug 28 2113 UTC\n\n\nWATCH: Geomagnetic Storm Category G1 Predicted\nHighest Storm Level Predicted by Day:\nAug 29:  G1 (Minor)   Aug 30:  None (Below G1)   Aug 31:  None (Below G1)\nTHIS SUPERSEDES ANY/ALL PRIOR WATCHES IN EFFECT\n\n\nComment: Lingering CME effects are likely to cause geomagnetic storming during the early hours of 29 Aug.\nwww.swpc.noaa.gov/noaa-scales-explanation\nPotential Impacts: Area of impact primarily poleward of 60 degrees Geomagnetic Latitude.\nInduced Currents - Weak power grid fluctuations can occur.\nSpacecraft - Minor impact on satellite operations possible.\nAurora - Aurora may be visible at high latitudes, i.e., northern tier of the U.S. such as northern Michigan and Maine."
+  },
+  {
+    "file": "alerts_202408.html",
+    "message": "Space Weather Message Code: WARK04\nSerial Number: 4674\nIssue Time: 2024 Aug 30 0849 UTC\n\n\nWARNING: Geomagnetic K-index of 4 expected\nValid From: 2024 Aug 30 0849 UTC\nValid To: 2024 Aug 30 1500 UTC\nWarning Condition: Onset\nwww.swpc.noaa.gov/noaa-scales-explanation\nPotential Impacts: Area of impact primarily poleward of 65 degrees Geomagnetic Latitude.\nInduced Currents - Weak power grid fluctuations can occur.\nAurora - Aurora may be visible at high latitudes such as Canada and Alaska."
+  },
+  {
+    "file": "alerts_202408.html",
+    "message": "Space Weather Message Code: ALTK04\nSerial Number: 2468\nIssue Time: 2024 Aug 30 0852 UTC\n\n\nALERT: Geomagnetic K-index of 4\nSynoptic Period: 0600-0900 UTC\nActive Warning: Yes\nwww.swpc.noaa.gov/noaa-scales-explanation\nPotential Impacts: Area of impact primarily poleward of 65 degrees Geomagnetic Latitude.\nInduced Currents - Weak power grid fluctuations can occur.\nAurora - Aurora may be visible at high latitudes such as Canada and Alaska."
+  },
+  {
+    "file": "alerts_202408.html",
+    "message": "Space Weather Message Code: WARK04\nSerial Number: 4675\nIssue Time: 2024 Aug 30 1321 UTC\n\n\nEXTENDED WARNING: Geomagnetic K-index of 4 expected\nExtension to Serial Number: 4674\nValid From: 2024 Aug 30 0849 UTC\nNow Valid Until: 2024 Aug 30 2359 UTC\nWarning Condition: Persistence\nwww.swpc.noaa.gov/noaa-scales-explanation\nPotential Impacts: Area of impact primarily poleward of 65 degrees Geomagnetic Latitude.\nInduced Currents - Weak power grid fluctuations can occur.\nAurora - Aurora may be visible at high latitudes such as Canada and Alaska."
+  },
+  {
+    "file": "alerts_202408.html",
+    "message": "Space Weather Message Code: WARK04\nSerial Number: 4676\nIssue Time: 2024 Aug 30 2334 UTC\n\n\nEXTENDED WARNING: Geomagnetic K-index of 4 expected\nExtension to Serial Number: 4675\nValid From: 2024 Aug 30 0849 UTC\nNow Valid Until: 2024 Aug 31 1200 UTC\nWarning Condition: Persistence\nwww.swpc.noaa.gov/noaa-scales-explanation\nPotential Impacts: Area of impact primarily poleward of 65 degrees Geomagnetic Latitude.\nInduced Currents - Weak power grid fluctuations can occur.\nAurora - Aurora may be visible at high latitudes such as Canada and Alaska."
+  },
+  {
+    "file": "alerts_202408.html",
+    "message": "Space Weather Message Code: WARK05\nSerial Number: 1918\nIssue Time: 2024 Aug 30 2334 UTC\n\n\nWARNING: Geomagnetic K-index of 5 expected\nValid From: 2024 Aug 30 2335 UTC\nValid To: 2024 Aug 31 0900 UTC\nWarning Condition: Onset\nNOAA Scale: G1 - Minor\nwww.swpc.noaa.gov/noaa-scales-explanation\nPotential Impacts: Area of impact primarily poleward of 60 degrees Geomagnetic Latitude.\nInduced Currents - Weak power grid fluctuations can occur.\nSpacecraft - Minor impact on satellite operations possible.\nAurora - Aurora may be visible at high latitudes, i.e., northern tier of the U.S. such as northern Michigan and Maine."
+  },
+  {
+    "file": "alerts_202408.html",
+    "message": "Space Weather Message Code: ALTK05\nSerial Number: 1631\nIssue Time: 2024 Aug 30 2359 UTC\n\n\nALERT: Geomagnetic K-index of 5\nSynoptic Period: 2100-2400 UTC\nActive Warning: Yes\nNOAA Scale: G1 - Minor\nwww.swpc.noaa.gov/noaa-scales-explanation\nPotential Impacts: Area of impact primarily poleward of 60 degrees Geomagnetic Latitude.\nInduced Currents - Weak power grid fluctuations can occur.\nSpacecraft - Minor impact on satellite operations possible.\nAurora - Aurora may be visible at high latitudes, i.e., northern tier of the U.S. such as northern Michigan and Maine."
+  },
+  {
+    "file": "alerts_202408.html",
+    "message": "Space Weather Message Code: WARK05\nSerial Number: 1919\nIssue Time: 2024 Aug 31 0856 UTC\n\n\nEXTENDED WARNING: Geomagnetic K-index of 5 expected\nExtension to Serial Number: 1918\nValid From: 2024 Aug 30 2335 UTC\nNow Valid Until: 2024 Aug 31 1500 UTC\nWarning Condition: Persistence\nwww.swpc.noaa.gov/noaa-scales-explanation\nPotential Impacts: Area of impact primarily poleward of 60 degrees Geomagnetic Latitude.\nInduced Currents - Weak power grid fluctuations can occur.\nSpacecraft - Minor impact on satellite operations possible.\nAurora - Aurora may be visible at high latitudes, i.e., northern tier of the U.S. such as northern Michigan and Maine."
+  },
+  {
+    "file": "alerts_202408.html",
+    "message": "Space Weather Message Code: WARK04\nSerial Number: 4677\nIssue Time: 2024 Aug 31 0856 UTC\n\n\nEXTENDED WARNING: Geomagnetic K-index of 4 expected\nExtension to Serial Number: 4676\nValid From: 2024 Aug 30 0849 UTC\nNow Valid Until: 2024 Aug 31 1500 UTC\nWarning Condition: Persistence\nwww.swpc.noaa.gov/noaa-scales-explanation\nPotential Impacts: Area of impact primarily poleward of 65 degrees Geomagnetic Latitude.\nInduced Currents - Weak power grid fluctuations can occur.\nAurora - Aurora may be visible at high latitudes such as Canada and Alaska."
+  },
+  {
+    "file": "alerts_202408.html",
+    "message": "Space Weather Message Code: ALTK05\nSerial Number: 1632\nIssue Time: 2024 Aug 31 0914 UTC\n\n\nALERT: Geomagnetic K-index of 5\nSynoptic Period: 0900-1200 UTC\nActive Warning: Yes\nNOAA Scale: G1 - Minor\nwww.swpc.noaa.gov/noaa-scales-explanation\nPotential Impacts: Area of impact primarily poleward of 60 degrees Geomagnetic Latitude.\nInduced Currents - Weak power grid fluctuations can occur.\nSpacecraft - Minor impact on satellite operations possible.\nAurora - Aurora may be visible at high latitudes, i.e., northern tier of the U.S. such as northern Michigan and Maine."
+  },
+  {
+    "file": "alerts_202408.html",
+    "message": "Space Weather Message Code: WARK04\nSerial Number: 4678\nIssue Time: 2024 Aug 31 1444 UTC\n\n\nEXTENDED WARNING: Geomagnetic K-index of 4 expected\nExtension to Serial Number: 4677\nValid From: 2024 Aug 30 0849 UTC\nNow Valid Until: 2024 Aug 31 2100 UTC\nWarning Condition: Onset\nwww.swpc.noaa.gov/noaa-scales-explanation\nPotential Impacts: Area of impact primarily poleward of 65 degrees Geomagnetic Latitude.\nInduced Currents - Weak power grid fluctuations can occur.\nAurora - Aurora may be visible at high latitudes such as Canada and Alaska."
+  },
+  {
+    "file": "alerts_202408.html",
+    "message": "Space Weather Message Code: WARK05\nSerial Number: 1920\nIssue Time: 2024 Aug 31 1615 UTC\n\n\nWARNING: Geomagnetic K-index of 5 expected\nValid From: 2024 Aug 31 1612 UTC\nValid To: 2024 Aug 31 2100 UTC\nWarning Condition: Onset\nNOAA Scale: G1 - Minor\nwww.swpc.noaa.gov/noaa-scales-explanation\nPotential Impacts: Area of impact primarily poleward of 60 degrees Geomagnetic Latitude.\nInduced Currents - Weak power grid fluctuations can occur.\nSpacecraft - Minor impact on satellite operations possible.\nAurora - Aurora may be visible at high latitudes, i.e., northern tier of the U.S. such as northern Michigan and Maine."
+  },
+  {
+    "file": "alerts_202408.html",
+    "message": "Space Weather Message Code: ALTK05\nSerial Number: 1633\nIssue Time: 2024 Aug 31 1716 UTC\n\n\nALERT: Geomagnetic K-index of 5\nSynoptic Period: 1500-1800 UTC\nActive Warning: Yes\nNOAA Scale: G1 - Minor\nwww.swpc.noaa.gov/noaa-scales-explanation\nPotential Impacts: Area of impact primarily poleward of 60 degrees Geomagnetic Latitude.\nInduced Currents - Weak power grid fluctuations can occur.\nSpacecraft - Minor impact on satellite operations possible.\nAurora - Aurora may be visible at high latitudes, i.e., northern tier of the U.S. such as northern Michigan and Maine."
+  },
+  {
+    "file": "alerts_202408.html",
+    "message": "Space Weather Message Code: WARK04\nSerial Number: 4679\nIssue Time: 2024 Aug 31 2055 UTC\n\n\nEXTENDED WARNING: Geomagnetic K-index of 4 expected\nExtension to Serial Number: 4678\nValid From: 2024 Aug 30 0849 UTC\nNow Valid Until: 2024 Aug 31 2359 UTC\nWarning Condition: Persistence\nwww.swpc.noaa.gov/noaa-scales-explanation\nPotential Impacts: Area of impact primarily poleward of 65 degrees Geomagnetic Latitude.\nInduced Currents - Weak power grid fluctuations can occur.\nAurora - Aurora may be visible at high latitudes such as Canada and Alaska."
+  },
+  {
+    "file": "alerts_202408.html",
+    "message": "Space Weather Message Code: WARK04\nSerial Number: 4680\nIssue Time: 2024 Aug 31 2321 UTC\n\n\nEXTENDED WARNING: Geomagnetic K-index of 4 expected\nExtension to Serial Number: 4679\nValid From: 2024 Aug 30 0849 UTC\nNow Valid Until: 2024 Sep 01 1200 UTC\nWarning Condition: Persistence\nwww.swpc.noaa.gov/noaa-scales-explanation\nPotential Impacts: Area of impact primarily poleward of 65 degrees Geomagnetic Latitude.\nInduced Currents - Weak power grid fluctuations can occur.\nAurora - Aurora may be visible at high latitudes such as Canada and Alaska."
+  }
+]

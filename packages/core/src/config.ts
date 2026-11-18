@@ -104,7 +104,7 @@ export interface SpendConfig {
   readonly reserveUsd?: number;
   /**
    * The floor of the balance of the account, in the currency of the account: one floor or a list of floors. Below each
-   * floor, the system reports one line `low`. Thus the list `[5, 2]` gives one alert at 5 and one more alert at 2.
+   * floor, the system reports one line `low`. Thus the list `[10, 3]` gives one alert at 10 and one more alert at 3.
    */
   readonly floor: number | readonly number[];
   /** The time zone of the start of the month, as an IANA name: for example `America/New_York`. */
