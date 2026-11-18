@@ -1,5 +1,6 @@
 /**
- * The map function of a status page. The summary of a page lists each incident that is not resolved. The fetch gives
+ * The map function of a status page of the format `statuspage`. The function also gives each page of another format to
+ * the map of that format (`statusiq.ts`). The summary of a page lists each incident that is not resolved. The fetch gives
  * one observation for each incident and one observation of the head of the page. An incident gives one report of the
  * kind of the page. The head gives no report.
  *
@@ -8,10 +9,12 @@
  * person who names the service gets the report. Each key of a component of the incident adds the domain of its endpoint.
  */
 
-import { categoryOf, kindLabel, Problems, reportId, type Instant, type MapResult, type Observation, type Report, type Severity, type Subject, type Urgency } from "@mark1russell7/alerts";
+import { categoryOf, kindLabel, Problems, reportId, type Instant, type MapResult, type Observation, type Report, type Severity, type Urgency } from "@mark1russell7/alerts";
 import { errorMessage } from "@mark1russell7/text";
 
-import { SUBJECT_SYSTEM, type ComponentKey, type StatusPage } from "./page.ts";
+import { isFields, textOf, timeOf, type Fields } from "./fields.ts";
+import { subjectsOf, type ComponentKey, type StatusPage } from "./page.ts";
+import { mapComponent } from "./statusiq.ts";
 
 /** The fields of the body of an incident, in this order. The fetch keeps only these fields. */
 export const INCIDENT_FIELDS = ["id", "name", "status", "impact", "created_at", "updated_at", "started_at", "monitoring_at", "resolved_at", "shortlink", "components", "incident_updates"] as const;
@@ -37,23 +40,6 @@ export const SEVERITY_OF_IMPACT: Readonly<Record<string, Severity>> = { critical
 /** The urgency of each status of an incident. After a fix, the provider only watches the service, so no action is necessary. */
 export const URGENCY_OF_STATUS: Readonly<Record<string, Urgency>> = { investigating: "immediate", identified: "immediate", monitoring: "past", resolved: "past", postmortem: "past" };
 
-type Fields = Readonly<Record<string, unknown>>;
-
-const isFields = (value: unknown): value is Fields => typeof value === "object" && value !== null && !Array.isArray(value);
-
-/** This function gives the time of a field, or `undefined` for an absent value or a value that is not a time. */
-function timeOf(fields: Fields, field: string): Instant | undefined {
-  const value = fields[field];
-  if (typeof value !== "string") return undefined;
-  const time = Date.parse(value);
-  return Number.isFinite(time) ? time : undefined;
-}
-
-/** This function gives the text of a field, or `undefined` for an empty or absent text. */
-function textOf(fields: Fields, field: string): string | undefined {
-  const value = fields[field];
-  return typeof value === "string" && value.trim() !== "" ? value.trim() : undefined;
-}
 
 /** This function tells if a body is the head of a page: a page with an id, and only the fields of `HEAD_FIELDS`. */
 export function isHead(fields: Fields): boolean {
@@ -111,6 +97,10 @@ function mapOrThrow(observation: Observation, page: StatusPage): MapResult {
   } catch {
     return { reports: [], problems: [{ path: "", message: "the body is not JSON", fatal: true }] };
   }
+  if (page.format === "statusiq") {
+    if (!isFields(fields)) return { reports: [], problems: [{ path: "", message: "the observation is not one component of a feed of StatusIQ: the format changed", fatal: true }] };
+    return mapComponent(observation, page, fields);
+  }
   if (isFields(fields) && isHead(fields)) return { reports: [], problems: [] };
   // The fetch gives the whole answer as one observation when the answer is not the summary of a page.
   if (!isFields(fields) || !Object.hasOwn(fields, "id")) {
@@ -141,12 +131,7 @@ function reportOf(observation: Observation, page: StatusPage, incident: Fields, 
   const effective = timeOf(incident, "created_at");
   const onset = timeOf(incident, "started_at");
   // A component has no id in a system of the core. The parameter `component` gives its name.
-  const keys = keysOf(incident, page);
-  const endpoints = [...new Set(keys.map((each) => each.domain))].filter((domain) => domain !== page.domain);
-  const about: Subject[] = [
-    { system: SUBJECT_SYSTEM, id: page.domain, label: page.title },
-    ...endpoints.map((domain) => ({ system: SUBJECT_SYSTEM, id: domain, label: `${page.title}: ${keys.filter((each) => each.domain === domain).map((each) => each.name).join(", ")}` })),
-  ];
+  const about = [...subjectsOf(page, keysOf(incident, page))];
   return {
     id: reportId({ source: page.id, key, sent }),
     source: page.id,

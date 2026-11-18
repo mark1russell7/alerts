@@ -3,7 +3,7 @@
  * register of this package names well-known pages. The config of an instance can name other pages.
  */
 
-import { knownKind, type Duration, type SourceId, type SubjectSystem } from "@mark1russell7/alerts";
+import { knownKind, type Duration, type SourceId, type Subject, type SubjectSystem } from "@mark1russell7/alerts";
 
 /**
  * The key of one component of a service: the domain of the endpoint that the component serves. A key names the endpoint,
@@ -17,6 +17,15 @@ export interface ComponentKey {
   /** The domain of the endpoint, for example `api.twilio.com`. Each report of the component names it as a subject. */
   readonly domain: string;
 }
+
+/**
+ * The formats of a page. `statuspage` is the summary API of Atlassian Statuspage, and incident.io gives the same format.
+ * `statusiq` is the RSS feed of the components of a page of Site24x7 StatusIQ.
+ */
+export const PAGE_FORMATS = ["statuspage", "statusiq"] as const;
+
+/** The format of a page: one of `PAGE_FORMATS`. */
+export type PageFormat = (typeof PAGE_FORMATS)[number];
 
 /** The config of one status page. */
 export interface StatusPage {
@@ -40,6 +49,8 @@ export interface StatusPage {
   readonly slowAfter?: Duration;
   /** The keys of the components that serve an endpoint. The default is no key: each report names only the domain of the service. */
   readonly components?: readonly ComponentKey[];
+  /** The format of the page. The default is `statuspage`. */
+  readonly format?: PageFormat;
 }
 
 /** The default time between two fetches of a page: two minutes. The pages of Statuspage keep an answer in a cache for 10 seconds. */
@@ -77,6 +88,18 @@ export function pageDomains(page: Pick<StatusPage, "domain" | "components">): re
   return [...new Set([page.domain, ...(page.components ?? []).map((key) => key.domain)])];
 }
 
+/**
+ * This function gives the subjects of a report of a page. The first subject is the domain of the service. Then each
+ * other domain of the keys of the components of the report is one subject. The label of an endpoint names its components.
+ */
+export function subjectsOf(page: Pick<StatusPage, "title" | "domain">, keys: readonly ComponentKey[]): readonly Subject[] {
+  const endpoints = [...new Set(keys.map((each) => each.domain))].filter((domain) => domain !== page.domain);
+  return [
+    { system: SUBJECT_SYSTEM, id: page.domain, label: page.title },
+    ...endpoints.map((domain) => ({ system: SUBJECT_SYSTEM, id: domain, label: `${page.title}: ${keys.filter((each) => each.domain === domain).map((each) => each.name).join(", ")}` })),
+  ];
+}
+
 /** This function examines the config of a page. It gives one text for each problem, and an empty list for a good config. A text holds no URL. */
 export function pageProblems(page: StatusPage): readonly string[] {
   const problems: string[] = [];
@@ -85,6 +108,7 @@ export function pageProblems(page: StatusPage): readonly string[] {
   // A problem text holds no URL of the config: a URL can hold a password.
   if (!isPageBase(page.base)) problems.push("the base is not an https URL with only a host, for example https://status.example.com");
   if (page.origin.trim() === "") problems.push("the origin is empty");
+  if (page.format !== undefined && !(PAGE_FORMATS as readonly string[]).includes(page.format)) problems.push(`the format ${JSON.stringify(page.format)} is not a format of a page`);
   if (!isDomain(page.domain)) problems.push(`the domain ${JSON.stringify(page.domain)} is not a domain name in lower case`);
   if (!knownKind(page.kind)) problems.push(`the kind ${JSON.stringify(page.kind)} is not a code of the taxonomy`);
   if (page.dependsOn.length === 0) problems.push("the list of failure domains is empty");
