@@ -125,6 +125,7 @@ import {
   type WhyLimit,
   type WhyRecord,
   type WatchedPlace,
+  type ContactServices,
 } from "./contracts.ts";
 import { MEASURE_ID, SERIES_VERSION } from "./indicators.ts";
 import { err, ok, tryCatch, type Result } from "@mark1russell7/optional";
@@ -1910,6 +1911,7 @@ export function parseConfig(
   channels: readonly ChannelDescriptor[],
   secret: SecretLookup,
   parts: readonly PartText[] = [],
+  services?: ContactServices,
 ): Result<ParsedConfig, readonly string[]> {
   const problems: string[] = [];
   // The message of the JSON parser can quote the text, so the problem does not use it.
@@ -1928,6 +1930,6 @@ export function parseConfig(
   if (checked.tag === "err" || problems.length > 0) return err(problems);
   const merged = mergeParts(checked.value, named);
   if (merged.tag === "err") return merged;
-  const loaded = loadConfig(merged.value, channels, secret);
+  const loaded = loadConfig(merged.value, channels, secret, services);
   return loaded.problems.length > 0 ? err(loaded.problems) : ok({ config: merged.value, recipients: loaded.recipients, optIn: loaded.optIn });
 }

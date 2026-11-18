@@ -7,7 +7,7 @@ import { localTime } from "@mark1russell7/algebra/clock";
 import { err, ok, type Result } from "@mark1russell7/optional";
 import { canonicalHash } from "@mark1russell7/rigor-generators";
 import { compareCodeUnits } from "@mark1russell7/text/order";
-import type { Address, AssessPolicy, ChannelDescriptor, ChannelId, Duration, EscalationPolicy, Instant, InterestGraph, NodeKey, PersonId, PersonWatch, PlaceId, Position, RegionCode, SourceId, WatchedPlace } from "./contracts.ts";
+import type { Address, AssessPolicy, ChannelDescriptor, ChannelId, ContactServices, Duration, EscalationPolicy, Instant, InterestGraph, NodeKey, PersonId, PersonWatch, PlaceId, Position, RegionCode, SourceId, WatchedPlace } from "./contracts.ts";
 import { assess, CHANNEL_KIND, DEFAULT_ASSESS_POLICY, DRILL_KIND, matchSubjects, reachedAssessment } from "./assess.ts";
 import type { ChannelDownConfig } from "./channel-down.ts";
 import { policyFor, recipientProblems, ruleSteps, type ChannelRule, type Recipient } from "./delivery.ts";
@@ -20,7 +20,7 @@ import type { TryChain } from "./chain.ts";
 import type { Expectation } from "./lateness.ts";
 import { rankDelayProblems, rankFloorProblems, type RankDelays } from "./escalation.ts";
 import type { LinkPolicy } from "./link.ts";
-import { placeNode, placeOfNode, type WhyLabels } from "./why.ts";
+import { kindOfNode, placeNode, placeOfNode, type WhyLabels } from "./why.ts";
 
 /** The name of the format of a configuration. A change that breaks a configuration gets a new name. */
 export const CONFIG_FORMAT = "alerts-config/1";
@@ -427,8 +427,11 @@ export interface LoadedConfig {
  * - a run or a failure of a drill that sends nothing to its person: no policy of its level, or no step after the rules
  * - each problem of `drillProblems` for each drill
  * - each problem of `recipientProblems` for each person.
+ *
+ * With `services`, the layer `delivery` of each person also takes the services of each contact of the person
+ * (`contactChannels`). No problem holds them.
  */
-export function loadConfig(config: AlertConfig, channels: readonly ChannelDescriptor[], secret: SecretLookup): LoadedConfig {
+export function loadConfig(config: AlertConfig, channels: readonly ChannelDescriptor[], secret: SecretLookup, services?: ContactServices): LoadedConfig {
   const problems: string[] = [];
   const places = new Set<string>();
   for (const place of config.places) {
@@ -453,7 +456,7 @@ export function loadConfig(config: AlertConfig, channels: readonly ChannelDescri
         if (!own.has(place)) problems.push(`Rule ${index} of the person ${person} names the place ${place}, and the person does not watch it. The rule matches no incident there.`);
       }
     });
-    const joined = personInterests(entry, contactChannels(config, person, channels));
+    const joined = personInterests(entry, contactChannels(config, person, channels, services === undefined ? undefined : { secret, services }));
     if (joined.problem !== undefined) problems.push(`The defaults of the person ${person}: ${joined.problem}`);
     watches.push(joined.watch);
     problems.push(...relevanceProblems(joined.watch, own));
@@ -479,17 +482,9 @@ export function loadConfig(config: AlertConfig, channels: readonly ChannelDescri
       problems.push(`The person ${person} has two contacts on the channel ${channel}.`);
       continue;
     }
-    const fields: [string, string][] = [];
-    for (const [field, value] of Object.entries(contact.address)) {
-      if (typeof value === "string") {
-        fields.push([field, value]);
-        continue;
-      }
-      const found = secret(value.secret);
-      if (found === undefined || found === "") problems.push(`The field ${field} of the contact of ${person} on ${channel} names the secret ${value.secret}, and the secret store has no value for it.`);
-      else fields.push([field, found]);
-    }
-    ofPerson.set(channel, Object.fromEntries(fields));
+    const { address, missing } = resolveAddress(contact, secret);
+    for (const { field, name } of missing) problems.push(`The field ${field} of the contact of ${person} on ${channel} names the secret ${name}, and the secret store has no value for it.`);
+    ofPerson.set(channel, address);
   }
 
   // Each value of an opt-in field needs a record. A channel of texts then sends only to a person who agreed.
@@ -676,13 +671,62 @@ export function personInterests(entry: PersonConfig, channels: readonly ChannelD
   }
 }
 
+/** The lookup of the services of each contact: the store of the secrets, and the services of an address. */
+export interface ContactLookup {
+  readonly secret: SecretLookup;
+  readonly services: ContactServices;
+}
+
 /**
  * This function gives the channels of the contacts of a person, in the order of `channels`. Each such descriptor has a
  * contact of the person in the configuration. The layer `delivery` takes the services of these channels.
+ *
+ * With a `lookup`, the descriptor of each channel also gets the services of the first contact of the person on it.
+ * Only the keys of entities count. A missing secret, a lookup that throws and a key of another kind give no service.
+ * The check of the contacts reports a missing secret. Thus no problem holds a value of an address or its services.
  */
-export function contactChannels(config: Pick<AlertConfig, "contacts">, person: PersonId, channels: readonly ChannelDescriptor[]): readonly ChannelDescriptor[] {
-  const ids = new Set<string>(config.contacts.filter((contact) => contact.person === person).map((contact) => contact.channel));
-  return channels.filter((channel) => ids.has(channel.id));
+export function contactChannels(
+  config: Pick<AlertConfig, "contacts">,
+  person: PersonId,
+  channels: readonly ChannelDescriptor[],
+  lookup?: ContactLookup,
+): readonly ChannelDescriptor[] {
+  const contacts = config.contacts.filter((contact) => contact.person === person);
+  const ids = new Set<string>(contacts.map((contact) => contact.channel));
+  const found = channels.filter((channel) => ids.has(channel.id));
+  if (lookup === undefined) return found;
+  return found.map((channel) => {
+    const contact = contacts.find((one) => one.channel === channel.id);
+    const resolved = contact === undefined ? undefined : resolveAddress(contact, lookup.secret);
+    const added = resolved === undefined || resolved.missing.length > 0 ? [] : contactNodes(lookup.services, channel.id, resolved.address);
+    return added.length === 0 ? channel : { ...channel, services: [...new Set([...(channel.services ?? []), ...added])] };
+  });
+}
+
+// The address of a contact with the value of each secret, and each field whose secret the store does not have.
+function resolveAddress(contact: ContactConfig, secret: SecretLookup): { readonly address: Address; readonly missing: readonly { readonly field: string; readonly name: string }[] } {
+  const fields: [string, string][] = [];
+  const missing: { field: string; name: string }[] = [];
+  for (const [field, value] of Object.entries(contact.address)) {
+    if (typeof value === "string") {
+      fields.push([field, value]);
+      continue;
+    }
+    const found = secret(value.secret);
+    if (found === undefined || found === "") missing.push({ field, name: value.secret });
+    else fields.push([field, found]);
+  }
+  return { address: Object.fromEntries(fields), missing };
+}
+
+// The services of an address that are entities. A lookup that throws gives none. By its contract it does not throw, and
+// a problem with its error could hold a private fact of the address.
+function contactNodes(services: ContactServices, channel: ChannelId, address: Address): readonly NodeKey[] {
+  try {
+    return services(channel, address).filter((node) => kindOfNode(node) === "entity");
+  } catch {
+    return [];
+  }
 }
 
 /**

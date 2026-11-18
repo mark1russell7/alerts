@@ -61,6 +61,30 @@ export function kindOfNode(node: NodeKey): SubjectKind | undefined {
   return Object.hasOwn(SUBJECT_SYSTEMS, system) ? SUBJECT_SYSTEMS[system as keyof typeof SUBJECT_SYSTEMS] : undefined;
 }
 
+/**
+ * The systems of the node keys with path ids. In these systems, an id is a path of parts with `/` between them. A
+ * node covers each node below it. For example, `provider-region:twilio/europe` covers `provider-region:twilio/europe/sms`.
+ */
+export const PATH_SYSTEMS: readonly string[] = ["provider-region"];
+
+/**
+ * This function tells if the node `a` covers the node `b`. A node covers itself. In a system of `PATH_SYSTEMS`, a node
+ * also covers each node whose id starts with its id and a `/`. A mute covers the nodes below its subjects.
+ */
+export function nodeCovers(a: NodeKey, b: NodeKey): boolean {
+  if (a === b) return true;
+  const colon = a.indexOf(":");
+  return colon > 0 && colon < a.length - 1 && PATH_SYSTEMS.includes(a.slice(0, colon)) && b.startsWith(`${a}/`);
+}
+
+/**
+ * This function tells if two nodes overlap: one of the two nodes covers the other (`nodeCovers`). An incident about a
+ * node reaches each node that it overlaps. Thus an outage of a region reaches a product of the region, and the reverse.
+ */
+export function nodesOverlap(a: NodeKey, b: NodeKey): boolean {
+  return nodeCovers(a, b) || nodeCovers(b, a);
+}
+
 const PLACE_SYSTEM = "place:";
 
 /** This function gives the node key of a watched place: `place:<id>`. */

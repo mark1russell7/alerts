@@ -36,7 +36,7 @@ import { hasKind } from "./kind-prefix.ts";
 import type { MapShape } from "./map.ts";
 import { DEFAULT_ENTRY_MAX, DEFAULT_RELEVANCE_POLICY, canReach, relevance, topicEntry } from "./relevance.ts";
 import { isShape, shapeDistanceKm } from "./shapes.ts";
-import { kindOfNode, placeNode } from "./why.ts";
+import { kindOfNode, nodesOverlap, placeNode } from "./why.ts";
 
 export { hasKind } from "./kind-prefix.ts";
 
@@ -359,11 +359,14 @@ function nearestShape(shapes: readonly MapShape[], at: Position): number | undef
 
 /**
  * This function gives the watches of a person that a subject of an incident matches, in the order
- * of the watches. A watch with no id matches each subject of its system.
+ * of the watches. A watch with no id matches each subject of its system. A watch with an id matches each subject
+ * whose node overlaps its node (`nodesOverlap`). Outside the systems of paths, that is the subject with the same id.
  */
 export function matchSubjects(incident: Pick<Incident, "about">, watches: readonly SubjectWatch[]): SubjectWatch[] {
   return watches.filter((watch) =>
-    incident.about.some((subject) => subject.system === watch.system && (watch.id === undefined || watch.id === subject.id)),
+    incident.about.some(
+      (subject) => subject.system === watch.system && (watch.id === undefined || nodesOverlap(`${watch.system}:${watch.id}`, `${subject.system}:${subject.id}`)),
+    ),
   );
 }
 
@@ -587,6 +590,12 @@ function entriesOf(incident: Incident, matches: readonly PlaceMatch[], graph: In
     else if (area.type === "place") add("place", area.place);
   }
   for (const subject of incident.about) add(subject.system, subject.id);
+  // A node of the graph that overlaps a subject in a system of paths is also an entry (`nodesOverlap`).
+  const subjects = [...found.keys()];
+  for (const node of new Set(graph.edges.flatMap((edge) => [edge.from, edge.to]))) {
+    const kind = kindOfNode(node);
+    if (kind !== undefined && !found.has(node) && subjects.some((subject) => nodesOverlap(subject, node))) found.set(node, { node, kind, hit: FULL_HIT });
+  }
   const topic = topicEntry(incident.kind.code, graph);
   if (topic !== undefined && !found.has(topic.node)) found.set(topic.node, topic);
   return [...found.values()];
