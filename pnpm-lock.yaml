@@ -574,6 +574,9 @@ importers:
       '@mark1russell7/alerts-source-nws-api':
         specifier: workspace:*
         version: link:../source-nws-api
+      '@mark1russell7/alerts-source-nwws':
+        specifier: workspace:*
+        version: link:../source-nwws
       '@mark1russell7/alerts-source-swpc':
         specifier: workspace:*
         version: link:../source-swpc

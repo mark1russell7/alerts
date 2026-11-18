@@ -70,11 +70,30 @@ describe("the fetch of the source", () => {
     const third = ok(await source.fetch({ watch, cursor: second.cursor }));
     expect(events(third)).toEqual(["High Wind Watch", "Test Message"]);
     expect(third.observations[1]).toEqual({ ...second.observations[0], fetched: START + 5 * MINUTE });
-    expect(source.check?.({ observations: third.observations }).pass).toBe(true);
+    expect(source.check?.({ observations: third.observations })?.pass).toBe(true);
     await clock.advance(13 * MINUTE);
     fake.last().send(FREEZE);
     const late = ok(await source.fetch({ watch, cursor: third.cursor }));
     expect(source.check?.({ observations: late.observations })).toMatchObject({ pass: false });
+  });
+
+  it("gives no read of the canary in the first 15 minutes of each session with no keepalive, and fails after them", async () => {
+    const { clock, fake, source } = setup();
+    const first = ok(await source.fetch({ watch }));
+    fake.last().send(WIND);
+    const second = ok(await source.fetch({ watch, cursor: first.cursor }));
+    expect(source.check?.({ observations: second.observations })).toBeUndefined();
+    await clock.advance(15 * MINUTE);
+    const third = ok(await source.fetch({ watch, cursor: second.cursor }));
+    expect(source.check?.({ observations: third.observations })).toEqual({ pass: false, reason: "the fetch has no keepalive message of the NWS" });
+    // A session that ends has no join time, so the check fails. The next session gives no read again.
+    fake.last().end("the server closed the stream", "network");
+    expect(source.check?.({ observations: [] })).toMatchObject({ pass: false });
+    await clock.advance(5_000);
+    expect(fake.sessions).toHaveLength(2);
+    fake.last().send(FREEZE);
+    const fourth = ok(await source.fetch({ watch, cursor: third.cursor }));
+    expect(source.check?.({ observations: fourth.observations })).toBeUndefined();
   });
 
   it("tells a gap of the stream as an incomplete fetch, one time", async () => {

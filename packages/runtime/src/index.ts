@@ -73,6 +73,11 @@ export interface Options {
   /** The store of the counts of the quotas of the channels. The service closes it in the phase `tear down dependencies`. */
   readonly quotas?: { close(): void };
   /**
+   * The sources of the runtime (`Runtime.close`). The service ends their sessions in the phase `tear down dependencies`,
+   * after the close of the worker. Thus no fetch reads a closed session.
+   */
+  readonly sources?: { close(): Promise<void> };
+  /**
    * The lock of the home folder (`holdHome`). The service releases it last in the phase `tear down dependencies`, after
    * the log closes. Thus a next runtime starts only after the last event of this runtime.
    */
@@ -141,6 +146,7 @@ const parts = (options: Options): ServiceBuilder =>
       .dependency("log", { system: null, knobs: {}, operations: {} }, { connect: () => undefined, close: () => options.log.close() })
       .dependency("shapes", { system: null, knobs: {}, operations: {} }, { connect: () => undefined, close: () => options.shapes?.close() })
       .dependency("quotas", { system: null, knobs: {}, operations: {} }, { connect: () => undefined, close: () => options.quotas?.close() })
+      .dependency("sources", { system: null, knobs: {}, operations: {} }, { connect: () => undefined, close: () => options.sources?.close() })
       .worker("passes", options.loop.worker.knobs, options.loop.worker),
     options.outage,
   )
