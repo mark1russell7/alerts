@@ -1,6 +1,8 @@
+import { stat } from "node:fs/promises";
 import { createServer } from "node:http";
 import { join } from "node:path";
 import type { HealthPayload, HistoryPayload, Instant, MapPayload, SourceId } from "@mark1russell7/alerts";
+import { findFilesAsync } from "@mark1russell7/files";
 import type { ServiceBuilder } from "@mark1russell7/service";
 import { handle, httpTransport } from "@mark1russell7/service/http";
 import { folderHandler } from "@mark1russell7/service/http-folder";
@@ -101,6 +103,61 @@ export const PAGE_INDEX = "local.html";
 
 /** This function gives the folder of the built local page in a checkout, from the folder of the package `runtime`. */
 export const pageFolder = (root: string): string => join(root, "..", "site", "dist");
+
+/** The state of the built local page of a checkout: current, older than its source files, or not built. */
+export type PageState = "current" | "stale" | "missing";
+
+/**
+ * The source files of the local page, as globs in the folder `packages`. The page bundles the core and a source package.
+ * Thus the globs hold the source folder of each package. A change of another package gives a build that has no effect.
+ */
+export const PAGE_SOURCES: readonly string[] = ["*/src/**", "site/*.html", "site/vite.config.ts"];
+
+/**
+ * This function gives the state of the page from the time of its index file and the times of its source files. The
+ * page is stale when a source file is newer than the index file. The times are in milliseconds.
+ */
+export function pageStateOf(indexTime: number | undefined, sourceTimes: readonly number[]): PageState {
+  if (indexTime === undefined) return "missing";
+  return sourceTimes.some((time) => time > indexTime) ? "stale" : "current";
+}
+
+/**
+ * This function reads the state of the built local page of a checkout, from the folder of the package `runtime`. A move
+ * of the checkout to a new commit writes the changed source files. Thus the page is stale until the next build.
+ */
+export async function readPageState(root: string): Promise<PageState> {
+  const indexTime = await stat(join(pageFolder(root), PAGE_INDEX)).then(
+    (stats) => stats.mtimeMs,
+    () => undefined,
+  );
+  if (indexTime === undefined) return "missing";
+  const sources = await findFilesAsync({ root: join(root, ".."), include: PAGE_SOURCES });
+  const times = await Promise.all(
+    sources.map((path) =>
+      stat(path).then(
+        (stats) => stats.mtimeMs,
+        () => 0,
+      ),
+    ),
+  );
+  return pageStateOf(indexTime, times);
+}
+
+/** The command that builds the local page, from the root of the checkout. */
+export const PAGE_BUILD = "pnpm --filter ./packages/site build";
+
+/** This function gives the warning of a page state, or `undefined` for a current page. The warning holds no path. */
+export function pageWarning(state: PageState): string | undefined {
+  switch (state) {
+    case "missing":
+      return `The local page is not built, thus the path / gives 404. Build it: ${PAGE_BUILD}`;
+    case "stale":
+      return `The local page is older than the source files of this checkout. Build it again: ${PAGE_BUILD}`;
+    case "current":
+      return undefined;
+  }
+}
 
 /** This function gives the status of the loop, of the deploy of the outage call and of the start, at the time of the request. */
 export function statusOf(loop: RuntimeLoop, outage?: { state(): OutageDeployState }, start?: StartStatus): Status {
