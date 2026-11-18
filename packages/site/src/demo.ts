@@ -188,12 +188,13 @@ export const STEPS: readonly Step[] = [
   {
     at: at("13:25"),
     title: "The API is back",
-    story: "The fetches of the NWS API pass again from 13:24, so its health is healthy. The flood has 2 independent sources again. The core cancels each system report, and their incidents end.",
+    story:
+      "The fetches of the NWS API pass again from 13:24, so its health is healthy. The flood has 2 independent sources again, and the core cancels the coverage reports. The health report of the API stays open for 15 minutes of good fetches. Thus a source that flaps makes one incident.",
   },
   {
-    at: at("13:30"),
+    at: at("13:40"),
     title: "A test message",
-    story: "A monthly test arrives. The policy sends only actual messages, so the test reaches nobody.",
+    story: "A monthly test arrives. The policy sends only actual messages, so the test reaches nobody. The NWS API is up for 16 minutes, so the core cancels its health report.",
     message: { name: "5-test-message.json", body: test },
   },
   {

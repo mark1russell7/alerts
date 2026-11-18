@@ -115,8 +115,9 @@ export function sourceClearTime(policy: SourceClearPolicy, source: SourceDescrip
 }
 
 /**
- * This function gives the times after `at` when the open lines of the sources that are up end: the start of the state of
- * the source plus its clear time. The runtime wakes at these times. Thus a line ends on time, also when no fetch is due.
+ * This function gives the end times after `at` of the open lines of the sources that are up. Each end time is the start
+ * of the state of the source plus its clear time. The runtime wakes at these times. Thus a line ends on time, also when
+ * no fetch is due.
  */
 export function sourceClearAt(lines: SystemLines, snapshot: Pick<SystemSnapshot, "sources" | "health" | "sourceClear">, at: Instant): Instant[] {
   const policy = sourceClearPolicy(snapshot.sourceClear);

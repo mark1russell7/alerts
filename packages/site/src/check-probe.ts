@@ -217,16 +217,17 @@ check("the map has the three system reports as live incidents", live() === 5, su
 check("the map marks a gap of the coverage at the two homes", await until(async () => (await gaps()) === 2), words());
 check("the outage step fits the width of the page", fits(), [document.documentElement.scrollWidth, window.innerWidth]);
 
-// The API is back: the core cancels each system report.
+// The API is back: the core cancels the coverage reports. The health report stays open for 15 minutes of good fetches.
 await goTo(6);
 check("the API is healthy again", state("nws-api") === "healthy", state("nws-api"));
 check("each coverage is met again", $$("#sources .coverage li.short").length === 0);
-check("each system report ended", $$("#sources .system-card.ended").length === 3 && live() === 2, summary());
+check("each coverage report ended, and the health report stays open", $$("#sources .system-card.ended").length === 2 && $$("#sources .system-card:not(.ended)").length === 1 && live() === 3, summary());
 check("the map marks no gap of the coverage", (await gaps()) === 0);
 check("nobody is urgent after the cancel", count("urgent") === 0, count("urgent"));
 
-// The test message reaches nobody.
+// The test message reaches nobody. The API is up for 16 minutes, so its health report ended.
 await goTo(7);
+check("the health report ended after its clear time", $$("#sources .system-card:not(.ended)").length === 0, $$("#sources .system-card").length);
 check("the test message is an incident with its status", texts($$('.incident-card .chip.status[data-status="test"]')).join() === "Test", texts($$(".incident-card .chip.status")));
 // A test does not look like a real alert: the legend names the status, and the map writes its word on the area.
 check("the legend names the test while the map shows it", await until(() => statuses().join() === "Test"), statuses());

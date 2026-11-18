@@ -79,7 +79,7 @@ describe("the map of a frame", () => {
       const live = [...frame.incidents, ...frame.sources.incidents].filter((incident) => incident.live).map((incident) => incident.anchor);
       expect(payload.view.incidents.map((incident) => incident.anchor).sort()).toEqual([...live].sort());
     });
-    expect(maps.map((payload) => payload.view.incidents.length)).toEqual([0, 1, 2, 2, 2, 5, 2, 3, 1, 0]);
+    expect(maps.map((payload) => payload.view.incidents.length)).toEqual([0, 1, 2, 2, 2, 5, 3, 3, 1, 0]);
   });
 
   it("gives each incident the highest level that the frame gives to a person", () => {
