@@ -270,8 +270,9 @@ async function committedFile(path: string): Promise<RatesFile | undefined> {
 log(
   `the measure starts: Cow ${String(cowYears.first)} to ${String(cowYears.last)}, NCEI ${String(nceiYears.first)} to ${String(nceiYears.last)}, alerts ${String(alertYears.first)} to ${String(alertYears.last)}`,
 );
-const cow = await measureCow();
+// NCEI comes first. Thus an outage of NCEI stops the run in a minute, not after the long read of the Cow warnings.
 const ncei = await measureNcei();
+const cow = await measureCow();
 const under = await measureUnder(ncei.harms);
 const file = ratesFile({
   fetched: started,
