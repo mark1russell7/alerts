@@ -1,5 +1,6 @@
 import type { SourceDescriptor } from "@mark1russell7/alerts";
 import { EMSC_DESCRIPTOR } from "@mark1russell7/alerts-source-emsc";
+import { GFZ_DESCRIPTOR } from "@mark1russell7/alerts-source-gfz";
 import { IEM_DESCRIPTOR } from "@mark1russell7/alerts-source-iem";
 import { IPAWS_DESCRIPTOR } from "@mark1russell7/alerts-source-ipaws";
 import { NWS_DESCRIPTOR } from "@mark1russell7/alerts-source-nws-api";
@@ -13,6 +14,7 @@ import { readAtlas } from "./read.ts";
 /** The descriptors of each adapter that the atlas adopts. A new adopted adapter needs a row here. */
 const DESCRIPTORS: Readonly<Record<string, readonly SourceDescriptor[]>> = {
   "@mark1russell7/alerts-source-emsc": [EMSC_DESCRIPTOR],
+  "@mark1russell7/alerts-source-gfz": [GFZ_DESCRIPTOR],
   "@mark1russell7/alerts-source-iem": [IEM_DESCRIPTOR],
   "@mark1russell7/alerts-source-ipaws": [IPAWS_DESCRIPTOR],
   "@mark1russell7/alerts-source-nws-api": [NWS_DESCRIPTOR],

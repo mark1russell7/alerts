@@ -4329,7 +4329,7 @@
     "cost": "free",
     "delay": "Hp30 each 30 minutes and Kp each 3 hours, as nowcast values with the status pre. One read at 01:22 UTC on 2026-11-17 had the Hp30 interval from 00:30 to 01:00 UTC as its last value.",
     "history": "Kp from 1932. The nowcast values change to definitive values later.",
-    "rateLimit": "No published limit. The data page tells users to use the HTTPS files for large amounts of data.",
+    "rateLimit": "No published limit. The data page tells users to use the HTTPS files for large amounts of data. The adapter asks once each 10 minutes, for the Kp values of the past 3 days.",
     "calibration": null,
     "coverage": "The whole Earth: one planetary index from 13 geomagnetic observatories. A Kp of 5 or more is a storm on the G scale of NOAA, from G1 at 5 to G5 at 9.",
     "subjectIds": [],
@@ -4340,16 +4340,16 @@
       "kp.gfz.de"
     ],
     "risks": [],
-    "decision": "plan",
-    "adapter": null,
-    "reason": "A second origin of the geomagnetic storm, apart from the SWPC, with no key. Hp30 gives a storm in 30 minutes, before the 3-hour Kp.",
+    "decision": "adopt",
+    "adapter": "@mark1russell7/alerts-source-gfz",
+    "reason": "A second origin of the geomagnetic storm, apart from the SWPC, with no key. The adapter reads Kp each 10 minutes. Each 3-hour interval of G1 or more is a report, and the intervals of one storm are one incident. Merge rule 3 joins that incident to the storms of the SWPC. Hp30 gives a storm in 30 minutes, and it is later.",
     "evidence": [
       "https://kp.gfz.de/en/",
       "https://kp.gfz.de/en/data",
       "https://kp.gfz.de/app/format/json.txt",
       "https://kp.gfz.de/app/json/"
     ],
-    "round": 9
+    "round": 11
   },
   {
     "id": "github-advisories-api",
