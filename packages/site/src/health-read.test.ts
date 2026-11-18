@@ -41,7 +41,7 @@ describe("the read of the health", () => {
   });
 
   it("tells a health of a different format to start the runtime of the version of the page", async () => {
-    const result = await readHealth(answer(JSON.stringify({ ...HEALTH_FIXTURE, format: "alerts-health/2" })));
+    const result = await readHealth(answer(JSON.stringify({ ...HEALTH_FIXTURE, format: "alerts-health/3" })));
     expect(result).toEqual({ ok: false, absent: false, text: OTHER_HEALTH_TEXT });
     expect(OTHER_HEALTH_TEXT).toBe(`${SOURCE} The runtime has a different version of the health. Start the runtime of the version of this page.`);
   });

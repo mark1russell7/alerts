@@ -1088,11 +1088,14 @@ The package `@mark1russell7/alerts-channel-twilio` operates the chain on the ser
 - The SMS message has at most `OUTAGE_TEXT_LIMIT` (160) code points. That is at most 3 segments of 1.4 cents, so a text costs no more than a call.
 - A failed read of the recent texts goes to the log, with no number. Then the caps count the calls only.
 - The setup of the runtime refuses an outage call with no spend entry for Twilio. Each problem of the monthly cap names no count, because the spend cap is private.
-- A gap stays open: the spend gate of the instance does not count the calls of the Functions. Thus one month can have more calls than the cap, by the calls of the Functions.
-- The end of the gap is AL-57. The gate also reads the usage records of Twilio for the local month, in whole UTC days. It uses the larger of that amount and its own count, by the rule of `@mark1russell7/stack-spend`.
+- The spend gate of the instance does not count the calls of the Functions as sends. The watch of the spend adds them (AL-57).
+- The gate also reads the usage records of Twilio for the local month, in whole UTC days. It uses the larger of that amount and its own count, by the rule of `@mark1russell7/stack-spend`.
+- `readTwilioSpend` gives the record `totalprice` less the record `phonenumbers`, from the GMT day of the start of the month. The rent of the numbers is in the fixed costs.
+- The first GMT day can hold some hours of the month before. The cap can then stop a send early, but not late.
 - `spendWatch` of the runtime reads the spend of the provider each hour, from the start of the month of the cap. It notes the spend in the count of the gates. The count does not become smaller, thus the gate keeps the larger amount.
-- A failed read goes to the health of the watch, and the watch reads again after 15 minutes. A read that ends in the next month does not change the count.
-- The watch of Twilio starts after the release of `@procedures/notify` 0.63.0, which reads the usage records.
+- A failed read is a note in the body of each ping of the heartbeat, and the watch reads again after 15 minutes. A read that ends in the next month does not change the count.
+- The instance makes the watch of Twilio when the configuration has a spend entry for Twilio. Each pass of the runtime checks it.
+- Twilio adds its usage after a delay. Thus the count can miss the usage of that delay.
 - If the move of the status callback fails, the end has no `acked=1`. Then the chain calls again. That is the safe side.
 - Each handler gives the script of the call as data. The Function renders it with the TwiML builders of `@procedures/notify/twilio`.
 - `outageListOf` makes the list from the field `outage` of the private configuration and the recipients of `loadConfig`. The number of each person is the contact of the person on `twilio-call`.
@@ -1359,12 +1362,13 @@ The API also serves the built local page (`packages/site/dist`) on the same addr
 
 The route `GET /health` of the runtime gives the `HealthPayload` of `healthPayload`. The page reads it on its own origin, next to the map. `healthPayloadSchema` checks it.
 
-- `format`: `alerts-health/1` (`HEALTH_FORMAT`). A change that breaks a reader gets a new name.
+- `format`: `alerts-health/2` (`HEALTH_FORMAT`). A change that breaks a reader gets a new name. The second format added `reads`.
 - `at`: the time of the last pass, or `null` before the first pass. The sources, the lateness and the coverage come from that pass.
 - `now`: the time of the read. The stages of the copies and of the balances are at this time.
 - `sources`: the health of each source. The last failure keeps its time and its kind, and not its message, because a message can hold the address of a fetch.
 - `lateness` and `coverage`: the lists of the view of the last pass.
 - `copies`, `quotas` and `balances`: each watch with its stages. The stages come from `copyStages`, `quotaStages` and `balanceStages`, thus the page and the system reports agree.
+- `reads`: each read on a schedule other than the balances, for example the replies of the texts and the spend of Twilio. Each read has the end of its last read that passed, a `failed` flag and the time of its next read. It holds no message and no value of the read.
 
 The coverage holds the ids of the places. Thus only the loopback address gives the route, as for the map.
 
@@ -1374,7 +1378,7 @@ The local page shows the payload in the panel "Sources" (`packages/site/src/heal
 - Two sentences sum the payload: the sources, and the quotas and balances that stop or limit a message. A link at the top of the page has the same sentences.
 - Each source has a row with its state, the time since its last good read and the kinds that it covers. The source that needs attention is first.
 - A source that is down or late needs attention. A source is late when an entry of `lateness` has the state `late` and names it in `to`.
-- A quota, a balance or a copy gets a row only when it has a stage.
+- A quota, a balance or a copy gets a row only when it has a stage. A read gets a row only when its last read failed.
 - The health is of the present. For a past time of the scrubber, the panel tells that it stays at the present.
 - After a failed read, the panel keeps the last rows. One sentence tells the time of that read in place of the two sentences.
 
