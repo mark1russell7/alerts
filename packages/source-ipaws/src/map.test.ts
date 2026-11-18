@@ -1,10 +1,10 @@
 import { readFileSync } from "node:fs";
 import { carriages, incidents, normalize, reportId, unknownKinds, type Observation, type ObservationId, type Report, type SourceId } from "@mark1russell7/alerts";
-import { EVENT_CODES, NAME_ALIASES, parseVtec, PHENOMENA, vtecKey } from "@mark1russell7/alerts-format-nws";
+import { EVENT_CODES, NAME_ALIASES, NWS_API_SOURCE, parseVtec, PHENOMENA, vtecKey } from "@mark1russell7/alerts-format-nws";
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import { IPAWS_DESCRIPTOR } from "./descriptor.ts";
-import { NWS_API_SOURCE, WEA_EXPECTATION } from "./expectation.ts";
+import { WEA_EXPECTATION } from "./expectation.ts";
 import { mapObservation, NWS_SENDER, ORIGINS, originOf, SOURCE_ID } from "./map.ts";
 
 /**
