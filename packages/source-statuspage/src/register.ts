@@ -8,7 +8,7 @@
 
 import type { SourceId } from "@mark1russell7/alerts";
 
-import type { StatusPage } from "./page.ts";
+import type { ComponentKey, StatusPage } from "./page.ts";
 
 /** The failure domain of each page that Atlassian Statuspage hosts. */
 export const ATLASSIAN_STATUSPAGE = "provider:atlassian-statuspage";
@@ -38,6 +38,17 @@ const page = (name: string, title: string, host: string, domain: string, kind: s
   kind,
   dependsOn,
 });
+
+/**
+ * The keys of the components of Twilio that an alert uses for a call or a text message. These are the text messages,
+ * the carrier network of the texts and the voice of the region US1. The API of these services is `api.twilio.com`. Each
+ * id is a group of the page on 2026-11-18. An outage of Twilio Video or SendGrid names only `twilio.com`.
+ */
+export const TWILIO_KEYS: readonly ComponentKey[] = [
+  { id: "s2k3h0mkqnth", name: "Programmable Messaging", domain: "api.twilio.com" },
+  { id: "j3s4w3gnsj08", name: "Programmable Voice US1", domain: "api.twilio.com" },
+  { id: "j8hlnyphbbs0", name: "Carrier Network", domain: "api.twilio.com" },
+];
 
 /** The well-known status pages, in the order of their ids. */
 export const STATUS_PAGES: readonly StatusPage[] = [
@@ -73,7 +84,7 @@ export const STATUS_PAGES: readonly StatusPage[] = [
   page("shopify", "Shopify", "www.shopifystatus.com", "shopify.com", SAAS),
   page("snowflake", "Snowflake", "status.snowflake.com", "snowflake.com", CLOUD),
   page("solana", "Solana", "status.solana.com", "solana.com", CHAIN),
-  page("twilio", "Twilio", "status.twilio.com", "twilio.com", SAAS),
+  { ...page("twilio", "Twilio", "status.twilio.com", "twilio.com", SAAS), components: TWILIO_KEYS },
   page("vercel", "Vercel", "www.vercel-status.com", "vercel.com", CLOUD),
   page("visa-acceptance", "Visa Acceptance Solutions", "status.visaacceptance.com", "visaacceptance.com", PAYMENTS, [ATLASSIAN_STATUSPAGE], "visa"),
 ];

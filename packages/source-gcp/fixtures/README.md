@@ -1,4 +1,4 @@
-# The fixtures of the source of Google Cloud Service Health
+# The fixtures of the sources of the dashboards of Google
 
 - `incidents-20261118.json` comes from the real answer to `https://status.cloud.google.com/incidents.json`. The answer had the date `Last-Modified: Wed, 18 Nov 2026 05:24:17 GMT`.
 - The real answer had 8 incidents. The fixture keeps 2 of them with no change: `5fGQt4VbkDnr3Yp8PXPr` and `T8gmtofFSTGT5tbhyciF`.
@@ -8,3 +8,12 @@
 - The answer had `Content-Type: application/json`, a `Last-Modified` date and no `ETag`. A request with `If-Modified-Since` and that date got a 304 with no body.
 - Google owns the texts of the incidents. The texts are notices of the operation of a service.
 - The answer contains no personal data. The fixture has an indent of 2 spaces.
+
+## Firebase
+
+- `firebase-incidents-20261118.json` comes from the real answer to `https://status.firebase.google.com/incidents.json`. The answer had the date `Last-Modified: Wed, 18 Nov 2026 13:54:12 GMT`.
+- The real answer had 52 incidents. The fixture keeps 2 of them with no change: the newest incident of Cloud Messaging, `efSHTx8oFZ4CH8XsqZuy`, and the newest incident of another product, `uezk4rTzcNKjWtEkFj7k` (Hosting).
+- Each incident is a disruption of the severity `medium` that has ended. The incidents of Firebase have no location.
+- The field `number` is the number of the incident in the dashboard. It is not a phone number.
+- The answer had `Content-Type: application/json`, a `Last-Modified` date and no `ETag`.
+- Google owns the texts of the incidents. The answer contains no personal data.

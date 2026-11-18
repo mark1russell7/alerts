@@ -5,6 +5,19 @@
 
 import { knownKind, type Duration, type SourceId, type SubjectSystem } from "@mark1russell7/alerts";
 
+/**
+ * The key of one component of a service: the domain of the endpoint that the component serves. A key names the endpoint,
+ * not the company. Thus an outage of the video of a service does not go to a person who watches only its calls.
+ */
+export interface ComponentKey {
+  /** The id of a component, or of a group of components, on the page. A key of a group applies to each component of the group. */
+  readonly id: string;
+  /** The name of the component or of the group, for a person who reads the config, for example `Programmable Messaging`. */
+  readonly name: string;
+  /** The domain of the endpoint, for example `api.twilio.com`. Each report of the component names it as a subject. */
+  readonly domain: string;
+}
+
 /** The config of one status page. */
 export interface StatusPage {
   /** The id of the source of the page, for example `statuspage-github`. */
@@ -25,6 +38,8 @@ export interface StatusPage {
   readonly interval?: Duration;
   /** The longest normal time of one fetch. The default is `DEFAULT_SLOW_AFTER`. */
   readonly slowAfter?: Duration;
+  /** The keys of the components that serve an endpoint. The default is no key: each report names only the domain of the service. */
+  readonly components?: readonly ComponentKey[];
 }
 
 /** The default time between two fetches of a page: two minutes. The pages of Statuspage keep an answer in a cache for 10 seconds. */
@@ -54,6 +69,14 @@ export function isDomain(text: string): boolean {
   return /^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/.test(text);
 }
 
+/**
+ * This function gives the domains of a page: the domain of the service, then the domain of each key of a component. No
+ * domain is in the list twice. A person who watches one of these domains gets the reports of the page that name it.
+ */
+export function pageDomains(page: Pick<StatusPage, "domain" | "components">): readonly string[] {
+  return [...new Set([page.domain, ...(page.components ?? []).map((key) => key.domain)])];
+}
+
 /** This function examines the config of a page. It gives one text for each problem, and an empty list for a good config. A text holds no URL. */
 export function pageProblems(page: StatusPage): readonly string[] {
   const problems: string[] = [];
@@ -66,6 +89,16 @@ export function pageProblems(page: StatusPage): readonly string[] {
   if (!knownKind(page.kind)) problems.push(`the kind ${JSON.stringify(page.kind)} is not a code of the taxonomy`);
   if (page.dependsOn.length === 0) problems.push("the list of failure domains is empty");
   for (const domain of page.dependsOn) if (!/^[a-z]+:[a-z0-9.-]+$/.test(domain)) problems.push(`the failure domain ${JSON.stringify(domain)} is not a kind, a colon and an id`);
+  const ids = new Set<string>();
+  for (const key of page.components ?? []) {
+    if (key.id.trim() === "") problems.push("a key of a component has no id");
+    else if (ids.has(key.id)) problems.push(`the component ${JSON.stringify(key.id)} has two keys`);
+    ids.add(key.id);
+    if (key.name.trim() === "") problems.push(`the key of the component ${JSON.stringify(key.id)} has no name`);
+    if (!isDomain(key.domain)) problems.push(`the domain ${JSON.stringify(key.domain)} of a component is not a domain name in lower case`);
+    // The domain of the service is the subject of each report already. A key with it changes nothing.
+    else if (key.domain === page.domain) problems.push(`the key of the component ${JSON.stringify(key.id)} gives the domain of the service`);
+  }
   for (const [name, value] of [
     ["interval", page.interval],
     ["slowAfter", page.slowAfter],

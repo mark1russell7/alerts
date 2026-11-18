@@ -3,7 +3,7 @@ import type { FetchOutcome, PlaceId, Watch } from "@mark1russell7/alerts";
 import type { Exchange, Reply, Transport } from "polite-crawler/api";
 import { HostScheduler } from "polite-crawler/politeness";
 import { describe, expect, it } from "vitest";
-import { GCP_BASE, INCIDENTS_PATH } from "./feed.ts";
+import { FIREBASE_DASHBOARD, GCP_BASE, INCIDENTS_PATH, type GoogleDashboard } from "./feed.ts";
 import { createGcpFetch, incidentBody, INCIDENTS_TIMEOUT_MS, isLive, readIncidents } from "./fetch.ts";
 
 type Incident = Record<string, unknown> & { updates: Record<string, unknown>[] };
@@ -25,7 +25,7 @@ const json = (body: string, status = 200, headers: Record<string, string> = {}):
 const NOT_MODIFIED: Reply = { status: 304, statusText: "Not Modified", headers: { "last-modified": MODIFIED }, body: "" };
 
 /** This function makes a fetch whose transport gives the replies in turn, and then the last reply again. */
-const fetchWith = (replies: readonly Reply[]) => {
+const fetchWith = (replies: readonly Reply[], dashboard?: GoogleDashboard) => {
   const sent: Exchange[] = [];
   let index = 0;
   const transport: Transport = async (exchange) => {
@@ -35,7 +35,7 @@ const fetchWith = (replies: readonly Reply[]) => {
     return reply;
   };
   const clock = { time: FETCHED, now: () => clock.time, sleep: async (ms: number) => void (clock.time += ms) };
-  const fetch = createGcpFetch({ pace: { scheduler: new HostScheduler(clock, 1), now: clock.now }, transport, userAgent: "alerts-tests", minIntervalMs: 0, timeoutMs: 1000 });
+  const fetch = createGcpFetch({ pace: { scheduler: new HostScheduler(clock, 1), now: clock.now }, transport, userAgent: "alerts-tests", minIntervalMs: 0, timeoutMs: 1000, ...(dashboard === undefined ? {} : { dashboard }) });
   return { fetch, sent, clock };
 };
 const observationsOf = (outcome: FetchOutcome) => (outcome.ok ? outcome.observations : []);
@@ -101,6 +101,16 @@ describe("createGcpFetch", () => {
     expect(observationsOf(outcome)[0]).toMatchObject({ source: "gcp-status", contentType: "application/json", fetched: FETCHED, transport: { status: 200 } });
     expect(sent.map((exchange) => exchange.url)).toEqual([`${GCP_BASE}${INCIDENTS_PATH}`]);
     expect(sent[0]?.headers).toMatchObject({ "user-agent": "alerts-tests", accept: "application/json" });
+  });
+
+  it("asks the dashboard of the options, and gives the observations of its source", async () => {
+    const [messaging] = JSON.parse(readFileSync(new URL("../fixtures/firebase-incidents-20261118.json", import.meta.url), "utf8")) as Incident[];
+    const { end: _gone, ...live } = messaging!;
+    const { fetch, sent } = fetchWith([json(JSON.stringify([live]))], FIREBASE_DASHBOARD);
+    const outcome = await fetch({ watch: WATCH });
+    expect(idsOf(outcome)).toEqual(["efSHTx8oFZ4CH8XsqZuy"]);
+    expect(observationsOf(outcome)[0]?.source).toBe("firebase-status");
+    expect(sent.map((exchange) => exchange.url)).toEqual(["https://status.firebase.google.com/incidents.json"]);
   });
 
   it("gives an empty complete list when no incident is live", async () => {

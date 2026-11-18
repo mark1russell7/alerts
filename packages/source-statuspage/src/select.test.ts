@@ -48,6 +48,10 @@ describe("pagesFor", () => {
     expect(idsOf([watchOf(undefined, [{ system: "domain" }])])).toEqual(STATUS_PAGES.map((page) => page.id));
     expect(idsOf([watchOf(undefined, [{ system: "domain", id: "github.com" }, { system: "alerts.source" }])])).toEqual(["statuspage-github"]);
   });
+
+  it("gives the page of a service for the domain of an endpoint of one of its keys", () => {
+    expect(idsOf([watchOf(servicesLayer(["domain:api.twilio.com"]))])).toEqual(["statuspage-twilio"]);
+  });
 });
 
 describe("watchReads", () => {
@@ -58,5 +62,14 @@ describe("watchReads", () => {
     expect(watchReads(watchOf([edge("infra.saas.outage")]), github)).toBe(true);
     expect(watchReads(watchOf([edge("infra.sa")]), github)).toBe(false);
     expect(watchReads(watchOf([edge("infra.cloud")]), github)).toBe(false);
+  });
+
+  it("reads a page for each domain of the page, and not for another subdomain of the service", () => {
+    const twilio = registeredPage("statuspage-twilio")!;
+    expect(watchReads(watchOf(servicesLayer(["domain:twilio.com"])), twilio)).toBe(true);
+    expect(watchReads(watchOf(servicesLayer(["domain:api.twilio.com"])), twilio)).toBe(true);
+    expect(watchReads(watchOf(undefined, [{ system: "domain", id: "api.twilio.com" }]), twilio)).toBe(true);
+    expect(watchReads(watchOf(servicesLayer(["domain:video.twilio.com"])), twilio)).toBe(false);
+    expect(watchReads(watchOf(servicesLayer(["domain:api.github.com"])), registeredPage("statuspage-github")!)).toBe(false);
   });
 });

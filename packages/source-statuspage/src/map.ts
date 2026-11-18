@@ -4,14 +4,14 @@
  * kind of the page. The head gives no report.
  *
  * The id of the incident is the key of the report. The report has no correlation key: two incidents of one service at
- * one time are two events. The subject of the report is the domain of the service (`domain:github.com`). Thus a person who
- * names the service gets the report.
+ * one time are two events. The first subject of the report is the domain of the service (`domain:github.com`). Thus a
+ * person who names the service gets the report. Each key of a component of the incident adds the domain of its endpoint.
  */
 
 import { categoryOf, kindLabel, Problems, reportId, type Instant, type MapResult, type Observation, type Report, type Severity, type Subject, type Urgency } from "@mark1russell7/alerts";
 import { errorMessage } from "@mark1russell7/text";
 
-import { SUBJECT_SYSTEM, type StatusPage } from "./page.ts";
+import { SUBJECT_SYSTEM, type ComponentKey, type StatusPage } from "./page.ts";
 
 /** The fields of the body of an incident, in this order. The fetch keeps only these fields. */
 export const INCIDENT_FIELDS = ["id", "name", "status", "impact", "created_at", "updated_at", "started_at", "monitoring_at", "resolved_at", "shortlink", "components", "incident_updates"] as const;
@@ -21,9 +21,9 @@ export const UPDATE_FIELDS = ["id", "status", "body", "created_at", "updated_at"
 
 /**
  * The fields of each component of an incident, in this order. The status of a component changes with no update of the
- * incident, so the body of the incident does not keep it.
+ * incident, so the body of the incident does not keep it. The group of a component chooses the key of a group.
  */
-export const COMPONENT_FIELDS = ["id", "name"] as const;
+export const COMPONENT_FIELDS = ["id", "name", "group_id"] as const;
 
 /** The fields of the body of the head of a page, in this order. The head keeps no time, so a page with no change keeps its head. */
 export const HEAD_FIELDS = ["page", "status"] as const;
@@ -83,6 +83,17 @@ export function componentsOf(incident: Fields): readonly string[] {
   return [...new Set(components.flatMap((component) => (textOf(component, "name") === undefined ? [] : [textOf(component, "name")!])))];
 }
 
+/**
+ * This function gives the keys of a page that an incident names. A component of the incident, or its group, has the id
+ * of the key. Or an update gives the id of the key as the code of an affected component. The order is the order of the page.
+ */
+export function keysOf(incident: Fields, page: Pick<StatusPage, "components">): readonly ComponentKey[] {
+  const components = Array.isArray(incident["components"]) ? incident["components"].filter(isFields) : [];
+  const affected = updatesOf(incident).flatMap((update) => (Array.isArray(update["affected_components"]) ? update["affected_components"].filter(isFields) : []));
+  const ids = new Set([...components.flatMap((component) => [textOf(component, "id"), textOf(component, "group_id")]), ...affected.map((component) => textOf(component, "code"))]);
+  return (page.components ?? []).filter((key) => ids.has(key.id));
+}
+
 /** This function maps one observation of a page. It does not throw. A body that it does not understand gives a fatal problem. */
 export function mapObservation(observation: Observation, page: StatusPage): MapResult {
   try {
@@ -130,7 +141,12 @@ function reportOf(observation: Observation, page: StatusPage, incident: Fields, 
   const effective = timeOf(incident, "created_at");
   const onset = timeOf(incident, "started_at");
   // A component has no id in a system of the core. The parameter `component` gives its name.
-  const about: Subject[] = [{ system: SUBJECT_SYSTEM, id: page.domain, label: page.title }];
+  const keys = keysOf(incident, page);
+  const endpoints = [...new Set(keys.map((each) => each.domain))].filter((domain) => domain !== page.domain);
+  const about: Subject[] = [
+    { system: SUBJECT_SYSTEM, id: page.domain, label: page.title },
+    ...endpoints.map((domain) => ({ system: SUBJECT_SYSTEM, id: domain, label: `${page.title}: ${keys.filter((each) => each.domain === domain).map((each) => each.name).join(", ")}` })),
+  ];
   return {
     id: reportId({ source: page.id, key, sent }),
     source: page.id,
