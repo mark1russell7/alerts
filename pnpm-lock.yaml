@@ -362,8 +362,8 @@ importers:
         specifier: ^0.1.18
         version: 0.1.19
       '@mark1russell7/rigor-statistics':
-        specifier: ^0.2.1
-        version: 0.2.1
+        specifier: ^0.2.8
+        version: 0.2.8
       '@mark1russell7/text':
         specifier: ^0.0.13
         version: 0.0.13
@@ -574,6 +574,9 @@ importers:
       '@mark1russell7/alerts-source-nws-api':
         specifier: workspace:*
         version: link:../source-nws-api
+      '@mark1russell7/alerts-source-nwws':
+        specifier: workspace:*
+        version: link:../source-nwws
       '@mark1russell7/alerts-source-swpc':
         specifier: workspace:*
         version: link:../source-swpc
@@ -3092,7 +3095,7 @@ snapshots:
     dependencies:
       '@mark1russell7/algebra': 0.8.10(zod@4.6.7)
       '@mark1russell7/optional': 1.2.0
-      '@mark1russell7/rigor-statistics': 0.2.4
+      '@mark1russell7/rigor-statistics': 0.2.8
     transitivePeerDependencies:
       - zod
 

@@ -813,7 +813,7 @@ export const sendOutcomeSchema: z.ZodType<SendOutcome, SendOutcome> = schemaOf<S
       z.strictObject({ ok: z.literal(true), receipt: receiptSchema, accepted: instantSchema }),
       z.strictObject({
         ok: z.literal(false),
-        kind: z.enum(["network", "timeout", "server", "rate-limited", "reserved", "auth", "refused", "consent"]),
+        kind: z.enum(["network", "timeout", "server", "rate-limited", "reserved", "auth", "refused", "consent", "quiet", "expired"]),
         message: z.string(),
         retryAfter: durationSchema.exactOptional(),
       }),
@@ -1568,6 +1568,10 @@ export const copySettingsSchema: z.ZodType<CopySettings, CopySettings> = schemaO
       pingKey: z
         .string()
         .regex(/^[A-Z][A-Z0-9_]*$/u, "The key is a name of the secrets: capital letters, digits and underscores.")
+        .exactOptional(),
+      accounts: z
+        .record(z.string().min(1, "The id of a source is a non-empty text."), z.int().min(1, "The number of an account is an integer, 1 or more."))
+        .readonly()
         .exactOptional(),
     })
     .readonly(),

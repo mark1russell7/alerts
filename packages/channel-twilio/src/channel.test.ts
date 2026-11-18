@@ -78,8 +78,8 @@ describe("the map of a message to a call", () => {
   });
 
   it("refuses a quiet message, a message that expired and an address that the core refuses, with no value in the reason", () => {
-    expect(twilioCallOf(message("notice", { quiet: true }), ADDRESS, AT, { from: FROM })).toEqual({ refused: "A call has no silent mode, thus a quiet message gets no call." });
-    expect(twilioCallOf(message("notice", { expires: AT }), ADDRESS, AT, { from: FROM })).toEqual({ refused: "The message expired before the send." });
+    expect(twilioCallOf(message("notice", { quiet: true }), ADDRESS, AT, { from: FROM })).toEqual({ refused: "A call has no silent mode, thus a quiet message gets no call.", kind: "quiet" });
+    expect(twilioCallOf(message("notice", { expires: AT }), ADDRESS, AT, { from: FROM })).toEqual({ refused: "The message expired before the send.", kind: "expired" });
     expect(twilioCallOf(message("notice"), {}, AT, { from: FROM })).toEqual({ refused: `The address on twilio-call has no field to. The channel needs ${FORM}.` });
     for (const to of ["999", "+0123", "+1555555012"]) {
       const refusal = twilioCallOf(message("notice"), { to }, AT, { from: FROM });
@@ -102,9 +102,11 @@ describe("the send", () => {
     expect(fake.calls[0]?.fields["Twiml"]).toContain("Tornado warning.");
   });
 
-  it("makes no request for a refused message, a bad copy id, a bad account SID and a bad Twilio number", async () => {
+  it("makes no request for a quiet message, a bad copy id, a bad account SID and a bad Twilio number", async () => {
     const fake = server();
-    expect(await channelOf(fake).send({ message: message("notice", { quiet: true }), address: ADDRESS })).toMatchObject({ ok: false, kind: "refused" });
+    // A quiet call is not a fault of the channel: the kind is quiet, and the step goes after the quiet window.
+    expect(await channelOf(fake).send({ message: message("notice", { quiet: true }), address: ADDRESS })).toMatchObject({ ok: false, kind: "quiet" });
+    expect(await channelOf(fake).send({ message: message("notice", { expires: AT }), address: ADDRESS })).toMatchObject({ ok: false, kind: "expired" });
     expect(await channelOf(fake).send({ message: message("notice"), address: ADDRESS, copy: "bad copy" })).toMatchObject({ ok: false, kind: "refused" });
     expect(await channelOf(fake, { credentials: { accountSid: "AC1", secret: "fake-secret" } }).send({ message: message("notice"), address: ADDRESS })).toMatchObject({ ok: false, kind: "auth" });
     expect(await channelOf(fake, { from: "999" }).send({ message: message("notice"), address: ADDRESS })).toMatchObject({ ok: false, kind: "refused" });

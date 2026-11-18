@@ -582,4 +582,24 @@ describe("one pass of the runtime", () => {
     const source = scripted(API, async () => ({ ok: true, observations: [], complete: true }));
     expect(() => open([source, source])).toThrow("Two sources have the id api.");
   });
+
+  it("closes each source with a close one time, also after a close that throws, and refuses a pass after the close", async () => {
+    const closes: string[] = [];
+    const empty: SourceProcedures["fetch"] = async () => ({ ok: true, observations: [], complete: true });
+    const failing: SourceProcedures = { ...scripted(API, empty), close: () => Promise.reject(new Error("The session did not end.")) };
+    const stream: SourceProcedures = { ...scripted(WEA, empty), close: async () => void closes.push("wea") };
+    const plain = scripted("plain" as SourceId, empty);
+    const { log, runtime } = open([failing, stream, plain]);
+    try {
+      await runtime.pass();
+      const first = runtime.close();
+      expect(runtime.close()).toBe(first);
+      await expect(first).resolves.toBeUndefined();
+      expect(closes).toEqual(["wea"]);
+      await expect(runtime.pass()).rejects.toThrow("The runtime is closed: its sources have no session.");
+      expect(closes).toEqual(["wea"]);
+    } finally {
+      log.close();
+    }
+  });
 });
