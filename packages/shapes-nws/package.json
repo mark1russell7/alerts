@@ -19,7 +19,7 @@
     "@mark1russell7/geo": "^0.5.3",
     "@mark1russell7/sqlite": "^0.3.8",
     "@mark1russell7/text": "^0.0.13",
-    "polite-crawler": "^0.7.3"
+    "polite-crawler": "^0.7.10"
   },
   "devDependencies": {
     "@mark1russell7/cue": "^2.0.0",
