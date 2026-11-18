@@ -22,6 +22,7 @@ import { createSupervisor, DEFAULT_BACKOFF, type NwwsAccount, type SupervisorSta
 export { createProductBuffer, type BufferEntry, type BufferPosition, type BufferRead, type ProductBuffer } from "./buffer.ts";
 export { checkCanary, keepaliveSent, type CanarySession } from "./check.ts";
 export { NWWS_DESCRIPTOR } from "./descriptor.ts";
+export { COPY_EXPECTATION } from "./expectation.ts";
 export { fakeSessions, type FakeSession, type FakeSessions } from "./fake.ts";
 export { CONTENT_TYPE, createNwwsFetch, cursorOf, failureOf, markOf, observationOf, positionOf, type NwwsFetchOptions } from "./fetch.ts";
 export { mapObservation, SOURCE_ID } from "./map.ts";
