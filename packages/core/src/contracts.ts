@@ -919,12 +919,14 @@ export interface ProviderBalance {
  * - `reserved`: the channel keeps the last units of its quota for a higher level. It still sends a message of that level.
  * - `auth` and `refused`: the provider refused the key or the message.
  * - `consent`: the address has no opt-in, or its person took the opt-in back with a STOP reply. The channel sent nothing.
+ * - `quiet`: the message is quiet, and the channel has no silent mode, as a call. The step goes after the quiet window.
+ * - `expired`: the message expired before the send. The channel sent nothing.
  */
 export type SendOutcome =
   | { readonly ok: true; readonly receipt: Receipt; readonly accepted: Instant }
   | {
       readonly ok: false;
-      readonly kind: "network" | "timeout" | "server" | "rate-limited" | "reserved" | "auth" | "refused" | "consent";
+      readonly kind: "network" | "timeout" | "server" | "rate-limited" | "reserved" | "auth" | "refused" | "consent" | "quiet" | "expired";
       readonly message: string;
       readonly retryAfter?: Duration;
     };

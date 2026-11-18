@@ -45,6 +45,8 @@ const CODE_POINTS = { unit: "code-point" } as const;
 /** A message that the channel does not send, with the reason. */
 export interface Refusal {
   readonly refused: string;
+  /** `expired` for a message that expired before the send. Without it, the kind of the send is `refused`. */
+  readonly kind?: "expired";
 }
 
 /**
@@ -60,7 +62,7 @@ export interface Refusal {
 export function pushoverMessageOf(message: Message, address: Address, at: Instant, options: PushoverMapOptions = {}, copy?: string): PushoverMessage | Refusal {
   const user = address["user"];
   if (user === undefined || user === "") return { refused: "The address has no user key." };
-  if (message.expires !== undefined && message.expires <= at) return { refused: "The message expired before the send." };
+  if (message.expires !== undefined && message.expires <= at) return { refused: "The message expired before the send.", kind: "expired" };
   const priority = priorityOf(message.level, message.quiet);
   const title = truncate(message.title, PUSHOVER_LIMITS.title, CODE_POINTS);
   const parts = [message.why, message.body].flatMap((part) => (part === undefined || part.trim() === "" ? [] : [part]));

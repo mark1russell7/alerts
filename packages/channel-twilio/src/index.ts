@@ -111,7 +111,7 @@ export function createTwilioCallChannel(options: TwilioCallChannelOptions): Chan
       const at = now();
       if (!TWILIO_ACCOUNT_SID.test(options.credentials.accountSid)) return { ok: false, kind: "auth", message: "The account SID is not AC and 32 hexadecimal digits." };
       const mapped = twilioCallOf(message, address, at, options);
-      if ("refused" in mapped) return { ok: false, kind: "refused", message: mapped.refused };
+      if ("refused" in mapped) return { ok: false, kind: mapped.kind ?? "refused", message: mapped.refused };
       let request: TwilioRequest;
       try {
         request = twilioCallRequest(options.credentials, mapped);
