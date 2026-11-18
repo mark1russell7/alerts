@@ -79,7 +79,8 @@ export interface SpendConfig {
   readonly monthlyUsd: number;
   /**
    * The fixed costs of the account in each month, for example the rent of each phone number. The sends of a month get
-   * the monthly cap less these costs (`sendCapUsd`). The default is no fixed cost.
+   * the monthly cap less these costs (`sendCapUsd`). The default is no fixed cost. Then the whole cap is for the sends,
+   * and the rent is outside the cap. Give fixed costs only for a cap of the whole bill.
    */
   readonly fixed?: readonly FixedCost[];
   /** The last part of the cap of the sends that only `life-safety` messages use, in US dollars. The default is 0. */
