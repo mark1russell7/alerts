@@ -592,6 +592,9 @@ importers:
       '@mark1russell7/alerts-source-nwws':
         specifier: workspace:*
         version: link:../source-nwws
+      '@mark1russell7/alerts-source-statuspage':
+        specifier: workspace:*
+        version: link:../source-statuspage
       '@mark1russell7/alerts-source-swpc':
         specifier: workspace:*
         version: link:../source-swpc
