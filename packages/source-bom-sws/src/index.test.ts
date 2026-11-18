@@ -15,7 +15,7 @@ describe("createBomSwsSource", () => {
     });
     expect(source.describe()).toEqual(BOM_SWS_DESCRIPTOR);
     expect(source.locate).toBeUndefined();
-    expect(source.check?.({ observations: [] }).pass).toBe(false);
+    expect(source.check?.({ observations: [] })?.pass).toBe(false);
     const observation = { id: "o" as never, source: SOURCE_ID, fetched: 0, contentType: "application/json", body: "", transport: { latency: 0 } };
     expect(source.map({ observation }).reports).toEqual([]);
   });
