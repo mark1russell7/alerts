@@ -1,9 +1,10 @@
 /**
- * The config of one GTFS Realtime feed of service alerts: its URL, its agency and the box of its network.
- * The catalog of the Mobility Database lists the public feeds. The config of an instance names the feeds that it reads.
+ * The config of one GTFS Realtime feed of service alerts: its URL, its agency, its box and the places of its stops and
+ * routes. The catalog of the Mobility Database lists the public feeds. The config of an instance names the
+ * feeds that it reads.
  */
 
-import type { Duration, IndicatorArea, SourceId } from "@mark1russell7/alerts";
+import { positionSchema, type Duration, type IndicatorArea, type Position, type SourceId } from "@mark1russell7/alerts";
 
 /** The box of the network of an agency, in degrees: the lowest and the highest longitude and latitude of its stops. */
 export interface Box {
@@ -11,6 +12,14 @@ export interface Box {
   readonly south: number;
   readonly east: number;
   readonly north: number;
+}
+
+/** The places of the stops and the routes of a feed, from its static GTFS feed. Each id is an id of the static feed. */
+export interface FeedPlaces {
+  /** The position of each stop, at its `stop_id`: the longitude and the latitude of `stops.txt`. */
+  readonly stops?: Readonly<Record<string, Position>>;
+  /** The box of each route, at its `route_id`: the box of the stops of its trips. */
+  readonly routes?: Readonly<Record<string, Box>>;
 }
 
 /** The config of one feed of service alerts. */
@@ -24,10 +33,16 @@ export interface GtfsFeed {
   /** The agency: the origin of each report, in lower case with hyphens, for example `zditm-szczecin`. */
   readonly origin: string;
   /**
-   * The box of the network, from the static GTFS feed of the agency or from the catalog. It is the area of each report and
-   * of each reading. The catalog gives a box for most feeds. Its country is wrong for some feeds, so the source does not use it.
+   * The box of the network, from the static GTFS feed of the agency or from the catalog. It is the area of each reading.
+   * It is not the area of a report, because one alert does not cover a network. The catalog gives a box for most feeds.
+   * Its country is wrong for some feeds, so the source does not use it.
    */
   readonly box: Box;
+  /**
+   * The places of the stops and the routes of the network. A report has the areas of the stops and the routes of its
+   * alert that this field holds. With no such stop or route, the report has no area, so it reaches no watched place.
+   */
+  readonly places?: FeedPlaces;
   /** The URL of the license of the feed, as the catalog gives it. */
   readonly license?: string;
   /** The time between two fetches. The default is `DEFAULT_INTERVAL`. */
@@ -100,6 +115,13 @@ export function feedProblems(feed: GtfsFeed): readonly string[] {
   const problem = boxProblem(feed.box);
   if (problem !== undefined) problems.push(problem);
   if (feed.license !== undefined && !isFeedUrl(feed.license)) problems.push("the license is not an https or http URL");
+  for (const [stop, position] of Object.entries(feed.places?.stops ?? {})) {
+    if (!positionSchema.safeParse(position).success) problems.push(`the stop ${stop} has no longitude and latitude in their ranges`);
+  }
+  for (const [route, box] of Object.entries(feed.places?.routes ?? {})) {
+    const found = boxProblem(box);
+    if (found !== undefined) problems.push(`the route ${route}: ${found}`);
+  }
   if (feed.interval !== undefined && (!Number.isInteger(feed.interval) || feed.interval < 60_000)) problems.push(`the interval is not an integer of 60000 or more milliseconds: ${String(feed.interval)}`);
   return problems;
 }

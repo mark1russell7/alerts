@@ -27,11 +27,10 @@ export interface ObservationIdInput {
   readonly url?: string;
 }
 
-/** The input of `reportId`: the source, the key that the source gives, the sent time and the part. */
-export interface ReportIdInput {
+/** The fields of each input of `reportId`: the source, the key that the source gives and the part. */
+interface ReportIdFields {
   readonly source: SourceId;
   readonly key: string;
-  readonly sent: Instant;
   /**
    * The part of a message that gives two or more reports, for example `info[1]`, the second info block of a CAP
    * message. The reports of one message keep its key, so a reference to the message ends each of them. A report
@@ -39,6 +38,13 @@ export interface ReportIdInput {
    */
   readonly part?: string | undefined;
 }
+
+/**
+ * The input of `reportId`. A report gives its sent time, or a version when its source gives no time of its own.
+ * The version is the id of the observation that holds the text of the report. Thus each copy and each start of the
+ * runtime give one id to one text. A new text gets a new id with the same key.
+ */
+export type ReportIdInput = ReportIdFields & ({ readonly sent: Instant; readonly version?: undefined } | { readonly version: string; readonly sent?: undefined });
 
 /** The input of `messageKey`: one step of the escalation of one level of one incident to one person. */
 export interface MessageKeyInput {
@@ -64,11 +70,13 @@ export function observationId(input: ObservationIdInput): ObservationId {
 }
 
 /**
- * This function gives the id of a report. An update of the source has a new key or a new sent
- * time, so it gets a new id. The merge uses the smallest report id of an incident as its anchor.
+ * This function gives the id of a report. An update of the source has a new key, a new sent
+ * time or a new version, so it gets a new id. The merge uses the smallest report id of an incident
+ * as its anchor. A version is a text in the hash input, and a sent time is a number. Thus a version
+ * and a sent time do not give the same id.
  */
 export function reportId(input: ReportIdInput): ReportId {
-  const fields = ["report", input.source, input.key, input.sent];
+  const fields = ["report", input.source, input.key, input.version ?? input.sent];
   return digest(input.part === undefined ? fields : [...fields, input.part]) as ReportId;
 }
 

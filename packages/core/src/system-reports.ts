@@ -773,8 +773,8 @@ function drillNoStartCondition(copy: string, drill: DrillConfig): Condition {
 }
 
 /**
- * This function tells if each kind of a source is a kind of context (`CONTEXT_KINDS`). The reports of such a source reach no
- * person, so its health reaches the digest at most. A source with no kind is not a source of context.
+ * This function tells if each kind of a source is a kind of context (`CONTEXT_KINDS`). The reports of such a source reach the
+ * digest at most, so its health also reaches the digest at most. A source with no kind is not a source of context.
  */
 export function contextSource(source: SourceDescriptor): boolean {
   return source.kinds.length > 0 && source.kinds.every((kind) => hasKind(CONTEXT_KINDS, kind));

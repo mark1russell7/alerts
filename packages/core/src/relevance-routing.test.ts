@@ -116,6 +116,16 @@ describe("the routing by the relevance (AL-35 step 5)", () => {
     expect(run(incident(), watcher(muted), absent).muted).toEqual({ mute: "m1", effect: "absent" });
   });
 
+  it("never puts a transit incident under the rule of the life-safety warnings (AL-73)", () => {
+    const transit = incident({ kind: "transport.transit.service-alert", severity: "extreme", urgency: "immediate" });
+    // The rule is on, and the match by the codes is in its range. The table gives the digest, so the rule does not apply.
+    const ruled = run(transit, watcher(offHome, { mandatory: [{ place: home, on: true, rangeKm: 10 }] }));
+    expect(ruled.level).toBe("none");
+    expect(ruled.reasons).toContainEqual(expect.objectContaining({ kind: "reach", mandatory: [] }));
+    // With the edge on, the place counts, and the level stays at the digest.
+    expect(run(transit, watcher(graph([edge("e1", HOME)]), { mandatory: [{ place: home, on: true, rangeKm: 10 }] })).level).toBe("digest");
+  });
+
   it("turns the rule off at a place, and holds its range", () => {
     expect(run(incident(), watcher(offHome, { mandatory: [{ place: home, on: false, rangeKm: 10 }] })).level).toBe("none");
     // The edge of this circle is 5 km from the place, in its buffer of 10 km.
