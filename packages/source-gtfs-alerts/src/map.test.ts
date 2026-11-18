@@ -3,7 +3,7 @@ import { checkWith, observationId, readingProblems, readingSchema, reportSchema,
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import { gtfsDescriptor } from "./descriptor.ts";
-import { sourceIdOf, type GtfsFeed } from "./feed.ts";
+import { boxArea, sourceIdOf, type GtfsFeed } from "./feed.ts";
 import { BODY_TYPE, feedBodies } from "./fetch.ts";
 import { ACTIVE_ALERTS, alertText, censusText, ended, GTFS_KIND, inEffect, mapObservation, MAX_PARAMETER_VALUES, NO_SERVICE_ALERTS, severityOf, textIn } from "./map.ts";
 import { decodeFeed, type Alert, type TimeRange } from "./proto.ts";
@@ -19,10 +19,9 @@ const ZDITM_FEED: GtfsFeed = {
   title: "ZDiTM Szczecin",
   url: "https://transit.example.test/gtfs-rt-alerts.pb",
   origin: "zditm-szczecin",
-  country: "PL",
   box: { west: 14.4, south: 53.3, east: 14.8, north: 53.6 },
 };
-const RUTER_FEED: GtfsFeed = { id: "mdb-1799", title: "Ruter", url: "https://transit.example.test/ruter", origin: "ruter", country: "NO", box: { west: 10.2, south: 59.6, east: 11.4, north: 60.2 } };
+const RUTER_FEED: GtfsFeed = { id: "mdb-1799", title: "Ruter", url: "https://transit.example.test/ruter", origin: "ruter", box: { west: 10.2, south: 59.6, east: 11.4, north: 60.2 } };
 
 /** This function gives the observations of the bodies of a decoded feed, as the fetch makes them. */
 const observationsOf = (feed: GtfsFeed, message: ReturnType<typeof decodeFeed>, fetched = FETCHED): Observation[] =>
@@ -56,7 +55,7 @@ describe("mapObservation of the real feeds", () => {
         [NO_SERVICE_ALERTS, 0],
       ]);
       for (const reading of result.readings ?? []) {
-        expect(reading.area).toEqual({ type: "code", system: "iso3166", code: feed.country });
+        expect(reading.area).toEqual(boxArea(feed.box));
         expect(reading.at).toBe((message.header?.timestamp ?? 0) * 1000);
         expect(checkWith(readingSchema, reading).tag).toBe("ok");
         expect(readingProblems(reading, gtfsDescriptor(feed))).toEqual([]);

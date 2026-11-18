@@ -14,7 +14,7 @@ const LIVE_AT = Date.parse("2026-11-18T03:58:19Z");
 /** A place of the tests. The request holds no place, so the fetch reads no code and no position of a place. */
 const WATCH: Watch = { places: [{ id: "a" as PlaceId, codes: [{ system: "iso3166", code: "PL" }], at: [14.55, 53.43], bufferKm: 0 }] };
 
-const FEED: GtfsFeed = { id: "mdb-1967", title: "ZDiTM Szczecin", url: "https://transit.example.test/storage/gtfs/alerts.pb?key=k1", origin: "zditm-szczecin", country: "PL", box: { west: 14.4, south: 53.3, east: 14.8, north: 53.6 } };
+const FEED: GtfsFeed = { id: "mdb-1967", title: "ZDiTM Szczecin", url: "https://transit.example.test/storage/gtfs/alerts.pb?key=k1", origin: "zditm-szczecin", box: { west: 14.4, south: 53.3, east: 14.8, north: 53.6 } };
 
 const protobuf = (bytes: Uint8Array, status = 200, headers: Record<string, string> = { etag: '"v1"' }): Reply => ({
   status,

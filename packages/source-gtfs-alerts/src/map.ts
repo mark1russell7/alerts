@@ -208,7 +208,7 @@ function mapCensus(feed: GtfsFeed, observation: Observation, body: Fields): MapR
   if (!Number.isFinite(at) || !isCount(active) || !isCount(noService)) {
     return { reports: [], problems: [{ path: "", message: "the census has no time or no counts", fatal: true }], readings: [] };
   }
-  const area: Reading["area"] = { type: "code", system: "iso3166", code: feed.country };
+  const area: Reading["area"] = boxArea(feed.box);
   const reading = (measure: string, value: number): Reading => ({
     source: sourceIdOf(feed),
     measure,

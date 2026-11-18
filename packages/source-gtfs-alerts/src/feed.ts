@@ -1,9 +1,9 @@
 /**
- * The config of one GTFS Realtime feed of service alerts: its URL, its agency, its country and the box of its network.
+ * The config of one GTFS Realtime feed of service alerts: its URL, its agency and the box of its network.
  * The catalog of the Mobility Database lists the public feeds. The config of an instance names the feeds that it reads.
  */
 
-import type { Area, Duration, SourceId } from "@mark1russell7/alerts";
+import type { Duration, IndicatorArea, SourceId } from "@mark1russell7/alerts";
 
 /** The box of the network of an agency, in degrees: the lowest and the highest longitude and latitude of its stops. */
 export interface Box {
@@ -23,11 +23,9 @@ export interface GtfsFeed {
   readonly url: string;
   /** The agency: the origin of each report, in lower case with hyphens, for example `zditm-szczecin`. */
   readonly origin: string;
-  /** The country of the agency: a code of ISO 3166-1 alpha-2 in upper case, for example `PL`. It is the area of each reading. */
-  readonly country: string;
   /**
-   * The box of the network, from the static GTFS feed of the agency or from the catalog. It is the area of each report. A
-   * report needs an area, and the country is too wide for one network, so the box is necessary.
+   * The box of the network, from the static GTFS feed of the agency or from the catalog. It is the area of each report and
+   * of each reading. The catalog gives a box for most feeds. Its country is wrong for some feeds, so the source does not use it.
    */
   readonly box: Box;
   /** The URL of the license of the feed, as the catalog gives it. */
@@ -59,7 +57,7 @@ export function intervalOf(feed: Pick<GtfsFeed, "interval">): Duration {
 }
 
 /** This function gives the polygon of a box: one ring from the south-west corner, counterclockwise, that closes on its first position. */
-export function boxArea(box: Box): Area {
+export function boxArea(box: Box): Extract<IndicatorArea, { readonly type: "polygon" }> {
   const { west, south, east, north } = box;
   return {
     type: "polygon",
@@ -99,7 +97,6 @@ export function feedProblems(feed: GtfsFeed): readonly string[] {
   // A problem text holds no URL of the config: a URL can hold a key.
   if (!isFeedUrl(feed.url)) problems.push("the URL is not an https or http URL with a host and no user, password or fragment");
   if (!FEED_ID_PATTERN.test(feed.origin)) problems.push("the origin is not lower-case letters and digits with single hyphens");
-  if (!/^[A-Z]{2}$/.test(feed.country)) problems.push(`the country ${JSON.stringify(feed.country)} is not a code of two upper-case letters`);
   const problem = boxProblem(feed.box);
   if (problem !== undefined) problems.push(problem);
   if (feed.license !== undefined && !isFeedUrl(feed.license)) problems.push("the license is not an https or http URL");

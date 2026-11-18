@@ -5,7 +5,7 @@ import { gtfsDescriptor } from "./descriptor.ts";
 import { boxArea, DEFAULT_INTERVAL, feedProblems, isFeedUrl, sourceIdOf, type GtfsFeed } from "./feed.ts";
 import { censusText, GTFS_KIND } from "./map.ts";
 
-const FEED: GtfsFeed = { id: "mdb-1967", title: "ZDiTM Szczecin", url: "https://transit.example.test/alerts.pb", origin: "zditm-szczecin", country: "PL", box: { west: 14.4, south: 53.3, east: 14.8, north: 53.6 } };
+const FEED: GtfsFeed = { id: "mdb-1967", title: "ZDiTM Szczecin", url: "https://transit.example.test/alerts.pb", origin: "zditm-szczecin", box: { west: 14.4, south: 53.3, east: 14.8, north: 53.6 } };
 
 describe("feedProblems", () => {
   it("gives no problem for a good feed", () => {
@@ -19,13 +19,12 @@ describe("feedProblems", () => {
       title: " ",
       url: "https://user:secret@transit.example.test/alerts.pb",
       origin: "Agency",
-      country: "pl",
       box: { west: 14.8, south: 53.3, east: 14.4, north: 53.6 },
       license: "ftp://x",
       interval: 1000,
     };
     const problems = feedProblems(bad);
-    expect(problems).toHaveLength(8);
+    expect(problems).toHaveLength(7);
     expect(problems.join(" ")).not.toContain("secret");
     expect(problems.join(" ")).not.toContain("transit.example.test");
   });
