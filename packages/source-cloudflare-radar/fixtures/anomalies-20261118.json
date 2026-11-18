@@ -1,0 +1,1 @@
+{"success":true,"errors":[],"result":{"trafficAnomalies":[{"visibleInDataSources":["HTTP","NET"],"uuid":"c595977b-aa94-4659-bb59-45d1884015f0","type":"AS","status":"TP","startDate":"2026-11-17T00:15:00Z","endDate":null,"locationDetails":null,"asnDetails":{"asn":"10030","name":"CELCOMNET-AP","location":{"code":"MY","name":"Malaysia"}},"originDetails":null,"outageId":null}]}}

@@ -598,6 +598,9 @@ importers:
       '@mark1russell7/alerts-source-cisa-kev':
         specifier: workspace:*
         version: link:../source-cisa-kev
+      '@mark1russell7/alerts-source-cloudflare-radar':
+        specifier: workspace:*
+        version: link:../source-cloudflare-radar
       '@mark1russell7/alerts-source-emsc':
         specifier: workspace:*
         version: link:../source-emsc
@@ -959,6 +962,46 @@ importers:
       fast-check:
         specifier: ^4.10.2
         version: 4.10.2
+      typescript:
+        specifier: ^7.0.2
+        version: 7.0.2
+      vitest:
+        specifier: ^5.0.3
+        version: 5.1.0(@opentelemetry/api@1.10.0)(@types/node@26.6.6)(@vitest/coverage-v8@5.1.0)(vite@8.3.8(@types/node@26.6.6)(esbuild@0.28.2)(tsx@4.23.15)(yaml@2.9.1))
+
+  packages/source-cloudflare-radar:
+    dependencies:
+      '@mark1russell7/alerts':
+        specifier: workspace:*
+        version: link:../core
+      '@mark1russell7/alerts-fetch':
+        specifier: workspace:*
+        version: link:../fetch
+      '@mark1russell7/alerts-source-aws':
+        specifier: workspace:*
+        version: link:../source-aws
+      '@mark1russell7/alerts-source-azure':
+        specifier: workspace:*
+        version: link:../source-azure
+      '@mark1russell7/alerts-source-gcp':
+        specifier: workspace:*
+        version: link:../source-gcp
+      '@mark1russell7/text':
+        specifier: ^0.0.13
+        version: 0.0.13
+      polite-crawler:
+        specifier: ^0.7.3
+        version: 0.7.4(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
+    devDependencies:
+      '@mark1russell7/cue':
+        specifier: ^2.0.0
+        version: 2.1.4
+      '@types/node':
+        specifier: ^26.6.5
+        version: 26.6.6
+      '@vitest/coverage-v8':
+        specifier: ^5.0.3
+        version: 5.1.0(vitest@5.1.0)
       typescript:
         specifier: ^7.0.2
         version: 7.0.2
