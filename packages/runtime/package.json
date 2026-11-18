@@ -19,6 +19,7 @@
     "@mark1russell7/alerts-rates": "workspace:*",
     "@mark1russell7/alerts-shapes-nws": "workspace:*",
     "@mark1russell7/alerts-source-emsc": "workspace:*",
+    "@mark1russell7/alerts-source-gfz": "workspace:*",
     "@mark1russell7/alerts-source-ipaws": "workspace:*",
     "@mark1russell7/alerts-source-nws-api": "workspace:*",
     "@mark1russell7/alerts-source-nwws": "workspace:*",
