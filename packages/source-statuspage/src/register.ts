@@ -40,14 +40,22 @@ const page = (name: string, title: string, host: string, domain: string, kind: s
 });
 
 /**
- * The keys of the components of Twilio that an alert uses for a call or a text message. These are the text messages,
- * the carrier network of the texts and the voice of the region US1. The API of these services is `api.twilio.com`. Each
- * id is a group of the page on 2026-11-18. An outage of Twilio Video or SendGrid names only `twilio.com`.
+ * The keys of the components of Twilio on the path of an alert call or text message. These are the SMS and the API of
+ * the messages, and Functions. For the voice of US1, these are the REST API, the PSTN, TwiML and the text to speech. The
+ * outage call starts Functions on the server of Twilio. The API of these services is `api.twilio.com`. Each id is a
+ * component of the page on 2026-11-18.
+ *
+ * An incident of a carrier names only `twilio.com`. A key of a carrier needs the region of the phone of a person, and
+ * the delivery layer gives no region yet. An outage of Twilio Video or SendGrid also names only `twilio.com`.
  */
 export const TWILIO_KEYS: readonly ComponentKey[] = [
-  { id: "s2k3h0mkqnth", name: "Programmable Messaging", domain: "api.twilio.com" },
-  { id: "j3s4w3gnsj08", name: "Programmable Voice US1", domain: "api.twilio.com" },
-  { id: "j8hlnyphbbs0", name: "Carrier Network", domain: "api.twilio.com" },
+  { id: "yvvy3vlp4djf", name: "SMS", domain: "api.twilio.com" },
+  { id: "x3z86l06nvl7", name: "Programmable Messaging API", domain: "api.twilio.com" },
+  { id: "mwcz6hw53t7c", name: "Voice REST API US1", domain: "api.twilio.com" },
+  { id: "g2dt752kwqs0", name: "PSTN US1", domain: "api.twilio.com" },
+  { id: "xnzrm2zg4qbv", name: "TwiML US1", domain: "api.twilio.com" },
+  { id: "dv0j99s68yxn", name: "Text-to-Speech US1", domain: "api.twilio.com" },
+  { id: "b3tl520cz8tc", name: "Functions", domain: "api.twilio.com" },
 ];
 
 /** The well-known status pages, in the order of their ids. */

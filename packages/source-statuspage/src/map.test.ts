@@ -185,6 +185,17 @@ describe("keysOf", () => {
   it("gives no key for a page with no keys", () => {
     expect(keysOf(incident(CLOUDFLARE, "k3r9i5tbre4i"), CLOUDFLARE_PAGE)).toEqual([]);
   });
+
+  it("names the API of Twilio for an incident on the path of an alert, and not for an incident of a carrier in APAC", () => {
+    const twilio = read("twilio-incidents-20261118.json");
+    const page = registeredPage("statuspage-twilio")!;
+    const aboutOf = (id: string) => mapObservation(observationOf(incidentBody(incident(twilio, id))), page).reports[0]!.about.map((subject) => subject.id);
+    expect(keysOf(incident(twilio, "269ytwp2jgqq"), page).map((key) => key.name)).toEqual(["SMS", "Programmable Messaging API"]);
+    expect(aboutOf("269ytwp2jgqq")).toEqual(["twilio.com", "api.twilio.com"]);
+    // The component SMS, APAC is in the group CARRIER NETWORK, and the group has no key.
+    expect(keysOf(incident(twilio, "smg76w4fhp05"), page)).toEqual([]);
+    expect(aboutOf("smg76w4fhp05")).toEqual(["twilio.com"]);
+  });
 });
 
 describe("the values of an incident", () => {
