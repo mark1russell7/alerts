@@ -937,7 +937,8 @@ The core function `limitRoutes` applies the send limit of each person to the rou
 - Each level below `life-safety` has a count: the most new escalations of one person in one window. A `life-safety` escalation has no limit.
 - The defaults are 6 at `notice` and 12 at `urgent` in one hour (`DEFAULT_SEND_LIMITS`). The busiest hour of one person before the burst of 2026-11-18 had 4 and 8.
 - The field `sendLimit` of the configuration changes the window or a count. The window is one minute to one day, and each count is 1 or more.
-- The count of a person and a level is the incidents whose first delivery of the level is in the window. The deliveries of the other copies count, thus the limit applies over all the copies.
+- The count of a person and a level is the incidents with a delivery of the level in the window. The deliveries of the other copies count, thus the limit applies over all the copies.
+- Each delivery in the window counts, not only the first delivery of the incident. Thus a new episode of an incident from before the window counts after its send.
 - The limit counts escalations, not messages. An escalation with a delivery in its episode sends its later steps with no limit.
 - A new escalation has a send and no delivery in its episode. It gets a place in the order of its first due time, then of its anchor.
 - A new episode is a new escalation. Thus an older copy that opens each episode again after the ends of a newer copy stays in the limit.

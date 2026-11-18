@@ -114,9 +114,11 @@ export interface LimitResult {
  * - A route with a delivery in its episode is admitted. Its later steps go with no limit, thus the repeats of an
  *   alert are not cut.
  * - A route with a send and no delivery is new. Each person and each level has a count of places. The count is the
- *   limit times the share, less the incidents whose first delivery of the level is in the window. The deliveries of the
+ *   limit times the share, less the incidents with a delivery of the level in the window. The deliveries of the
  *   other copies count, thus the limit applies over all the copies. The places of the share are at least 1, thus each
  *   copy that runs alone still sends.
+ * - Each delivery in the window counts, not only the first delivery of the incident. Thus a new episode of an old
+ *   incident counts after its send, and the window cannot hold more than the limit.
  * - The new routes get places in the order of their first due time, then of the anchor, then of the episode. A new
  *   route with no place gets a hold at `now`.
  * - A send in flight or a refused send has no delivery yet. Its route stays new, and it keeps its place, because its
@@ -128,18 +130,19 @@ export function limitRoutes(input: LimitInput): LimitResult {
   const share = input.share !== undefined && input.share > 0 && input.share <= 1 ? input.share : 1;
   const logged = new Map(input.holds.map((hold) => [holdKey(hold), hold]));
   const groupOf = (person: PersonId, level: Level): string => `${level} ${person}`;
-  // The first delivery of each incident to each person at each level with a limit. Two reports of one merged incident
-  // can count two times, thus the limit can hold an escalation early, never late.
-  const firsts = new Map<string, { readonly group: string; readonly at: Instant }>();
+  // The incidents of each person at each level with a limit that have a delivery in the window. An incident counts one
+  // time, also with many steps or episodes. A time that is not a number is in no window. Two reports of one merged
+  // incident can count two times, thus the limit can hold an escalation early, never late.
+  const counted = new Set<string>();
+  const used = new Map<string, number>();
   for (const delivery of input.deliveries) {
-    if (!isLimitedLevel(delivery.level) || !Number.isFinite(delivery.at)) continue;
+    if (!isLimitedLevel(delivery.level) || !(delivery.at > input.now - limits.window && delivery.at <= input.now)) continue;
     const group = groupOf(delivery.person, delivery.level);
     const key = `${group} ${delivery.incident}`;
-    const known = firsts.get(key);
-    if (known === undefined || delivery.at < known.at) firsts.set(key, { group, at: delivery.at });
+    if (counted.has(key)) continue;
+    counted.add(key);
+    used.set(group, (used.get(group) ?? 0) + 1);
   }
-  const used = new Map<string, number>();
-  for (const { group, at } of firsts.values()) if (at > input.now - limits.window && at <= input.now) used.set(group, (used.get(group) ?? 0) + 1);
 
   // The new routes of each person and level.
   const fresh = new Map<string, { readonly index: number; readonly due: Instant }[]>();

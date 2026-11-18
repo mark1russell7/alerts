@@ -88,15 +88,17 @@ describe("limitRoutes", () => {
     expect(heldOf(result.routes)).toEqual(["03:person-1:0", "03:person-2:0"]);
   });
 
-  it("counts the first delivery of each incident in the window, also a delivery of another copy, and one time for each incident", () => {
+  it("counts each incident with a delivery in the window, also a delivery of another copy, and one time for each incident", () => {
     const deliveries = [sent(idOf(50), "notice", T0 - 10 * MINUTE), sent(idOf(50), "notice", T0 - 5 * MINUTE, person, 1), sent(idOf(51), "notice", T0 - 30 * MINUTE), sent(idOf(52), "notice", T0 - 2 * HOUR), sent(idOf(53), "urgent", T0 - MINUTE), sent(idOf(54), "notice", T0, other)];
     const routes = Array.from({ length: 3 }, (_, index) => entry(index));
     // Two incidents in the window: 50 and 51. Incident 52 is older than the window, and 53 and 54 are of another level or person.
     expect(heldOf(limitRoutes({ routes, deliveries, holds: [], limits: LIMITS, now: T0 }).routes)).toEqual(["01:person-1:0", "02:person-1:0"]);
     // The delivery of incident 51 is out of the window after one hour, thus only incident 50 counts.
     expect(heldOf(limitRoutes({ routes, deliveries, holds: [], limits: LIMITS, now: T0 + 30 * MINUTE + 1 }).routes)).toEqual(["02:person-1:0"]);
-    // The first delivery of incident 50 is then out of the window too. Its later delivery is in the window, but only the first delivery counts.
-    expect(heldOf(limitRoutes({ routes, deliveries, holds: [], limits: LIMITS, now: T0 + 50 * MINUTE + 1 }).routes)).toEqual([]);
+    // The first delivery of incident 50 is then out of the window, but its later delivery is in the window. Thus it still counts.
+    expect(heldOf(limitRoutes({ routes, deliveries, holds: [], limits: LIMITS, now: T0 + 50 * MINUTE + 1 }).routes)).toEqual(["02:person-1:0"]);
+    // After its later delivery, no delivery of the person is in the window.
+    expect(heldOf(limitRoutes({ routes, deliveries, holds: [], limits: LIMITS, now: T0 + 55 * MINUTE + 1 }).routes)).toEqual([]);
   });
 
   it("does not hold an escalation with a delivery in its episode, thus its later steps go when the count is full", () => {
