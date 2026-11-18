@@ -349,7 +349,7 @@ A balance report has no area. Its subjects are `{ system: "alerts.channel", id: 
 | `unread` | No read passed for the maximum age or longer (`balanceUnreadAt`) | `moderate`, `expected` |
 
 - The facts of a line are the provider, the stage and the floor of a line `low`. A new balance gives no update.
-- A spend entry gives one floor or a list of floors, for example `[5, 2]`. One floor is a list of one floor (`balanceFloors`).
+- A spend entry gives one floor or a list of floors, for example `[10, 3]`. One floor is a list of one floor (`balanceFloors`).
 - Each floor above the last read gives one line `low`: `balance/<provider>/low/<floor>`. Thus each floor gives one alert.
 - Money above a floor cancels the line of that floor. `balanceFloorsBelow` gives the floors above the read, from the highest.
 - `low` and `empty` come from the last read that passed, also when the read is old. A read that passes ends `unread`.
