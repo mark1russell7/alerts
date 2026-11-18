@@ -11,6 +11,8 @@ import { compareCodes, zoneKindOf } from "./zones.ts";
  * county and forecast zone, the SAME code of each county and the code of each state. The SAME code lets the alerts of the radio
  * and of IPAWS match. Each code is in the list one time, in the order of the system and the code. A region that is not a county
  * or a forecast zone gives no code.
+ *
+ * A fire zone region (`ugc-fire`, AL-33) gives its fire zone code and the code of its state.
  */
 export function zoneCodesNear(regions: readonly MapRegion[], at: Position, bufferKm: number): RegionCode[] {
   const codes = new Map<string, RegionCode>();
@@ -18,6 +20,14 @@ export function zoneCodesNear(regions: readonly MapRegion[], at: Position, buffe
     codes.set(`${code.system}:${code.code}`, code);
   };
   for (const { region } of regionsNear(regions, at, bufferKm)) {
+    if (region.code.system === "ugc-fire") {
+      const ugc = region.code.code.trim().toUpperCase();
+      const state = stateOfUgc(ugc);
+      if (zoneKindOf(ugc) !== "forecast" || state === undefined) continue;
+      add({ system: "ugc-fire", code: ugc });
+      add({ system: "state", code: state });
+      continue;
+    }
     if (region.code.system !== "ugc") continue;
     const ugc = region.code.code.trim().toUpperCase();
     const kind = zoneKindOf(ugc);

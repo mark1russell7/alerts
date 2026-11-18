@@ -23,6 +23,14 @@ function derived(name: string, id: string): string {
   return JSON.stringify(value);
 }
 
+/** This function gives the list of the forecast zones of the fixture as a list of fire zones, with these codes. */
+function fireList(ids: readonly string[]): string {
+  const value = JSON.parse(fixture("zones-KS-forecast.json")) as { features: { properties: Record<string, unknown> }[] };
+  const [first] = value.features;
+  value.features = ids.map((id) => ({ ...first!, properties: { ...first!.properties, id, type: "fire" } }));
+  return JSON.stringify(value);
+}
+
 const reply = (body: string, status = 200, headers: Record<string, string> = {}): Reply => ({
   status,
   statusText: status === 200 ? "OK" : "Error",
@@ -37,11 +45,17 @@ type Route = Reply | ((exchange: Exchange) => Reply);
 const tagged = (body: string, etag: string): Route => (exchange) =>
   exchange.headers["if-none-match"] === etag ? { status: 304, statusText: "Not Modified", headers: { etag }, body: "" } : reply(body, 200, { etag });
 
-/** The routes of a Kansas with three counties and three forecast zones. */
+/**
+ * The routes of a Kansas with three counties, three forecast zones and two fire zones. The fire zone `KSZ083` has the code
+ * of a forecast zone. Its outline is a made-up change of the outline of the forecast zone.
+ */
 function kansas(): Record<string, Route> {
   return {
     "/zones?area=KS&type=county": tagged(fixture("zones-KS-county.json"), '"c1"'),
     "/zones?area=KS&type=forecast": tagged(fixture("zones-KS-forecast.json"), '"f1"'),
+    "/zones?area=KS&type=fire": tagged(fireList(["KSZ083", "KSZ084"]), '"w1"'),
+    "/zones/fire/KSZ083": reply(derived("zone-forecast-KSZ083.json", "KSZ083")),
+    "/zones/fire/KSZ084": reply(derived("zone-forecast-KSZ083.json", "KSZ084")),
     "/zones/county/KSC173": tagged(fixture("zone-county-KSC173.json"), '"z173"'),
     "/zones/forecast/KSZ083": tagged(fixture("zone-forecast-KSZ083.json"), '"z083"'),
     "/zones/county/KSC015": reply(derived("zone-county-KSC173.json", "KSC015")),
@@ -78,8 +92,8 @@ describe("the store of the shapes", () => {
     const { store, sent } = setup(kansas());
     expect(store.lookup({ system: "ugc", code: "KSC173" })).toBeUndefined();
     const result = await store.refresh({ wanted: KANSAS, until: FAR });
-    expect(result).toMatchObject({ requests: 8, failures: [], problems: [], stop: "done" });
-    expect(sent.slice(0, 2)).toEqual(["/zones?area=KS&type=county", "/zones?area=KS&type=forecast"]);
+    expect(result).toMatchObject({ requests: 11, failures: [], problems: [], stop: "done" });
+    expect(sent.slice(0, 3)).toEqual(["/zones?area=KS&type=county", "/zones?area=KS&type=forecast", "/zones?area=KS&type=fire"]);
     expect(codes(store)).toEqual(["KSC015", "KSC079", "KSC173", "KSZ069", "KSZ070", "KSZ083"]);
     expect(store.basemap("ks").find((region) => region.code.code === "KSC173")?.name).toBe("Sedgwick");
     expect(store.lookup({ system: "same", code: "020173" })).toBe(store.lookup({ system: "ugc", code: "ksc173" }));
@@ -92,9 +106,30 @@ describe("the store of the shapes", () => {
     expect(store.region({ system: "ugc", code: "ksz083" })?.code).toEqual({ system: "ugc", code: "KSZ083" });
     expect(store.region({ system: "ugc", code: "TXC167" })).toBeUndefined();
     expect(store.region({ system: "state", code: "KS" })).toBeUndefined();
+    // The fire zones are not in the basemap. They have their own regions, with the system ugc-fire (AL-33).
+    expect(store.fireZones("ks").map((region) => region.code)).toEqual([
+      { system: "ugc-fire", code: "KSZ083" },
+      { system: "ugc-fire", code: "KSZ084" },
+    ]);
+    expect(store.region({ system: "ugc-fire", code: "ksz083" })).toMatchObject({ code: { system: "ugc-fire", code: "KSZ083" }, name: "Zone KSZ083" });
+    expect(store.region({ system: "ugc", code: "KSZ083" })?.name).not.toBe("Zone KSZ083");
+    expect(store.lookup({ system: "ugc-fire", code: "KSZ083" })).not.toBe(store.lookup({ system: "ugc", code: "KSZ083" }));
+    expect(store.lookup({ system: "ugc-fire", code: "KSC173" })).toBeUndefined();
+    expect(store.fireZones("XX")).toEqual([]);
     // The next task is the refresh of the first list, after 7 days.
     expect(result.next).toBe(store.nextDue(KANSAS));
     expect(result.next).toBeGreaterThan(T0 + 7 * DAY - 1);
+  });
+
+  it("gives no fire zone of a state until it has the outline of each fire zone of the list (AL-33)", async () => {
+    const routes = kansas();
+    delete routes["/zones/fire/KSZ084"];
+    const { store } = setup(routes);
+    await store.refresh({ wanted: KANSAS, until: FAR });
+    expect(store.region({ system: "ugc-fire", code: "KSZ083" })?.code).toEqual({ system: "ugc-fire", code: "KSZ083" });
+    // A place then gets no fire zone code of the state, and the match uses its forecast zone code.
+    expect(store.fireZones("KS")).toEqual([]);
+    expect(codes(store)).toHaveLength(6);
   });
 
   it("gets the zones of the wanted codes first, also in a state that is not wanted", async () => {
@@ -114,7 +149,7 @@ describe("the store of the shapes", () => {
     advance(7 * DAY);
     sent.length = 0;
     const again = await store.refresh({ wanted: KANSAS, until: FAR + 7 * DAY });
-    expect(again).toMatchObject({ requests: 8, failures: [], stop: "done" });
+    expect(again).toMatchObject({ requests: 11, failures: [], stop: "done" });
     expect(store.lookup({ system: "ugc", code: "KSC173" })).toBe(before);
     expect(codes(store)).toHaveLength(6);
   });
@@ -158,7 +193,7 @@ describe("the store of the shapes", () => {
     delete routes["/zones/county/KSC015"];
     const { store, now } = setup(routes);
     const result = await store.refresh({ wanted: KANSAS, until: FAR });
-    expect(result).toMatchObject({ requests: 8, stop: "done" });
+    expect(result).toMatchObject({ requests: 11, stop: "done" });
     expect(result.failures).toEqual([{ task: "zone:county:KSC015", failure: expect.objectContaining({ kind: "refused", message: expect.stringContaining("A fake error 404.") }) }]);
     expect(result.problems).toEqual([expect.stringContaining("ring-not-closed")]);
     expect(codes(store)).toEqual(["KSC079", "KSZ069", "KSZ070", "KSZ083"]);

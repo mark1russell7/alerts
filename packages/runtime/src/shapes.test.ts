@@ -42,14 +42,17 @@ function fakeStore(known: readonly string[], states: Readonly<Record<string, rea
   let end: ((value: Refreshed) => void) | undefined;
   let fail: ((error: unknown) => void) | undefined;
   const regions = new Map<string, MapRegion>();
+  // An id `fire:<code>` is a fire zone, with the system ugc-fire (AL-33).
   const region = (id: string): MapRegion => {
-    const held = regions.get(id) ?? { code: { system: "ugc", code: id }, name: `Zone ${id}`, shapes: [{ type: "polygon", rings: [RING] }] };
+    const code: RegionCode = id.startsWith("fire:") ? { system: "ugc-fire", code: id.slice(5) } : { system: "ugc", code: id };
+    const held = regions.get(id) ?? { code, name: `Zone ${id}`, shapes: [{ type: "polygon", rings: [RING] }] };
     regions.set(id, held);
     return held;
   };
   const zoneOf = (code: RegionCode): string | undefined => {
     const text = code.code.toUpperCase();
     if (code.system === "ugc") return text;
+    if (code.system === "ugc-fire") return `fire:${text}`;
     if (code.system === "same") return text === "020173" ? "KSC173" : undefined;
     return undefined;
   };
@@ -63,6 +66,7 @@ function fakeStore(known: readonly string[], states: Readonly<Record<string, rea
       return id !== undefined && known.includes(id) ? region(id) : undefined;
     },
     basemap: (state) => states[state] ?? [],
+    fireZones: () => [],
     nextDue: () => undefined,
     refresh: (input) => {
       calls.push(input);
@@ -289,6 +293,17 @@ describe("keepShapes", () => {
     expect(keeper.basemap().map((region) => region.code.code)).toEqual(["KSC173", "KSZ083", "TXC167"]);
     expect(keeper.lookup({ system: "same", code: "020173" })).toHaveLength(1);
     expect(keeper.lookup({ system: "ugc", code: "TXC029" })).toBeUndefined();
+    await keeper.close();
+  });
+
+  it("keeps the fire zone of an incident next to the forecast zone with the same code (AL-33)", async () => {
+    const forecast: MapRegion = { code: { system: "ugc", code: "KSZ083" }, name: "Forecast zone", shapes: [{ type: "polygon", rings: [RING] }] };
+    const fake = fakeStore(["fire:KSZ083"], { KS: [forecast] });
+    const keeper = keepShapes({ store: fake.store, places: [KANSAS] });
+    const keys = (): string[] => keeper.basemap().map((region) => `${region.code.system}:${region.code.code}`);
+    expect(keys()).toEqual(["ugc:KSZ083"]);
+    keeper.afterPass([incident("a", [{ system: "ugc-fire", code: "KSZ083" }])], undefined);
+    expect(keys().sort()).toEqual(["ugc-fire:KSZ083", "ugc:KSZ083"]);
     await keeper.close();
   });
 

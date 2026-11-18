@@ -249,15 +249,16 @@ export function keepShapes(options: ShapeKeeperOptions): ShapeKeeper {
     lookup: (code) => store?.lookup(code),
     basemap() {
       if (store === undefined) return [];
+      // The key is the system and the code: a fire zone and a forecast zone can have one code (AL-33).
       const own = new Map<string, MapRegion>();
-      for (const state of states) for (const region of store.basemap(state)) own.set(region.code.code, region);
+      for (const state of states) for (const region of store.basemap(state)) own.set(codeKey(region.code), region);
       const ownList = byRegion(own.values());
       if (watched === undefined || !sameRegions(watched.raw, ownList)) watched = copyOf(ownList, basemapToleranceKm(ownList));
       // A region of a place or of an incident can be outside the watched states, or not yet in the list of its state.
       const other = new Map<string, MapRegion>();
       for (const code of [...places.flatMap((place) => place.codes), ...liveCodes(incidents)]) {
         const region = store.region(code);
-        if (region !== undefined && !own.has(region.code.code)) other.set(region.code.code, region);
+        if (region !== undefined && !own.has(codeKey(region.code))) other.set(codeKey(region.code), region);
       }
       const otherList = byRegion(other.values());
       if (others === undefined || others.with !== watched || !sameRegions(others.raw, otherList)) {

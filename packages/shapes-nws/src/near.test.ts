@@ -48,6 +48,20 @@ describe("zoneCodesNear", () => {
     expect(new Set(codes.map((code) => `${code.system}:${code.code}`)).size).toBe(codes.length);
   });
 
+  it("gives the fire zone code of a fire zone region, next to the forecast zone with the same code (AL-33)", () => {
+    // A made-up fire zone: the outline of the forecast zone, with the system ugc-fire.
+    const fire: MapRegion = { ...zone, code: { system: "ugc-fire", code: "ksz083" } };
+    const notZone: MapRegion = { ...county, code: { system: "ugc-fire", code: "KSC173" } };
+    expect(zoneCodesNear([...regions, fire, notZone], WICHITA, 0)).toEqual([
+      { system: "same", code: "020173" },
+      { system: "state", code: "KS" },
+      { system: "ugc", code: "KSC173" },
+      { system: "ugc", code: "KSZ083" },
+      { system: "ugc-fire", code: "KSZ083" },
+    ]);
+    expect(zoneCodesNear([fire], EAST, 0)).toEqual([]);
+  });
+
   it("gives each code once for two regions with one code in two forms", () => {
     const lower: MapRegion = { ...county, code: { system: "ugc", code: " ksc173 " } };
     expect(zoneCodesNear([lower, county], WICHITA, 0).map((code) => code.code)).toEqual(["020173", "KS", "KSC173"]);

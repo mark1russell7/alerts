@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
-import { compareCodes, listPath, readList, readZone, zoneKindOf, zoneOfCode, zonePath, type ZoneKey } from "./zones.ts";
+import { codeOfZone, compareCodes, listPath, readList, readZone, zoneKindOf, zoneOfCode, zonePath, type ZoneKey } from "./zones.ts";
 
 const fixture = (name: string): string => readFileSync(new URL(`../fixtures/${name}`, import.meta.url), "utf8");
 const SEDGWICK: ZoneKey = { kind: "county", id: "KSC173" };
@@ -34,14 +34,25 @@ describe("the codes", () => {
     { system: "ugc", code: "PKZ414" },
     { system: "state", code: "KS" },
     { system: "fips", code: "20173" },
+    { system: "ugc-fire", code: "KSC173" },
+    { system: "ugc-fire", code: "PKZ414" },
   ])("gives no zone for $system $code", (code) => {
     expect(zoneOfCode(code)).toBeUndefined();
   });
 
 
+  it("gives the fire zone of a fire zone code, and the code of each zone (AL-33)", () => {
+    expect(zoneOfCode({ system: "ugc-fire", code: " ksz083 " })).toEqual({ kind: "fire", id: "KSZ083" });
+    expect(codeOfZone({ kind: "fire", id: "KSZ083" })).toEqual({ system: "ugc-fire", code: "KSZ083" });
+    expect(codeOfZone({ kind: "forecast", id: "KSZ083" })).toEqual({ system: "ugc", code: "KSZ083" });
+    expect(codeOfZone(SEDGWICK)).toEqual({ system: "ugc", code: "KSC173" });
+  });
+
   it("gives the paths of the zone service", () => {
     expect(listPath("KS", "county")).toBe("/zones?area=KS&type=county");
     expect(zonePath({ kind: "forecast", id: "KSZ083" })).toBe("/zones/forecast/KSZ083");
+    expect(listPath("KS", "fire")).toBe("/zones?area=KS&type=fire");
+    expect(zonePath({ kind: "fire", id: "KSZ083" })).toBe("/zones/fire/KSZ083");
   });
 
   it("orders codes by code units, as the default sort does", () => {
@@ -57,6 +68,17 @@ describe("readList", () => {
   it("reads the codes of a real list of counties and of forecast zones", () => {
     expect(readList(fixture("zones-KS-county.json"), "KS", "county")).toEqual({ ok: true, ids: ["KSC015", "KSC079", "KSC173"], complete: true, problems: [] });
     expect(readList(fixture("zones-KS-forecast.json"), "KS", "forecast")).toEqual({ ok: true, ids: ["KSZ069", "KSZ070", "KSZ083"], complete: true, problems: [] });
+  });
+
+  it("reads a list of fire zones, with the row type fire (AL-33)", () => {
+    const value = JSON.parse(fixture("zones-KS-forecast.json")) as { features: { properties: Record<string, unknown> }[] };
+    for (const feature of value.features) feature.properties["type"] = "fire";
+    const fire = JSON.stringify(value);
+    expect(readList(fire, "KS", "fire")).toEqual({ ok: true, ids: ["KSZ069", "KSZ070", "KSZ083"], complete: true, problems: [] });
+    // A forecast list is not a fire list, and a fire list is not a forecast list.
+    expect(readList(fixture("zones-KS-forecast.json"), "KS", "fire")).toMatchObject({ ok: false });
+    expect(readList(fire, "KS", "forecast")).toMatchObject({ ok: false });
+    expect(readList(fixture("zones-KS-county.json"), "KS", "fire")).toMatchObject({ ok: false });
   });
 
   it("refuses a list of a different state or kind, because its rows are not correct", () => {

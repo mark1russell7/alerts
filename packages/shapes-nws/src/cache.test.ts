@@ -58,7 +58,8 @@ describe("openShapeCache", () => {
     again.close();
   });
 
-  it("skips a row that it cannot read, and the next refresh asks for it again", () => {
+  // A copy before AL-33 knows no kind `fire`. It skips each fire row of a newer copy this way, thus a rollback works.
+  it("skips a row that it cannot read or of a kind that it does not know, and the next refresh asks for it again", () => {
     const path = filePath();
     const cache = openShapeCache(path);
     cache.putZone(zone("KSC015"));
@@ -66,10 +67,26 @@ describe("openShapeCache", () => {
     cache.close();
     const db = new DatabaseSync(path);
     db.prepare("UPDATE zones SET shapes = '[' WHERE id = 'KSC015'").run();
-    db.prepare("INSERT INTO lists (state, kind, fetched, ids) VALUES ('KS', 'fire', 1, '[]')").run();
+    db.prepare("INSERT INTO lists (state, kind, fetched, ids) VALUES ('KS', 'marine', 1, '[]')").run();
     db.close();
     const again = openShapeCache(path);
     expect(again.load()).toEqual({ lists: [], zones: [zone("KSC173")] });
+    again.close();
+  });
+
+  it("keeps the fire zones next to a forecast zone with the same code (AL-33)", () => {
+    const path = filePath();
+    const cache = openShapeCache(path);
+    const forecast = { ...zone("KSZ083"), kind: "forecast" as const };
+    const fire = { ...zone("KSZ083"), kind: "fire" as const, name: "Fire zone 83" };
+    cache.putList({ state: "KS", kind: "fire", fetched: 1, ids: ["KSZ083"] }, []);
+    cache.putZone(forecast);
+    cache.putZone(fire);
+    cache.close();
+    const again = openShapeCache(path);
+    const loaded = again.load();
+    expect(loaded.lists).toEqual([{ state: "KS", kind: "fire", fetched: 1, ids: ["KSZ083"] }]);
+    expect(loaded.zones.map((item) => `${item.kind}:${item.id}:${item.name}`).sort()).toEqual(["fire:KSZ083:Fire zone 83", "forecast:KSZ083:KSZ083"]);
     again.close();
   });
 
