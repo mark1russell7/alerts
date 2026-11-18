@@ -500,7 +500,7 @@ The two Twilio channels give the region of the carrier network of the phone (`tw
 - The United States, Canada and the United States territories are in North America. The other countries of the North American numbering plan are in Latin America.
 - A call gives `voice`. A text gives `sms`. In North America, a text adds the type of its sender: `sms/long-code`, `sms/short-code` or `sms/toll-free`. The type comes from the number of `TWILIO_TEXT_FROM`.
 - A node covers each node below it. Thus an outage of all SMS in North America reaches each type, and an outage of one type reaches only that type.
-- The type of the real sender is a private fact. Thus the route `GET /interests` shows the node `sms` with no type (`shownServices`). The load keeps the full node.
+- The type of the real sender is a private fact. Thus the route `GET /interests` cuts each node of a carrier region to its provider, region and product (`shownNode`). The load keeps the full node.
 - A phone with no country gives no node. The functions do not throw.
 
 The channel does not escalate. The core does:

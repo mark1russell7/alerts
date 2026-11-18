@@ -532,12 +532,27 @@ export function instanceServices(secret: SecretLookup): ContactServices {
   return (channel, address) => byChannel.get(channel)?.(address) ?? [];
 }
 
+// The system of the carrier regions, and the parts of its path that the route `GET /interests` shows: the provider, the
+// region and the product.
+const PROVIDER_REGION = "provider-region:";
+const SHOWN_PARTS = 3;
+
 /**
- * This function gives the services of the contacts that the route `GET /interests` shows. A text shows the SMS node of its
- * region with no type of the sender. The type of the real sender is a private fact. The load keeps the full node.
+ * This function cuts a node of a carrier region to its provider, region and product. A deeper part, as the type of a text
+ * sender, is a private fact. Each other node stays the same.
+ */
+export function shownNode(node: NodeKey): NodeKey {
+  if (!node.startsWith(PROVIDER_REGION)) return node;
+  return PROVIDER_REGION + node.slice(PROVIDER_REGION.length).split("/").slice(0, SHOWN_PARTS).join("/");
+}
+
+/**
+ * This function gives the services of the contacts that the route `GET /interests` shows (`shownNode`). Thus a text shows
+ * `.../north-america/sms` with no type of the sender. The load keeps the full node, thus the matching does not change.
  */
 export function shownServices(secret: SecretLookup): ContactServices {
-  return instanceServices((name) => (name === TWILIO_TEXT_FROM_KEY ? undefined : secret(name)));
+  const services = instanceServices(secret);
+  return (channel, address) => [...new Set(services(channel, address).map(shownNode))];
 }
 
 /**

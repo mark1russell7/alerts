@@ -43,7 +43,7 @@ import { ENERGY_CHARTS_MEASURES, SOURCE_ID as ENERGY_CHARTS_SOURCE, WINDOW_MINUT
 import { memoryQuotaStore, quotaGate, type Exchange, type Transport } from "polite-crawler/api";
 import { DEFAULT_POLICY } from "polite-crawler/politeness";
 import { afterEach, describe, expect, it } from "vitest";
-import { ACCOUNT_SOURCES, BOM_SWS_KEY, CHECKS_KEY, CLOUDFLARE_RADAR_KEY, checksKeys, DAEMON_CHECK, daemonCheck, DELIVERY_TIMES, INSTANCE_CHANNELS, INSTANCE_CHECK, INSTANCE_EXPECTATIONS, INSTANCE_FETCH_LIMIT, INSTANCE_SOURCES, INSTANCE_TIMES, instanceCheck, instanceProblems, instanceServices, shownServices, LOUD_PING_URL_KEY, nwwsKeys, nwwsSetup, openInstance, PING_URL_KEY, pingKeyOf, pingTargets, RANK_DELAY, RANK_FLOOR, SOURCE_POLICY, sourcePace, twilioSetup, USER_AGENT_NAME, type Instance, type InstanceOptions } from "./instance.ts";
+import { ACCOUNT_SOURCES, BOM_SWS_KEY, CHECKS_KEY, CLOUDFLARE_RADAR_KEY, checksKeys, DAEMON_CHECK, daemonCheck, DELIVERY_TIMES, INSTANCE_CHANNELS, INSTANCE_CHECK, INSTANCE_EXPECTATIONS, INSTANCE_FETCH_LIMIT, INSTANCE_SOURCES, INSTANCE_TIMES, instanceCheck, instanceProblems, instanceServices, shownNode, shownServices, LOUD_PING_URL_KEY, nwwsKeys, nwwsSetup, openInstance, PING_URL_KEY, pingKeyOf, pingTargets, RANK_DELAY, RANK_FLOOR, SOURCE_POLICY, sourcePace, twilioSetup, USER_AGENT_NAME, type Instance, type InstanceOptions } from "./instance.ts";
 import { heartbeatGap } from "./heartbeat.ts";
 import { spendGates, spendQuota } from "./balance.ts";
 import { CLOCK_SKEW_LIMIT, COPY_TOKEN_KEY, EXCHANGE_EVERY, EXCHANGE_LIMIT } from "./copy.ts";
@@ -1447,9 +1447,17 @@ describe("the services of the contacts of the instance", () => {
   });
 
   it("shows a text with no type of the sender, because the type of the real sender is private", () => {
-    const shown = shownServices((name) => (name === "TWILIO_TEXT_FROM" ? "+18005550100" : undefined));
-    expect(shown(text, { to: US })).toEqual(["provider-region:twilio/north-america/sms"]);
+    for (const from of ["12345", "+18005550100", US]) {
+      const shown = shownServices((name) => (name === "TWILIO_TEXT_FROM" ? from : undefined));
+      expect(shown(text, { to: US })).toEqual(["provider-region:twilio/north-america/sms"]);
+    }
+    const shown = shownServices(() => undefined);
     expect(shown(call, { to: US })).toEqual(["provider-region:twilio/north-america/voice"]);
+    expect(["provider-region:example/region-1/sms/long-code", "provider-region:example/region-1", "domain:api.example.com"].map(shownNode)).toEqual([
+      "provider-region:example/region-1/sms",
+      "provider-region:example/region-1",
+      "domain:api.example.com",
+    ]);
   });
 
   it("adds the carrier nodes of the call and text contacts to the rows of the interests, with no type of the sender", () => {
@@ -1462,7 +1470,7 @@ describe("the services of the contacts of the instance", () => {
     const rows = instance.interests().people[0]?.rows.map((row) => row.edge.id) ?? [];
     expect(rows).toContain("delivery/provider-region:twilio/north-america/voice>person");
     expect(rows).toContain("delivery/provider-region:twilio/north-america/sms>person");
-    expect(rows.filter((id) => id.includes("toll-free"))).toEqual([]);
+    expect(rows.filter((id) => /long-code|short-code|toll-free/u.test(id))).toEqual([]);
     // A phone with no country gives no node.
     const unknown = open(store({ ...SECRETS, PHONE: "+15555550123" }), config).instance.interests().people[0]?.rows ?? [];
     expect(unknown.map((row) => row.edge.id).filter((id) => id.includes("provider-region:twilio"))).toEqual([]);
