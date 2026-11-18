@@ -236,8 +236,8 @@ export class ConfigRefused extends Error {
   }
 }
 
-/** The code of a thrown value, for example `ENOENT`, or `no code` when the value has no text code. */
-function codeOf(thrown: unknown): string {
+/** This function gives the code of a thrown value, for example `ENOENT`, or `no code` when the value has no text code. */
+export function codeOf(thrown: unknown): string {
   const code = typeof thrown === "object" && thrown !== null && "code" in thrown ? thrown.code : undefined;
   return typeof code === "string" && /^[A-Z][A-Z0-9_]*$/.test(code) ? code : "no code";
 }

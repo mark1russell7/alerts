@@ -348,6 +348,11 @@ export interface ReloadOptions {
   readonly restart: (cause: RestartCause) => void;
   /** This function gets the problems of refused texts, one time for each change. */
   readonly onRefused: (problems: readonly string[]) => void;
+  /**
+   * This function operates at the start of each read, in the flight of the read. The sync of the configuration writes its
+   * files here, thus the read does not get half of a set. An error of the function refuses the read, as an error of the read does.
+   */
+  readonly beforeRead?: () => Promise<void>;
 }
 
 /** The hook of the reload. */
@@ -364,6 +369,7 @@ export function reloadHook(options: ReloadOptions): ReloadHook {
   let restarting = false;
   let flight: Promise<void> | undefined;
   const read = async (): Promise<void> => {
+    await options.beforeRead?.();
     const [texts, request] = await Promise.all([readStartTexts(options.files), readRestartRequest(options.files)]);
     const step = reloadStep(state, texts, options.checkOf, request);
     state = step.state;
