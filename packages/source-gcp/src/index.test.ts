@@ -33,7 +33,7 @@ describe("createGcpSource", () => {
   });
 
   it("gives the id of a region as the provider, a slash and the id of the location", () => {
-    expect(regionId("us-west1")).toBe("gcp/us-west1");
+    expect(regionId("europe-west1")).toBe("gcp/europe-west1");
     expect(regionId("global")).toBe("gcp/global");
   });
 

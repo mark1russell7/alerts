@@ -170,15 +170,15 @@ function statusPageAnswer(page: StatusPage): string {
 }
 
 /**
- * The answer of Google Cloud Service Health to the request of its history. It is the recorded outage of the package
- * `source-gcp` as it was after its first update. Its times move to the time of the tests. The outage has no end.
+ * The answer of Google Cloud Service Health to the request of its history. It is the first recorded incident of the package
+ * `source-gcp` as it was after its first update. Its times move to the time of the tests. The incident has no end.
  */
 function gcpAnswer(): string {
   const [outage] = JSON.parse(fixture("alerts-source-gcp", "incidents-20261118.json")) as Record<string, unknown>[];
   const { end: _end, ...live } = outage!;
   const time = (minutes: number): string => new Date(T0 + minutes * 60_000).toISOString();
-  const region = [{ title: "Oregon (us-west1)", id: "us-west1" }];
-  const latest = { created: time(-10), modified: time(-10), when: time(-10), text: "We are investigating an issue in us-west1.", status: "SERVICE_OUTAGE", affected_locations: region };
+  const region = [{ title: "Delhi (asia-south2)", id: "asia-south2" }];
+  const latest = { created: time(-10), modified: time(-10), when: time(-10), text: "We are investigating an issue in asia-south2.", status: "SERVICE_DISRUPTION", affected_locations: region };
   return JSON.stringify([{ ...live, begin: time(-30), created: time(-20), modified: time(-10), most_recent_update: latest, updates: [latest], currently_affected_locations: region, previously_affected_locations: [] }]);
 }
 
@@ -195,7 +195,7 @@ const STATUS_HOSTS: ReadonlyMap<string, StatusPage> = new Map(STATUS_PAGES.map((
  *
  * GFZ gives a quiet value of the index Kp for each interval of the window of the query (`gfzAnswer`). Energy-Charts gives
  * the nominal frequency for each second of the query (`energyChartsAnswer`). CISA gives a catalog with one live entry (`kevAnswer`).
- * Each status page gives its summary (`statusPageAnswer`). Google Cloud gives one live outage (`gcpAnswer`).
+ * Each status page gives its summary (`statusPageAnswer`). Google Cloud gives one live incident (`gcpAnswer`).
  *
  * Each exchange takes `delay` milliseconds of real time, as on a busy runner. With `Infinity`, no exchange ends.
  */
@@ -533,7 +533,7 @@ describe("openInstance", () => {
         [],
         [
           { system: "domain", id: "cloud.google.com", label: "Google Cloud" },
-          { system: "provider-region", id: "gcp/us-west1", label: "Oregon (us-west1)" },
+          { system: "provider-region", id: "gcp/asia-south2", label: "Delhi (asia-south2)" },
         ],
       ],
     ]);

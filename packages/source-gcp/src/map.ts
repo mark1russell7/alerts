@@ -3,7 +3,7 @@
  * not ended. An incident gives one report of the kind `infra.cloud.outage`.
  *
  * The id of the incident is the key of the report. The subjects of the report are the domain of the service and each
- * location of the incident (`provider-region:gcp/us-west1`). Thus a person who names the service or a region gets the
+ * location of the incident (`provider-region:gcp/europe-west1`). Thus a person who names the service or a region gets the
  * report. The documentation gives the ids as stable and the titles as unstable, so a title is only a label.
  */
 

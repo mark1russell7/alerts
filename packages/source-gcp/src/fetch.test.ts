@@ -10,13 +10,13 @@ type Incident = Record<string, unknown> & { updates: Record<string, unknown>[] }
 
 /** The real answer, with 2 of its 8 incidents (`fixtures/README.md`). Both incidents have ended. */
 const TEXT = readFileSync(new URL("../fixtures/incidents-20261118.json", import.meta.url), "utf8");
-const [OUTAGE, NOTICE] = JSON.parse(TEXT) as [Incident, Incident];
+const [FIRST, OTHER] = JSON.parse(TEXT) as [Incident, Incident];
 const FETCHED = Date.parse("2026-11-18T05:24:17Z");
 const MODIFIED = "Wed, 18 Nov 2026 05:24:17 GMT";
 
-/** The answer with the outage live: the outage has no end. */
-const { end: _end, ...LIVE_OUTAGE } = OUTAGE;
-const LIVE = JSON.stringify([LIVE_OUTAGE, NOTICE]);
+/** The answer with the first incident live: that incident has no end. */
+const { end: _end, ...LIVE_FIRST } = FIRST;
+const LIVE = JSON.stringify([LIVE_FIRST, OTHER]);
 
 /** A place of the tests. The request holds no place, so the fetch reads no code and no position of a place. */
 const WATCH: Watch = { places: [{ id: "a" as PlaceId, codes: [{ system: "iso3166", code: "NO" }], at: [18.96, 69.65], bufferKm: 0 }] };
@@ -53,19 +53,19 @@ describe("readIncidents", () => {
     expect(incidents.bodies).toHaveLength(1);
     const body = JSON.parse(incidents.bodies[0]!) as Record<string, unknown>;
     expect(Object.keys(body)).toEqual(["id", "begin", "created", "modified", "external_desc", "status_impact", "severity", "affected_products", "currently_affected_locations", "previously_affected_locations", "most_recent_update", "updates", "uri"]);
-    expect((body["affected_products"] as unknown[])[0]).toEqual({ id: "fPovtKbaWN9UTepMm3kJ", title: "AlloyDB for PostgreSQL" });
-    expect((body["updates"] as unknown[])[0]).toEqual({ when: "2026-08-27T21:45:02+00:00", status: "AVAILABLE" });
+    expect((body["affected_products"] as unknown[])[0]).toEqual({ id: "5x6CGnZvSHQZ26KtxpK1", title: "Hybrid Connectivity" });
+    expect((body["updates"] as unknown[])[0]).toEqual({ when: "2026-06-29T23:06:10+00:00", status: "AVAILABLE" });
     expect(Object.keys(body["most_recent_update"] as object)).toEqual(["created", "modified", "when", "text", "status", "affected_locations"]);
-    expect(incidents.bodies[0]!.length).toBeLessThan(JSON.stringify(LIVE_OUTAGE).length / 2);
+    expect(incidents.bodies[0]!.length).toBeLessThan(JSON.stringify(LIVE_FIRST).length / 2);
   });
 
   it("keeps the fields of each incident in one order, with no field that the map does not read", () => {
-    const reordered = Object.fromEntries(Object.entries(LIVE_OUTAGE).reverse());
-    expect(incidentBody({ ...reordered, number: "7", service_key: "x", newField: 1 })).toBe(incidentBody(LIVE_OUTAGE));
+    const reordered = Object.fromEntries(Object.entries(LIVE_FIRST).reverse());
+    expect(incidentBody({ ...reordered, number: "7", service_key: "x", newField: 1 })).toBe(incidentBody(LIVE_FIRST));
   });
 
   it("is not complete when a live incident is not valid, and keeps that incident in the list", () => {
-    const incidents = readIncidents(JSON.stringify([{ id: "x1" }, NOTICE]), FETCHED)!;
+    const incidents = readIncidents(JSON.stringify([{ id: "x1" }, OTHER]), FETCHED)!;
     expect(incidents).toEqual({ bodies: [JSON.stringify({ id: "x1" })], complete: false });
   });
 
@@ -77,12 +77,12 @@ describe("readIncidents", () => {
 
 describe("isLive", () => {
   it("reads an incident with no end, or with an end after the time, as live", () => {
-    expect(isLive(LIVE_OUTAGE, FETCHED)).toBe(true);
-    expect(isLive({ ...OUTAGE, end: null }, FETCHED)).toBe(true);
-    expect(isLive({ ...OUTAGE, end: "" }, FETCHED)).toBe(true);
-    expect(isLive({ ...OUTAGE, end: "2026-11-18T06:00:00+00:00" }, FETCHED)).toBe(true);
-    expect(isLive(OUTAGE, FETCHED)).toBe(false);
-    expect(isLive({ ...OUTAGE, end: "soon" }, FETCHED)).toBe(false);
+    expect(isLive(LIVE_FIRST, FETCHED)).toBe(true);
+    expect(isLive({ ...FIRST, end: null }, FETCHED)).toBe(true);
+    expect(isLive({ ...FIRST, end: "" }, FETCHED)).toBe(true);
+    expect(isLive({ ...FIRST, end: "2026-11-18T06:00:00+00:00" }, FETCHED)).toBe(true);
+    expect(isLive(FIRST, FETCHED)).toBe(false);
+    expect(isLive({ ...FIRST, end: "soon" }, FETCHED)).toBe(false);
     expect(isLive(7, FETCHED)).toBe(true);
   });
 });
@@ -97,7 +97,7 @@ describe("createGcpFetch", () => {
     const { fetch, sent } = fetchWith([json(LIVE)]);
     const outcome = await fetch({ watch: WATCH });
     expect(outcome).toMatchObject({ ok: true, complete: true, asOf: Date.parse(MODIFIED) });
-    expect(idsOf(outcome)).toEqual(["utF3FMFdQfwBzJcGG6vf"]);
+    expect(idsOf(outcome)).toEqual(["5fGQt4VbkDnr3Yp8PXPr"]);
     expect(observationsOf(outcome)[0]).toMatchObject({ source: "gcp-status", contentType: "application/json", fetched: FETCHED, transport: { status: 200 } });
     expect(sent.map((exchange) => exchange.url)).toEqual([`${GCP_BASE}${INCIDENTS_PATH}`]);
     expect(sent[0]?.headers).toMatchObject({ "user-agent": "alerts-tests", accept: "application/json" });
@@ -119,9 +119,9 @@ describe("createGcpFetch", () => {
   });
 
   it("reads the last full answer again at the time of a 304: an incident whose end passes leaves the list", async () => {
-    const ending = JSON.stringify([{ ...OUTAGE, end: new Date(FETCHED + 60_000).toISOString() }]);
+    const ending = JSON.stringify([{ ...FIRST, end: new Date(FETCHED + 60_000).toISOString() }]);
     const { fetch, clock } = fetchWith([json(ending), NOT_MODIFIED]);
-    expect(idsOf(await fetch({ watch: WATCH }))).toEqual(["utF3FMFdQfwBzJcGG6vf"]);
+    expect(idsOf(await fetch({ watch: WATCH }))).toEqual(["5fGQt4VbkDnr3Yp8PXPr"]);
     clock.time += 120_000;
     expect(await fetch({ watch: WATCH })).toMatchObject({ ok: true, observations: [], complete: true });
   });

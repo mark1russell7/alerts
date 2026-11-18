@@ -38,7 +38,7 @@ export const DOMAIN_SYSTEM: SubjectSystem = "domain";
 
 /**
  * The system of the subject of each location of an incident. Its id is the provider, a slash and the id of the location,
- * for example `gcp/us-west1`. The location `global` gives `gcp/global`.
+ * for example `gcp/europe-west1`. The location `global` gives `gcp/global`.
  */
 export const REGION_SYSTEM: SubjectSystem = "provider-region";
 

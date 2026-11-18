@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { categoryOf, knownKind, SUBJECT_SYSTEMS, type Observation, type SubjectSystem, type ObservationId } from "@mark1russell7/alerts";
+import { categoryOf, knownKind, SUBJECT_SYSTEMS, type Observation, type ObservationId, type SubjectSystem } from "@mark1russell7/alerts";
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import { GCP_SOURCE, REGION_SYSTEM } from "./feed.ts";
@@ -8,86 +8,97 @@ import { itemsOf, locationsOf, mapObservation, SEVERITY_OF_INCIDENT, URGENCY_OF_
 
 type Incident = Record<string, unknown> & { updates: Record<string, unknown>[] };
 
-/** Two real incidents of the feed (`fixtures/README.md`): an outage and a notice. Both have ended. */
-const [OUTAGE, NOTICE] = JSON.parse(readFileSync(new URL("../fixtures/incidents-20261118.json", import.meta.url), "utf8")) as [Incident, Incident];
+/** Two real disruptions of the feed (`fixtures/README.md`). Both have ended. The second has more than one region. */
+const [NETWORK, CLUSTERS] = JSON.parse(readFileSync(new URL("../fixtures/incidents-20261118.json", import.meta.url), "utf8")) as [Incident, Incident];
 const FETCHED = Date.parse("2026-11-18T05:24:17Z");
 
-/** This function gives an incident as it was after its first `count` updates: live, with the locations of its newest update. */
-function asOfUpdate(incident: Incident, count: number): Incident {
+/**
+ * This function gives an incident as it was after its first `count` updates: live, with the locations of its newest
+ * update. The feed changes the field `modified` of an update when the next update comes. Thus the time of the newest
+ * update is its field `created`.
+ */
+function asOfUpdate(incident: Incident, count: number, status?: string): Incident {
   const updates = incident.updates.slice(incident.updates.length - count);
-  const latest = updates[0]!;
+  const newest = updates[0]!;
+  const latest: Record<string, unknown> = { ...newest, modified: newest["created"], ...(status === undefined ? {} : { status }) };
   const { end: _end, ...live } = incident;
-  return { ...live, modified: latest["modified"], updates, most_recent_update: latest, currently_affected_locations: latest["affected_locations"], previously_affected_locations: [] };
+  return { ...live, modified: latest["modified"], updates: [latest, ...updates.slice(1)], most_recent_update: latest, currently_affected_locations: latest["affected_locations"], previously_affected_locations: [] };
 }
 
 const observationOf = (body: string): Observation => ({ id: `o-${body.length}` as ObservationId, source: GCP_SOURCE, fetched: FETCHED, contentType: "application/json", body, transport: { latency: 0 } });
 const mapIncident = (incident: Record<string, unknown>) => mapObservation(observationOf(incidentBody(incident)));
+const regionsOf = (incident: Record<string, unknown>) =>
+  mapIncident(incident)
+    .reports[0]!.about.filter((subject) => subject.system === REGION_SYSTEM)
+    .map((subject) => subject.id);
 
 describe("mapObservation", () => {
   it("gives one report of infra.cloud.outage for an incident in progress, with the id of the incident as its key", () => {
-    const { reports, problems } = mapIncident(asOfUpdate(OUTAGE, 1));
+    const { reports, problems } = mapIncident(asOfUpdate(NETWORK, 1));
     expect(problems).toEqual([]);
     expect(reports).toHaveLength(1);
     expect(reports[0]).toMatchObject({
       source: "gcp-status",
       origin: "google-cloud",
-      key: "utF3FMFdQfwBzJcGG6vf",
+      key: "5fGQt4VbkDnr3Yp8PXPr",
       references: [],
       correlation: [],
       status: "actual",
       op: "alert",
       kind: { code: "infra.cloud.outage" },
       categories: [categoryOf("infra.cloud.outage")],
-      severity: "severe",
+      severity: "moderate",
       urgency: "immediate",
       certainty: "observed",
       response: ["monitor"],
-      sent: Date.parse("2026-08-20T17:13:59Z"),
+      sent: Date.parse("2026-06-10T01:13:50Z"),
       received: FETCHED,
-      effective: Date.parse("2026-08-20T16:44:37Z"),
-      onset: Date.parse("2026-08-20T15:40:00Z"),
+      effective: Date.parse("2026-06-10T01:13:50Z"),
+      onset: Date.parse("2026-06-05T07:00:00Z"),
       areas: [],
       sender: "Google Cloud Service Health",
-      web: "https://status.cloud.google.com/incidents/utF3FMFdQfwBzJcGG6vf",
+      web: "https://status.cloud.google.com/incidents/5fGQt4VbkDnr3Yp8PXPr",
     });
-    expect(reports[0]?.headline).toMatch(/^Google Cloud: We are investigating an issue where customers may experience timeouts/);
+    expect(reports[0]?.headline).toMatch(/^Google Cloud: Network traffic to Google Cloud originating from /);
     expect(reports[0]?.about).toEqual([
       { system: "domain", id: "cloud.google.com", label: "Google Cloud" },
-      { system: "provider-region", id: "gcp/global", label: "Global" },
-      { system: "provider-region", id: "gcp/us-west1", label: "Oregon (us-west1)" },
+      { system: "provider-region", id: "gcp/asia-south2", label: "Delhi (asia-south2)" },
     ]);
-    expect(reports[0]?.parameters).toMatchObject({ status: ["SERVICE_OUTAGE"], impact: ["SERVICE_OUTAGE"], severity: ["high"], "location-now": ["global", "us-west1"], updates: ["1"] });
+    expect(reports[0]?.parameters).toMatchObject({ status: ["SERVICE_DISRUPTION"], impact: ["SERVICE_DISRUPTION"], severity: ["medium"], "location-now": ["asia-south2"], updates: ["1"] });
     expect(reports[0]?.expires).toBeUndefined();
   });
 
   it("gives the op update, a new sent time and the urgency past after more updates and the recovery", () => {
-    const later = mapIncident(asOfUpdate(OUTAGE, 5)).reports[0]!;
-    expect(later).toMatchObject({ op: "update", urgency: "immediate", sent: Date.parse("2026-08-20T19:21:07Z") });
-    expect(later.about.filter((subject) => subject.system === REGION_SYSTEM).map((subject) => subject.id)).toEqual(["gcp/us-west1"]);
-    const report = mapIncident(OUTAGE).reports[0]!;
-    expect(report).toMatchObject({ op: "update", urgency: "past", severity: "severe", sent: Date.parse("2026-08-27T21:45:02Z") });
-    expect(report.description).toMatch(/^# Incident Report\n## Summary\n/);
-    expect(report.parameters["product"]).toHaveLength(27);
-    expect(report.parameters["product-id"]).toHaveLength(27);
-    expect(report.parameters["product"]?.[0]).toBe("AlloyDB for PostgreSQL");
+    const later = mapIncident(asOfUpdate(NETWORK, 5)).reports[0]!;
+    expect(later).toMatchObject({ op: "update", urgency: "immediate", sent: Date.parse("2026-06-15T23:11:38Z") });
+    expect(regionsOf(asOfUpdate(NETWORK, 5))).toEqual(["gcp/asia-south2", "gcp/global"]);
+    const report = mapIncident(NETWORK).reports[0]!;
+    expect(report).toMatchObject({ op: "update", urgency: "past", severity: "moderate", sent: Date.parse("2026-06-29T23:06:10Z") });
+    expect(report.description).toMatch(/^\*\*Summary\*\*\nNetwork traffic to Google Cloud/);
+    expect(report.parameters["product"]).toEqual(["Hybrid Connectivity", "Media CDN", "Virtual Private Cloud (VPC)"]);
+    expect(report.parameters["product-id"]).toHaveLength(3);
     expect(report.parameters["location-now"]).toBeUndefined();
     expect(report.parameters["updates"]).toEqual(["9"]);
   });
 
-  it("reads a notice of the severity low, with each location that it affected before", () => {
-    const report = mapIncident(NOTICE).reports[0]!;
-    expect(report).toMatchObject({ severity: "minor", urgency: "past", key: "41E5S3mkTGDfkZuJZH5k" });
-    expect(report.about.slice(1).map((subject) => subject.id)).toEqual(["gcp/global", "gcp/northamerica-northeast1", "gcp/southamerica-east1", "gcp/us-central1", "gcp/us-east1", "gcp/us-east4", "gcp/us-east5", "gcp/us-west1"]);
-    expect(mapIncident(asOfUpdate(NOTICE, 1)).reports[0]).toMatchObject({ urgency: "future", op: "alert", parameters: { status: ["SERVICE_INFORMATION"], impact: ["SERVICE_INFORMATION"] } });
+  it("gives each region of an incident with more than one region: the regions of the update, then the regions before", () => {
+    expect(regionsOf(asOfUpdate(CLUSTERS, 1))).toEqual(["gcp/australia-southeast2", "gcp/europe-west3", "gcp/northamerica-northeast2"]);
+    expect(regionsOf(CLUSTERS)).toEqual(["gcp/australia-southeast2", "gcp/europe-west3"]);
+    expect(mapIncident(CLUSTERS).reports[0]).toMatchObject({ key: "T8gmtofFSTGT5tbhyciF", urgency: "past", parameters: { product: ["VMWare engine"], updates: ["11"] } });
+  });
+
+  it("gives the severity minor for the severity low, and the urgency future for a notice in progress", () => {
+    expect(mapIncident({ ...CLUSTERS, severity: "low" }).reports[0]?.severity).toBe("minor");
+    expect(mapIncident(asOfUpdate(CLUSTERS, 1, "SERVICE_INFORMATION")).reports[0]).toMatchObject({ urgency: "future", op: "alert", parameters: { status: ["SERVICE_INFORMATION"] } });
   });
 
   it("gives subjects that the core routes: each system is an entity system of the core", () => {
-    for (const subject of mapIncident(NOTICE).reports[0]!.about) expect(SUBJECT_SYSTEMS[subject.system as SubjectSystem], subject.id).toBe("entity");
+    for (const subject of mapIncident(CLUSTERS).reports[0]!.about) expect(SUBJECT_SYSTEMS[subject.system as SubjectSystem], subject.id).toBe("entity");
     expect(knownKind("infra.cloud.outage")).toBe(true);
   });
 
   it("gives the same report for the same observation", () => {
-    for (const incident of [OUTAGE, NOTICE, asOfUpdate(OUTAGE, 3)]) {
+    for (const incident of [NETWORK, CLUSTERS, asOfUpdate(NETWORK, 3)]) {
       const observation = observationOf(incidentBody(incident));
       expect(mapObservation(observation)).toEqual(mapObservation(observation));
     }
@@ -95,7 +106,7 @@ describe("mapObservation", () => {
 
   it("gives a fatal problem for the whole answer when the answer is not one incident", () => {
     const message = "the observation is not one incident of Google Cloud Service Health: the format changed";
-    expect(mapObservation(observationOf(JSON.stringify([OUTAGE])))).toEqual({ reports: [], problems: [{ path: "", message, fatal: true }] });
+    expect(mapObservation(observationOf(JSON.stringify([NETWORK])))).toEqual({ reports: [], problems: [{ path: "", message, fatal: true }] });
     expect(mapObservation(observationOf(JSON.stringify({ incidents: [] }))).problems[0]?.message).toBe(message);
     expect(mapObservation(observationOf("<html>")).problems[0]).toMatchObject({ message: "the body is not JSON", fatal: true });
   });
@@ -106,20 +117,20 @@ describe("mapObservation", () => {
       ["external_desc", { external_desc: 7 }],
       ["modified", { modified: "soon", created: undefined }],
     ] as const) {
-      const { reports, problems } = mapIncident({ ...OUTAGE, ...change });
+      const { reports, problems } = mapIncident({ ...NETWORK, ...change });
       expect(reports, field).toEqual([]);
       expect(problems.map((problem) => [problem.path, problem.fatal]), field).toEqual([[field, true]]);
     }
   });
 
   it("gives a lossy problem and the value unknown for a severity or a status that the feed does not give", () => {
-    const { reports, problems } = mapIncident({ ...OUTAGE, severity: "huge", most_recent_update: { ...(OUTAGE["most_recent_update"] as object), status: "PAUSED" } });
+    const { reports, problems } = mapIncident({ ...NETWORK, severity: "huge", most_recent_update: { ...(NETWORK["most_recent_update"] as object), status: "PAUSED" } });
     expect(reports[0]).toMatchObject({ severity: "unknown", urgency: "unknown" });
     expect(problems.map((problem) => [problem.path, problem.fatal])).toEqual([
       ["severity", false],
       ["most_recent_update.status", false],
     ]);
-    expect(mapIncident({ ...OUTAGE, most_recent_update: undefined }).reports[0]).toMatchObject({ urgency: "unknown", op: "update" });
+    expect(mapIncident({ ...NETWORK, most_recent_update: undefined }).reports[0]).toMatchObject({ urgency: "unknown", op: "update" });
   });
 
   it("does not throw for any JSON body", () => {
