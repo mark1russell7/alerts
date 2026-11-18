@@ -741,6 +741,13 @@ export interface ChannelDescriptor {
    */
   readonly services?: readonly NodeKey[];
   /**
+   * The endpoints that the procedures of the channel call, as the keys of entities, for example `domain:api.twilio.com`.
+   * Each one is also in `services`. A report of a down channel names them (AL-65). Thus the layer `delivery` of the
+   * interest graph takes the report to each person with a contact on the channel. A service that the calls do not reach,
+   * as the push service of a phone platform, is only in `services`.
+   */
+  readonly api?: readonly NodeKey[];
+  /**
    * The resources of the cell that the channel uses. A push or a text through an API uses
    * `internet`, `dns` and `power`. Thus a fault of the internet link stops each source and each such
    * channel together.
@@ -950,6 +957,17 @@ export type SendOutcome =
       readonly retryAfter?: Duration;
     };
 
+/** The kind of a failed send. `SendOutcome` tells each kind. */
+export type ChannelFailureKind = Extract<SendOutcome, { readonly ok: false }>["kind"];
+
+/**
+ * The outcome of a probe of a channel: a call to its provider that sends nothing and costs nothing. A success tells that
+ * the provider takes the calls of the channel again. A failure has a kind of `ChannelFailureKind`.
+ */
+export type ProbeOutcome =
+  | { readonly ok: true; readonly at: Instant }
+  | { readonly ok: false; readonly kind: ChannelFailureKind; readonly message: string };
+
 /** The state of a sent message. */
 export type DeliveryState = "accepted" | "delivered" | "acknowledged" | "expired" | "failed";
 
@@ -970,12 +988,16 @@ export interface DeliveryStatus {
  * - `send`: it writes `network`. It is not idempotent, unless the channel drops a repeated key.
  * - `status`: it reads `network`.
  * - `cancel`: it writes `network`. It stops the repeats of a message. It is idempotent.
+ * - `probe`: it reads `network`. It is an authenticated read that sends nothing and costs nothing. While the line of a
+ *   down channel is open, the runtime calls it, and a success ends the line (AL-65). A channel with no probe keeps its line
+ *   until an accepted send.
  */
 export interface ChannelProcedures {
   describe(): ChannelDescriptor;
   send(input: SendInput): Promise<SendOutcome>;
   status(input: { readonly receipt: Receipt }): Promise<DeliveryStatus>;
   cancel(input: CancelTarget): Promise<void>;
+  probe?(): Promise<ProbeOutcome>;
 }
 
 /** The input of a send. */

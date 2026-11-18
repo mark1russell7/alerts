@@ -419,6 +419,7 @@ const SCHEMA_NAMES = [
   "cellResourceSchema",
   "certaintySchema",
   "channelDescriptorSchema",
+  "channelDownConfigSchema",
   "channelIdSchema",
   "channelQuotaSchema",
   "configPartSchema",

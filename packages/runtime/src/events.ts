@@ -5,6 +5,7 @@
  */
 import type {
   Acknowledgment,
+  ChannelFailureKind,
   ChannelId,
   Cursor,
   Delivery,
@@ -17,13 +18,12 @@ import type {
   Observation,
   Report,
   ReportId,
-  SendOutcome,
   ShadowScore,
   SourceId,
 } from "@mark1russell7/alerts";
 
-/** The kind of a failed call of a channel. */
-export type ChannelFailureKind = Extract<SendOutcome, { readonly ok: false }>["kind"];
+// The kind of a failed call of a channel has its home in the core. The runtime gives it again, as before.
+export type { ChannelFailureKind };
 
 /** The kinds of a send that the channel refused. After such a send, the channel has no message. */
 export type RefusalKind = Exclude<ChannelFailureKind, "network" | "timeout" | "server">;

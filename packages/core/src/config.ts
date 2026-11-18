@@ -8,13 +8,14 @@ import { err, ok, type Result } from "@mark1russell7/optional";
 import { canonicalHash } from "@mark1russell7/rigor-generators";
 import { compareCodeUnits } from "@mark1russell7/text/order";
 import type { Address, AssessPolicy, ChannelDescriptor, ChannelId, Duration, EscalationPolicy, Instant, InterestGraph, NodeKey, PersonId, PersonWatch, PlaceId, Position, RegionCode, SourceId, WatchedPlace } from "./contracts.ts";
-import { assess, DEFAULT_ASSESS_POLICY, DRILL_KIND, matchSubjects, reachedAssessment } from "./assess.ts";
+import { assess, CHANNEL_KIND, DEFAULT_ASSESS_POLICY, DRILL_KIND, matchSubjects, reachedAssessment } from "./assess.ts";
+import type { ChannelDownConfig } from "./channel-down.ts";
 import { policyFor, recipientProblems, ruleSteps, type ChannelRule, type Recipient } from "./delivery.ts";
 import { DRILL_PROBES, drillProblems, nextDrillAt, type DrillConfig } from "./drill.ts";
 import { composeInterests, deliveryLayer, placesLayer, servicesLayer, workLayer, type InterestRow } from "./interest-defaults.ts";
 import { incidents, normalize } from "./merge.ts";
 import { optInFields, resolveOptIn, type OptInConfig, type OptInRecord } from "./opt-in.ts";
-import { DRILL_SUBJECT, NO_SYSTEM_LINES, systemReports } from "./system-reports.ts";
+import { CHANNEL_SUBJECT, DRILL_SUBJECT, NO_SYSTEM_LINES, systemReports } from "./system-reports.ts";
 import type { TryChain } from "./chain.ts";
 import type { Expectation } from "./lateness.ts";
 import { rankDelayProblems, rankFloorProblems, type RankDelays } from "./escalation.ts";
@@ -201,6 +202,11 @@ export interface AlertConfig {
    * list, and a STOP reply removes the number. The list holds phone numbers: keep it out of each public text.
    */
   readonly optIn?: readonly OptInConfig[];
+  /**
+   * The policy of a down channel (AL-65): the run of failed calls that opens its line. Without it, 3 failed calls in at
+   * least 60 s open a line (`DEFAULT_CHANNEL_DOWN`).
+   */
+  readonly channelDown?: ChannelDownConfig;
 }
 
 /** The name of the format of a part of the configuration. A change that breaks a part gets a new name. */
@@ -567,11 +573,21 @@ export function loadConfig(config: AlertConfig, channels: readonly ChannelDescri
     }
     problems.push(...drillProblems(drill, channels, recipient?.watch.quiet));
   }
+  // The report of a down channel goes on each other channel of the person, because the down channel does not carry it.
   const ruled = recipients.map((recipient) => {
-    const rules = rulesOf.get(recipient.watch.person);
-    return rules === undefined ? recipient : { ...recipient, channelRules: [...(recipient.channelRules ?? []), ...rules] };
+    const own = [...(addresses.get(recipient.watch.person)?.keys() ?? [])].sort(compareCodeUnits) as ChannelId[];
+    const rules = [...(rulesOf.get(recipient.watch.person) ?? []), ...channelDownRules(own)];
+    return rules.length === 0 ? recipient : { ...recipient, channelRules: [...(recipient.channelRules ?? []), ...rules] };
   });
   return { recipients: ruled, problems, optIn };
+}
+
+/**
+ * This function gives the channel rules of the reports of down channels (AL-65), one for each channel. The report of a
+ * down channel goes on each channel of the person except that channel. `loadConfig` adds them to each person.
+ */
+export function channelDownRules(channels: readonly ChannelId[]): ChannelRule[] {
+  return channels.map((channel) => ({ kinds: [`${CHANNEL_KIND}.down`], about: { system: CHANNEL_SUBJECT, id: channel }, keep: "except", channels: [channel] }));
 }
 
 /**

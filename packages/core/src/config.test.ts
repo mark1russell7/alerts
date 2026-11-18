@@ -1,6 +1,6 @@
 import { random, seedsFrom } from "@mark1russell7/rigor-generators";
 import { describe, expect, it } from "vitest";
-import { type AlertConfig, balanceFloors, CONFIG_FORMAT, CONFIG_PART_FORMAT, configHash, configuredExpectations, type ContactConfig, contactChannels, drillRules, expectationProblems, loadConfig, localPlaces, mergeParts, type NamedPart, type PersonConfig, type PlaceConfig, placeLabels, type SecretLookup, sendCapUsd, sourcePlaces } from "./config.ts";
+import { type AlertConfig, balanceFloors, CONFIG_FORMAT, CONFIG_PART_FORMAT, configHash, configuredExpectations, channelDownRules, type ContactConfig, contactChannels, drillRules, expectationProblems, loadConfig, localPlaces, mergeParts, type NamedPart, type PersonConfig, type PlaceConfig, placeLabels, type SecretLookup, sendCapUsd, sourcePlaces } from "./config.ts";
 import type { ChannelDescriptor, ChannelId, EscalationPolicy, InterestEdge, InterestGraph, NodeKey, PersonId, PlaceId, Position, SourceId } from "./contracts.ts";
 import { RANK_DELAY_LIMIT } from "./escalation.ts";
 import { DRILL_SUBJECT } from "./system-reports.ts";
@@ -76,6 +76,8 @@ describe("loadConfig", () => {
         watch: { person: p1, places: [home], rules: [] },
         policies: [LIFE_SAFETY, URGENT],
         addresses: { pushover: { user: "fake-user-value" }, sms: { to: "fake-number-value" } },
+        // The report of a down channel goes on each other channel of the person (AL-65).
+        channelRules: channelDownRules([pushover, sms]),
       },
     ]);
   });
@@ -394,11 +396,12 @@ describe("loadConfig", () => {
     expect(loaded.problems).toEqual([]);
     const rules = new Map(loaded.recipients.map((recipient) => [recipient.watch.person, recipient.channelRules]));
     const about = { system: DRILL_SUBJECT, id: "push-weekly" };
-    expect(rules.get(p1)).toEqual(drillRules(drill));
-    expect(rules.get(p2)).toEqual([{ kinds: ["system.drill.run"], about, keep: "only", channels: [] }]);
-    // A person who does not watch the drill gets no rule.
+    const down = channelDownRules([pushover, sms]);
+    expect(rules.get(p1)).toEqual([...drillRules(drill), ...down]);
+    expect(rules.get(p2)).toEqual([{ kinds: ["system.drill.run"], about, keep: "only", channels: [] }, ...down]);
+    // A person who does not watch the drill gets no rule of the drill, only the rules of the down channels.
     const apart = loadConfig(config({ people: [person(p1, [home], { watch: watch(p1) }), person(p2)], contacts: [...contacts(p1), ...contacts(p2)], drills: [drill] }), polled, store);
-    expect(apart.recipients.find((recipient) => recipient.watch.person === p2)?.channelRules).toBeUndefined();
+    expect(apart.recipients.find((recipient) => recipient.watch.person === p2)?.channelRules).toEqual(down);
   });
 
   it("checks the outage call: a known person, one time each, a chain with steps, and a contact on each channel of a step", () => {

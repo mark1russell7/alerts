@@ -156,6 +156,7 @@ import {
   type SecretRef,
 } from "./config.ts";
 import type { TryChain } from "./chain.ts";
+import type { ChannelDownConfig } from "./channel-down.ts";
 import type { EscalationEnd, Recipient } from "./delivery.ts";
 import type { DrillConfig, DrillPath } from "./drill.ts";
 import { OPT_IN_WAYS, type OptInConfig, type OptInRecord } from "./opt-in.ts";
@@ -775,6 +776,7 @@ export const channelDescriptorSchema: z.ZodType<ChannelDescriptor, ChannelDescri
       dependsOn: outsideDomains,
       // A lazy schema: the schema of a node key comes later in this file.
       services: z.array(z.lazy(() => nodeKeySchema)).readonly().exactOptional(),
+      api: z.array(z.lazy(() => nodeKeySchema)).min(1, "A list of endpoints is not empty.").readonly().exactOptional(),
       uses: cellUses,
       breaksThrough: z.boolean(),
       repeats: z.boolean(),
@@ -792,6 +794,11 @@ export const channelDescriptorSchema: z.ZodType<ChannelDescriptor, ChannelDescri
     .refine((channel) => channel.ack !== "none" || (channel.ackLevels ?? []).length === 0, {
       error: "A channel with the ack none asks for no acknowledgment, thus it has no ackLevels.",
       path: ["ackLevels"],
+    })
+    // An endpoint is a service that the calls reach. Thus the delivery layer has an edge from it (AL-65).
+    .refine((channel) => (channel.api ?? []).every((key) => (channel.services ?? []).includes(key)), {
+      error: "Each endpoint in api is also in services.",
+      path: ["api"],
     }),
 );
 
@@ -1570,6 +1577,11 @@ export const rankDelaysSchema: z.ZodType<RankDelays, RankDelays> = schemaOf<Rank
   z.strictObject({ digest: durationSchema.exactOptional(), notice: durationSchema.exactOptional(), urgent: durationSchema.exactOptional(), "life-safety": durationSchema.exactOptional() }).readonly(),
 );
 
+/** This schema checks the policy of a down channel (AL-65). A run opens a line at 1 failed call or more. */
+export const channelDownConfigSchema: z.ZodType<ChannelDownConfig, ChannelDownConfig> = schemaOf<ChannelDownConfig>()(
+  z.strictObject({ failures: z.number().int().min(1).exactOptional(), span: durationSchema.exactOptional() }).readonly(),
+);
+
 /**
  * This schema checks the JSON of the private configuration at the load. It checks the form of each
  * value. Then `loadConfig` checks the references: the ids, the places of each person, the contacts,
@@ -1593,6 +1605,7 @@ export const alertConfigSchema: z.ZodType<AlertConfig, AlertConfig> = schemaOf<A
       assess: assessPolicySchema.exactOptional(),
       drills: z.array(drillConfigSchema).readonly().exactOptional(),
       optIn: z.array(optInConfigSchema).readonly().exactOptional(),
+      channelDown: channelDownConfigSchema.exactOptional(),
     })
     .readonly(),
 );
