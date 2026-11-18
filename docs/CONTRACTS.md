@@ -292,7 +292,8 @@ The cell is the copy of the system on one machine. Its internet link, its DNS re
 
 - A source counts when its health is in `policy.up`. The first policy counts `healthy` and `slow`. A source with no health is `unknown`.
 - A source covers a kind when one of its prefixes has the kind. A source of a part of the kind does not count.
-- A source covers a place when its coverage is `global`, or when a code of its coverage holds a code of the place (`regionContains`). So a place lists its codes at each level: the NWS zone and county, SAME, the state (`state`) and the country (`iso3166`).
+- A source covers a place when its coverage is `global`, or when a code of its coverage holds a code of the place (`regionContains`).
+- With `containing`, the coverage adds the codes of the regions that hold each code of the place, and then their codes. The runtime gives `containingCodes` of the NWS format. A zone or a county gets its state (`state`) and its country (`iso3166`), and a county gets the code of the other system. A territory gets its own country code, not `US`. A marine zone gets no code. Thus a place with only a zone code has no false gap.
 - A SAME code of a part of a county does not hold the full county. This rule errs on the safe side for the coverage: a source of a part does not hide a gap.
 - A shape of the coverage covers a place when the shape contains the position of the place. The buffer does not count, as for the codes.
 - A shape covers no place with no position. A shape that `@mark1russell7/geo` refuses covers no place, so the coverage shows a gap.

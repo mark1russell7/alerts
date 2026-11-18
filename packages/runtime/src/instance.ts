@@ -20,6 +20,7 @@ import {
   ONLY_COPY,
   optedIn,
   placeLabels,
+  placeCodesWithContaining,
   sourceCovers,
   sourcePlaces,
   type Address,
@@ -45,6 +46,7 @@ import {
   type SourceProcedures,
   type SpendConfig,
 } from "@mark1russell7/alerts";
+import { containingCodes } from "@mark1russell7/alerts-format-nws";
 import {
   CHANNEL_ID as TWILIO_CHANNEL,
   createTwilioCallChannel,
@@ -518,15 +520,17 @@ export function instanceProblems(parsed: ParsedConfig, secret: SecretLookup, des
       ? [`The channel ${descriptor.id} costs money, and the configuration has no spend entry for its provider. Give an entry with a monthly cap.`]
       : [],
   );
-  // A place that no regional source covers gets no alert of its area. The usual cause is a missing code of a level.
+  // A place that no regional source covers gets no alert of its area. The usual cause is a missing code or a wrong code.
   // A global source covers each place with no code, so it tells nothing about the codes of a place.
+  // The check adds the codes that hold each code of the place, as the coverage of the view does.
   const regional = descriptors.filter((descriptor) => descriptor.coverage !== "global");
   const kinds = [...new Set(regional.flatMap((descriptor) => descriptor.kinds))];
-  const placeProblems = localPlaces(parsed.config).flatMap((place) =>
-    regional.some((descriptor) => kinds.some((kind) => sourceCovers(descriptor, place, kind)))
+  const placeProblems = localPlaces(parsed.config).flatMap((place) => {
+    const widened = { ...place, codes: placeCodesWithContaining(place.codes, containingCodes) };
+    return regional.some((descriptor) => kinds.some((kind) => sourceCovers(descriptor, widened, kind)))
       ? []
-      : [`No regional source covers the place ${place.id}. Give the place its codes at each level: the NWS zone and county, SAME, the state and the country (iso3166).`],
-  );
+      : [`No regional source covers the place ${place.id}. Give the place a code that a source holds: an NWS zone or county, a SAME code, a state or a country (iso3166).`];
+  });
   // The outage call deploys at the start. A bad list or a missing key fails the deploy, so it stops the start.
   const outage = outageSetup(parsed, secret, twilio.tag === "ok" ? twilio.value : undefined);
   const outageProblems = outage.tag === "err" ? outage.error : [];

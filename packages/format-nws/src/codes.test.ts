@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import fc from "fast-check";
-import { countyUgcOfSame, isSameCode, isUgcCode, parseSameLocation, sameOfCountyUgc, STATE_FIPS, STATE_POSTAL, stateCode, stateOfCode, stateOfSame, stateOfUgc } from "./codes.ts";
+import { containingCodes, countyUgcOfSame, isSameCode, isUgcCode, parseSameLocation, sameOfCountyUgc, STATE_FIPS, STATE_POSTAL, stateCode, stateOfCode, stateOfSame, stateOfUgc } from "./codes.ts";
 
 describe("isUgcCode", () => {
   it.each(["KSZ001", "TXC123", "GMZ250", "PKZ414"])("accepts %s", (code) => {
@@ -108,5 +108,57 @@ describe("stateCode and stateOfCode", () => {
     expect(stateOfCode({ system: "ugc", code: "GMZ250" })).toBeUndefined();
     expect(stateOfCode({ system: "iso3166", code: "US" })).toBeUndefined();
     expect(stateOfCode({ system: "state", code: "XX" })).toBeUndefined();
+  });
+});
+
+describe("containingCodes", () => {
+  const KS = [
+    { system: "state", code: "KS" },
+    { system: "iso3166", code: "US" },
+    { system: "iso3166", code: "US-KS" },
+  ];
+
+  it("gives the state and the country of a zone, and the county of the other system for a county", () => {
+    expect(containingCodes({ system: "ugc", code: "KSZ083" })).toEqual(KS);
+    expect(containingCodes({ system: "ugc", code: "KSC173" })).toEqual([...KS, { system: "same", code: "020173" }]);
+    expect(containingCodes({ system: "same", code: "020173" })).toEqual([...KS, { system: "ugc", code: "KSC173" }]);
+    expect(containingCodes({ system: "same", code: "120173" })).toEqual([...KS, { system: "ugc", code: "KSC173" }, { system: "same", code: "020173" }]);
+    expect(containingCodes({ system: "same", code: "020000" })).toEqual(KS);
+    expect(containingCodes({ system: "state", code: "ks" })).toEqual(KS.slice(1));
+  });
+
+  it("gives a territory its own country code, not US", () => {
+    expect(containingCodes({ system: "ugc", code: "PRZ001" })).toEqual([
+      { system: "state", code: "PR" },
+      { system: "iso3166", code: "PR" },
+      { system: "iso3166", code: "US-PR" },
+    ]);
+    expect(containingCodes({ system: "same", code: "072001" })).toEqual([
+      { system: "state", code: "PR" },
+      { system: "iso3166", code: "PR" },
+      { system: "iso3166", code: "US-PR" },
+      { system: "ugc", code: "PRC001" },
+    ]);
+  });
+
+  it("gives no code for a marine zone, a country, a bad code or a different system", () => {
+    for (const code of [
+      { system: "ugc", code: "GMZ550" },
+      { system: "ugc", code: "ANZ335" },
+      { system: "iso3166", code: "US" },
+      { system: "state", code: "XX" },
+      { system: "same", code: "999001" },
+      { system: "eic", code: "10Y1001A1001A83F" },
+    ]) {
+      expect(containingCodes(code)).toEqual([]);
+    }
+  });
+
+  it("gives each code of a region that holds the region, so a second step adds no code", () => {
+    for (const code of [{ system: "ugc", code: "KSC173" }, { system: "same", code: "120173" }, { system: "ugc", code: "PRZ001" }]) {
+      const first = containingCodes(code);
+      const keys = new Set([code, ...first].map((one) => `${one.system}:${one.code}`));
+      for (const next of first) for (const more of containingCodes(next)) expect(keys.has(`${more.system}:${more.code}`), `${next.code} gives ${more.code}`).toBe(true);
+    }
   });
 });

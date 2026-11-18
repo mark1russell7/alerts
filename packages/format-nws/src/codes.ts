@@ -162,3 +162,30 @@ export function stateOfCode(code: RegionCode): string | undefined {
       return undefined;
   }
 }
+
+/** The smallest FIPS code of a territory. The codes of the states and the District of Columbia are smaller. */
+const FIRST_TERRITORY_FIPS = 60;
+
+/**
+ * This function gives the codes of the regions that hold all of the region of a code. The code itself is not in the result.
+ * The coverage of the sources adds them to the codes of a place. Thus a source of a country covers a place with only a zone code.
+ *
+ * - A UGC code and a SAME code give the `state` code of their state.
+ * - A state or the District of Columbia gives the `iso3166` codes `US` and its subdivision, for example `US-KS`.
+ * - A territory gives its own `iso3166` code (`PR`) and its subdivision (`US-PR`). The sources tell each territory apart from `US`.
+ * - A county UGC code gives its SAME code. A SAME code of a county, or of a part of a county, gives its county UGC code.
+ * - A SAME code of a part of a county also gives the SAME code of the full county.
+ * - A marine zone, a country and a code of a different system give no code.
+ */
+export function containingCodes(code: RegionCode): RegionCode[] {
+  const state = stateOfCode(code);
+  if (state === undefined) return [];
+  const territory = Number(STATE_FIPS[state]) >= FIRST_TERRITORY_FIPS;
+  const codes: RegionCode[] = code.system === "state" ? [] : [{ system: "state", code: state }];
+  codes.push({ system: "iso3166", code: territory ? state : "US" }, { system: "iso3166", code: `US-${state}` });
+  const county = code.system === "ugc" ? sameOfCountyUgc(code.code) : code.system === "same" ? countyUgcOfSame(code.code) : undefined;
+  if (county !== undefined) codes.push({ system: code.system === "ugc" ? "same" : "ugc", code: county });
+  const location = code.system === "same" ? parseSameLocation(code.code) : undefined;
+  if (location !== undefined && location.part !== "0" && location.county !== "000") codes.push({ system: "same", code: `0${location.state}${location.county}` });
+  return codes;
+}

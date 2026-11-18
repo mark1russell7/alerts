@@ -27,6 +27,7 @@ export {
   VTEC_KIND_PREFIXES,
 } from "./kinds.ts";
 export {
+  containingCodes,
   countyUgcOfSame,
   isSameCode,
   isUgcCode,
