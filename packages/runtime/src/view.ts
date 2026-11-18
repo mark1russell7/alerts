@@ -46,6 +46,7 @@ import {
   type SystemStep,
   type WatchedPlace,
 } from "@mark1russell7/alerts";
+import { containingCodes } from "@mark1russell7/alerts-format-nws";
 import { envelope, type SystemEvent } from "./events.ts";
 import type { FoldContext, RuntimeState } from "./state.ts";
 
@@ -141,7 +142,7 @@ export function systemView(state: RuntimeState, config: ViewConfig, at: Instant,
   const found = incidents(state.merge, at, { link: linkRule(config.link ?? DEFAULT_LINK_POLICY) });
   const checks = carriages(state.merge, found, config.expectations);
   const { lateness: late, folds: next } = latenessStep(checks, config.expectations, at, ruleOf(config.delay), folds);
-  const covered = coverage({ sources: config.sources, health, late: lateSources(late), places: config.places, kinds: config.kinds }, config.coverage);
+  const covered = coverage({ sources: config.sources, health, late: lateSources(late), places: config.places, kinds: config.kinds, containing: containingCodes }, config.coverage);
   const step = systemReports(state.lines, { sources: config.sources, health, coverage: covered, threats: threats(found, config.places), lateness: late, ...(quotas === undefined ? {} : { quotas }), ...(balances === undefined ? {} : { balances }), ...(copies === undefined ? {} : { copies }), ...(copy === undefined ? {} : { copy }), ...(drills === undefined ? {} : { drills }), ...(exhausted === undefined ? {} : { exhausted }), ...(channels === undefined ? {} : { channels }), ...(config.channelDown === undefined ? {} : { channelDown: config.channelDown }), steps: state.steps, recoveries: state.recoveries }, at);
   // An incident that expires changes the threats, thus its end is a timer too.
   const ends = found.flatMap((incident) => (incident.live && incident.expires !== undefined && incident.expires > at ? [incident.expires] : []));
