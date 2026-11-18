@@ -40,6 +40,7 @@ const input: HealthPayloadInput = {
   copies: [skewed, unread],
   quotas: [reserve],
   balances: [low],
+  reads: [{ what: "replies of the texts", at: START + 100_000, failed: true, next: NOW + 300_000 }],
 };
 
 describe("sourceHealthView", () => {
@@ -86,8 +87,8 @@ describe("healthPayload", () => {
   });
 
   it("gives a payload before the first pass, with empty lists", () => {
-    const empty = healthPayload({ at: null, now: START, sources: [], lateness: [], coverage: [], copies: [], quotas: [], balances: [] });
-    expect(empty).toEqual({ format: HEALTH_FORMAT, at: null, now: START, sources: [], lateness: [], coverage: [], copies: [], quotas: [], balances: [] });
+    const empty = healthPayload({ at: null, now: START, sources: [], lateness: [], coverage: [], copies: [], quotas: [], balances: [], reads: [] });
+    expect(empty).toEqual({ format: HEALTH_FORMAT, at: null, now: START, sources: [], lateness: [], coverage: [], copies: [], quotas: [], balances: [], reads: [] });
     expect(healthPayloadSchema.safeParse(empty).success).toBe(true);
   });
 

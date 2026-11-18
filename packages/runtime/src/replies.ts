@@ -10,9 +10,9 @@
  *   counts at the next read that passed.
  * - The watch holds the numbers only in memory. Its read and its health give counts, and no number.
  */
-import { optedIn, optInTime, type Duration, type Instant, type OptInChange, type OptInRecord } from "@mark1russell7/alerts";
+import { optedIn, optInTime, type Duration, type Instant, type OptInChange, type OptInRecord, type ReadHealth } from "@mark1russell7/alerts";
 import type { TextOptIn } from "@mark1russell7/alerts-channel-twilio";
-import { readSchedule, type ReadWatch } from "./schedule.ts";
+import { readHealth, readSchedule, type ReadWatch } from "./schedule.ts";
 
 const MINUTE = 60_000;
 
@@ -50,7 +50,12 @@ export interface ReplyWatch extends ReadWatch {
   read(): ReplyRead | undefined;
   /** This method gives the message of the failure of the last read, or `undefined` when the last read passed. */
   failure(): string | undefined;
+  /** This method gives the health of the watch for the health route. It holds no number and no message. */
+  health(): ReadHealth;
 }
+
+/** The words of the watch of the replies in the health route. */
+export const REPLY_READ_WHAT = "replies of the texts";
 
 /**
  * This function makes the watch of the replies. It throws when the list has no record with a time in UTC: `loadConfig`
@@ -74,7 +79,7 @@ export function replyWatch(options: ReplyWatchOptions): ReplyWatch {
   let last: ReplyRead | undefined;
 
   const reads = readSchedule<{ readonly ok: true; readonly changes: readonly OptInChange[] }>({
-    what: "replies of the texts",
+    what: REPLY_READ_WHAT,
     every,
     retry,
     limit,
@@ -103,6 +108,7 @@ export function replyWatch(options: ReplyWatchOptions): ReplyWatch {
     nextReadAt: () => reads.nextReadAt(),
     failure: () => reads.failure(),
     read: () => last,
+    health: () => readHealth(REPLY_READ_WHAT, reads, last?.at),
     shift(size) {
       reads.shift(size);
       if (last !== undefined) last = { ...last, at: last.at + size };

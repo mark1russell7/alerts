@@ -90,6 +90,19 @@ describe("the store of the readings", () => {
     expect(store.prune(T0 - READING_RETENTION)).toBe(0);
   });
 
+  it("lists each series one time, with each version in one series", () => {
+    const store = openStore();
+    expect(store.refs()).toEqual([]);
+    store.add([reading(T0, 1, { series: "station-2" }), reading(T0, 2), reading(T0 + MINUTE, 3, { version: "v2" }), reading(T0, 4, { measure: "flow" })]);
+    expect(store.refs()).toEqual([
+      { source: SOURCE_ID, measure: "flow", series: "station-1" },
+      { source: SOURCE_ID, measure: LEVEL.id, series: "station-1" },
+      { source: SOURCE_ID, measure: LEVEL.id, series: "station-2" },
+    ]);
+    store.prune(T0 + MINUTE);
+    expect(store.refs()).toEqual([{ source: SOURCE_ID, measure: LEVEL.id, series: "station-1" }]);
+  });
+
   it("puts a broken file into quarantine, and starts empty", () => {
     const store = openStore((path) => writeFileSync(path, "This text is not a SQLite file. ".repeat(200)));
     expect(store.quarantined).toBeDefined();
@@ -179,6 +192,9 @@ describe("the readings in a pass of the runtime", () => {
         throw new Error("The disk is full.");
       },
       series: () => [],
+      refs: () => {
+        throw new Error("The disk is full.");
+      },
       prune: () => {
         throw new Error("The disk is full.");
       },
@@ -190,8 +206,31 @@ describe("the readings in a pass of the runtime", () => {
       const runtime = openRuntime({ log, clock: fakeWallClock(T0), sources: [gauges()], watch: () => ({ places: [KANSAS], kinds: ["met"] }), view: VIEW, run: "run-0", readings: broken, onReadingsFault: (_error, action) => faults.push(action) });
       const pass = await runtime.pass();
       expect(pass.fetched).toEqual([SOURCE_ID]);
-      expect(faults).toEqual(["add", "prune"]);
+      expect(faults).toEqual(["add", "read", "prune"]);
+      expect(pass.breadth).toBeUndefined();
       expect(log.has("obs-1")).toBe(true);
+    } finally {
+      log.close();
+    }
+  });
+
+  it("gives the breadth of the signals in the world and in each place", async () => {
+    const store = openStore();
+    // Three weeks of a calm station in the zone of the place, at the same time of the week, and a high value at T0.
+    const inZone = { type: "code", system: "ugc", code: "KSZ083" } as const;
+    const weeks = [1, 2, 3].flatMap((week) =>
+      [-2, -1, 0, 1, 2].map((slot) => reading(T0 - week * 7 * 24 * 60 * MINUTE + slot * 15 * MINUTE, 1 + slot / 100, { series: "station-2", area: inZone, observation: `obs-w${week}-${slot}` as ObservationId })),
+    );
+    store.add([...weeks, reading(T0, 50, { series: "station-2", area: inZone, observation: "obs-high" as ObservationId })]);
+    const log = openRuntimeLog(":memory:");
+    try {
+      const runtime = openRuntime({ log, clock: fakeWallClock(T0), sources: [gauges()], watch: () => ({ places: [KANSAS], kinds: ["met"] }), view: VIEW, run: "run-0", readings: store });
+      const pass = await runtime.pass();
+      // The fetched station has one reading: no read. The station in the zone has a signal.
+      const counts = [{ dimension: "river-levels", read: 1, signals: 1, noRead: 1 }];
+      expect(pass.breadth?.world).toEqual({ signals: ["river-levels"], read: ["river-levels"], dimensions: counts });
+      expect(pass.breadth?.places).toEqual([{ place: KANSAS.id, signals: ["river-levels"], read: ["river-levels"], dimensions: [{ dimension: "river-levels", read: 1, signals: 1, noRead: 0 }] }]);
+      expect(pass.breadth?.unplaced).toEqual([]);
     } finally {
       log.close();
     }
