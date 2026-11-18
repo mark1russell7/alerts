@@ -26,7 +26,7 @@ import {
 } from "./heartbeat.ts";
 import { envelope, type RuntimeEvent } from "./events.ts";
 import { INSTANCE_TIMES } from "./instance.ts";
-import { EMPTY_RUNTIME, fold } from "./state.ts";
+import { EMPTY_RUNTIME, fold, refusalKept } from "./state.ts";
 
 const T0 = Date.UTC(2026, 10, 15, 12, 0);
 const SECOND = 1000;
@@ -331,8 +331,8 @@ describe("the refused channels of the log", () => {
           );
           for (const [channel, hold] of Object.entries(held)) expect(expected[channel]!.kinds, label).toEqual(expect.arrayContaining([...hold.kinds]));
         }
-        // The state keeps only the refusals that wait after the start.
-        for (const refusal of Object.values(state.refusals)) expect(refusal.retryAt, `seed ${seed}, a restart after pass ${stop}`).toBeGreaterThan(restart);
+        // The state keeps only the refusals that the log keeps at the start. The holds above read only the waits after it.
+        for (const refusal of Object.values(state.refusals)) expect(refusalKept(refusal, restart), `seed ${seed}, a restart after pass ${stop}`).toBe(true);
       }
     }
   });

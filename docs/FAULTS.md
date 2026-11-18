@@ -11,7 +11,7 @@ A gate that cannot decide gives no read. A case with a failed gate or no read fa
 - A cut and a time limit are sensitive to time. Thus these cases start only in CI, where no other job shares the runner.
 - The workflow starts on each pull request, and on each push to `main` that changes a package of the suite. A person can also start it with `workflow_dispatch`.
 - Each case writes its records to `fault-records/case-<n>.json`. The job keeps the records as an artifact, and writes a table of the gates to its summary.
-- Cases 11 and 12 use fake clocks, thus the time of the runner does not change their outcome. They are `vitest` tests of `packages/testkit`, and the checks of CI start them.
+- Cases 11, 12 and 15 use fake clocks, thus the time of the runner does not change their outcome. The workflow `Faults` also starts case 15, and keeps its record in `fault-records/case-15.json`. They are `vitest` tests of `packages/testkit`, and the checks of CI start them.
 
 ## The cases
 
@@ -30,9 +30,13 @@ A gate that cannot decide gives no read. A case with a failed gate or no read fa
 | 11 | `clock-step.ts` | The wall clock steps back or forward at one point of a delivery, a retry or a fetch. | The gates of case 4, then `copyOnce`, `noThrow`, `prompt`, `stepSeen`, `oneCopy` and `noOverdue`. |
 | 12 | `log-fault.ts` | A second connection holds the write lock of the log file, or the log file is broken at the boot. | The lock gates: the gates of case 4, `copyOnce`, `oneCopy`, `attempted`, `noThrow`, `noSendLocked`, `noPingLocked`, `promptAfter` and `pingAfter`. The boot gates: `bootOk`, `kept`, `salvaged`, `noPageAgain` and `lossReported`. |
 | 13 | `two-copies.ts` | Two copies of the system and one phone, with faults on the exchange of the copies. | `pushed`, `calls`, `caller`, `apart`, `noThrow` and `faulted`: the copy with rank 1 does not call when its ledger has the call of the copy with rank 0. |
+| 15 | `send-burst.ts` | A burst of 100 new notices and 2 life-safety alerts for one person. The arms have one copy, two copies, a split, imported incidents, a source that flaps and a rollback. | `capped`, `held`, `lifeSafety`, `settles` and `noThrow`, then `oneSend` and `flapped` in some arms: the sends of each level stay in the send limit of the person over all the copies. |
 
 ## The faults that the cases found
 
 - Case 4 found two emergency copies after a hang. The fix gives a copy tag to each send.
 - Before AL-49, a step back of the wall clock held each due action of case 11. The frame clock of AL-49 gives each step to the runtime at the start of the next pass.
 - Case 12 found that the runtime opened a broken log file with no check. The fix of AL-50 checks the file at the boot.
+- The design of the rollback arm of case 15 found that the send limit counted only the first delivery of an incident. Thus a rollback could send more than the limit in one window. The fix counts each delivery in the window. The second wave of the arm holds the fix.
+- Case 7 in CI found that the gate `recovered` of its arm `limited` did not know the back-off of refusals of AL-72. Each try of that arm is a refusal, thus the first try after the outage comes at 630 s, 30 s after the outage. On `main`, the arm passed at 624.6 s with 0.4 s to spare, because the old back-off lost the time of each call. The gate now takes the schedule from `refusalWait` of the runtime.
+- The arm `flapping` of case 15 shows that each flap of a source opens a new system incident. The send limit holds them to the limit of the person.

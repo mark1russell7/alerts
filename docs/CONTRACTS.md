@@ -951,6 +951,7 @@ The core function `limitRoutes` applies the send limit of each person to the rou
 - A new escalation has a send and no delivery in its episode. It gets a place in the order of its first due time, then of its anchor.
 - A new episode is a new escalation. Thus an older copy that opens each episode again after the ends of a newer copy stays in the limit.
 - A send in flight or a refused send keeps its place, because its due time is early.
+- A route with a send in flight, or with an open copy in the log, gets a place before each other new route. It does not get a hold, because the phone can already have its message.
 - A new escalation with no place gets a hold. The hold is an event `hold` of the log of the copy. It is not shared.
 - A held escalation sends nothing in its episode. Its cancels go. It has no exhaustion and no overdue send. The next digest tells its incident.
 - A copy takes a share of each count for each other copy that it cannot read: 1 divided by 1 plus the count of such copies (`limitShare`).
@@ -959,6 +960,10 @@ The core function `limitRoutes` applies the send limit of each person to the rou
 - The overshoot is limited to the first 60 s of a split. Two copies that start in a split take a share at once.
 
 A refused send backs off. Its wait doubles after each refusal of its key in a row, up to 10 minutes (`REFUSAL_LIMIT`).
+
+- The state keeps the count of the refusals of each key in a row (`refusalStreak`). The wait is `retry` times 2 to the power of the count, up to the limit (`refusalWait`). Fault case 7 takes its schedule from `refusalWait`.
+- The log keeps the last refusal of a key until its retry time plus `REFUSAL_LIMIT`, or plus its wait when the wait is longer (`refusalKept`).
+- Thus a refusal of another key in a burst, or a restart, does not set the wait back to `retry`. A delivery of the key ends the count.
 
 ## The down channels
 

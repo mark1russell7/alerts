@@ -17,6 +17,7 @@ import { runSlowSource, SLOW_ARMS, trickleMs } from "../src/slow-source.ts";
 import { NWWS_ARMS, NWWS_GATES, runNwwsStream } from "../src/nwws-stream.ts";
 import { DOWN_ARMS, runSourceDown } from "../src/source-down.ts";
 import { COPIES_ARMS, COPIES_GATES, runTwoCopies, type SentRecord } from "../src/two-copies.ts";
+import { BURST_ARMS, BURST_GATES, runSendBurst } from "../src/send-burst.ts";
 import {
   COPY_ARMS,
   COPY_GATES,
@@ -207,7 +208,7 @@ report(channel.id, channel.verdict, [
   `## ${channel.id}: a channel down`,
   "",
   `The case clock moves ${String(channel.settings.speed)} times faster than real time. Each arm has ${min(channel.settings.armMs)} min, and each outage lasts ${min(channel.settings.outageMs)} min from the start of the arm.`,
-  `Each Pushover request goes through the fault proxy. The retry of a failed call is ${s(channel.times.retry)} s, and the first delivery comes in ${s(recoverLimit(channel.settings))} s after the outage.`,
+  `Each Pushover request goes through the fault proxy. The retry of a failed call is ${s(channel.times.retry)} s, and the first delivery comes in ${s(recoverLimit(channel.settings))} s after the outage. In the arm limited, each try is a refusal, thus the waits double: the first delivery comes in ${s(recoverLimit(channel.settings, "limited"))} s.`,
   "",
   `| Arm | Requests (in the window) | To the server | Faults | Failed sends (kinds) | First delivery (s) | Pings (fail) | First fail ping (s) | ${CHANNEL_GATES.join(" | ")} |`,
   `| --- | --- | --- | --- | --- | --- | --- | --- | ${CHANNEL_GATES.map(() => "---").join(" | ")} |`,
@@ -385,4 +386,26 @@ report(nwws.id, nwws.verdict, [
   }),
   "",
   `Read: ${yes(nwws.verdict.read)}. Arms: ${NWWS_ARMS.join(", ")}. Pass: **${yes(nwws.verdict.pass)}**.`,
+]);
+
+const burst = await runSendBurst();
+write("case-15.json", burst);
+report(burst.id, burst.verdict, [
+  `## ${burst.id}: a burst of new incidents and the send limit`,
+  "",
+  `One source gives ${String(burst.settings.floods)} new notices and ${String(burst.settings.tornadoes)} life-safety alerts for one person at one time. The send limit is ${String(burst.settings.limits.notice)} notices and ${String(burst.settings.limits.urgent)} urgent alerts in ${String(burst.settings.limits.window / 60_000)} min, over all the copies. The clocks are fake.`,
+  "",
+  `| Arm | Sends | Counted sends | Holds | Flap incidents | Most notices in one window | ${BURST_GATES.join(" | ")} |`,
+  `| --- | --- | --- | --- | --- | --- | ${BURST_GATES.map(() => "---").join(" | ")} |`,
+  ...burst.records.map((record) => {
+    const result = burst.verdict.results[record.arm];
+    const counted = record.sends.filter((send) => send.at >= record.countFrom).length;
+    const gates = BURST_GATES.map((gate) => {
+      const value = result.gates[gate];
+      return value === undefined ? "-" : yes(value);
+    });
+    return `| ${record.arm} | ${String(record.sends.length)} | ${String(counted)} | ${String(record.holds.length)} | ${String(record.flaps.length)} | ${String(result.peak.notice)} | ${gates.join(" | ")} |`;
+  }),
+  "",
+  `Read: ${yes(burst.verdict.read)}. Arms: ${BURST_ARMS.join(", ")}. Pass: **${yes(burst.verdict.pass)}**.`,
 ]);

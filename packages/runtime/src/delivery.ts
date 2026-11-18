@@ -52,7 +52,7 @@ import { errorMessage } from "@mark1russell7/text";
 import { compareCodeUnits } from "@mark1russell7/text/order";
 import { envelope, frameTag, REFUSAL_FAULTS, type ChannelFailureKind, type RefusalKind, type RefusedEvent, type RuntimeEvent } from "./events.ts";
 import { limited } from "./limit.ts";
-import { cancelledKeys, type RuntimeState } from "./state.ts";
+import { cancelledKeys, REFUSAL_LIMIT, refusalStreak, refusalWait, type RuntimeState } from "./state.ts";
 import { earliest } from "./view.ts";
 
 /** The options of the delivery. The private configuration gives the recipients and the addresses. */
@@ -112,12 +112,6 @@ export interface DeliveryOptions {
 
 /** The default longest wait between two stop probes of a down channel: 60 seconds. */
 export const PROBE_LIMIT: Duration = 60_000;
-
-/**
- * The default longest wait between two tries of a refused send: 10 minutes. On 2026-11-18 a refused send went again
- * each 10 seconds through a burst (AL-72). A refusal tells that the channel has no message, thus a quick retry helps little.
- */
-export const REFUSAL_LIMIT: Duration = 600_000;
 
 /** A call of a channel that failed. The decision stays, thus the call goes again at `retryAt` or later. */
 export interface DeliveryFailure {
@@ -405,7 +399,9 @@ export function createDispatcher(options: DeliveryOptions, context: DeliveryCont
           rankFloor: options.rankFloor,
           now: at,
         });
-        return limitRoutes({ routes, deliveries: state.merge.deliveries, holds: state.holds, limits: options.sendLimits, share: context.share?.(at), now: at });
+        // A send in flight, or an open copy of the log, can already be on the phone. Thus its route keeps its place.
+        const started = new Set([...flying.keys(), ...Object.values(state.copies).map((copy) => copy.key)]);
+        return limitRoutes({ routes, deliveries: state.merge.deliveries, holds: state.holds, limits: options.sendLimits, share: context.share?.(at), started, now: at });
       };
       const failures: DeliveryFailure[] = [];
       const conflicts: string[] = [];
@@ -414,10 +410,10 @@ export function createDispatcher(options: DeliveryOptions, context: DeliveryCont
       };
       const fail = (call: DeliveryFailure["call"], target: { readonly key: string; readonly channel: ChannelId; readonly copy?: string }, kind: string, message: string, after?: Duration): Instant => {
         // A refused send backs off: its wait doubles after each refusal of its key in a row, up to the refusal limit.
-        // The log keeps the last refusal of the key until its retry time, thus the wait also holds across a restart.
-        const before = call === "send" && refusal(kind as ChannelFailureKind) ? context.state().refusals[target.key] : undefined;
-        const backoff = before === undefined ? 0 : Math.min(refusalLimit, 2 * (before.retryAt - before.at));
-        const retryAt = at + Math.max(options.retry, after ?? 0, backoff);
+        // The log keeps the count of the refusals in a row past the retry time (`refusalStreak`). Thus a refusal of
+        // another key in a burst, or a restart, does not set the wait back to `retry`.
+        const streak = call === "send" && refusal(kind as ChannelFailureKind) ? refusalStreak(context.state().refusals, target.key, at) : 0;
+        const retryAt = at + Math.max(refusalWait(streak, options.retry, refusalLimit), after ?? 0);
         waits.set(later(call, target.copy ?? target.key), retryAt);
         failures.push({ call, key: target.key, ...(target.copy === undefined ? {} : { copy: target.copy }), channel: target.channel, kind, message, retryAt });
         return retryAt;
