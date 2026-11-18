@@ -7,12 +7,12 @@
  * - The start of the month of a cap comes from `monthStartOf` of the Twilio channel, its one copy in this repository. Its
  *   home is the civil time of `@mark1russell7/algebra/clock`. It moves there when that entry has the month of an instant.
  */
-import type { BalanceRead, ChannelDescriptor, ChannelId, Duration, Instant, ProviderBalance, SpendConfig } from "@mark1russell7/alerts";
+import type { BalanceRead, ChannelDescriptor, ChannelId, Duration, Instant, ProviderBalance, ReadHealth, SpendConfig } from "@mark1russell7/alerts";
 import { localTime, type WallClock } from "@mark1russell7/algebra/clock";
 import { monthStartOf } from "@mark1russell7/alerts-channel-twilio";
 import { errorMessage } from "@mark1russell7/text";
 import { quotaGate, type Quota, type QuotaGate, type QuotaGateOptions } from "polite-crawler/api";
-import { readSchedule } from "./schedule.ts";
+import { readHealth, readSchedule } from "./schedule.ts";
 
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
@@ -158,6 +158,8 @@ export interface SpendWatch {
   spend(): SpendRead | undefined;
   /** This method gives the message of the last read when it failed. */
   failure(): string | undefined;
+  /** This method gives the health of the watch for the health route. It holds no amount and no message. */
+  health(): ReadHealth;
   /** This method moves the own times of the watch by the size of a step of the wall clock. */
   shift(size: Duration): void;
 }
@@ -213,11 +215,21 @@ export function spendWatch(options: SpendWatchOptions): SpendWatch {
     nextReadAt: () => reads.nextReadAt(),
     spend: () => last,
     failure: () => reads.failure(),
+    health: () => readHealth(`spend of ${options.provider}`, reads, last?.at),
     shift(size) {
       reads.shift(size);
       if (last !== undefined) last = { ...last, at: last.at + size };
     },
   };
+}
+
+/**
+ * This function gives the notes of a watch of the spend for the heartbeat: one note after a failed read, or none. The
+ * note names the provider, and it holds no amount and no message of the provider.
+ */
+export function spendNotes(watch: Pick<SpendWatch, "provider" | "failure"> | undefined): readonly string[] {
+  if (watch?.failure() === undefined) return [];
+  return [`The last read of the spend of ${watch.provider} failed. The cap has no usage outside the sends since the last read that passed.`];
 }
 
 /** A monthly cap of the spend of a provider account: the fields of a `SpendConfig` of the configuration, and a name. */

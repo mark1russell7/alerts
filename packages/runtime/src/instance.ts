@@ -43,6 +43,7 @@ import {
   createTwilioTextChannel,
   readTwilioBalance,
   readTwilioReplies,
+  readTwilioSpend,
   TEXT_CHANNEL_ID,
   TWILIO_CALL_COST_USD,
   TWILIO_CALL_TIMEOUT_MS,
@@ -68,7 +69,7 @@ import { err, ok, type Result } from "@mark1russell7/optional";
 import type { WorkerLoop } from "@mark1russell7/service";
 import type { Pace, QuotaStore, Transport } from "polite-crawler/api";
 import { DEFAULT_POLICY, HostScheduler, type PolitenessPolicy } from "polite-crawler/politeness";
-import { balanceWatch, SPEND_UNIT, spendEntryOf, spendGates, spendQuota, spendUnits, type BalanceWatch, type SpendGates } from "./balance.ts";
+import { balanceWatch, SPEND_UNIT, spendEntryOf, spendGates, spendQuota, spendUnits, spendWatch, type BalanceWatch, type SpendGates, type SpendWatch } from "./balance.ts";
 import { replyWatch, type ReplyWatch } from "./replies.ts";
 import { parseSecrets, requireKey, SECRETS_FILE, type FileText, type InstanceCheck } from "./config.ts";
 import { CLOCK_SKEW_LIMIT, COPY_FILE, COPY_TOKEN_KEY, EXCHANGE_EVERY, EXCHANGE_LIMIT } from "./copy.ts";
@@ -579,6 +580,8 @@ export interface Instance {
   readonly balances: readonly BalanceWatch[];
   /** The watch of the STOP and START replies of the texts, when the instance has the text channel and an opt-in list. */
   readonly replies?: ReplyWatch;
+  /** The watch of the spend that Twilio reports for the month of the cap, when the configuration has a spend entry for Twilio. */
+  readonly spend?: SpendWatch;
   /**
    * This function gives the map payload of the last pass: the live incidents with the level of each person, the places and
    * the basemap. The first read after a change of the store simplifies the basemap of the watched states.
@@ -696,6 +699,8 @@ export function openInstance(options: InstanceOptions): Instance {
   ];
   const balances = twilio?.watch === undefined ? [] : [twilio.watch];
   const replies = twilio?.replies;
+  const spent = twilio?.spend;
+  const reads = [...(replies === undefined ? [] : [replies]), ...(spent === undefined ? [] : [spent])];
   // The text channel takes its units from the gates of the call channel. Thus the quota of the call channel counts the texts too.
   const channels = twilio === undefined ? [pushover] : [pushover, twilio.channel, ...(twilio.text === undefined ? [] : [twilio.text])];
   // The labels of the places go only into the why line of each message. The policy of the configuration replaces the default policy of the core.
@@ -735,8 +740,8 @@ export function openInstance(options: InstanceOptions): Instance {
     // Each stage of a quota is a line of system reports, and so is each stage of a balance.
     quotas,
     balances,
-    // Each pass reads the replies of the texts when the read is due.
-    ...(replies === undefined ? {} : { reads: [replies] }),
+    // Each pass reads the replies of the texts and the spend of Twilio when each read is due.
+    ...(reads.length === 0 ? {} : { reads }),
     // Each pass waits for the first round of the exchange, and its view has a line for each fault of another copy.
     ...(worker === undefined ? {} : { copies: worker }),
     // The readings of each fetch go to their store, not to the log.
@@ -782,6 +787,7 @@ export function openInstance(options: InstanceOptions): Instance {
       copies: worker?.watches() ?? [],
       quotas: quotas(),
       balances: balances.flatMap((watch) => watch.balance() ?? []),
+      reads: reads.map((watch) => watch.health()),
     });
   // The history reads the merge state at the time of the read, with the link rule of the view and the delivery.
   const link = linkRule(runtime.config.link ?? DEFAULT_LINK_POLICY);
@@ -822,6 +828,7 @@ export function openInstance(options: InstanceOptions): Instance {
     quotas,
     balances,
     ...(replies === undefined ? {} : { replies }),
+    ...(spent === undefined ? {} : { spend: spent }),
     map,
     health,
     history,
@@ -851,7 +858,7 @@ function outageWorker(options: InstanceOptions, limit: Duration): OutageDeployWo
   });
 }
 
-/** The Twilio channels of an instance: the call channel and the text channel. Also the gates of the spend, the watch of the balance and the watch of the replies. */
+/** The Twilio channels of an instance: the call channel and the text channel. Also the gates of the spend, the watch of the balance, the watch of the spend and the watch of the replies. */
 interface TwilioParts {
   readonly channel: ChannelProcedures;
   /** The text channel, when the secrets have the number of the texts. */
@@ -859,6 +866,7 @@ interface TwilioParts {
   readonly gates?: SpendGates;
   readonly watch?: BalanceWatch;
   readonly replies?: ReplyWatch;
+  readonly spend?: SpendWatch;
 }
 
 /**
@@ -898,6 +906,8 @@ function twilioChannel(options: InstanceOptions, spend: readonly SpendConfig[] |
     floor: entry.floor,
     read: (signal) => readTwilioBalance({ credentials, fetch }, signal),
   });
+  // The watch of the spend adds the other usage of the account to the count of the gates (AL-57).
+  const spent = spendWatch({ provider: entry.provider, gates, timeZone: entry.timeZone, read: (start, signal) => readTwilioSpend({ credentials, fetch, from: start, to: now() }, signal) });
   const channel = createTwilioCallChannel({ credentials, from, fetch, now, spend: { ...gates, units: spendUnits(TWILIO_CALL_COST_USD) } });
-  return { channel, gates, watch, ...text(gates), ...watched };
+  return { channel, gates, watch, spend: spent, ...text(gates), ...watched };
 }

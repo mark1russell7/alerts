@@ -43,6 +43,7 @@ export type { Refusal, TwilioCallMapOptions } from "./map.ts";
 export type { TwilioSpendGates } from "./spend.ts";
 export * from "./text.ts";
 export * from "./replies.ts";
+export * from "./usage.ts";
 export type { TwilioCredentials, TwilioFetch } from "@procedures/notify/twilio";
 
 /** The time limit of one request to Twilio. */

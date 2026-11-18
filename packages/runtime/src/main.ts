@@ -60,6 +60,7 @@ import { heartbeat, heldOf, type PassSummary } from "./heartbeat.ts";
 import { holdHome } from "./home-lock.ts";
 import { quotaNote } from "./quota.ts";
 import { replyNotes } from "./replies.ts";
+import { spendNotes } from "./balance.ts";
 import { PROFILES, declare } from "./index.ts";
 import { daemonCheck, instanceCheck, LOUD_PING_URL_KEY, openInstance, pingKeyOf, pingTargets, userAgent } from "./instance.ts";
 import { openCheckedRuntimeLog } from "./log.ts";
@@ -149,8 +150,8 @@ async function runtime(): Promise<ServiceBuilder> {
       clock: wall,
       userAgent: agent,
       held: (at) => heldOf(instance.runtime.state(), at),
-      // The body of each ping tells the state of each quota, and a failed read of the replies of the texts. Thus the check shows the reserve.
-      notes: () => [...instance.quotas().map(quotaNote), ...replyNotes(instance.replies)],
+      // The body of each ping tells the state of each quota, and each failed read of the replies or of the spend. Thus the check shows the reserve.
+      notes: () => [...instance.quotas().map(quotaNote), ...replyNotes(instance.replies), ...spendNotes(instance.spend)],
       onError: (message) => console.error(redactSecrets(target.key === LOUD_PING_URL_KEY ? `The loud check: ${message}` : message, values)),
     }),
   );
@@ -245,7 +246,7 @@ async function runtime(): Promise<ServiceBuilder> {
     shapes,
     readings,
     // The kind of the error only: its message can quote a value of a reading.
-    onReadingsFault: (error, action) => console.error(`The store of readings refused a write (${action}): ${error instanceof Error ? error.name : typeof error}.`),
+    onReadingsFault: (error, action) => console.error(`The store of readings failed (${action}): ${error instanceof Error ? error.name : typeof error}.`),
     onShapes: (outcome) => {
       const report = shapeReport(outcome);
       if (report !== undefined) console.error(redactSecrets(report, values));

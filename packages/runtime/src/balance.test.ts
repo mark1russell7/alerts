@@ -6,7 +6,7 @@ import type { ChannelId } from "@mark1russell7/alerts";
 import { SqliteHostStateStore } from "polite-crawler";
 import { memoryQuotaStore, quotaGate, type QuotaStore } from "polite-crawler/api";
 import { describe, expect, it } from "vitest";
-import { balanceWatch, spendGates, spendQuota, spendUnits, spendWatch, type BalanceReading, type BalanceWatchOptions, type SpendReading, type SpendWatchOptions } from "./balance.ts";
+import { balanceWatch, spendGates, spendNotes, spendQuota, spendUnits, spendWatch, type BalanceReading, type BalanceWatchOptions, type SpendReading, type SpendWatchOptions } from "./balance.ts";
 
 const T0 = Date.UTC(2026, 10, 15, 12);
 const HOUR = 3_600_000;
@@ -139,6 +139,27 @@ describe("the spend watch", () => {
     const watch = spendWatch({ provider: "provider:twilio", gates, timeZone: ZONE, read, ...options });
     return { clock, gates, watch, froms, reads: () => reads };
   }
+
+  it("gives its health with no amount and no message", async () => {
+    const { clock, watch } = setup([spent(3.2105), { ok: false, message: "Twilio did not give the usage totalprice (server)." }]);
+    expect(watch.health()).toEqual({ what: "spend of provider:twilio", at: null, failed: false, next: null });
+    await watch.check(clock);
+    expect(watch.health()).toEqual({ what: "spend of provider:twilio", at: T0, failed: false, next: T0 + HOUR });
+    await clock.advance(HOUR);
+    await watch.check(clock);
+    expect(watch.health()).toEqual({ what: "spend of provider:twilio", at: T0, failed: true, next: T0 + HOUR + 15 * 60_000 });
+  });
+
+  it("gives a note for the heartbeat after a failed read, with the provider and no amount", async () => {
+    const { clock, watch } = setup([{ ok: false, message: "Twilio did not give the usage totalprice (server): 12.34" }, spent(1)]);
+    expect(spendNotes(undefined)).toEqual([]);
+    expect(spendNotes(watch)).toEqual([]);
+    await watch.check(clock);
+    expect(spendNotes(watch)).toEqual(["The last read of the spend of provider:twilio failed. The cap has no usage outside the sends since the last read that passed."]);
+    await clock.advance(15 * 60_000);
+    await watch.check(clock);
+    expect(spendNotes(watch)).toEqual([]);
+  });
 
   it("reads the spend from the start of the month at the first check, then each hour, and makes the count of the gates larger", async () => {
     const { clock, gates, watch, froms, reads } = setup([spent(3.2105), spent(2), spent(4)]);
