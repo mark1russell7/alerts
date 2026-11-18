@@ -872,7 +872,11 @@ export function createDispatcher(options: DeliveryOptions, context: DeliveryCont
       // Only an open receipt needs the time of its last poll. Each other entry goes, thus the map grows with the open receipts only.
       const keep = new Set(open.map((delivery) => delivery.key));
       for (const key of polled.keys()) if (!keep.has(key)) polled.delete(key);
-      const polls = open.map((delivery) => (polled.get(delivery.key) ?? at) + options.pollEvery);
+      // A poll that came due and did not go in this step waits for its retry or for a place of its channel. The list
+      // `waiting` has the end of that wait. Thus a poll time at or before the step is not a wake time: it is one poll
+      // interval after the step, a bound for a poll that no wait holds. On 2026-11-18 such past times made 494 passes
+      // in a burst end with a wake time before the pass (AL-75).
+      const polls = open.map((delivery) => (polled.get(delivery.key) ?? at) + options.pollEvery).map((time) => (time > at ? time : at + options.pollEvery));
       const wakeAt = earliest([...after.map((entry) => entry.plan.wakeAt), digests.wakeAt, ...polls, ...failures.map((failure) => failure.retryAt), ...waiting]);
       const overdue = overdueSends(after, context.state().refusals, at, options.overdueAfter);
       const exhausted = exhaustions(after, descriptors, context.state().merge.reports);

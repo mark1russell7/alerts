@@ -273,6 +273,29 @@ describe("the delivery step of a pass", () => {
     log.close();
   });
 
+  it("gives a wake after the step when a due poll waits for the retry of its failed status, and polls at the retry (AL-75)", async () => {
+    const clock = fakeWallClock(T0);
+    // The first status fails. Its retry of 60 s is longer than the poll interval of 30 s, thus the poll at 60 s waits.
+    const status = (): DeliveryStatus => {
+      if (pushover.status.length === 1) throw new Error("The status service is down.");
+      return { state: "delivered", at: clock.now() };
+    };
+    const { runtime, log, pushover } = open({ pushover: { status } }, openRuntimeLog(":memory:"), clock, { retry: 60 * SECOND });
+    expect((await runtime.pass()).wakeAt).toBe(T0 + 30 * SECOND);
+    await clock.advance(30 * SECOND);
+    const failed = await runtime.pass();
+    expect(failed.delivery?.failures.filter((failure) => failure.call === "status").map((failure) => failure.retryAt)).toEqual([T0 + 90 * SECOND]);
+    await clock.advance(30 * SECOND);
+    const waiting = await runtime.pass();
+    expect(pushover.status).toHaveLength(1);
+    expect(waiting.delivery?.wakeAt).toBeGreaterThan(clock.now());
+    expect(waiting.wakeAt).toBeGreaterThan(waiting.at);
+    await clock.advance(T0 + 90 * SECOND - clock.now());
+    await runtime.pass();
+    expect(pushover.status).toHaveLength(2);
+    log.close();
+  });
+
   it("polls the receipt, writes the acknowledgment, cancels the repeats and sends no later step", async () => {
     const { clock, runtime, log, pushover, sms } = open({ pushover: { status: () => ({ state: "acknowledged", at: T0 + 20 * SECOND, by: "phone" }) } });
     await runtime.pass();
