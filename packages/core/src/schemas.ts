@@ -990,7 +990,13 @@ export const subjectWatchSchema: z.ZodType<SubjectWatch, SubjectWatch> = schemaO
 /** This schema checks the escalation of one level, with its optional subject. */
 export const escalationPolicySchema: z.ZodType<EscalationPolicy, EscalationPolicy> = schemaOf<EscalationPolicy>()(
   z
-    .strictObject({ level: levelSchema, about: subjectWatchSchema.exactOptional(), steps: z.array(escalationStepSchema).readonly(), exhaustedAfter: durationSchema })
+    .strictObject({
+      level: levelSchema,
+      daily: z.strictObject({ zone: z.string(), time: z.string() }).readonly().exactOptional(),
+      about: subjectWatchSchema.exactOptional(),
+      steps: z.array(escalationStepSchema).readonly(),
+      exhaustedAfter: durationSchema,
+    })
     .readonly(),
 );
 
