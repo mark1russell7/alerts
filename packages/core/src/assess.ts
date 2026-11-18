@@ -91,6 +91,19 @@ const EARTHQUAKE_TABLE: LevelTable = {
   pastWithin: EARTHQUAKE_PAST_WITHIN,
 };
 
+/**
+ * The kinds of context. With the default policy, a report of such a kind reaches no person. The map and the log keep it.
+ * A feed of the service alerts of public transit holds many alerts each day, and the alerts of one large network can
+ * fill each digest. The count of its alerts is an indicator reading. A policy of the configuration can give the kinds a level.
+ */
+export const CONTEXT_KINDS: readonly string[] = ["transport.transit"];
+
+/** The table of the kinds of context. Each lookup gives `none`. */
+const CONTEXT_TABLE: LevelTable = {
+  severity: { extreme: "none", severe: "none", moderate: "none", minor: "none", unknown: "none" },
+  urgency: { immediate: "none", expected: "none", future: "none", past: "none", unknown: "none" },
+};
+
 /** The table of the other kinds. These kinds reach `urgent` at most. */
 const OTHER_TABLE: LevelTable = {
   severity: { extreme: "urgent", severe: "urgent", moderate: "notice", minor: "digest", unknown: "digest" },
@@ -189,6 +202,8 @@ const SYSTEM_TABLE: LevelTable = {
  *
  * The earthquake class has its own table. In one hour after the onset, its urgency `past` counts as
  * `immediate`. Then `extreme` is `life-safety`, and `severe` is `urgent`.
+ *
+ * The kinds of context (`CONTEXT_KINDS`) reach no person.
  */
 export const DEFAULT_ASSESS_POLICY: AssessPolicy = {
   statuses: ["actual"],
@@ -202,6 +217,8 @@ export const DEFAULT_ASSESS_POLICY: AssessPolicy = {
     // An exhausted escalation of a person keeps its level for the people who watch that person (AL-21).
     { id: "system-escalation", kinds: [ESCALATION_KIND], statuses: ["system"], ...LOUD_SYSTEM_TABLE },
     { id: "system", kinds: [HEALTH_KIND, COVERAGE_KIND, QUOTA_KIND, BALANCE_KIND, CLOCK_KIND, LOG_KIND, COPY_KIND, DRILL_KIND, CHANNEL_KIND], statuses: ["system"], ...SYSTEM_TABLE },
+    // The service alerts of public transit are context. Their counts are indicator readings.
+    { id: "context", kinds: CONTEXT_KINDS, ...CONTEXT_TABLE },
   ],
   otherwise: OTHER_TABLE,
 };
