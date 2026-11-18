@@ -1553,6 +1553,10 @@ export const copySettingsSchema: z.ZodType<CopySettings, CopySettings> = schemaO
         .string()
         .regex(/^[A-Z][A-Z0-9_]*$/u, "The key is a name of the secrets: capital letters, digits and underscores.")
         .exactOptional(),
+      accounts: z
+        .record(z.string().min(1, "The id of a source is a non-empty text."), z.int().min(1, "The number of an account is an integer, 1 or more."))
+        .readonly()
+        .exactOptional(),
     })
     .readonly(),
 );

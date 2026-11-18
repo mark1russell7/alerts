@@ -201,6 +201,11 @@ export interface CopySettings {
   readonly peers?: readonly CopyPeer[];
   /** The key of the secrets with the ping URL of the first check of this copy. The runtime gives a default key. */
   readonly pingKey?: string;
+  /**
+   * The number of the account of each source with an account, by the id of the source. The keys of account 2 end in
+   * `_2`. The default is account 1. Two copies do not share an account, because an account has one session.
+   */
+  readonly accounts?: Readonly<Record<string, number>>;
 }
 
 /** The settings of a runtime with no file `copy.json`: the only copy, with rank 0 and no exchange. */

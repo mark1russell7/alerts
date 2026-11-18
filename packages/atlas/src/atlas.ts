@@ -21,7 +21,18 @@
  * most. Thus two sources of two different children are not a pair of the parent.
  */
 
-import { categoryOf, knownKind, SUBJECT_SYSTEMS, TAXONOMY, type Category, type SubjectKind, type SubjectSystem } from "@mark1russell7/alerts";
+import {
+  categoryOf,
+  DIMENSION_IDS,
+  isDimensionId,
+  knownKind,
+  SUBJECT_SYSTEMS,
+  TAXONOMY,
+  type Category,
+  type DimensionId,
+  type SubjectKind,
+  type SubjectSystem,
+} from "@mark1russell7/alerts";
 import { compareCodeUnits } from "@mark1russell7/text/order";
 
 /** The ways to get the data of a source. */
@@ -145,8 +156,13 @@ export interface Terms {
 export interface Source {
   readonly id: string;
   readonly name: string;
-  /** The classes that the source gives signals of. */
+  /** The classes that the source gives events of. A source of indicators only has no class. */
   readonly classes: readonly string[];
+  /**
+   * The dimensions of the indicators of the source: the ids of `DIMENSIONS` of the core. Each measure of the
+   * descriptor of the source has one of them. Absent: the source gives only events.
+   */
+  readonly dimensions?: readonly DimensionId[];
   /** The page of the documentation. */
   readonly url: string;
   readonly access: Access;
@@ -228,6 +244,11 @@ export interface Measures {
   readonly unknownOrigins: number;
   /** The sources that are not rejected, with an unknown part of the path. */
   readonly unknownPaths: number;
+  /**
+   * The dimensions of indicators with `MIN_SOURCES` or more adopted or planned sources with no risk. The
+   * records of the rounds before round 10 do not have this measure.
+   */
+  readonly dimensions?: number;
 }
 
 /** The measures that a round records, with the cause of the change from the record before. */
@@ -527,7 +548,21 @@ export function measures(atlas: Atlas): Measures {
     total: per((value) => value),
     unknownOrigins: kept.filter((source) => allOrigins(source).includes(UNKNOWN)).length,
     unknownPaths: kept.filter((source) => listOf(source.path).includes(UNKNOWN)).length,
+    dimensions: dimensionCoverage(atlas).filter((row) => row.sources.length >= MIN_SOURCES).length,
   };
+}
+
+/** The live sources of one dimension of indicators. */
+export interface DimensionCoverage {
+  readonly id: DimensionId;
+  /** The ids of the adopted and planned sources of the dimension with no risk. */
+  readonly sources: readonly string[];
+}
+
+/** This function gives the adopted and planned sources with no risk of each dimension of the core, in the order of `DIMENSIONS`. */
+export function dimensionCoverage(atlas: Atlas): DimensionCoverage[] {
+  const live = atlas.sources.filter((source) => LIVE_DECISIONS.includes(source.decision) && source.risks.length === 0);
+  return DIMENSION_IDS.map((id) => ({ id, sources: live.filter((source) => source.dimensions?.includes(id) === true).map((source) => source.id) }));
 }
 
 /** This function gives each problem of the atlas. An empty list is a pass of the gate. */
@@ -545,7 +580,8 @@ export function checkAtlas(atlas: Atlas, context: AtlasContext = {}): AtlasProbl
     if (recorded === undefined) add(at, "the round has no measures");
     else {
       const layered = (group: Layers | undefined): unknown[] => LAYERS.map((name) => group?.[name]);
-      const values = [recorded.classes, recorded.gaps, ...layered(recorded.cover), ...layered(recorded.total), recorded.unknownOrigins, recorded.unknownPaths];
+      const optional = recorded.dimensions === undefined ? [] : [recorded.dimensions];
+      const values = [recorded.classes, recorded.gaps, ...layered(recorded.cover), ...layered(recorded.total), recorded.unknownOrigins, recorded.unknownPaths, ...optional];
       for (const value of values) if (!Number.isSafeInteger(value) || (value as number) < 0) add(at, `the measure ${String(value)} is not a count`);
       if (typeof recorded.cause !== "string" || recorded.cause.trim() === "") add(at, "the measures have no cause");
     }
@@ -609,6 +645,10 @@ export function checkAtlas(atlas: Atlas, context: AtlasContext = {}): AtlasProbl
         }
       }
     }
+    const dimensionFloor = (latest as Partial<Round> | undefined)?.measures?.dimensions ?? 0;
+    if (latest !== undefined && (now.dimensions ?? 0) < dimensionFloor) {
+      add("atlas", `${String(now.dimensions ?? 0)} dimensions have ${String(MIN_SOURCES)} live sources, below the ${String(dimensionFloor)} of round ${String(latest.round)}`);
+    }
   }
   const classIds = new Set<string>();
   for (const item of atlas.classes) {
@@ -627,7 +667,15 @@ export function checkAtlas(atlas: Atlas, context: AtlasContext = {}): AtlasProbl
     if (sourceIds.has(source.id)) add(at, "the id is not unique");
     sourceIds.add(source.id);
     if (!SOURCE_ID.test(source.id)) add(at, "the id is not in lower case with hyphens");
-    if (source.classes.length === 0) add(at, "the source has no class");
+    const dimensions = source.dimensions;
+    if (source.classes.length === 0 && dimensions === undefined) add(at, "the source has no class and no dimension");
+    if (dimensions !== undefined) {
+      if (!Array.isArray(dimensions) || dimensions.length === 0) add(at, "the field dimensions has no id: give one or more, or no field");
+      else {
+        if (new Set(dimensions).size !== dimensions.length) add(at, "the dimensions have a duplicate");
+        for (const id of dimensions) if (!isDimensionId(id)) add(at, `the dimension ${String(id)} is not in DIMENSIONS of the core`);
+      }
+    }
     for (const name of source.classes) if (!classIds.has(name)) add(at, `the class ${name} is not in the atlas`);
     if (!isUrl(source.url)) add(at, "the url is not an http or https URL");
     if (source.terms.url !== null && !isUrl(source.terms.url)) add(at, "the url of the terms is not an http or https URL");
