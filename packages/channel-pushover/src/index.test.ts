@@ -1,4 +1,4 @@
-import type { Level, Message, PersonId, ReportId } from "@mark1russell7/alerts";
+import { addressProblems, WHY_LIMITS, type Level, type Message, type PersonId, type ReportId } from "@mark1russell7/alerts";
 import type { PushoverFetch } from "@procedures/notify/pushover";
 import { quotaGate, type QuotaGate } from "polite-crawler/api";
 import { describe, expect, it } from "vitest";
@@ -110,9 +110,19 @@ describe("pushoverMessageOf", () => {
     expect(pushoverMessageOf(message("notice", { body: "  ", url: "https://example.com/a" }), ADDRESS, AT)).toMatchObject({ message: "Tornado warning", url: "https://example.com/a" });
   });
 
+  it("puts the why line first in the body, thus the cut of a long body keeps it", () => {
+    const why = "Why: Lake cabin is in the area";
+    expect(pushoverMessageOf(message("notice", { body: "Take cover.", why }), ADDRESS, AT)).toMatchObject({ message: `${why}\n\nTake cover.` });
+    expect(pushoverMessageOf(message("notice", { body: "  ", why }), ADDRESS, AT)).toMatchObject({ title: "Tornado warning", message: why });
+    const long = pushoverMessageOf(message("notice", { body: "b".repeat(2000), why }), ADDRESS, AT);
+    if ("refused" in long) throw new Error("refused");
+    expect(long.message.startsWith(`${why}\n\nbbb`)).toBe(true);
+    expect([...long.message].length).toBe(1024);
+  });
+
   it("refuses an address with no user key and a message that expired", () => {
     expect(pushoverMessageOf(message("notice"), {}, AT)).toEqual({ refused: "The address has no user key." });
-    expect(pushoverMessageOf(message("notice", { expires: AT }), ADDRESS, AT)).toEqual({ refused: "The message expired before the send." });
+    expect(pushoverMessageOf(message("notice", { expires: AT }), ADDRESS, AT)).toEqual({ refused: "The message expired before the send.", kind: "expired" });
   });
 });
 
@@ -127,9 +137,26 @@ describe("the descriptor", () => {
   it("names the push service of the platform, and the resources of the cell", () => {
     expect(pushoverDescriptor("ios").dependsOn).toEqual(["provider:pushover", "provider:apns"]);
     expect(pushoverDescriptor("android").dependsOn).toEqual(["provider:pushover", "provider:fcm"]);
-    expect(pushoverDescriptor()).toMatchObject({ id: "pushover", uses: ["internet", "power"], breaksThrough: true, repeats: true, ack: "poll", maxTitle: 250, maxBody: 1024 });
+    expect(pushoverDescriptor()).toMatchObject({ id: "pushover", uses: ["internet", "dns", "power"], breaksThrough: true, repeats: true, ack: "poll", maxTitle: 250, maxBody: 1024 });
+    // A phone takes many pushes at once, thus each copy sends a life-safety push with no floor.
+    expect(pushoverDescriptor().exclusive).toBeUndefined();
+    // A push takes the why line of the push limit.
+    expect(pushoverDescriptor().why).toEqual(WHY_LIMITS.push);
     const fake = server();
     expect(createPushoverChannel({ token: TOKEN, fetch: fake.fetch, platform: "ios" }).describe().dependsOn).toContain("provider:apns");
+  });
+
+  it("checks the user key and the device name of an address, and names no value", () => {
+    const descriptor = pushoverDescriptor();
+    expect(addressProblems(ADDRESS, descriptor)).toEqual([]);
+    expect(addressProblems({ user: USER, device: "iphone-15_pro" }, descriptor)).toEqual([]);
+    expect(addressProblems({ user: USER, device: "" }, descriptor)).toEqual([]);
+    expect(addressProblems({}, descriptor)).toEqual(["The address on pushover has no field user. The channel needs a key of Pushover: 30 letters and digits."]);
+    expect(addressProblems({ user: "bad-user-value" }, descriptor)).toEqual(["The field user of the address on pushover is not a key of Pushover: 30 letters and digits."]);
+    expect(addressProblems({ user: USER, device: "my phone" }, descriptor)).toEqual(["The field device of the address on pushover is not a device name of Pushover: up to 25 letters, digits, _ and -."]);
+    expect(addressProblems({ user: USER, devise: "phone" }, descriptor)).toEqual(["The address on pushover has the field devise, and the channel reads no such field."]);
+    // The form of the user key is the form of each key of Pushover.
+    expect(isPushoverKey(USER)).toBe(true);
   });
 });
 

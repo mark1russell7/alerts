@@ -4,7 +4,7 @@
  * the caller throws.
  */
 
-import type { FetchFailure, SourceId } from "@mark1russell7/alerts";
+import type { FetchFailure, FetchSignal, SourceId } from "@mark1russell7/alerts";
 import { errorMessage } from "@mark1russell7/text";
 import { ApiError, poll, send, type Answer, type Conditions, type Pace, type Send, type Transport } from "polite-crawler/api";
 
@@ -63,7 +63,19 @@ export interface Requester {
   /** The time limit of one request, in milliseconds. */
   readonly timeoutMs: number;
   /** This function sends one request. It throws only when the signal of the caller aborts. */
-  get(request: Request, signal?: AbortSignal): Promise<Requested>;
+  get(request: Request, signal?: FetchSignal): Promise<Requested>;
+}
+
+/**
+ * This function gives the `AbortSignal` of a signal of the contract, for polite-crawler. An `AbortSignal` stays as it is.
+ * A signal of another kind gets a linked `AbortSignal`: it aborts at the abort of the signal, with the same reason.
+ */
+export function abortSignalOf(signal: FetchSignal | undefined): AbortSignal | undefined {
+  if (signal === undefined || signal instanceof AbortSignal) return signal;
+  const linked = new AbortController();
+  if (signal.aborted) linked.abort(signal.reason);
+  else signal.addEventListener("abort", () => linked.abort(signal.reason), { once: true });
+  return linked.signal;
 }
 
 /** This function removes the slashes at the end of a URL. */
@@ -91,7 +103,8 @@ export function createRequester(options: RequesterOptions): Requester {
   const { pace, transport, source, headers, detail } = options;
   const now = pace.now;
 
-  async function get({ path, what, conditions }: Request, signal?: AbortSignal): Promise<Requested> {
+  async function get({ path, what, conditions }: Request, signal?: FetchSignal): Promise<Requested> {
+    const stop = abortSignalOf(signal);
     const url = `${baseUrl}${path}`;
     let timedOut = false;
     let latency = 0;
@@ -109,7 +122,7 @@ export function createRequester(options: RequesterOptions): Requester {
     const input: Send = { source, host, minIntervalMs, what, exchange: { method: "GET", url, headers, body: null } };
     let answer: Answer;
     try {
-      answer = conditions === undefined ? await send(pace, timed, input, signal) : await poll(pace, timed, conditions, input, signal);
+      answer = conditions === undefined ? await send(pace, timed, input, stop) : await poll(pace, timed, conditions, input, stop);
     } catch (error) {
       if (signal?.aborted === true) throw error;
       if (timedOut) return { ok: false, url, failure: { kind: "timeout", message: `no answer in ${String(timeoutMs)} ms: ${url}` } };

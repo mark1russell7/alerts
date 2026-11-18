@@ -5,13 +5,19 @@
  * calls of the channels, and it writes each result to the log after the call.
  */
 import type { WallClock } from "@mark1russell7/algebra/clock";
+import { backoffDelay, type Backoff } from "@mark1russell7/service/backoff";
 import {
   COPY_ID,
+  DEFAULT_LINK_POLICY,
+  NO_LABELS,
   acknowledgmentOf,
+  graphLabels,
   incidents,
+  linkRule,
   messageKey,
   messageOf,
   route,
+  whyLine,
   type Acknowledgment,
   type AssessPolicy,
   type ChannelDescriptor,
@@ -20,16 +26,22 @@ import {
   type Delivery,
   type DeliveryStatus,
   type Duration,
+  type EscalationEnd,
   type Instant,
+  type LinkPolicy,
+  type RankDelays,
   type Recipient,
   type Route,
   type SendOutcome,
   type WatchedPlace,
+  type WhyLabels,
+  type WhyLimit,
 } from "@mark1russell7/alerts";
 import { errorMessage } from "@mark1russell7/text";
-import { envelope, type ChannelFailureKind, type RefusalKind, type RefusedEvent, type RuntimeEvent } from "./events.ts";
+import { compareCodeUnits } from "@mark1russell7/text/order";
+import { envelope, frameTag, REFUSAL_FAULTS, type ChannelFailureKind, type RefusalKind, type RefusedEvent, type RuntimeEvent } from "./events.ts";
 import { limited } from "./limit.ts";
-import type { RuntimeState } from "./state.ts";
+import { cancelledKeys, type RuntimeState } from "./state.ts";
 import { earliest } from "./view.ts";
 
 /** The options of the delivery. The private configuration gives the recipients and the addresses. */
@@ -60,8 +72,26 @@ export interface DeliveryOptions {
   readonly overdueAfter?: Duration;
   /** The rank of this copy of the system, and the wait of each rank. */
   readonly rank?: number;
+  /** The default wait of one rank: the wait of each level with no entry in `rankDelays`. */
   readonly rankDelay?: Duration;
+  /** The wait of one rank for each level, from the configuration. */
+  readonly rankDelays?: RankDelays;
+  /** The least wait of one rank before a step of an exclusive channel. Without it, the channels have no floor. */
+  readonly rankFloor?: Duration;
+  /**
+   * The longest wait between two stop probes of a down channel. The wait starts at `retry` and doubles after each
+   * failed probe, up to this time. The default is `PROBE_LIMIT` or `retry`, the longer one.
+   */
+  readonly probeLimit?: Duration;
+  /**
+   * The private labels of the nodes of the why records, for the why line of each message. The labels stay in the
+   * runtime: no record and no log event holds them. Without them, each why line uses plain nouns.
+   */
+  readonly labels?: WhyLabels;
 }
+
+/** The default longest wait between two stop probes of a down channel: 60 seconds. */
+export const PROBE_LIMIT: Duration = 60_000;
 
 /** A call of a channel that failed. The decision stays, thus the call goes again at `retryAt` or later. */
 export interface DeliveryFailure {
@@ -140,6 +170,8 @@ export interface DeliveryContext {
   /** The id of the run. Its characters match `COPY_ID`. Each copy id starts with it, thus two runs do not give the same copy id. */
   readonly run: string;
   readonly places: readonly WatchedPlace[];
+  /** The policy of the link rule of the merge, the policy of the view. The default is `DEFAULT_LINK_POLICY`. */
+  readonly link?: LinkPolicy | undefined;
   state(): RuntimeState;
   /**
    * This function writes events to the log and folds them. It gives the ids of the events that are
@@ -153,11 +185,18 @@ export interface DeliveryContext {
 /** The dispatcher of the deliveries: one step for each pass. */
 export interface Dispatcher {
   step(at: Instant): Promise<DeliveryStep>;
+  /**
+   * This method moves the times in memory by the size of a step of the wall clock. They are the times of the polls,
+   * the waits, the flights, the places and the probes. They are also the times of the deliveries that the next step
+   * writes. Thus each timer keeps its distance on the monotonic clock.
+   */
+  shift(size: Duration): void;
 }
 
 /** A send in flight. A stale flight passed its flight limit on a channel that repeats. The log does not keep its copy. */
 interface Flight {
-  readonly since: Instant;
+  // A step of the wall clock moves this time in place. The object stays the same, thus a late end finds its flight.
+  since: Instant;
   readonly copy: string;
   stale: boolean;
 }
@@ -183,6 +222,19 @@ interface CallFailure {
   readonly message: string;
 }
 
+/** One call of a channel with a limit of calls. It keeps its place until it ends or until its flight limit passes. */
+interface Place {
+  // A step of the wall clock moves this time in place. The object stays the same, thus the end of the call frees it.
+  until: Instant;
+}
+
+/** This function starts a call, and it gives back its place when the call ends, also after the time limit of the step. */
+function within<T>(release: () => void, call: () => T | Promise<T>): Promise<T> {
+  const started = Promise.resolve().then(call);
+  void started.then(release, release);
+  return started;
+}
+
 /** A cancel or a stop that threw is a failure of the kind `network`. */
 const thrownFailure = (thrown: unknown, otherwise: string): CallFailure => ({ kind: "network", message: thrown === undefined ? otherwise : errorMessage(thrown) });
 
@@ -199,14 +251,21 @@ const thrownFailure = (thrown: unknown, otherwise: string): CallFailure => ({ ki
  * - After a step with a failed stop on a channel, each step sends only one stop on that channel: the probe.
  *   Thus an outage of the channel costs one stop at each retry, not one stop for each copy. After a good
  *   probe, the other stops go at the next step.
+ * - The wait before the next probe starts at the retry, and it doubles after each failed probe, up to the probe
+ *   limit. A good answer of the channel to a send, a poll or a cancel moves the next probe to the next step.
+ * - A channel with \`maxInFlight\` gets no more calls in progress at the same time. Each other call waits for a later
+ *   step, and the end of a call wakes the loop. A call keeps its place until it ends or its flight limit passes.
  *
- * The times of the polls and the flights are in memory only. After a restart, each receipt gets a poll
- * at once. The log keeps each refused send, thus the wait of its retry holds after a restart. Before each send on a channel that repeats, the log keeps its copy. The log also
- * keeps the end of the copy: its delivery, a refusal or a stop. Thus the first step after a restart stops each copy of an
- * earlier run with no end.
+ * The times of the polls and the flights are in memory only. A step of the wall clock moves them with `shift`. After
+ * a restart, each receipt gets a poll at once.
+ *
+ * The log keeps each refused send, thus the wait of its retry holds after a restart. Before each send on a channel
+ * that repeats, the log keeps its copy. The log also keeps the end of the copy: its delivery, a refusal or a stop.
+ * Thus the first step after a restart stops each copy of an earlier run with no end.
  */
 export function createDispatcher(options: DeliveryOptions, context: DeliveryContext): Dispatcher {
   const { clock } = context;
+  const link = linkRule(context.link ?? DEFAULT_LINK_POLICY);
   const byId = new Map<string, ChannelProcedures>();
   const descriptors: ChannelDescriptor[] = [];
   for (const channel of options.channels) {
@@ -216,10 +275,30 @@ export function createDispatcher(options: DeliveryOptions, context: DeliveryCont
     descriptors.push(descriptor);
   }
   const polling = new Set(descriptors.filter((descriptor) => descriptor.ack === "poll").map((descriptor) => descriptor.id as string));
+  // The limit of the why line of each channel that has one.
+  const whyLimits = new Map<string, WhyLimit>(descriptors.flatMap((descriptor) => (descriptor.why === undefined ? [] : [[descriptor.id as string, descriptor.why] as const])));
+  const labels = options.labels ?? NO_LABELS;
   // Only a copy that the channel repeats needs a stop.
   const repeating = new Set(descriptors.filter((descriptor) => descriptor.repeats).map((descriptor) => descriptor.id as string));
   const recipients = new Map(options.recipients.map((recipient) => [recipient.watch.person as string, recipient]));
+  // The labels of each person: the labels of the instance, and then the labels of the interest graph of the person.
+  const personLabels = new Map(options.recipients.map((recipient) => [recipient.watch.person as string, graphLabels(labels, recipient.watch.interests)]));
+  const labelsOf = (person: string): WhyLabels => personLabels.get(person) ?? labels;
   if (!(options.flightLimit >= options.callLimit)) throw new Error(`The flight limit (${options.flightLimit} ms) is shorter than the call limit (${options.callLimit} ms).`);
+  const probeLimit = options.probeLimit ?? Math.max(PROBE_LIMIT, options.retry);
+  if (!(probeLimit >= options.retry)) throw new Error(`The probe limit (${probeLimit} ms) is shorter than the retry (${options.retry} ms).`);
+  // The probes of a down channel back off. There is one client, thus the waits need no jitter.
+  const probeWait: Backoff = { base: options.retry, factor: 2, cap: probeLimit };
+  // The most calls in progress of each channel with a limit, and the places of its calls in progress.
+  const limits = new Map<ChannelId, number>();
+  for (const descriptor of descriptors) {
+    if (descriptor.maxInFlight === undefined) continue;
+    if (!(Number.isInteger(descriptor.maxInFlight) && descriptor.maxInFlight >= 1)) throw new Error(`The channel ${descriptor.id} has maxInFlight ${descriptor.maxInFlight}. It must be an integer of 1 or more.`);
+    limits.set(descriptor.id, descriptor.maxInFlight);
+  }
+  const places = new Map<ChannelId, Set<Place>>();
+  // The channels with a call that waits for a place. The end of a call of such a channel wakes the loop.
+  const starved = new Set<ChannelId>();
   // Each copy id starts with the run id. A channel can put it in the path of a URL.
   if (!COPY_ID.test(context.run)) throw new Error(`The run id "${context.run}" has a character that a copy id cannot have. Use letters, digits, _ and -.`);
   const polled = new Map<string, Instant>();
@@ -230,6 +309,8 @@ export function createDispatcher(options: DeliveryOptions, context: DeliveryCont
   const stopping = new Map<string, { readonly key: string; readonly channel: ChannelId }>();
   // The channels whose last step of stops had a failed stop. Each step sends one stop on such a channel: the probe.
   const down = new Set<ChannelId>();
+  // The failed probes in a row of each down channel, and the time of its next probe.
+  const probes = new Map<ChannelId, { readonly failed: number; readonly at: Instant }>();
   let copies = 0;
   // The copies whose send did not end. A stop of such a copy does not end it, because the channel can accept it later.
   const pending = new Set<string>();
@@ -246,6 +327,17 @@ export function createDispatcher(options: DeliveryOptions, context: DeliveryCont
   };
 
   return {
+    shift(size) {
+      for (const [key, at] of polled) polled.set(key, at + size);
+      for (const [call, until] of waits) waits.set(call, until + size);
+      for (const flight of flying.values()) flight.since += size;
+      for (const taken of places.values()) for (const call of taken) call.until += size;
+      for (const [id, probe] of probes) probes.set(id, { ...probe, at: probe.at + size });
+      for (let index = 0; index < landed.length; index += 1) {
+        const entry = landed[index]!;
+        landed[index] = { ...entry, delivery: { ...entry.delivery, at: entry.delivery.at + size } };
+      }
+    },
     async step(at) {
       if (restarted) {
         restarted = false;
@@ -255,7 +347,7 @@ export function createDispatcher(options: DeliveryOptions, context: DeliveryCont
       }
       // A wait that is over keeps nothing. Thus the map holds only the waits of the last retry time.
       for (const [call, until] of waits) if (until <= at) waits.delete(call);
-      const found = incidents(context.state().merge, at);
+      const found = incidents(context.state().merge, at, { link });
       const routesNow = (): Route[] => {
         const state = context.state();
         return route({
@@ -265,10 +357,13 @@ export function createDispatcher(options: DeliveryOptions, context: DeliveryCont
           places: context.places,
           assess: options.assess,
           starts: state.starts,
-          cancelled: new Set(state.cancelled),
+          ends: state.escalationEnds,
+          cancelled: cancelledKeys(state),
           channels: descriptors,
           rank: options.rank,
           rankDelay: options.rankDelay,
+          rankDelays: options.rankDelays,
+          rankFloor: options.rankFloor,
           now: at,
         });
       };
@@ -301,6 +396,26 @@ export function createDispatcher(options: DeliveryOptions, context: DeliveryCont
         waiting.push(until);
         return false;
       };
+      // The channels with a good answer in this step. A good answer of a down channel moves its next probe to the next step.
+      const reached = new Set<ChannelId>();
+      // A place for one call of a channel. With no free place, the call waits for a later step, and the function gives undefined.
+      const place = (id: ChannelId): (() => void) | undefined => {
+        const limit = limits.get(id);
+        if (limit === undefined) return () => undefined;
+        const taken = places.get(id) ?? new Set<Place>();
+        places.set(id, taken);
+        for (const call of taken) if (call.until <= at) taken.delete(call);
+        if (taken.size >= limit) {
+          starved.add(id);
+          waiting.push(Math.min(...[...taken].map((call) => call.until)));
+          return undefined;
+        }
+        const call: Place = { until: at + options.flightLimit };
+        taken.add(call);
+        return () => {
+          if (taken.delete(call) && starved.delete(id)) context.wake?.();
+        };
+      };
 
       // 0. The late sends that ended with a delivery. They go to the log first, thus the routes see them and send no second copy.
       const sent: Delivery[] = [];
@@ -330,15 +445,21 @@ export function createDispatcher(options: DeliveryOptions, context: DeliveryCont
 
       // 1. The polls. An acknowledgment changes the escalations, thus the routes come again after it.
       const first = routesNow();
-      const due = first.flatMap((entry) => entry.polls).filter((delivery) => (polled.get(delivery.key) ?? Number.NEGATIVE_INFINITY) + options.pollEvery <= at && ready("status", delivery.key));
-      const statuses = await Promise.all(due.map((delivery) => poll(delivery)));
+      const due: { readonly delivery: Delivery; readonly release: () => void }[] = [];
+      for (const delivery of first.flatMap((entry) => entry.polls)) {
+        if (!((polled.get(delivery.key) ?? Number.NEGATIVE_INFINITY) + options.pollEvery <= at && ready("status", delivery.key))) continue;
+        const release = place(delivery.channel);
+        if (release !== undefined) due.push({ delivery, release });
+      }
+      const statuses = await Promise.all(due.map(({ delivery, release }) => poll(delivery, release)));
       const acks = statuses.flatMap((status, index) => {
-        const delivery = due[index]!;
+        const { delivery } = due[index]!;
         polled.set(delivery.key, at);
         if (!status.ok) {
           fail("status", delivery, status.kind, status.message);
           return [];
         }
+        reached.add(delivery.channel);
         const acknowledgment = acknowledgmentOf(delivery, status.status);
         return acknowledgment === undefined ? [] : [{ ...envelope("acknowledgment", `ack:${delivery.key}`, at), acknowledgment }];
       });
@@ -346,8 +467,12 @@ export function createDispatcher(options: DeliveryOptions, context: DeliveryCont
       const acknowledged = acks.map((event) => event.acknowledgment);
       const routes = acknowledged.length === 0 ? first : routesNow();
 
-      // 2. The start of each new escalation, before its first send.
+      // 2. The start of each new escalation, before its first send. The end of each person that the incident no longer
+      // reaches, before its cancels: the routes of each level of the person give the same end, and the log keeps it once.
       write(routes.filter((entry) => entry.fresh).map((entry) => ({ ...envelope("escalation", startId(entry), at), start: entry.start })));
+      const ending = new Map<string, EscalationEnd>();
+      for (const entry of routes) if (entry.freshEnd && entry.end !== undefined) ending.set(endId(entry), entry.end);
+      write([...ending].map(([id, end]) => ({ ...envelope("escalation-end", id, at), end })));
 
       // 3. The sends and the cancels. Each result goes to the log at once, thus a crash loses the fewest results.
       const cancelled: string[] = [];
@@ -381,19 +506,28 @@ export function createDispatcher(options: DeliveryOptions, context: DeliveryCont
                 refuse(target, "refused", retryAt);
                 return;
               }
-              const message = messageOf(entry.incident, context.state().merge.reports, send);
+              const limit = whyLimits.get(send.channel);
+              const why = limit === undefined || entry.why === undefined ? undefined : whyLine(entry.why, labelsOf(send.person), limit);
+              const message = messageOf(entry.incident, context.state().merge.reports, send, why);
               const deliveryOf = (accepted: Extract<SendOutcome, { ok: true }>): Delivery => ({ key: message.key, incident: send.incident, level: send.level, person: send.person, channel: send.channel, step: send.step, at: accepted.accepted, receipt: accepted.receipt });
+              // A send with no free place on its channel goes at a later step. It has no copy yet.
+              const release = place(send.channel);
+              if (release === undefined) return;
               copies += 1;
               const copy = `${context.run}-${copies}`;
               // The log keeps the copy before the send. A write that fails throws, and no send goes.
-              if (repeating.has(send.channel)) write([{ ...envelope("attempt", `attempt:${copy}`, clock.now()), key, channel: send.channel, copy }]);
+              try {
+                if (repeating.has(send.channel)) write([{ ...envelope("attempt", `attempt:${copy}`, clock.now()), key, channel: send.channel, copy }]);
+              } catch (error) {
+                release();
+                throw error;
+              }
               // The send stays in flight until it ends, also after the time limit of the step.
               const flight: Flight = { since: at, copy, stale: false };
               flying.set(key, flight);
               pending.add(copy);
               let late = false;
-              const call = Promise.resolve()
-                .then(() => channel.send({ message, address, copy }))
+              const call = within(release, () => channel.send({ message, address, copy }))
                 .then(
                   (result) => result,
                   (error): SendOutcome => ({ ok: false, kind: "network", message: `The send threw: ${errorMessage(error)}` }),
@@ -433,6 +567,7 @@ export function createDispatcher(options: DeliveryOptions, context: DeliveryCont
                 if (refusal(outcome.kind)) refuse(target, outcome.kind, retryAt, repeating.has(send.channel) ? copy : undefined);
                 return;
               }
+              reached.add(send.channel);
               const delivery = deliveryOf(outcome);
               let different: readonly string[];
               try {
@@ -466,8 +601,11 @@ export function createDispatcher(options: DeliveryOptions, context: DeliveryCont
                   return;
                 }
                 const receipt = delivery.receipt;
+                // A cancel with no free place on its channel goes at a later step.
+                const release = place(delivery.channel);
+                if (release === undefined) return;
                 const failure = await limited<CallFailure | undefined>(
-                  Promise.resolve().then(() => channel.cancel({ receipt })).then(() => undefined),
+                  within(release, () => channel.cancel({ receipt })).then(() => undefined),
                   options.callLimit,
                   clock,
                   () => ({ kind: "timeout", message: `The cancel took longer than ${options.callLimit} ms.` }),
@@ -477,6 +615,7 @@ export function createDispatcher(options: DeliveryOptions, context: DeliveryCont
                   fail("cancel", delivery, failure.kind, failure.message);
                   return;
                 }
+                reached.add(delivery.channel);
               }
               write([{ ...envelope("cancelled", `cancelled:${delivery.key}`, clock.now()), delivery: delivery.key }]);
               cancelled.push(delivery.key);
@@ -485,7 +624,8 @@ export function createDispatcher(options: DeliveryOptions, context: DeliveryCont
         }
       }
       // 4. The stops of the stale copies, in parallel with the sends. A failed stop goes again at a later step.
-      // On a channel that is down, only the first ready stop goes: the probe. The other stops wait for a step after a good probe.
+      // On a channel that is down, only the first ready stop goes: the probe, at the time of the probe. The other stops wait for
+      // a step after a good probe.
       const stopped: string[] = [];
       const probed = new Set<ChannelId>();
       const held = new Set<ChannelId>();
@@ -503,14 +643,20 @@ export function createDispatcher(options: DeliveryOptions, context: DeliveryCont
             held.add(target.channel);
             continue;
           }
-          probed.add(target.channel);
+          const probeAt = probes.get(target.channel)?.at ?? at;
+          if (probeAt > at) {
+            waiting.push(probeAt);
+            continue;
+          }
         }
+        // A stop with no free place on its channel goes at a later step.
+        const release = place(target.channel);
+        if (release === undefined) continue;
+        if (down.has(target.channel)) probed.add(target.channel);
         work.push(
           (async () => {
             const failure = await limited<CallFailure | undefined>(
-              Promise.resolve()
-                .then(() => channel.cancel({ copy }))
-                .then(() => undefined),
+              within(release, () => channel.cancel({ copy })).then(() => undefined),
               options.callLimit,
               clock,
               () => ({ kind: "timeout", message: `The stop of the copy took longer than ${options.callLimit} ms.` }),
@@ -538,18 +684,32 @@ export function createDispatcher(options: DeliveryOptions, context: DeliveryCont
 
       // Each call ends before the step ends. A write that failed throws after all of them.
       const settled = await Promise.allSettled(work);
-      // A channel is down after a step with a failed stop, and up after a step whose stops all ended well.
-      for (const id of failedStops) down.add(id);
-      for (const id of goodStops) if (!failedStops.has(id)) down.delete(id);
-      // After a good probe, the held stops go at the next step. It comes soon, not at the next poll.
-      if ([...held].some((id) => !down.has(id))) {
+      // A channel is down after a step with a failed stop, and up after a step whose stops all ended well. Each failed
+      // probe doubles the wait before the next probe, up to the probe limit.
+      for (const id of failedStops) {
+        down.add(id);
+        const failed = (probes.get(id)?.failed ?? 0) + 1;
+        probes.set(id, { failed, at: at + backoffDelay(probeWait, failed) });
+      }
+      for (const id of goodStops) {
+        if (failedStops.has(id)) continue;
+        down.delete(id);
+        probes.delete(id);
+      }
+      // A good answer of a down channel to another call moves its next probe to the next step.
+      const moved = [...reached].filter((id) => down.has(id) && !failedStops.has(id) && (probes.get(id)?.at ?? at) > at);
+      for (const id of moved) probes.set(id, { failed: probes.get(id)?.failed ?? 0, at });
+      // After a good probe, the held stops go at the next step. It comes soon, not at the next poll. The same holds
+      // after a good answer of a down channel with stops to send.
+      const stopsOf = new Set([...stopping.values()].map((target) => target.channel));
+      if ([...held].some((id) => !down.has(id)) || moved.some((id) => stopsOf.has(id))) {
         waiting.push(at + options.retry);
         context.wake?.();
       }
       // The refusals of the step come after each delivery of the step in the log. Thus only a delivery of a later step
       // ends the hold of a refused channel after a restart, as in the pass. The order decides, not the times: a channel
       // can give a time of acceptance after the time of the refusal.
-      write(refusing.map((refused) => ({ ...envelope("refused", `refused:${refused.key}@${at}`, clock.now()), ...refused })));
+      write(refusing.map((refused) => ({ ...envelope("refused", `refused:${refused.key}@${at}${frameTag(context.state().steps.length)}`, clock.now()), ...refused })));
       const broken = settled.find((result) => result.status === "rejected");
       if (broken !== undefined) throw broken.reason;
 
@@ -570,14 +730,15 @@ export function createDispatcher(options: DeliveryOptions, context: DeliveryCont
     },
   };
 
-  async function poll(delivery: Delivery): Promise<{ readonly ok: true; readonly status: DeliveryStatus } | { readonly ok: false; readonly kind: string; readonly message: string }> {
+  async function poll(delivery: Delivery, release: () => void): Promise<{ readonly ok: true; readonly status: DeliveryStatus } | { readonly ok: false; readonly kind: string; readonly message: string }> {
     const channel = byId.get(delivery.channel);
     const receipt = delivery.receipt;
-    if (channel === undefined || receipt === undefined || !polling.has(delivery.channel)) return { ok: false, kind: "refused", message: `The channel ${delivery.channel} gives no status here.` };
+    if (channel === undefined || receipt === undefined || !polling.has(delivery.channel)) {
+      release();
+      return { ok: false, kind: "refused", message: `The channel ${delivery.channel} gives no status here.` };
+    }
     return limited(
-      Promise.resolve()
-        .then(() => channel.status({ receipt }))
-        .then((status) => ({ ok: true as const, status })),
+      within(release, () => channel.status({ receipt })).then((status) => ({ ok: true as const, status })),
       options.callLimit,
       clock,
       () => ({ ok: false as const, kind: "timeout", message: `The status took longer than ${options.callLimit} ms.` }),
@@ -588,17 +749,19 @@ export function createDispatcher(options: DeliveryOptions, context: DeliveryCont
 
 /**
  * This function gives the overdue sends of each channel at `at`. An overdue send is a send of the routes after the
- * step, due for `after` or more. A send whose last refusal is `reserved` is not overdue. With no `after`, no send is overdue.
+ * step, due for `after` or more. With no `after`, no send is overdue. A send whose last refusal is not a fault of the
+ * channel is not overdue (`REFUSAL_FAULTS`). Examples are `consent`, a STOP reply, and `quiet`, a call in the quiet window.
  */
 function overdueSends(routes: readonly Route[], refusals: RuntimeState["refusals"], at: Instant, after: Duration | undefined): OverdueSends[] {
   if (after === undefined) return [];
   const byChannel = new Map<ChannelId, { readonly sends: number; readonly since: Instant }>();
   for (const send of routes.flatMap((entry) => entry.plan.sends)) {
-    if (at - send.due < after || refusals[messageKey(send)]?.kind === "reserved") continue;
+    const last = refusals[messageKey(send)]?.kind;
+    if (at - send.due < after || (last !== undefined && !REFUSAL_FAULTS[last])) continue;
     const before = byChannel.get(send.channel);
     byChannel.set(send.channel, { sends: (before?.sends ?? 0) + 1, since: Math.min(before?.since ?? send.due, send.due) });
   }
-  return [...byChannel].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)).map(([channel, sends]) => ({ channel, ...sends }));
+  return [...byChannel].sort(([a], [b]) => compareCodeUnits(a, b)).map(([channel, sends]) => ({ channel, ...sends }));
 }
 
 // The event of a delivery, with the copy id of its send.
@@ -607,6 +770,13 @@ function deliveryEvent(delivery: Delivery, copy: string, time: Instant): Runtime
 }
 
 // The id of the event of a start: one start for each anchor, level and person.
+// The id of the start of an escalation. An episode after the first one is in the id, thus its start is a new event of the log.
 function startId(entry: Route): string {
-  return `escalation:${entry.start.incident}:${entry.start.level}:${entry.start.person}`;
+  const id = `escalation:${entry.start.incident}:${entry.start.level}:${entry.start.person}`;
+  return entry.episode === 0 ? id : `${id}:${String(entry.episode)}`;
+}
+
+// The id of the end of an episode of a person in an incident.
+function endId(entry: Route): string {
+  return `escalation-end:${entry.end?.incident ?? entry.incident.anchor}:${entry.person}:${String(entry.episode)}`;
 }

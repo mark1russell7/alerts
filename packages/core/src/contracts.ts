@@ -1,5 +1,5 @@
 /**
- * The contracts of the alert system: the event, the source and the channel.
+ * The contracts of the alert system: the event, the indicator, the source and the channel.
  *
  * The text of `docs/CONTRACTS.md` explains each part. All values are JSON values, so each type
  * crosses a procedure call, a log row and a copy of the system without a change.
@@ -222,6 +222,157 @@ export interface Report {
 }
 
 // =============================================================================
+// The indicator contract
+// =============================================================================
+
+/**
+ * The dimensions of the indicators. A dimension is one kind of measure, for example rail delays or grid frequency. The
+ * list is closed, as the taxonomy is. A new dimension is a change of the contract.
+ */
+export const DIMENSIONS = [
+  { id: "road-traffic", title: "Road traffic flow" },
+  { id: "road-events", title: "Road closures, incidents and work zones" },
+  { id: "rail", title: "Rail punctuality and cancellations" },
+  { id: "public-transit", title: "Bus, tram and metro service" },
+  { id: "micromobility", title: "Bike and scooter share" },
+  { id: "aviation-delays", title: "Airport delays and ground stops" },
+  { id: "air-traffic", title: "Aircraft in the air" },
+  { id: "air-passengers", title: "Air passengers and flights" },
+  { id: "gnss-interference", title: "GNSS interference" },
+  { id: "maritime-traffic", title: "Vessel traffic" },
+  { id: "port-activity", title: "Port calls and chokepoint transits" },
+  { id: "internet-connectivity", title: "Internet connectivity" },
+  { id: "internet-routing", title: "Internet routing and latency" },
+  { id: "online-service-status", title: "Online service status" },
+  { id: "power-demand", title: "Electric load" },
+  { id: "grid-frequency", title: "Grid frequency" },
+  { id: "power-supply", title: "Power generation and prices" },
+  { id: "fuel-prices", title: "Fuel prices and stock" },
+  { id: "radiation", title: "Ambient radiation" },
+  { id: "river-levels", title: "River levels and flow" },
+  { id: "sea-level", title: "Sea level" },
+  { id: "public-health", title: "Public health signals" },
+  { id: "outbreak-reports", title: "Official outbreak reports" },
+  { id: "online-attention", title: "Online attention" },
+  { id: "news-volume", title: "News volume" },
+  { id: "social-volume", title: "Social media volume" },
+  { id: "active-fires", title: "Active fires" },
+  { id: "night-lights", title: "Night lights" },
+  { id: "air-quality", title: "Air quality" },
+  { id: "felt-reports", title: "Felt reports" },
+  { id: "food-prices", title: "Food prices" },
+  { id: "ev-charging", title: "Electric vehicle charging" },
+  { id: "emergency-calls", title: "Emergency and service calls" },
+  { id: "border-crossings", title: "Border crossings" },
+  { id: "financial-markets", title: "Financial markets" },
+  { id: "disaster-mapping", title: "Satellite disaster mapping" },
+] as const;
+
+/** The id of a dimension of `DIMENSIONS`. */
+export type DimensionId = (typeof DIMENSIONS)[number]["id"];
+
+/** The ids of the dimensions, in the order of `DIMENSIONS`. */
+export const DIMENSION_IDS: readonly DimensionId[] = DIMENSIONS.map((dimension) => dimension.id);
+
+/**
+ * The kind of the area of the readings of a measure. A country and a subdivision are region codes, for example
+ * `iso3166-1` and `iso3166-2`. A grid cell and a box that the caller chose are polygons.
+ */
+export type IndicatorAreaKind = "code" | "point" | "line" | "polygon" | "zone" | "world";
+
+/** The kinds of the area of a reading, in their order in a report. */
+export const INDICATOR_AREA_KINDS: readonly IndicatorAreaKind[] = ["code", "point", "line", "polygon", "zone", "world"];
+
+/** The area of one reading. Its `type` is the area kind of the measure. */
+export type IndicatorArea =
+  /** A region by its code, for example a country, a state or an NWS zone. */
+  | ({ readonly type: "code" } & RegionCode)
+  /** A station, a gauge, a sensor or a vehicle. */
+  | { readonly type: "point"; readonly at: Position }
+  /** A road link or a rail line: two positions or more. */
+  | { readonly type: "line"; readonly path: readonly Position[] }
+  /** A grid cell, or a box that the caller chose. The first ring is the outside, and each ring closes on its first position. */
+  | { readonly type: "polygon"; readonly rings: readonly (readonly Position[])[] }
+  /**
+   * A zone of the domain of the source, for example an electricity bidding zone or a balancing authority. The
+   * system names the codes, for example `eic`. A table of the atlas gives the regions of each zone.
+   */
+  | { readonly type: "zone"; readonly system: string; readonly code: string }
+  /** No place: a market series, a subreddit or a service of the world. */
+  | { readonly type: "world" };
+
+/** The direction of a change that is a signal: `rise`, `drop` or `both`. */
+export type Move = "rise" | "drop" | "both";
+
+/** The directions of a change, in their order in a report. */
+export const MOVES: readonly Move[] = ["rise", "drop", "both"];
+
+/**
+ * The baseline that a source gives with its values. With `none`, the core computes the normal level of each
+ * series from its history. With `expected`, each reading holds the expected value of the source, for example a
+ * load forecast or a timetable. With `flag`, each reading tells if the source marks it as an anomaly.
+ */
+export type OwnBaseline = "none" | "expected" | "flag";
+
+/** The baselines that a source can give, in their order in a report. */
+export const OWN_BASELINES: readonly OwnBaseline[] = ["none", "expected", "flag"];
+
+/**
+ * One measure that a source gives. A source can give measures of two dimensions or more. Each measure has one
+ * dimension, one unit and one area kind.
+ */
+export interface MeasureDeclaration {
+  /** The id of the measure in its source: small letters, digits and hyphens, with a letter first. */
+  readonly id: string;
+  readonly dimension: DimensionId;
+  readonly title: string;
+  /** The unit of each value, in the grammar of `@mark1russell7/quantity`, for example `{vehicle}/h`, `km/h` or `Hz`. */
+  readonly unit: string;
+  readonly area: IndicatorAreaKind;
+  /** The direction of a change that is a signal. A cancelled train is a rise, and a station that goes offline is a drop. */
+  readonly moves: Move;
+  readonly baseline: OwnBaseline;
+  /** The time between two values of one series. Absent: the cadence is not known. */
+  readonly cadence?: Duration;
+  /** The time from the time of a value to its publication. Absent: the delay is not known. */
+  readonly delay?: Duration;
+  /** The history that the source gives at once. Absent: the source gives only live values, so a baseline starts empty. */
+  readonly backfill?: Duration;
+}
+
+/**
+ * One value of one series of a measure at one time. A series is a station, a link or a zone of the source. A
+ * reading does not change.
+ */
+export interface Reading {
+  readonly source: SourceId;
+  /** The id of the measure in the declaration of the source. The measure gives the dimension and the unit. */
+  readonly measure: string;
+  /** The id of the series in the measure, for example the id of a station. */
+  readonly series: string;
+  /**
+   * The version of the method of the series. The source changes it when its method changes, for example a new
+   * instrument. A baseline does not cross a version. Absent: the first version.
+   */
+  readonly version?: string;
+  /** The time of the value, not the time of the fetch. */
+  readonly at: Instant;
+  readonly value: number;
+  readonly area: IndicatorArea;
+  /**
+   * The cadence of the series, as the source states it, for example the ttl of a GBFS file. When it is present, it
+   * replaces the cadence of the measure for this series. A general reader of many feeds gives it.
+   */
+  readonly cadence?: Duration;
+  /** The expected value of the source. It is present only for a measure with the baseline `expected`. */
+  readonly expected?: number;
+  /** True when the source marks the value as an anomaly. It is present only for a measure with the baseline `flag`. */
+  readonly flagged?: boolean;
+  /** The raw message that gave the reading. */
+  readonly observation: ObservationId;
+}
+
+// =============================================================================
 // The source contract
 // =============================================================================
 
@@ -230,13 +381,13 @@ export type Transport = "poll" | "stream" | "push" | "radio";
 
 /**
  * A resource of the cell. The cell is the copy of the system on one machine. Each source of the
- * cell uses the same internet link, the same power and the same receivers. So the fault of a
+ * cell uses the same internet link, the same DNS resolver, the same power and the same receivers. So the fault of a
  * resource is a common fault of the cell, not the fault of one source.
  */
-export type CellResource = "internet" | "power" | "receiver";
+export type CellResource = "internet" | "dns" | "power" | "receiver";
 
 /** The resources of the cell, in their order in a report. */
-export const CELL_RESOURCES: readonly CellResource[] = ["internet", "power", "receiver"];
+export const CELL_RESOURCES: readonly CellResource[] = ["internet", "dns", "power", "receiver"];
 
 /** The facts of a source. The core uses them for the schedule, the health and the coverage. */
 export interface SourceDescriptor {
@@ -245,17 +396,18 @@ export interface SourceDescriptor {
   /** The authorities whose messages the source carries, for example `nws` or `usgs`. */
   readonly origins: readonly string[];
   /**
-   * The failure domains outside the cell that the source needs: providers, CDNs, transmitters and
-   * regions. Examples: `provider:nws-api`, `cdn:akamai`, `rf:nwr`. Two sources with a shared
+   * The failure domains outside the cell that the source needs: providers, CDNs, carriers, transmitters
+   * and regions. Examples: `provider:nws-api`, `cdn:akamai`, `carrier:noaaport`, `rf:nwr`. The kind of a
+   * domain comes before the colon. The paths of the atlas use the same ids. Two sources with a shared
    * domain are not independent for coverage. Do not put the resources of the cell here.
    */
   readonly dependsOn: readonly string[];
   /**
-   * The resources of the cell that the source uses. An internet source uses `internet` and
+   * The resources of the cell that the source uses. An internet source uses `internet`, `dns` and
    * `power`. A radio source uses `receiver` and `power`.
    */
   readonly uses: readonly CellResource[];
-  /** The prefixes of the taxonomy codes that the source covers, for example `met` and `hydro`. */
+  /** The prefixes of the taxonomy codes that the source covers, for example `met` and `geo.earthquake`. */
   readonly kinds: readonly string[];
   /** The areas that the source covers, or `global`. */
   readonly coverage: readonly Area[] | "global";
@@ -278,6 +430,8 @@ export interface SourceDescriptor {
   readonly listing?: "snapshot";
   /** A plain sentence of the canary check, when the source has one. */
   readonly canary?: string;
+  /** The measures of an indicator source. Absent: the source gives only events. */
+  readonly measures?: readonly MeasureDeclaration[];
 }
 
 /**
@@ -354,6 +508,11 @@ export interface MapProblem {
 export interface MapResult {
   readonly reports: readonly Report[];
   readonly problems: readonly MapProblem[];
+  /**
+   * The readings of the indicator measures in the message. The runtime checks each reading against the declaration of
+   * its measure, and keeps it in the store of the readings, not in the event log. A source with no measures gives no field.
+   */
+  readonly readings?: readonly Reading[];
 }
 
 /** The result of the canary check of a source. */
@@ -380,8 +539,23 @@ export interface FetchRecord {
   readonly fatal: number;
   /** The count of lossy problems that the map gave for the observations of the fetch. An absent count is 0. */
   readonly lossy?: number;
-  /** The result of the canary check of the observations of the fetch, when the source has a canary. */
+  /** The result of the canary check of the observations of the fetch, when the source has a canary and the check decides. */
   readonly canary?: CanaryResult;
+}
+
+/**
+ * The part of an `AbortSignal` that a fetch reads. The core has no platform, thus it does not name the
+ * `AbortSignal` type of a platform. An `AbortSignal` of Node.js or of a browser has each member.
+ */
+export interface FetchSignal {
+  /** This value is true after the abort. */
+  readonly aborted: boolean;
+  /** This value is the reason of the abort, after the abort. */
+  readonly reason?: unknown;
+  /** This function adds a listener of the abort. */
+  addEventListener(type: "abort", listener: () => void, options?: { readonly once?: boolean }): void;
+  /** This function removes a listener of the abort. */
+  removeEventListener(type: "abort", listener: () => void): void;
 }
 
 /**
@@ -391,18 +565,26 @@ export interface FetchRecord {
  * - `describe`: no effects.
  * - `fetch`: it reads `network`, through polite-crawler. It is idempotent. For a failure of the
  *   source, it gives `{ ok: false }` and does not throw.
+ * - The optional `signal` of `fetch` stops the fetch. The runtime aborts it at the time limit of
+ *   the fetch and at the stop of the runtime. After the abort, the fetch sends no more requests.
+ *   It can then throw the reason of the signal.
  * - `map`: a pure, total function. It does not throw, and the same observation gives the same
  *   reports with the same ids.
- * - `check`: a pure function. It examines the observations of a fetch against the canary.
+ * - `check`: it examines the observations of a fetch against the canary, and sends no request. It gives `undefined`
+ *   when it cannot decide yet: no read. The health then gets no canary event. A stream gives no read until its session
+ *   had one full period of its test message.
  * - `locate`: optional. It reads `network` and is idempotent. It gives the region codes of a
  *   position, for a source that has a lookup: the `/points` query of the NWS API.
+ * - `close`: optional. It ends the resources of the source, for example the session of a stream. The runtime starts
+ *   it one time, at the stop, after the last fetch. It does not throw.
  */
 export interface SourceProcedures {
   describe(): SourceDescriptor;
-  fetch(input: { readonly watch: Watch; readonly cursor?: Cursor }): Promise<FetchOutcome>;
+  fetch(input: { readonly watch: Watch; readonly cursor?: Cursor }, signal?: FetchSignal): Promise<FetchOutcome>;
   map(input: { readonly observation: Observation }): MapResult;
-  check?(input: { readonly observations: readonly Observation[] }): CanaryResult;
+  check?(input: { readonly observations: readonly Observation[] }): CanaryResult | undefined;
   locate?(input: { readonly at: Position }): Promise<LocateOutcome>;
+  close?(): Promise<void>;
 }
 
 /** The result of a lookup of the region codes of a position. */
@@ -481,6 +663,27 @@ export interface Incident {
   readonly live: boolean;
   /** The count of different origins that report the event. */
   readonly corroboration: number;
+  /**
+   * The lines of the incident: one for each report that gives its values, with the values and the areas of that
+   * report. The merge gives them only when the values of two lines differ. The assessment gives each place the
+   * level of the lines whose areas hold that place. Without lines, each place gets the level of the incident.
+   */
+  readonly lines?: readonly IncidentLine[];
+}
+
+/**
+ * One line of an incident: a report that gives the values of the incident, with its own values and areas. For
+ * example, each band of the shaking of an earthquake is one line, with its severity and its circle.
+ */
+export interface IncidentLine {
+  readonly report: ReportId;
+  readonly kind: Kind;
+  readonly severity: Severity;
+  readonly urgency: Urgency;
+  readonly certainty: Certainty;
+  readonly onset?: Instant;
+  /** The live areas of the report, with the keys of the blocks of the incident. */
+  readonly areas: readonly Area[];
 }
 
 // =============================================================================
@@ -499,6 +702,29 @@ export type Level = "life-safety" | "urgent" | "notice" | "digest";
 /** The order of the levels, from the lowest. */
 export const LEVELS: readonly Level[] = ["digest", "notice", "urgent", "life-safety"];
 
+/**
+ * One field of the address of a person on a channel, for example the user key of Pushover. The load of the
+ * configuration checks each address with the fields of its channel.
+ */
+export interface AddressField {
+  /** The name of the field in the address, for example `user` or `to`. */
+  readonly name: string;
+  /** True: each address on the channel has the field. */
+  readonly required: boolean;
+  /**
+   * The form of the whole value: the source of a regular expression with the flag `u`. The check adds the anchors
+   * `^` and `$`. Write a pattern with no nested repeats, because the check runs it on each address.
+   */
+  readonly pattern: string;
+  /** The form in words, for the text of a problem, for example `a phone number in E.164 form`. It tells no value. */
+  readonly form: string;
+  /**
+   * True: each value of the field needs a record of the opt-in list of the configuration (`optIn`). A send to a value
+   * with no opt-in fails with the kind `consent`. The default is false.
+   */
+  readonly optIn?: boolean;
+}
+
 /** The facts of a channel. The core uses them for the escalation and the coverage of delivery. */
 export interface ChannelDescriptor {
   readonly id: ChannelId;
@@ -510,7 +736,7 @@ export interface ChannelDescriptor {
   readonly dependsOn: readonly string[];
   /**
    * The resources of the cell that the channel uses. A push or a text through an API uses
-   * `internet` and `power`. Thus a fault of the internet link stops each source and each such
+   * `internet`, `dns` and `power`. Thus a fault of the internet link stops each source and each such
    * channel together.
    */
   readonly uses: readonly CellResource[];
@@ -524,6 +750,34 @@ export interface ChannelDescriptor {
   readonly maxBody: number;
   /** The cost of one message, when the channel costs money. */
   readonly costUsd?: number;
+  /**
+   * The most calls of the channel in progress at the same time, from the rules of its provider. The delivery
+   * holds each other call for a later step. Without it, the delivery has no limit.
+   */
+  readonly maxInFlight?: number;
+  /**
+   * True: a person takes one message of the channel at a time, as with a phone call. A second phone call during the
+   * first gets a busy line. Thus a copy with a rank above 0 waits at least the rank floor before a step of the channel.
+   */
+  readonly exclusive?: boolean;
+  /**
+   * The limit of the why line of the channel. `WHY_LIMITS` in `why.ts` holds the limit of each kind of channel.
+   * When it is absent, the messages of the channel have no why line.
+   */
+  readonly why?: WhyLimit;
+  /**
+   * The fields of the address of a person on the channel. The load of the configuration refuses an address that
+   * does not agree with this list. With no list, each address passes. The function `addressProblems` tells the rules.
+   */
+  readonly address?: readonly AddressField[];
+}
+
+/** The limit of a why line: the most characters, the most words, or both. */
+export interface WhyLimit {
+  /** The most characters (code points). */
+  readonly chars?: number;
+  /** The most words. */
+  readonly words?: number;
 }
 
 /** One message to one person on one channel. */
@@ -545,7 +799,8 @@ export interface Message {
   /**
    * True: the channel sends the message in its silent mode, for example Pushover priority `-1`, or a
    * text and no call. The escalation sets it in the quiet window of the person. A `life-safety`
-   * message is not quiet at any time. The channel keeps no rule of its own about the time of day.
+   * message is not quiet in the window. A mute with the effect `silent` makes each message quiet,
+   * also at `life-safety`. The channel keeps no rule of its own about the time of day.
    */
   readonly quiet: boolean;
   /**
@@ -553,6 +808,11 @@ export interface Message {
    * it from the reserve, one time in each window. `messageOf` sets it.
    */
   readonly useReserve?: boolean;
+  /**
+   * The why line: why the message reaches the person, in the limit of the channel. The runtime makes it from the
+   * `WhyRecord` of the route and the private labels. It holds no address, point or region code.
+   */
+  readonly why?: string;
 }
 
 /** The address of a person on a channel, from the private configuration. The repo does not hold an address. */
@@ -583,6 +843,77 @@ export interface ChannelQuota {
   readonly resetAt?: Instant;
   /** The provider refuses each message until this time. */
   readonly blockedUntil?: Instant;
+  /** The name of the units in a text, in the plural: for example `cents` for a cap of the spend. The default is `units`. */
+  readonly unit?: string;
+}
+
+/**
+ * The stages of the balance of a provider account. Each stage is a line of system reports:
+ *
+ * - `low`: the balance is below the floor.
+ * - `empty`: the balance is 0 or less. The provider then refuses each paid message.
+ * - `unread`: no read passed for the maximum age or longer. Then the watch cannot see a low balance.
+ */
+export type BalanceStage = "low" | "empty" | "unread";
+
+/** One read of the balance of a provider account that passed. */
+export interface BalanceRead {
+  /** The balance in the currency of the account. It is below 0 when the account owes money. */
+  readonly balance: number;
+  /** The currency of the account, as a code of ISO 4217: for example `USD`. */
+  readonly currency: string;
+  readonly at: Instant;
+}
+
+/**
+ * The stages of another copy of the system (AL-16), as this copy sees it. Each stage is a line of system reports:
+ *
+ * - `skew`: the clock of the other copy differs from the clock of this copy by more than the limit.
+ * - `config`: the other copy has a different hash of the configuration. Then the copies can route an alert in two ways.
+ * - `unread`: no read of the log of the other copy passed for the maximum age. Then the two copies can both send.
+ */
+export type CopyStage = "skew" | "config" | "unread";
+
+/** One read of the log of another copy that passed. */
+export interface CopyRead {
+  /** The middle of the call, on the clock of this copy. */
+  readonly at: Instant;
+  /** The time of the other copy minus `at`. It is below 0 when the clock of the other copy is behind. */
+  readonly skew: Duration;
+  /** This value tells if the other copy has the hash of the configuration of this copy. */
+  readonly sameConfig: boolean;
+}
+
+/** The watch of another copy of the system, at one time. */
+export interface CopyWatch {
+  /** The id of the other copy. */
+  readonly copy: string;
+  /** The largest difference of the two clocks with no stage `skew`. */
+  readonly skewLimit: Duration;
+  /** The longest time with no read that passed. After it, the stage is `unread`. */
+  readonly maxAge: Duration;
+  /** The start of the watch. With no read, the time of `unread` counts from it. */
+  readonly since: Instant;
+  /** The last read that passed. */
+  readonly read?: CopyRead;
+}
+
+/** The watch of the balance of one provider account, at one time. */
+export interface ProviderBalance {
+  /** The provider, as an id in the `dependsOn` of its channels: for example `provider:twilio`. */
+  readonly provider: string;
+  /** The name of the provider in a text: for example `Twilio`. */
+  readonly title: string;
+  /** The channels that the account pays for. The reports have their subjects. */
+  readonly channels: readonly ChannelId[];
+  /** Below this balance, in the currency of the account, the stage is `low`. */
+  readonly floor: number;
+  /** The longest time with no read that passed. After it, the stage is `unread`. */
+  readonly maxAge: Duration;
+  /** The start of the watch. With no read, the time of `unread` counts from it. */
+  readonly since: Instant;
+  /** The last read that passed. */
+  readonly read?: BalanceRead;
 }
 
 /**
@@ -592,12 +923,15 @@ export interface ChannelQuota {
  * - `rate-limited`: the provider refuses each message until the retry.
  * - `reserved`: the channel keeps the last units of its quota for a higher level. It still sends a message of that level.
  * - `auth` and `refused`: the provider refused the key or the message.
+ * - `consent`: the address has no opt-in, or its person took the opt-in back with a STOP reply. The channel sent nothing.
+ * - `quiet`: the message is quiet, and the channel has no silent mode, as a call. The step goes after the quiet window.
+ * - `expired`: the message expired before the send. The channel sent nothing.
  */
 export type SendOutcome =
   | { readonly ok: true; readonly receipt: Receipt; readonly accepted: Instant }
   | {
       readonly ok: false;
-      readonly kind: "network" | "timeout" | "server" | "rate-limited" | "reserved" | "auth" | "refused";
+      readonly kind: "network" | "timeout" | "server" | "rate-limited" | "reserved" | "auth" | "refused" | "consent" | "quiet" | "expired";
       readonly message: string;
       readonly retryAfter?: Duration;
     };
@@ -654,9 +988,15 @@ export interface EscalationStep {
   readonly at: Duration;
 }
 
-/** The escalation of one level: the steps, until a person acknowledges. */
+/**
+ * The escalation of one level: the steps, until a person acknowledges. A policy with a subject (`about`) applies only
+ * to the incidents about that subject with the status `system`, `test` or `exercise`. For them, it replaces the policy
+ * of the level with no subject. Thus no policy with a subject changes the plan of a real warning.
+ */
 export interface EscalationPolicy {
   readonly level: Level;
+  /** The subject of the policy, as a subject watch. A subject watch with no id matches each subject of its system. */
+  readonly about?: SubjectWatch;
   readonly steps: readonly EscalationStep[];
   /** The time after the last step at which the escalation is exhausted. Exhausted is a system alert. */
   readonly exhaustedAfter: Duration;
@@ -711,10 +1051,22 @@ export interface EndMark {
 }
 
 /**
- * The merge state: four grow-only sets. The join of two states is their union, so each copy of
+ * The mark of a report that left the merge state after the horizon of its incident (`retirements`). A copy
+ * of the report that arrives later stays out until the time `until`. Then `pruneTombstones` drops the mark.
+ */
+export interface Tombstone {
+  readonly report: ReportId;
+  readonly until: Instant;
+}
+
+/**
+ * The merge state: five grow-only sets. The join of two states is their union, so each copy of
  * the system that gets the same parts gets the same state. `normalize` gives the one form of a
  * state. It has one report for each id, in the order of the ids. It has each delivery, each
  * acknowledgment and each end mark one time, in the order of their canonical JSON.
+ *
+ * The tombstones remove parts: a state has no report with a tombstone, and no delivery,
+ * acknowledgment or end mark of such a report. The removal reads only the union, so the join keeps its laws.
  */
 export interface MergeState {
   readonly reports: readonly Report[];
@@ -722,6 +1074,8 @@ export interface MergeState {
   readonly acks: readonly Acknowledgment[];
   /** The end marks of the reports of the snapshot sources. */
   readonly ends: readonly EndMark[];
+  /** The tombstones of the retired reports: one for each report, with the latest `until`, in the order of the report ids. */
+  readonly retired: readonly Tombstone[];
 }
 
 // =============================================================================
@@ -741,6 +1095,12 @@ export const ASSESSED_LEVELS: readonly AssessedLevel[] = ["none", ...LEVELS];
 export interface LevelTable {
   readonly severity: Readonly<Record<Severity, AssessedLevel>>;
   readonly urgency: Readonly<Record<Urgency, AssessedLevel>>;
+  /**
+   * The time after the onset in which the urgency `past` counts as `immediate`. A report of an event that
+   * occurred, for example an earthquake, has the urgency `past`. With no time of the assessment or no onset,
+   * the age is unknown, and `past` counts as `immediate`. When it is absent, `past` keeps its lookup.
+   */
+  readonly pastWithin?: Duration;
 }
 
 /** A class of kinds with its own table, for example the kinds that can reach `life-safety`. */
@@ -760,6 +1120,8 @@ export interface AssessPolicy {
   readonly classes: readonly KindClass[];
   /** The table of each kind that no class has. */
   readonly otherwise: LevelTable;
+  /** The policy of the relevance for a person with an interest graph. When it is absent, the assessment uses `DEFAULT_RELEVANCE_POLICY`. */
+  readonly relevance?: RelevancePolicy;
 }
 
 /**
@@ -805,7 +1167,7 @@ export interface PersonWatch {
   readonly places: readonly PlaceId[];
   /**
    * The subjects that the person watches. The health reports of the sources have the subjects of
-   * the system `alerts.source`, and the quota reports have the subjects of the system `alerts.channel`. So the
+   * the system `alerts.source`. The quota and balance reports have the subjects of the system `alerts.channel`. So the
    * person who operates the system watches `{ system: "alerts.source" }` and `{ system: "alerts.channel" }`.
    */
   readonly subjects?: readonly SubjectWatch[];
@@ -813,6 +1175,32 @@ export interface PersonWatch {
   readonly rules: readonly LevelRule[];
   /** The quiet window of the person. When it is absent, no message is quiet. */
   readonly quiet?: QuietWindow;
+  /**
+   * The interest graph of the person (`docs/RELEVANCE.md`). With a graph, a place or another entry of an incident
+   * counts only when the entry reaches the person. With no graph, each place in the areas counts.
+   */
+  readonly interests?: InterestGraph;
+  /**
+   * The rules of the life-safety warnings at the places of the person, one rule for each place at most. A place
+   * with no rule has the rule on, and its range is the buffer of the place.
+   */
+  readonly mandatory?: readonly MandatoryRule[];
+}
+
+/**
+ * The rule of the life-safety warnings at one place of a person. When the rule is on, a warning of the level
+ * `life-safety` at the place in the range always counts. An edge that is off does not stop it, and a mute makes it
+ * silent under the policy `silent` of the relevance.
+ */
+export interface MandatoryRule {
+  readonly place: PlaceId;
+  /** False when the person turned the rule off at this place. */
+  readonly on: boolean;
+  /**
+   * The range in kilometers. A match by a shape at this distance from the place or nearer is in the range. A match by
+   * the codes or by the id of the place is always in the range.
+   */
+  readonly rangeKm: number;
 }
 
 /** A measured value with its interval. The interval holds the value: `low <= value <= high`. */
@@ -918,6 +1306,11 @@ export type AssessReason =
     }
   /** The person watches a subject of the incident. */
   | { readonly kind: "subject"; readonly subject: SubjectWatch }
+  /**
+   * The level of the table at this place is not the level of the incident. The lines of these reports hold the
+   * place, and the highest table of those lines gives the level.
+   */
+  | { readonly kind: "place-table"; readonly place: PlaceId; readonly reports: readonly ReportId[]; readonly level: AssessedLevel }
   /** The table gave this level. The class is absent for the table `otherwise`. */
   | {
       readonly kind: "table";
@@ -925,6 +1318,8 @@ export type AssessReason =
       readonly bySeverity: AssessedLevel;
       readonly byUrgency: AssessedLevel;
       readonly level: AssessedLevel;
+      /** This value is true when the urgency `past` counted as `immediate` in the window `pastWithin` of the table. */
+      readonly recentPast?: true;
     }
   /**
    * A rule of the person lowered the level at this place. The index is the position of the rule.
@@ -932,7 +1327,23 @@ export type AssessReason =
    */
   | { readonly kind: "rule"; readonly place?: PlaceId; readonly index: number; readonly max: AssessedLevel }
   /** The shadow score of the incident. It does not change the level. */
-  | { readonly kind: "shadow"; readonly score: ShadowScore };
+  | { readonly kind: "shadow"; readonly score: ShadowScore }
+  /**
+   * The relevance of the incident over the interest graph of the person. `reached` holds the entries that reach the
+   * person alone: the places, the areas, the subjects and the topic, in this order. `mandatory` holds the places
+   * where the rule of the life-safety warnings keeps the level. `entryLevel` is present when an entry that is not a
+   * watched place reaches the person. It is the level of the table, up to `entryMax` of the policy, before the rules. The why comes from the strongest path.
+   */
+  | {
+      readonly kind: "reach";
+      readonly reach: Estimate;
+      readonly reached: readonly NodeKey[];
+      readonly mandatory: readonly PlaceId[];
+      readonly entryLevel?: AssessedLevel;
+      readonly why?: WhyRecord;
+    }
+  /** The relevance failed, so the places in the areas decided, as for a person with no graph. The message tells the fault. */
+  | { readonly kind: "relevance-fault"; readonly message: string };
 
 /** The level of one incident for one person, with its reasons. */
 export interface Assessment {
@@ -943,4 +1354,236 @@ export interface Assessment {
   /** The places of the person that the areas of the incident contain. */
   readonly places: readonly PlaceId[];
   readonly reasons: readonly AssessReason[];
+  /**
+   * The mute of the person that matches the incident, and its effect: the field `muted` of the relevance. With the
+   * effect `absent`, the incident does not reach the person. With `silent`, the level stays, and `route` sends one quiet
+   * message at most.
+   */
+  readonly muted?: { readonly mute: string; readonly effect: MuteEffect };
+}
+
+// =============================================================================
+// Relevance: how much an incident touches one person (AL-35, `docs/RELEVANCE.md`)
+// =============================================================================
+
+/** The three kinds of the subjects of an incident. */
+export type SubjectKind = "place" | "topic" | "entity";
+
+/**
+ * A system of the ids of subjects. The system `place` holds the watched places of a person. The system
+ * `topic` holds the codes of the taxonomy and their prefixes.
+ */
+export type SubjectSystem =
+  | "place"
+  | "point"
+  | "polygon"
+  | "ugc"
+  | "same"
+  | "fips"
+  | "state"
+  | "iso3166"
+  | "geonames"
+  | "icao"
+  | "topic"
+  | "iptc"
+  | "cap-category"
+  | "cve"
+  | "wikidata"
+  | "asn"
+  | "domain"
+  | "provider-region"
+  | "ticker"
+  | "lei"
+  | "purl";
+
+/**
+ * The kind of the subjects of each system. The list is closed. A new system comes with the first source or
+ * default that gives its ids.
+ */
+export const SUBJECT_SYSTEMS: Readonly<Record<SubjectSystem, SubjectKind>> = {
+  place: "place",
+  point: "place",
+  polygon: "place",
+  ugc: "place",
+  same: "place",
+  fips: "place",
+  state: "place",
+  iso3166: "place",
+  geonames: "place",
+  icao: "place",
+  topic: "topic",
+  iptc: "topic",
+  "cap-category": "topic",
+  cve: "entity",
+  wikidata: "entity",
+  asn: "entity",
+  domain: "entity",
+  "provider-region": "entity",
+  ticker: "entity",
+  lei: "entity",
+  purl: "entity",
+};
+
+/**
+ * The key of a node of an interest graph: `person`, or `<system>:<id>` with a system of `SUBJECT_SYSTEMS`.
+ * Examples are `place:home`, `ugc:KSC173`, `topic:infra.power.outage` and `domain:example.com`. The id is the
+ * text after the first colon, thus an id can hold a colon, as in `purl:pkg:npm/example`.
+ */
+export type NodeKey = string;
+
+/**
+ * The kind of an edge. The first four are the kinds of dependency of Rinaldi, Peerenboom and Kelly (2001). An
+ * edge of the kind `interest` goes into the person.
+ */
+export type EdgeKind = "physical" | "cyber" | "geographic" | "logical" | "interest";
+
+/**
+ * The origin of the weight of an edge. Each origin except `person` is one layer of the defaults.
+ * - `base`: the human base, the same for each person.
+ * - `places`: the watched places of the person.
+ * - `services`: the services that the person names.
+ * - `work`: the tools and the services of a kind of work.
+ * - `data`: public data, for example the service area of a power utility.
+ * - `measured`: a measure of the system, for example the DNS providers of a domain.
+ * - `person`: the person set the value. No default replaces it.
+ */
+export type EdgeOrigin = "base" | "places" | "services" | "work" | "data" | "measured" | "person";
+
+/** One edge of an interest graph: the cause at `from` can impair the node at `to`, with a chance. */
+export interface InterestEdge {
+  /** The id of the edge. The exact sum expands the edges in the order of their ids, thus the order of a file has no effect. */
+  readonly id: string;
+  /** The cause. It is not `person`. */
+  readonly from: NodeKey;
+  /** The node that the cause can impair, or `person`. */
+  readonly to: NodeKey;
+  readonly kind: EdgeKind;
+  /**
+   * The chance that an effect passes along the edge, from 0 to 1. The interval is the doubt of a default. An
+   * unknown edge gets a wide interval, not 0. For a supply with a backup, the weight is the need times the
+   * chance that an outage lasts longer than the backup.
+   */
+  readonly weight: Estimate;
+  readonly origin: EdgeOrigin;
+  /** The data or the measure that gave the weight, for example `eia-861/2025`. */
+  readonly source?: string;
+  /** The day of the source or of the choice of the person, `YYYY-MM-DD`. */
+  readonly date?: string;
+  /** False when the person turned the route off. The edge stays in the graph as a row, and the reach does not use it. */
+  readonly on: boolean;
+}
+
+/**
+ * A mute of a person. An incident matches when its kind has a prefix in `kinds`, and an entry of the incident
+ * is in `subjects`. An absent list matches each incident. A mute has one list or both. A matched incident does
+ * not reach the person on any path, except an incident of the mandatory class (`RelevancePolicy`).
+ */
+export interface Mute {
+  readonly id: string;
+  /** The prefixes of the taxonomy codes, as in `LevelRule`. */
+  readonly kinds?: readonly string[];
+  /** The subjects of the incidents that the mute matches. */
+  readonly subjects?: readonly NodeKey[];
+  /** The mute has effect until this time. With no end, it has effect until the person removes it. */
+  readonly until?: Instant;
+  /** The day that the person set the mute, `YYYY-MM-DD`. */
+  readonly date: string;
+}
+
+/**
+ * The interest graph of one person, the format `alerts-interest/1`. The file is private configuration. The
+ * repository holds the model, the taxonomy and the defaults from public data, and no graph of a real person.
+ */
+export interface InterestGraph {
+  readonly format: "alerts-interest/1";
+  readonly person: PersonId;
+  readonly edges: readonly InterestEdge[];
+  readonly mutes: readonly Mute[];
+  /** The private labels of the nodes, for the text of an alert. The why record holds only the keys. */
+  readonly labels?: Readonly<Record<NodeKey, string>>;
+}
+
+/** A subject of an incident that is a node of the graph of a person. */
+export interface SubjectEntry {
+  readonly node: NodeKey;
+  readonly kind: SubjectKind;
+  /**
+   * The chance that the incident hits the subject when the event is real. It is the share of the area near a
+   * place for a place, and 1 for a topic or a named entity.
+   */
+  readonly hit: Estimate;
+}
+
+/** One path from a subject of an incident to the person. */
+export interface RelevancePath {
+  readonly subject: NodeKey;
+  /** The ids of the edges of the path, in order from the subject. */
+  readonly edges: readonly string[];
+  /** The chance that each part of the path is on: the hit chance times the weight of each edge. */
+  readonly chance: number;
+}
+
+/**
+ * The record of why an incident reaches a person. The delivery puts it in the text of each channel. It holds
+ * keys and no labels, and the runtime gives the private labels.
+ */
+export interface WhyRecord {
+  /** A stable id of the reason, `reach.<subject kind>.<origin>`, for example `reach.place.base`. */
+  readonly rule: string;
+  readonly subject: NodeKey;
+  readonly kind: SubjectKind;
+  /** The first node after the subject, when the path has two nodes or more between the subject and the person. */
+  readonly via?: NodeKey;
+  /** The last node before the person: the place, the service or the topic of the interest. */
+  readonly anchor: NodeKey;
+  /** The origin of the last edge of the path, the interest edge. */
+  readonly origin: EdgeOrigin;
+  /** The reach of the shown paths alone, divided by the full reach, from 0 to 1. */
+  readonly coverage: number;
+}
+
+/** The effect of a mute on an incident: it does not reach the person, or it reaches the person with no sound. */
+export type MuteEffect = "absent" | "silent";
+
+/** The policy of the relevance. */
+export interface RelevancePolicy {
+  /** The most edges of a path. A longer path does not count. */
+  readonly hopCap: number;
+  /** The most paths in a relevance, from the strongest. */
+  readonly topPaths: number;
+  /** The effect of a mute on an incident of the mandatory class. A mute removes each other incident that it matches. */
+  readonly mandatory: MuteEffect;
+  /**
+   * The highest level of an incident that reaches the person only through entries that are not watched places. The
+   * level `life-safety` needs a place of the person. When it is absent, the assessment uses `DEFAULT_ENTRY_MAX`.
+   */
+  readonly entryMax?: AssessedLevel;
+}
+
+/** The relevance of an incident for one person. */
+export interface Relevance {
+  /**
+   * The reach: the chance that at least one path from a subject of the incident to the person is fully on.
+   * The value comes from the point weights. The interval comes from the ends of the intervals of the weights.
+   */
+  readonly reach: Estimate;
+  /** The lower bound at the point weights: the chance of the best path. */
+  readonly best: number;
+  /** The upper bound at the point weights: noisy-OR over the paths. */
+  readonly noisyOr: number;
+  /** The strongest paths, from the strongest. */
+  readonly paths: readonly RelevancePath[];
+  /** The why, from the strongest path. It is absent when no path reaches the person. */
+  readonly why?: WhyRecord;
+  /** The edge with the largest Birnbaum importance: the reach with the edge on, minus the reach with the edge off. */
+  readonly weakest?: { readonly edge: string; readonly importance: number };
+  /** The edge to ask the person about: the largest importance times the width of the weight interval, of the edges with a default weight. */
+  readonly next?: { readonly edge: string; readonly gain: number };
+  /** The mute that matched, and its effect. When the effect is `absent`, the reach is 0 and the relevance has no path. */
+  readonly muted?: { readonly mute: string; readonly effect: MuteEffect };
+  /**
+   * The kind of the result when the budget of steps ended the exact sum. With `bounds`, the reach is noisy-OR, a
+   * ceiling. With `partial`, the path search did not end, and the ceiling is 1. An exact result has no field.
+   */
+  readonly bound?: "bounds" | "partial";
 }

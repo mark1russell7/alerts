@@ -1,17 +1,22 @@
 import { fakeWallClock } from "@mark1russell7/algebra/clock";
 import {
   COPY_ID,
+  WHY_LIMITS,
+  messageKey,
   reportId,
   type ChannelDescriptor,
   type ChannelId,
   type ChannelProcedures,
   type DeliveryStatus,
   type EscalationPolicy,
+  type LinkPolicy,
+  type InterestGraph,
   type Message,
   type Observation,
   type ObservationId,
   type PersonId,
   type PlaceId,
+  type Position,
   type Receipt,
   type Recipient,
   type Report,
@@ -89,7 +94,7 @@ const SOURCE: SourceProcedures = {
     title: "The source api",
     origins: ["nws"],
     dependsOn: ["provider:api"],
-    uses: ["internet", "power"],
+    uses: ["internet", "dns", "power"],
     kinds: ["met"],
     coverage: [{ type: "code", system: "ugc", code: "KSZ083" }],
     transport: "poll",
@@ -122,13 +127,15 @@ interface Script {
   status?: (receipt: Receipt) => DeliveryStatus;
   cancel?: (receipt: Receipt) => void | Promise<void>;
   stop?: (copy: string) => void | Promise<void>;
+  /** The fields that replace the fields of the default descriptor. */
+  describe?: Partial<ChannelDescriptor>;
 }
 
 // A channel of the test. Its default send accepts each message with a new receipt.
 function channel(id: ChannelId, ack: ChannelDescriptor["ack"], now: () => number, script: Script = {}): { readonly procedures: ChannelProcedures; readonly calls: Calls } {
   const calls: Calls = { send: [], copies: [], status: [], cancel: [], stops: [] };
   const procedures: ChannelProcedures = {
-    describe: () => ({ id, title: id, dependsOn: [], uses: ["internet"], breaksThrough: true, repeats: ack === "poll", ack, maxTitle: 250, maxBody: 1024 }),
+    describe: () => ({ id, title: id, dependsOn: [], uses: ["internet", "dns"], breaksThrough: true, repeats: ack === "poll", ack, maxTitle: 250, maxBody: 1024, ...script.describe }),
     send: async ({ message, copy }) => {
       calls.send.push(message);
       calls.copies.push(copy);
@@ -150,6 +157,9 @@ function channel(id: ChannelId, ack: ChannelDescriptor["ack"], now: () => number
   };
   return { procedures, calls };
 }
+
+// Six people with the same place and the same policy.
+const PEOPLE: readonly Recipient[] = [1, 2, 3, 4, 5, 6].map((n) => ({ ...RECIPIENT, watch: { ...RECIPIENT.watch, person: `person-${n}` as PersonId } }));
 
 const DELIVERY = { recipients: [RECIPIENT], pollEvery: 30 * SECOND, retry: 15 * SECOND, callLimit: 10 * SECOND, flightLimit: 40 * SECOND } as const;
 
@@ -178,6 +188,46 @@ function open(scripts: { readonly pushover?: Script; readonly sms?: Script } = {
 const types = (log: RuntimeLog) => [...log.read()].map((event) => event.type).filter((type) => type !== "observation" && type !== "fetch" && type !== "system");
 
 describe("the delivery step of a pass", () => {
+  it("puts the why line into each message of a channel with a why limit, with the label of the runtime and no label in the log", async () => {
+    const labels = (node: string): string | undefined => (node === `place:${KANSAS.id}` ? "Lake cabin" : undefined);
+    const named = open({ pushover: { describe: { why: WHY_LIMITS.push } } }, undefined, undefined, { labels });
+    await named.runtime.pass();
+    expect(named.pushover.send[0]?.why).toBe("Why: Lake cabin is in the area");
+    expect(named.pushover.send[0]?.body).toBe("TAKE COVER NOW!");
+    expect(JSON.stringify([...named.log.read()])).not.toContain("Lake cabin");
+    named.log.close();
+    // With no labels, the line uses a plain noun. A channel with no why limit gets no why line.
+    const plain = open({ pushover: { describe: { why: WHY_LIMITS.text } } });
+    await plain.runtime.pass();
+    expect(plain.pushover.send[0]?.why).toBe("Why: your place is in the area");
+    plain.log.close();
+    const none = open(undefined, undefined, undefined, { labels });
+    await none.runtime.pass();
+    expect(none.pushover.send[0]).not.toHaveProperty("why");
+    none.log.close();
+  });
+
+  it("names a node by the label of the interest graph of the person, and the rule of the life-safety warnings keeps the level", async () => {
+    // The person turned the route of the place off and follows the topic. The rule of the place keeps the warning at life-safety.
+    const interests: InterestGraph = {
+      format: "alerts-interest/1",
+      person: PERSON,
+      edges: [
+        { id: "e1", from: `place:${KANSAS.id}`, to: "person", kind: "geographic", weight: { value: 1, low: 1, high: 1 }, origin: "places", on: false },
+        { id: "e2", from: "topic:met.tornado", to: "person", kind: "interest", weight: { value: 1, low: 1, high: 1 }, origin: "person", on: true },
+      ],
+      mutes: [],
+      labels: { "topic:met.tornado": "Twisters" },
+    };
+    const follower: Recipient = { ...RECIPIENT, watch: { ...RECIPIENT.watch, interests, mandatory: [{ place: KANSAS.id, on: true, rangeKm: 0 }] } };
+    const { runtime, log, pushover } = open({ pushover: { describe: { why: WHY_LIMITS.push } } }, undefined, undefined, { recipients: [follower] });
+    await runtime.pass();
+    expect(pushover.send).toHaveLength(1);
+    expect(pushover.send[0]).toMatchObject({ person: PERSON, level: "life-safety", why: "Why: you follow Twisters" });
+    expect(JSON.stringify([...log.read()])).not.toContain("Twisters");
+    log.close();
+  });
+
   it("starts the escalation of a warning at a watched place, and sends its first step", async () => {
     const { runtime, log, pushover, sms } = open();
     const pass = await runtime.pass();
@@ -205,6 +255,43 @@ describe("the delivery step of a pass", () => {
     await runtime.pass();
     expect(sms.send).toEqual([]);
     expect(pushover.status).toHaveLength(1);
+    log.close();
+  });
+
+  it("ends the escalation of a person that the incident no longer reaches, and starts a new one with new keys when it comes back", async () => {
+    const clock = fakeWallClock(T0);
+    const log = openRuntimeLog(":memory:");
+    const first = open({}, log, clock);
+    await first.runtime.pass();
+    const anchor = first.runtime.state().merge.deliveries[0]!.incident;
+    const key = first.pushover.send[0]!.key;
+    const ends = () => [...log.read()].flatMap((event) => (event.type === "escalation-end" ? [[event.id, event.end]] : []));
+    const starts = () => [...log.read()].flatMap((event) => (event.type === "escalation" ? [event.id] : []));
+
+    // The person no longer watches the place, thus the incident no longer reaches the person.
+    await clock.advance(MINUTE);
+    const gone = open({}, log, clock, { recipients: [{ ...RECIPIENT, watch: { ...RECIPIENT.watch, places: [] } }] });
+    await gone.runtime.pass();
+    expect(gone.pushover.send).toEqual([]);
+    expect(gone.pushover.cancel).toEqual([{ receipt: "pushover-1" }]);
+    expect(ends()).toEqual([[`escalation-end:${anchor}:${PERSON}:0`, { incident: anchor, person: PERSON, at: T0 + MINUTE }]]);
+    expect(types(log)).toEqual(["started", "escalation", "attempt", "delivery", "started", "escalation-end", "cancelled"]);
+    expect(gone.runtime.state().escalationEnds).toEqual([{ incident: anchor, person: PERSON, at: T0 + MINUTE }]);
+    expect(gone.runtime.state()).toEqual(rebuild(log.read(), gone.runtime.config));
+
+    // A later pass cancels nothing again and writes no second end.
+    await clock.advance(MINUTE);
+    await gone.runtime.pass();
+    expect(gone.pushover.cancel).toHaveLength(1);
+    expect(ends()).toHaveLength(1);
+
+    // The person watches the place again: a new escalation with a new start and a new key.
+    await clock.advance(MINUTE);
+    const back = open({}, log, clock);
+    await back.runtime.pass();
+    expect(back.pushover.send.map((message) => message.key)).toEqual([messageKey({ incident: anchor, level: "life-safety", person: PERSON, step: 0, episode: 1 })]);
+    expect(back.pushover.send[0]!.key).not.toBe(key);
+    expect(starts()).toEqual([`escalation:${anchor}:life-safety:${PERSON}`, `escalation:${anchor}:life-safety:${PERSON}:1`]);
     log.close();
   });
 
@@ -702,7 +789,7 @@ describe("the delivery step of a pass", () => {
     log.close();
   });
 
-  it("sends one stop of a channel at each step while its stops fail, and the held stops after a good probe", async () => {
+  it("backs off the stop probe of a down channel, and a good poll of the channel moves the probe to the next step", async () => {
     let down = true;
     const clock = fakeWallClock(T0);
     const woken: number[] = [];
@@ -728,14 +815,22 @@ describe("the delivery step of a pass", () => {
       counts.push(pushover.stops.length - before);
       await clock.advance(15 * SECOND);
     }
-    // With no probe, the stops grow with the copies: 0, 1, 2, 3, 4, 4.
-    expect(counts).toEqual([0, 1, 1, 1, 1, 1]);
+    // With no probe, the stops grow with the copies: 0, 1, 2, 3, 4, 4. With a probe at each step: 0, 1, 1, 1, 1, 1. The
+    // probes go at 15, 30 and 60 seconds. The good send at 60 seconds does not move the probe, because the probe of the same
+    // step failed.
+    expect(counts).toEqual([0, 1, 1, 0, 1, 0]);
     expect(woken).toEqual([]);
     down = false;
+    // The next probe is at 120 seconds. The poll of the receipt at 90 seconds is a good answer, thus the probe goes at the next step.
+    const poll = await runtime.pass();
+    expect(pushover.status).toHaveLength(1);
+    expect(poll.delivery?.stopped).toEqual([]);
+    expect(woken).toEqual([T0 + 90 * SECOND]);
+    expect(poll.wakeAt).toBeLessThanOrEqual(T0 + 105 * SECOND);
+    await clock.advance(SECOND);
     const probe = await runtime.pass();
     expect(probe.delivery?.stopped).toHaveLength(1);
-    expect(woken).toEqual([T0 + 90 * SECOND]);
-    expect(probe.wakeAt).toBeLessThanOrEqual(T0 + 105 * SECOND);
+    expect(woken).toEqual([T0 + 90 * SECOND, T0 + 91 * SECOND]);
     await clock.advance(SECOND);
     const drain = await runtime.pass();
     expect(drain.delivery?.stopped).toHaveLength(3);
@@ -765,6 +860,115 @@ describe("the delivery step of a pass", () => {
       await clock.advance(20 * SECOND);
     }
     expect(stopped.sort()).toEqual([`${RUN}-2`, `${RUN}-3`]);
+    log.close();
+  });
+
+  // The times of the stops of a channel whose sends and stops always fail, in seconds from T0, with a pass each 15 seconds.
+  async function probeTimes(extra: Partial<DeliveryOptions>): Promise<number[]> {
+    const clock = fakeWallClock(T0);
+    const times: number[] = [];
+    const { runtime, log } = open(
+      {
+        pushover: {
+          send: () => ({ ok: false, kind: "network", message: "The connection reset." }),
+          stop: () => {
+            times.push((clock.now() - T0) / SECOND);
+            throw new Error("Pushover is down.");
+          },
+        },
+      },
+      openRuntimeLog(":memory:"),
+      clock,
+      extra,
+    );
+    for (let pass = 0; pass < 16; pass += 1) {
+      await runtime.pass();
+      await clock.advance(15 * SECOND);
+    }
+    log.close();
+    return times;
+  }
+
+  it("doubles the wait before the next stop probe of a down channel after each failed probe, up to the probe limit", async () => {
+    // A probe at each pass gives 15 probes from 15 to 225 seconds.
+    expect(await probeTimes({})).toEqual([15, 30, 60, 120, 180]);
+    expect(await probeTimes({ probeLimit: 30 * SECOND })).toEqual([15, 30, 60, 90, 120, 150, 180, 210]);
+  });
+
+  it("keeps at most maxInFlight calls of a channel in progress, and the end of a call wakes the loop for the held calls", async () => {
+    const clock = fakeWallClock(T0);
+    const woken: number[] = [];
+    let busy = 0;
+    let peak = 0;
+    let free = (): void => undefined;
+    const gate = new Promise<void>((resolve) => {
+      free = resolve;
+    });
+    const { runtime, log, pushover } = open(
+      {
+        pushover: {
+          describe: { maxInFlight: 2 },
+          send: async (_, count): Promise<SendOutcome> => {
+            busy += 1;
+            peak = Math.max(peak, busy);
+            await gate;
+            busy -= 1;
+            return { ok: true, receipt: { receipt: `pushover-${count}` }, accepted: clock.now() };
+          },
+        },
+      },
+      openRuntimeLog(":memory:"),
+      clock,
+      { recipients: PEOPLE },
+      () => woken.push(clock.now()),
+    );
+    // Six people get a send. Two sends start, and the other four wait for a free place.
+    const running = runtime.pass();
+    await settle();
+    expect(pushover.send).toHaveLength(2);
+    expect(woken).toEqual([]);
+    // The end of the two sends frees their places and wakes the loop one time.
+    free();
+    expect((await running).delivery?.sent).toHaveLength(2);
+    expect(woken).toEqual([T0]);
+    await clock.advance(SECOND);
+    expect((await runtime.pass()).delivery?.sent).toHaveLength(2);
+    expect(woken).toEqual([T0, T0 + SECOND]);
+    // No call waits for a place after the last two sends, thus no wake comes.
+    await clock.advance(SECOND);
+    expect((await runtime.pass()).delivery?.sent).toHaveLength(2);
+    expect(woken).toEqual([T0, T0 + SECOND]);
+    expect(new Set(pushover.send.map((message) => message.person))).toEqual(new Set(PEOPLE.map((person) => person.watch.person)));
+    expect(peak).toBe(2);
+    log.close();
+  });
+
+  it("frees the place of a call that hangs when its flight limit passes", async () => {
+    const clock = fakeWallClock(T0);
+    const { runtime, log, pushover } = open(
+      {
+        pushover: {
+          describe: { maxInFlight: 1 },
+          // The first send hangs for all time.
+          send: (_, count) => (count === 1 ? new Promise<SendOutcome>(() => undefined) : undefined),
+        },
+      },
+      openRuntimeLog(":memory:"),
+      clock,
+      { recipients: PEOPLE.slice(0, 2) },
+    );
+    const running = runtime.pass();
+    await clock.advance(10 * SECOND);
+    expect((await running).wakeAt).toBeLessThanOrEqual(T0 + 40 * SECOND);
+    expect(pushover.send).toHaveLength(1);
+    // The hung send keeps its place until its flight limit at 40 seconds.
+    await clock.advance(20 * SECOND);
+    await runtime.pass();
+    expect(pushover.send).toHaveLength(1);
+    // At the flight limit, the place is free again. One call gets it, and the other calls wait.
+    await clock.advance(10 * SECOND);
+    await runtime.pass();
+    expect(pushover.send).toHaveLength(2);
     log.close();
   });
 
@@ -811,6 +1015,28 @@ describe("the delivery step of a pass", () => {
     const reserved: Script = { send: () => ({ ok: false, kind: "reserved", message: "The quota keeps its last units for life-safety.", retryAfter: 600 * SECOND }) };
     const { clock, runtime, log } = open({ pushover: reserved }, openRuntimeLog(":memory:"), fakeWallClock(T0), { overdueAfter: 60 * SECOND });
     await runtime.pass();
+    await clock.advance(120 * SECOND);
+    expect((await runtime.pass()).delivery?.overdue).toEqual([]);
+    log.close();
+  });
+
+  it("does not give a quiet call at night or an expired message as overdue", async () => {
+    for (const kind of ["quiet", "expired"] as const) {
+      const night: Script = { send: () => ({ ok: false, kind, message: "A call has no silent mode, thus a quiet message gets no call." }) };
+      const { clock, runtime, log } = open({ pushover: night }, openRuntimeLog(":memory:"), fakeWallClock(T0), { overdueAfter: 60 * SECOND });
+      const first = await runtime.pass();
+      expect(first.delivery?.failures.map((failure) => failure.kind)).toEqual([kind]);
+      await clock.advance(120 * SECOND);
+      expect((await runtime.pass()).delivery?.overdue).toEqual([]);
+      log.close();
+    }
+  });
+
+  it("does not give a send that the person refused with a STOP reply as overdue", async () => {
+    const stopped: Script = { send: () => ({ ok: false, kind: "consent", message: "The number replied STOP." }) };
+    const { clock, runtime, log } = open({ pushover: stopped }, openRuntimeLog(":memory:"), fakeWallClock(T0), { overdueAfter: 60 * SECOND });
+    const first = await runtime.pass();
+    expect(first.delivery?.failures.map((failure) => failure.kind)).toEqual(["consent"]);
     await clock.advance(120 * SECOND);
     expect((await runtime.pass()).delivery?.overdue).toEqual([]);
     log.close();
@@ -867,9 +1093,81 @@ describe("the delivery step of a pass", () => {
     expect(() => open({}, openRuntimeLog(":memory:"), fakeWallClock(T0), { flightLimit: 5 * SECOND })).toThrow("The flight limit (5000 ms) is shorter than the call limit (10000 ms).");
   });
 
+  it("refuses a probe limit that is shorter than the retry", () => {
+    expect(() => open({}, openRuntimeLog(":memory:"), fakeWallClock(T0), { probeLimit: 5 * SECOND })).toThrow("The probe limit (5000 ms) is shorter than the retry (15000 ms).");
+  });
+
+  it("refuses a channel whose maxInFlight is not an integer of 1 or more", () => {
+    expect(() => open({ pushover: { describe: { maxInFlight: 0 } } })).toThrow("The channel pushover has maxInFlight 0. It must be an integer of 1 or more.");
+  });
+
   it("refuses two channels with the same id", () => {
     const clock = fakeWallClock(T0);
     const twice = channel(PUSHOVER, "poll", () => clock.now()).procedures;
     expect(() => open({}, openRuntimeLog(":memory:"), clock, { channels: [twice, twice] })).toThrow("Two channels have the id pushover.");
+  });
+});
+
+// A source that reports one earthquake. The code area puts it at the watched place, and the circle is its epicenter.
+function quakeSource(id: SourceId, onset: number, center: Position, magnitude: string): SourceProcedures {
+  return {
+    describe: () => ({ ...SOURCE.describe(), id, title: `The source ${id}`, origins: [id], dependsOn: [`provider:${id}`], kinds: ["geo"] }),
+    fetch: async () => ({
+      ok: true,
+      observations: [{ id: `${id}:q1` as ObservationId, source: id, fetched: T0, contentType: "application/json", body: "{}", transport: { latency: 0 } }],
+      complete: true,
+    }),
+    map: ({ observation }) => ({
+      reports: [
+        {
+          ...warning(observation),
+          id: reportId({ source: id, key: "q1", sent: onset }),
+          source: id,
+          origin: id,
+          key: "q1",
+          kind: { code: "geo.earthquake", label: "Earthquake" },
+          categories: ["geo"],
+          sent: onset,
+          onset,
+          areas: [{ type: "code", system: "ugc", code: "KSZ083" }, { type: "circle", center, radiusKm: 30 }],
+          headline: `Earthquake, from ${id}`,
+          parameters: { magnitude: [magnitude] },
+        },
+      ],
+      problems: [],
+    }),
+  };
+}
+
+describe("the link rule of the merge in the delivery", () => {
+  // Two sources report one earthquake with their own ids: 6 s, 20 km and 0.2 of magnitude apart.
+  function quakes(link?: LinkPolicy) {
+    const clock = fakeWallClock(T0);
+    const log = openRuntimeLog(":memory:");
+    const pushover = channel(PUSHOVER, "poll", () => clock.now());
+    const sms = channel(SMS, "none", () => clock.now());
+    const runtime = openRuntime({
+      log,
+      clock,
+      sources: [quakeSource("usgs" as SourceId, T0, [-97.4, 37.7], "4.5"), quakeSource("emsc" as SourceId, T0 + 6 * SECOND, [-97.3, 37.85], "4.3")],
+      watch: () => ({ places: [KANSAS], kinds: ["geo"] }),
+      view: { ...VIEW, kinds: ["geo"], ...(link === undefined ? {} : { link }) },
+      run: RUN,
+      delivery: { ...DELIVERY, channels: [pushover.procedures, sms.procedures] },
+    });
+    return { runtime, log, pushover: pushover.calls };
+  }
+
+  it("sends one alert for one earthquake of two sources, and an alert for each report with no family in the policy", async () => {
+    const linked = quakes();
+    const pass = await linked.runtime.pass();
+    expect(pass.view.incidents.map((incident) => incident.reports.length)).toEqual([2]);
+    expect(linked.pushover.send).toHaveLength(1);
+    linked.log.close();
+    const apart = quakes({ families: [] });
+    const second = await apart.runtime.pass();
+    expect(second.view.incidents.map((incident) => incident.reports.length)).toEqual([1, 1]);
+    expect(apart.pushover.send).toHaveLength(2);
+    apart.log.close();
   });
 });

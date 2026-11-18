@@ -5,6 +5,7 @@
  */
 import { distanceKm, distanceToGeometryKm, GeoError } from "@mark1russell7/geo";
 import { canonicalJson } from "@mark1russell7/rigor-generators";
+import { compareCodeUnits } from "@mark1russell7/text/order";
 import type { Area, Position } from "./contracts.ts";
 import type { MapRegion, MapShape } from "./map.ts";
 
@@ -25,6 +26,25 @@ export function areasWithoutBlocks(areas: readonly Area[]): Area[] {
     if (!byText.has(text)) byText.set(text, plain);
   }
   return [...byText.values()];
+}
+
+/**
+ * This function gives each shape one time, in the order of the first. Two shapes are equal by reference or by value, with no
+ * block key. A zone and a county of one message can give the same outline from the store. The map draws it one time.
+ */
+export function distinctShapes(shapes: readonly MapShape[]): MapShape[] {
+  const seen = new Set<MapShape>();
+  const texts = new Set<string>();
+  const out: MapShape[] = [];
+  for (const shape of shapes) {
+    if (seen.has(shape)) continue;
+    seen.add(shape);
+    const text = canonicalJson(withoutBlock(shape), { form: "json" });
+    if (texts.has(text)) continue;
+    texts.add(text);
+    out.push(shape);
+  }
+  return out;
 }
 
 function withoutBlock(area: Area): Area {
@@ -85,8 +105,5 @@ export function regionsNear(regions: readonly MapRegion[], at: Position, bufferK
     const distanceKm = regionDistanceKm(region, at);
     if (distanceKm !== undefined && distanceKm <= bufferKm) near.push({ region, distanceKm });
   }
-  return near.sort((a, b) => a.distanceKm - b.distanceKm || order(a.region.code.system, b.region.code.system) || order(a.region.code.code, b.region.code.code));
+  return near.sort((a, b) => a.distanceKm - b.distanceKm || compareCodeUnits(a.region.code.system, b.region.code.system) || compareCodeUnits(a.region.code.code, b.region.code.code));
 }
-
-// The order of two texts by their code units, thus the order does not change with the locale.
-const order = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);

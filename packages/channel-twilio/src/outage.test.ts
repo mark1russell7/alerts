@@ -1,0 +1,370 @@
+import type { ChannelId, PersonId } from "@mark1russell7/alerts";
+import { describe, expect, it } from "vitest";
+import { CHANNEL_ID } from "./index.ts";
+import {
+  callEnd,
+  monthStartOf,
+  cursorQuery,
+  MAX_PRESS_ROUNDS,
+  OUTAGE_TEXT_LIMIT,
+  OUTAGE_TEXTS,
+  outageEnded,
+  outageListProblems,
+  outageListSchema,
+  outageSends,
+  outagePress,
+  outageStart,
+  parseCursor,
+  type CallScript,
+  type OutageAction,
+  type OutageList,
+} from "./outage.ts";
+
+// Fake numbers only: 555-0100 to 555-0199 are numbers of fiction.
+const BASE = "https://outage-0000.twil.io";
+const MINUTE = 60_000;
+const p1 = "person-1" as PersonId;
+const p2 = "person-2" as PersonId;
+const steps = (count: number): ChannelId[] => Array.from({ length: count }, () => CHANNEL_ID);
+const LIST: OutageList = {
+  version: "v1",
+  message: "The alert system is down.",
+  people: [
+    { person: p1, to: "+15555550123", chain: { steps: steps(3) } },
+    { person: p2, to: "+15555550124", chain: { steps: steps(2) } },
+  ],
+  repeats: 3,
+  ringSeconds: 45,
+  maxCalls: 10,
+  capWindow: 60 * MINUTE,
+  month: { maxCalls: 250, timeZone: "America/Chicago" },
+};
+const AT = 1_000 * MINUTE;
+
+const paramsOf = (url: string): Record<string, string> => Object.fromEntries(new URL(url).searchParams);
+const calls = (actions: readonly OutageAction[]): Extract<OutageAction, { kind: "call" }>[] => actions.flatMap((action) => (action.kind === "call" ? [action] : []));
+const actionOf = (script: CallScript | undefined): string => {
+  if (script?.kind !== "gather") throw new Error("The script is not a gather.");
+  return script.action;
+};
+
+describe("outageStart", () => {
+  it("makes the first call of each person, with the cursor of the try in each callback", () => {
+    const step = outageStart(LIST, BASE, AT, []);
+    expect(step.notes).toEqual([]);
+    expect(step.actions.map((action) => action.person)).toEqual([p1, p2]);
+    const [first] = calls(step.actions);
+    expect(first).toMatchObject({ to: "+15555550123", ringSeconds: 45 });
+    expect(new URL(first!.statusCallback).pathname).toBe("/ended");
+    expect(paramsOf(first!.statusCallback)).toEqual({ outage: String(AT), person: "0", step: "0", round: "0", list: "v1" });
+    expect(first!.script).toEqual({ kind: "gather", text: `The alert system is down. ${OUTAGE_TEXTS.prompt}`, action: expect.stringContaining(`${BASE}/press?`), repeats: 3, after: OUTAGE_TEXTS.noPress });
+    expect(paramsOf(actionOf(first!.script))).toEqual({ outage: String(AT), person: "0", step: "0", round: "0", list: "v1" });
+  });
+
+  it("counts the calls of the cap window, and stops each try above the cap", () => {
+    const recent = [AT - 61 * MINUTE, AT - 30 * MINUTE, ...Array.from({ length: 8 }, (_, i) => AT - i * MINUTE)];
+    const step = outageStart(LIST, BASE, AT, recent);
+    expect(step.actions.map((action) => action.person)).toEqual([p1]);
+    expect(step.notes).toEqual([{ kind: "capped", person: p2, cap: "window" }]);
+  });
+
+  it("gives the voice and the texts of the list to the script", () => {
+    const list = { ...LIST, voice: "Polly.Joanna", language: "en-US", texts: { prompt: "Press 1." } };
+    expect(calls(outageStart(list, BASE, AT, []).actions)[0]!.script).toMatchObject({ text: "The alert system is down. Press 1.", voice: "Polly.Joanna", language: "en-US", after: OUTAGE_TEXTS.noPress });
+  });
+});
+
+describe("outagePress", () => {
+  const press = (Digits: string | undefined, round = 0, list = LIST) => {
+    const params = { ...Object.fromEntries(cursorQuery({ outage: AT, person: 0, step: 1, round }, "v1")), ...(Digits === undefined ? {} : { Digits }) };
+    return outagePress(list, BASE, params);
+  };
+
+  it("confirms a 1: it moves the status callback of the live call to the URL with acked=1", () => {
+    const step = press("1");
+    expect(step.script).toEqual({ kind: "say", text: OUTAGE_TEXTS.confirmed });
+    expect(step.actions).toEqual([{ kind: "ack", person: p1, statusCallback: expect.stringContaining(`${BASE}/ended?`) }]);
+    const [ack] = step.actions;
+    if (ack?.kind !== "ack") throw new Error("The action is not an ack.");
+    expect(paramsOf(ack.statusCallback)).toEqual({ outage: String(AT), person: "0", step: "1", round: "0", list: "v1", acked: "1" });
+  });
+
+  it("asks again after another key, and ends after the last round", () => {
+    const again = press("2");
+    expect(again.actions).toEqual([]);
+    expect(paramsOf(actionOf(again.script))).toMatchObject({ step: "1", round: "1" });
+    expect(press("#", MAX_PRESS_ROUNDS - 1).script).toEqual({ kind: "say", text: OUTAGE_TEXTS.noPress });
+    expect(press(undefined, MAX_PRESS_ROUNDS - 1).actions).toEqual([]);
+  });
+
+  it("starts no action for a press with no valid cursor", () => {
+    expect(press("1", 0, { ...LIST, version: "v2" })).toEqual({ actions: [], script: { kind: "say", text: OUTAGE_TEXTS.confirmed }, notes: [{ kind: "stale" }] });
+    expect(press("2", 0, { ...LIST, version: "v2" }).script).toEqual({ kind: "say", text: LIST.message });
+    expect(outagePress(LIST, BASE, { ...Object.fromEntries(cursorQuery({ outage: AT, person: 5, step: 0, round: 0 }, "v1")), Digits: "1" }).actions).toEqual([]);
+  });
+});
+
+describe("outageEnded", () => {
+  const ended = (step: number, CallStatus: string, acked = false, recent: number[] = [], person = 0) =>
+    outageEnded(LIST, BASE, { ...Object.fromEntries(cursorQuery({ outage: AT, person, step, round: 2 }, "v1", acked)), CallStatus }, AT + MINUTE, recent);
+
+  it("makes the next call of the chain after a call with no confirmation", () => {
+    for (const status of ["completed", "busy", "no-answer", "failed", "canceled"]) {
+      const step = ended(0, status);
+      expect(step.notes, status).toEqual([]);
+      const [next] = calls(step.actions);
+      expect(paramsOf(next!.statusCallback), status).toEqual({ outage: String(AT), person: "0", step: "1", round: "0", list: "v1" });
+    }
+  });
+
+  it("stops at a confirmation and at the last step", () => {
+    expect(ended(1, "completed", true)).toEqual({ actions: [], notes: [{ kind: "acked", person: p1, step: 1 }] });
+    expect(ended(2, "no-answer")).toEqual({ actions: [], notes: [{ kind: "exhausted", person: p1 }] });
+    expect(ended(1, "busy", false, [], 1)).toEqual({ actions: [], notes: [{ kind: "exhausted", person: p2 }] });
+  });
+
+  it("starts no call for a status that is not an end, a stale cursor, a step out of the chain and a full cap", () => {
+    expect(ended(0, "in-progress")).toEqual({ actions: [], notes: [{ kind: "open", status: "in-progress" }] });
+    expect(outageEnded({ ...LIST, version: "v2" }, BASE, { ...Object.fromEntries(cursorQuery({ outage: AT, person: 0, step: 0, round: 0 }, "v1")), CallStatus: "busy" }, AT, [])).toEqual({ actions: [], notes: [{ kind: "stale" }] });
+    expect(ended(7, "busy")).toEqual({ actions: [], notes: [{ kind: "exhausted", person: p1 }] });
+    expect(ended(0, "busy", false, Array.from({ length: 10 }, () => AT))).toEqual({ actions: [], notes: [{ kind: "capped", person: p1, cap: "window" }] });
+  });
+});
+
+describe("the text after a chain", () => {
+  const TEXT = "The alert system is down. The calls got no confirmation.";
+  const WITH_TEXT: OutageList = { ...LIST, textMessage: TEXT, people: LIST.people.map((person) => ({ ...person, text: true })) };
+  const ended = (list: OutageList, step: number, CallStatus: string, recent: number[] = [], acked = false) =>
+    outageEnded(list, BASE, { ...Object.fromEntries(cursorQuery({ outage: AT, person: 0, step, round: 0 }, "v1", acked)), CallStatus }, AT + MINUTE, recent);
+
+  it("gives one text to the person at the end of a chain with no confirmation", () => {
+    expect(ended(WITH_TEXT, 2, "no-answer")).toEqual({
+      actions: [{ kind: "text", person: p1, to: "+15555550123", body: TEXT }],
+      notes: [{ kind: "exhausted", person: p1 }],
+    });
+  });
+
+  it("gives no text after a confirmation, before the last step, or with no text in the list", () => {
+    expect(ended(WITH_TEXT, 1, "completed", [], true).actions).toEqual([]);
+    expect(calls(ended(WITH_TEXT, 0, "busy").actions)).toHaveLength(1);
+    expect(ended(WITH_TEXT, 0, "busy").actions.filter((action) => action.kind === "text")).toEqual([]);
+    expect(ended(LIST, 2, "no-answer").actions).toEqual([]);
+  });
+
+  it("gives no text to a person with no opt-in", () => {
+    const optedOut: OutageList = { ...WITH_TEXT, people: LIST.people };
+    expect(ended(optedOut, 2, "no-answer")).toEqual({ actions: [], notes: [{ kind: "exhausted", person: p1 }] });
+    expect(outageListSchema.safeParse(WITH_TEXT).success).toBe(true);
+  });
+
+  it("counts a text as one call in each cap", () => {
+    const full = Array.from({ length: WITH_TEXT.maxCalls }, () => AT);
+    expect(ended(WITH_TEXT, 2, "busy", full)).toEqual({ actions: [], notes: [{ kind: "exhausted", person: p1 }, { kind: "text-capped", person: p1, cap: "window" }] });
+    const month = { ...WITH_TEXT, maxCalls: 1000, month: { maxCalls: 9, timeZone: "UTC" } };
+    expect(ended(month, 2, "busy", Array.from({ length: 9 }, () => AT - 2 * 60 * MINUTE)).notes).toContainEqual({ kind: "text-capped", person: p1, cap: "month" });
+  });
+
+  it("counts the texts in the sends of one outage", () => {
+    const callsOf = LIST.people.reduce((sum, person) => sum + person.chain.steps.length, 0);
+    expect(outageSends(LIST)).toBe(callsOf);
+    expect(outageSends(WITH_TEXT)).toBe(callsOf + LIST.people.length);
+    // Only a person with the opt-in counts a text.
+    expect(outageSends({ ...WITH_TEXT, people: [WITH_TEXT.people[0]!, LIST.people[1]!] })).toBe(callsOf + 1);
+  });
+
+  it("finds the problems of a text message: empty, too long, a control character, and a cap below the sends of one outage", () => {
+    expect(outageListProblems(WITH_TEXT)).toEqual([]);
+    expect(outageListProblems({ ...WITH_TEXT, textMessage: " " })).toContain("The SMS message is empty.");
+    expect(outageListProblems({ ...WITH_TEXT, textMessage: "x".repeat(OUTAGE_TEXT_LIMIT) })).toEqual([]);
+    expect(outageListProblems({ ...WITH_TEXT, textMessage: "é".repeat(OUTAGE_TEXT_LIMIT + 1) })).toContain(
+      `The SMS message has more than ${OUTAGE_TEXT_LIMIT} code points, so one text can cost more than one call.`,
+    );
+    expect(outageListProblems({ ...WITH_TEXT, textMessage: "down\u0007" })).toContain("The SMS message has a control character.");
+    const sends = outageSends(WITH_TEXT);
+    expect(outageListProblems({ ...WITH_TEXT, maxCalls: sends - 1 })).toContain(
+      `The cap of ${sends - 1} calls is below the ${sends} calls and texts of one outage, so the cap stops tries of one outage.`,
+    );
+  });
+});
+
+describe("callEnd", () => {
+  it("maps each final status of a call to the end of a try", () => {
+    expect(["completed", "busy", "no-answer", "failed", "canceled", "queued", "ringing", "in-progress", ""].map((status) => callEnd(status, false))).toEqual([
+      "unconfirmed",
+      "unconfirmed",
+      "unconfirmed",
+      "failed",
+      "failed",
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+    ]);
+    expect(callEnd("completed", true)).toBe("acked");
+    expect(callEnd("no-answer", true)).toBe("unconfirmed");
+  });
+});
+
+describe("the cursor", () => {
+  it("reads back each cursor that it writes", () => {
+    for (const cursor of [{ outage: 0, person: 0, step: 0, round: 0 }, { outage: Number.MAX_SAFE_INTEGER, person: 12, step: 3, round: 2 }]) {
+      expect(parseCursor(Object.fromEntries(cursorQuery(cursor, "v1")), "v1")).toEqual(cursor);
+    }
+  });
+
+  it("refuses a field that is not a whole number in decimal, and another version", () => {
+    const good = Object.fromEntries(cursorQuery({ outage: AT, person: 0, step: 1, round: 0 }, "v1"));
+    for (const step of ["01", "-1", "1.5", "1e3", " 1", "", "99999999999999999", "0x1"]) expect(parseCursor({ ...good, step }, "v1"), step).toBeUndefined();
+    expect(parseCursor({ ...good, step: 2 }, "v1")).toBeUndefined();
+    expect(parseCursor({ ...good, list: "v0" }, "v1")).toBeUndefined();
+    expect(parseCursor(Object.fromEntries(Object.entries(good).filter(([key]) => key !== "round")), "v1")).toBeUndefined();
+  });
+});
+
+// The outcome of one call in the gate: a key press of 1, or the final status of a call with no press.
+type Outcome = "press" | "completed" | "busy" | "no-answer" | "failed";
+const OUTCOMES: readonly Outcome[] = ["press", "completed", "busy", "no-answer", "failed"];
+
+function sequences(length: number): Outcome[][] {
+  if (length === 0) return [[]];
+  return sequences(length - 1).flatMap((rest) => OUTCOMES.map((outcome) => [outcome, ...rest]));
+}
+
+// One outage through the handlers, as the Function applies them. Each call takes the next outcome of its person.
+// The calls list of Twilio holds each call from its creation, so each new call counts against the cap at once.
+function simulate(list: OutageList, outcomes: ReadonlyMap<PersonId, readonly Outcome[]>): Map<PersonId, number> {
+  const made = new Map<PersonId, number>();
+  const placed: number[] = [];
+  const queue: Extract<OutageAction, { kind: "call" }>[] = [];
+  let at = AT;
+  const enqueue = (actions: readonly OutageAction[]): void => {
+    for (const call of calls(actions)) {
+      placed.push(at);
+      queue.push(call);
+    }
+  };
+  enqueue(outageStart(list, BASE, at, placed).actions);
+  while (queue.length > 0) {
+    const call = queue.shift()!;
+    const index = made.get(call.person) ?? 0;
+    made.set(call.person, index + 1);
+    at += MINUTE;
+    const outcome = outcomes.get(call.person)?.[index] ?? "no-answer";
+    let callback = call.statusCallback;
+    if (outcome === "press") {
+      const pressed = outagePress(list, BASE, { ...paramsOf(actionOf(call.script)), Digits: "1" });
+      callback = pressed.actions.find((action) => action.kind === "ack")!.statusCallback;
+    }
+    const status = outcome === "press" ? "completed" : outcome;
+    enqueue(outageEnded(list, BASE, { ...paramsOf(callback), CallStatus: status }, at, placed).actions);
+  }
+  return made;
+}
+
+describe("the gate: the calls of a person stop at the first key press, and each step makes one call", () => {
+  it("holds for each sequence of outcomes of a chain of 1 to 4 calls", () => {
+    for (const length of [1, 2, 3, 4]) {
+      const list = { ...LIST, people: [{ person: p1, to: "+15555550123", chain: { steps: steps(length) } }], maxCalls: 100 };
+      for (const sequence of sequences(length)) {
+        const pressed = sequence.indexOf("press");
+        expect(simulate(list, new Map([[p1, sequence]])).get(p1), sequence.join(" ")).toBe(pressed === -1 ? length : pressed + 1);
+      }
+    }
+  });
+
+  it("holds for two people, and the cap bounds the calls of the outage", () => {
+    for (const first of sequences(3)) {
+      const made = simulate(LIST, new Map([[p1, first], [p2, ["no-answer", "press"]]]));
+      const pressed = first.indexOf("press");
+      expect(made.get(p1)).toBe(pressed === -1 ? 3 : pressed + 1);
+      expect(made.get(p2)).toBe(2);
+    }
+    const capped = simulate({ ...LIST, maxCalls: 3 }, new Map());
+    expect((capped.get(p1) ?? 0) + (capped.get(p2) ?? 0)).toBe(3);
+  });
+});
+
+describe("outageListProblems", () => {
+  it("finds no problem in a valid list", () => {
+    expect(outageListProblems(LIST)).toEqual([]);
+  });
+
+  it("finds each problem of a list, and names no phone number", () => {
+    const bad: OutageList = {
+      version: " ",
+      message: "Down\u0007",
+      people: [
+        { person: p1, to: "+1555555012", chain: { steps: [CHANNEL_ID, "pushover" as ChannelId] } },
+        { person: p1, to: "+15555550124", chain: { steps: [] } },
+      ],
+      repeats: 0,
+      ringSeconds: 4,
+      maxCalls: 1,
+      capWindow: 0,
+      month: { maxCalls: 0, timeZone: "Mars/Olympus" },
+      texts: { confirmed: "" },
+    };
+    const problems = outageListProblems(bad);
+    expect(problems).toEqual([
+      "The list has no version.",
+      "The text message has a control character, and TwiML cannot hold it.",
+      "The text confirmed is empty.",
+      "The person person-1: The field to of the address on twilio-call is not a phone number in E.164 form: a plus sign, the country code and the number.",
+      "Step 1 of the person person-1 uses the channel pushover. The outage call makes only calls on twilio-call.",
+      "The list has the person person-1 two times.",
+      "The chain of the person person-1 has no step, so no call reaches the person.",
+      "The repeats are not a whole number from 1 to 5.",
+      "The ring seconds are not a whole number from 5 to 600.",
+      "The time of the cap is not more than 0.",
+      "The cap of 1 calls is below the 2 calls of one outage, so the cap stops tries of one outage.",
+      "The monthly cap of calls is not a whole number from 1 to 1000.",
+      "The time zone of the monthly cap is not an IANA time zone.",
+    ]);
+    // A monthly cap below the calls of one outage stops tries of one outage. Its problem names no count.
+    expect(outageListProblems({ ...LIST, month: { maxCalls: 4, timeZone: "UTC" } })).toEqual(["The monthly cap of calls is below the calls of one outage, so the cap stops tries of one outage."]);
+    expect(problems.join(" ")).not.toMatch(/555/);
+  });
+
+  it("finds a message that is too long and a list with no person", () => {
+    expect(outageListProblems({ ...LIST, message: "x".repeat(600) })).toEqual(["The message and the prompt have more than 600 characters."]);
+    expect(outageListProblems({ ...LIST, people: [], maxCalls: 1 })).toEqual(["The list has no person, so no outage call reaches a person."]);
+  });
+});
+
+describe("the monthly cap", () => {
+  const DAY = 24 * 60 * MINUTE;
+  // Midnight of 1 April 2026 in Chicago is 05:00 UTC, in daylight time.
+  const APRIL = Date.UTC(2026, 3, 1, 5);
+
+  it("gives the start of the calendar month in the time zone of the cap", () => {
+    expect(monthStartOf(Date.UTC(2026, 3, 15, 12), "America/Chicago")).toBe(APRIL);
+    expect(monthStartOf(APRIL, "America/Chicago")).toBe(APRIL);
+    // One millisecond before, Chicago is in March, in standard time.
+    expect(monthStartOf(APRIL - 1, "America/Chicago")).toBe(Date.UTC(2026, 2, 1, 6));
+    // The clock goes back at 02:00 on 1 November 2026. Midnight is before the change, thus in daylight time.
+    expect(monthStartOf(Date.UTC(2026, 10, 20), "America/Chicago")).toBe(Date.UTC(2026, 10, 1, 5));
+    expect(monthStartOf(Date.UTC(2026, 3, 15), "UTC")).toBe(Date.UTC(2026, 3, 1));
+    // A name that is not a time zone gives 31 days, thus the cap counts more calls, not fewer.
+    expect(monthStartOf(APRIL, "Mars/Olympus")).toBe(APRIL - 31 * DAY);
+  });
+
+  it("counts each call of the number from the start of the month, and stops each try at the cap", () => {
+    const list: OutageList = { ...LIST, month: { maxCalls: 6, timeZone: "America/Chicago" } };
+    const at = APRIL + 10 * DAY;
+    // Five calls in April and twenty in March. Only the calls of April count, thus one call starts.
+    const recent = [...Array.from({ length: 5 }, (_, i) => APRIL + i * DAY), ...Array.from({ length: 20 }, (_, i) => APRIL - (i + 1) * MINUTE)];
+    const step = outageStart(list, BASE, at, recent);
+    expect(step.actions.map((action) => action.person)).toEqual([p1]);
+    expect(step.notes).toEqual([{ kind: "capped", person: p2, cap: "month" }]);
+    // On 1 May, the calls of April do not count.
+    expect(outageStart(list, BASE, Date.UTC(2026, 4, 1, 5), recent).actions.map((action) => action.person)).toEqual([p1, p2]);
+  });
+
+  it("stops the next step of a chain at the monthly cap, and names the cap of the window first", () => {
+    const params = { ...Object.fromEntries(cursorQuery({ outage: AT, person: 0, step: 0, round: 0 }, "v1")), CallStatus: "busy" };
+    const three = [AT - 1, AT - 2, AT - 3];
+    expect(outageEnded({ ...LIST, month: { maxCalls: 3, timeZone: "UTC" } }, BASE, params, AT, three)).toEqual({ actions: [], notes: [{ kind: "capped", person: p1, cap: "month" }] });
+    expect(outageEnded({ ...LIST, maxCalls: 3, month: { maxCalls: 3, timeZone: "UTC" } }, BASE, params, AT, three).notes).toEqual([{ kind: "capped", person: p1, cap: "window" }]);
+    expect(calls(outageEnded({ ...LIST, month: { maxCalls: 4, timeZone: "UTC" } }, BASE, params, AT, three).actions)).toHaveLength(1);
+  });
+});

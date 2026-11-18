@@ -11,9 +11,41 @@ import { FRAMINGS } from "@mark1russell7/rigor-testkit/http";
 import { CHANNEL_ARMS, CHANNEL_GATES, recoverLimit, runChannelDown } from "../src/channel-down.ts";
 import { runCutInBody } from "../src/cut-in-body.ts";
 import { changesOf, runChangedFormat } from "../src/changed-format.ts";
+import { KILL_ARMS, KILL_GATES, runKillRestart } from "../src/kill-restart.ts";
 import { ACCEPT_ARMS, ACCEPT_GATES, runLateAccept } from "../src/late-accept.ts";
 import { runSlowSource, SLOW_ARMS, trickleMs } from "../src/slow-source.ts";
+import { NWWS_ARMS, NWWS_GATES, runNwwsStream } from "../src/nwws-stream.ts";
 import { DOWN_ARMS, runSourceDown } from "../src/source-down.ts";
+import { COPIES_ARMS, COPIES_GATES, runTwoCopies, type SentRecord } from "../src/two-copies.ts";
+import {
+  COPY_ARMS,
+  COPY_GATES,
+  COPY_ROUTES,
+  type CopyArm,
+  copyFaultsOf,
+  type CopyGate,
+  extFetchOf,
+  KNOWN_FAULTS,
+  knownFaultOf,
+  LAG,
+  outageWindowOf,
+  PER_FETCH,
+  runCopyLate,
+  WINDOW,
+} from "../src/copy-late.ts";
+import {
+  expectationOf,
+  type GateKey,
+  ORDER_ARMS,
+  ORDER_GATES,
+  ORDER_KNOWN_FAULTS,
+  ORDER_PLACES,
+  type OrderArm,
+  orderKnownFaultOf,
+  runOutOfOrder,
+  sendLabel,
+  STEP_GAP,
+} from "../src/out-of-order.ts";
 import { OLD_LISTS, R2_FROM, R3_UNTIL, runStaleList, STALE_ARMS, STALE_GATES } from "../src/stale-list.ts";
 
 const at = process.argv.indexOf("--out");
@@ -191,4 +223,166 @@ report(channel.id, channel.verdict, [
   }),
   "",
   `Read: ${yes(channel.verdict.read)}. Pass: **${yes(channel.verdict.pass)}**.`,
+]);
+
+const copy = await runCopyLate();
+write("case-8.json", copy);
+// A gate of a known fault shows "no (known)" when it fails, and "YES (fixed)" when it passes.
+const copyGate = (arm: CopyArm, gate: CopyGate, value: boolean | undefined): string => {
+  if (value === undefined) return "-";
+  if (knownFaultOf(arm, gate) === undefined) return yes(value);
+  return value ? "YES (fixed)" : "no (known)";
+};
+report(copy.id, { ...copy.verdict, problems: [...copy.verdict.problems, ...copy.verdict.fixed] }, [
+  `## ${copy.id}: a copy feed that stops, lags or comes as a backlog`,
+  "",
+  `Each arm has ${String(copy.settings.fetches)} fetches of the NWS source and of the IPAWS source. The case clock moves ${String(copy.settings.speed)} times faster than real time.`,
+  `Each NWS fetch gives ${String(PER_FETCH)} WEA messages. The faults are in the fetches from ${String(WINDOW.from)} to ${String(WINDOW.to - 1)}. A lag gives the answer of ${String(LAG)} fetches before.`,
+  `In copy-backlog, the IPAWS feed gives HTTP 503 from ${s(outageWindowOf().from)} s to ${s(outageWindowOf().to)} s of the case clock. The next good fetch gets the backlog.`,
+  "",
+  `| Arm | Faults (route) | EXT at | IPAWS faults (fetches) | Limit before (s) | Largest limit after (s) | Late periods (first fetch) | First late | First met after | Met after (s) | Smallest gap NWS, IPAWS (s) | False clears | Double threats | ${COPY_GATES.join(" | ")} |`,
+  `| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | ${COPY_GATES.map(() => "---").join(" | ")} |`,
+  ...COPY_ARMS.map((arm) => {
+    const record = copy.records.find((one) => one.arm === arm);
+    const result = copy.verdict.results[arm];
+    const faults = copyFaultsOf(arm);
+    const routes =
+      arm === "copy-backlog"
+        ? `${String(record?.faults.feed ?? 0)} feed (503), ${String(record?.outage?.inWindow ?? 0)} in the window`
+        : COPY_ROUTES.filter((route) => faults[route].size > 0).map((route) => `${String(faults[route].size)} ${route}`).join(", ") || "none";
+    const span = result?.faultFetches === undefined ? "none" : `${String(result.faultFetches.from)} to ${String(result.faultFetches.to - 1)}`;
+    const periods = result?.periods.map((period) => String(period.nws - 1)).join(", ") || "none";
+    const fetchOf = (count: number | undefined): string => (count === undefined ? "none" : String(count - 1));
+    const gates = COPY_GATES.map((gate) => copyGate(arm, gate, result?.gates[gate])).join(" | ");
+    return `| ${arm} | ${routes} | ${String(extFetchOf(arm, copy.settings.fetches))} | ${span} | ${s(result?.limitBefore)} | ${s(result?.limitAfter)} | ${String(result?.periods.length ?? 0)} (${periods}) | ${fetchOf(result?.toldAt)} | ${fetchOf(result?.metAt)} | ${s(result?.metAfter)} | ${s(result?.smallestGaps.nws)}, ${s(result?.smallestGaps.ipaws)} | ${String(result?.falseClears.length ?? 0)} | ${String(result?.doubles.length ?? 0)} | ${gates} |`;
+  }),
+  "",
+  `Known faults: ${KNOWN_FAULTS.map((fault) => `${fault.arm} ${fault.gate}`).join(", ")}. ${[...new Set(KNOWN_FAULTS.map((fault) => fault.reason))].join(" ")}`,
+  "",
+  `Read: ${yes(copy.verdict.read)}. Pass: **${yes(copy.verdict.pass)}**.`,
+]);
+
+const order = await runOutOfOrder();
+write("case-9.json", order);
+// A gate of a known fault shows "no (known)" when it fails, and "YES (fixed)" when it passes.
+const orderGate = (arm: OrderArm, gate: GateKey, value: boolean | undefined): string => {
+  if (value === undefined) return "-";
+  if (orderKnownFaultOf(arm, gate) === undefined) return yes(value);
+  return value ? "YES (fixed)" : "no (known)";
+};
+const labels = (list: readonly string[]): string => list.join(" ") || "none";
+report(order.id, { ...order.verdict, problems: [...order.verdict.problems, ...order.verdict.fixed] }, [
+  `## ${order.id}: reports out of order, and duplicates`,
+  "",
+  `Each arm has ${String(order.settings.fetches)} fetches of the NWS source and of the IPAWS source. The case clock moves ${String(order.settings.speed)} times faster than real time.`,
+  `One event line comes as NWS messages and as their IPAWS copies. Each arm changes the order or the count of the messages. Each policy has a step at 0 and a step at ${min(STEP_GAP)} min.`,
+  "A send is the level (u or ls), the step and the episode, with c for a send with a cancel. The values in brackets are the expected values.",
+  "",
+  `| Arm | Place | Expected sends | Sends | Ends | Live | Sends while away (s) | Passes | ${ORDER_GATES.join(" | ")} |`,
+  `| --- | --- | --- | --- | --- | --- | --- | --- | ${ORDER_GATES.map(() => "---").join(" | ")} |`,
+  ...ORDER_ARMS.flatMap((arm) => {
+    const record = order.records.find((one) => one.arm === arm);
+    const result = order.verdict.results[arm];
+    const expected = expectationOf(arm);
+    return ORDER_PLACES.map((place) => {
+      const want = expected[place];
+      const gates = ORDER_GATES.map((gate) => {
+        const key: GateKey = `${place}:${gate}`;
+        return orderGate(arm, key, result?.gates[key]);
+      }).join(" | ");
+      const away = result?.awaySends[place].map((ms) => s(ms)).join(", ") || "none";
+      const live = record === undefined ? "-" : `${yes(record.live[place])} (${yes(want.live)})`;
+      return `| ${arm} | ${place} | ${labels(want.sends.map((send) => sendLabel(send)))} | ${labels(result?.sends[place] ?? [])} | ${String(result?.ends[place] ?? "-")} (${String(want.ends)}) | ${live} | ${away} | ${String(record?.passes ?? 0)} | ${gates} |`;
+    });
+  }),
+  "",
+  `System incidents: ${
+    order.records
+      .flatMap((record) => {
+        const result = order.verdict.results[record.arm];
+        const sent = ORDER_PLACES.map((place) => `${place} ${labels(result?.systemSends[place] ?? [])}`).join(", ");
+        return record.system.length === 0 ? [] : [`${record.arm}: ${record.system.map((incident) => `${incident.kind} at ${s(incident.at)} s`).join(", ")} (sends: ${sent})`];
+      })
+      .join("; ") || "none"
+  }.`,
+  "",
+  `Known faults: ${ORDER_KNOWN_FAULTS.length === 0 ? "none" : ORDER_KNOWN_FAULTS.map((fault) => `${fault.arm} ${fault.gate}`).join(", ")}.`,
+  "",
+  `Read: ${yes(order.verdict.read)}. Pass: **${yes(order.verdict.pass)}**.`,
+]);
+
+const kill = await runKillRestart();
+write("case-10.json", kill);
+const ends = (record: (typeof kill.records)[number]): string =>
+  record.lives
+    .map((life) => {
+      const point = life.notes.find((note) => note.kind === "kill");
+      const how = life.signal === null ? `code ${String(life.code)}` : `${life.signal}${point?.kind === "kill" ? ` at ${point.point}` : ""}`;
+      return `${String(life.life)}: ${how}${life.timedOut ? " (time limit)" : ""}`;
+    })
+    .join(", ") || "none";
+report(kill.id, kill.verdict, [
+  `## ${kill.id}: a hard stop of the runtime in a delivery, and a restart`,
+  "",
+  `Each arm lasts ${String(kill.settings.armMs)} ms. The first life of each arm except control ends by SIGKILL at its point. A second life opens the same log, with a new run id, to the end of the arm.`,
+  "Pushover only: the Twilio arms come with AL-15, because `instance.ts` has no Twilio sender.",
+  "",
+  `| Arm | Lives | Fault at its point | Sends | Reads | Cancels | Cancels by tag | Copies of each life | Cancelled copies | Failed calls | ${KILL_GATES.join(" | ")} |`,
+  `| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | ${KILL_GATES.map(() => "---").join(" | ")} |`,
+  ...kill.records.map((r) => {
+    const result = kill.verdict.results[r.arm];
+    const c = r.ledger.counts;
+    const copies = result.copies.map((list) => String(list.length)).join(" + ") || "0";
+    return `| ${r.arm} | ${ends(r)} | ${yes(r.faulted)} | ${String(c.sends)} | ${String(c.reads)} | ${String(c.cancels)} | ${String(c.tagCancels)} | ${copies} | ${result.cancelled.join(" ") || "none"} | ${String(r.failures.length)} | ${KILL_GATES.map((g) => yes(result.gates[g])).join(" | ")} |`;
+  }),
+  "",
+  `Read: ${yes(kill.verdict.read)}. Arms: ${KILL_ARMS.join(", ")}. Known faults: none. Pass: **${yes(kill.verdict.pass)}**.`,
+]);
+
+const copies = await runTwoCopies();
+write("case-13.json", copies);
+const sent = (list: readonly SentRecord[]): string => list.map((one) => `${one.copy} at ${s(one.at)}`).join(", ") || "none";
+report(copies.id, copies.verdict, [
+  `## ${copies.id}: two copies and one phone`,
+  "",
+  `The case clock moves ${String(copies.settings.speed)} times faster than real time. Each arm has ${s(copies.settings.armMs)} s. The copy home has rank 0, and the copy cloud has rank 1.`,
+  `Each copy reads the other copy through a fault proxy. The rank delay of life-safety is 0, and the rank floor of a call is ${s(copies.times.rankFloor)} s. Two calls come ${s(copies.times.apartLimit)} s apart or more.`,
+  "",
+  `| Arm | First sight (s, home and cloud) | Pushes (s) | Calls (s) | Faults | Connections | Rounds (failed), home and cloud | ${COPIES_GATES.join(" | ")} |`,
+  `| --- | --- | --- | --- | --- | --- | --- | ${COPIES_GATES.map(() => "---").join(" | ")} |`,
+  ...COPIES_ARMS.map((arm) => {
+    const record = copies.records.find((one) => one.arm === arm);
+    const gates = copies.verdict.results[arm];
+    if (record === undefined) return `| ${arm} | - | - | - | - | - | - | ${COPIES_GATES.map(() => "-").join(" | ")} |`;
+    const seen = record.copies.map((copy) => s(copy.seenAt)).join(", ");
+    const rounds = record.copies.map((copy) => `${String(copy.rounds)} (${String(copy.failedRounds)})`).join(", ");
+    return `| ${arm} | ${seen} | ${sent(record.pushes)} | ${sent(record.calls)} | ${String(record.faults)} | ${String(record.connections)} | ${rounds} | ${COPIES_GATES.map((gate) => (gates === undefined ? "-" : yes(gates[gate]))).join(" | ")} |`;
+  }),
+  "",
+  `Read: ${yes(copies.verdict.read)}. Pass: **${yes(copies.verdict.pass)}**.`,
+]);
+
+const nwws = await runNwwsStream();
+write("case-14.json", nwws);
+const waits = (record: (typeof nwws.records)[number]): string =>
+  record.ends
+    .map((end, index) => {
+      const next = record.opens[index + 1];
+      return next === undefined ? "none" : `${String(next - end.at)} ms`;
+    })
+    .join(", ") || "-";
+report(nwws.id, nwws.verdict, [
+  `## ${nwws.id}: faults of the stream of NWWS-OI`,
+  "",
+  `The source of NWWS-OI holds one XMPP session with TLS to a scripted server, through a fault proxy. The faults of the proxy fall at byte ${String(nwws.point ?? "none")} of connection 0, in the middle of the product ${String(nwws.settings.faultAt)}. The stall limit of the source is ${String(nwws.settings.stallAfter)} ms.`,
+  "",
+  `| Arm | Fault at its point | Ends | Sessions | Wait before the next session | Products (distinct of all) | Each fetch complete | ${NWWS_GATES.join(" | ")} |`,
+  `| --- | --- | --- | --- | --- | --- | --- | ${NWWS_GATES.map(() => "---").join(" | ")} |`,
+  ...nwws.records.map((r) => {
+    const gates = nwws.verdict.results[r.arm]?.gates;
+    const ends = r.ends.map((end) => end.kind).join(", ") || "none";
+    return `| ${r.arm} | ${yes(r.faulted)} | ${ends} | ${String(r.opens.length)} | ${waits(r)} | ${String(new Set(r.serials).size)} of ${String(r.serials.length)} | ${yes(r.complete.every(Boolean))} | ${NWWS_GATES.map((gate) => yes(gates?.[gate] ?? false)).join(" | ")} |`;
+  }),
+  "",
+  `Read: ${yes(nwws.verdict.read)}. Arms: ${NWWS_ARMS.join(", ")}. Pass: **${yes(nwws.verdict.pass)}**.`,
 ]);

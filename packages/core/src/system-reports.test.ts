@@ -2,10 +2,38 @@ import { random, seedsFrom } from "@mark1russell7/rigor-generators";
 import { describe, expect, it } from "vitest";
 import { assess } from "./assess.ts";
 import { messageOf } from "./delivery.ts";
-import type { ChannelId, ChannelQuota, Coverage, HealthState, Incident, Observation, PersonId, PersonWatch, PlaceId, Report, ReportId, SourceDescriptor, SourceHealth, SourceId, WatchedPlace } from "./contracts.ts";
+import type { ChannelId, ChannelQuota, CopyRead, CopyWatch, Coverage, HealthState, Incident, Observation, PersonId, PersonWatch, PlaceId, ProviderBalance, Report, ReportId, SourceDescriptor, SourceHealth, SourceId, WatchedPlace } from "./contracts.ts";
+import type { DrillConfig, DrillRun } from "./drill.ts";
 import type { Lateness } from "./lateness.ts";
 import { incidents, normalize } from "./merge.ts";
-import { addSystemReports, CHANNEL_SUBJECT, gapGrade, NO_SYSTEM_LINES, quotaStages, SOURCE_SUBJECT, SYSTEM_SOURCE, systemReports, threats, type SystemLines, type SystemSnapshot } from "./system-reports.ts";
+import {
+  addSystemReports,
+  balanceStages,
+  balanceUnreadAt,
+  CHANNEL_SUBJECT,
+  CLOCK_STEP_WINDOW,
+  CLOCK_SUBJECT,
+  COPY_SUBJECT,
+  DRILL_SUBJECT,
+  copyStages,
+  copyUnreadAt,
+  gapGrade,
+  latestIn,
+  LOG_RECOVERY_WINDOW,
+  LOG_SUBJECT,
+  NO_SYSTEM_LINES,
+  quotaStages,
+  recentRecovery,
+  recentStep,
+  SOURCE_SUBJECT,
+  stepSizeText,
+  SYSTEM_SOURCE,
+  systemReports,
+  threats,
+  type LogRecovery,
+  type SystemLines,
+  type SystemSnapshot,
+} from "./system-reports.ts";
 import { unknownKinds } from "./taxonomy.ts";
 
 const SEEDS = seedsFrom(process.env["SEED"], [1, 2, 3, 4, 5, 6, 7, 8]);
@@ -29,7 +57,7 @@ const API: SourceDescriptor = {
   title: "The API",
   origins: ["nws"],
   dependsOn: ["provider:api"],
-  uses: ["internet", "power"],
+  uses: ["internet", "dns", "power"],
   kinds: ["met"],
   coverage: [{ type: "code", system: "state", code: "KS" }],
   transport: "poll",
@@ -264,10 +292,415 @@ describe("the quota reports", () => {
     expect(levels(step.reports, OPERATOR)).toEqual(["none", "none"]);
     const found = incidents(normalize({ reports: step.reports }), 200);
     const uses = found.map((incident) => {
-      const send = { incident: incident.anchor, level: "notice" as const, person: WATCHER.person, step: 0, channel: PUSHOVER, due: 200, quiet: false };
+      const send = { incident: incident.anchor, level: "notice" as const, person: WATCHER.person, step: 0, channel: PUSHOVER, due: 200, wait: 0, quiet: false };
       return [incident.kind.code, messageOf(incident, step.reports, send).useReserve ?? false];
     });
     expect(Object.fromEntries(uses)).toEqual({ "system.quota.low": false, "system.quota.reserve": true });
+  });
+
+  it("names the units of the quota in the texts", () => {
+    const step = systemReports(NO_SYSTEM_LINES, snapshot({ quotas: [quota(8_000, { unit: "cents" })] }), 100);
+    expect(step.reports[0]).toMatchObject({ headline: "pushover: 2000 of 10000 cents of the window are left." });
+    expect(step.reports[0]?.description).toContain("At 1000 cents left");
+  });
+});
+
+describe("the balance reports", () => {
+  const DAY = 86_400_000;
+  const START = Date.UTC(2026, 10, 15, 12);
+  const CALL = "twilio-call" as ChannelId;
+  const WATCHER: PersonWatch = { ...NEIGHBOR, subjects: [{ system: CHANNEL_SUBJECT }] };
+  const codes = (reports: readonly Report[]) => reports.map((report) => [report.op, report.kind.code]);
+  const balance = (read?: { readonly balance: number; readonly at?: number }, fields: Partial<ProviderBalance> = {}): ProviderBalance => ({
+    provider: "provider:twilio",
+    title: "Twilio",
+    channels: [CALL],
+    floor: 5,
+    maxAge: 2 * DAY,
+    since: START,
+    ...(read === undefined ? {} : { read: { balance: read.balance, currency: "USD", at: read.at ?? START } }),
+    ...fields,
+  });
+
+  it("reaches low below the floor, empty at 0 or less, and unread at the maximum age", () => {
+    expect(balanceStages(balance({ balance: 5 }), START)).toEqual([]);
+    expect(balanceStages(balance({ balance: 4.99 }), START)).toEqual(["low"]);
+    expect(balanceStages(balance({ balance: 0 }), START)).toEqual(["low", "empty"]);
+    expect(balanceStages(balance({ balance: -0.5 }), START)).toEqual(["low", "empty"]);
+    expect(balanceStages(balance({ balance: 0 }, { floor: 0 }), START)).toEqual(["low", "empty"]);
+    // The age counts from the last read, or from the start of the watch with no read.
+    expect(balanceStages(balance({ balance: 20 }), START + 2 * DAY - 1)).toEqual([]);
+    expect(balanceStages(balance({ balance: 20 }), START + 2 * DAY)).toEqual(["unread"]);
+    expect(balanceStages(balance({ balance: 1 }), START + 3 * DAY)).toEqual(["low", "unread"]);
+    expect(balanceStages(balance(), START + DAY)).toEqual([]);
+    expect(balanceStages(balance(), START + 2 * DAY)).toEqual(["unread"]);
+    expect(balanceUnreadAt(balance({ balance: 1, at: START + DAY }))).toBe(START + 3 * DAY);
+    expect(unknownKinds(["system.balance", "system.balance.low", "system.balance.empty", "system.balance.unread"])).toEqual([]);
+  });
+
+  it("gives one alert for each stage, no update for a new balance, and a cancel when money comes", () => {
+    const low = systemReports(NO_SYSTEM_LINES, snapshot({ balances: [balance({ balance: 1.83164 })] }), START);
+    expect(low.reports).toMatchObject([
+      {
+        op: "alert",
+        status: "system",
+        kind: { code: "system.balance.low", label: "Low balance of a provider" },
+        severity: "moderate",
+        urgency: "expected",
+        areas: [],
+        about: [{ system: CHANNEL_SUBJECT, id: CALL }],
+        headline: "Twilio: the balance is 1.83 USD, below the floor of 5.00.",
+      },
+    ]);
+    expect(Object.keys(low.lines.open)).toEqual(["balance/provider%3Atwilio/low"]);
+    expect(systemReports(low.lines, snapshot({ balances: [balance({ balance: 1.2, at: START + DAY })] }), START + DAY).reports).toEqual([]);
+    const empty = systemReports(low.lines, snapshot({ balances: [balance({ balance: -0.04, at: START + DAY })] }), START + DAY);
+    expect(empty.reports).toMatchObject([{ op: "alert", kind: { code: "system.balance.empty" }, severity: "severe", urgency: "immediate", headline: "Twilio refuses each paid message: the balance is -0.04 USD." }]);
+    const paid = systemReports(empty.lines, snapshot({ balances: [balance({ balance: 20, at: START + DAY + 1 })] }), START + DAY + 1);
+    expect(codes(paid.reports)).toEqual([
+      ["cancel", "system.balance.empty"],
+      ["cancel", "system.balance.low"],
+    ]);
+    expect(paid.lines.open).toEqual({});
+  });
+
+  it("gives the unread line when no read passes, and ends it at the next read", () => {
+    const unread = systemReports(NO_SYSTEM_LINES, snapshot({ balances: [balance()] }), START + 2 * DAY);
+    expect(unread.reports).toMatchObject([
+      { op: "alert", kind: { code: "system.balance.unread" }, severity: "moderate", headline: `The balance of Twilio has no read since the start of the watch at ${new Date(START).toISOString()}.` },
+    ]);
+    const old = systemReports(NO_SYSTEM_LINES, snapshot({ balances: [balance({ balance: 9, at: START })] }), START + 2 * DAY);
+    expect(old.reports[0]).toMatchObject({ headline: `The balance of Twilio has no read since ${new Date(START).toISOString()}.` });
+    const read = systemReports(unread.lines, snapshot({ balances: [balance({ balance: 9, at: START + 2 * DAY })] }), START + 2 * DAY);
+    expect(codes(read.reports)).toEqual([["cancel", "system.balance.unread"]]);
+  });
+
+  it("keeps each open line of a balance when the snapshot has no balances, and ends the lines of a provider that the snapshot does not have", () => {
+    const low = systemReports(NO_SYSTEM_LINES, snapshot({ balances: [balance({ balance: 1 })], quotas: [] }), START);
+    expect(systemReports(low.lines, snapshot(), START + 1).reports).toEqual([]);
+    expect(codes(systemReports(low.lines, snapshot({ balances: [] }), START + 1).reports)).toEqual([["cancel", "system.balance.low"]]);
+  });
+
+  it("goes at notice to the person who watches the channels of the account, and rebuilds from its reports", () => {
+    const step = systemReports(NO_SYSTEM_LINES, snapshot({ balances: [balance({ balance: 0 }, { channels: [CALL, "twilio-sms" as ChannelId] })] }), START);
+    expect(step.reports[0]?.about.map((subject) => subject.id)).toEqual([CALL, "twilio-sms"]);
+    expect(levels(step.reports, WATCHER, START)).toEqual(["notice", "notice"]);
+    expect(levels(step.reports, OPERATOR, START)).toEqual(["none", "none"]);
+    expect(addSystemReports(NO_SYSTEM_LINES, step.reports, step.observations)).toEqual(step.lines);
+  });
+});
+
+describe("the copy reports", () => {
+  const MINUTE = 60_000;
+  const START = Date.UTC(2026, 10, 15, 12);
+  const WATCHER: PersonWatch = { ...NEIGHBOR, subjects: [{ system: COPY_SUBJECT }] };
+  const codes = (reports: readonly Report[]) => reports.map((report) => [report.op, report.kind.code]);
+  const watch = (read?: Partial<CopyRead>, fields: Partial<CopyWatch> = {}): CopyWatch => ({
+    copy: "cloud",
+    skewLimit: 2_000,
+    maxAge: MINUTE,
+    since: START,
+    ...(read === undefined ? {} : { read: { at: START, skew: 0, sameConfig: true, ...read } }),
+    ...fields,
+  });
+
+  it("reaches skew above the limit, config at a different hash, and unread at the maximum age", () => {
+    expect(copyStages(watch({}), START)).toEqual([]);
+    expect(copyStages(watch({ skew: 2_000 }), START)).toEqual([]);
+    expect(copyStages(watch({ skew: 2_001 }), START)).toEqual(["skew"]);
+    expect(copyStages(watch({ skew: -2_001 }), START)).toEqual(["skew"]);
+    expect(copyStages(watch({ sameConfig: false }), START)).toEqual(["config"]);
+    // The age counts from the last read, or from the start of the watch with no read.
+    expect(copyStages(watch({}), START + MINUTE - 1)).toEqual([]);
+    expect(copyStages(watch({ skew: 5_000, sameConfig: false }), START + MINUTE)).toEqual(["skew", "config", "unread"]);
+    expect(copyStages(watch(), START + MINUTE - 1)).toEqual([]);
+    expect(copyStages(watch(), START + MINUTE)).toEqual(["unread"]);
+    expect(copyUnreadAt(watch({ at: START + 5_000 }))).toBe(START + 5_000 + MINUTE);
+    expect(unknownKinds(["system.copy", "system.copy.skew", "system.copy.config", "system.copy.unread"])).toEqual([]);
+  });
+
+  it("gives one alert for each stage, no update for a new difference, and a cancel at a good read", () => {
+    const skewed = systemReports(NO_SYSTEM_LINES, snapshot({ copies: [watch({ skew: -2_540 })] }), START);
+    expect(skewed.reports).toMatchObject([
+      {
+        op: "alert",
+        status: "system",
+        kind: { code: "system.copy.skew", label: "Clock difference of a copy" },
+        severity: "moderate",
+        urgency: "expected",
+        areas: [],
+        about: [{ system: COPY_SUBJECT, id: "cloud", label: "Copy cloud" }],
+        headline: "The clock of the copy cloud differs from the clock of this copy by 2.5 s.",
+        parameters: { stage: ["skew"], skew: ["-2540"], sameConfig: ["true"], age: ["0"] },
+      },
+    ]);
+    expect(Object.keys(skewed.lines.open)).toEqual(["copy/cloud/skew"]);
+    expect(systemReports(skewed.lines, snapshot({ copies: [watch({ at: START + 5_000, skew: 3_900 })] }), START + 5_000).reports).toEqual([]);
+    const config = systemReports(skewed.lines, snapshot({ copies: [watch({ at: START + 5_000, skew: 3_900, sameConfig: false })] }), START + 5_000);
+    expect(config.reports).toMatchObject([{ op: "alert", kind: { code: "system.copy.config" }, headline: "The copy cloud has a different configuration." }]);
+    const good = systemReports(config.lines, snapshot({ copies: [watch({ at: START + 10_000 })] }), START + 10_000);
+    expect(codes(good.reports)).toEqual([
+      ["cancel", "system.copy.config"],
+      ["cancel", "system.copy.skew"],
+    ]);
+    expect(good.lines.open).toEqual({});
+  });
+
+  it("gives the unread line when no read passes, and ends it at the next read", () => {
+    const unread = systemReports(NO_SYSTEM_LINES, snapshot({ copies: [watch()] }), START + MINUTE);
+    expect(unread.reports).toMatchObject([
+      { op: "alert", kind: { code: "system.copy.unread" }, headline: `No read of the copy cloud passed since the start of the watch at ${new Date(START).toISOString()}.` },
+    ]);
+    const old = systemReports(NO_SYSTEM_LINES, snapshot({ copies: [watch({ at: START })] }), START + 2 * MINUTE);
+    expect(old.reports[0]).toMatchObject({ headline: `No read of the copy cloud passed since ${new Date(START).toISOString()}.`, parameters: { age: [String(2 * MINUTE)] } });
+    const read = systemReports(unread.lines, snapshot({ copies: [watch({ at: START + MINUTE })] }), START + MINUTE);
+    expect(codes(read.reports)).toEqual([["cancel", "system.copy.unread"]]);
+  });
+
+  it("keeps each open line of a copy when the snapshot has no copies, and ends the lines of a copy that the snapshot does not have", () => {
+    const skewed = systemReports(NO_SYSTEM_LINES, snapshot({ copies: [watch({ skew: 9_000 })], balances: [] }), START);
+    expect(systemReports(skewed.lines, snapshot(), START + 1).reports).toEqual([]);
+    expect(codes(systemReports(skewed.lines, snapshot({ copies: [] }), START + 1).reports)).toEqual([["cancel", "system.copy.skew"]]);
+    // Each copy has its own lines.
+    const two = systemReports(NO_SYSTEM_LINES, snapshot({ copies: [watch({ skew: 9_000 }), watch({ sameConfig: false }, { copy: "home-2" })] }), START);
+    expect(Object.keys(two.lines.open)).toEqual(["copy/cloud/skew", "copy/home-2/config"]);
+  });
+
+  it("goes at notice to the person who watches the copies, and rebuilds from its reports", () => {
+    const step = systemReports(NO_SYSTEM_LINES, snapshot({ copies: [watch({ skew: 9_000, sameConfig: false })] }), START);
+    expect(levels(step.reports, WATCHER, START)).toEqual(["notice", "notice"]);
+    expect(levels(step.reports, OPERATOR, START)).toEqual(["none", "none"]);
+    expect(addSystemReports(NO_SYSTEM_LINES, step.reports, step.observations)).toEqual(step.lines);
+  });
+});
+
+describe("the clock reports", () => {
+  const HOUR = 3_600_000;
+  const START = Date.UTC(2026, 10, 15, 12);
+  const WATCHER: PersonWatch = { ...NEIGHBOR, subjects: [{ system: CLOCK_SUBJECT }] };
+  const codes = (reports: readonly Report[]) => reports.map((report) => [report.op, report.kind.code]);
+
+  it("names the size of a step in whole hours, whole minutes or whole seconds", () => {
+    expect(stepSizeText(HOUR)).toBe("1 h");
+    expect(stepSizeText(-2 * HOUR)).toBe("2 h");
+    expect(stepSizeText(1.5 * HOUR)).toBe("90 min");
+    expect(stepSizeText(-600_000)).toBe("10 min");
+    expect(stepSizeText(90_000)).toBe("90 s");
+    expect(stepSizeText(2_400)).toBe("2 s");
+    expect(unknownKinds(["system.clock", "system.clock.step"])).toEqual([]);
+  });
+
+  it("finds the latest step at the time or before it, in the window", () => {
+    const steps = [
+      { at: START, size: -HOUR },
+      { at: START + HOUR, size: 5_000 },
+    ];
+    expect(recentStep(steps, START - 1)).toBeUndefined();
+    expect(recentStep(steps, START)).toEqual(steps[0]);
+    expect(recentStep(steps, START + HOUR)).toEqual(steps[1]);
+    expect(recentStep(steps, START + HOUR + CLOCK_STEP_WINDOW - 1)).toEqual(steps[1]);
+    expect(recentStep(steps, START + HOUR + CLOCK_STEP_WINDOW)).toBeUndefined();
+    expect(recentStep([], START)).toBeUndefined();
+  });
+
+  it("gives an alert for a step, an update for the next step in the window, and a cancel at the end of the window", () => {
+    const back = systemReports(NO_SYSTEM_LINES, snapshot({ steps: [{ at: START, size: -HOUR }] }), START);
+    expect(back.reports).toMatchObject([
+      {
+        op: "alert",
+        status: "system",
+        kind: { code: "system.clock.step", label: "Step of the clock" },
+        severity: "minor",
+        urgency: "past",
+        onset: START,
+        areas: [],
+        about: [{ system: CLOCK_SUBJECT, id: "wall" }],
+        headline: "The wall clock stepped back by 1 h.",
+        parameters: { size: [String(-HOUR)] },
+      },
+    ]);
+    expect(Object.keys(back.lines.open)).toEqual(["clock"]);
+    expect(systemReports(back.lines, snapshot({ steps: [{ at: START, size: -HOUR }] }), START + HOUR).reports).toEqual([]);
+    const steps = [
+      { at: START, size: -HOUR },
+      { at: START + HOUR, size: 600_000 },
+    ];
+    const forward = systemReports(back.lines, snapshot({ steps }), START + HOUR);
+    expect(forward.reports).toMatchObject([{ op: "update", references: [back.reports[0]!.key], headline: "The wall clock stepped forward by 10 min." }]);
+    expect(codes(systemReports(forward.lines, snapshot({ steps }), START + HOUR + CLOCK_STEP_WINDOW).reports)).toEqual([["cancel", "system.clock.step"]]);
+    expect(addSystemReports(NO_SYSTEM_LINES, [...back.reports, ...forward.reports], [...back.observations, ...forward.observations])).toEqual(forward.lines);
+  });
+
+  it("goes to the digest of the person who watches the clock, and to no other person", () => {
+    const step = systemReports(NO_SYSTEM_LINES, snapshot({ steps: [{ at: START, size: HOUR }] }), START);
+    expect(levels(step.reports, WATCHER, START)).toEqual(["digest"]);
+    expect(levels(step.reports, OPERATOR, START)).toEqual(["none"]);
+  });
+});
+
+describe("the log reports", () => {
+  const DAY = 24 * 3_600_000;
+  const START = Date.UTC(2026, 10, 16, 12);
+  const WATCHER: PersonWatch = { ...NEIGHBOR, subjects: [{ system: LOG_SUBJECT }] };
+  const FOLDER = "runtime.sqlite.broken-20261116T120000Z";
+  const whole: LogRecovery = { at: START, quarantine: FOLDER, kept: 40, lost: 0, whole: true };
+  const lossy: LogRecovery = { at: START + 1_000, quarantine: `${FOLDER}-2`, kept: 30, lost: 3, whole: false };
+  const unread: LogRecovery = { at: START, quarantine: FOLDER, kept: 0, lost: 0, whole: false };
+  const codes = (reports: readonly Report[]) => reports.map((report) => [report.op, report.kind.code]);
+
+  it("finds the latest recovery at the time or before it, in the window, with the rule of the steps of the clock", () => {
+    expect(LOG_RECOVERY_WINDOW).toBe(DAY);
+    expect(unknownKinds(["system.log", "system.log.recovered"])).toEqual([]);
+    expect(recentRecovery([whole, lossy], START - 1)).toBeUndefined();
+    expect(recentRecovery([whole, lossy], START)).toEqual(whole);
+    expect(recentRecovery([whole, lossy], START + 1_000)).toEqual(lossy);
+    expect(recentRecovery([whole, lossy], START + 1_000 + DAY)).toBeUndefined();
+    expect(latestIn([whole, { ...whole, kept: 1 }], START, 1)).toEqual({ ...whole, kept: 1 });
+    expect(latestIn([whole], START + 1, 1)).toBeUndefined();
+  });
+
+  it("gives an alert that names the quarantine, an update for a second recovery, and a cancel at the end of the window", () => {
+    const first = systemReports(NO_SYSTEM_LINES, snapshot({ recoveries: [whole] }), START);
+    expect(first.reports).toMatchObject([
+      {
+        op: "alert",
+        status: "system",
+        kind: { code: "system.log.recovered", label: "Recovery of the log" },
+        severity: "minor",
+        urgency: "past",
+        onset: START,
+        areas: [],
+        about: [{ system: LOG_SUBJECT, id: "runtime" }],
+        headline: "The log file of the alert system was broken.",
+        parameters: { quarantine: [FOLDER], kept: ["40"], lost: ["0"], whole: ["true"] },
+      },
+    ]);
+    expect(first.reports[0]!.description).toBe(`The alert system moved the broken file into the quarantine folder ${FOLDER}, and it started a new log. It kept each of the 40 events.`);
+    expect(Object.keys(first.lines.open)).toEqual(["log"]);
+    expect(systemReports(first.lines, snapshot({ recoveries: [whole] }), START + 500).reports).toEqual([]);
+    const second = systemReports(first.lines, snapshot({ recoveries: [whole, lossy] }), START + 1_000);
+    expect(second.reports).toMatchObject([{ op: "update", references: [first.reports[0]!.key], severity: "moderate", urgency: "expected" }]);
+    expect(second.reports[0]!.description).toContain("It kept 30 events, and it could not read each part of the file (3 positions).");
+    expect(codes(systemReports(second.lines, snapshot({ recoveries: [whole, lossy] }), START + 1_000 + DAY).reports)).toEqual([["cancel", "system.log.recovered"]]);
+    expect(addSystemReports(NO_SYSTEM_LINES, [...first.reports, ...second.reports], [...first.observations, ...second.observations])).toEqual(second.lines);
+  });
+
+  it("goes to the digest of the person who watches the log with no loss, to the notice with a loss, and to no other person", () => {
+    const quiet = systemReports(NO_SYSTEM_LINES, snapshot({ recoveries: [whole] }), START);
+    expect(levels(quiet.reports, WATCHER, START)).toEqual(["digest"]);
+    expect(levels(quiet.reports, OPERATOR, START)).toEqual(["none"]);
+    const loud = systemReports(NO_SYSTEM_LINES, snapshot({ recoveries: [lossy] }), START + 1_000);
+    expect(levels(loud.reports, WATCHER, START + 1_000)).toEqual(["notice"]);
+    // A file that the salvage cannot read gives no count of the lost positions. It is a loss all the same.
+    const none = systemReports(NO_SYSTEM_LINES, snapshot({ recoveries: [unread] }), START);
+    expect(none.reports).toMatchObject([{ severity: "moderate", urgency: "expected" }]);
+    expect(none.reports[0]!.description).toContain("It kept 0 events, and it could not read each part of the file. A lost event");
+    expect(levels(none.reports, WATCHER, START)).toEqual(["notice"]);
+  });
+});
+
+describe("the drill reports", () => {
+  const MINUTE = 60_000;
+  const DAY = 24 * 60 * MINUTE;
+  const START = Date.UTC(2026, 10, 21, 17);
+  const WATCHER: PersonWatch = { ...NEIGHBOR, subjects: [{ system: DRILL_SUBJECT, id: "push-weekly" }] };
+  const DRILL: DrillConfig = {
+    id: "push-weekly",
+    person: WATCHER.person,
+    path: { kind: "channel", channel: "pushover" as ChannelId },
+    every: 6 * 24 * 60 * MINUTE,
+    window: { zone: "America/Chicago", start: "11:00", end: "17:00", days: [6] },
+    ackWithin: 30 * MINUTE,
+  };
+  const codes = (reports: readonly Report[]) => reports.map((report) => [report.op, report.kind.code, report.key.slice(0, report.key.lastIndexOf("#"))]);
+  const drills = (run?: Partial<DrillRun>, copy = "home") => ({ drills: [{ copy, drill: DRILL, ...(run === undefined ? {} : { run: { drill: DRILL.id, at: START, ...run } }) }] });
+
+  it("opens the run line at the start, and cancels it at the acknowledgment", () => {
+    const started = systemReports(NO_SYSTEM_LINES, snapshot(drills({})), START);
+    expect(codes(started.reports)).toEqual([["alert", "system.drill.run", "drill/home/push-weekly"]]);
+    expect(started.reports[0]).toMatchObject({ severity: "extreme", urgency: "immediate", onset: START, areas: [], about: [{ system: DRILL_SUBJECT, id: "push-weekly" }] });
+    expect(started.reports[0]!.headline).toBe("Drill push-weekly: acknowledge this message. This is not a warning.");
+    // The same run later gives no report, and an acknowledgment in the time passes the drill.
+    expect(systemReports(started.lines, snapshot(drills({})), START + 29 * MINUTE).reports).toEqual([]);
+    const passed = systemReports(started.lines, snapshot(drills({ acked: START + 5 * MINUTE })), START + 5 * MINUTE);
+    expect(codes(passed.reports)).toEqual([["cancel", "system.drill.run", "drill/home/push-weekly"]]);
+    expect(passed.lines.open).toEqual({});
+  });
+
+  it("ends the run line and opens the failed line at the end of the time, and updates it for a late acknowledgment", () => {
+    const started = systemReports(NO_SYSTEM_LINES, snapshot(drills({})), START);
+    const failed = systemReports(started.lines, snapshot(drills({})), START + 30 * MINUTE);
+    // The fold gives the reports in the order of the names of the lines.
+    expect(codes(failed.reports)).toEqual([
+      ["cancel", "system.drill.run", "drill/home/push-weekly"],
+      ["alert", "system.drill.failed", "drill/home/push-weekly/failed"],
+    ]);
+    expect(failed.reports[1]!.headline).toBe("The drill push-weekly failed: no acknowledgment came.");
+    const late = systemReports(failed.lines, snapshot(drills({ acked: START + 40 * MINUTE })), START + 40 * MINUTE);
+    expect(codes(late.reports)).toEqual([["update", "system.drill.failed", "drill/home/push-weekly/failed"]]);
+    expect(late.reports[0]!.headline).toBe("The drill push-weekly failed: the acknowledgment came late.");
+    // The next run ends the failed line, and its own verdict decides again.
+    const next = systemReports(late.lines, snapshot(drills({ at: START + DRILL.every + DAY })), START + DRILL.every + DAY);
+    expect(codes(next.reports)).toEqual([
+      ["alert", "system.drill.run", "drill/home/push-weekly"],
+      ["cancel", "system.drill.failed", "drill/home/push-weekly/failed"],
+    ]);
+  });
+
+  it("gives a failure with the reason no-start for a drill with no next start, and ends it at the next start", () => {
+    const stuck = { drills: [{ copy: "home", drill: DRILL, noStart: true }] };
+    const failed = systemReports(NO_SYSTEM_LINES, snapshot(stuck), START);
+    expect(codes(failed.reports)).toEqual([["alert", "system.drill.failed", "drill/home/push-weekly/no-start"]]);
+    expect(failed.reports[0]!.headline).toBe("The drill push-weekly has no next start.");
+    expect(failed.reports[0]!.parameters).toEqual({ drill: ["push-weekly"], copy: ["home"], why: ["no-start"] });
+    // The same condition later gives no report. A next start ends the line, and the last run keeps its own line.
+    expect(systemReports(failed.lines, snapshot(stuck), START + MINUTE).reports).toEqual([]);
+    const fixed = systemReports(failed.lines, snapshot(drills({})), START + 2 * MINUTE);
+    expect(codes(fixed.reports)).toEqual([
+      ["alert", "system.drill.run", "drill/home/push-weekly"],
+      ["cancel", "system.drill.failed", "drill/home/push-weekly/no-start"],
+    ]);
+  });
+
+  it("gives a failure with the reason missed for a start that the copy missed, and ends it at the next run", () => {
+    const due = START + DRILL.every + DAY;
+    const missed = { drills: [{ copy: "home", drill: DRILL, run: { drill: DRILL.id, at: START, acked: START + MINUTE }, missed: due }] };
+    const failed = systemReports(NO_SYSTEM_LINES, snapshot(missed), due + 7 * 60 * MINUTE);
+    expect(codes(failed.reports)).toEqual([["alert", "system.drill.failed", "drill/home/push-weekly/missed"]]);
+    expect(failed.reports[0]).toMatchObject({ severity: "moderate", urgency: "expected", onset: due, areas: [] });
+    expect(failed.reports[0]!.headline).toBe("The drill push-weekly did not start at its time.");
+    expect(failed.reports[0]!.parameters).toEqual({ drill: ["push-weekly"], copy: ["home"], why: ["missed"] });
+    // The same missed start later gives no report. The next run ends the line, and its own line opens.
+    expect(systemReports(failed.lines, snapshot(missed), due + DAY).reports).toEqual([]);
+    const next = due + 7 * DAY;
+    const run = systemReports(failed.lines, snapshot(drills({ at: next })), next);
+    expect(codes(run.reports)).toEqual([
+      ["alert", "system.drill.run", "drill/home/push-weekly"],
+      ["cancel", "system.drill.failed", "drill/home/push-weekly/missed"],
+    ]);
+  });
+
+  it("keeps the lines with no drills in the snapshot, ends them for a drill that is gone, and starts no line with no run", () => {
+    const started = systemReports(NO_SYSTEM_LINES, snapshot(drills({})), START);
+    expect(systemReports(started.lines, snapshot(), START + 40 * MINUTE).reports).toEqual([]);
+    expect(codes(systemReports(started.lines, snapshot({ drills: [] }), START + MINUTE).reports)).toEqual([["cancel", "system.drill.run", "drill/home/push-weekly"]]);
+    expect(systemReports(NO_SYSTEM_LINES, snapshot(drills()), START).reports).toEqual([]);
+    // A run of another drill is not a run of this drill.
+    expect(systemReports(NO_SYSTEM_LINES, snapshot(drills({ drill: "other" })), START).reports).toEqual([]);
+    // Each copy has its own lines.
+    const two = systemReports(NO_SYSTEM_LINES, snapshot({ drills: [...drills({}).drills, ...drills({}, "cloud").drills] }), START);
+    expect(Object.keys(two.lines.open)).toEqual(["drill/cloud/push-weekly", "drill/home/push-weekly"]);
+  });
+
+  it("reaches life-safety for the person who watches the drill, notice for a failure, and rebuilds from its reports", () => {
+    const started = systemReports(NO_SYSTEM_LINES, snapshot(drills({})), START);
+    expect(levels(started.reports, WATCHER, START)).toEqual(["life-safety"]);
+    expect(levels(started.reports, NEIGHBOR, START)).toEqual(["none"]);
+    expect(levels(started.reports, { ...NEIGHBOR, subjects: [{ system: DRILL_SUBJECT, id: "other" }] }, START)).toEqual(["none"]);
+    const failed = systemReports(started.lines, snapshot(drills({})), START + 30 * MINUTE);
+    const failure = failed.reports.filter((report) => report.op === "alert");
+    expect(levels(failure, WATCHER, START + 30 * MINUTE)).toEqual(["notice"]);
+    expect(addSystemReports(started.lines, failed.reports, failed.observations)).toEqual(failed.lines);
   });
 });
 

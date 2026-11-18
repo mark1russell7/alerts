@@ -232,7 +232,8 @@ export function fromEventCode(value: string): EventCode | undefined {
 
 /**
  * The other names of some events: names that do not follow the pattern of hazard and stage. The NWS
- * gives one name to the river floods and the areal floods, so these names give the broad code.
+ * gives one name to the river floods and the areal floods, so these names give the broad code. The
+ * tsunami warning centers send a statement with no VTEC as `Tsunami Information`.
  */
 export const NAME_ALIASES: Readonly<Record<string, EventCode>> = {
   "flood warning": code("met.flood", "Flood Warning", "warning"),
@@ -240,6 +241,7 @@ export const NAME_ALIASES: Readonly<Record<string, EventCode>> = {
   "flood advisory": code("met.flood", "Flood Advisory", "advisory"),
   "flood statement": code("met.flood", "Flood Statement", "statement"),
   "red flag warning": code("fire.weather", "Red Flag Warning", "warning"),
+  "tsunami information": code("geo.tsunami", "Tsunami Information", "statement"),
   "small craft advisory for hazardous seas": code("met.marine.small-craft.seas", "Small Craft Advisory for Hazardous Seas", "advisory"),
   "small craft advisory for rough bar": code("met.marine.small-craft.rough-bar", "Small Craft Advisory for Rough Bar", "advisory"),
   "small craft advisory for winds": code("met.marine.small-craft.wind", "Small Craft Advisory for Winds", "advisory"),

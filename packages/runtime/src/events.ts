@@ -3,13 +3,32 @@
  * events and the configuration, and of nothing else. Thus a restart reads the log and gets the same
  * state as a run with no restart.
  */
-import type { Acknowledgment, ChannelId, Cursor, Delivery, EscalationStart, FetchRecord, Instant, MapProblem, Observation, Report, ReportId, SendOutcome, SourceId } from "@mark1russell7/alerts";
+import type { Acknowledgment, ChannelId, Cursor, Delivery, Duration, EscalationEnd, EscalationStart, FetchRecord, Instant, MapProblem, Observation, Report, ReportId, SendOutcome, SourceId } from "@mark1russell7/alerts";
 
 /** The kind of a failed call of a channel. */
 export type ChannelFailureKind = Extract<SendOutcome, { readonly ok: false }>["kind"];
 
 /** The kinds of a send that the channel refused. After such a send, the channel has no message. */
 export type RefusalKind = Exclude<ChannelFailureKind, "network" | "timeout" | "server">;
+
+/**
+ * The record has each kind of `RefusalKind`, thus no list of the kinds can lose a kind. True: the kind is a fault of
+ * the channel, and it stops each delivery to the person until the owner acts. The heartbeat then pings `/fail`.
+ *
+ * - `reserved`: the channel still sends a `life-safety` message.
+ * - `consent`: the choice of one person, a STOP reply. The deliveries to the other people go on.
+ * - `quiet`: a quiet message on a channel with no silent mode. The step goes at the first try after the quiet window.
+ * - `expired`: a message that expired before the send. The channel is not the cause.
+ */
+export const REFUSAL_FAULTS: Readonly<Record<RefusalKind, boolean>> = {
+  auth: true,
+  refused: true,
+  "rate-limited": true,
+  reserved: false,
+  consent: false,
+  quiet: false,
+  expired: false,
+};
 
 /** The fields of each event. The log of `@mark1russell7/sqlite` reads `id`, `at` and `type`. */
 interface Envelope<T extends string> {
@@ -115,6 +134,113 @@ export interface EscalationEvent extends Envelope<"escalation"> {
   readonly start: EscalationStart;
 }
 
+/**
+ * The escalations of a person in a live incident ended: the incident no longer reaches the person. A later match of
+ * the person starts a new episode.
+ */
+export interface EscalationEndEvent extends Envelope<"escalation-end"> {
+  readonly end: EscalationEnd;
+}
+
+/**
+ * The wall clock stepped against the monotonic clock, back or forward. The fold moves each own instant of the state by
+ * `size`. Thus each timer keeps its distance on the monotonic clock, and a rebuild gives the same state.
+ */
+export interface ClockEvent extends Envelope<"clock"> {
+  /** The size of the step: below 0 for a step back, above 0 for a step forward. */
+  readonly size: Duration;
+}
+
+/**
+ * At the boot, the log file was broken. The runtime moved it into a quarantine folder, and it started a new file with
+ * each event that the salvage read. This event comes after the salvaged events. Its fold gives a system report.
+ */
+export interface RecoveredEvent extends Envelope<"recovered"> {
+  /** The name of the quarantine folder, in the folder of the log. The id of the event has it. */
+  readonly quarantine: string;
+  /**
+   * The kind of the fault of the broken file, from `sqliteFault` of `@mark1russell7/sqlite`. An example is `corrupt`.
+   * `orphan-journal` is a WAL, SHM or journal file with no database file. `no-read` is a quarantine folder with no record.
+   */
+  readonly fault: string;
+  /** The count of the events that the salvage read and parsed with no conflict. A conflict counts as lost. */
+  readonly read: number;
+  /** The count of the read events that the new file got. */
+  readonly added: number;
+  /** The count of the positions of the broken file that the salvage could not read or parse. */
+  readonly lost: number;
+  /** This value tells if the salvage read each part of the broken file with no problem. */
+  readonly whole: boolean;
+  /** The first problems of the check and of the salvage, in this order. */
+  readonly problems: readonly string[];
+}
+
+/**
+ * Old incidents leave the state of the runtime (AL-47). Each report of the event gets a tombstone until `until`. The fold
+ * removes the parts of the reports, the starts and ends of their escalations, and their cancelled keys. The log keeps
+ * each event of the reports. The event stays in its copy: each copy finds its retirements from the shared parts.
+ */
+export interface RetiredEvent extends Envelope<"retired"> {
+  /** The reports of the retired incidents, in the order of their ids. */
+  readonly reports: readonly ReportId[];
+  /** The end of the tombstones. A tombstone keeps a late copy of a report out of the state until this time. */
+  readonly until: Instant;
+  /**
+   * The keys of `cancelled` of the deliveries of the retired incidents, and each old key with no delivery in the merge,
+   * sorted. A delivery key does not name its incident.
+   */
+  readonly cancelled: readonly string[];
+}
+
+/**
+ * This copy starts a run of a drill (AL-43). The time of the event is the start of the run. The fold keeps the last start
+ * of each drill. The event stays in its copy: each copy starts its own drills, and each has its own lines.
+ */
+export interface DrillEvent extends Envelope<"drill"> {
+  /** The id of the drill. */
+  readonly drill: string;
+  /** The id of the copy that starts the run. */
+  readonly copy: string;
+}
+
+/** The reports of one fetch of another copy. It has no fetch record and no cursor: each copy has its own health and cursors. */
+export interface SharedFetchEvent extends Envelope<"fetch"> {
+  readonly reports: readonly Report[];
+}
+
+/** One accepted send of another copy. It has no copy id: only the copy of the send stops the copies of its channel. */
+export type SharedDeliveryEvent = Omit<DeliveryEvent, "copy">;
+
+/**
+ * An event that a copy of the system gives to the other copies (AL-16): a part of the merge state or of the ledger.
+ * Each other event stays in its copy, because each copy has its own sources, health and channels.
+ */
+export type SharedEvent = SharedFetchEvent | EndedEvent | BackEvent | SharedDeliveryEvent | AcknowledgmentEvent | CancelledEvent | EscalationEndEvent;
+
+/**
+ * A shared event of another copy in the log of this copy. The fold changes only the shared state. The instants of the
+ * event come from the clock of the other copy. Thus a step of the clock of this copy does not move them. The envelope
+ * has the time of the inner event, thus two reads of one event give the same import.
+ */
+export interface ImportEvent extends Envelope<"import"> {
+  /** The id of the copy that wrote the inner event. */
+  readonly from: string;
+  readonly event: SharedEvent;
+}
+
+/**
+ * The read position in the log of another copy. The runtime writes it with the imports of a read. Thus after a restart,
+ * the next read starts at this position, not at the start of the log.
+ */
+export interface ExchangeEvent extends Envelope<"exchange"> {
+  /** The id of the other copy. */
+  readonly peer: string;
+  /** The id of the first event of the log of the other copy. A new log of the copy has a new id. */
+  readonly log: string;
+  /** The position of the last entry that the read examined. */
+  readonly next: number;
+}
+
 /** One event of the log of the runtime. */
 export type RuntimeEvent =
   | StartedEvent
@@ -124,15 +250,51 @@ export type RuntimeEvent =
   | BackEvent
   | SystemEvent
   | EscalationEvent
+  | EscalationEndEvent
   | DeliveryEvent
   | AcknowledgmentEvent
   | CancelledEvent
   | AttemptEvent
   | SettledEvent
-  | RefusedEvent;
+  | RefusedEvent
+  | ClockEvent
+  | RecoveredEvent
+  | ImportEvent
+  | ExchangeEvent
+  | RetiredEvent
+  | DrillEvent;
 
 /** The types of the events. */
-export const EVENT_TYPES: readonly RuntimeEvent["type"][] = ["started", "observation", "fetch", "ended", "back", "system", "escalation", "delivery", "acknowledgment", "cancelled", "attempt", "settled", "refused"];
+export const EVENT_TYPES: readonly RuntimeEvent["type"][] = [
+  "started",
+  "observation",
+  "fetch",
+  "ended",
+  "back",
+  "system",
+  "escalation",
+  "escalation-end",
+  "delivery",
+  "acknowledgment",
+  "cancelled",
+  "attempt",
+  "settled",
+  "refused",
+  "clock",
+  "recovered",
+  "import",
+  "exchange",
+  "retired",
+  "drill",
+];
+
+/**
+ * This function gives the frame tag of an id with a time of the runtime. The tag is empty before the first step of
+ * the wall clock, and `~<count of steps>` after it. Thus a time that comes again after a step back gives a new id.
+ */
+export function frameTag(steps: number): string {
+  return steps === 0 ? "" : `~${steps}`;
+}
 
 /** This function gives the fields of the envelope of an event at a time. */
 export function envelope<T extends RuntimeEvent["type"]>(type: T, id: string, time: Instant): Envelope<T> {

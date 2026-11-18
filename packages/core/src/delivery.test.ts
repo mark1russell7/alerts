@@ -1,14 +1,17 @@
 import { random, seedsFrom } from "@mark1russell7/rigor-generators";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type {
   Acknowledgment,
+  Address,
   ChannelDescriptor,
   ChannelId,
   Delivery,
   EscalationPolicy,
   Incident,
+  InterestGraph,
   Level,
   MergeState,
+  MuteEffect,
   PersonId,
   PlaceId,
   Report,
@@ -16,8 +19,26 @@ import type {
   WatchedPlace,
 } from "./contracts.ts";
 import { LEVELS } from "./contracts.ts";
-import { acknowledgmentOf, messageOf, recipientProblems, route, type EscalationStart, type Recipient, type Route, type RouteInput } from "./delivery.ts";
+import { acknowledgmentOf, addressProblems, messageOf, policyFor, policyName, recipientProblems, route, RULED_STATUSES, ruleSteps, type ChannelRule, type EscalationEnd, type EscalationStart, type Recipient, type Route, type RouteInput } from "./delivery.ts";
+import { RANK_DELAY_LIMIT, rankDelayProblems } from "./escalation.ts";
 import { messageKey } from "./ids.ts";
+import { matchSubjects } from "./assess.ts";
+import { DRILL_SUBJECT } from "./system-reports.ts";
+import { placeWhy } from "./why.ts";
+
+// The mute of each assessment. `assess` gives `Assessment.muted` from the graph of the person. The mock adds the mute
+// of the test to the assessment, so a test sets the effect with no graph. With no mute, it gives the assessment as it is.
+const mutes = vi.hoisted(() => ({ effect: undefined as MuteEffect | undefined }));
+vi.mock("./assess.ts", async (importOriginal) => {
+  const real = await importOriginal<typeof import("./assess.ts")>();
+  return {
+    ...real,
+    assess: (...args: Parameters<typeof real.assess>) => {
+      const result = real.assess(...args);
+      return mutes.effect === undefined ? result : { ...result, muted: { mute: "mute-1", effect: mutes.effect } };
+    },
+  };
+});
 
 const SEEDS = seedsFrom(process.env["SEED"], [1, 2, 3, 4, 5, 6, 7, 8]);
 const MINUTE = 60_000;
@@ -47,7 +68,7 @@ function recipient(person = "person-1", policies: readonly EscalationPolicy[] = 
 }
 
 function channel(id: ChannelId, ack: ChannelDescriptor["ack"]): ChannelDescriptor {
-  return { id, title: id, dependsOn: [], uses: ["internet"], breaksThrough: true, repeats: ack === "poll", ack, maxTitle: 250, maxBody: 1024 };
+  return { id, title: id, dependsOn: [], uses: ["internet", "dns"], breaksThrough: true, repeats: ack === "poll", ack, maxTitle: 250, maxBody: 1024 };
 }
 const CHANNELS = [channel(pushover, "poll"), channel(sms, "none")];
 
@@ -84,7 +105,7 @@ function start(level: Level, at: number, incidentId: ReportId = anchor): Escalat
 function input(extra: Partial<RouteInput> & { readonly merge?: Partial<MergeState> } = {}): RouteInput {
   const { merge, ...rest } = extra;
   return {
-    state: { reports: [], deliveries: [], acks: [], ends: [], ...merge },
+    state: { reports: [], deliveries: [], acks: [], ends: [], retired: [], ...merge },
     incidents: [incident()],
     recipients: [recipient()],
     places,
@@ -105,6 +126,90 @@ describe("route", () => {
     expect(summary(routes)).toEqual([{ level: "life-safety", state: "sent", fresh: true, sends: [0], cancels: [] }]);
     expect(routes[0]!.start).toEqual(start("life-safety", T0));
     expect(routes[0]!.plan.wakeAt).toBe(T0 + 5 * MINUTE);
+  });
+
+  it("gives the why of the matched place with the first id, whatever the order of the places of the person", () => {
+    const lake = "place-0" as PlaceId;
+    const both: readonly WatchedPlace[] = [...places, { id: lake, codes: [{ system: "ugc", code: "KSC173" }], bufferKm: 5 }];
+    const routes = route(input({ places: both, recipients: [recipient("person-1", [LIFE_SAFETY, URGENT], [home, lake])] }));
+    expect(routes[0]!.why).toEqual(placeWhy([lake]));
+    expect(routes[0]!.why).toEqual({ rule: "reach.place.places", subject: "place:place-0", kind: "place", anchor: "place:place-0", origin: "places", coverage: 1 });
+    expect(route(input())[0]!.why?.anchor).toBe("place:place-1");
+  });
+
+  it("gives no why to a match by subjects alone, and none to an incident that is over", () => {
+    const operator = recipient("person-1", [LIFE_SAFETY, URGENT], []);
+    const watching: Recipient = { ...operator, watch: { ...operator.watch, subjects: [{ system: "alerts.source" }] } };
+    const about = incident({ areas: [], about: [{ system: "alerts.source", id: "source-1" }] });
+    const routes = route(input({ incidents: [about], recipients: [watching] }));
+    expect(routes).toHaveLength(1);
+    expect(routes[0]!.why).toBeUndefined();
+    const sent = [delivery("life-safety", 0, T0)];
+    const over = incident({ live: false, expires: T0 + MINUTE });
+    const ended = route(input({ incidents: [over], starts: [start("life-safety", T0)], merge: { deliveries: sent }, now: T0 + 3 * MINUTE }));
+    expect(ended).toHaveLength(1);
+    expect(ended[0]!.why).toBeUndefined();
+  });
+
+  it("routes an incident by a topic alone, with no area and no place of the person", () => {
+    const base = recipient("person-1", [LIFE_SAFETY, URGENT], []);
+    const follower: Recipient = { ...base, watch: { ...base.watch, subjects: [{ system: "topic", id: "infra.power.outage" }] } };
+    // A power cut has no class of its own. Thus the table of the other kinds gives it `urgent` at most.
+    const outage = incident({ kind: { code: "infra.power.outage", label: "Power outage" }, areas: [], about: [{ system: "topic", id: "infra.power.outage" }] });
+    const routes = route(input({ incidents: [outage], recipients: [follower] }));
+    expect(summary(routes)).toEqual([{ level: "urgent", state: "last", fresh: true, sends: [0], cancels: [] }]);
+    expect(routes[0]!.start).toEqual(start("urgent", T0));
+    // A match by the subjects of the watch has no why. The why of a topic comes from the interest graph.
+    expect(routes[0]!.why).toBeUndefined();
+    // A topic of a life-safety kind escalates as a place does: the first step at once, the second step after 5 minutes.
+    const storm: Recipient = { ...base, watch: { ...base.watch, subjects: [{ system: "topic", id: "met.tornado" }] } };
+    const tornado = incident({ areas: [], about: [{ system: "topic", id: "met.tornado" }] });
+    const first = route(input({ incidents: [tornado], recipients: [storm] }));
+    expect(summary(first)).toEqual([{ level: "life-safety", state: "sent", fresh: true, sends: [0], cancels: [] }]);
+    expect(first[0]!.plan.wakeAt).toBe(T0 + 5 * MINUTE);
+    const later = route(input({ incidents: [tornado], recipients: [storm], starts: [start("life-safety", T0)], now: T0 + 6 * MINUTE }));
+    expect(summary(later)).toEqual([{ level: "life-safety", state: "last", fresh: false, sends: [0, 1], cancels: [] }]);
+  });
+
+  it("matches a topic by its system and its id, and a watch of a system with no id matches each topic", () => {
+    const base = recipient("person-1", [LIFE_SAFETY, URGENT], []);
+    const watching = (subjects: NonNullable<Recipient["watch"]["subjects"]>): Recipient => ({ ...base, watch: { ...base.watch, subjects } });
+    const flood = incident({ areas: [], about: [{ system: "topic", id: "met.flood" }] });
+    expect(route(input({ incidents: [flood], recipients: [watching([{ system: "topic", id: "met.tornado" }])] }))).toEqual([]);
+    expect(route(input({ incidents: [flood], recipients: [watching([{ system: "iptc", id: "met.flood" }])] }))).toEqual([]);
+    expect(route(input({ incidents: [flood], recipients: [watching([{ system: "topic" }])] }))).toHaveLength(1);
+    expect(route(input({ incidents: [flood], recipients: [base] }))).toEqual([]);
+  });
+
+  it("reaches a person by a topic when no place of the person is in the area, and gives the why of a place in the area", () => {
+    const base = recipient();
+    const follower: Recipient = { ...base, watch: { ...base.watch, subjects: [{ system: "topic", id: "met.tornado" }] } };
+    // Harvey County, Kansas: a county next to the place of the person.
+    const elsewhere = incident({ areas: [{ type: "code", system: "ugc", code: "KSC079" }], about: [{ system: "topic", id: "met.tornado" }] });
+    const far = route(input({ incidents: [elsewhere], recipients: [follower] }));
+    expect(summary(far)).toEqual([{ level: "life-safety", state: "sent", fresh: true, sends: [0], cancels: [] }]);
+    expect(far[0]!.why).toBeUndefined();
+    // Without the topic, the incident does not reach the person.
+    expect(route(input({ incidents: [elsewhere] }))).toEqual([]);
+    const near = route(input({ incidents: [incident({ about: [{ system: "topic", id: "met.tornado" }] })], recipients: [follower] }));
+    expect(near[0]!.why).toEqual(placeWhy([home]));
+  });
+
+  it("gives the why of the interest graph before the why of a watched place", () => {
+    const base = recipient();
+    const interests: InterestGraph = {
+      format: "alerts-interest/1",
+      person: base.watch.person,
+      edges: [{ id: "e1", from: "topic:met.tornado", to: "person", kind: "interest", weight: { value: 1, low: 1, high: 1 }, origin: "person", on: true }],
+      mutes: [],
+    };
+    const follower: Recipient = { ...base, watch: { ...base.watch, interests } };
+    const tornado = incident({ about: [{ system: "topic", id: "met.tornado" }] });
+    const routes = route(input({ incidents: [tornado], recipients: [follower] }));
+    expect(routes).toHaveLength(1);
+    expect(routes[0]!.why).toEqual({ rule: "reach.topic.person", subject: "topic:met.tornado", kind: "topic", anchor: "topic:met.tornado", origin: "person", coverage: 1 });
+    // Without the graph, the watched place gives the why.
+    expect(route(input({ incidents: [tornado] }))[0]!.why).toEqual(placeWhy([home]));
   });
 
   it("keeps the start of the log, thus a step comes at its time after a restart", () => {
@@ -235,6 +340,536 @@ describe("route", () => {
   });
 });
 
+describe("route: the rank delay of each level", () => {
+  const DELAY = 30_000;
+  // The routes of the copies of rank 0 and rank 1, with the same merge state and the table of the private configuration.
+  const copies = (extra: Partial<RouteInput> = {}): Route[][] => [0, 1].map((rank) => route(input({ rank, rankDelay: DELAY, rankDelays: { "life-safety": 0 }, ...extra })));
+  const sends = (routes: readonly Route[]) => routes.map((entry) => entry.plan.sends.map((send) => ({ step: send.step, due: send.due, wait: send.wait })));
+
+  it("gives two sends at the same time from two copies for one life-safety incident", () => {
+    const [first, second] = copies();
+    expect(sends(first!)).toEqual([[{ step: 0, due: T0, wait: 0 }]]);
+    expect(sends(second!)).toEqual(sends(first!));
+  });
+
+  it("gives one send at a lower level: the copy of rank 1 waits the default, and then the delivery of rank 0 holds it", () => {
+    const [first, second] = copies({ incidents: [incident(WATCH)] });
+    expect(sends(first!)).toEqual([[{ step: 0, due: T0, wait: 0 }]]);
+    expect(sends(second!)).toEqual([[]]);
+    expect(second![0]!.plan.wakeAt).toBe(T0 + DELAY);
+    const later = route(input({ incidents: [incident(WATCH)], rank: 1, rankDelay: DELAY, rankDelays: { "life-safety": 0 }, starts: [start("urgent", T0)], merge: { deliveries: [delivery("urgent", 0, T0 + 500)] }, now: T0 + DELAY }));
+    expect(sends(later)).toEqual([[]]);
+  });
+
+  it("gives the default to a level with no entry, and the entry to a level with one", () => {
+    const table = { urgent: 5_000 };
+    expect(route(input({ incidents: [incident(WATCH)], rank: 2, rankDelay: DELAY, rankDelays: table }))[0]!.plan.wakeAt).toBe(T0 + 10_000);
+    const lifeSafety = route(input({ rank: 2, rankDelay: DELAY, rankDelays: table, now: T0 + 2 * DELAY, starts: [start("life-safety", T0)] }));
+    expect(sends(lifeSafety)).toEqual([[{ step: 0, due: T0 + 2 * DELAY, wait: 2 * DELAY }]]);
+  });
+
+  it("gives the plain default to each level with no table", () => {
+    const [, second] = copies({ rankDelays: undefined });
+    expect(sends(second!)).toEqual([[]]);
+    expect(second![0]!.plan.wakeAt).toBe(T0 + DELAY);
+  });
+});
+
+describe("rankDelayProblems", () => {
+  it("accepts 0 and whole milliseconds up to the limit, and names each level with another value", () => {
+    expect(rankDelayProblems({ "life-safety": 0, urgent: RANK_DELAY_LIMIT })).toEqual([]);
+    expect(rankDelayProblems({ notice: 1.5, digest: RANK_DELAY_LIMIT + 1 })).toEqual([
+      `The rank delay of the level notice is not a whole number of milliseconds from 0 to ${RANK_DELAY_LIMIT}.`,
+      `The rank delay of the level digest is not a whole number of milliseconds from 0 to ${RANK_DELAY_LIMIT}.`,
+    ]);
+  });
+});
+
+describe("route: the end of a person and a new episode", () => {
+  // A public county in Kansas that the person does not watch.
+  const away = incident({ areas: [{ type: "code", system: "ugc", code: "KSC079" }] });
+  const first = delivery("life-safety", 0, T0);
+  const endAt = (at: number): EscalationEnd => ({ incident: anchor, person, at });
+  const keyOf = (level: Level, step: number, episode: number): string => messageKey({ incident: anchor, level, person, step, episode });
+  const ack = (at: number): Acknowledgment => ({ incident: anchor, level: "life-safety", person, at, via: pushover });
+
+  it("ends the escalation when the live incident no longer reaches the person, and cancels its deliveries", () => {
+    const routes = route(input({ incidents: [away], starts: [start("life-safety", T0)], merge: { deliveries: [first] }, now: T0 + 2 * MINUTE }));
+    expect(summary(routes)).toEqual([{ level: "life-safety", state: "ended", fresh: false, sends: [], cancels: [first.key] }]);
+    expect(routes[0]!.freshEnd).toBe(true);
+    expect(routes[0]!.end).toEqual(endAt(T0 + 2 * MINUTE));
+    expect(routes[0]!.episode).toBe(0);
+  });
+
+  it("gives no end to a person with no escalation, and none while a lower level still reaches the person", () => {
+    expect(route(input({ incidents: [away] }))).toEqual([]);
+    const kept = route(input({ incidents: [incident(WATCH)], starts: [start("life-safety", T0)], merge: { deliveries: [first] }, now: T0 + 2 * MINUTE }));
+    expect(kept.map((entry) => [entry.policy.level, entry.plan.state, entry.freshEnd, entry.end])).toEqual([["life-safety", "sent", false, undefined]]);
+  });
+
+  it("cancels again the deliveries of an earlier episode with no cancel, and then routes nothing", () => {
+    const ends = [endAt(T0 + 2 * MINUTE)];
+    const retry = route(input({ incidents: [away], starts: [start("life-safety", T0)], ends, merge: { deliveries: [first] }, now: T0 + 3 * MINUTE }));
+    expect(summary(retry)).toEqual([{ level: "life-safety", state: "ended", fresh: false, sends: [], cancels: [first.key] }]);
+    expect([retry[0]!.freshEnd, retry[0]!.end]).toEqual([false, ends[0]]);
+    const done = route(input({ incidents: [away], starts: [start("life-safety", T0)], ends, merge: { deliveries: [first] }, cancelled: new Set([first.key]), now: T0 + 4 * MINUTE }));
+    expect(done).toEqual([]);
+  });
+
+  it("starts a new episode with new keys when the threat comes back, and an acknowledgment before its start covers nothing", () => {
+    const ends = [endAt(T0 + 2 * MINUTE)];
+    const cancelled = new Set([first.key]);
+    // One acknowledgment of the first episode, and one between the end and the return.
+    const acks = [ack(T0 + MINUTE), ack(T0 + 5 * MINUTE)];
+    const back = route(input({ starts: [start("life-safety", T0)], ends, merge: { deliveries: [first], acks }, cancelled, now: T0 + 10 * MINUTE }));
+    expect(summary(back)).toEqual([{ level: "life-safety", state: "sent", fresh: true, sends: [0], cancels: [] }]);
+    expect([back[0]!.episode, back[0]!.start, back[0]!.end]).toEqual([1, start("life-safety", T0 + 10 * MINUTE), undefined]);
+    const send = back[0]!.plan.sends[0]!;
+    expect(send.episode).toBe(1);
+    expect(messageKey(send)).toBe(keyOf("life-safety", 0, 1));
+    expect(messageKey(send)).not.toBe(first.key);
+  });
+
+  it("starts a new episode at a lower level than the level of the earlier episode", () => {
+    const back = route(input({ incidents: [incident(WATCH)], starts: [start("life-safety", T0)], ends: [endAt(T0 + 2 * MINUTE)], merge: { deliveries: [first] }, cancelled: new Set([first.key]), now: T0 + 10 * MINUTE }));
+    expect(summary(back)).toEqual([{ level: "urgent", state: "last", fresh: true, sends: [0], cancels: [] }]);
+    expect(back[0]!.episode).toBe(1);
+  });
+
+  it("ends a new episode by an acknowledgment after its start", () => {
+    const again = delivery("life-safety", 0, T0 + 10 * MINUTE, { key: keyOf("life-safety", 0, 1) });
+    const routes = route(
+      input({
+        starts: [start("life-safety", T0), start("life-safety", T0 + 10 * MINUTE)],
+        ends: [endAt(T0 + 2 * MINUTE)],
+        merge: { deliveries: [first, again], acks: [ack(T0 + 11 * MINUTE)] },
+        cancelled: new Set([first.key]),
+        now: T0 + 12 * MINUTE,
+      }),
+    );
+    expect(routes.map((entry) => [entry.episode, entry.plan.state, entry.fresh, entry.plan.cancels.map((d) => d.key)])).toEqual([[1, "acknowledged", false, [again.key]]]);
+  });
+
+  it("starts a new episode after its end, also when the clock has not moved past the end", () => {
+    const at = T0 + 2 * MINUTE;
+    const routes = route(input({ starts: [start("life-safety", T0)], ends: [endAt(at)], merge: { deliveries: [first] }, cancelled: new Set([first.key]), now: at }));
+    expect(routes.map((entry) => [entry.episode, entry.fresh, entry.start.at, entry.plan.sends.length, entry.plan.wakeAt])).toEqual([[1, true, at + 1, 0, at + 1]]);
+  });
+
+  it("holds its laws over seeded histories where the threat leaves and comes back", () => {
+    let returns = 0;
+    for (const seed of SEEDS) {
+      const r = random(`route-episodes:${seed}`);
+      const starts: EscalationStart[] = [];
+      const ends: EscalationEnd[] = [];
+      const deliveries: Delivery[] = [];
+      const acks: Acknowledgment[] = [];
+      const cancelled = new Set<string>();
+      let phase: "warning" | "watch" | "away" = "warning";
+      for (let step = 0; step < 90; step += 1) {
+        const now = T0 + step * MINUTE;
+        if (r.chance(0.15)) phase = r.pick(["warning", "watch", "away"] as const);
+        const current = phase === "away" ? away : incident(phase === "warning" ? WARNING : WATCH);
+        const routes = route(input({ incidents: [current], merge: { deliveries, acks }, starts, ends, cancelled, now }));
+        const context = `seed ${seed}, minute ${step}`;
+
+        for (const entry of routes) {
+          // Each send has the episode of its escalation.
+          for (const send of entry.plan.sends) expect(send.episode ?? 0, context).toBe(entry.episode);
+          if (entry.episode < ends.length) {
+            // An earlier episode sends nothing, and it cancels each of its deliveries with no cancel.
+            expect(entry.plan.sends, context).toEqual([]);
+            expect(["ended", "acknowledged"], context).toContain(entry.plan.state);
+            expect(entry.end, context).toEqual(ends[entry.episode]);
+          }
+          // A new escalation sends its first step at once.
+          if (entry.fresh) expect(entry.plan.sends.map((send) => send.step), context).toContain(0);
+          if (entry.fresh && entry.episode > 0) returns += 1;
+        }
+        // While the threat is away, nothing sends, and each escalation of the current episode ends now.
+        if (phase === "away") {
+          expect(routes.flatMap((entry) => entry.plan.sends), context).toEqual([]);
+          for (const entry of routes.filter((item) => item.episode === ends.length)) {
+            expect([entry.freshEnd, entry.end?.at], context).toEqual([true, now]);
+            expect(["ended", "acknowledged"], context).toContain(entry.plan.state);
+          }
+        } else {
+          expect(routes.filter((entry) => entry.freshEnd), context).toEqual([]);
+        }
+
+        // The runtime: it writes the new starts and the new end, sends with some failures, cancels, and the person acknowledges at times.
+        for (const entry of routes) {
+          if (entry.fresh) starts.push(entry.start);
+          for (const send of entry.plan.sends) {
+            if (r.chance(0.2)) continue;
+            deliveries.push({ key: messageKey(send), incident: send.incident, level: send.level, person: send.person, channel: send.channel, step: send.step, at: now, receipt: { receipt: `${send.level}:${send.step}` } });
+          }
+          for (const done of entry.plan.cancels) if (r.chance(0.8)) cancelled.add(done.key);
+          if (entry.episode === ends.length && entry.deliveries.length > 0 && r.chance(0.05)) acks.push({ incident: anchor, level: entry.policy.level, person, at: now, via: pushover });
+        }
+        const ending = routes.find((entry) => entry.freshEnd)?.end;
+        if (ending !== undefined) ends.push(ending);
+      }
+      // No key goes out two times: each episode gets new keys.
+      expect(new Set(deliveries.map((item) => item.key)).size, `seed ${seed}`).toBe(deliveries.length);
+    }
+    expect(returns).toBeGreaterThan(0);
+  });
+});
+
+describe("route: a mute of the person (AL-35)", () => {
+  // A public county in Kansas that the person does not watch.
+  const away = incident({ areas: [{ type: "code", system: "ugc", code: "KSC079" }] });
+  const first = delivery("life-safety", 0, T0);
+  const endAt = (at: number, reason?: "muted"): EscalationEnd => ({ incident: anchor, person, at, ...(reason === undefined ? {} : { reason }) });
+  const silentStart = (level: Level, at: number): EscalationStart => ({ ...start(level, at), silent: true });
+  const keyOf = (level: Level, step: number, episode: number): string => messageKey({ incident: anchor, level, person, step, episode });
+  const ack = (at: number): Acknowledgment => ({ incident: anchor, level: "life-safety", person, at, via: pushover });
+  const mute = (effect: MuteEffect | undefined): void => {
+    mutes.effect = effect;
+  };
+  const sends = (routes: readonly Route[]) => routes.flatMap((entry) => entry.plan.sends.map((send) => ({ episode: entry.episode, level: send.level, step: send.step, quiet: send.quiet })));
+
+  beforeEach(() => mute(undefined));
+
+  it("gives one quiet step 0 under a mute that was there before the incident, also at life-safety, and no exhaustion", () => {
+    mute("silent");
+    const routes = route(input());
+    expect(sends(routes)).toEqual([{ episode: 0, level: "life-safety", step: 0, quiet: true }]);
+    expect([routes[0]!.fresh, routes[0]!.start]).toEqual([true, silentStart("life-safety", T0)]);
+    // Later, the policy has a step at 5 minutes and an exhaustion at 25 minutes. The silent mode sends no more and does not exhaust.
+    const later = route(input({ starts: [silentStart("life-safety", T0)], merge: { deliveries: [first] }, now: T0 + 40 * MINUTE }));
+    expect(summary(later)).toEqual([{ level: "life-safety", state: "last", fresh: false, sends: [], cancels: [] }]);
+    expect([later[0]!.plan.exhaustedAt, later[0]!.plan.wakeAt, later[0]!.freshEnd]).toEqual([undefined, undefined, false]);
+  });
+
+  it("ends a loud episode at a silent mute with the reason muted, cancels its repeats, and sends no copy", () => {
+    mute("silent");
+    const at = T0 + 2 * MINUTE;
+    const routes = route(input({ starts: [start("life-safety", T0)], merge: { deliveries: [first] }, now: at }));
+    expect(routes.map((entry) => [entry.episode, entry.plan.state, entry.freshEnd, entry.fresh, entry.plan.cancels.map((item) => item.key)])).toEqual([
+      [0, "ended", true, false, [first.key]],
+      [1, "idle", false, true, []],
+    ]);
+    expect(routes[0]!.end).toEqual(endAt(at, "muted"));
+    // The next episode starts at once in the silent mode. The person has a delivery of the incident, thus it sends nothing.
+    expect(routes[1]!.start).toEqual(silentStart("life-safety", at + 1));
+    expect(sends(routes)).toEqual([]);
+    const later = route(
+      input({ starts: [start("life-safety", T0), silentStart("life-safety", at + 1)], ends: [endAt(at, "muted")], merge: { deliveries: [first] }, cancelled: new Set([first.key]), now: T0 + 30 * MINUTE }),
+    );
+    expect(summary(later)).toEqual([{ level: "life-safety", state: "idle", fresh: false, sends: [], cancels: [] }]);
+  });
+
+  it("starts a loud episode at once with new keys when a silent mute ends with no acknowledgment", () => {
+    const at = T0 + 3 * MINUTE;
+    const routes = route(input({ starts: [silentStart("life-safety", T0)], merge: { deliveries: [first] }, now: at }));
+    expect(routes.map((entry) => [entry.episode, entry.plan.state, entry.freshEnd, entry.fresh, entry.plan.wakeAt])).toEqual([
+      [0, "ended", true, false, undefined],
+      [1, "idle", false, true, at + 1],
+    ]);
+    expect([routes[0]!.end, routes[1]!.start]).toEqual([endAt(at, "muted"), start("life-safety", at + 1)]);
+    const loud = route(input({ starts: [silentStart("life-safety", T0), start("life-safety", at + 1)], ends: [endAt(at, "muted")], merge: { deliveries: [first] }, cancelled: new Set([first.key]), now: at + MINUTE }));
+    expect(sends(loud)).toEqual([{ episode: 1, level: "life-safety", step: 0, quiet: false }]);
+    expect(messageKey(loud[0]!.plan.sends[0]!)).toBe(keyOf("life-safety", 0, 1));
+  });
+
+  it("gives the loud episode after a mute the rules of the quiet window, as any new start", () => {
+    // T0 is 13:00 in Chicago, in the quiet window of the person. A mute that expires and a mute that the person removes
+    // are the same to route(): no mute at now. So one case holds both.
+    const base = recipient();
+    const night: Recipient = { ...base, watch: { ...base.watch, quiet: { zone: "America/Chicago", start: "12:00", end: "15:00" } } };
+    const at = T0 + 3 * MINUTE;
+    for (const [fields, level, quiet] of [
+      [WATCH, "urgent", true],
+      [WARNING, "life-safety", false],
+    ] as const) {
+      const muted = delivery(level, 0, T0);
+      const ended = route(input({ incidents: [incident(fields)], recipients: [night], starts: [silentStart(level, T0)], merge: { deliveries: [muted] }, now: at }));
+      expect(
+        ended.map((entry) => [entry.policy.level, entry.episode, entry.freshEnd, entry.fresh, entry.end?.reason]),
+        level,
+      ).toEqual([
+        [level, 0, true, false, "muted"],
+        [level, 1, false, true, undefined],
+      ]);
+      const loud = route(
+        input({ incidents: [incident(fields)], recipients: [night], starts: [silentStart(level, T0), start(level, at + 1)], ends: [endAt(at, "muted")], merge: { deliveries: [muted] }, cancelled: new Set([muted.key]), now: at + MINUTE }),
+      );
+      // Below life-safety, the new episode sends quiet in the window. At life-safety, it sends loud.
+      expect(sends(loud), level).toEqual([{ episode: 1, level, step: 0, quiet }]);
+    }
+  });
+
+  it("does not alert again after an acknowledgment when a mute starts and ends", () => {
+    // The person acknowledged the loud alert, then muted it, then ended the mute.
+    const muteAt = T0 + 2 * MINUTE;
+    const routes = route(
+      input({
+        starts: [start("life-safety", T0), silentStart("life-safety", muteAt + 1)],
+        ends: [endAt(muteAt, "muted")],
+        merge: { deliveries: [first], acks: [ack(T0 + MINUTE)] },
+        cancelled: new Set([first.key]),
+        now: T0 + 5 * MINUTE,
+      }),
+    );
+    expect(routes.map((entry) => [entry.episode, entry.plan.state, entry.fresh, entry.freshEnd])).toEqual([
+      [1, "acknowledged", false, true],
+      [2, "acknowledged", true, false],
+    ]);
+    expect(sends(routes)).toEqual([]);
+  });
+
+  it("ends the escalation at a mute with the effect absent, and alerts again with new keys when the mute ends", () => {
+    mute("absent");
+    const at = T0 + 2 * MINUTE;
+    const routes = route(input({ starts: [start("life-safety", T0)], merge: { deliveries: [first] }, now: at }));
+    expect(summary(routes)).toEqual([{ level: "life-safety", state: "ended", fresh: false, sends: [], cancels: [first.key] }]);
+    expect([routes[0]!.freshEnd, routes[0]!.end]).toEqual([true, endAt(at, "muted")]);
+    mute(undefined);
+    const back = route(input({ starts: [start("life-safety", T0)], ends: [endAt(at, "muted")], merge: { deliveries: [first] }, cancelled: new Set([first.key]), now: T0 + 10 * MINUTE }));
+    expect(sends(back)).toEqual([{ episode: 1, level: "life-safety", step: 0, quiet: false }]);
+  });
+
+  it("gives an end with no reason when the threat leaves, also under a silent mute", () => {
+    mute("silent");
+    const routes = route(input({ incidents: [away], starts: [silentStart("life-safety", T0)], merge: { deliveries: [first] }, now: T0 + 2 * MINUTE }));
+    expect([routes[0]!.freshEnd, routes[0]!.end]).toEqual([true, endAt(T0 + 2 * MINUTE)]);
+  });
+
+  it("sends nothing for a higher level of a silent episode after the quiet message of a lower level", () => {
+    mute("silent");
+    const watch = delivery("urgent", 0, T0);
+    const routes = route(input({ starts: [silentStart("urgent", T0)], merge: { deliveries: [watch] }, now: T0 + 5 * MINUTE }));
+    expect(summary(routes)).toEqual([
+      { level: "urgent", state: "ended", fresh: false, sends: [], cancels: [watch.key] },
+      { level: "life-safety", state: "idle", fresh: true, sends: [], cancels: [] },
+    ]);
+    expect(routes[1]!.start).toEqual(silentStart("life-safety", T0 + 5 * MINUTE));
+  });
+
+  it("holds its laws over seeded histories of mutes, returns and acknowledgments", () => {
+    const counts = { silentSends: 0, modeEnds: 0, quietAfterAck: 0 };
+    for (const seed of SEEDS) {
+      const r = random(`route-mutes:${seed}`);
+      const starts: EscalationStart[] = [];
+      const ends: EscalationEnd[] = [];
+      const deliveries: Delivery[] = [];
+      const acks: Acknowledgment[] = [];
+      const cancelled = new Set<string>();
+      let phase: "loud" | "silent" | "absent" | "away" = "loud";
+      // The highest level that the person acknowledged since the last end `ended`, or -1.
+      let acked = -1;
+      for (let step = 0; step < 120; step += 1) {
+        const now = T0 + step * MINUTE;
+        if (r.chance(0.12)) phase = r.pick(["loud", "silent", "absent", "away"] as const);
+        mute(phase === "silent" ? "silent" : phase === "absent" ? "absent" : undefined);
+        const current = phase === "away" ? away : incident(r.chance(0.5) ? WARNING : WATCH);
+        const routes = route(input({ incidents: [current], merge: { deliveries, acks }, starts, ends, cancelled, now }));
+        const context = `seed ${seed}, minute ${step}, ${phase}`;
+        const before = deliveries.length;
+        for (const entry of routes) {
+          for (const send of entry.plan.sends) {
+            // A silent episode sends one quiet step 0, and only when the person has no delivery of the incident.
+            if (entry.start.silent === true) {
+              expect([send.step, send.quiet, before], context).toEqual([0, true, 0]);
+              counts.silentSends += 1;
+            }
+            // An acknowledgment covers its level and each lower level until the threat leaves. A change of a mute does not alert again.
+            expect(LEVELS.indexOf(send.level) > acked, context).toBe(true);
+          }
+          if (entry.freshEnd) {
+            // An end of a mute has the reason muted. An end of a threat that left has no reason.
+            expect(entry.end?.reason, context).toBe(phase === "away" ? undefined : "muted");
+            if (entry.end?.reason === "muted") counts.modeEnds += 1;
+          }
+          // An escalation that starts at `now` in the loud mode sends its first step at once.
+          if (entry.fresh && entry.start.silent !== true && entry.start.at <= now && entry.plan.state !== "acknowledged") {
+            expect(entry.plan.sends.map((send) => send.step), context).toContain(0);
+          }
+        }
+        // Nothing sends while the threat is away or under a mute with the effect absent.
+        if (phase === "away" || phase === "absent") expect(routes.flatMap((entry) => entry.plan.sends), context).toEqual([]);
+
+        // The runtime: it writes the new starts and the new ends, sends with some failures, cancels, and the person acknowledges at times.
+        for (const entry of routes) {
+          if (entry.fresh) starts.push(entry.start);
+          for (const send of entry.plan.sends) {
+            if (r.chance(0.2)) continue;
+            deliveries.push({ key: messageKey(send), incident: send.incident, level: send.level, person: send.person, channel: send.channel, step: send.step, at: now, receipt: { receipt: `${send.level}:${send.step}` } });
+          }
+          for (const done of entry.plan.cancels) if (r.chance(0.8)) cancelled.add(done.key);
+        }
+        const ending = new Map<number, EscalationEnd>();
+        for (const entry of routes) if (entry.freshEnd && entry.end !== undefined) ending.set(entry.episode, entry.end);
+        for (const end of [...ending.values()]) {
+          ends.push(end);
+          if (end.reason === undefined) acked = -1;
+        }
+        const open = routes.find((entry) => entry.episode === ends.length && entry.deliveries.length > 0);
+        if (open !== undefined && r.chance(0.08)) {
+          acks.push({ incident: anchor, level: open.policy.level, person, at: now, via: pushover });
+          acked = Math.max(acked, LEVELS.indexOf(open.policy.level));
+          if (phase === "silent") counts.quietAfterAck += 1;
+        }
+      }
+      // No key goes out two times: each episode gets new keys.
+      expect(new Set(deliveries.map((item) => item.key)).size, `seed ${seed}`).toBe(deliveries.length);
+    }
+    // The histories reach each case of the laws.
+    expect(counts.silentSends).toBeGreaterThan(0);
+    expect(counts.modeEnds).toBeGreaterThan(0);
+  });
+});
+
+describe("ruleSteps: the channel rules of a person (AL-43)", () => {
+  const about = { system: DRILL_SUBJECT, id: "push-weekly" };
+  const drillRun = incident({ status: "system", kind: { code: "system.drill.run", label: "Drill" }, about: [about], areas: [] });
+  const only: ChannelRule = { kinds: ["system.drill.run"], about, keep: "only", channels: [pushover] };
+  const except: ChannelRule = { kinds: ["system.drill"], about, keep: "except", channels: [pushover] };
+  const none = { policy: LIFE_SAFETY, rules: [], dropped: [] };
+
+  it("keeps only the steps on the channels of an only rule, and removes the steps of an except rule", () => {
+    expect(ruleSteps(LIFE_SAFETY, [only], drillRun)).toEqual({ policy: { ...LIFE_SAFETY, steps: [LIFE_SAFETY.steps[0]] }, rules: [0], dropped: [1] });
+    expect(ruleSteps(LIFE_SAFETY, [except], drillRun)).toEqual({ policy: { ...LIFE_SAFETY, steps: [LIFE_SAFETY.steps[1]] }, rules: [0], dropped: [0] });
+    // Each rule that applies keeps a step. An only rule and an except rule on one channel keep no step.
+    expect(ruleSteps(LIFE_SAFETY, [only, except], drillRun)).toEqual({ policy: { ...LIFE_SAFETY, steps: [] }, rules: [0, 1], dropped: [0, 1] });
+  });
+
+  it("applies a rule only to its kinds and its subject", () => {
+    expect(ruleSteps(LIFE_SAFETY, [only], { ...drillRun, kind: { code: "system.drill.failed", label: "Failed drill" } })).toEqual(none);
+    expect(ruleSteps(LIFE_SAFETY, [only], { ...drillRun, about: [{ system: DRILL_SUBJECT, id: "other" }] })).toEqual(none);
+    // A rule with no subject applies to each incident of its kinds.
+    const anyDrill: ChannelRule = { kinds: ["system.drill.run"], keep: "only", channels: [pushover] };
+    expect(ruleSteps(LIFE_SAFETY, [anyDrill], { ...drillRun, about: [] }).dropped).toEqual([1]);
+    expect(ruleSteps(LIFE_SAFETY, undefined, drillRun)).toEqual(none);
+  });
+
+  it("changes no step of an incident with the status actual, and applies to the statuses system, test and exercise", () => {
+    const rule: ChannelRule = { kinds: ["met.tornado"], keep: "only", channels: [] };
+    expect(ruleSteps(LIFE_SAFETY, [rule], incident())).toEqual(none);
+    expect(RULED_STATUSES).toEqual(["system", "test", "exercise"]);
+    for (const status of RULED_STATUSES) expect(ruleSteps(LIFE_SAFETY, [rule], incident({ status })).dropped).toEqual([0, 1]);
+  });
+
+  it("holds its laws over seeded rules and incidents", () => {
+    const kinds = ["system.drill", "system.drill.run", "system.drill.failed", "met.tornado", "system"];
+    const statuses = ["actual", "system", "test", "exercise"] as const;
+    for (const seed of SEEDS) {
+      const r = random(`rules:${seed}`);
+      for (let round = 0; round < 50; round += 1) {
+        const rules: ChannelRule[] = Array.from({ length: r.int(0, 3) }, () => ({
+          kinds: r.sample(kinds, r.int(1, 2)),
+          ...(r.chance(0.5) ? { about: { system: DRILL_SUBJECT, id: r.pick(["a", "b"]) } } : {}),
+          keep: r.pick(["only", "except"] as const),
+          channels: r.sample([pushover, sms], r.int(0, 2)),
+        }));
+        const code = r.pick(["system.drill.run", "system.drill.failed", "met.tornado", "system.health"]);
+        const current = incident({ status: r.pick(statuses), kind: { code, label: code }, about: r.chance(0.5) ? [{ system: DRILL_SUBJECT, id: r.pick(["a", "b"]) }] : [] });
+        const ruled = ruleSteps(LIFE_SAFETY, rules, current);
+        const context = `seed ${seed}, round ${round}`;
+        // A real warning keeps its policy as it is.
+        if (current.status === "actual") expect(ruled, context).toEqual(none);
+        // The kept steps and the dropped steps split the steps of the policy, in their order.
+        expect(ruled.policy.steps, context).toEqual(LIFE_SAFETY.steps.filter((_, index) => !ruled.dropped.includes(index)));
+        // Each rule that applies keeps each step that stays.
+        for (const step of ruled.policy.steps) for (const index of ruled.rules) expect(rules[index]!.channels.includes(step.channel) === (rules[index]!.keep === "only"), context).toBe(true);
+        // The order of the rules has no effect on the steps.
+        expect(ruleSteps(LIFE_SAFETY, [...rules].reverse(), current).policy.steps, context).toEqual(ruled.policy.steps);
+      }
+    }
+  });
+
+  it("gives the plan with the kept steps, and tells the rules and the dropped steps in Route.ruled", () => {
+    const watcher: Recipient = { ...recipient(), watch: { ...recipient().watch, subjects: [{ system: DRILL_SUBJECT }] }, channelRules: [only] };
+    const view = (routes: readonly Route[]) => routes.map((entry) => ({ level: entry.policy.level, steps: entry.policy.steps, ruled: entry.ruled, sends: entry.plan.sends.map((send) => send.channel) }));
+    expect(view(route(input({ incidents: [drillRun], recipients: [watcher] })))).toEqual([{ level: "life-safety", steps: [LIFE_SAFETY.steps[0]], ruled: { rules: [0], dropped: [1] }, sends: [pushover] }]);
+    // With no rule that applies, the route has no field ruled.
+    expect(route(input({ incidents: [drillRun], recipients: [{ ...watcher, channelRules: [except] }] }))[0]?.ruled).toEqual({ rules: [0], dropped: [0] });
+    expect(route(input({ incidents: [drillRun], recipients: [{ ...watcher, channelRules: [] }] }))[0]?.ruled).toBeUndefined();
+  });
+});
+
+describe("policyFor: the policy of a subject (AL-43)", () => {
+  const about = { system: DRILL_SUBJECT, id: "push-weekly" };
+  const drillRun = incident({ status: "system", kind: { code: "system.drill.run", label: "Drill" }, about: [about], areas: [] });
+  const anyDrill: EscalationPolicy = { ...LIFE_SAFETY, about: { system: DRILL_SUBJECT }, steps: [{ channel: sms, at: 0 }] };
+  const thisDrill: EscalationPolicy = { ...LIFE_SAFETY, about, steps: [{ channel: pushover, at: 0 }] };
+
+  it("gives the first policy of the level whose subject matches, and else the policy with no subject", () => {
+    expect(policyFor([LIFE_SAFETY, URGENT], "urgent", drillRun)).toBe(URGENT);
+    expect(policyFor([LIFE_SAFETY, anyDrill], "life-safety", drillRun)).toBe(anyDrill);
+    // When two policies of the level match the incident, the first one in the list applies.
+    expect(policyFor([anyDrill, thisDrill, LIFE_SAFETY], "life-safety", drillRun)).toBe(anyDrill);
+    expect(policyFor([thisDrill, anyDrill, LIFE_SAFETY], "life-safety", drillRun)).toBe(thisDrill);
+    // A subject that does not match gives the policy with no subject. With no such policy, the level has no policy.
+    expect(policyFor([thisDrill, LIFE_SAFETY], "life-safety", { ...drillRun, about: [{ system: DRILL_SUBJECT, id: "other" }] })).toBe(LIFE_SAFETY);
+    expect(policyFor([thisDrill], "life-safety", { ...drillRun, about: [] })).toBeUndefined();
+  });
+
+  it("gives no policy with a subject to a real warning", () => {
+    expect(policyFor([anyDrill, LIFE_SAFETY], "life-safety", { ...drillRun, status: "actual" })).toBe(LIFE_SAFETY);
+    expect(policyFor([anyDrill], "life-safety", { ...drillRun, status: "actual" })).toBeUndefined();
+    for (const status of RULED_STATUSES) expect(policyFor([LIFE_SAFETY, anyDrill], "life-safety", { ...drillRun, status })).toBe(anyDrill);
+  });
+
+  it("holds its laws over seeded lists of policies", () => {
+    const statuses = ["actual", "system", "test", "exercise"] as const;
+    for (const seed of SEEDS) {
+      const r = random(`policies:${seed}`);
+      for (let round = 0; round < 50; round += 1) {
+        const policies: EscalationPolicy[] = Array.from({ length: r.int(0, 5) }, () => ({
+          level: r.pick(["life-safety", "urgent", "notice"] as const),
+          ...(r.chance(0.5) ? { about: { system: DRILL_SUBJECT, ...(r.chance(0.5) ? { id: r.pick(["a", "b"]) } : {}) } } : {}),
+          steps: [{ channel: r.pick([pushover, sms]), at: 0 }],
+          exhaustedAfter: MINUTE,
+        }));
+        const level = r.pick(["life-safety", "urgent", "notice"] as const);
+        const current = incident({ status: r.pick(statuses), about: r.chance(0.5) ? [{ system: DRILL_SUBJECT, id: r.pick(["a", "b"]) }] : [] });
+        const found = policyFor(policies, level, current);
+        const context = `seed ${seed}, round ${round}`;
+        const plain = policies.find((policy) => policy.level === level && policy.about === undefined);
+        // The policy is of the level, and it is one of the list.
+        if (found !== undefined) expect(found.level === level && policies.includes(found), context).toBe(true);
+        // A real warning gets the first policy of the level with no subject.
+        if (current.status === "actual") expect(found, context).toBe(plain);
+        // A policy with a subject applies only when the subject matches the incident.
+        if (found?.about !== undefined) expect(matchSubjects(current, [found.about]).length, context).toBeGreaterThan(0);
+        // With no policy with a subject that matches, the policy with no subject applies.
+        if (!policies.some((policy) => policy.level === level && policy.about !== undefined && matchSubjects(current, [policy.about]).length > 0)) expect(found, context).toBe(plain);
+      }
+    }
+  });
+
+  it("gives the route the policy of the subject, and the channel rules apply to it", () => {
+    const watcher: Recipient = { ...recipient("person-1", [LIFE_SAFETY, anyDrill]), watch: { ...recipient().watch, subjects: [{ system: DRILL_SUBJECT }] } };
+    const view = (routes: readonly Route[]) => routes.map((entry) => ({ about: entry.policy.about, sends: entry.plan.sends.map((send) => send.channel) }));
+    expect(view(route(input({ incidents: [drillRun], recipients: [watcher] })))).toEqual([{ about: anyDrill.about, sends: [sms] }]);
+    // A real warning at the place of the person gets the policy with no subject.
+    expect(view(route(input({ incidents: [incident()], recipients: [watcher] })))).toEqual([{ about: undefined, sends: [pushover] }]);
+    // A rule that keeps only the channel pushover removes the step of the policy of the subject.
+    const only: ChannelRule = { kinds: ["system.drill.run"], about, keep: "only", channels: [pushover] };
+    expect(route(input({ incidents: [drillRun], recipients: [{ ...watcher, channelRules: [only] }] }))[0]?.ruled).toEqual({ rules: [0], dropped: [0] });
+  });
+
+  it("finds two policies of one level and one subject, and a life-safety policy only with a subject", () => {
+    expect(policyName(anyDrill)).toBe(`life-safety about ${DRILL_SUBJECT}`);
+    expect(policyName(thisDrill)).toBe(`life-safety about ${DRILL_SUBJECT} push-weekly`);
+    expect(recipientProblems(recipient("person-1", [LIFE_SAFETY, anyDrill, thisDrill]), CHANNELS)).toEqual([]);
+    expect(recipientProblems(recipient("person-1", [LIFE_SAFETY, anyDrill, { ...anyDrill, steps: [{ channel: pushover, at: 0 }] }]), CHANNELS)).toEqual([
+      `Two policies have the level life-safety about ${DRILL_SUBJECT}. Only the first one applies.`,
+    ]);
+    expect(recipientProblems(recipient("person-1", [anyDrill, URGENT]), CHANNELS)).toEqual([
+      "The person watches a place or a subject, and has no policy of the level life-safety. A life-safety alert sends nothing to the person.",
+    ]);
+    const fax = "fax" as ChannelId;
+    expect(recipientProblems(recipient("person-1", [LIFE_SAFETY, { ...thisDrill, steps: [{ channel: fax, at: 0 }] }]), CHANNELS)).toEqual([
+      `Step 0 of life-safety about ${DRILL_SUBJECT} push-weekly uses the channel fax, and the system has no such channel.`,
+      `Step 0 of life-safety about ${DRILL_SUBJECT} push-weekly uses the channel fax, and the person has no address on it.`,
+    ]);
+  });
+});
+
 describe("recipientProblems", () => {
   it("finds a repeated level, a channel that does not exist and a missing address", () => {
     const fax = "fax" as ChannelId;
@@ -293,6 +928,34 @@ describe("recipientProblems", () => {
     expect(problems.length).toBeGreaterThanOrEqual(2);
     for (const problem of problems) expect(problem).toMatch(/^The quiet window: /);
   });
+
+  it("finds an address that does not have the fields of its channel, and names no value", () => {
+    const to = { name: "to", required: true, pattern: "\\+[1-9][0-9]{7,14}", form: "a phone number in E.164 form" } as const;
+    const label = { name: "label", required: false, pattern: "[a-z]{1,10}", form: "1 to 10 small letters" } as const;
+    const texts: ChannelDescriptor = { ...channel(sms, "none"), address: [to, label] };
+    const base = recipient();
+    const at = (address: Address): string[] => recipientProblems({ ...base, addresses: { ...base.addresses, sms: address } }, [channel(pushover, "poll"), texts]);
+    expect(at({ to: "+99900000002" })).toEqual([]);
+    expect(at({ to: "+99900000002", label: "home" })).toEqual([]);
+    expect(at({})).toEqual(["The address on sms has no field to. The channel needs a phone number in E.164 form."]);
+    expect(at({ to: "99900000002" })).toEqual(["The field to of the address on sms is not a phone number in E.164 form."]);
+    // The pattern holds the whole value, not a part of it.
+    expect(at({ to: "+99900000002 and more" })).toEqual(["The field to of the address on sms is not a phone number in E.164 form."]);
+    expect(at({ to: "+99900000002", label: "Home 2" })).toEqual(["The field label of the address on sms is not 1 to 10 small letters."]);
+    expect(at({ to: "+99900000002", numbr: "+1" })).toEqual(["The address on sms has the field numbr, and the channel reads no such field."]);
+    // Own fields only: the field constructor of a plain object is not a field of the address.
+    expect(addressProblems({}, { ...texts, address: [{ name: "constructor", required: true, pattern: ".*", form: "any text" }] })).toEqual([
+      "The address on sms has no field constructor. The channel needs any text.",
+    ]);
+    // A bad pattern of a channel is a problem, not a throw.
+    expect(addressProblems({ to: "+99900000002" }, { ...texts, address: [{ ...to, pattern: "[0-9" }] })).toEqual([
+      "The channel sms gives the field to a pattern that is not a regular expression.",
+    ]);
+    // A channel with no fields accepts each address. An address on a channel that the system does not know is not a problem.
+    expect(addressProblems({ any: "value" }, channel(pushover, "poll"))).toEqual([]);
+    expect(recipientProblems({ ...base, addresses: { ...base.addresses, fax: { to: "x" } } }, CHANNELS)).toEqual([]);
+    for (const problem of [...at({ to: "bad-value-1" }), ...at({ numbr: "bad-value-2" })]) expect(problem).not.toMatch(/bad-value/);
+  });
 });
 
 function report(id: ReportId, fields: Partial<Report> = {}): Report {
@@ -323,7 +986,7 @@ function report(id: ReportId, fields: Partial<Report> = {}): Report {
 }
 
 describe("messageOf", () => {
-  const send = { incident: anchor, level: "life-safety", person, step: 0, channel: pushover, due: T0, quiet: false } as const;
+  const send = { incident: anchor, level: "life-safety", person, step: 0, channel: pushover, due: T0, wait: 0, quiet: false } as const;
 
   it("takes the text of the latest report at the severity and the urgency of the incident", () => {
     const reports = [
@@ -344,6 +1007,9 @@ describe("messageOf", () => {
       expires: T0 + 30 * MINUTE,
       quiet: false,
     });
+    // The why line of the channel goes into its own field. An empty line gives no field.
+    expect(messageOf(members, reports, send, "Why: your place is in the area").why).toBe("Why: your place is in the area");
+    expect("why" in messageOf(members, reports, send, "")).toBe(false);
   });
 
   it("uses the label of the kind when no report of the incident is in the state", () => {

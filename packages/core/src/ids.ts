@@ -27,11 +27,17 @@ export interface ObservationIdInput {
   readonly url?: string;
 }
 
-/** The input of `reportId`: the source, the key that the source gives and the sent time. */
+/** The input of `reportId`: the source, the key that the source gives, the sent time and the part. */
 export interface ReportIdInput {
   readonly source: SourceId;
   readonly key: string;
   readonly sent: Instant;
+  /**
+   * The part of a message that gives two or more reports, for example `info[1]`, the second info block of a CAP
+   * message. The reports of one message keep its key, so a reference to the message ends each of them. A report
+   * with no part keeps the id of a report of one part.
+   */
+  readonly part?: string | undefined;
 }
 
 /** The input of `messageKey`: one step of the escalation of one level of one incident to one person. */
@@ -41,6 +47,11 @@ export interface MessageKeyInput {
   readonly person: PersonId;
   /** The index of the step in the escalation of the person, from 0. */
   readonly step: number;
+  /**
+   * The count of the ends of the escalations of the person in the incident before this escalation (`EscalationEnd`).
+   * When the threat comes back to the person after an end, the new escalation gets new keys.
+   */
+  readonly episode?: number | undefined;
 }
 
 /**
@@ -57,7 +68,8 @@ export function observationId(input: ObservationIdInput): ObservationId {
  * time, so it gets a new id. The merge uses the smallest report id of an incident as its anchor.
  */
 export function reportId(input: ReportIdInput): ReportId {
-  return digest(["report", input.source, input.key, input.sent]) as ReportId;
+  const fields = ["report", input.source, input.key, input.sent];
+  return digest(input.part === undefined ? fields : [...fields, input.part]) as ReportId;
 }
 
 /**
@@ -69,9 +81,14 @@ export const COPY_ID: RegExp = /^[A-Za-z0-9_-]+$/;
 /**
  * This function gives the key of a message. A channel that can drop a repeated key does so. A
  * repeat of the same step gets the same key, and the next step gets a new key.
+ *
+ * - An episode after the first one is in the key. Thus a new escalation after an end gets new keys.
+ * - The key of the first episode has no episode field. Thus the keys of a log from before the episodes do not change.
  */
 export function messageKey(input: MessageKeyInput): string {
-  return digest(["message", input.incident, input.level, input.person, input.step]);
+  const episode = input.episode ?? 0;
+  const fields = ["message", input.incident, input.level, input.person, input.step];
+  return digest(episode === 0 ? fields : [...fields, episode]);
 }
 
 // The form "json" writes NaN and an infinite number as null, and escapes a lone surrogate. So the

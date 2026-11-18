@@ -5,24 +5,38 @@
  * view again at that time.
  */
 import {
+  DEFAULT_LINK_POLICY,
   advanceHealth,
+  balanceUnreadAt,
   carriages,
+  CLOCK_STEP_WINDOW,
+  copyUnreadAt,
+  LOG_RECOVERY_WINDOW,
   coverage,
   incidents,
-  lateLimits,
-  lateness,
+  latenessStep,
   lateSources,
+  limitRule,
+  linkRule,
+  recentRecovery,
+  recentStep,
   startHealth,
   systemReports,
   threats,
   type Coverage,
   type ChannelQuota,
+  type CopyWatch,
+  type DrillSnapshot,
+  type ProviderBalance,
   type CoveragePolicy,
   type DelayLimitOptions,
   type Expectation,
   type Incident,
   type Instant,
   type Lateness,
+  type LatenessFolds,
+  type LimitRule,
+  type LinkPolicy,
   type SourceDescriptor,
   type SourceHealth,
   type SystemStep,
@@ -48,6 +62,8 @@ export interface ViewConfig extends FoldContext {
   /** The quantile and the level of the two limits of each expectation: the delay and the count of misses. They come from the log. */
   readonly delay: DelayLimitOptions;
   readonly coverage?: CoveragePolicy;
+  /** The policy of the link rule of the merge. The default is `DEFAULT_LINK_POLICY`. The delivery uses the same policy. */
+  readonly link?: LinkPolicy;
 }
 
 /** The view of the system at one time. */
@@ -61,25 +77,61 @@ export interface SystemView {
   readonly step: SystemStep;
   /** The next time when a timer of the health, of the lateness or of an incident ends. */
   readonly wakeAt?: Instant;
+  /** The folds of the lateness at `at`. The next view continues them. They change only the cost of the next view. The lateness stays the same. */
+  readonly folds: LatenessFolds;
+}
+
+// One rule for each policy of the limits. Thus the folds of one view continue in the next view, because their rule is the same function.
+const RULES = new WeakMap<DelayLimitOptions, LimitRule>();
+
+function ruleOf(options: DelayLimitOptions): LimitRule {
+  const known = RULES.get(options);
+  if (known !== undefined) return known;
+  const rule = limitRule(options);
+  RULES.set(options, rule);
+  return rule;
+}
+
+/** The parts of the view that do not come from the log: the counts and the watches at the time of the view. */
+export interface SystemParts {
+  /** The counts of the channels at the time of the view. With no quotas, each open line of a quota stays open. */
+  readonly quotas?: readonly ChannelQuota[];
+  /** The watches of the provider accounts. With no balances, each open line of a balance stays open. */
+  readonly balances?: readonly ProviderBalance[];
+  /** The watches of the other copies of the system. With no copies, each open line of a copy stays open. */
+  readonly copies?: readonly CopyWatch[];
+  /** The folds of the last view (`latenessStep`). With no folds, each fold starts again. The view is the same. */
+  readonly folds?: LatenessFolds;
+  /** The drills of this copy (`drillStep`). With no drills, each open line of a drill stays open. */
+  readonly drills?: readonly DrillSnapshot[];
 }
 
 /**
- * This function gives the view of the system at the time `at`. The quotas are the counts of the channels
- * at `at`. With no quotas, each open line of a quota stays open.
+ * This function gives the view of the system at the time `at`.
+ *
+ * - The quotas are the counts of the channels at `at`. With no quotas, each open line of a quota stays open.
+ * - The balances are the watches of the provider accounts. The time when a balance reaches `unread` is a timer too.
+ * - The copies are the watches of the other copies. The time when a copy reaches `unread` is a timer too.
+ * - The latest step of the wall clock in its window is a line. The end of the window is a timer too.
+ * - The latest recovery of the log in its window is a line. The end of the window is a timer too.
+ * - The folds are the folds of the last view (`latenessStep`). With no folds, each fold starts again. The view is the same.
  */
-export function systemView(state: RuntimeState, config: ViewConfig, at: Instant, quotas?: readonly ChannelQuota[]): SystemView {
+export function systemView(state: RuntimeState, config: ViewConfig, at: Instant, parts: SystemParts = {}): SystemView {
+  const { quotas, balances, copies, folds, drills } = parts;
   const steps = config.sources.map((source) => advanceHealth(state.health[source.id] ?? startHealth(source.id, state.start ?? at), at, source, config.health));
   const health = steps.map((step) => step.health);
-  const found = incidents(state.merge, at);
+  const found = incidents(state.merge, at, { link: linkRule(config.link ?? DEFAULT_LINK_POLICY) });
   const checks = carriages(state.merge, found, config.expectations);
-  const limits = lateLimits(checks, config.expectations, at, config.delay);
-  const late = lateness(checks, config.expectations, limits, at);
+  const { lateness: late, folds: next } = latenessStep(checks, config.expectations, at, ruleOf(config.delay), folds);
   const covered = coverage({ sources: config.sources, health, late: lateSources(late), places: config.places, kinds: config.kinds }, config.coverage);
-  const step = systemReports(state.lines, { sources: config.sources, health, coverage: covered, threats: threats(found, config.places), lateness: late, ...(quotas === undefined ? {} : { quotas }) }, at);
+  const step = systemReports(state.lines, { sources: config.sources, health, coverage: covered, threats: threats(found, config.places), lateness: late, ...(quotas === undefined ? {} : { quotas }), ...(balances === undefined ? {} : { balances }), ...(copies === undefined ? {} : { copies }), ...(drills === undefined ? {} : { drills }), steps: state.steps, recoveries: state.recoveries }, at);
   // An incident that expires changes the threats, thus its end is a timer too.
   const ends = found.flatMap((incident) => (incident.live && incident.expires !== undefined && incident.expires > at ? [incident.expires] : []));
-  const wakeAt = earliest([...steps.map((entry) => entry.wakeAt), ...late.map((entry) => entry.wakeAt), ...ends]);
-  return { at, health, incidents: found, lateness: late, coverage: covered, step, ...(wakeAt === undefined ? {} : { wakeAt }) };
+  const unread = [...(balances ?? []).map(balanceUnreadAt), ...(copies ?? []).map(copyUnreadAt)].filter((time) => time > at);
+  const stepped = recentStep(state.steps, at);
+  const recovered = recentRecovery(state.recoveries, at);
+  const wakeAt = earliest([...steps.map((entry) => entry.wakeAt), ...late.map((entry) => entry.wakeAt), ...ends, ...unread, stepped === undefined ? undefined : stepped.at + CLOCK_STEP_WINDOW, recovered === undefined ? undefined : recovered.at + LOG_RECOVERY_WINDOW]);
+  return { at, health, incidents: found, lateness: late, coverage: covered, step, ...(wakeAt === undefined ? {} : { wakeAt }), folds: next };
 }
 
 /** This function gives the event of the step of a view, or `undefined` when the step has no report. */

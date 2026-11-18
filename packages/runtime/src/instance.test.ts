@@ -3,14 +3,42 @@ import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fakeClock, type FakeClock, type WallClock } from "@mark1russell7/algebra/clock";
-import { CONFIG_FORMAT, matchPlaces, parseConfig, type AlertConfig, type Watch, type ChannelId, type EscalationPolicy, type PersonId, type PlaceId, type SecretLookup, type SourceId } from "@mark1russell7/alerts";
+import {
+  CONFIG_FORMAT,
+  COPY_FORMAT,
+  escalate,
+  HEALTH_FORMAT,
+  healthPayloadSchema,
+  MAP_FORMAT,
+  matchPlaces,
+  ONLY_COPY,
+  parseConfig,
+  type AlertConfig,
+  type Watch,
+  type ChannelId,
+  type Delivery,
+  type EscalationPolicy,
+  type PersonId,
+  type PlaceId,
+  type ReportId,
+  type SecretLookup,
+  type CopySettings,
+  type SourceId,
+  type SpendConfig,
+} from "@mark1russell7/alerts";
+import type { TwilioFetch } from "@mark1russell7/alerts-channel-twilio";
 import { PUSHOVER_QUOTA, PUSHOVER_RESERVE_NOTICES, PUSHOVER_TIMEOUT_MS, type PushoverChannelOptions } from "@mark1russell7/alerts-channel-pushover";
 import { memoryCache, type ShapeCache } from "@mark1russell7/alerts-shapes-nws";
 import { CANARY_PATH, createNwsSource } from "@mark1russell7/alerts-source-nws-api";
-import { quotaGate, type Exchange, type Transport } from "polite-crawler/api";
+import { fakeSessions, NWWS_DESCRIPTOR } from "@mark1russell7/alerts-source-nwws";
+import { SWPC_KINDS } from "@mark1russell7/alerts-source-swpc";
+import { memoryQuotaStore, quotaGate, type Exchange, type Transport } from "polite-crawler/api";
 import { DEFAULT_POLICY } from "polite-crawler/politeness";
 import { afterEach, describe, expect, it } from "vitest";
-import { CHECKS_KEY, checksKeys, DAEMON_CHECK, DELIVERY_TIMES, INSTANCE_CHANNELS, INSTANCE_CHECK, INSTANCE_SOURCES, INSTANCE_TIMES, instanceProblems, LOUD_PING_URL_KEY, openInstance, PING_URL_KEY, pingTargets, SOURCE_POLICY, sourcePace, USER_AGENT_NAME, type Instance, type InstanceOptions } from "./instance.ts";
+import { ACCOUNT_SOURCES, CHECKS_KEY, checksKeys, DAEMON_CHECK, daemonCheck, DELIVERY_TIMES, INSTANCE_CHANNELS, INSTANCE_CHECK, INSTANCE_EXPECTATIONS, INSTANCE_SOURCES, INSTANCE_TIMES, instanceCheck, instanceProblems, LOUD_PING_URL_KEY, nwwsKeys, nwwsSetup, openInstance, PING_URL_KEY, pingKeyOf, pingTargets, RANK_DELAY, RANK_FLOOR, SOURCE_POLICY, sourcePace, twilioSetup, USER_AGENT_NAME, type Instance, type InstanceOptions } from "./instance.ts";
+import { heartbeatGap } from "./heartbeat.ts";
+import { spendGates, spendQuota } from "./balance.ts";
+import { CLOCK_SKEW_LIMIT, COPY_TOKEN_KEY, EXCHANGE_EVERY, EXCHANGE_LIMIT } from "./copy.ts";
 import { overdueLimit } from "./delivery.ts";
 import type { ShapeOutcome } from "./shapes.ts";
 import { nextFetch } from "./view.ts";
@@ -32,6 +60,10 @@ const LONGITUDE = -98.55;
 const LATITUDE = 28.3;
 
 const policy = (level: EscalationPolicy["level"]): EscalationPolicy => ({ level, steps: [{ channel: pushover, at: 0 }], exhaustedAfter: 20 * MINUTE });
+
+// A copy with rank 1 and its own first check. The addresses are fake.
+const CLOUD_KEY = "HEALTHCHECKS_PING_URL_CLOUD";
+const CLOUD: CopySettings = { format: COPY_FORMAT, id: "cloud", rank: 1, listen: { host: "cloud.example", port: 4751 }, peers: [{ id: "home", url: "http://home.example:4751" }], pingKey: CLOUD_KEY };
 
 const CONFIG: AlertConfig = {
   format: CONFIG_FORMAT,
@@ -70,6 +102,11 @@ function fixture(source: string, name: string): string {
 /**
  * A fake network with recorded answers. The NWS API gives the Flood Warning to the request of the
  * state, the keepalive to the canary, and no alert to the WEA request. The IPAWS feed has no alert.
+ *
+ * The USGS and EMSC give their recorded earthquakes of 2026-11-16. No disc of these earthquakes reaches the place.
+ * Each tsunami warning center gives its recorded statement of 2026-11-13. Each statement expired before the time of the tests.
+ * The SWPC gives its recorded list of 2026-11-16. Its caps are far from the place, and its other messages have no area.
+ *
  * Each exchange takes `delay` milliseconds of real time, as on a busy runner. With `Infinity`, no exchange ends.
  */
 function network(delay = 0) {
@@ -82,6 +119,13 @@ function network(delay = 0) {
     if (delay > 0) await pause(delay);
     const url = new URL(exchange.url);
     if (url.hostname === "apps.fema.gov") return { status: 200, statusText: "OK", headers: { "content-type": "application/xml" }, body: fixture("alerts-source-ipaws", "feed-empty.xml") };
+    if (url.hostname === "earthquake.usgs.gov") return { status: 200, statusText: "OK", headers: { "content-type": "application/geo+json" }, body: fixture("alerts-source-usgs", "feed-2.5_day-20261116T0327Z.geojson") };
+    if (url.hostname === "www.seismicportal.eu") return { status: 200, statusText: "OK", headers: { "content-type": "application/json" }, body: fixture("alerts-source-emsc", "query-2.5_day-20261116T0528Z.json") };
+    if (url.hostname === "services.swpc.noaa.gov") return { status: 200, statusText: "OK", headers: { "content-type": "application/json" }, body: fixture("alerts-source-swpc", "alerts-20261116T1553Z.json") };
+    if (url.hostname === "www.tsunami.gov") {
+      const name = url.pathname.endsWith("/PHEBCAP.xml") ? "PHEBCAP-20261116T1134Z.xml" : "PAAQCAP-20261116T1134Z.xml";
+      return { status: 200, statusText: "OK", headers: { "content-type": "text/xml" }, body: fixture("alerts-source-tsunami", name) };
+    }
     if (url.hostname !== "api.weather.gov") throw new Error(`The fake network has no route to ${url.hostname}.`);
     const body = nws[url.pathname + url.search] ?? collection();
     return { status: 200, statusText: "OK", headers: { "content-type": "application/geo+json" }, body };
@@ -196,20 +240,62 @@ describe("openInstance", () => {
   it("sends a recorded NWS warning for a watched county to the person on Pushover", async () => {
     const { instance, clock, net, server } = await open();
     const pass = await finish(clock, instance.runtime.pass());
-    expect(pass.fetched).toEqual(["nws-api", "ipaws"]);
+    expect(pass.fetched).toEqual(["nws-api", "ipaws", "usgs", "emsc", "tsunami-ntwc", "tsunami-ptwc", "swpc"]);
     // A fetch that ran out of time names its cause here, before the checks of the send.
     expect(pass.view?.health.map((health) => [health.source, health.state])).toEqual([
       ["nws-api", "healthy"],
       ["ipaws", "healthy"],
+      ["usgs", "healthy"],
+      ["emsc", "healthy"],
+      ["tsunami-ntwc", "healthy"],
+      ["tsunami-ptwc", "healthy"],
+      ["swpc", "healthy"],
     ]);
     expect(server.calls).toHaveLength(1);
     const [call] = server.calls;
     expect(call?.url).toBe("https://api.pushover.net/1/messages.json");
     expect(call?.fields).toMatchObject({ token: SECRETS["PUSHOVER_APP_TOKEN"], user: SECRETS["PUSHOVER_USER_KEY"] });
     expect(call?.fields["title"]).toContain("Flood Warning");
+    // The body starts with the why line, with the label of the place from the configuration.
+    expect(call?.fields["message"]).toMatch(/^Why: Place is in the area\n\n\S/);
     expect(pass.delivery?.sent).toHaveLength(1);
     // The source asks for the alerts of the state. The match to the county is local.
     expect(net.exchanges.map((exchange) => exchange.url)).toContain("https://api.weather.gov/alerts/active?area=TX");
+  });
+
+  it("gives the map of the last pass, also of a pass that starts outside the loop, with the level of the person", async () => {
+    const { instance, clock } = await open();
+    const before = instance.map();
+    expect(before.format).toBe(MAP_FORMAT);
+    expect(before.at).toBeNull();
+    expect(before.view.incidents).toEqual([]);
+    const pass = await finish(clock, instance.runtime.pass());
+    const after = instance.map();
+    expect(after.at).toBe(pass.at);
+    expect(after.view.places.map((place) => place.id)).toEqual(CONFIG.places.map((place) => place.id));
+    // The warning of the county reaches the person, thus the map shows a level above `none`.
+    expect(after.view.incidents.length).toBeGreaterThan(0);
+    expect(after.view.incidents.some((incident) => incident.level !== "none")).toBe(true);
+  });
+
+  it("gives the health of the last pass with no message of a failure, and the quotas at the time of the read", async () => {
+    const { instance, clock } = await open();
+    const before = instance.health();
+    expect(before.format).toBe(HEALTH_FORMAT);
+    expect(before.at).toBeNull();
+    expect(before.sources).toEqual([]);
+    const pass = await finish(clock, instance.runtime.pass());
+    const after = instance.health();
+    expect(after.at).toBe(pass.at);
+    expect(after.sources.map((entry) => [entry.source, entry.state])).toEqual(pass.view.health.map((entry) => [entry.source, entry.state]));
+    expect(after.lateness).toEqual(pass.view.lateness);
+    expect(after.coverage).toEqual(pass.view.coverage);
+    expect(after.quotas.map((entry) => entry.quota)).toEqual(instance.quotas());
+    // An instance with no other copy has no watch of a copy.
+    expect(after.copies).toEqual([]);
+    const text = JSON.stringify(after);
+    expect(text).not.toContain('"message"');
+    expect(healthPayloadSchema.safeParse(JSON.parse(text)).success).toBe(true);
   });
 
   it("gives the gate of the month to the Pushover channel: a send counts, and the reserve stops a send below life-safety", async () => {
@@ -238,7 +324,12 @@ describe("openInstance", () => {
     const pass = await finish(clock, instance.runtime.pass());
     expect(pass.view.step.reports.map((report) => report.kind.code)).toEqual(["system.quota.low", "system.quota.reserve"]);
     expect(server.calls.map((call) => call.fields["title"])).toEqual([expect.stringContaining("sends only life-safety messages")]);
-    expect(pass.delivery?.failures.map((failure) => failure.kind)).toEqual(["reserved", "reserved"]);
+    // Pushover takes 2 calls at a time, thus the third message waits for the next pass. The reserve holds it there.
+    expect(pass.delivery?.failures.map((failure) => failure.kind)).toEqual(["reserved"]);
+    await clock.advance(1000);
+    const next = await finish(clock, instance.runtime.pass());
+    expect(next.delivery?.failures.map((failure) => failure.kind)).toEqual(["reserved"]);
+    expect(server.calls).toHaveLength(1);
     expect(notices.state().used).toBe(1);
   });
 
@@ -248,9 +339,11 @@ describe("openInstance", () => {
     const outside = { ...CONFIG.places[0]!, at: [LONGITUDE, 28.46] as const };
     const { instance, clock, server } = open(store(SECRETS), { ...CONFIG, places: [outside] });
     const pass = await finish(clock, instance.runtime.pass());
-    expect(pass.fetched).toEqual(["nws-api", "ipaws"]);
+    expect(pass.fetched).toEqual(["nws-api", "ipaws", "usgs", "emsc", "tsunami-ntwc", "tsunami-ptwc", "swpc"]);
     expect(server.calls).toHaveLength(0);
-    const [incident] = pass.view.incidents;
+    // The USGS and EMSC give earthquake incidents too, the tsunami centers give expired statements, and the SWPC gives
+    // space weather. The order of the incidents is the order of their anchors.
+    const incident = pass.view.incidents.find((one) => !["geo.earthquake", "geo.tsunami", ...SWPC_KINDS].includes(one.kind.code));
     expect(incident?.areas.some((area) => area.type === "polygon")).toBe(true);
     expect(matchPlaces(incident!, [outside])).toEqual([]);
     // With a buffer of 10 km, the polygon is in the buffer of the place, and the distance decides the match.
@@ -267,6 +360,11 @@ describe("openInstance", () => {
     expect(pass.view?.health.map((health) => [health.source, health.state])).toEqual([
       ["nws-api", "healthy"],
       ["ipaws", "healthy"],
+      ["usgs", "healthy"],
+      ["emsc", "healthy"],
+      ["tsunami-ntwc", "healthy"],
+      ["tsunami-ptwc", "healthy"],
+      ["swpc", "healthy"],
     ]);
     expect(server.calls.map((call) => call.fields["title"])).toEqual([expect.stringContaining("Flood Warning")]);
   });
@@ -277,6 +375,11 @@ describe("openInstance", () => {
     expect(pass.view?.health.map((health) => [health.source, health.lastFailure?.failure.message])).toEqual([
       ["nws-api", "The fetch took longer than 5000 ms."],
       ["ipaws", "The fetch took longer than 5000 ms."],
+      ["usgs", "The fetch took longer than 5000 ms."],
+      ["emsc", "The fetch took longer than 5000 ms."],
+      ["tsunami-ntwc", "The fetch took longer than 5000 ms."],
+      ["tsunami-ptwc", "The fetch took longer than 5000 ms."],
+      ["swpc", "The fetch took longer than 5000 ms."],
     ]);
   });
 
@@ -284,7 +387,7 @@ describe("openInstance", () => {
     const { instance, clock, net } = await open();
     await finish(clock, instance.runtime.pass());
     const hosts = new Set(net.exchanges.map((exchange) => new URL(exchange.url).hostname));
-    expect(hosts).toEqual(new Set(["api.weather.gov", "apps.fema.gov"]));
+    expect(hosts).toEqual(new Set(["api.weather.gov", "apps.fema.gov", "earthquake.usgs.gov", "www.seismicportal.eu", "www.tsunami.gov", "services.swpc.noaa.gov"]));
     for (const exchange of net.exchanges) {
       expect(exchange.headers["user-agent"]).toBe(USER_AGENT_NAME);
       const text = JSON.stringify(exchange);
@@ -308,7 +411,7 @@ describe("openInstance", () => {
     // The refresh starts after the pass, and it starts no request that can end after the next fetch of a source.
     const next = Math.min(...instance.runtime.config.sources.map((source) => nextFetch(instance.runtime.state(), source)));
     expect(clock.now()).toBeLessThanOrEqual(next);
-    expect(pass.fetched).toEqual(["nws-api", "ipaws"]);
+    expect(pass.fetched).toEqual(["nws-api", "ipaws", "usgs", "emsc", "tsunami-ntwc", "tsunami-ptwc", "swpc"]);
     expect(outcomes).toHaveLength(1);
     expect(outcomes[0]?.ok).toBe(true);
     await instance.shapes.close();
@@ -385,7 +488,7 @@ describe("openInstance", () => {
   it("gives the loop the times of the sources and of the channel", async () => {
     const { instance } = await open();
     const intervals = instance.runtime.config.sources.map((source) => source.interval);
-    expect(instance.runtime.config.sources.map((source) => source.id)).toEqual(["nws-api" as SourceId, "ipaws" as SourceId]);
+    expect(instance.runtime.config.sources.map((source) => source.id)).toEqual(["nws-api", "ipaws", "usgs", "emsc", "tsunami-ntwc", "tsunami-ptwc", "swpc"].map((id) => id as SourceId));
     expect(instance.loop.times).toEqual({
       passLimit: Math.max(...intervals) + 2 * PUSHOVER_TIMEOUT_MS,
       retryBase: Math.min(PUSHOVER_TIMEOUT_MS, ...intervals),
@@ -404,19 +507,316 @@ describe("openInstance", () => {
     for (const start of [noToken, noUser]) expect(messageOf(start)).not.toMatch(/t{30}|u{30}/);
   });
 
-  it("does not start when no source covers a place", () => {
-    // The place has no code of the country. The coverage of each source is a list of countries.
+  it("does not start when no regional source covers a place", () => {
+    // The place has no code of the country. The coverage of each regional source is a list of countries.
+    // The SWPC covers the whole Earth, so it covers the place with no code. The check does not count it.
     const place = CONFIG.places[0]!;
     const config: AlertConfig = { ...CONFIG, places: [{ ...place, codes: place.codes.filter((code) => code.system !== "iso3166") }] };
-    expect(messageOf(() => open(store(SECRETS), config))).toContain("No source covers the place place-1.");
+    expect(messageOf(() => open(store(SECRETS), config))).toContain("No regional source covers the place place-1.");
   });
 
   it("does not start with a key that is not a key of Pushover, and no message holds the bad value", () => {
-    const bad = { PUSHOVER_APP_TOKEN: "bad-token-value", PUSHOVER_USER_KEY: "bad-user-value" };
-    const message = messageOf(() => open(store(bad)));
-    expect(message).toContain("The value of PUSHOVER_APP_TOKEN is not a key of Pushover");
-    expect(message).toContain("The Pushover user key of person-1 is not 30 letters and digits.");
-    expect(message).not.toMatch(/bad-token-value|bad-user-value/);
+    // The load of the configuration checks the user key with the address fields of the channel. The instance checks the token.
+    const badUser = messageOf(() => open(store({ ...SECRETS, PUSHOVER_USER_KEY: "bad-user-value" })));
+    expect(badUser).toContain("The person person-1: The field user of the address on pushover is not a key of Pushover: 30 letters and digits.");
+    const badToken = messageOf(() => open(store({ ...SECRETS, PUSHOVER_APP_TOKEN: "bad-token-value" })));
+    expect(badToken).toContain("The value of PUSHOVER_APP_TOKEN is not a key of Pushover");
+    for (const message of [badUser, badToken]) expect(message).not.toMatch(/bad-token-value|bad-user-value/);
+  });
+
+  it("does not start with a phone number with a missing digit, or a step on the call channel before its sender", () => {
+    const call = "twilio-call" as ChannelId;
+    const withPhone = (steps: EscalationPolicy["steps"]): AlertConfig => ({
+      ...CONFIG,
+      contacts: [...CONFIG.contacts, { person, channel: call, address: { to: { secret: "PHONE" } } }],
+      policies: [{ ...policy("life-safety"), steps }, policy("urgent"), policy("notice")],
+    });
+    // Fake numbers: the area code 555 of the plan has no phones.
+    const phone = (to: string): SecretLookup => store({ ...SECRETS, PHONE: to });
+    const pushOnly = [{ channel: pushover, at: 0 }];
+    const missing = messageOf(() => open(phone("+1555555012"), withPhone(pushOnly)));
+    expect(missing).toContain("The person person-1: The field to of the address on twilio-call is not a phone number in E.164 form");
+    expect(missing).not.toContain("+1555555012");
+    // A good number on a step loads. Without the keys of Twilio, the instance has no sender on the channel, thus it does not start.
+    const steps = [...pushOnly, { channel: call, at: 5 * MINUTE }];
+    expect(parseConfig(JSON.stringify(withPhone(steps)), INSTANCE_CHANNELS, phone("+15555550123")).tag).toBe("ok");
+    expect(messageOf(() => open(phone("+15555550123"), withPhone(steps)))).toContain("Step 1 of life-safety of person-1 uses the channel twilio-call, and the instance has no sender on it.");
+    // A number with no step only waits for its sender. The instance starts.
+    expect(() => open(phone("+15555550123"), withPhone(pushOnly))).not.toThrow();
+  });
+});
+
+describe("the Twilio call channel of the instance", () => {
+  const call = "twilio-call" as ChannelId;
+  // Fake keys and fake numbers: the country code +999 has no country. A test looks for the values in each problem.
+  const TWILIO = {
+    TWILIO_ACCOUNT_SID: `AC${"0".repeat(32)}`,
+    TWILIO_API_KEY_SID: `SK${"1".repeat(32)}`,
+    TWILIO_API_KEY_SECRET: "s".repeat(32),
+    TWILIO_FROM: "+99900000001",
+    PHONE: "+99900000002",
+  };
+  const SPEND: SpendConfig = { provider: "provider:twilio", monthlyUsd: 10, reserveUsd: 3, floor: 5, timeZone: "America/Chicago" };
+  // Each policy calls the person at once, next to the Pushover message.
+  const calling = (spend?: readonly SpendConfig[]): AlertConfig => ({
+    ...CONFIG,
+    contacts: [...CONFIG.contacts, { person, channel: call, address: { to: { secret: "PHONE" } } }],
+    policies: CONFIG.policies.map((entry) => ({ ...entry, steps: [...entry.steps, { channel: call, at: 0 }] })),
+    ...(spend === undefined ? {} : { spend }),
+  });
+
+  /** A fake Twilio server. It accepts each call and each text, and it gives a balance of 12.50 US dollars. */
+  function twilioServer() {
+    const calls: Array<{ url: string; method: string; authorization: string | undefined; fields: Record<string, string> }> = [];
+    const fetch: TwilioFetch = async (url, init) => {
+      calls.push({ url, method: init.method, authorization: init.headers["authorization"], fields: Object.fromEntries(new URLSearchParams(init.body ?? "")) });
+      const body = url.endsWith("/Balance.json")
+        ? { balance: "12.50", currency: "USD" }
+        : url.endsWith("/Messages.json")
+          ? { sid: `SM${"b".repeat(32)}`, status: "queued" }
+          : { sid: `CA${"a".repeat(32)}`, status: "queued" };
+      return { status: url.endsWith("/Calls.json") || url.endsWith("/Messages.json") ? 201 : 200, text: async () => JSON.stringify(body), headers: { get: () => null } };
+    };
+    const posts = (resource: string) => calls.filter((entry) => entry.method === "POST" && entry.url.endsWith(resource));
+    return { fetch, calls, made: () => posts("/Calls.json"), texts: () => posts("/Messages.json") };
+  }
+
+  it("calls the person with the keys of the secrets, counts the call in the cap, and reads the balance", async () => {
+    const twilio = twilioServer();
+    const { instance, clock, server } = open(store({ ...SECRETS, ...TWILIO }), calling([SPEND]), undefined, undefined, { twilio: twilio.fetch, spendStore: memoryQuotaStore() });
+    const pass = await finish(clock, instance.runtime.pass());
+    expect(pass.delivery?.sent).toHaveLength(2);
+    expect(server.calls).toHaveLength(1);
+    const [made] = twilio.made();
+    expect(twilio.made()).toHaveLength(1);
+    expect(made?.url).toBe(`https://api.twilio.com/2010-04-01/Accounts/${TWILIO.TWILIO_ACCOUNT_SID}/Calls.json`);
+    expect(made?.fields).toMatchObject({ To: TWILIO.PHONE, From: TWILIO.TWILIO_FROM, MachineDetection: "Enable" });
+    expect(made?.fields["Twiml"]).toContain("Flood Warning");
+    // The API key signs each request, not the account SID.
+    expect(made?.authorization).toBe(`Basic ${btoa(`${TWILIO.TWILIO_API_KEY_SID}:${TWILIO.TWILIO_API_KEY_SECRET}`)}`);
+    // The cap is 10 US dollars with a reserve of 3, in cents. One call takes 4 cents.
+    expect(instance.quotas()).toContainEqual({ channel: call, limit: 1_000, reserve: 300, used: 4, unit: "cents", resetAt: expect.any(Number) });
+    expect(twilio.calls.filter((entry) => entry.method === "GET" && entry.url.endsWith("/Balance.json"))).toHaveLength(1);
+    expect(instance.balances.map((watch) => [watch.provider, watch.balance()?.read?.balance, watch.balance()?.floor])).toEqual([["provider:twilio", 12.5, 5]]);
+  });
+
+  it("calls from a copy with rank 1 one rank floor after its push, also with no rank delay at the level (AL-15)", async () => {
+    const twilio = twilioServer();
+    const noDelay: AlertConfig = { ...calling([SPEND]), rankDelay: { digest: 0, notice: 0, urgent: 0, "life-safety": 0 } };
+    const { instance, clock, server } = open(store({ ...SECRETS, ...TWILIO }), noDelay, undefined, undefined, { twilio: twilio.fetch, spendStore: memoryQuotaStore(), copy: CLOUD });
+    const first = await finish(clock, instance.runtime.pass());
+    // The push goes at once. The call waits for the call of rank 0.
+    expect(server.calls).toHaveLength(1);
+    expect(twilio.made()).toEqual([]);
+    const route = first.delivery?.routes[0];
+    expect(route?.plan.wakeAt).toBe((route?.plan.start ?? 0) + RANK_FLOOR);
+    await clock.advance(RANK_FLOOR);
+    await finish(clock, instance.runtime.pass());
+    expect(twilio.made()).toHaveLength(1);
+    expect(server.calls).toHaveLength(1);
+  });
+
+  it("takes the rank floor of the configuration", async () => {
+    const twilio = twilioServer();
+    const floor: AlertConfig = { ...calling([SPEND]), rankDelay: { digest: 0, notice: 0, urgent: 0, "life-safety": 0 }, rankFloor: 45_000 };
+    const { instance, clock } = open(store({ ...SECRETS, ...TWILIO }), floor, undefined, undefined, { twilio: twilio.fetch, spendStore: memoryQuotaStore(), copy: CLOUD });
+    const first = await finish(clock, instance.runtime.pass());
+    const route = first.delivery?.routes[0];
+    expect(route?.plan.wakeAt).toBe((route?.plan.start ?? 0) + 45_000);
+    expect(twilio.made()).toEqual([]);
+  });
+
+  it("keeps the reserve of the cap for life-safety: a call below life-safety in the reserve does not go", async () => {
+    const twilio = twilioServer();
+    const spendStore = memoryQuotaStore();
+    // An earlier run used 700 of the 1000 cents. The last 300 cents are the reserve.
+    spendGates(spendQuota({ name: "Twilio spend", ...SPEND }), { key: "provider:twilio:spend", store: spendStore, now: () => T0 }).gate.take(700);
+    const { instance, clock, server } = open(store({ ...SECRETS, ...TWILIO }), calling([SPEND]), undefined, undefined, { twilio: twilio.fetch, spendStore });
+    const pass = await finish(clock, instance.runtime.pass());
+    expect(server.calls).toHaveLength(1);
+    expect(twilio.made()).toEqual([]);
+    expect(pass.delivery?.failures.map((failure) => [failure.channel, failure.kind])).toEqual([[call, "reserved"]]);
+    expect(instance.quotas().find((quota) => quota.channel === call)?.used).toBe(700);
+  });
+
+  describe("the text channel", () => {
+    const text = "twilio-text" as ChannelId;
+    // A fake number of the texts. The number of a real sender needs a registration at Twilio.
+    const TEXTS = { ...TWILIO, TWILIO_TEXT_FROM: "+99900000003" };
+    // Each policy texts the person at once, next to the Pushover message.
+    const texting = (spend?: readonly SpendConfig[]): AlertConfig => ({
+      ...CONFIG,
+      contacts: [...CONFIG.contacts, { person, channel: text, address: { to: { secret: "PHONE" } } }],
+      // The person agreed to the texts before the start of the test.
+      optIn: [{ number: { secret: "PHONE" }, at: "2026-11-01T00:00:00Z", way: "written", words: "texts-consent/1" }],
+      policies: CONFIG.policies.map((entry) => ({ ...entry, steps: [...entry.steps, { channel: text, at: 0 }] })),
+      ...(spend === undefined ? {} : { spend }),
+    });
+
+    it("texts the person from the number of the texts, counts the text in the cap of the calls, and watches one balance", async () => {
+      const twilio = twilioServer();
+      const { instance, clock, server } = open(store({ ...SECRETS, ...TEXTS }), texting([SPEND]), undefined, undefined, { twilio: twilio.fetch, spendStore: memoryQuotaStore() });
+      const pass = await finish(clock, instance.runtime.pass());
+      expect(pass.delivery?.sent).toHaveLength(2);
+      expect(server.calls).toHaveLength(1);
+      expect(twilio.made()).toEqual([]);
+      const [sent] = twilio.texts();
+      expect(twilio.texts()).toHaveLength(1);
+      expect(sent?.url).toBe(`https://api.twilio.com/2010-04-01/Accounts/${TWILIO.TWILIO_ACCOUNT_SID}/Messages.json`);
+      expect(sent?.fields).toMatchObject({ To: TWILIO.PHONE, From: TEXTS.TWILIO_TEXT_FROM });
+      expect(sent?.fields["Body"]).toContain("Flood Warning");
+      expect([...(sent?.fields["Body"] ?? "")].length).toBeLessThanOrEqual(160);
+      expect(sent?.authorization).toBe(`Basic ${btoa(`${TWILIO.TWILIO_API_KEY_SID}:${TWILIO.TWILIO_API_KEY_SECRET}`)}`);
+      // The text takes 4 cents from the one cap of the account. The quota of the text is the quota of the calls.
+      expect(instance.quotas()).toContainEqual({ channel: call, limit: 1_000, reserve: 300, used: 4, unit: "cents", resetAt: expect.any(Number) });
+      expect(instance.quotas().map((quota) => quota.channel)).not.toContain(text);
+      expect(instance.balances.map((watch) => watch.provider)).toEqual(["provider:twilio"]);
+    });
+
+    it("does not start with a text step and no number of the texts, a number of a bad form, a number with no keys, no cap, or no opt-in", () => {
+      const more = () => ({ twilio: twilioServer().fetch, spendStore: memoryQuotaStore() });
+      const noFrom = messageOf(() => open(store({ ...SECRETS, ...TWILIO }), texting([SPEND]), undefined, undefined, more()));
+      expect(noFrom).toContain("uses the channel twilio-text, and the instance has no sender on it.");
+      const badFrom = messageOf(() => open(store({ ...SECRETS, ...TWILIO, TWILIO_TEXT_FROM: "+1-bad-value" }), texting([SPEND]), undefined, undefined, more()));
+      expect(badFrom).toContain("The keys of Twilio have a problem: The number that texts is not a phone number in E.164 form.");
+      const alone = messageOf(() => open(store({ ...SECRETS, TWILIO_TEXT_FROM: TEXTS.TWILIO_TEXT_FROM })));
+      expect(alone).toContain("The secret store has a value for TWILIO_TEXT_FROM, and no keys of Twilio.");
+      const noCap = messageOf(() => open(store({ ...SECRETS, ...TEXTS }), texting(), undefined, undefined, more()));
+      expect(noCap).toContain("The channel twilio-text costs money, and the configuration has no spend entry for its provider.");
+      const noOptIn = messageOf(() => open(store({ ...SECRETS, ...TEXTS }), { ...texting([SPEND]), optIn: [] }, undefined, undefined, more()));
+      expect(noOptIn).toContain(`The field to of the contact of ${person} on twilio-text is not on the opt-in list. The channel sends nothing to it.`);
+      for (const problem of [noFrom, badFrom, alone, noCap, noOptIn]) expect(problem).not.toMatch(/bad-value|s{32}|0{32}|1{32}|\+999/u);
+      // With the number of the texts and no step on the channel, the instance starts.
+      expect(() => open(store({ ...SECRETS, ...TEXTS }), CONFIG, undefined, undefined, more())).not.toThrow();
+    });
+
+    it("gives the number of the texts in the setup of Twilio, so the outage call gets it too", () => {
+      const setup = twilioSetup(store({ ...SECRETS, ...TEXTS }));
+      expect(setup).toEqual({ tag: "ok", value: expect.objectContaining({ from: TWILIO.TWILIO_FROM, textFrom: TEXTS.TWILIO_TEXT_FROM }) });
+      expect(twilioSetup(store({ ...SECRETS, ...TWILIO }))).toEqual({ tag: "ok", value: expect.not.objectContaining({ textFrom: expect.anything() }) });
+    });
+  });
+
+  it("makes no call channel without the keys, and the heartbeat has only the Pushover quota", () => {
+    const gate = quotaGate(PUSHOVER_QUOTA, { key: "pushover:app", now: () => T0 });
+    const { instance } = open(undefined, undefined, undefined, undefined, { pushoverQuota: gate });
+    expect(instance.quotas().map((quota) => quota.channel)).toEqual([pushover]);
+    expect(instance.balances).toEqual([]);
+  });
+
+  it("does not start with some keys of Twilio, a key of a bad form, or a call with no cap, and no problem holds a value", () => {
+    const keys = (extra: Readonly<Record<string, string>>): SecretLookup => store({ ...SECRETS, ...TWILIO, ...extra });
+    const partial = messageOf(() => open(keys({ TWILIO_API_KEY_SECRET: "" }), calling([SPEND])));
+    expect(partial).toContain("it has no value for TWILIO_API_KEY_SECRET. Give all the keys, or none.");
+    const badAccount = messageOf(() => open(keys({ TWILIO_ACCOUNT_SID: "AC-bad-value" }), calling([SPEND])));
+    expect(badAccount).toContain("The keys of Twilio have a problem: The account SID is not AC and 32 hexadecimal digits.");
+    const badKey = messageOf(() => open(keys({ TWILIO_API_KEY_SID: "SK-bad-value" }), calling([SPEND])));
+    expect(badKey).toContain("The API key SID is not SK and 32 hexadecimal digits.");
+    const badFrom = messageOf(() => open(keys({ TWILIO_FROM: "+1-bad-value" }), calling([SPEND])));
+    expect(badFrom).toContain("The number that calls is not a phone number in E.164 form.");
+    const noCap = messageOf(() => open(keys({}), calling()));
+    expect(noCap).toContain("The channel twilio-call costs money, and the configuration has no spend entry for its provider.");
+    for (const problem of [partial, badAccount, badKey, badFrom, noCap]) expect(problem).not.toMatch(/bad-value|s{32}|0{32}|1{32}|\+999/);
+    // With the keys and no step on the channel, no cap is needed.
+    expect(() => open(keys({}), CONFIG, undefined, undefined, { twilio: twilioServer().fetch })).not.toThrow();
+  });
+
+  it("needs the fetch of the channel and the store of the cap from the entry", () => {
+    const keys = store({ ...SECRETS, ...TWILIO });
+    expect(messageOf(() => open(keys, calling([SPEND]), undefined, undefined, { spendStore: memoryQuotaStore() }))).toContain("no fetch for the call channel");
+    expect(messageOf(() => open(keys, calling([SPEND]), undefined, undefined, { twilio: twilioServer().fetch }))).toContain("no store for its count");
+  });
+
+  it("makes the worker of the deploy of the outage call, bound by the pass limit, and its problems hold no value", () => {
+    const config: AlertConfig = { ...calling([SPEND]), outage: { people: [{ person, chain: { steps: [call, call] } }] } };
+    const keys = (extra: Readonly<Record<string, string>> = {}): SecretLookup => store({ ...SECRETS, ...TWILIO, OUTAGE_TOKEN: "o".repeat(40), ...extra });
+    const more = () => ({ twilio: twilioServer().fetch, spendStore: memoryQuotaStore() });
+    const { instance } = open(keys(), config, undefined, undefined, more());
+    expect(instance.outage?.state()).toEqual({ state: "pending" });
+    expect(instance.outage?.worker.knobs.unit_processing_time).toEqual({ value: instance.loop.times.passLimit, unit: "ms" });
+    // Without an outage call, the instance has no worker of the deploy.
+    expect(open(keys(), calling([SPEND]), undefined, undefined, more()).instance.outage).toBeUndefined();
+    const noToken = messageOf(() => open(keys({ OUTAGE_TOKEN: "" }), config, undefined, undefined, more()));
+    expect(noToken).toContain("the secret store has no value for OUTAGE_TOKEN");
+    const badToken = messageOf(() => open(keys({ OUTAGE_TOKEN: "bad-value" }), config, undefined, undefined, more()));
+    expect(badToken).toContain("The value of OUTAGE_TOKEN is not 32 to 128");
+    const noKeys = messageOf(() => open(store({ ...SECRETS, OUTAGE_TOKEN: "o".repeat(40), PHONE: TWILIO.PHONE }), config));
+    expect(noKeys).toContain("the secret store has no keys of Twilio that pass the check");
+    for (const problem of [noToken, badToken, noKeys]) expect(problem).not.toMatch(/bad-value|o{40}|s{32}|\+999/u);
+  });
+});
+
+describe("the NWWS-OI source of the instance", () => {
+  // Fake keys of two accounts. A test looks for them in each message.
+  const ACCOUNT_1 = { NWWS_OI_USER_1: "operator-one", NWWS_OI_PASSWORD_1: "password-one" };
+  const ACCOUNT_2 = { NWWS_OI_USER_2: "operator-two", NWWS_OI_PASSWORD_2: "password-two" };
+  const VALUES = [...Object.values(ACCOUNT_1), ...Object.values(ACCOUNT_2)];
+  const SECOND: CopySettings = { ...ONLY_COPY, accounts: { nwws: 2 } };
+
+  it("names the keys of each account, and only the stream has an account", () => {
+    expect(nwwsKeys(1)).toEqual({ username: "NWWS_OI_USER_1", password: "NWWS_OI_PASSWORD_1" });
+    expect(nwwsKeys(2)).toEqual({ username: "NWWS_OI_USER_2", password: "NWWS_OI_PASSWORD_2" });
+    expect(ACCOUNT_SOURCES).toEqual([NWWS_DESCRIPTOR.id]);
+  });
+
+  it("adds the stream with the keys of account 1, fetches it in a pass, and ends its session at the close of the runtime", async () => {
+    const fake = fakeSessions((session) => session.join());
+    const { instance, clock } = open(store({ ...SECRETS, ...ACCOUNT_1 }), CONFIG, 0, TEST_FETCH_LIMIT, { nwwsOpen: fake.open });
+    expect(instance.runtime.config.sources.map((source) => source.id)).toEqual([...INSTANCE_SOURCES.map((source) => source.id), NWWS_DESCRIPTOR.id]);
+    // The first fetch opens the session, not the start.
+    expect(fake.sessions).toHaveLength(0);
+    const pass = await finish(clock, instance.runtime.pass());
+    expect(pass.fetched).toContain(NWWS_DESCRIPTOR.id);
+    expect(fake.sessions).toHaveLength(1);
+    expect(fake.last().options).toMatchObject({ username: "operator-one", password: "password-one" });
+    expect(fake.last().closed).toBe(false);
+    await instance.runtime.close();
+    expect(fake.last().closed).toBe(true);
+    await expect(instance.runtime.pass()).rejects.toThrow("The runtime is closed");
+    expect(fake.sessions).toHaveLength(1);
+  });
+
+  it("uses the keys of the account of the copy", async () => {
+    const fake = fakeSessions((session) => session.join());
+    const { instance, clock } = open(store({ ...SECRETS, ...ACCOUNT_1, ...ACCOUNT_2 }), CONFIG, 0, TEST_FETCH_LIMIT, { nwwsOpen: fake.open, copy: SECOND });
+    await finish(clock, instance.runtime.pass());
+    expect(fake.last().options).toMatchObject({ username: "operator-two", password: "password-two" });
+    await instance.runtime.close();
+  });
+
+  it("has no stream without the keys of account 1 and with no account in the copy", () => {
+    const { instance } = open();
+    expect(instance.runtime.config.sources.map((source) => source.id)).not.toContain(NWWS_DESCRIPTOR.id);
+    expect(nwwsSetup(store(SECRETS))).toEqual({ tag: "ok", value: undefined });
+    // The keys of account 2 alone give no stream to a copy with the default account.
+    expect(nwwsSetup(store({ ...SECRETS, ...ACCOUNT_2 }))).toEqual({ tag: "ok", value: undefined });
+  });
+
+  it("does not start with one key of a pair, an account of the copy with no keys, or an account of a source with no account, and no problem holds a value", () => {
+    const half = messageOf(() => open(store({ ...SECRETS, NWWS_OI_USER_1: "operator-one" })));
+    expect(half).toContain("The secret store has one key of the NWWS-OI account 1, and it has no value for NWWS_OI_PASSWORD_1. Give the two keys, or none.");
+    const noKeys = messageOf(() => open(store({ ...SECRETS, ...ACCOUNT_1 }), CONFIG, 0, TEST_FETCH_LIMIT, { copy: SECOND }));
+    expect(noKeys).toContain("The file copy.json gives the NWWS-OI account 2 to this copy, and the secret store has no value for NWWS_OI_USER_2, NWWS_OI_PASSWORD_2.");
+    const unknown = messageOf(() => open(store(SECRETS), CONFIG, 0, TEST_FETCH_LIMIT, { copy: { ...ONLY_COPY, accounts: { usgs: 1 } } }));
+    expect(unknown).toContain("The file copy.json: the field accounts names the source usgs. Only these sources have an account: nwws.");
+    for (const message of [half, noKeys, unknown]) for (const value of VALUES) expect(message).not.toContain(value);
+  });
+
+  it("checks the account of the copy before the start, as the start does", () => {
+    const secret = store({ ...SECRETS, ...ACCOUNT_1 });
+    const parsed = parseConfig(JSON.stringify(CONFIG), INSTANCE_CHANNELS, secret);
+    if (parsed.tag === "err") throw new Error(parsed.error.join("\n"));
+    const problem = "The file copy.json gives the NWWS-OI account 2 to this copy, and the secret store has no value for NWWS_OI_USER_2, NWWS_OI_PASSWORD_2.";
+    expect(INSTANCE_CHECK.problems(parsed.value, secret)).toEqual([]);
+    expect(instanceCheck(SECOND).problems(parsed.value, secret)).toEqual([problem]);
+    expect(daemonCheck(SECOND).problems(parsed.value, secret)).toContain(problem);
+    expect(instanceProblems(parsed.value, secret, INSTANCE_SOURCES, T0, SECOND)).toEqual([problem]);
+  });
+
+  it("keeps the times of the host: the stream makes only the cap of the retry shorter, thus the gap of the heartbeat stays a bound", () => {
+    const { instance } = open(store({ ...SECRETS, ...ACCOUNT_1 }), CONFIG, 0, TEST_FETCH_LIMIT, { nwwsOpen: fakeSessions().open });
+    expect(instance.loop.times).toEqual({ ...INSTANCE_TIMES, retryCap: NWWS_DESCRIPTOR.interval });
+    expect(heartbeatGap(instance.loop.times)).toBeLessThan(heartbeatGap(INSTANCE_TIMES));
   });
 });
 
@@ -484,19 +884,29 @@ describe("the check of the instance", () => {
   it("finds each problem that stops the start, and no message holds a value of a secret", () => {
     const place = CONFIG.places[0]!;
     const uncovered: AlertConfig = { ...CONFIG, places: [{ ...place, codes: place.codes.filter((code) => code.system !== "iso3166") }] };
-    const bad = store({ PUSHOVER_APP_TOKEN: "bad-token-value", PUSHOVER_USER_KEY: "bad-user-value" });
+    const bad = store({ ...SECRETS, PUSHOVER_APP_TOKEN: "bad-token-value" });
     const problems = INSTANCE_CHECK.problems(parse(uncovered, bad), bad);
-    expect(problems).toEqual([
-      expect.stringContaining("The value of PUSHOVER_APP_TOKEN is not a key of Pushover"),
-      "The Pushover user key of person-1 is not 30 letters and digits.",
-      expect.stringContaining("No source covers the place place-1."),
-    ]);
+    expect(problems).toEqual([expect.stringContaining("The value of PUSHOVER_APP_TOKEN is not a key of Pushover"), expect.stringContaining("No regional source covers the place place-1.")]);
     expect(problems.join("\n")).not.toMatch(/bad-token-value|bad-user-value/);
     expect(messageOf(() => open(bad, uncovered))).toContain(problems.join("\n- "));
   });
 
   it("finds no problem in a configuration that starts", () => {
-    expect(instanceProblems(parse(CONFIG, store(SECRETS)), store(SECRETS), INSTANCE_SOURCES)).toEqual([]);
+    expect(instanceProblems(parse(CONFIG, store(SECRETS)), store(SECRETS), INSTANCE_SOURCES, 0)).toEqual([]);
+  });
+
+  it("does not count a global source as the cover of a place", () => {
+    const global = INSTANCE_SOURCES.filter((descriptor) => descriptor.coverage === "global");
+    expect(global.map((descriptor) => descriptor.id)).toEqual(["swpc"]);
+    expect(instanceProblems(parse(CONFIG, store(SECRETS)), store(SECRETS), global, 0)).toEqual([expect.stringContaining("No regional source covers the place place-1.")]);
+  });
+
+  it("checks the settings of the expectations against the expectations of the instance", () => {
+    const wea = INSTANCE_EXPECTATIONS[0]!.id;
+    const parsed = parse({ ...CONFIG, expectations: [{ id: "other", since: 1_000 }, { id: wea, since: 9_000 }] }, store(SECRETS));
+    const unknown = "The configuration sets the expectation other, and the instance has no such expectation.";
+    expect(instanceProblems(parsed, store(SECRETS), INSTANCE_SOURCES, 5_000)).toEqual([unknown, `The since of the expectation ${wea} is in the future. The check of the source then has no record until that time.`]);
+    expect(instanceProblems(parsed, store(SECRETS), INSTANCE_SOURCES, 9_000)).toEqual([unknown]);
   });
 
   it("needs the key of the outside heartbeat only for the live instance", () => {
@@ -504,6 +914,118 @@ describe("the check of the instance", () => {
     expect(DAEMON_CHECK.channels).toBe(INSTANCE_CHECK.channels);
     expect(DAEMON_CHECK.problems(parsed, store(SECRETS))).toEqual([`The file secrets.env has no ${PING_URL_KEY}. The live instance needs its outside heartbeat.`]);
     expect(DAEMON_CHECK.problems(parsed, store({ ...SECRETS, [PING_URL_KEY]: "https://hc-ping.example/test" }))).toEqual([]);
+  });
+});
+
+describe("the copies of the system", () => {
+  const URL_OF_CHECK = "https://hc-ping.com/00000000-0000-4000-8000-000000000000";
+  const lookup = (values: Record<string, string>) => (key: string) => values[key];
+
+  it("waits 30 s for each rank: the flight limit, one exchange with its time limit, and the clock difference", () => {
+    expect(RANK_DELAY).toBe(DELIVERY_TIMES.flightLimit + EXCHANGE_EVERY + EXCHANGE_LIMIT + CLOCK_SKEW_LIMIT);
+    expect(RANK_DELAY).toBe(30_000);
+    // The delivery of rank 0 comes to rank 1 before its wait ends, also after the longest send and one failed read.
+    expect(RANK_DELAY).toBeGreaterThan(DELIVERY_TIMES.flightLimit + 2 * EXCHANGE_EVERY - EXCHANGE_EVERY + EXCHANGE_LIMIT);
+  });
+
+  it("waits 31 s for each rank before a call: the delivery of rank 0 comes to rank 1 in the worst case before its due time", () => {
+    expect(RANK_FLOOR).toBe(DELIVERY_TIMES.callLimit + 3 * EXCHANGE_EVERY + 2 * EXCHANGE_LIMIT);
+    expect(RANK_FLOOR).toBe(31_000);
+    const call = "twilio-call" as ChannelId;
+    const anchor = "a".repeat(64) as ReportId;
+    const steps = [
+      { channel: pushover, at: 0 },
+      { channel: call, at: 0 },
+    ];
+    const plan = (rank: number, since: number, deliveries: readonly Delivery[], now: number) =>
+      escalate({
+        policy: { level: "life-safety", steps, exhaustedAfter: 20 * MINUTE },
+        person,
+        incident: { anchor, reports: [anchor] },
+        since,
+        deliveries,
+        acknowledgments: [],
+        rank,
+        rankDelay: 0,
+        floors: new Map([[call, RANK_FLOOR]]),
+        now,
+      });
+    const calls = (each: ReturnType<typeof plan>) => each.sends.filter((send) => send.channel === call);
+    // Rank 1 sees the incident first, at s1. Rank 0 sees it one exchange later: one interval and one read.
+    const s1 = T0;
+    const seen = s1 + EXCHANGE_EVERY + EXCHANGE_LIMIT;
+    // Rank 0 calls at once, and the send ends in the call limit.
+    expect(calls(plan(0, seen, [], seen)).map((send) => send.due)).toEqual([seen]);
+    const sent = seen + DELIVERY_TIMES.callLimit;
+    // A read in progress misses the delivery. Two intervals and one read bring it to rank 1.
+    const merged = sent + 2 * EXCHANGE_EVERY + EXCHANGE_LIMIT;
+    const first = plan(1, s1, [], s1);
+    expect(first.sends.map((send) => send.channel)).toEqual([pushover]);
+    expect(first.wakeAt).toBe(s1 + RANK_FLOOR);
+    expect(first.wakeAt).toBeGreaterThanOrEqual(merged);
+    // At its due time, rank 1 has the call of rank 0 in its ledger, thus it does not call.
+    const delivered: Delivery = { key: "k-call", incident: anchor, level: "life-safety", person, channel: call, step: 1, at: sent };
+    expect(calls(plan(1, s1, [delivered], s1 + RANK_FLOOR))).toEqual([]);
+    // With no delivery, rank 1 calls at its due time: the system prefers a second call to a missed call.
+    expect(calls(plan(1, s1, [], s1 + RANK_FLOOR)).map((send) => send.due)).toEqual([s1 + RANK_FLOOR]);
+  });
+
+  it("sends a step of a copy with rank 1 one rank delay after the start of the escalation", async () => {
+    const { instance, clock, server } = await open(undefined, undefined, undefined, undefined, { copy: CLOUD });
+    const first = await finish(clock, instance.runtime.pass());
+    const route = first.delivery?.routes[0];
+    expect(route).toBeDefined();
+    expect(server.calls).toEqual([]);
+    expect(route?.plan.sends).toEqual([]);
+    expect(route?.plan.wakeAt).toBe((route?.plan.start ?? 0) + RANK_DELAY);
+    await clock.advance(RANK_DELAY);
+    const second = await finish(clock, instance.runtime.pass());
+    expect(server.calls).toHaveLength(1);
+    expect(second.delivery?.sent[0]?.at).toBeGreaterThanOrEqual((route?.plan.start ?? 0) + RANK_DELAY);
+  });
+
+  it("sends a step of the only copy at once", async () => {
+    const { instance, clock, server } = await open(undefined, undefined, undefined, undefined, { copy: ONLY_COPY });
+    await finish(clock, instance.runtime.pass());
+    expect(server.calls).toHaveLength(1);
+  });
+
+  it("pings the first check of the copy and the shared loud check", () => {
+    const loud = `${URL_OF_CHECK}-loud`;
+    const own = `${URL_OF_CHECK}-cloud`;
+    const secrets = lookup({ [PING_URL_KEY]: URL_OF_CHECK, [CLOUD_KEY]: own, [LOUD_PING_URL_KEY]: loud });
+    expect(pingKeyOf(ONLY_COPY)).toBe(PING_URL_KEY);
+    expect(pingKeyOf(CLOUD)).toBe(CLOUD_KEY);
+    expect(pingTargets(secrets, CLOUD)).toEqual([
+      { key: CLOUD_KEY, url: own },
+      { key: LOUD_PING_URL_KEY, url: loud },
+    ]);
+    expect(pingTargets(secrets)).toEqual(pingTargets(secrets, ONLY_COPY));
+    expect(checksKeys({ text: `${CHECKS_KEY}=${"k".repeat(32)}
+${CLOUD_KEY}=${own}
+` }, CLOUD)).toEqual({ tag: "ok", value: { key: "k".repeat(32), url: own } });
+    const missing = checksKeys({ text: `${CHECKS_KEY}=${"k".repeat(32)}
+${PING_URL_KEY}=${URL_OF_CHECK}
+` }, CLOUD);
+    expect(missing).toEqual({ tag: "err", error: [`The file secrets.env needs ${CHECKS_KEY} and ${CLOUD_KEY} for this check.`] });
+  });
+
+  it("needs the first check of the copy, the token of the exchange with other copies, and its own first check", () => {
+    const parsed = parseConfig(JSON.stringify(CONFIG), INSTANCE_CHECK.channels, store(SECRETS));
+    if (parsed.tag === "err") throw new Error(parsed.error.join("\n"));
+    const check = daemonCheck(CLOUD);
+    expect(check.channels).toBe(INSTANCE_CHECK.channels);
+    expect(check.problems(parsed.value, store({ ...SECRETS, [PING_URL_KEY]: URL_OF_CHECK }))).toEqual([
+      `The file secrets.env has no ${CLOUD_KEY}. The live instance needs its outside heartbeat.`,
+      `The file secrets.env has no ${COPY_TOKEN_KEY}. A copy with other copies needs the token of the exchange.`,
+    ]);
+    expect(check.problems(parsed.value, store({ ...SECRETS, [CLOUD_KEY]: URL_OF_CHECK, [COPY_TOKEN_KEY]: "t".repeat(32) }))).toEqual([]);
+    // The only copy has no exchange, thus it needs no token.
+    expect(daemonCheck(ONLY_COPY).problems(parsed.value, store({ ...SECRETS, [PING_URL_KEY]: URL_OF_CHECK }))).toEqual([]);
+    expect(DAEMON_CHECK.problems(parsed.value, store(SECRETS))).toEqual(daemonCheck(ONLY_COPY).problems(parsed.value, store(SECRETS)));
+    // The copies share the loud check. It is not the first check of a copy.
+    const shared = daemonCheck({ ...ONLY_COPY, pingKey: LOUD_PING_URL_KEY }).problems(parsed.value, store({ ...SECRETS, [LOUD_PING_URL_KEY]: URL_OF_CHECK }));
+    expect(shared).toEqual([`The file copy.json: pingKey is ${LOUD_PING_URL_KEY}, the key of the shared loud check. Each copy has its own first check.`]);
   });
 });
 

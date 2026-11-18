@@ -1,8 +1,13 @@
+import { stat } from "node:fs/promises";
 import { createServer } from "node:http";
-import type { Instant, SourceId } from "@mark1russell7/alerts";
+import { join } from "node:path";
+import type { HealthPayload, HistoryPayload, Instant, MapPayload, SourceId } from "@mark1russell7/alerts";
+import { findFilesAsync } from "@mark1russell7/files";
 import type { ServiceBuilder } from "@mark1russell7/service";
 import { handle, httpTransport } from "@mark1russell7/service/http";
+import { folderHandler } from "@mark1russell7/service/http-folder";
 import type { RuntimeLoop } from "./loop.ts";
+import type { OutageDeployState } from "./outage.ts";
 
 /** The address of each server of the service. Only this computer reaches the API and the probes. */
 export const LOOPBACK = "127.0.0.1";
@@ -13,6 +18,39 @@ export interface ApiOptions {
   readonly port: number;
   /** The loop of the runtime. The route `GET /status` reads it. */
   readonly loop: RuntimeLoop;
+  /**
+   * This function gives the payload of the route `GET /map`. The payload holds the labels and the positions of the places,
+   * thus only the loopback address serves it. Without the function, the API has no map route.
+   */
+  readonly map?: (() => MapPayload) | undefined;
+  /**
+   * This function gives the payload of the route `GET /health`: the health of each part of the system. Its coverage holds
+   * the ids of the places, thus only the loopback address serves it. Without the function, the API has no health route.
+   */
+  readonly health?: (() => HealthPayload) | undefined;
+  /**
+   * This function gives the payload of the route `GET /history` for a value of the query `since`. The levels come from the
+   * watches of the people, thus only the loopback address serves it. Without the function, the API has no history route.
+   */
+  readonly history?: ((since: Instant | null) => HistoryPayload) | undefined;
+  /**
+   * The folder of the built local page (`pageFolder`). The path `/` gives its file `PAGE_INDEX`. The page and the route
+   * `GET /map` have one origin. Thus the policy of the folder lets the page read the map. Without the folder, the API serves no page.
+   */
+  readonly page?: string | undefined;
+  /** The worker of the deploy of the outage call. The route `GET /status` reads its state. */
+  readonly outage?: { state(): OutageDeployState };
+  /** The files of the start of the runtime. The route `GET /status` gives them. */
+  readonly start?: StartStatus;
+}
+
+/**
+ * The files of the start: the private files, or the last good set (`reload.ts`). A runtime on the last good set has the count
+ * of the reasons. The reasons are in the output of the runtime, and the status holds no reason.
+ */
+export interface StartStatus {
+  readonly use: "files" | "good";
+  readonly reasons: number;
 }
 
 /**
@@ -32,10 +70,97 @@ export interface Status {
   readonly conflicts: number;
   /** The reason that the loop is stuck, or `null`. */
   readonly stuck: string | null;
+  /** The state of the deploy of the outage call. An instance with no outage call has no field. */
+  readonly outage?: OutageDeployState;
+  /** The files of the start. A runtime with no start files, for example a test, has no field. */
+  readonly start?: StartStatus;
 }
 
-/** This function gives the status of the loop at the time of the request. */
-export function statusOf(loop: RuntimeLoop): Status {
+/** The answer of a route to a request with a bad query. The route gives it with the status 400. */
+export interface QueryProblem {
+  readonly problem: string;
+}
+
+// The digits of a time in milliseconds since the epoch: no sign, no fraction and no zero before another digit.
+const WHOLE = /^(0|[1-9][0-9]*)$/;
+
+/**
+ * This function reads the query `since` of the history route from the URL of a request. No value gives `null`. A value
+ * that is not a whole number of milliseconds, or two values, give a problem.
+ */
+export function sinceOf(url: string | undefined): Instant | null | QueryProblem {
+  const values = new URL(url ?? "/", "http://loopback").searchParams.getAll("since");
+  const [value] = values;
+  if (value === undefined) return null;
+  if (values.length > 1 || !WHOLE.test(value) || !Number.isSafeInteger(Number(value))) {
+    return { problem: "The query since is one time in milliseconds since the epoch: a whole number with no sign." };
+  }
+  return Number(value);
+}
+
+/** The file of the built local page that the path `/` gives. */
+export const PAGE_INDEX = "local.html";
+
+/** This function gives the folder of the built local page in a checkout, from the folder of the package `runtime`. */
+export const pageFolder = (root: string): string => join(root, "..", "site", "dist");
+
+/** The state of the built local page of a checkout: current, older than its source files, or not built. */
+export type PageState = "current" | "stale" | "missing";
+
+/**
+ * The source files of the local page, as globs in the folder `packages`. The page bundles the core and a source package.
+ * Thus the globs hold the source folder of each package. A change of another package gives a build that has no effect.
+ */
+export const PAGE_SOURCES: readonly string[] = ["*/src/**", "site/*.html", "site/vite.config.ts"];
+
+/**
+ * This function gives the state of the page from the time of its index file and the times of its source files. The
+ * page is stale when a source file is newer than the index file. The times are in milliseconds.
+ */
+export function pageStateOf(indexTime: number | undefined, sourceTimes: readonly number[]): PageState {
+  if (indexTime === undefined) return "missing";
+  return sourceTimes.some((time) => time > indexTime) ? "stale" : "current";
+}
+
+/**
+ * This function reads the state of the built local page of a checkout, from the folder of the package `runtime`. A move
+ * of the checkout to a new commit writes the changed source files. Thus the page is stale until the next build.
+ */
+export async function readPageState(root: string): Promise<PageState> {
+  const indexTime = await stat(join(pageFolder(root), PAGE_INDEX)).then(
+    (stats) => stats.mtimeMs,
+    () => undefined,
+  );
+  if (indexTime === undefined) return "missing";
+  const sources = await findFilesAsync({ root: join(root, ".."), include: PAGE_SOURCES });
+  const times = await Promise.all(
+    sources.map((path) =>
+      stat(path).then(
+        (stats) => stats.mtimeMs,
+        () => 0,
+      ),
+    ),
+  );
+  return pageStateOf(indexTime, times);
+}
+
+/** The command that builds the local page, from the root of the checkout. */
+export const PAGE_BUILD = "pnpm --filter ./packages/site build";
+
+/** This function gives the warning of a page state, or `undefined` for a current page. The warning holds no path. */
+export function pageWarning(state: PageState): string | undefined {
+  switch (state) {
+    case "missing":
+      return `The local page is not built, thus the path / gives 404. Build it: ${PAGE_BUILD}`;
+    case "stale":
+      return `The local page is older than the source files of this checkout. Build it again: ${PAGE_BUILD}`;
+    case "current":
+      return undefined;
+  }
+}
+
+/** This function gives the status of the loop, of the deploy of the outage call and of the start, at the time of the request. */
+export function statusOf(loop: RuntimeLoop, outage?: { state(): OutageDeployState }, start?: StartStatus): Status {
   const last = loop.last();
   return {
     at: last?.at ?? null,
@@ -44,6 +169,8 @@ export function statusOf(loop: RuntimeLoop): Status {
     sent: last?.delivery?.sent.length ?? 0,
     conflicts: last?.conflicts.length ?? 0,
     stuck: loop.stuck() ?? null,
+    ...(outage === undefined ? {} : { outage: outage.state() }),
+    ...(start === undefined ? {} : { start }),
   };
 }
 
@@ -61,8 +188,29 @@ export const attachApi = (svc: ServiceBuilder, options: ApiOptions): ServiceBuil
     { listen: { port: options.port, host: LOOPBACK } },
   );
   // Each request of a route goes through the service. Thus the drain waits for it, and the shutdown can cut it.
-  http.mount(handle("api", "GET /status", () => statusOf(options.loop)));
+  http.mount(handle("api", "GET /status", () => statusOf(options.loop, options.outage, options.start)));
   // Each route declares if a client can send it again.
-  svc.controller("api").route("GET /status", { idempotent: true });
+  const api = svc.controller("api").route("GET /status", { idempotent: true });
+  const map = options.map;
+  if (map !== undefined) {
+    http.mount(handle("api", "GET /map", () => map()));
+    api.route("GET /map", { idempotent: true });
+  }
+  const health = options.health;
+  if (health !== undefined) {
+    http.mount(handle("api", "GET /health", () => health()));
+    api.route("GET /health", { idempotent: true });
+  }
+  const history = options.history;
+  if (history !== undefined) {
+    const work = (req: { readonly url?: string | undefined }): HistoryPayload | QueryProblem => {
+      const since = sinceOf(req.url);
+      return since !== null && typeof since === "object" ? since : history(since);
+    };
+    http.mount(handle("api", "GET /history", work, { done: (value) => ("problem" in value ? { status: 400 } : {}) }));
+    api.route("GET /history", { idempotent: true });
+  }
+  // The files of the page come after the routes. A path of no file goes to the next handler, thus it gets 404.
+  if (options.page !== undefined) http.mount(folderHandler(options.page, { index: PAGE_INDEX }));
   return svc.server("http", http.knobs, http);
 };

@@ -3,7 +3,7 @@
   "name": "alerts-monorepo",
   "private": true,
   "type": "module",
-  "packageManager": "pnpm@12.20.0",
+  "packageManager": "pnpm@12.21.0",
   "engines": {
     "node": ">=22"
   },
@@ -21,7 +21,10 @@
   "conventions": {
     "rules": {
       "gate-trigger": {
-        "allow": ["measure.yml", "measure-wea.yml"],
+        "allow": [
+          "measure.yml",
+          "measure-wea.yml"
+        ],
         "reason": "measure.yml and measure-wea.yml are measures of outside servers, not gates. A pull request that changes a measure gets a smoke run, and no other pull request starts it."
       }
     }

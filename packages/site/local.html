@@ -6,11 +6,7 @@
 <meta name="color-scheme" content="light dark">
 <meta name="robots" content="noindex">
 <title>alerts: the live map</title>
-<meta name="description" content="The live map of the alert runtime on this computer: the incidents, their levels and the watched places.">
-<script>
-  // The theme before the first paint: the choice of the visitor, else the theme of the system.
-  try { const t = localStorage.getItem("theme"); if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; } catch {}
-</script>
+<meta name="description" content="The live map of the alert runtime on this computer: the incidents, their levels, the watched places, the map of each past time and the health of each source.">
 <link rel="stylesheet" href="./src/style.css">
 </head>
 <body>
@@ -26,13 +22,23 @@
     <h1>The live map</h1>
     <p id="read" class="read" aria-live="polite">Reading the runtime.</p>
   </div>
+  <p class="brief"><a id="brief" href="#sources-h"><span class="verdict waiting" data-tone="quiet"><span>Reading the health of the sources.</span></span></a></p>
   <p id="problem" class="problem" role="alert" hidden></p>
 
   <div class="board">
     <section class="panel map-panel" aria-labelledby="map-h">
       <h2 id="map-h">Map</h2>
+      <div id="globe" class="globe-box" hidden></div>
       <div id="map" class="map-box"></div>
-      <ul class="legend" aria-label="The parts of the map">
+      <div id="time" class="time-box" hidden></div>
+      <p id="past" class="past" hidden><span id="past-text"></span> <button id="now" type="button">Show the live map</button></p>
+      <p id="time-problem" class="hint time-problem" role="status" hidden></p>
+      <div id="globe-tools" class="globe-tools" hidden>
+        <p id="words" class="map-words"></p>
+        <button id="whole" type="button">Show all</button>
+        <p class="hint">Drag the map to move it. Select the map, then turn the wheel to go nearer or farther.</p>
+      </div>
+      <ul id="legend" class="legend" aria-label="The parts of the map">
         <li><span class="swatch level-life-safety"></span>Life-safety</li>
         <li><span class="swatch level-urgent"></span>Urgent</li>
         <li><span class="swatch level-notice"></span>Notice</li>
@@ -48,6 +54,17 @@
       <p class="hint">The highest level is first. Select an incident to show it on the map.</p>
       <div id="incidents"></div>
       <div id="unshaped"></div>
+    </section>
+
+    <section class="panel health-panel" aria-labelledby="sources-h">
+      <h2 id="sources-h">Sources</h2>
+      <p id="health-past" class="past health-past" hidden></p>
+      <div id="health-sum" class="verdicts" aria-live="polite">
+        <p class="verdict waiting" data-tone="quiet"><span>Reading the health of the sources.</span></p>
+      </div>
+      <p id="health-problem" class="hint health-problem" role="status" hidden></p>
+      <div id="health" class="health-rows"></div>
+      <p id="health-hint" class="hint">A source that needs attention is first. The health comes from the runtime on this computer, and it is the health of the present.</p>
     </section>
   </div>
 </main>

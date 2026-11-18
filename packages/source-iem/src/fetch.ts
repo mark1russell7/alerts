@@ -7,7 +7,7 @@
  * IEM reads the products of the NWS from its own feeds, not from the NWS API.
  */
 
-import { observationId, Problems, type Cursor, type FetchOutcome, type Instant, type Observation, type Watch } from "@mark1russell7/alerts";
+import { observationId, Problems, type Cursor, type FetchOutcome, type FetchSignal, type Instant, type Observation, type Watch } from "@mark1russell7/alerts";
 import { capTime } from "@mark1russell7/alerts-format-cap";
 import { createRequester } from "@mark1russell7/alerts-fetch";
 import { stateOfUgc, statesOf } from "@mark1russell7/alerts-format-nws";
@@ -158,7 +158,7 @@ export function readAnswer(reply: Reply, url: string, fetched: Instant, latency:
  * Each fetch is one request of the whole list. IEM gives no ETag and no time of a change, so the
  * request has no condition. The fetch gives no cursor: the list holds each row that is in effect.
  */
-export function createIemFetch(options: IemFetchOptions): (input: IemFetchInput, signal?: AbortSignal) => Promise<FetchOutcome> {
+export function createIemFetch(options: IemFetchOptions): (input: IemFetchInput, signal?: FetchSignal) => Promise<FetchOutcome> {
   const requester = createRequester({
     source: SOURCE_ID,
     pace: options.pace,

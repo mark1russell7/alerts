@@ -22,6 +22,7 @@ import {
   add,
   assess,
   type AssessedLevel,
+  DEFAULT_ASSESS_POLICY,
   EMPTY_STATE,
   type FetchOutcome,
   type FetchRecord,
@@ -131,7 +132,10 @@ export interface FormatBaseline {
   readonly problems: readonly MapProblem[];
   /** The health after the record of the baseline fetch. */
   readonly health: HealthState;
-  /** The time of the assessments: the newest sent time of the reports of the baseline. */
+  /**
+   * The time of the assessments: the newest sent time of the actual reports of the baseline. The keepalive of the canary
+   * has the time of the run, so it does not count. Thus the levels do not change with the clock.
+   */
   readonly at: Instant;
   /** The level of each alert of the baseline, for the person of the case. */
   readonly levels: readonly AlertLevel[];
@@ -236,10 +240,19 @@ export function watchOf(reports: readonly Report[]): { readonly person: PersonWa
 export function levelsOf(reports: readonly Report[], at: Instant, person: PersonWatch, places: readonly WatchedPlace[]): ReadonlyMap<string, AssessedLevel> {
   const levels = new Map<string, AssessedLevel>();
   for (const incident of incidents(add(EMPTY_STATE, { reports }), at)) {
-    const { level } = assess(incident, person, places);
+    const { level } = assess(incident, person, places, DEFAULT_ASSESS_POLICY, at);
     for (const id of incident.reports) levels.set(id, level);
   }
   return levels;
+}
+
+/**
+ * This function gives the time of the assessments of a baseline: the newest sent time of its actual reports. The canary
+ * keepalive is a test message with the time of the run. When it counts, the recorded alerts end before that time, and
+ * the case stops to read (AL-13).
+ */
+export function baselineAt(reports: readonly Pick<Report, "status" | "sent">[]): Instant {
+  return reports.reduce((newest, report) => (report.status === "actual" ? Math.max(newest, report.sent) : newest), 0);
 }
 
 /** This function starts the case: a baseline fetch, then one fetch for each arm through a fault proxy. It gives the records and the verdict. */
@@ -258,7 +271,7 @@ export async function runChangedFormat(options: FormatOptions = {}): Promise<For
     const mapped = mapResult(result);
     const known = new Set(mapped.observations.map((observation) => observation.id));
     const first = observeFetch(startHealth(SOURCE_ID, started), recordOf(result, started, took, new Set()), NWS_DESCRIPTOR);
-    const at = mapped.reports.reduce((newest, report) => Math.max(newest, report.sent), 0);
+    const at = baselineAt(mapped.reports);
     const { person, places } = watchOf(mapped.reports);
     const before = levelsOf(mapped.reports, at, person, places);
     const baseline: FormatBaseline = {

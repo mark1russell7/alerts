@@ -17,6 +17,7 @@ import {
   pingOf,
   pingUrl,
   REFUSAL_KINDS,
+  shiftHeartbeat,
   UNREACHABLE,
   type HeartbeatFetch,
   type HeartbeatState,
@@ -123,6 +124,24 @@ describe("the steps of the heartbeat", () => {
     expect(kindsOf(passes)).toEqual(["success", "fail", "-", "-", "-"]);
   });
 
+  it("moves its times by a step of the wall clock: the fail holds to its retry, and the next ping comes at its time (AL-49)", () => {
+    const HOUR = 3_600_000;
+    const every = 60 * SECOND;
+    // The channel refused a send at T0 + 1 s, with a retry at T0 + 11 s. Then the wall clock stepped back 1 h.
+    let state = heartbeatStep(HEARTBEAT_START, healthy(T0), every).state;
+    state = heartbeatStep(state, refused(T0 + SECOND, "auth", T0 + 11 * SECOND), every).state;
+    expect(shiftHeartbeat(state, -HOUR)).toEqual({ last: { at: T0 + SECOND - HOUR, kind: "fail" }, held: { pushover: { kinds: ["auth"], until: T0 + 11 * SECOND - HOUR } } });
+    const after = heartbeatStep(state, { ...healthy(T0 + 4 * SECOND - HOUR), stepped: -HOUR }, every);
+    // No ping: the step back is not a change, and the fail holds to its retry on the monotonic clock.
+    expect(after.ping).toBeUndefined();
+    expect(after.state.held["pushover"]?.until).toBe(T0 + 11 * SECOND - HOUR);
+    expect(heartbeatStep(after.state, healthy(T0 + 10 * SECOND - HOUR), every).ping).toBeUndefined();
+    expect(heartbeatStep(after.state, healthy(T0 + 11 * SECOND - HOUR), every).ping?.kind).toBe("success");
+    // With no size of the step, a time before the last ping gives a ping, as a clock with no frames needs.
+    expect(heartbeatStep(state, healthy(T0 + 4 * SECOND - HOUR), every).ping?.kind).toBe("fail");
+    expect(shiftHeartbeat(HEARTBEAT_START, HOUR)).toEqual(HEARTBEAT_START);
+  });
+
   it("ends the fail at the first pass at or after the retry with no refusal on the channel", () => {
     const passes = [refused(T0, "auth", T0 + 10 * SECOND), healthy(T0 + 9 * SECOND), healthy(T0 + 10 * SECOND)];
     expect(kindsOf(passes)).toEqual(["fail", "-", "success"]);
@@ -150,10 +169,25 @@ describe("the steps of the heartbeat", () => {
 
   it("gives success to a send in the reserve of a quota, and holds no fail for it", () => {
     expect(UNREACHABLE).toEqual(["auth", "refused", "rate-limited"]);
-    expect(REFUSAL_KINDS).toEqual([...UNREACHABLE, "reserved"]);
+    expect(REFUSAL_KINDS).toEqual([...UNREACHABLE, "reserved", "consent", "quiet", "expired"]);
     expect(holdStep({}, refused(T0, "reserved"))).toEqual({});
     expect(pingOf(refused(T0, "reserved")).kind).toBe("success");
     expect(heldOf({ refusals: { a: { channel: "pushover", kind: "reserved", retryAt: T0 + 60 * SECOND, deliveries: 0 } }, delivered: {} }, T0)).toEqual({});
+  });
+
+  it("gives success to a send that the person refused with a STOP reply, and holds no fail for it", () => {
+    expect(holdStep({}, refused(T0, "consent"))).toEqual({});
+    expect(pingOf(refused(T0, "consent")).kind).toBe("success");
+    expect(heldOf({ refusals: { a: { channel: "twilio-text", kind: "consent", retryAt: T0 + 60 * SECOND, deliveries: 0 } }, delivered: {} }, T0)).toEqual({});
+  });
+
+  it("gives success to a quiet call at night and to an expired message, and holds no fail for them", () => {
+    // A call has no silent mode. A notice at night is quiet, thus the call channel refuses it. That is not a fault.
+    for (const kind of ["quiet", "expired"] as const) {
+      expect(holdStep({}, refused(T0, kind))).toEqual({});
+      expect(pingOf(refused(T0, kind)).kind).toBe("success");
+      expect(heldOf({ refusals: { a: { channel: "twilio-call", kind, retryAt: T0 + 60 * SECOND, deliveries: 0 } }, delivered: {} }, T0)).toEqual({});
+    }
   });
 
   it("pings again when the wall clock steps back", () => {
@@ -369,6 +403,15 @@ describe("the check of Healthchecks.io", () => {
   it("finds the check of the ping URL, and gives its times in milliseconds", () => {
     const other = { ...check, ping_url: "https://hc-ping.com/11111111-1111-4111-8111-111111111111", timeout: 86400 };
     expect(checkOfPingUrl(answer([other, { ...check, ping_url: `${URL_OF_CHECK}/` }]), URL_OF_CHECK)).toEqual({ ok: true, check: { status: "up", timeout: 60 * SECOND, grace: 400 * SECOND } });
+  });
+
+  it("compares the URLs in linear time, also for a long run of slashes from the server", { timeout: 2_000 }, () => {
+    const slashes = "/".repeat(100_000);
+    const hostile = { ...check, ping_url: `${slashes}x` };
+    const found = checkOfPingUrl(answer([hostile, { ...check, ping_url: `${URL_OF_CHECK}${slashes}` }]), URL_OF_CHECK);
+    expect(found).toEqual({ ok: true, check: { status: "up", timeout: 60 * SECOND, grace: 400 * SECOND } });
+    expect(checkOfPingUrl(answer([hostile]), `${slashes}x${slashes}`)).toMatchObject({ ok: true });
+    expect(checkOfPingUrl(answer([hostile]), `${slashes}y`)).toMatchObject({ ok: false });
   });
 
   it("gives a problem with no URL for no check, a key that only reads, a cron check and a bad answer", () => {

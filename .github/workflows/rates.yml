@@ -8,7 +8,7 @@ name: Rates
 
 on:
   schedule:
-    - cron: "39 6 3 * *"
+    - cron: "15 6 3 * *"
   # A person starts a run with gh workflow run rates.yml.
   workflow_dispatch:
 

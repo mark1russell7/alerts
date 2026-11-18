@@ -1,0 +1,374 @@
+[
+  {
+    "id": "ee4bed0f62b134890d0a3bdbd0cf1d9589fc46d5ee912d05d70ad7fe062a9114",
+    "source": "usgs",
+    "origin": "usgs",
+    "key": "us6000jllz@2ea2ab019653ab0f838845b950358c12a47cff89471d8ef78378ffcebcf4cb90/extreme",
+    "references": [],
+    "correlation": [
+      {
+        "system": "usgs-event",
+        "id": "at00rpmwxe"
+      },
+      {
+        "system": "usgs-event",
+        "id": "pt23037000"
+      },
+      {
+        "system": "usgs-event",
+        "id": "us6000jllz"
+      },
+      {
+        "system": "usgs-event",
+        "id": "usauto6000jllz"
+      }
+    ],
+    "status": "actual",
+    "op": "alert",
+    "kind": {
+      "code": "geo.earthquake",
+      "label": "Earthquake"
+    },
+    "categories": [
+      "geo"
+    ],
+    "severity": "extreme",
+    "urgency": "past",
+    "certainty": "observed",
+    "response": [],
+    "sent": 1675646254342,
+    "received": 1675646854342,
+    "onset": 1675646254342,
+    "expires": 1675732654342,
+    "areas": [
+      {
+        "type": "circle",
+        "center": [
+          37.0143,
+          37.2256
+        ],
+        "radiusKm": 39.84
+      }
+    ],
+    "areaText": "Pazarcik earthquake, Kahramanmaras earthquake sequence",
+    "about": [],
+    "sender": "us",
+    "headline": "M 7.8 - Pazarcik earthquake, Kahramanmaras earthquake sequence",
+    "web": "https://earthquake.usgs.gov/earthquakes/eventpage/us6000jllz",
+    "observation": "2ea2ab019653ab0f838845b950358c12a47cff89471d8ef78378ffcebcf4cb90",
+    "parameters": {
+      "magnitude": [
+        "7.8"
+      ],
+      "magnitudeType": [
+        "mww"
+      ],
+      "depthKm": [
+        "10"
+      ],
+      "strongestIntensity": [
+        "9.5"
+      ],
+      "intensitySource": [
+        "shakemap"
+      ],
+      "intensityBias": [
+        "-0.06"
+      ],
+      "intensityLaw": [
+        "aw07-california"
+      ],
+      "bandIntensity": [
+        "7.5"
+      ],
+      "bandRadiusKm": [
+        "39.84"
+      ],
+      "pager": [
+        "red"
+      ],
+      "tsunami": [
+        "0"
+      ]
+    }
+  },
+  {
+    "id": "c18321d708c0644064fc2d6ea2ac4102df9ff58f8546654efd1058106c51f70d",
+    "source": "usgs",
+    "origin": "usgs",
+    "key": "us6000jllz@2ea2ab019653ab0f838845b950358c12a47cff89471d8ef78378ffcebcf4cb90/severe",
+    "references": [],
+    "correlation": [
+      {
+        "system": "usgs-event",
+        "id": "at00rpmwxe"
+      },
+      {
+        "system": "usgs-event",
+        "id": "pt23037000"
+      },
+      {
+        "system": "usgs-event",
+        "id": "us6000jllz"
+      },
+      {
+        "system": "usgs-event",
+        "id": "usauto6000jllz"
+      }
+    ],
+    "status": "actual",
+    "op": "alert",
+    "kind": {
+      "code": "geo.earthquake",
+      "label": "Earthquake"
+    },
+    "categories": [
+      "geo"
+    ],
+    "severity": "severe",
+    "urgency": "past",
+    "certainty": "observed",
+    "response": [],
+    "sent": 1675646254342,
+    "received": 1675646854342,
+    "onset": 1675646254342,
+    "expires": 1675732654342,
+    "areas": [
+      {
+        "type": "circle",
+        "center": [
+          37.0143,
+          37.2256
+        ],
+        "radiusKm": 75.85
+      }
+    ],
+    "areaText": "Pazarcik earthquake, Kahramanmaras earthquake sequence",
+    "about": [],
+    "sender": "us",
+    "headline": "M 7.8 - Pazarcik earthquake, Kahramanmaras earthquake sequence",
+    "web": "https://earthquake.usgs.gov/earthquakes/eventpage/us6000jllz",
+    "observation": "2ea2ab019653ab0f838845b950358c12a47cff89471d8ef78378ffcebcf4cb90",
+    "parameters": {
+      "magnitude": [
+        "7.8"
+      ],
+      "magnitudeType": [
+        "mww"
+      ],
+      "depthKm": [
+        "10"
+      ],
+      "strongestIntensity": [
+        "9.5"
+      ],
+      "intensitySource": [
+        "shakemap"
+      ],
+      "intensityBias": [
+        "-0.06"
+      ],
+      "intensityLaw": [
+        "aw07-california"
+      ],
+      "bandIntensity": [
+        "6.5"
+      ],
+      "bandRadiusKm": [
+        "75.85"
+      ],
+      "pager": [
+        "red"
+      ],
+      "tsunami": [
+        "0"
+      ]
+    }
+  },
+  {
+    "id": "874c0d3d556491393811d5690623813ec97ba9a6f7b2a44d3026651a1f266d83",
+    "source": "usgs",
+    "origin": "usgs",
+    "key": "us6000jllz@2ea2ab019653ab0f838845b950358c12a47cff89471d8ef78378ffcebcf4cb90/moderate",
+    "references": [],
+    "correlation": [
+      {
+        "system": "usgs-event",
+        "id": "at00rpmwxe"
+      },
+      {
+        "system": "usgs-event",
+        "id": "pt23037000"
+      },
+      {
+        "system": "usgs-event",
+        "id": "us6000jllz"
+      },
+      {
+        "system": "usgs-event",
+        "id": "usauto6000jllz"
+      }
+    ],
+    "status": "actual",
+    "op": "alert",
+    "kind": {
+      "code": "geo.earthquake",
+      "label": "Earthquake"
+    },
+    "categories": [
+      "geo"
+    ],
+    "severity": "moderate",
+    "urgency": "past",
+    "certainty": "observed",
+    "response": [],
+    "sent": 1675646254342,
+    "received": 1675646854342,
+    "onset": 1675646254342,
+    "expires": 1675732654342,
+    "areas": [
+      {
+        "type": "circle",
+        "center": [
+          37.0143,
+          37.2256
+        ],
+        "radiusKm": 136.82
+      }
+    ],
+    "areaText": "Pazarcik earthquake, Kahramanmaras earthquake sequence",
+    "about": [],
+    "sender": "us",
+    "headline": "M 7.8 - Pazarcik earthquake, Kahramanmaras earthquake sequence",
+    "web": "https://earthquake.usgs.gov/earthquakes/eventpage/us6000jllz",
+    "observation": "2ea2ab019653ab0f838845b950358c12a47cff89471d8ef78378ffcebcf4cb90",
+    "parameters": {
+      "magnitude": [
+        "7.8"
+      ],
+      "magnitudeType": [
+        "mww"
+      ],
+      "depthKm": [
+        "10"
+      ],
+      "strongestIntensity": [
+        "9.5"
+      ],
+      "intensitySource": [
+        "shakemap"
+      ],
+      "intensityBias": [
+        "-0.06"
+      ],
+      "intensityLaw": [
+        "aw07-california"
+      ],
+      "bandIntensity": [
+        "5.5"
+      ],
+      "bandRadiusKm": [
+        "136.82"
+      ],
+      "pager": [
+        "red"
+      ],
+      "tsunami": [
+        "0"
+      ]
+    }
+  },
+  {
+    "id": "2851304704fd1797c0c912f1d31ed1ecc7fac222316182282298ec24b430d18f",
+    "source": "usgs",
+    "origin": "usgs",
+    "key": "us6000jllz@2ea2ab019653ab0f838845b950358c12a47cff89471d8ef78378ffcebcf4cb90/minor",
+    "references": [],
+    "correlation": [
+      {
+        "system": "usgs-event",
+        "id": "at00rpmwxe"
+      },
+      {
+        "system": "usgs-event",
+        "id": "pt23037000"
+      },
+      {
+        "system": "usgs-event",
+        "id": "us6000jllz"
+      },
+      {
+        "system": "usgs-event",
+        "id": "usauto6000jllz"
+      }
+    ],
+    "status": "actual",
+    "op": "alert",
+    "kind": {
+      "code": "geo.earthquake",
+      "label": "Earthquake"
+    },
+    "categories": [
+      "geo"
+    ],
+    "severity": "minor",
+    "urgency": "past",
+    "certainty": "observed",
+    "response": [],
+    "sent": 1675646254342,
+    "received": 1675646854342,
+    "onset": 1675646254342,
+    "expires": 1675732654342,
+    "areas": [
+      {
+        "type": "circle",
+        "center": [
+          37.0143,
+          37.2256
+        ],
+        "radiusKm": 522.36
+      }
+    ],
+    "areaText": "Pazarcik earthquake, Kahramanmaras earthquake sequence",
+    "about": [],
+    "sender": "us",
+    "headline": "M 7.8 - Pazarcik earthquake, Kahramanmaras earthquake sequence",
+    "web": "https://earthquake.usgs.gov/earthquakes/eventpage/us6000jllz",
+    "observation": "2ea2ab019653ab0f838845b950358c12a47cff89471d8ef78378ffcebcf4cb90",
+    "parameters": {
+      "magnitude": [
+        "7.8"
+      ],
+      "magnitudeType": [
+        "mww"
+      ],
+      "depthKm": [
+        "10"
+      ],
+      "strongestIntensity": [
+        "9.5"
+      ],
+      "intensitySource": [
+        "shakemap"
+      ],
+      "intensityBias": [
+        "-0.06"
+      ],
+      "intensityLaw": [
+        "aw07-california"
+      ],
+      "bandIntensity": [
+        "3"
+      ],
+      "bandRadiusKm": [
+        "522.36"
+      ],
+      "pager": [
+        "red"
+      ],
+      "tsunami": [
+        "0"
+      ]
+    }
+  }
+]

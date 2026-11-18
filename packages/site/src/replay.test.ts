@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import { COVERAGE_KINDS, FETCHES, FIRST_FETCH, OUTAGE, PEOPLE, PLACES, SOURCES, STEPS, ZONES } from "./demo.ts";
 import { incidentLabel, joinFacts, reasonText, stepLabel } from "./explain.ts";
 import { observe, replay, type Frame } from "./replay.ts";
-import { zonesOf } from "./view.ts";
+import { zonesOf } from "./demo-map.ts";
 
 const WORLD = { sources: SOURCES, fetches: FETCHES, start: FIRST_FETCH, kinds: COVERAGE_KINDS };
 const frames = replay(STEPS, PEOPLE, PLACES, WORLD);
@@ -275,6 +275,12 @@ describe("the words of the page", () => {
     expect(reasonText({ kind: "place", place, codes: [{ system: "ugc", code: "KSC173" }], distanceKm: 0 }, incident!)).toBe(
       "The incident covers the home of A, in the Valley: KSC173. A shape of the incident contains the home of A, in the Valley.",
     );
+  });
+
+  it("tells the level of the table at a place", () => {
+    const [incident] = frames[1]!.incidents;
+    const reason = { kind: "place-table", place: "home-a" as PlaceId, reports: [incident!.anchor], level: "urgent" } as const;
+    expect(reasonText(reason, incident!)).toBe("The lines that hold this place give the level urgent at the home of A, in the Valley.");
   });
 
   it("tells first that the shadow score does not decide, and gives each factor with its source", () => {

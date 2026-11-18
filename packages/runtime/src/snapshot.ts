@@ -19,7 +19,7 @@
  * is the same after a restart.
  */
 import { endedReports, type FetchOutcome, type Instant, type MergeState, type ReportId, type SourceId } from "@mark1russell7/alerts";
-import { envelope, type BackEvent, type EndedEvent } from "./events.ts";
+import { envelope, frameTag, type BackEvent, type EndedEvent } from "./events.ts";
 
 /**
  * The count of complete fetches in a row that miss a report before its end. The value 2 is a shortcut
@@ -40,6 +40,8 @@ export interface SnapshotInput {
   readonly misses: ReadonlyMap<ReportId, number>;
   /** The count of misses that ends a report. It is 1 or more. */
   readonly limit: number;
+  /** The count of the steps of the wall clock in the log. The id of each event has its frame tag. The default is 0. */
+  readonly frame?: number;
 }
 
 /** The result of `snapshotStep`: the events to write, and the counts after the fetch. */
@@ -81,8 +83,8 @@ export function snapshotStep(input: SnapshotInput): SnapshotStep {
     else misses.set(report.id, count);
   }
   const events: (EndedEvent | BackEvent)[] = [];
-  if (gone.length > 0) events.push({ ...envelope("ended", `ended:${source}:${input.started}`, at), source, reports: gone, ...(asOf === undefined ? {} : { asOf }) });
-  if (back.length > 0) events.push({ ...envelope("back", `back:${source}:${input.started}`, at), source, reports: back });
+  if (gone.length > 0) events.push({ ...envelope("ended", `ended:${source}:${input.started}${frameTag(input.frame ?? 0)}`, at), source, reports: gone, ...(asOf === undefined ? {} : { asOf }) });
+  if (back.length > 0) events.push({ ...envelope("back", `back:${source}:${input.started}${frameTag(input.frame ?? 0)}`, at), source, reports: back });
   return { events, misses };
 }
 

@@ -21,17 +21,19 @@
  * - `recovered`: the first delivery comes in two retries and one tick after the end of the outage.
  * - `told`: a fail ping goes to the check during the outage. The control arm has no fail ping.
  * - `cleared`: the last ping of the arm is a success ping.
+ * - `paced`: the requests in progress at one time are not more than the `maxInFlight` of the channel.
+ * - `probed`: in an arm that held a stop in the outage, the first stop after the outage starts in `PROBE_LIMIT`.
  */
 import { platformClock, wallClock } from "@mark1russell7/algebra/clock";
 import { createPushoverChannel } from "@mark1russell7/alerts-channel-pushover";
-import { DELIVERY_TIMES, HEARTBEAT_EVERY, heartbeat, heldOf, openRuntime, openRuntimeLog, type Runtime } from "@mark1russell7/alerts-runtime";
+import { DELIVERY_TIMES, HEARTBEAT_EVERY, heartbeat, heldOf, openRuntime, openRuntimeLog, PROBE_LIMIT, type Runtime } from "@mark1russell7/alerts-runtime";
 import { type FaultPlan, type FaultWindow, faultPlanOf, type WindowFault } from "@mark1russell7/rigor-chaos";
 import { startFaultProxy } from "@mark1russell7/rigor-proxy";
 import { startScriptedServer } from "@mark1russell7/rigor-testkit/http";
 import { type PushoverLedger, pushoverApi, pushoverFetchTo, pushoverLedgerOf } from "@procedures/notify/testing";
 import { type CallFailure, deliveryFixture, FIXTURE_PLACE, type LogSummary, logSummaryOf } from "./delivery-fixture.ts";
 import { acceptGatesOf } from "./late-accept.ts";
-import { caseClock, type RequestCounts } from "./source-down.ts";
+import { caseClock, caseDeliveryTimes, type RequestCounts } from "./source-down.ts";
 
 /** The id of the case. */
 export const CASE_7_ID = "al-13-case-7";
@@ -49,8 +51,14 @@ export const CHANNEL_ARMS: readonly ChannelArm[] = ["control", "reset", "error",
 /** The arms with an outage. */
 export const CHANNEL_OUTAGE_ARMS: readonly ChannelArm[] = CHANNEL_ARMS.filter((arm) => arm !== "control");
 
+/**
+ * The arms whose outage stops the stop requests of the copies. Each one holds a stop in its outage. In run 2 of the case, the `limited` arm
+ * sent no stop in its outage, because a send that got HTTP 429 made no copy.
+ */
+export const CHANNEL_PROBE_ARMS: readonly ChannelArm[] = ["reset", "error", "unavailable"];
+
 /** The gates of each arm. */
-export const CHANNEL_GATES = ["delivered", "single", "stopped", "recovered", "told", "cleared"] as const;
+export const CHANNEL_GATES = ["delivered", "single", "stopped", "recovered", "told", "cleared", "paced", "probed"] as const;
 
 /** A gate of an arm. */
 export type ChannelGate = (typeof CHANNEL_GATES)[number];
@@ -109,6 +117,41 @@ export interface PingRecord {
 /** A failed call of a pass, at the time of the pass after the start of the arm. */
 export type TimedFailure = CallFailure & { readonly at: number };
 
+/** One Pushover request of the channel. Each time is after the start of the arm. */
+export interface TimedRequest {
+  /** The path of the address of the Pushover API, for example `/1/messages.json`. */
+  readonly path: string;
+  readonly start: number;
+  /** The time when the answer came or the request failed. */
+  readonly end: number;
+  /** The status of the answer. A request that failed has no status. */
+  readonly status?: number;
+}
+
+/**
+ * The start of the path of a stop of the copies of a send: a cancel by tag. The ledger of `@procedures/notify/testing`
+ * has the same rule, but it does not export it.
+ */
+export const STOP_PATH = "/1/receipts/cancel_by_tag/";
+
+/** The stops of an arm with an outage. */
+export interface StopProbe {
+  /** The count of the stops that started in the outage. */
+  readonly held: number;
+  /** The time from the end of the outage to the start of the first stop after it. No stop after the outage gives `undefined`. */
+  readonly after?: number;
+}
+
+/** This function gives the stops of an arm with an outage. An arm with no outage holds no stop. */
+export function stopProbeOf(record: Pick<ChannelRecord, "outage" | "exchanges">): StopProbe {
+  const { outage } = record;
+  if (outage === undefined) return { held: 0 };
+  const stops = record.exchanges.filter((exchange) => exchange.path.startsWith(STOP_PATH));
+  const held = stops.filter((stop) => stop.start >= outage.from && stop.start < outage.to).length;
+  const first = Math.min(...stops.filter((stop) => stop.start >= outage.to).map((stop) => stop.start));
+  return Number.isFinite(first) ? { held, after: first - outage.to } : { held };
+}
+
 /** The records of one arm. Each time is after the start of the arm. */
 export interface ChannelRecord {
   readonly arm: ChannelArm;
@@ -122,6 +165,12 @@ export interface ChannelRecord {
   readonly pingErrors: readonly string[];
   /** The Pushover requests of the channel. Each request goes to the fault proxy. */
   readonly requests: RequestCounts;
+  /** Each Pushover request of the channel, in the order of its start. */
+  readonly exchanges: readonly TimedRequest[];
+  /** The most Pushover requests in progress at one time. */
+  readonly inFlight: number;
+  /** The `maxInFlight` of the descriptor of the channel. */
+  readonly maxInFlight?: number;
   /** The count of the faults that the proxy recorded. */
   readonly faults: number;
   readonly passes: number;
@@ -143,12 +192,28 @@ export async function runChannelArm(arm: ChannelArm, settings: ChannelSettings =
   // The proxy takes a monotonic clock with the speed and the start of the case clock. Thus the window of the plan is in the time of the arm.
   const proxy = await startFaultProxy({ target: { host: server.host, port: server.port }, plan: channelPlanOf(arm, settings), protocol: "http", clock: platformClock({ speed: settings.speed, start }), origin: start });
   const sent: number[] = [];
+  const exchanges: TimedRequest[] = [];
+  let open = 0;
+  let inFlight = 0;
   const toProxy = pushoverFetchTo(`http://${proxy.host}:${String(proxy.port)}`);
-  const fetch: typeof toProxy = (url, init) => {
-    sent.push(clock.now() - start);
-    return toProxy(url, init);
+  // A counter at the start and at the end of each request gives the most requests in progress, with no error of the clock.
+  const fetch: typeof toProxy = async (url, init) => {
+    const begin = clock.now() - start;
+    sent.push(begin);
+    open += 1;
+    inFlight = Math.max(inFlight, open);
+    let status: number | undefined;
+    try {
+      const reply = await toProxy(url, init);
+      status = reply.status;
+      return reply;
+    } finally {
+      open -= 1;
+      exchanges.push({ path: new URL(url).pathname, start: begin, end: clock.now() - start, ...(status === undefined ? {} : { status }) });
+    }
   };
   const channel = createPushoverChannel({ token: FIXTURE.token, fetch, now: clock.now });
+  const { maxInFlight } = channel.describe();
   const log = openRuntimeLog(":memory:");
   const pings: PingRecord[] = [];
   const pingErrors: string[] = [];
@@ -176,7 +241,7 @@ export async function runChannelArm(arm: ChannelArm, settings: ChannelSettings =
       watch: () => ({ places: [FIXTURE_PLACE], kinds: ["met"] }),
       view: FIXTURE.view,
       run: `${CASE_7_ID}-${arm}`,
-      delivery: { recipients: [FIXTURE.recipient], channels: [channel], ...DELIVERY_TIMES },
+      delivery: { recipients: [FIXTURE.recipient], channels: [channel], ...caseDeliveryTimes(settings.speed) },
       onPass: (pass) => beat(pass),
     });
     const end = start + settings.armMs;
@@ -207,6 +272,9 @@ export async function runChannelArm(arm: ChannelArm, settings: ChannelSettings =
     pings,
     pingErrors,
     requests: { sent: sent.length, inWindow, reached },
+    exchanges: exchanges.sort((a, b) => a.start - b.start),
+    inFlight,
+    ...(maxInFlight === undefined ? {} : { maxInFlight }),
     faults: proxy.records.length,
     passes,
     ...(lastPassAt === undefined ? {} : { lastPassAt }),
@@ -234,7 +302,24 @@ export function channelGatesOf(record: ChannelRecord, settings: ChannelSettings 
   }
   const cleared = record.pings.at(-1)?.kind === "success";
   if (!cleared) problems.push(`${record.arm}: the last ping of the arm is not a success ping.`);
-  return { gates: { ...accept.gates, recovered, told, cleared }, problems };
+  const paced = record.maxInFlight !== undefined && record.inFlight <= record.maxInFlight;
+  if (!paced) {
+    problems.push(
+      record.maxInFlight === undefined
+        ? `${record.arm}: the channel has no maxInFlight.`
+        : `${record.arm}: ${String(record.inFlight)} requests were in progress at one time, more than ${String(record.maxInFlight)}.`,
+    );
+  }
+  const probe = stopProbeOf(record);
+  const probed = probe.held === 0 || (probe.after !== undefined && probe.after <= PROBE_LIMIT);
+  if (!probed) {
+    problems.push(
+      probe.after === undefined
+        ? `${record.arm}: the outage held ${String(probe.held)} stops, and no stop came after it.`
+        : `${record.arm}: the first stop came ${String(probe.after)} ms after the outage, after the limit of ${String(PROBE_LIMIT)} ms.`,
+    );
+  }
+  return { gates: { ...accept.gates, recovered, told, cleared, paced, probed }, problems };
 }
 
 /** This function gives the problems of the settings. With a problem, the case cannot read. */
@@ -243,6 +328,9 @@ export function channelSettingsProblems(settings: ChannelSettings): string[] {
   if (settings.outageMs < 2 * HEARTBEAT_EVERY) problems.push(`The outage (${String(settings.outageMs)} ms) is shorter than two times of the heartbeat.`);
   const last = settings.outageMs + recoverLimit(settings) + DELIVERY_TIMES.pollEvery + 2 * settings.tickMs;
   if (settings.armMs < last) problems.push(`The arm (${String(settings.armMs)} ms) ends before the poll of a delivery at the recovery limit (${String(last)} ms).`);
+  // The runtime takes `PROBE_LIMIT` or the retry, the longer one. The gate `probed` uses `PROBE_LIMIT`.
+  if (DELIVERY_TIMES.retry > PROBE_LIMIT) problems.push(`The retry (${String(DELIVERY_TIMES.retry)} ms) is longer than PROBE_LIMIT (${String(PROBE_LIMIT)} ms).`);
+  if (settings.armMs < settings.outageMs + PROBE_LIMIT + 2 * settings.tickMs) problems.push(`The arm (${String(settings.armMs)} ms) ends before the first stop after the outage.`);
   return problems;
 }
 
@@ -273,6 +361,8 @@ export function channelVerdictOf(records: readonly ChannelRecord[], settings: Ch
     if (outage !== undefined && record.faults === 0) problems.push(`${arm}: the proxy has no record of a fault.`);
     if (outage !== undefined && inWindow === 0) problems.push(`${arm}: the channel sent no request in the outage window.`);
     if (outage !== undefined && record.log.deliveries.some((delivery) => delivery.at < outage.to)) problems.push(`${arm}: a delivery came before the end of the outage.`);
+    if (record.exchanges.length !== sent) problems.push(`${arm}: the channel sent ${String(sent)} requests, but ${String(record.exchanges.length)} have a time.`);
+    if (CHANNEL_PROBE_ARMS.includes(arm) && stopProbeOf(record).held === 0) problems.push(`${arm}: the outage held no stop, thus the gate probed has no read.`);
     // Each fault stops one request before the server. Thus each request gets to the server or has one fault.
     if (reached + record.faults !== sent) {
       problems.push(`${arm}: the channel sent ${String(sent)} requests, but ${String(reached)} got to the server and ${String(record.faults)} stopped at the proxy.`);
@@ -303,5 +393,5 @@ export interface ChannelRun {
 export async function runChannelDown(given: Partial<ChannelSettings> = {}): Promise<ChannelRun> {
   const settings: ChannelSettings = { ...CASE_7_SETTINGS, ...given };
   const records = await Promise.all(CHANNEL_ARMS.map((arm) => runChannelArm(arm, settings)));
-  return { id: CASE_7_ID, settings, times: DELIVERY_TIMES, records, verdict: channelVerdictOf(records, settings) };
+  return { id: CASE_7_ID, settings, times: caseDeliveryTimes(settings.speed), records, verdict: channelVerdictOf(records, settings) };
 }

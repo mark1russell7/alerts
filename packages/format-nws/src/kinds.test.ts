@@ -89,6 +89,16 @@ describe("resolveKind", () => {
     expect(resolveKind({ sameCode: "NWS", name: "Tornado Warning" }).kind.code).toBe("met.tornado");
   });
 
+  it("knows the names of the tsunami bulletins: the statement with no VTEC and each stage", () => {
+    expect(resolveKind({ name: "Tsunami Information" })).toEqual({
+      kind: { code: "geo.tsunami", significance: "statement", label: "Tsunami Information" },
+      known: true,
+    });
+    for (const [name, significance] of [["Tsunami Warning", "warning"], ["Tsunami Advisory", "advisory"], ["Tsunami Watch", "watch"]] as const) {
+      expect(resolveKind({ name }).kind).toMatchObject({ code: "geo.tsunami", significance });
+    }
+  });
+
   it("keeps the name of an unknown event and says so", () => {
     expect(resolveKind({ name: "Volcanic Haze Notice" })).toEqual({ kind: { code: UNKNOWN_KIND, label: "Volcanic Haze Notice" }, known: false });
     expect(resolveKind({})).toEqual({ kind: { code: UNKNOWN_KIND, label: "Unknown event" }, known: false });

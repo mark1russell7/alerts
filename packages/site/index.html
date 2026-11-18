@@ -6,10 +6,6 @@
 <meta name="color-scheme" content="light dark">
 <title>alerts</title>
 <meta name="description" content="One stream of alerts from many sources (weather, news, service status and more), with dedup, ranking and delivery that survives faults.">
-<script>
-  // The theme before the first paint: the choice of the visitor, else the theme of the system.
-  try { const t = localStorage.getItem("theme"); if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; } catch {}
-</script>
 <link rel="stylesheet" href="./src/style.css">
 </head>
 <body>
@@ -19,7 +15,7 @@
     <a href="#demo">Demo</a>
     <a href="./releases/">Releases</a>
     <a href="./status/">Status</a>
-    <a href="https://github.com/mark1russell7/alerts">GitHub</a>
+    <a href="https://github.com/metrograph-labs/alerts">GitHub</a>
     <button id="theme" class="theme" type="button" aria-label="Change the theme"><span aria-hidden="true">◐</span></button>
   </nav>
 </header>
@@ -60,13 +56,18 @@
   <div class="board">
     <section class="panel map-panel" aria-labelledby="map-h">
       <h3 id="map-h">Map</h3>
+      <div id="globe" class="globe-box" hidden></div>
       <div id="map" class="map-box"></div>
-      <ul class="legend" aria-label="The colors of the levels">
+      <div id="globe-tools" class="globe-tools" hidden>
+        <p id="words" class="map-words"></p>
+        <button id="whole" type="button">Show all</button>
+        <p class="hint">Drag the map to move it. Select the map, then turn the wheel to go nearer or farther.</p>
+      </div>
+      <ul id="legend" class="legend" aria-label="The parts of the map">
         <li><span class="swatch level-life-safety"></span>Life-safety</li>
         <li><span class="swatch level-urgent"></span>Urgent</li>
         <li><span class="swatch level-notice"></span>Notice</li>
         <li><span class="swatch level-none"></span>No person</li>
-        <li><span class="swatch test"></span>Test</li>
         <li><span class="swatch gap"></span>Coverage gap</li>
       </ul>
       <p class="hint">The core matches a home by its zone and county codes. The map draws the shapes, and decides nothing.</p>
@@ -109,10 +110,11 @@
 
   <h2>Get the code</h2>
   <div class="command">
-    <code id="install">git clone https://github.com/mark1russell7/alerts.git</code>
+    <code id="install">git clone https://github.com/metrograph-labs/alerts.git</code>
     <button id="copy" type="button">Copy</button>
   </div>
   <p class="note"><a href="./releases/">Releases</a> shows each version, and <a href="./status/">Status</a> shows the open work.</p>
+  <p class="note">The alert texts: the <a href="./texts/privacy/">privacy policy</a>, the <a href="./texts/terms/">terms</a> and the <a href="./texts/opt-in/">opt-in</a>.</p>
 </main>
 
 <script type="module" src="./src/index.ts"></script>

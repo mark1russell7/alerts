@@ -1,6 +1,6 @@
 import { canonicalJson, random, seedsFrom, type Random } from "@mark1russell7/rigor-generators";
 import { describe, expect, it } from "vitest";
-import type { Acknowledgment, ChannelId, Delivery, EndMark, Incident, MergeState, ObservationId, PersonId, Report, SourceId, Status } from "./contracts.ts";
+import type { Acknowledgment, ChannelId, Delivery, EndMark, Incident, MergeState, ObservationId, PersonId, Report, Severity, SourceId, Status } from "./contracts.ts";
 import { reportId } from "./ids.ts";
 import { areasWithoutBlocks } from "./shapes.ts";
 import { EMPTY_STATE, acknowledgedLevel, add, endedReports, incidents, join, normalize, sentLevel, type LinkRule } from "./merge.ts";
@@ -307,7 +307,90 @@ describe("the copies of one event", () => {
     const partial = report({ key: "api-2", op: "cancel", sent: later, references: ["api-1"], correlation: vtec, areas: codes("KSC045") });
     const [incident] = incidents(normalize({ reports: [alert, copy, partial] }), at);
     expect(incident?.live).toBe(true);
-    expect(incident?.areas).toContainEqual({ type: "code", system: "ugc", code: "KSC177" });
+    // The cancelled county leaves the incident: the copy gives only the county that no later report names.
+    expect(incident?.areas).toEqual(codes("KSC177"));
+  });
+
+  it("keeps the rest of a report live after a lone cancel of a part", () => {
+    // The cancel of one county references the message of two counties. The update for the other county is lost.
+    const partial = report({ key: "api-2", op: "cancel", sent: later, references: ["api-1"], correlation: vtec, areas: codes("KSC045") });
+    const [incident] = incidents(normalize({ reports: [alert, partial] }), at);
+    expect(incident?.live).toBe(true);
+    expect(incident?.areas).toEqual(codes("KSC177"));
+    // The same cancel with no shared correlation key: the reference alone states the county.
+    const bare = report({ key: "api-2", op: "cancel", sent: later, references: ["api-1"], correlation: [], areas: codes("KSC045") });
+    expect(incidents(normalize({ reports: [alert, bare] }), at)[0]?.areas).toEqual(codes("KSC177"));
+    // Two cancels of a part that together name each county end the report.
+    const rest = report({ key: "api-3", op: "cancel", sent: later, references: ["api-1"], correlation: [], areas: codes("KSC177") });
+    expect(liveOf(alert, bare, rest)).toBe(false);
+  });
+
+  it("takes the areas of the segments of the NWS: a cancel of a part and an update of the rest", () => {
+    const partial = report({ key: "api-2", op: "cancel", sent: later, references: ["api-1"], correlation: vtec, areas: codes("KSC045") });
+    const rest = report({ key: "api-3", op: "update", sent: later, references: ["api-1"], correlation: vtec, areas: codes("KSC177"), severity: "severe" });
+    const [incident] = incidents(normalize({ reports: [alert, copy, partial, rest] }), at);
+    expect(incident?.live).toBe(true);
+    expect(incident?.areas).toEqual(codes("KSC177"));
+    expect(incident?.severity).toBe("severe");
+  });
+
+  it("ends the whole report on an update, or on a cancel that is not of a part, as CAP tells", () => {
+    // An update states the new area, so the county that it does not name ends.
+    const update = report({ key: "api-2", op: "update", sent: later, references: ["api-1"], correlation: vtec, areas: codes("KSC177") });
+    expect(incidents(normalize({ reports: [alert, update] }), at)[0]?.areas).toEqual(codes("KSC177"));
+    // A cancel that names another code, or no code, is not a cancel of a part.
+    const other = report({ key: "api-2", op: "cancel", sent: later, references: ["api-1"], correlation: vtec, areas: codes("KSC045", "KSC139") });
+    expect(liveOf(alert, other)).toBe(false);
+    const shape = report({ key: "api-2", op: "cancel", sent: later, references: ["api-1"], correlation: [], areas: [{ type: "polygon", rings: [[[-95.8, 39.0], [-95.6, 39.0], [-95.6, 39.1], [-95.8, 39.0]]] }] });
+    expect(liveOf(alert, shape)).toBe(false);
+  });
+
+  it("removes the shapes of a block with a code that has a later statement", () => {
+    const polygon = { type: "polygon", rings: [[[-95.8, 39.0], [-95.6, 39.0], [-95.6, 39.1], [-95.8, 39.0]]] } as const;
+    const code = (name: string, block?: string): Report["areas"][number] => ({ type: "code", system: "ugc", code: name, ...(block === undefined ? {} : { block }) });
+    const row = report({ key: "iem-KSC177", source: "iem", op: "cancel", sent: later, correlation: vtec, areas: codes("KSC177") });
+    // The block of the cancelled county goes, with its polygon. The county with no block stays.
+    const one = report({ key: "api-1", correlation: vtec, areas: [{ ...polygon, block: "feature" }, code("KSC177", "feature"), code("KSC045")] });
+    expect(incidents(normalize({ reports: [one, row] }), at)[0]?.areas).toEqual(codes("KSC045"));
+    // A block of two counties keeps the other county, with no polygon. The block then decides by that county.
+    const two = report({ key: "api-1", correlation: vtec, areas: [{ ...polygon, block: "feature" }, code("KSC177", "feature"), code("KSC045", "feature")] });
+    expect(incidents(normalize({ reports: [two, row] }), at)[0]?.areas).toEqual([code("KSC045", `${two.id}/feature`)]);
+  });
+
+  it("gives a county to the incident again when a later alert names it again", () => {
+    const cancel = report({ key: "api-2", op: "cancel", sent: later, references: ["api-1"], correlation: vtec, areas: codes("KSC177", "KSC045") });
+    const again = report({ key: "api-3", sent: later + 60_000, correlation: vtec, areas: codes("KSC177") });
+    const [incident] = incidents(normalize({ reports: [alert, cancel, again] }), at);
+    expect(incident?.live).toBe(true);
+    expect(incident?.areas).toEqual(codes("KSC177"));
+  });
+
+  it.each(SEEDS)("keeps exactly the codes that no cancel of a part names, when no other cancel ends the report (seed %i)", (seed) => {
+    const r = random(seed);
+    const pool = ["KSC177", "KSC045", "KSC139", "KSC197"];
+    for (let round = 0; round < 50; round += 1) {
+      const own = r.sample(pool, r.int(1, pool.length));
+      const base = report({ key: "api-1", correlation: vtec, areas: codes(...own) });
+      const cancels = Array.from({ length: r.int(1, 3) }, (_, i) =>
+        report({
+          key: `api-${i + 2}`,
+          op: "cancel",
+          // A tie with the alert gives no statement by the event, so the reference alone decides.
+          sent: r.chance(0.3) ? T0 : later + i * 60_000,
+          references: ["api-1"],
+          correlation: r.chance(0.5) ? vtec : [],
+          // Most cancels name a part of the codes of the alert. Some name another code too.
+          areas: codes(...(r.chance(0.8) ? r.sample(own, r.int(1, own.length)) : [...r.sample(own, 1), "KSC999"])),
+        }),
+      );
+      const [incident] = incidents(normalize({ reports: [base, ...cancels] }), at);
+      const namedBy = (held: Report): string[] => held.areas.flatMap((area) => (area.type === "code" ? [area.code] : []));
+      const parts = cancels.filter((held) => namedBy(held).length < own.length && namedBy(held).every((code) => own.includes(code)));
+      const left = own.filter((code) => !parts.some((held) => namedBy(held).includes(code)));
+      const live = parts.length === cancels.length && left.length > 0;
+      expect(incident?.live, `seed ${seed} round ${round}`).toBe(live);
+      if (live) expect(namedBy({ ...base, areas: incident!.areas }).sort(), `seed ${seed} round ${round}`).toEqual([...left].sort());
+    }
   });
 
   it("does not end a copy of another origin, of the same sent time, of another event or with no code", () => {
@@ -400,7 +483,9 @@ describe("the copies of one event", () => {
       const heads = reports.filter((held) => pool.some((code) => named(held, code) && !reports.some((other) => other.sent > held.sent && named(other, code))));
       const liveHeads = heads.filter((held) => held.op !== "cancel");
       const basis = liveHeads.length > 0 ? liveHeads : heads;
-      const expected = [...new Set(basis.flatMap((held) => held.areas.map((area) => (area.type === "code" ? area.code : ""))))].sort();
+      // Each head gives only its codes that no later report names.
+      const fresh = (held: Report, code: string): boolean => !reports.some((other) => other.sent > held.sent && named(other, code));
+      const expected = [...new Set(basis.flatMap((held) => held.areas.flatMap((area) => (area.type === "code" && fresh(held, area.code) ? [area.code] : []))))].sort();
       expect(incident?.areas.map((area) => (area.type === "code" ? area.code : "")).sort(), `seed ${seed} round ${round}`).toEqual(expected);
       // The oracle of the values: an unknown value takes the highest value of the latest earlier known reports that are not cancels.
       const fill = <F extends "severity" | "urgency">(held: Report, field: F, order: readonly Report[F][]): number => {
@@ -450,5 +535,54 @@ describe("the levels of a person", () => {
     expect(rest).toEqual([]);
     expect(sentLevel(after, merged!, person)).toBe("urgent");
     expect(acknowledgedLevel(after, merged!, person)).toBe("urgent");
+  });
+});
+
+describe("the lines of an incident (AL-14)", () => {
+  // The bands of the shaking of one made-up earthquake at 0, 0: one report for each band, with one circle.
+  const band = (key: string, severity: Severity, radiusKm: number): Report =>
+    report({
+      key,
+      kind: { code: "geo.earthquake", label: "Earthquake" },
+      severity,
+      correlation: [{ system: "quake", id: "q1" }],
+      areas: [{ type: "circle", center: [0, 0], radiusKm, block: "band" }],
+    });
+  const bands = [band("b1", "extreme", 40), band("b2", "severe", 76), band("b3", "moderate", 137), band("b4", "minor", 522)];
+
+  it("gives one line for each live head, with its values and its areas", () => {
+    const [one, ...rest] = incidents(normalize({ reports: bands }), T0 + 1);
+    expect(rest).toEqual([]);
+    expect(one?.severity).toBe("extreme");
+    const lines = one?.lines ?? [];
+    expect(lines.map((line) => [line.severity, line.areas])).toEqual(
+      [...bands].sort((a, b) => (a.id < b.id ? -1 : 1)).map((head) => [head.severity, [{ ...head.areas[0], block: `${head.id}/band` }]]),
+    );
+    expect(new Set(lines.map((line) => line.report))).toEqual(new Set(bands.map((head) => head.id)));
+    // The areas of the incident are the areas of its lines.
+    expect(new Set(one?.areas.map((area) => JSON.stringify(area)))).toEqual(new Set(lines.flatMap((line) => line.areas.map((area) => JSON.stringify(area)))));
+  });
+
+  it("gives no lines when the values of the heads are equal, or for one head", () => {
+    const equal = [band("b1", "severe", 40), band("b2", "severe", 76)];
+    expect(incidents(normalize({ reports: equal }), T0 + 1)[0]?.lines).toBeUndefined();
+    expect(incidents(normalize({ reports: [bands[0] as Report] }), T0 + 1)[0]?.lines).toBeUndefined();
+  });
+
+  it("drops a line when its report ends", () => {
+    const [one] = incidents(normalize({ reports: bands }), (bands[0] as Report).expires as number);
+    expect(one?.live).toBe(false);
+    const cancel = report({ key: "c1", op: "cancel", sent: T0 + 1, references: ["b4"], correlation: [{ system: "quake", id: "q1" }], areas: [] });
+    const [left] = incidents(normalize({ reports: [...bands, cancel] }), T0 + 2);
+    expect(left?.lines?.map((line) => line.report).sort()).toEqual(bands.slice(0, 3).map((head) => head.id).sort());
+  });
+
+  it.each(SEEDS)("gives the same lines in each order of the reports (seed %i)", (seed) => {
+    const r = random(seed);
+    for (let round = 0; round < 50; round += 1) {
+      const pool = bands.map((_, index) => band(`b${String(index + 1)}`, r.pick(["extreme", "severe", "moderate", "minor"] as const), r.int(1, 600)));
+      const shuffled = r.shuffle([...pool]);
+      same(incidents(normalize({ reports: pool }), T0 + 1), incidents(normalize({ reports: shuffled }), T0 + 1));
+    }
   });
 });

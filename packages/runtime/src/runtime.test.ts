@@ -2,9 +2,10 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fakeWallClock, type WallClock } from "@mark1russell7/algebra/clock";
-import { reportId, type ChannelId, type ChannelQuota, type Expectation, type FetchOutcome, type Observation, type ObservationId, type PlaceId, type Report, type SourceDescriptor, type SourceId, type SourceProcedures, type Watch, type WatchedPlace } from "@mark1russell7/alerts";
+import { reportId, type ChannelId, type ChannelQuota, type Expectation, type FetchOutcome, type FetchSignal, type Observation, type ObservationId, type PlaceId, type Report, type SourceDescriptor, type SourceId, type SourceProcedures, type Watch, type WatchedPlace } from "@mark1russell7/alerts";
 import { random, seedsFrom } from "@mark1russell7/rigor-generators";
 import { afterEach, describe, expect, it } from "vitest";
+import { balanceWatch, type BalanceReading } from "./balance.ts";
 import type { RuntimeEvent } from "./events.ts";
 import { openRuntimeLog, type RuntimeLog } from "./log.ts";
 import { openRuntime, type Pass, type RuntimeOptions } from "./runtime.ts";
@@ -43,7 +44,7 @@ function descriptor(id: SourceId, interval: number, maxQuiet?: number): SourceDe
     title: `The source ${id}`,
     origins: ["nws"],
     dependsOn: [`provider:${id}`],
-    uses: ["internet", "power"],
+    uses: ["internet", "dns", "power"],
     kinds: ["met"],
     coverage: [{ type: "code", system: "ugc", code: "KSZ083" }],
     transport: "poll",
@@ -151,6 +152,9 @@ function crashing(inner: RuntimeLog, at: number): RuntimeLog {
   return {
     read: () => inner.read(),
     has: (id) => inner.has(id),
+    entries: (options) => inner.entries(options),
+    count: () => inner.count(),
+    head: () => inner.head(),
     close: () => inner.close(),
     appendAll(events, accept) {
       if (gone) throw new Crash("The process is gone.");
@@ -280,6 +284,39 @@ describe("one pass of the runtime", () => {
     log.close();
   });
 
+  it("checks each balance watch in each pass, gives its lines, and wakes for the next read and for its unread line (AL-42)", async () => {
+    let answer: BalanceReading = { ok: true, balance: 2, currency: "USD" };
+    let reads = 0;
+    const read = async (): Promise<BalanceReading> => {
+      reads += 1;
+      return answer;
+    };
+    const watch = balanceWatch({ provider: "provider:twilio", title: "Twilio", channels: ["twilio-call" as ChannelId], floor: 5, read, every: 60_000, retry: 60_000, maxAge: 150_000 });
+    const balanceReports = (pass: Pass) => pass.view.step.reports.filter((report) => report.kind.code.startsWith("system.balance.")).map((report) => [report.op, report.kind.code]);
+    const { clock, runtime, log } = open([], { balances: [watch] });
+    const first = await runtime.pass();
+    expect(balanceReports(first)).toEqual([["alert", "system.balance.low"]]);
+    expect(first.wakeAt).toBe(T0 + 60_000);
+    answer = { ok: false, message: "The network is down." };
+    await clock.advance(60_000);
+    expect(balanceReports(await runtime.pass())).toEqual([]);
+    await clock.advance(60_000);
+    const failing = await runtime.pass();
+    // The unread line starts at the maximum age after the last read, before the next retry.
+    expect(failing.wakeAt).toBe(T0 + 150_000);
+    await clock.advance(30_000);
+    expect(balanceReports(await runtime.pass())).toEqual([["alert", "system.balance.unread"]]);
+    answer = { ok: true, balance: 20, currency: "USD" };
+    await clock.advance(30_000);
+    expect(balanceReports(await runtime.pass())).toEqual([
+      ["cancel", "system.balance.low"],
+      ["cancel", "system.balance.unread"],
+    ]);
+    expect(reads).toBe(4);
+    expect(() => open([], { balances: [watch, watch] })).toThrow("the same provider");
+    log.close();
+  });
+
   it("records a timeout when a fetch takes longer than its limit, and ends the pass", async () => {
     const { clock, runtime, log } = open([scripted(API, () => new Promise<FetchOutcome>(() => undefined))], { fetchLimit: () => 5_000 });
     const running = runtime.pass();
@@ -287,6 +324,73 @@ describe("one pass of the runtime", () => {
     const pass = await running;
     expect(pass.fetched).toEqual([API]);
     expect(runtime.state().health[API]?.lastFailure?.failure.kind).toBe("timeout");
+    log.close();
+  });
+
+  // The fetches of the log, by source and outcome.
+  const fetchesOf = (log: RuntimeLog): string[] =>
+    [...log.read()].flatMap((event) => (event.type === "fetch" ? [`${event.record.source} ${event.record.failure?.kind ?? "ok"}`] : []));
+
+  it("aborts the signal of a fetch at its limit, and the outcome stays one timeout of the source (AL-39)", async () => {
+    let seen: FetchSignal | undefined;
+    const hanging = scripted(API, (_input, signal) => {
+      seen = signal;
+      return new Promise<FetchOutcome>(() => undefined);
+    });
+    const { clock, runtime, log } = open([hanging], { fetchLimit: () => 5_000 });
+    const running = runtime.pass();
+    await clock.advance(4_999);
+    expect(seen?.aborted).toBe(false);
+    await clock.advance(1);
+    await running;
+    // A request of the fetch that waits behind the park of its host now ends, and it never goes.
+    expect(seen?.aborted).toBe(true);
+    expect(fetchesOf(log)).toEqual([`${API} timeout`]);
+    log.close();
+  });
+
+  it("aborts each fetch at the stop, writes no fetch for it, and fetches the source again at the next pass (AL-39)", async () => {
+    const seen: (FetchSignal | undefined)[] = [];
+    const source = scripted(API, (_input, signal) => {
+      seen.push(signal);
+      if (seen.length > 1) return Promise.resolve({ ok: true, observations: [], complete: true });
+      // A fetch in the manner of polite-crawler: it throws the reason of the signal at the abort.
+      return new Promise<FetchOutcome>((_resolve, reject) => {
+        if (signal?.aborted === true) reject(signal.reason as Error);
+        signal?.addEventListener("abort", () => reject(signal.reason as Error), { once: true });
+      });
+    });
+    const { clock, runtime, log } = open([source], { fetchLimit: () => 5_000 });
+    const stop = new AbortController();
+    const running = runtime.pass(stop.signal);
+    await clock.advance(1_000);
+    expect(seen[0]?.aborted).toBe(false);
+    stop.abort(new Error("The runtime stops."));
+    const pass = await running;
+    // No fetch runs on after the stop. The stop is not a fault of the source, thus its health has no failure.
+    expect(seen[0]?.aborted).toBe(true);
+    expect(pass.fetched).toEqual([API]);
+    expect(fetchesOf(log)).toEqual([]);
+    expect(runtime.state().health[API]?.lastFailure).toBeUndefined();
+    // The log has no fetch of the source, thus the next pass fetches it at once.
+    expect((await runtime.pass()).fetched).toEqual([API]);
+    expect(fetchesOf(log)).toEqual([`${API} ok`]);
+    expect(seen[1]?.aborted).toBe(true);
+    log.close();
+  });
+
+  it("gives an aborted signal to each fetch of a pass that starts after the stop (AL-39)", async () => {
+    let seen: FetchSignal | undefined;
+    const source = scripted(API, (_input, signal) => {
+      seen = signal;
+      return signal?.aborted === true ? Promise.reject(signal.reason as Error) : Promise.resolve({ ok: true, observations: [], complete: true });
+    });
+    const { runtime, log } = open([source]);
+    const stop = new AbortController();
+    stop.abort(new Error("The runtime stops."));
+    await runtime.pass(stop.signal);
+    expect(seen?.aborted).toBe(true);
+    expect(fetchesOf(log)).toEqual([]);
     log.close();
   });
 
@@ -396,8 +500,106 @@ describe("one pass of the runtime", () => {
     log.close();
   });
 
+  it("gives a wake after the pass when a source comes due during the fetches of the pass, and fetches it in the next pass", async () => {
+    const clock = fakeWallClock(T0);
+    const fast = async (): Promise<FetchOutcome> => ({ ok: true, observations: [], complete: true });
+    let slowFor = 0;
+    // The fetch of API takes `slowFor` on the clock. WEA has a longer interval, thus it comes due in a slow fetch of API.
+    const api: SourceProcedures = { describe: () => descriptor(API, MINUTE), fetch: async () => (await clock.advance(slowFor), fast()), map };
+    const wea: SourceProcedures = { describe: () => descriptor(WEA, MINUTE + 10_000), fetch: fast, map };
+    const { runtime, log } = open([api, wea], { clock });
+    const first = await runtime.pass();
+    expect([first.fetched, first.wakeAt]).toEqual([[API, WEA], T0 + MINUTE]);
+    await clock.advance(MINUTE);
+    slowFor = 15_000;
+    // The pass starts at T0 + 60 s and fetches API until T0 + 75 s. WEA comes due at T0 + 70 s.
+    const second = await runtime.pass();
+    expect([second.fetched, second.at, second.wakeAt]).toEqual([[API], T0 + 75_000, T0 + 75_001]);
+    await clock.advance(1);
+    slowFor = 0;
+    expect((await runtime.pass()).fetched).toEqual([WEA]);
+    log.close();
+  });
+
+  it("gives a wake after the pass when a balance read comes due during the fetches of the pass (AL-42)", async () => {
+    const clock = fakeWallClock(T0);
+    let slowFor = 0;
+    const api: SourceProcedures = { describe: () => descriptor(API, MINUTE), fetch: async () => (await clock.advance(slowFor), { ok: true, observations: [], complete: true }), map };
+    let reads = 0;
+    const read = async (): Promise<BalanceReading> => ((reads += 1), { ok: true, balance: 20, currency: "USD" });
+    const watch = balanceWatch({ provider: "provider:twilio", title: "Twilio", channels: ["twilio-call" as ChannelId], floor: 5, read, every: MINUTE + 10_000 });
+    const { runtime, log } = open([api], { clock, balances: [watch] });
+    expect((await runtime.pass()).wakeAt).toBe(T0 + MINUTE);
+    await clock.advance(MINUTE);
+    slowFor = 15_000;
+    // The pass starts at T0 + 60 s, before the read is due, and fetches API until T0 + 75 s. The read comes due at T0 + 70 s.
+    const second = await runtime.pass();
+    expect([reads, second.at, second.wakeAt]).toEqual([1, T0 + 75_000, T0 + 75_001]);
+    await clock.advance(1);
+    slowFor = 0;
+    await runtime.pass();
+    expect(reads).toBe(2);
+    log.close();
+  });
+
+  it("gives a wake after the pass when a fetch runs to its limit of one interval", async () => {
+    const clock = fakeWallClock(T0);
+    // The fetch never ends. The runtime stops the wait at the limit, one interval, which is the next fetch of the source.
+    const stuck: SourceProcedures = { describe: () => descriptor(API, MINUTE), fetch: () => new Promise<FetchOutcome>(() => undefined), map };
+    const { runtime, log } = open([stuck], { clock });
+    const work = runtime.pass();
+    await clock.advance(MINUTE);
+    const pass = await work;
+    expect([pass.at, pass.wakeAt]).toEqual([T0 + MINUTE, T0 + MINUTE + 1]);
+    log.close();
+  });
+
+  it("gives each pass a wake after it, over seeded fetch times up to two intervals", async () => {
+    for (const seed of SEEDS) {
+      const r = random(seed).fork("slow-fetches");
+      const clock = fakeWallClock(T0);
+      const intervals = [MINUTE, MINUTE + r.int(1, 30) * 1000, 2 * MINUTE + r.int(1, 30) * 1000];
+      const ids = [API, WEA, "iem" as SourceId];
+      const sources = ids.map(
+        (id, at): SourceProcedures => ({
+          describe: () => descriptor(id, intervals[at]!),
+          // Each fetch takes 0 to 2 intervals. A fetch over its interval stops at the limit.
+          fetch: async () => (await clock.advance(r.int(0, 2 * intervals[at]!)), { ok: true, observations: [], complete: true }),
+          map,
+        }),
+      );
+      const { runtime, log } = open(sources, { clock });
+      for (let step = 0; step < 40; step++) {
+        const pass = await runtime.pass();
+        expect(pass.wakeAt! > pass.at, `seed ${seed}, pass ${step}`).toBe(true);
+        await clock.advance(Math.max(0, pass.wakeAt! - clock.now()));
+      }
+      log.close();
+    }
+  });
+
   it("refuses two sources with the same id", () => {
     const source = scripted(API, async () => ({ ok: true, observations: [], complete: true }));
     expect(() => open([source, source])).toThrow("Two sources have the id api.");
+  });
+
+  it("closes each source with a close one time, also after a close that throws, and refuses a pass after the close", async () => {
+    const closes: string[] = [];
+    const empty: SourceProcedures["fetch"] = async () => ({ ok: true, observations: [], complete: true });
+    const failing: SourceProcedures = { ...scripted(API, empty), close: () => Promise.reject(new Error("The session did not end.")) };
+    const stream: SourceProcedures = { ...scripted(WEA, empty), close: async () => void closes.push("wea") };
+    const plain = scripted("plain" as SourceId, empty);
+    const { log, runtime } = open([failing, stream, plain]);
+    try {
+      await runtime.pass();
+      const first = runtime.close();
+      expect(runtime.close()).toBe(first);
+      await expect(first).resolves.toBeUndefined();
+      expect(closes).toEqual(["wea"]);
+      await expect(runtime.pass()).rejects.toThrow("The runtime is closed: its sources have no session.");
+      expect(closes).toEqual(["wea"]);
+    } finally {
+      log.close();
+    }
   });
 });

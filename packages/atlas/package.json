@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json.schemastore.org/package",
+  "name": "@mark1russell7/alerts-atlas",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The source atlas of the alert system: the signal classes, the candidate sources of each class, the records of the research rounds and the gate of coverage.",
+  "type": "module",
+  "main": "./src/index.ts",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.test.json"
+  },
+  "dependencies": {
+    "@mark1russell7/alerts": "workspace:*",
+    "@mark1russell7/text": "^0.0.13"
+  },
+  "devDependencies": {
+    "@mark1russell7/alerts-source-emsc": "workspace:*",
+    "@mark1russell7/alerts-source-iem": "workspace:*",
+    "@mark1russell7/alerts-source-ipaws": "workspace:*",
+    "@mark1russell7/alerts-source-nws-api": "workspace:*",
+    "@mark1russell7/alerts-source-nwws": "workspace:*",
+    "@mark1russell7/alerts-source-swpc": "workspace:*",
+    "@mark1russell7/alerts-source-tsunami": "workspace:*",
+    "@mark1russell7/alerts-source-usgs": "workspace:*",
+    "@mark1russell7/cue": "^2.0.0",
+    "@types/node": "^26.6.5",
+    "@vitest/coverage-v8": "^5.0.3",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.3"
+  }
+}

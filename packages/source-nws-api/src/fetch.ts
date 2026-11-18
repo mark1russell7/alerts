@@ -3,7 +3,7 @@
  * through polite-crawler, and gives one observation for each alert.
  */
 
-import { observationId, type Cursor, type FetchFailure, type FetchOutcome, type Instant, type Observation, type Watch } from "@mark1russell7/alerts";
+import { observationId, type Cursor, type FetchFailure, type FetchOutcome, type FetchSignal, type Instant, type Observation, type Watch } from "@mark1russell7/alerts";
 import { createRequester, problemDetail } from "@mark1russell7/alerts-fetch";
 import { isUgcCode, WEA_EVENT_CODES } from "@mark1russell7/alerts-format-nws";
 import type { Condition, Pace, Reply, Transport } from "polite-crawler/api";
@@ -167,7 +167,7 @@ type QueryResult = { readonly ok: true; readonly read: Read } | { readonly ok: f
  * The requester of `@mark1russell7/alerts-fetch` sends each query. It reads the problem text of the
  * NWS API (RFC 9457) into the message of a failure.
  */
-export function createNwsFetch(options: NwsFetchOptions): (input: NwsFetchInput, signal?: AbortSignal) => Promise<FetchOutcome> {
+export function createNwsFetch(options: NwsFetchOptions): (input: NwsFetchInput, signal?: FetchSignal) => Promise<FetchOutcome> {
   const requester = createRequester({
     source: SOURCE_ID,
     pace: options.pace,
@@ -184,7 +184,7 @@ export function createNwsFetch(options: NwsFetchOptions): (input: NwsFetchInput,
   // The read of the last full answer of each URL. A 304 answer gives it again.
   const lastRead = new Map<string, Read>();
 
-  async function query(path: string, signal: AbortSignal | undefined): Promise<QueryResult> {
+  async function query(path: string, signal: FetchSignal | undefined): Promise<QueryResult> {
     const requested = await requester.get({ path, what: `the alerts ${path}`, conditions }, signal);
     if (!requested.ok) return { ok: false, failure: requested.failure };
     const { url, answer, latency } = requested;

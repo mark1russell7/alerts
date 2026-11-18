@@ -88,7 +88,7 @@ function descriptor(listing: boolean): SourceDescriptor {
     title: "A fake list",
     origins: ["nws"],
     dependsOn: ["provider:list"],
-    uses: ["internet", "power"],
+    uses: ["internet", "dns", "power"],
     kinds: ["met"],
     coverage: [{ type: "code", system: "ugc", code: "KSZ083" }],
     transport: "poll",

@@ -1,4 +1,4 @@
-import { DELIVERY_TIMES, HEARTBEAT_EVERY } from "@mark1russell7/alerts-runtime";
+import { DELIVERY_TIMES, HEARTBEAT_EVERY, PROBE_LIMIT } from "@mark1russell7/alerts-runtime";
 import type { ScriptedRequest } from "@mark1russell7/rigor-testkit/http";
 import { pushoverLedgerOf, pushoverReceiptOf } from "@procedures/notify/testing";
 import { describe, expect, it } from "vitest";
@@ -15,6 +15,9 @@ import {
   channelSettingsProblems,
   channelVerdictOf,
   recoverLimit,
+  STOP_PATH,
+  stopProbeOf,
+  type TimedRequest,
 } from "./channel-down.ts";
 
 const KEY = "k".repeat(64);
@@ -33,6 +36,20 @@ const READ: ScriptedRequest = { connection: 0, method: "GET", target: `/1/receip
 
 const OUTAGE_END = CASE_7_SETTINGS.outageMs;
 const END = CASE_7_SETTINGS.armMs;
+
+const STOP = `${STOP_PATH}${KEY}.json`;
+const timed = (path: string, start: number, status?: number): TimedRequest => ({ path, start, end: start + 50, ...(status === undefined ? {} : { status }) });
+
+/**
+ * The 64 requests of an arm. An arm with an outage sends 58 sends and 2 stops in the outage, then a send, a read and
+ * 2 stops after it. The first stop after the outage starts 5 s after its end.
+ */
+const exchangesOf = (outage: { readonly from: number; readonly to: number } | undefined): TimedRequest[] => {
+  if (outage === undefined) return Array.from({ length: 64 }, (_, index) => timed(index === 0 ? "/1/messages.json" : `/1/receipts/${pushoverReceiptOf(0)}.json`, index * 10_000, 200));
+  const held = Array.from({ length: 60 }, (_, index) => timed(index < 58 ? "/1/messages.json" : STOP, outage.from + index * 10_000));
+  const after = [timed("/1/messages.json", outage.to + 1_000, 200), timed(`/1/receipts/${pushoverReceiptOf(0)}.json`, outage.to + 2_000, 200), timed(STOP, outage.to + 5_000, 200), timed(STOP, outage.to + 6_000, 200)];
+  return [...held, ...after];
+};
 
 /** The record of an arm that recovers and pings as the gates ask. The changes of a test go in `extra`. */
 const recordOf = (arm: ChannelArm, extra: Partial<ChannelRecord> = {}): ChannelRecord => {
@@ -56,6 +73,9 @@ const recordOf = (arm: ChannelArm, extra: Partial<ChannelRecord> = {}): ChannelR
           ],
     pingErrors: [],
     requests: { sent: 64, inWindow: outage === undefined ? 0 : 60, reached: outage === undefined ? 64 : 4 },
+    exchanges: exchangesOf(outage),
+    inFlight: 1,
+    maxInFlight: 2,
     faults: outage === undefined ? 0 : 60,
     passes: 200,
     lastPassAt: END - 1_000,
@@ -78,7 +98,8 @@ describe("the plan of case 7", () => {
   it("has valid settings in CI, and a short arm or a short outage is a problem", () => {
     expect(channelSettingsProblems(CASE_7_SETTINGS)).toEqual([]);
     expect(channelSettingsProblems({ ...CASE_7_SETTINGS, outageMs: HEARTBEAT_EVERY })).toHaveLength(1);
-    expect(channelSettingsProblems({ ...CASE_7_SETTINGS, armMs: OUTAGE_END + recoverLimit() })).toHaveLength(1);
+    expect(channelSettingsProblems({ ...CASE_7_SETTINGS, armMs: OUTAGE_END + recoverLimit() })).toContainEqual(expect.stringContaining("the recovery limit"));
+    expect(channelSettingsProblems({ ...CASE_7_SETTINGS, armMs: OUTAGE_END + PROBE_LIMIT })).toContainEqual(expect.stringContaining("before the first stop after the outage"));
   });
 
   it("takes the retry of the recovery limit from the delivery times of an instance", () => {
@@ -123,6 +144,31 @@ describe("the gates of case 7", () => {
   });
 });
 
+describe("the request gates of case 7", () => {
+  it("fails `paced` for more requests in progress than the maxInFlight of the channel, and for no maxInFlight", () => {
+    const over = channelGatesOf(recordOf("control", { inFlight: 3 }));
+    expect(over.gates.paced).toBe(false);
+    expect(over.problems.join("\n")).toContain("3 requests were in progress at one time, more than 2");
+    const { maxInFlight, ...none } = recordOf("control");
+    expect(maxInFlight).toBe(2);
+    expect(channelGatesOf(none).gates.paced).toBe(false);
+  });
+
+  it("gives the held stops and the time to the first stop after the outage", () => {
+    expect(stopProbeOf(recordOf("reset"))).toEqual({ held: 2, after: 5_000 });
+    expect(stopProbeOf(recordOf("control"))).toEqual({ held: 0 });
+  });
+
+  it("passes `probed` at PROBE_LIMIT, and fails it after PROBE_LIMIT or with no stop after the outage", () => {
+    const at = (start: number) => recordOf("unavailable", { exchanges: [timed(STOP, 1_000), timed(STOP, start, 200)] });
+    expect(channelGatesOf(at(OUTAGE_END + PROBE_LIMIT)).gates.probed).toBe(true);
+    const late = channelGatesOf(at(OUTAGE_END + PROBE_LIMIT + 1));
+    expect(late.gates.probed).toBe(false);
+    expect(late.problems.join("\n")).toContain(`the first stop came ${String(PROBE_LIMIT + 1)} ms after the outage`);
+    expect(channelGatesOf(recordOf("error", { exchanges: [timed(STOP, 1_000)] })).gates.probed).toBe(false);
+  });
+});
+
 describe("the verdict of case 7", () => {
   it("reads and passes when each arm passes each gate", () => {
     const verdict = channelVerdictOf(allRecords());
@@ -141,6 +187,14 @@ describe("the verdict of case 7", () => {
     const verdict = channelVerdictOf(allRecords({ error: { requests: { sent: 64, inWindow: 60, reached: 3 } } }));
     expect(verdict.read).toBe(false);
     expect(verdict.pass).toBe(false);
+  });
+
+  it("cannot read when a request has no time, or an arm of the probe held no stop in the outage", () => {
+    expect(channelVerdictOf(allRecords({ reset: { exchanges: exchangesOf(channelOutageOf("reset")).slice(1) } })).read).toBe(false);
+    const noStop = exchangesOf(channelOutageOf("error")).map((exchange) => (exchange.path === STOP && exchange.start < OUTAGE_END ? { ...exchange, path: "/1/messages.json" } : exchange));
+    const verdict = channelVerdictOf(allRecords({ error: { exchanges: noStop } }));
+    expect(verdict.read).toBe(false);
+    expect(verdict.problems.join("\n")).toContain("error: the outage held no stop");
   });
 
   it("cannot read when an arm with an outage has no fault, or a delivery before the end of the outage", () => {

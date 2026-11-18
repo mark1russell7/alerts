@@ -10,23 +10,21 @@
 import type { Duration, HealthState, Instant, SourceId } from "@mark1russell7/alerts";
 import type { WallClock } from "@mark1russell7/algebra/clock";
 import { errorMessage } from "@mark1russell7/text";
+import { compareCodeUnits } from "@mark1russell7/text/order";
 import { redactSecrets } from "@mark1russell7/text/redact";
 import type { Exchange } from "polite-crawler/api";
-import type { RefusalKind } from "./events.ts";
+import { REFUSAL_FAULTS, type RefusalKind } from "./events.ts";
 import type { LoopTimes } from "./loop.ts";
 
-/**
- * The record has each kind of `RefusalKind`, thus the lists below cannot lose a kind. The value tells if
- * the kind stops each delivery to the person.
- */
-const REFUSALS: Readonly<Record<RefusalKind, boolean>> = { auth: true, refused: true, "rate-limited": true, reserved: false };
+// The table of the kinds is `REFUSAL_FAULTS` of `events.ts`. The overdue sends of the delivery read the same table.
+const REFUSALS = REFUSAL_FAULTS;
 
 /** The kinds of a refused send. The log keeps a `refused` event for each of them. */
 export const REFUSAL_KINDS = Object.keys(REFUSALS) as readonly RefusalKind[];
 
 /**
- * The kinds of a refused send that stop each delivery to the person until the owner acts. The kind
- * `reserved` is not one of them: the channel still sends a `life-safety` message.
+ * The kinds of a refused send that stop each delivery to the person until the owner acts. The kinds
+ * `reserved`, `consent`, `quiet` and `expired` are not faults of the channel (`REFUSAL_FAULTS`).
  */
 export const UNREACHABLE: readonly RefusalKind[] = REFUSAL_KINDS.filter((kind) => REFUSALS[kind]);
 const unreachable: ReadonlySet<string> = new Set(UNREACHABLE);
@@ -46,6 +44,8 @@ export const TOLERATED_FAILED_PASSES = 1;
 /** The parts of a pass that the heartbeat reads. A `Pass` of the runtime has them. */
 export interface PassSummary {
   readonly at: Instant;
+  /** The size of the step of the wall clock that the pass followed (`Pass.stepped`). The heartbeat moves its times by it. */
+  readonly stepped?: Duration;
   readonly view: { readonly health: readonly { readonly source: SourceId; readonly state: HealthState }[] };
   readonly delivery?: {
     readonly sent: readonly { readonly channel: string }[];
@@ -138,8 +138,8 @@ function hold(held: Record<string, HeldFail>, channel: string, kind: string, ret
  * quote a request.
  */
 export function pingOf(pass: PassSummary, held: HeartbeatState["held"] = holdStep({}, pass)): Ping {
-  const refused = Object.entries(held).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
-  const overdue = [...(pass.delivery?.overdue ?? [])].sort((a, b) => (a.channel < b.channel ? -1 : a.channel > b.channel ? 1 : 0));
+  const refused = Object.entries(held).sort(([a], [b]) => compareCodeUnits(a, b));
+  const overdue = [...(pass.delivery?.overdue ?? [])].sort((a, b) => compareCodeUnits(a.channel, b.channel));
   if (refused.length > 0 || overdue.length > 0) {
     const lines = [
       ...refused.flatMap(([channel, hold]) => hold.kinds.map((kind) => `The channel ${channel} gave the kind ${kind} to a send.`)),
@@ -156,11 +156,21 @@ export function pingOf(pass: PassSummary, held: HeartbeatState["held"] = holdSte
  * `busy` is true, a ping is in flight. Then no ping goes, and only the fails change.
  */
 export function heartbeatStep(state: HeartbeatState, pass: PassSummary, every: Duration, busy = false): { readonly state: HeartbeatState; readonly ping?: Ping } {
-  const held = holdStep(state.held, pass);
+  const moved = pass.stepped === undefined ? state : shiftHeartbeat(state, pass.stepped);
+  const held = holdStep(moved.held, pass);
   const ping = pingOf(pass, held);
-  const last = state.last;
+  const last = moved.last;
   const due = !busy && (last === undefined || last.kind !== ping.kind || pass.at - last.at >= every || pass.at < last.at);
-  return due ? { state: { held, last: { at: pass.at, kind: ping.kind } }, ping } : { state: { ...state, held } };
+  return due ? { state: { held, last: { at: pass.at, kind: ping.kind } }, ping } : { state: { ...moved, held } };
+}
+
+/**
+ * This function moves the times of the state of the heartbeat by the size of a step of the wall clock. They are the
+ * time of the last ping and the end of each fail. Thus a fail ends at its time on the monotonic clock.
+ */
+export function shiftHeartbeat(state: HeartbeatState, size: Duration): HeartbeatState {
+  const held = Object.fromEntries(Object.entries(state.held).map(([channel, hold]) => [channel, { ...hold, until: hold.until + size }]));
+  return { held, ...(state.last === undefined ? {} : { last: { ...state.last, at: state.last.at + size } }) };
 }
 
 /** The options of `heartbeatGap`. */
@@ -221,7 +231,7 @@ export interface HeartbeatOptions {
 export function pingUrl(url: string, kind: Ping["kind"]): string {
   if (kind === "success") return url;
   const target = new URL(url);
-  target.pathname = `${target.pathname.replace(/\/+$/, "")}/fail`;
+  target.pathname = `${withoutEndSlashes(target.pathname)}/fail`;
   return target.toString();
 }
 
@@ -260,7 +270,9 @@ export function heartbeat(options: HeartbeatOptions): (pass: PassSummary) => voi
   return (pass) => {
     if (!started) {
       started = true;
-      state = { held: options.held?.(pass.at) ?? {} };
+      // The fails of the log are in the frame of the pass already. The step of the pass moves them again, thus the
+      // start moves them back by the same size first.
+      state = shiftHeartbeat({ held: options.held?.(pass.at) ?? {} }, -(pass.stepped ?? 0));
     }
     const step = heartbeatStep(state, pass, every, flight);
     state = step.state;
@@ -314,6 +326,14 @@ export interface CheckTimes {
  * when it finds no such check. A key that can only read gives no ping URL, thus it finds no check.
  * A problem names no URL and no key.
  */
+// The text with no slash at its end. A loop is linear. The regular expression `/\/+$/` is quadratic on a long run of
+// slashes before another character, and the text can come from the answer of a server (CodeQL js/polynomial-redos).
+function withoutEndSlashes(text: string): string {
+  let end = text.length;
+  while (end > 0 && text.charCodeAt(end - 1) === 0x2f) end -= 1;
+  return text.slice(0, end);
+}
+
 export function checkOfPingUrl(body: string, url: string): { readonly ok: true; readonly check: CheckTimes } | { readonly ok: false; readonly problem: string } {
   let checks: unknown;
   try {
@@ -322,7 +342,7 @@ export function checkOfPingUrl(body: string, url: string): { readonly ok: true; 
     return { ok: false, problem: "The answer of the management API is not valid JSON." };
   }
   if (!Array.isArray(checks)) return { ok: false, problem: "The answer of the management API has no list of checks." };
-  const plain = (text: unknown): string | undefined => (typeof text === "string" ? text.replace(/\/+$/, "") : undefined);
+  const plain = (text: unknown): string | undefined => (typeof text === "string" ? withoutEndSlashes(text) : undefined);
   const records = checks.filter((entry: unknown): entry is Record<string, unknown> => typeof entry === "object" && entry !== null);
   const check = records.find((entry) => plain(entry["ping_url"]) === plain(url));
   if (check === undefined) return { ok: false, problem: "No check of the key has the ping URL of secrets.env. The key must be able to write, and the ping URL must be the URL with the id of the check." };

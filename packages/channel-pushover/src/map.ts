@@ -45,6 +45,8 @@ const CODE_POINTS = { unit: "code-point" } as const;
 /** A message that the channel does not send, with the reason. */
 export interface Refusal {
   readonly refused: string;
+  /** `expired` for a message that expired before the send. Without it, the kind of the send is `refused`. */
+  readonly kind?: "expired";
 }
 
 /**
@@ -53,16 +55,18 @@ export interface Refusal {
  *
  * - The address has the field `user`, and the optional field `device`.
  * - A title or a body over the limit of Pushover gets a cut. A URL over the limit is not sent, because a cut URL is broken.
+ * - The why line of the message is the first line of the body. Thus the cut of a long body does not remove it.
  * - The delivery key is the first tag of a `life-safety` message. Thus a cancel by tag stops its repeats.
  * - The copy id of the send is its second tag. Thus a cancel by the copy id stops this copy only.
  */
 export function pushoverMessageOf(message: Message, address: Address, at: Instant, options: PushoverMapOptions = {}, copy?: string): PushoverMessage | Refusal {
   const user = address["user"];
   if (user === undefined || user === "") return { refused: "The address has no user key." };
-  if (message.expires !== undefined && message.expires <= at) return { refused: "The message expired before the send." };
+  if (message.expires !== undefined && message.expires <= at) return { refused: "The message expired before the send.", kind: "expired" };
   const priority = priorityOf(message.level, message.quiet);
   const title = truncate(message.title, PUSHOVER_LIMITS.title, CODE_POINTS);
-  const body = message.body.trim() === "" ? title : truncate(message.body, PUSHOVER_LIMITS.message, CODE_POINTS);
+  const parts = [message.why, message.body].flatMap((part) => (part === undefined || part.trim() === "" ? [] : [part]));
+  const body = parts.length === 0 ? title : truncate(parts.join("\n\n"), PUSHOVER_LIMITS.message, CODE_POINTS);
   const left = message.expires === undefined ? Number.POSITIVE_INFINITY : message.expires - at;
   const device = address["device"];
   const sound = options.sounds?.[message.level];

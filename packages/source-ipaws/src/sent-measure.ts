@@ -9,6 +9,7 @@
  */
 
 import { carriages, incidents, normalize, type Duration, type Expectation, type Instant, type Report, type ReportId } from "@mark1russell7/alerts";
+import { compareCodeUnits } from "@mark1russell7/text/order";
 import { WEA_EXPECTATION } from "./expectation.ts";
 
 /** The end of the id of an IPAWS copy. The copy has the id of the NWS message and then this text. */
@@ -159,7 +160,7 @@ export function sentMeasure(reports: readonly Report[], options: SentMeasureOpti
     } else kind = "none";
     checks.push({ ...base, class: kind, copies });
   }
-  const order = (a: { sent: Instant; key: string }, b: { sent: Instant; key: string }): number => a.sent - b.sent || compare(a.key, b.key);
+  const order = (a: { sent: Instant; key: string }, b: { sent: Instant; key: string }): number => a.sent - b.sent || compareCodeUnits(a.key, b.key);
   checks.sort(order);
   gaps.sort(order);
   const count = (kind: SentClass): number => checks.filter((check) => check.class === kind).length;
@@ -193,10 +194,5 @@ function nearest(copies: readonly CopyTime[], sent: Instant): CopyTime {
 
 // The order of the copies: the earlier sent time first, then the smaller key.
 function byTime(a: CopyTime, b: CopyTime): number {
-  return a.sent - b.sent || compare(a.key, b.key);
-}
-
-// The order of the code units, the same in each copy and each locale.
-function compare(a: string, b: string): number {
-  return a < b ? -1 : a > b ? 1 : 0;
+  return a.sent - b.sent || compareCodeUnits(a.key, b.key);
 }

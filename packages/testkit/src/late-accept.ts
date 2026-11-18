@@ -237,6 +237,25 @@ export function acceptGatesOf(record: DeliveryEvidence): { readonly gates: Reado
   return { gates: { delivered, single, stopped }, problems };
 }
 
+/** The copy id of a message: its second tag. A `life-safety` message has the tags of its key and its copy. */
+export const copyOf = (message: PushoverLedgerMessage): string | undefined => message.tags[1];
+
+/**
+ * This function gives the gate `copyOnce` of a record, and a problem for each message that fails it. The gate is true
+ * when each message has a copy id, and each copy id has one send.
+ */
+export function copyOnceOf(record: DeliveryEvidence): { readonly copyOnce: boolean; readonly problems: readonly string[] } {
+  const problems: string[] = [];
+  const counts = new Map<string, number>();
+  for (const message of record.ledger.messages) {
+    const copy = copyOf(message);
+    if (copy === undefined) problems.push(`${record.arm}: the message ${message.receipt} has no copy id.`);
+    else counts.set(copy, (counts.get(copy) ?? 0) + 1);
+  }
+  for (const [copy, count] of counts) if (count > 1) problems.push(`${record.arm}: the copy ${copy} has ${String(count)} sends, not 1.`);
+  return { copyOnce: problems.length === 0, problems };
+}
+
 /** This function gives the verdict of the records of a run. */
 export function acceptVerdictOf(records: readonly AcceptRecord[], settings: AcceptSettings = CASE_4_SETTINGS): AcceptVerdict {
   const problems: string[] = [];

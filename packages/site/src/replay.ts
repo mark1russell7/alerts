@@ -17,9 +17,11 @@ import {
   coverageShort,
   DEFAULT_ASSESS_POLICY,
   DEFAULT_COVERAGE_POLICY,
+  DEFAULT_LINK_POLICY,
   EMPTY_STATE,
   higherLevel,
   incidents,
+  linkRule,
   NO_SYSTEM_LINES,
   observationId,
   observeFetch,
@@ -46,6 +48,7 @@ import {
   type WatchedPlace,
 } from "@mark1russell7/alerts";
 import { mapObservation, SOURCE_ID } from "@mark1russell7/alerts-source-nws-api";
+import { compareCodeUnits } from "@mark1russell7/text/order";
 import type { Step } from "./demo.ts";
 
 /** One coverage of the core, with the result of `coverageShort` for it. */
@@ -114,6 +117,9 @@ export function observe(body: string, fetched: number): Observation {
 
 const end = (record: FetchRecord): number => record.at + record.took;
 
+// The merge of the replay uses the link rule of the first policy, as the runtime does.
+const link = linkRule(DEFAULT_LINK_POLICY);
+
 /** This function does the steps in order, and gives the frame after each step. */
 export function replay(steps: readonly Step[], people: readonly PersonWatch[], places: readonly WatchedPlace[], world: SourceWorld): Frame[] {
   let state: MergeState = EMPTY_STATE;
@@ -145,7 +151,7 @@ export function replay(steps: readonly Step[], people: readonly PersonWatch[], p
     previous = step.at;
 
     // The coverage and the threats come from the health and the incidents before the system reports of this step.
-    const threatened = threats(incidents(state, step.at), places);
+    const threatened = threats(incidents(state, step.at, { link }), places);
     const covered = coverage({ sources: world.sources, health, places, kinds: world.kinds }, DEFAULT_COVERAGE_POLICY);
     const system = systemReports(lines, { sources: world.sources, health, coverage: covered, threats: threatened }, step.at);
     lines = system.lines;
@@ -154,9 +160,9 @@ export function replay(steps: readonly Step[], people: readonly PersonWatch[], p
     const byId = new Map<string, Report>(state.reports.map((report) => [report.id, report]));
     const head = (incident: Incident): Report =>
       incident.reports.map((id) => byId.get(id)!).reduce((best, report) => (report.sent < best.sent || (report.sent === best.sent && report.key < best.key) ? report : best));
-    const order = (a: Incident, b: Incident): number => head(a).sent - head(b).sent || compare(head(a).key, head(b).key) || compare(a.anchor, b.anchor);
-    const now = incidents(state, step.at).sort(order);
-    const judge = (list: readonly Incident[]): Assessment[] => list.flatMap((incident) => people.map((person) => assess(incident, person, places, DEFAULT_ASSESS_POLICY)));
+    const order = (a: Incident, b: Incident): number => head(a).sent - head(b).sent || compareCodeUnits(head(a).key, head(b).key) || compareCodeUnits(a.anchor, b.anchor);
+    const now = incidents(state, step.at, { link }).sort(order);
+    const judge = (list: readonly Incident[]): Assessment[] => list.flatMap((incident) => people.map((person) => assess(incident, person, places, DEFAULT_ASSESS_POLICY, step.at)));
     const own = now.filter((incident) => incident.status !== "system");
     const reported = now.filter((incident) => incident.status === "system");
     return {
@@ -179,8 +185,6 @@ export function replay(steps: readonly Step[], people: readonly PersonWatch[], p
     };
   });
 }
-
-const compare = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
 
 /** This function gives the highest level of the assessments, or `none` when the list is empty. */
 export function topLevel(assessments: readonly Assessment[]): AssessedLevel {

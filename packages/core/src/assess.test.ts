@@ -4,7 +4,11 @@ import { describe, expect, it } from "vitest";
 import type {
   Area,
   AssessedLevel,
+  AssessPolicy,
+  AssessReason,
   Incident,
+  IncidentLine,
+  KindClass,
   LevelRule,
   LevelTable,
   PersonId,
@@ -20,19 +24,21 @@ import type {
 import { ASSESSED_LEVELS } from "./contracts.ts";
 import {
   DEFAULT_ASSESS_POLICY,
+  EARTHQUAKE_PAST_WITHIN,
   LIFE_SAFETY_KINDS,
   admits,
   assess,
   classOf,
   hasKind,
   higherLevel,
+  linesAt,
   matchPlaces,
   matchSubjects,
   regionContains,
   regionCovers,
   tableLevel,
 } from "./assess.ts";
-import { assessmentSchema } from "./schemas.ts";
+import { assessmentSchema, incidentSchema } from "./schemas.ts";
 import { areasWithoutBlocks } from "./shapes.ts";
 
 const SEEDS = seedsFrom(process.env["SEED"], [1, 2, 3, 4, 5, 6, 7, 8]);
@@ -548,6 +554,194 @@ describe("the properties of the assessment", () => {
       // The level is the highest of the levels at each place alone.
       const alone = [home, other].map((place) => assess(subject, person(rules, [place]), places).level);
       expect(result.level).toBe(alone.reduce(higherLevel, "none"));
+    }
+  });
+});
+
+describe("the level at each place (AL-14)", () => {
+  // A made-up earthquake at 0, 0 in the ocean, with one line for each band of the shaking. No position is a real place.
+  const east = (km: number): Position => [km / ((6371.0088 * Math.PI) / 180), 0];
+  const quake = { code: "geo.earthquake", label: "geo.earthquake" };
+  const idOf = (digit: number): ReportId => String(digit).repeat(64) as ReportId;
+  const band = (digit: number, severity: Severity, radiusKm: number): IncidentLine => ({
+    report: idOf(digit),
+    kind: quake,
+    severity,
+    urgency: "immediate",
+    certainty: "observed",
+    areas: [{ type: "circle", center: [0, 0], radiusKm, block: `${idOf(digit)}/band` }],
+  });
+  const bands = [band(1, "extreme", 40), band(2, "severe", 76), band(3, "moderate", 137), band(4, "minor", 522)];
+  const shaken = incident({
+    kind: quake.code,
+    anchor: idOf(1),
+    reports: bands.map((line) => line.report),
+    areas: bands.flatMap((line) => line.areas),
+    lines: bands,
+  });
+  const placeAt = (km: number): WatchedPlace => ({ id: home, codes: [], at: east(km), bufferKm: 0 });
+  const tableOf = (line: IncidentLine): AssessedLevel => tableLevel(DEFAULT_ASSESS_POLICY, line).level;
+
+  it("gives each place the highest level of the bands that hold it", () => {
+    expect(incidentSchema.safeParse(shaken).success).toBe(true);
+    const levelAt = (km: number): AssessedLevel => assess(shaken, person([], [home]), [placeAt(km)]).level;
+    expect(levelAt(20)).toBe(tableLevel(DEFAULT_ASSESS_POLICY, shaken).level);
+    expect(levelAt(100)).toBe(tableOf(bands[2] as IncidentLine));
+    expect(levelAt(300)).toBe(tableOf(bands[3] as IncidentLine));
+    expect(levelAt(600)).toBe("none");
+    // The far places get lower levels than the center.
+    expect(rank(levelAt(300))).toBeLessThan(rank(levelAt(100)));
+    expect(rank(levelAt(100))).toBeLessThan(rank(levelAt(20)));
+  });
+
+  it("tells the bands that gave the level of a place", () => {
+    const result = assess(shaken, person([], [home]), [placeAt(100)]);
+    expect(result.reasons.filter((reason) => reason.kind === "place-table")).toEqual([
+      { kind: "place-table", place: home, reports: [idOf(3), idOf(4)], level: tableOf(bands[2] as IncidentLine) },
+    ]);
+    expect(assessmentSchema.safeParse(result).success).toBe(true);
+    // At the center, the level is the level of the incident, so no reason tells it again.
+    expect(assess(shaken, person([], [home]), [placeAt(20)]).reasons.some((reason) => reason.kind === "place-table")).toBe(false);
+    expect(linesAt(shaken, placeAt(100)).map((line) => line.report)).toEqual([idOf(3), idOf(4)]);
+    expect(linesAt(incident(), placeAt(100))).toEqual([]);
+  });
+
+  it("applies a rule of the person to the level of the place", () => {
+    const low = tableOf(bands[3] as IncidentLine);
+    const result = assess(shaken, person([{ places: [home], max: low }]), [placeAt(20)]);
+    expect(result.level).toBe(low);
+    // A rule above the level of the place does not raise it.
+    expect(assess(shaken, person([{ max: "life-safety" }], [home]), [placeAt(300)]).level).toBe(low);
+  });
+
+  it.each(SEEDS)("gives the level of the incident as the highest level of its lines alone (seed %i)", (seed) => {
+    const r = random(seed);
+    const kinds = ["met.tornado", "met.flood.flash", "geo.earthquake", "met.wind.high"];
+    for (let round = 0; round < 200; round += 1) {
+      const kind = r.pick(kinds);
+      const count = r.int(2, 4);
+      const lines: IncidentLine[] = Array.from({ length: count }, (_, index) => {
+        const areas = [...(r.chance(0.5) ? atHome : []), ...(r.chance(0.5) ? atOther : [])];
+        return {
+          report: idOf(index + 1),
+          kind: { code: kind, label: kind },
+          severity: r.pick([...SEVERITIES, "unknown"] as const),
+          urgency: r.pick([...URGENCIES, "unknown"] as const),
+          certainty: "observed",
+          ...(r.chance(0.7) ? { onset: r.int(0, 2 * EARTHQUAKE_PAST_WITHIN) } : {}),
+          areas: areas.length === 0 ? atHome : areas,
+        };
+      });
+      const status = r.chance(0.8) ? "actual" : r.pick(STATUSES);
+      const whole = incident({
+        kind,
+        status,
+        severity: r.pick([...SEVERITIES, "unknown"] as const),
+        urgency: r.pick([...URGENCIES, "unknown"] as const),
+        anchor: idOf(1),
+        reports: lines.map((line) => line.report),
+        areas: [...new Map(lines.flatMap((line) => line.areas).map((area) => [JSON.stringify(area), area])).values()],
+        lines,
+      });
+      expect(incidentSchema.safeParse(whole).success).toBe(true);
+      const rules: LevelRule[] = Array.from({ length: r.int(0, 2) }, () => ({
+        ...(r.chance(0.5) ? { places: [r.pick([home, other])] } : {}),
+        max: r.pick(ASSESSED_LEVELS),
+      }));
+      const at = r.chance(0.8) ? r.int(0, 3 * EARTHQUAKE_PAST_WITHIN) : undefined;
+      const result = assess(whole, person(rules), places, DEFAULT_ASSESS_POLICY, at);
+      expect(assessmentSchema.safeParse(result).success).toBe(true);
+      const alone = lines.map((line) => {
+        const onset = line.onset === undefined ? {} : { onset: line.onset };
+        return assess(incident({ kind, status, severity: line.severity, urgency: line.urgency, areas: line.areas, ...onset }), person(rules), places, DEFAULT_ASSESS_POLICY, at).level;
+      });
+      expect(result.level).toBe(alone.reduce(higherLevel, "none"));
+    }
+  });
+});
+
+describe("the urgency past of a recent event (AL-31)", () => {
+  // A made-up earthquake. Its report tells of shaking that occurred, so its urgency is `past`.
+  const onset = 1_800_000_000_000;
+  const quake = (fields: Draft = {}): Incident => incident({ kind: "geo.earthquake", urgency: "past", onset, ...fields });
+  const after = (minutes: number): number => onset + minutes * 60_000;
+  const levelAt = (draft: Incident, at?: number): AssessedLevel => assess(draft, person(), places, DEFAULT_ASSESS_POLICY, at).level;
+  const tableReason = (draft: Incident, at?: number): AssessReason | undefined => assess(draft, person(), places, DEFAULT_ASSESS_POLICY, at).reasons.find((reason) => reason.kind === "table");
+
+  it("counts a recent past as immediate, and then the severity decides", () => {
+    expect(levelAt(quake(), after(10))).toBe("life-safety");
+    expect(levelAt(quake({ severity: "severe" }), after(10))).toBe("urgent");
+    expect(levelAt(quake({ severity: "moderate" }), after(10))).toBe("notice");
+    expect(levelAt(quake({ severity: "minor" }), after(10))).toBe("digest");
+    // The window holds its end. After the window, the report is a digest.
+    expect(levelAt(quake(), onset + EARTHQUAKE_PAST_WITHIN)).toBe("life-safety");
+    expect(levelAt(quake(), onset + EARTHQUAKE_PAST_WITHIN + 1)).toBe("digest");
+  });
+
+  it("counts a past of unknown age as recent", () => {
+    expect(levelAt(quake())).toBe("life-safety");
+    expect(levelAt(incident({ kind: "geo.earthquake", urgency: "past" }), after(600))).toBe("life-safety");
+  });
+
+  it("tells the window in the reason of the table", () => {
+    expect(tableReason(quake(), after(10))).toMatchObject({ class: "earthquake", byUrgency: "life-safety", recentPast: true });
+    expect(tableReason(quake(), after(120))).not.toHaveProperty("recentPast");
+    expect(tableReason(quake({ urgency: "immediate" }), after(10))).not.toHaveProperty("recentPast");
+    expect(assessmentSchema.safeParse(assess(quake(), person(), places, DEFAULT_ASSESS_POLICY, after(10))).success).toBe(true);
+  });
+
+  it("keeps the past of a table with no window, and keeps an early warning in the life-safety class", () => {
+    expect(levelAt(incident({ kind: "met.tornado", urgency: "past", onset }), after(10))).toBe("digest");
+    expect(classOf(DEFAULT_ASSESS_POLICY, "geo.earthquake")?.id).toBe("earthquake");
+    const warning = { kind: { code: "geo.earthquake.early-warning", label: "" }, severity: "severe", urgency: "immediate" } as const;
+    expect(tableLevel(DEFAULT_ASSESS_POLICY, warning)).toMatchObject({ class: "life-safety", level: "life-safety" });
+  });
+
+  it("gives an earthquake life-safety exactly as the rule of docs/CONTRACTS.md tells", () => {
+    const ages = [undefined, 0, EARTHQUAKE_PAST_WITHIN, EARTHQUAKE_PAST_WITHIN + 1, 10 * EARTHQUAKE_PAST_WITHIN];
+    for (const status of STATUSES) {
+      for (const severity of [...SEVERITIES, "unknown"] as const) {
+        for (const urgency of [...URGENCIES, "unknown"] as const) {
+          for (const age of ages) {
+            const level = levelAt(quake({ status, severity, urgency }), age === undefined ? undefined : onset + age);
+            const recent = urgency === "past" && (age === undefined || age <= EARTHQUAKE_PAST_WITHIN);
+            const expected = status === "actual" && ["extreme", "unknown"].includes(severity) && (["immediate", "expected", "unknown"].includes(urgency) || recent);
+            expect([status, severity, urgency, age, level === "life-safety"]).toEqual([status, severity, urgency, age, expected]);
+          }
+        }
+      }
+    }
+  });
+
+  // The gate of the window: it raises only a report with the urgency `past`, only in the window, and the level does not rise with the age.
+  it.each(SEEDS)("raises only a recent past report, and the level does not rise with the age (seed %i)", (seed) => {
+    const r = random(seed);
+    const noWindow = (table: KindClass): KindClass => ({
+      id: table.id,
+      kinds: table.kinds,
+      ...(table.statuses === undefined ? {} : { statuses: table.statuses }),
+      severity: table.severity,
+      urgency: table.urgency,
+    });
+    const without: AssessPolicy = { ...DEFAULT_ASSESS_POLICY, classes: DEFAULT_ASSESS_POLICY.classes.map(noWindow) };
+    const kinds = ["geo.earthquake", "geo.earthquake.early-warning", "met.tornado", "geo.tsunami", "met.wind.high"];
+    for (let round = 0; round < 300; round += 1) {
+      const draft = incident({
+        kind: r.pick(kinds),
+        status: r.chance(0.8) ? "actual" : r.pick(STATUSES),
+        severity: r.pick([...SEVERITIES, "unknown"] as const),
+        urgency: r.chance(0.5) ? "past" : r.pick([...URGENCIES, "unknown"] as const),
+        ...(r.chance(0.8) ? { onset } : {}),
+      });
+      const rules: LevelRule[] = Array.from({ length: r.int(0, 2) }, () => ({ max: r.pick(ASSESSED_LEVELS) }));
+      const [early, late] = [r.int(0, 3 * EARTHQUAKE_PAST_WITHIN), r.int(0, 3 * EARTHQUAKE_PAST_WITHIN)].sort((a, b) => a - b) as [number, number];
+      const at = (age: number): number => onset + age;
+      const level = (age: number, policy: AssessPolicy = DEFAULT_ASSESS_POLICY): AssessedLevel => assess(draft, person(rules), places, policy, at(age)).level;
+      const old = level(early, without);
+      const found = tableLevel(DEFAULT_ASSESS_POLICY, draft, at(early));
+      expect(rank(level(early))).toBeGreaterThanOrEqual(rank(old));
+      if (found.recentPast !== true) expect(level(early)).toBe(old);
+      expect(rank(level(early))).toBeGreaterThanOrEqual(rank(level(late)));
     }
   });
 });

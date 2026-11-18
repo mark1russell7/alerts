@@ -3,12 +3,9 @@
  * and the coverage.
  */
 
-import type { Area, SourceDescriptor } from "@mark1russell7/alerts";
-import { KIND_PREFIXES } from "@mark1russell7/alerts-format-nws";
+import type { SourceDescriptor } from "@mark1russell7/alerts";
+import { KIND_PREFIXES, US_COVERAGE } from "@mark1russell7/alerts-format-nws";
 import { ORIGINS, SOURCE_ID } from "./map.ts";
-
-/** The countries and territories of IPAWS, as ISO 3166 codes. */
-const COVERAGE: readonly Area[] = ["US", "PR", "GU", "AS", "VI", "MP"].map((code) => ({ type: "code", system: "iso3166", code }));
 
 /**
  * The descriptor of the IPAWS source. The source has no canary: the feed has no keepalive message,
@@ -20,10 +17,10 @@ export const IPAWS_DESCRIPTOR: SourceDescriptor = {
   title: "FEMA IPAWS public alert feed (IPAWS-OPEN)",
   origins: [ORIGINS.nws, ORIGINS.authority],
   // The feed answers through the Cloudflare network (apps.fema.gov)
-  dependsOn: ["provider:fema-ipaws", "cdn:cloudflare"],
-  uses: ["internet", "power"],
+  dependsOn: ["provider:fema-ipaws", "cdn:cloudflare", "carrier:ipaws-open"],
+  uses: ["internet", "dns", "power"],
   kinds: KIND_PREFIXES,
-  coverage: COVERAGE,
+  coverage: US_COVERAGE,
   transport: "poll",
   interval: 60_000,
   slowAfter: 10_000,

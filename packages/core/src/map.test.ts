@@ -1,7 +1,8 @@
 import { random, seedsFrom } from "@mark1russell7/rigor-generators";
 import { describe, expect, it } from "vitest";
-import type { Area, AssessedLevel, Assessment, Coverage, Incident, PersonId, PlaceId, RegionCode, ReportId, Severity } from "./contracts.ts";
-import { mapView, regionRank, type MapInput, type MapPlaceInput, type MapShape, type ShapeLookup } from "./map.ts";
+import { assess, DEFAULT_ASSESS_POLICY, reachedAssessment } from "./assess.ts";
+import type { Area, AssessedLevel, Assessment, Coverage, Incident, PersonId, PersonWatch, PlaceId, RegionCode, ReportId, Severity } from "./contracts.ts";
+import { MAP_FORMAT, mapPayload, mapView, regionRank, type MapInput, type MapPayloadInput, type MapPlaceInput, type MapRegion, type MapShape, type ShapeLookup } from "./map.ts";
 
 const SEEDS = seedsFrom(process.env["SEED"], [1, 2, 3, 4, 5, 6, 7, 8]);
 const PERSON_A = "person:a" as PersonId;
@@ -74,6 +75,29 @@ describe("the incidents of the map", () => {
     expect(view.unshaped).toEqual([unknown]);
     // The county covers place A, and the area of place B names place B.
     expect(only?.places).toEqual([PLACE_A, PLACE_B]);
+  });
+
+  it("give each shape one time when a zone and its county give the same outline, in the order of the first", () => {
+    const outline = square(-97.5, 37.6);
+    const other = square(-97.2, 37.5);
+    // The store gives the zone and the county one shape: the same object, and a copy with equal values.
+    const store: ShapeLookup = (code) => (code.code === "KSZ083" ? [outline] : code.code === "KSC173" ? [outline, structuredClone(outline), other] : undefined);
+    const areas: Area[] = [{ type: "code", ...zone }, { type: "code", ...county }, structuredClone(other)];
+    const view = mapView(input({ incidents: [incident("a", { areas })], shape: store }));
+    expect(view.incidents[0]?.shapes).toEqual([outline, other]);
+    expect(view.incidents[0]?.shapes[0]).toBe(outline);
+    // The flip: two different outlines both stay.
+    const apart: ShapeLookup = (code) => (code.code === "KSZ083" ? [outline] : code.code === "KSC173" ? [other] : undefined);
+    expect(mapView(input({ incidents: [incident("a", { areas: areas.slice(0, 2) })], shape: apart })).incidents[0]?.shapes).toEqual([outline, other]);
+  });
+
+  it("keep the status of each incident, thus a test does not look like a real alert", () => {
+    const view = mapView(input({ incidents: [incident("a"), incident("b", { status: "test" }), incident("c", { status: "exercise" })] }));
+    expect(view.incidents.map((entry) => [entry.anchor[0], entry.status])).toEqual([
+      ["a", "actual"],
+      ["b", "test"],
+      ["c", "exercise"],
+    ]);
   });
 
   it("drop each incident that ended", () => {
@@ -150,5 +174,62 @@ describe("the order of the input", () => {
     const view = mapView(input({ incidents, assessments }));
     const shuffled = mapView(input({ incidents: r.shuffle([...incidents]), assessments: r.shuffle([...assessments]) }));
     expect(shuffled).toEqual(view);
+  });
+});
+
+describe("the payload of the map route", () => {
+  const AT = Date.parse("2026-11-16T12:00:00Z");
+  const people: PersonWatch[] = [
+    { person: PERSON_A, places: [PLACE_A], rules: [] },
+    { person: PERSON_B, places: [PLACE_B], rules: [] },
+  ];
+  const basemap: MapRegion[] = [{ code: zone, name: "Zone", shapes: SHAPES.get("ugc KSZ083") ?? [] }];
+  const payloadInput = (fields: Partial<MapPayloadInput> = {}): MapPayloadInput => ({ at: AT, incidents: [], places: [kansas, texas], coverage: [], shape, people, basemap, ...fields });
+  // The assessments of the delivery: each live incident for each person, at the time of the view.
+  const assessed = (incidents: readonly Incident[]): Assessment[] =>
+    incidents.filter((entry) => entry.live).flatMap((entry) => people.map((person) => reachedAssessment(assess(entry, person, [kansas, texas], DEFAULT_ASSESS_POLICY, AT))));
+
+  it("carries the format, the time of the view and the basemap", () => {
+    const payload = mapPayload(payloadInput());
+    expect([payload.format, payload.at, payload.basemap]).toEqual([MAP_FORMAT, AT, basemap]);
+    expect(mapPayload(payloadInput({ at: null })).at).toBeNull();
+  });
+
+  it("gives the level that the delivery gives the person", () => {
+    const tornado = incident("a");
+    const payload = mapPayload(payloadInput({ incidents: [tornado] }));
+    const [only] = payload.view.incidents;
+    // The zone covers place A of person A. Place B of person B is in Texas.
+    expect(only?.level).toBe(assess(tornado, people[0]!, [kansas, texas], DEFAULT_ASSESS_POLICY, AT).level);
+    expect(only?.level).not.toBe("none");
+    expect(payload.view.places.map((place) => [place.id, place.level === "none"])).toEqual([
+      [PLACE_A, false],
+      [PLACE_B, true],
+    ]);
+  });
+
+  it.each(SEEDS)("gives the view of the assessments of each person (seed %i)", (seed) => {
+    const r = random(seed);
+    const severities: Severity[] = ["extreme", "severe", "moderate", "minor", "unknown"];
+    const codes: RegionCode[] = [zone, county, state, { system: "same", code: "048029" }, { system: "ugc", code: "KSZ998" }];
+    const incidents = Array.from({ length: 10 }, (_, index) =>
+      incident(`p${index.toString(16)}`, {
+        severity: r.pick(severities),
+        live: r.int(0, 3) > 0,
+        areas: r.sample(codes, r.int(1, codes.length)).map((code): Area => ({ type: "code", ...code })),
+      }),
+    );
+    const payload = mapPayload(payloadInput({ incidents }));
+    expect(payload.view).toEqual(mapView(input({ incidents, assessments: assessed(incidents) })));
+  });
+});
+
+describe("the level that reaches a person", () => {
+  const base: Assessment = { incident: "a".padEnd(64, "0") as ReportId, person: PERSON_A, level: "urgent", places: [PLACE_A], reasons: [] };
+
+  it("is none for a mute with the effect absent, and the level for each other assessment", () => {
+    expect(reachedAssessment({ ...base, muted: { mute: "m1", effect: "absent" } }).level).toBe("none");
+    expect(reachedAssessment({ ...base, muted: { mute: "m1", effect: "silent" } })).toEqual({ ...base, muted: { mute: "m1", effect: "silent" } });
+    expect(reachedAssessment(base)).toBe(base);
   });
 });

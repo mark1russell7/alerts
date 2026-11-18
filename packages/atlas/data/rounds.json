@@ -1,0 +1,655 @@
+[
+  {
+    "round": 1,
+    "date": "2026-11-15",
+    "by": "Two research agents (the class list, and the market and finance signals), then a check of each record before the commit.",
+    "method": "The class research read lists of hazards, alert codes and the categories of risk products, then found sources for each class. The finance research did the same for prediction markets and finance signals. The check made each decision a calculation, opened each evidence link of the planned sources, and checked the facts that change a decision.",
+    "lists": [
+      "NWS NOAA Weather Radio SAME event codes: https://www.weather.gov/nwr/eventcodes",
+      "OASIS CAP 1.2 specification (categories, responseType, urgency, severity, certainty): http://docs.oasis-open.org/emergency/cap/v1.2/CAP-v1.2-os.html",
+      "CISA 16 critical infrastructure sectors: https://www.cisa.gov/topics/critical-infrastructure-security-and-resilience/critical-infrastructure-sectors",
+      "FEMA Community Lifelines: https://www.fema.gov/emergency-managers/practitioners/lifelines",
+      "EM-DAT disaster classification system: https://doc.emdat.be/docs/data-structure-and-content/disaster-classification-system/",
+      "UNDRR-ISC Hazard Information Profiles 2025, read through the IFRC Monty taxonomy page: https://ifrcgo.org/monty-stac-extension/model/taxonomy/",
+      "Safeture alert categories (MAX Security 28 categories and Riskline 8 categories): https://help.safeture.com/product-information/alert-categories",
+      "Crisis24 Travel Monitor alerting (names two incident categories only): https://docs.x-assist.crisis24.com/travel-monitor/travel-monitor-1/alerting",
+      "Samdesk home page (no category list on it): https://www.samdesk.io/",
+      "PulsePoint Respond incident types: https://www.pulsepoint.org/pulsepoint-respond",
+      "Cloudflare Radar Outage Center API documentation: https://developers.cloudflare.com/radar/investigate/outages/",
+      "NWS API alert event types: https://api.weather.gov/alerts/types",
+      "GDACS feed reference (event types): https://www.gdacs.org/feed_reference.aspx",
+      "OpenFEMA data sets catalog: https://www.fema.gov/about/openfema/data-sets",
+      "NOAA SWPC products directory: https://services.swpc.noaa.gov/products/",
+      "MeteoAlarm feeds catalog: https://feeds.meteoalarm.org/",
+      "USGS alerts and notification services: https://www.usgs.gov/web-tools/alerts-and-notification-services",
+      "CISA RSS feeds and email subscriptions: https://www.cisa.gov/about/contact-us/subscribe-updates-cisa",
+      "CISA cybersecurity alerts and advisories (advisory types): https://www.cisa.gov/news-events/cybersecurity-advisories",
+      "ERCOT TXANS notice levels: https://www.ercot.com/txans",
+      "Mobility Database catalog of transit feeds: https://mobilitydatabase.org/",
+      "Kalshi API docs index: https://docs.kalshi.com/welcome",
+      "Manifold bulk data dumps catalog: https://docs.manifold.markets/data",
+      "Metaculus API OpenAPI spec (endpoint catalog): https://www.metaculus.com/static/openapi.e1347b769479.yml",
+      "PredictIt all markets JSON: https://www.predictit.org/api/marketdata/all/",
+      "Insight Prediction home page (topic list): https://insightprediction.com/",
+      "PMXT prediction-market API (venue list): https://pmxt.dev/prediction-market-api",
+      "Smarkets trading API OpenAPI spec (endpoint catalog): https://api.smarkets.com/v0/control/openapi/?tags=trading_api",
+      "Smarkets upcoming politics events: https://api.smarkets.com/v3/events/?state=upcoming&type_domain=politics&limit=2",
+      "Gemini active prediction-market events: https://api.gemini.com/v1/prediction-markets/events?status=active&limit=3",
+      "Nasdaq Trader trade halt reason codes: https://www.nasdaqtrader.com/Trader.aspx?id=TradeHaltCodes",
+      "Nasdaq Trader current trade halts: https://www.nasdaqtrader.com/Trader.aspx?id=TradeHalts",
+      "Nasdaq Trader trade halts RSS: https://www.nasdaqtrader.com/rss.aspx?feed=tradehalts",
+      "Nasdaq Trader market system status: https://www.nasdaqtrader.com/Trader.aspx?id=MarketSystemStatus",
+      "NYSE current trade halts: https://www.nyse.com/trade-halt",
+      "NYSE current trade halts download: https://www.nyse.com/api/trade-halts/current/download",
+      "NYSE market status history: https://www.nyse.com/market-status",
+      "NYSE holidays and trading hours: https://www.nyse.com/markets/hours-calendars",
+      "SEC RSS feeds directory: https://www.sec.gov/about/rss-feeds",
+      "SEC trading suspensions RSS: https://www.sec.gov/enforcement-litigation/trading-suspensions/rss",
+      "FDIC Failed Bank List: https://www.fdic.gov/bank-failures/failed-bank-list",
+      "FDIC BankFind Suite API docs (dataset list): https://api.fdic.gov/banks/docs/",
+      "Federal Reserve Board RSS feeds directory: https://www.federalreserve.gov/feeds/feeds.htm",
+      "FOMC meeting calendars: https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
+      "BLS release calendar: https://www.bls.gov/schedule/news_release/",
+      "BEA release schedule: https://www.bea.gov/news/schedule",
+      "Census economic indicators calendar: https://www.census.gov/economic-indicators/calendar-listview.html",
+      "Cboe VIX historical data downloads: https://www.cboe.com/tradable_products/vix/vix_historical_data/",
+      "EIA Open Data catalog: https://www.eia.gov/opendata/",
+      "ECB euro reference rates (currency list and downloads): https://www.ecb.europa.eu/stats/policy_and_exchange_rates/euro_reference_exchange_rates/html/index.en.html",
+      "Federal Reserve Financial Services service status (service list): https://app.frbservices.org/app/status/serviceStatus.do",
+      "DefiLlama stablecoins list: https://stablecoins.llama.fi/stablecoins?includePrices=true",
+      "DefiLlama free API endpoint list: https://api-docs.defillama.com/llms-free.txt",
+      "DefiLlama Pro API endpoint list: https://api-docs.defillama.com/llms-pro.txt",
+      "AAA gas prices (national and state averages): https://gasprices.aaa.com/",
+      "OFAC recent actions: https://ofac.treasury.gov/recent-actions",
+      "OFAC Sanctions List Service (list files and deltas): https://ofac.treasury.gov/sanctions-list-service",
+      "Treasury Fiscal Data API docs (dataset list): https://fiscaldata.treasury.gov/api-documentation/"
+    ],
+    "queries": [
+      "UNDRR ISC Hazard Information Profiles 2025 update hazard clusters list",
+      "WEF Global Risks Report 2026 list of global risks categories",
+      "Dataminr First Alert event types monitored categories list",
+      "Everbridge Visual Command Center risk intelligence categories list \"risk categories\"",
+      "Factal event categories topics list \"Factal\" alerts types violence weather infrastructure",
+      "Crisis24 alert categories list \"Crisis24\" event categories terrorism health transport disruption",
+      "USGS Volcano Notification Service VNS subscribe VONA HANS public API elevated volcanoes json",
+      "WFIGS Incident Locations Current feature service NIFC update every 5 minutes IRWIN",
+      "GOES GLM-L2-LCFA lightning data NOAA open data AWS noaa-goes19 bucket GLM",
+      "CDC Health Alert Network HAN RSS feed tools.cdc.gov",
+      "FSIS recall API fsis.usda.gov/fsis/api/recall/v/1 documentation JSON",
+      "boil water advisory data feed API statewide open data list of active boil water notices",
+      "AWS Health Dashboard public RSS feed per service region \"status.aws.amazon.com/rss\"",
+      "IODA API v2 outages alerts events endpoint documentation Georgia Tech Internet Outage Detection and Analysis",
+      "Kalshi API developer agreement terms market data redistribution",
+      "\"Kalshi Developer Agreement\" \"Kalshi Data\" license \"non-commercial\" OR \"redistribute\" OR \"sublicense\"",
+      "Kalshi markets calibration accuracy study Brier score 2025",
+      "Federal Reserve FEDS paper Kalshi macro markets forecast fed funds CPI accuracy Diercks Katz Wright",
+      "study informed trading Polymarket before public announcement hours minutes lead news 2026",
+      "arXiv prediction market price discovery lead-lag Kalshi Polymarket minutes",
+      "Kurov Sancetta Strasser Wolfe \"Price drift before U.S. macroeconomic news\" 30 minutes before",
+      "Polgreen Nelson Neumann influenza prediction market Iowa Electronic Health Markets predicted weeks in advance",
+      "Bernile Hu Tang \"Can information be locked up\" informed trading ahead of FOMC announcements lockup E-mini",
+      "Nobel Peace Prize 2025 Polymarket Machado odds surged hours before announcement investigation leak",
+      "Metaculus API documentation token required questions community prediction rate limit 2026",
+      "PredictIt API terms \"non-commercial\" data attribution marketdata/all 60 seconds update",
+      "predictit.org support \"API\" market data \"every 60 seconds\" OR \"updated every minute\" non-commercial license PredictIt",
+      "Good Judgment Open API data access crowd forecast download",
+      "Insight Prediction API documentation markets prediction exchange",
+      "prediction market aggregator API Polymarket Kalshi unified free tier Dome Oddpool Adjacent News 2026",
+      "ForecastEx market data public download prices forecast contracts Interactive Brokers API",
+      "Gemini predictions prediction markets API public endpoint events contracts docs",
+      "Gemini API agreement terms market data redistribution \"market data\" license gemini.com legal",
+      "Hyperliquid HIP-4 outcome markets API info endpoint prediction",
+      "frbservices.org service status RSS subscribe Fedwire FedNow outage notification",
+      "Downdetector API enterprise access pricing outage data Ookla",
+      "Visa Mastercard network outage public status page real time card payments outage feed",
+      "CoinGecko Demo API plan free 30 calls per minute 10,000 monthly attribution required",
+      "FINRA OTC trading halts data API \"trade halts\" OTC equity FINRA data catalog"
+    ],
+    "notes": [
+      "The UNDRR-ISC HIPs 2025 list was read from the IFRC Monty taxonomy page, which copies the full 2025 hazard list with codes (281 hazards, 8 types). The UNDRR and IRDR PDF reports were not opened.",
+      "Reference lists not opened in round 1: the WEF Global Risks Report 2026 appendix (HTTP 403 on both domains), the Everbridge risk intelligence category guide (login), the UNDRR/ISC HIPs PDFs (the 2025 list was read through the IFRC Monty page), the full category lists of Dataminr, Factal, Crisis24 and Samdesk (only marketing pages), the Cloudflare outage center page, IsDown, the StatusGator API page, IODA documentation (empty page), Downdetector (blocked) and the ThousandEyes outage map (403).",
+      "Many government pages refused the fetch tool or rendered only a title (NVD, State Department, FCC, PHMSA, NAVCEN, NGA MSI, WZDx, NHTSA datasets, Federal Register bot check). Round 2 needs a browser-based check of these sources before a decision.",
+      "ECDC replaced the weekly Communicable Disease Threats Report with daily public health event updates in October 2026 (from the ECDC page).",
+      "The CDC NWSS SARS-CoV-2 dataset on data.cdc.gov (2ew6-ywp6) is archived since 12 September 2025. Current NWSS datasets were not found.",
+      "openFDA says its enforcement data must not be used to issue public alerts, and recall status is not updated after classification. Recall alerts need the press-release channels of each agency.",
+      "Weather-only coverage: the NWS API relays some non-weather IPAWS codes (CAE, BLU, LEW, SPW, EVI, CDW, CEM, LAE, TOE, HMW, RHW, NUW), so a weather system that reads all NWS event types gets part of the safety and cbrne classes, but only when an authority uses IPAWS and the relay.",
+      "This file records data sources and their properties only. It is not investment advice.",
+      "Pages that I could not read: Metaculus track record (HTTP 403), goodjudgment.com (403), SSRN abstract 5331995 (403), developer.betfair.com (403, so Betfair is not covered), investor.gov (403), kalshi.com/developer-agreement (429; the S3 PDF of v1.1 was read instead), the PredictIt help article (login redirect), the PredictIt terms (script-rendered), the Cboe Use of Content page (404 at the URL tried), otce.finra.org (script-rendered), the FINRA investor insights RSS path (404), and the Treasury Fiscal Data API call (no connection).",
+      "Region limits on reading data: the Binance API returned HTTP 451 to a plain read from the research location. Polymarket blocks order placement by region, not reading. Kalshi limits API data use by its agreement, not by region. Insight Prediction forbids trading from the US.",
+      "SEC fair access needs a declared User-Agent with an organization and a contact email. The system must use a project contact, never a person.",
+      "Unverified (search results only, pages not opened or empty): Bernile, Hu and Tang 2016 FOMC lockup findings and profit estimates of $4.5M to $210.5M; the Kurov et al. sample period 2008 to 2014; the Nobel 2025 Machado odds move from 3.6% to over 70%; reports that 57% of flagged Polymarket wallets on Iran-related markets were made less than 24 hours before their trades, with about $1M made before the February strikes and about $600k before the April 7 ceasefire; Ng, Peng, Tao and Zhou (SSRN 5331995) that Polymarket led Kalshi in price discovery in 2024; the Prediction Hunt free tier of 1,000 requests a month; a Downdetector enterprise price from $2,083 a month (StatusGator, a competitor) and a new Downdetector Pro plan with API access (ISPreview, 2026-09).",
+      "Venues seen only in third-party docs or search results, not given source records: Hyperliquid HIP-4 outcome markets (POST https://api.hyperliquid.xyz/info with type outcomeMeta; launched 2026-05-02, mostly BTC binaries), ForecastEx (needs an IBKR market-data subscription), and the aggregators FinFeedAPI, Tatum, PolyRouter, MarketMaster, SportsGameOdds and Codex. Metaforecast appears shut down: metaforecast.org redirects to quantifieduncertainty.org, which only links back.",
+      "Not researched in round 1: Betfair, Crypto.com and Robinhood event contracts, Polymarket US, INFER, Hypermind, brier.fyi or calibration.city, credit rating agencies, FINRA OTC halts in detail, chain halts other than Solana, and an official Visa or Mastercard network status page (a search found none).",
+      "Calibration found: Polymarket Brier 0.0605 (self-published); Manifold Brier 0.17425 (self-published, play money); Kalshi blog 2026-08-20 with values only in charts; the Fed FEDS 2026-010 paper on Kalshi macro markets (as summarized by natlawreview.com). The UT Austin Kalshi weather post describes a method but gives no numbers in its text.",
+      "Lead-time summary: futures drift about 30 minutes before some US macro releases; event-market leaks in the cited cases show up from hours to about half a day ahead; public shocks (a debate, an assassination attempt) show no rise before the event. So market signals add minutes to hours of lead only for some leaked or scheduled events.",
+      "Kalshi has the best-documented calibration for US macro and weather events, but its Developer Agreement v1.1 limits API use to a member's own trading. Written permission from Kalshi is the only route to use it.",
+      "Self-reported status pages (Atlassian Statuspage JSON at /api/v2/status.json) worked with no auth for Coinbase, Kraken, Gemini, Circle, Solana, Square, Plaid, Chime, Robinhood and Visa Acceptance Solutions on 2026-11-15. Stripe has no such endpoint (404) and PayPal redirects.",
+      "The research used the auth value unknown for 15 sources: no page that it opened said how access works. A source with this value is later until a round finds the auth.",
+      "The research did not find the IPAWS public feed: its page returned 404. The adapter source-ipaws of this repository reads the feed, so the check added it as ipaws-open.",
+      "The check made the decision a calculation (planBlock). A source is planned only when its auth is none, key or account, its cost is free or free-tier, and its terms do not forbid automated reading. A page source also needs terms that let automated reading. This rule moved 25 sources to later: fed-fomc-calendar (a page source needs terms that let automated reading), freddie-mac-pmms (a page source needs terms that let automated reading), frbservices-status (a page source needs terms that let automated reading), nasdaq-system-status (a page source needs terms that let automated reading), nyse-holidays-page (the terms forbid automated reading), census-econ-calendar (a page source needs terms that let automated reading), ofac-recent-actions (a page source needs terms that let automated reading), usgs-hans-api (the auth is unknown), swpc-email (the cost is unknown), nwps-api (the auth is unknown), nws-heatrisk (a page source needs terms that let automated reading), openaq-api (the cost is unknown), epa-cyan-api (the auth is unknown), ecdc-threats (a page source needs terms that let automated reading), fda-core-investigations (a page source needs terms that let automated reading), wastewaterscan (a page source needs terms that let automated reading), aphis-hpai (a page source needs terms that let automated reading), woah-wahis (a page source needs terms that let automated reading), github-advisories-api (the auth is unknown), ioda-api (the auth is unknown), odin-ornl (a page source needs terms that let automated reading), usps-service-alerts (a page source needs terms that let automated reading), acled-api (the cost is unknown), gtfs-rt-alerts (the auth is unknown), eurdep (a page source needs terms that let automated reading).",
+      "The check took the class infra.power.grid-emergency off eia-api: EIA gives the demand of the grid, not the notices of the grid operators.",
+      "An adopted or planned source needs evidence: a page that a round opened. Three planned sources had none. The check opened the AWS status feed and one answer of the NVD API. The FSIS pages returned 403, so fsis-recall-api is later.",
+      "The check added the three sources that adapters of this repository read (nws-alerts-api, ipaws-open, iem-vtec), and eagle-i-history.",
+      "The check opened the FEMA fact sheet of the IPAWS feed: it asks each provider for a Memorandum of Agreement. It is not clear that a personal receiver needs one. Until that is clear, the terms of ipaws-open are unclear, and ipaws-open has a risk. The gate does not count a source with a risk, so 9 classes name the risk in their gap.",
+      "The research did not record the subject ids of each source. Only the adopted sources and eagle-i-history have them. A value of null means not researched.",
+      "The class ids took the codes of TAXONOMY of the core, so the system has one id for each kind. The core holds the label and the summary of each class.",
+      "14 class ids changed to the core code of the same meaning. Three changes merged two classes: cbrne.hazardous-materials, infra.payments.outage and infra.fuel.shortage.",
+      "met.surf-and-rip-current split into met.surf, met.rip-current and met.beach-hazards, the three NWS products. 13 classes were added for core codes that no class reached.",
+      "After the change the atlas has 200 classes. The gate needs a class at each code of the taxonomy, its ancestor or its descendant.",
+      "The measures of round 1 at the merge of PR 115: 188 classes, 128 gaps and an adopted cover of 16. After the change of the ids: 200 classes, 131 gaps and an adopted cover of 24.",
+      "The adopted cover counts the classes with 2 or more adopted sources with no risk. Only 3 sources are adopted, so the gap count shows the plans and the adopted cover shows the outcome.",
+      "The adopted cover of 24 is a measure of the distribution layer. Its two sources, nws-alerts-api and iem-vtec, fail apart (api.weather.gov and the feeds of IEM), but both carry the products of one origin, the NWS. No class of the 24 has two independent origins. The layers of the cover measure this at this time: 24 classes have 2 paths, and no class has 2 origins.",
+      "Round 1 searched 39 queries and 58 lists. Round 2 starts with the sources that refused the fetch tool, the terms that are unclear, and the subject ids."
+    ],
+    "studies": [
+      {
+        "title": "Kurov, Sancetta, Strasser and Wolfe, 'Price Drift before U.S. Macroeconomic News: Private Information about Public Announcements?', JFQA 2019",
+        "url": "https://ideas.repec.org/a/cup/jfinqa/v54y2019i01p449-479_00.html",
+        "finding": "Stock index and Treasury futures start to move in the right direction about 30 minutes before 9 of 20 market-moving US releases; the drift is about 40% of the total price move.",
+        "verified": true
+      },
+      {
+        "title": "Bernile, Hu and Tang, 'Can information be locked up? Informed trading ahead of macro-news announcements', JFE 2016",
+        "url": "https://ink.library.smu.edu.sg/lkcsb_research/4227",
+        "finding": "E-mini S&P 500 order imbalance during the FOMC lockup points to the coming surprise; no such effect for payrolls, PPI or GDP.",
+        "verified": false
+      },
+      {
+        "title": "Polgreen, Nelson and Neumann, 'Use of prediction markets to forecast infectious disease activity', Clinical Infectious Diseases 2007 (CIDRAP summary)",
+        "url": "https://www.cidrap.umn.edu/influenza-general/iowa-group-bets-market-predict-pandemics",
+        "finding": "An Iowa flu market forecast the next week's activity level correctly 50% of the time against 36% for historical averages; the authors claimed 2 to 4 weeks of lead on season start and peak.",
+        "verified": true
+      },
+      {
+        "title": "Tsang and Yang, Polymarket 2024 election shocks at 5-minute resolution (arXiv 2603.03152)",
+        "url": "https://arxiv.org/html/2603.03152v2",
+        "finding": "The debate and the assassination attempt each moved Trump YES by about 11 cents at peak with no clear rise before; Harris YES rose well before the July 21 dropout.",
+        "verified": true
+      },
+      {
+        "title": "Nobel Peace Prize 2025 Polymarket trades (news reports)",
+        "url": "https://www.theblock.co/post/374199/officials-probe-polymarket-over-suspicious-trades-predicting-nobel-peace-prize-winner-reports",
+        "finding": "Machado's odds began to spike on the evening before the 11:00 Oslo announcement, about half a day ahead; Norwegian officials investigated a possible leak.",
+        "verified": true
+      },
+      {
+        "title": "Diercks, Katz and Wright, 'Kalshi and the Rise of Macro Markets', FEDS 2026-010",
+        "url": "https://federalreserve.gov/econres/feds/kalshi-and-the-rise-of-macro-markets.htm",
+        "finding": "No lead time given; the modal fed funds outcome was right on the eve of each FOMC meeting since 2022, and odds moved within days on Fed speeches and the jobs report (per natlawreview.com).",
+        "verified": true
+      }
+    ],
+    "measures": {
+      "classes": 200,
+      "gaps": 132,
+      "cover": {
+        "adopted": 24,
+        "paths": 24,
+        "origins": 0
+      },
+      "total": {
+        "adopted": 76,
+        "paths": 76,
+        "origins": 51
+      },
+      "unknownOrigins": 3,
+      "unknownPaths": 4,
+      "cause": "At the merge of PR 115 the adopted cover was 16. The change of the class ids made it 24: 13 new classes are NWS products that the two adopted NWS sources already read. The layers came after: the 24 classes have 2 adopted sources on 2 paths with no shared part, but one origin, the NWS. A parent class counts its sources at each leaf code, so no class has 2 origins at this time. This rule also made market.crypto a gap, because its two planned sources give different children. No adapter is new, so no new signal reaches a person."
+    }
+  },
+  {
+    "round": 2,
+    "date": "2026-11-15",
+    "by": "One research agent, for the adapter of the USGS earthquake feed (AL-14), then a check of each fact in the tests of the adapter.",
+    "method": "The check of one planned source before its adapter. It read the terms and the format of the feed, recorded the feed, counted the events of 12 days of one year, and held the intensity laws against the DYFI curves of the USGS.",
+    "lists": [
+      "USGS GeoJSON summary format: https://earthquake.usgs.gov/earthquakes/feed/v1.0/geojson.php",
+      "USGS copyrights and credits: https://www.usgs.gov/information-policies-and-instructions/copyrights-and-credits",
+      "USGS event web service, the count method: https://earthquake.usgs.gov/fdsnws/event/1/",
+      "USGS event detail feeds of us70005dj8 and us7000ki5u, with their DYFI attenuation plots: https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/us7000ki5u.geojson"
+    ],
+    "queries": [],
+    "notes": [
+      "The answers of the feed have Last-Modified and no ETag, with Cache-Control max-age=60, through CloudFront. A conditional GET gives 304.",
+      "The counts of the events of magnitude 2.5 or more in 24 hours, at 12 times of 2025, were 51 to 156. An empty feed is a fault of the source.",
+      "The DYFI plots of older events draw the laws of Atkinson and Wald (2007), and the laws of the adapter match them to 1e-4. The plots of newer events draw the laws of 2014. At magnitude 5.5 the felt radius of 2007 is 20% smaller in active crust and 28% larger in stable crust."
+    ],
+    "studies": [
+      {
+        "title": "Atkinson and Wald (2007), '\"Did You Feel It?\" intensity data: a surprisingly good measure of earthquake ground motion', Seismological Research Letters 78 (3)",
+        "url": "https://doi.org/10.1785/gssrl.78.3.362",
+        "finding": "Two laws give the MMI from the magnitude and the hypocentral distance: one for California and one for the central and eastern US. The coefficients match the DYFI curves of us70005dj8 to 1e-4.",
+        "verified": false
+      },
+      {
+        "title": "Atkinson, Worden and Wald (2014), 'Intensity Prediction Equations for North America', Bulletin of the Seismological Society of America 104 (6)",
+        "url": "https://doi.org/10.1785/0120140178",
+        "finding": "The 2014 laws revise the 2007 laws, which give too much shaking for large events at short distances. The round did not find the coefficients.",
+        "verified": false
+      }
+    ],
+    "measures": {
+      "classes": 200,
+      "gaps": 132,
+      "cover": {
+        "adopted": 25,
+        "paths": 25,
+        "origins": 1
+      },
+      "total": {
+        "adopted": 77,
+        "paths": 77,
+        "origins": 52
+      },
+      "unknownOrigins": 3,
+      "unknownPaths": 4,
+      "cause": "Round 2 adopts the USGS feed for geo.earthquake. The class now has 2 adopted sources on 2 paths with no shared part, and 2 origins: the USGS and the US alerting authorities of the NWS API. So the adopted cover is 25 and the origin cover is 1. The second origin is weak: the NWS API carries only the rare earthquake alerts of the authorities, not each event. The layers do not measure the share of the events that each source carries. The earthquake alerts of the authorities can come from ShakeAlert, a system of the USGS. Then the class has one origin. A later round examines it."
+    }
+  },
+  {
+    "round": 3,
+    "date": "2026-11-16",
+    "by": "One research session, for the power-outage class of the atlas (AL-36) and for the origins of EMSC (AL-14), then a count of each fact in the raw answers.",
+    "method": "A search for a live power-outage source with no fee. It read the OpenAPI document of the ODIN Web API, the status list of the reporting utilities and one answer of the county path. It read the terms of KUBRA and of two utilities that use its outage maps. It read the terms of the EMSC seismic portal and one answer of its event service, and it matched each event of the USGS feed of the same day.",
+    "lists": [
+      "ODIN Web API, the OpenAPI document: https://odin.ornl.gov/v3/api-docs",
+      "ODIN, the status list of the reporting utilities: https://odin.ornl.gov/odi/status",
+      "ODIN Real-time Outages (County) on the Open Energy Data Portal of ORNL: https://ornl.opendatasoft.com/explore/assets/odin-real-time-outages-county/",
+      "KUBRA Storm Center: https://kubra.com/solutions/utility-maps/storm-center-outage-mapping/",
+      "EMSC seismic portal, the terms: https://www.seismicportal.eu/terms.html",
+      "EMSC seismic portal, the FDSN event service: https://www.seismicportal.eu/fdsnws/event/1/",
+      "USGS, the feed of the events of M2.5 or more of the past day: https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_day.geojson"
+    ],
+    "queries": [
+      "ODIN Outage Data Initiative Nationwide ORNL API utility outage data public access",
+      "Kubra Storm Center outage map JSON API currentState terms of use",
+      "\"odin.ornl.gov\" api outages county swagger endpoint json"
+    ],
+    "notes": [
+      "The public paths of the ODIN Web API are /odi, /odi/{utilityId}, /odi/map, /odi/status and /odi/data/{dataId}. The paths under /odin need a token of OAuth 2.0 client credentials.",
+      "The path /odi gives the active outages. With view=county it gives one total for each county. It has the filters stateCd and countyCd, and pages of up to 1000 records.",
+      "At 2026-11-16 06:45 UTC the status list had 159 utilities: 158 with a report of the past 24 hours, 136 with one of the past hour, and 9 with an error. The county path gave 86 counties.",
+      "The county dataset of ODIN on the Open Energy Data Portal had 220 records and states no license. Its last change was 7 hours before the read, so it is not the live path.",
+      "The outage maps of KUBRA Storm Center read JSON files from the servers of KUBRA. KUBRA publishes no API documentation, and its terms cover only its payment services. The terms of the two utilities forbid automated reading without written consent. So the round plans no outage map.",
+      "The match of the EMSC events to the USGS events used a time of 20 seconds and a distance of 100 km. The largest time difference of a match was 6.3 seconds.",
+      "The USGS feed had 41 events in the time of the EMSC answer. EMSC had 30 of them. Each of the 11 misses was a small event of a US network.",
+      "Of the 24 events in the areas of the US networks, 13 were in EMSC, each with the solution of a US network. Of the 17 events outside them, EMSC had 17, and NEIC was the author of 9.",
+      "So in the United States, EMSC is a second path to the solutions of the US networks, not a second origin. Outside it, EMSC gives the solutions of many agencies and of NEIC."
+    ],
+    "studies": [],
+    "measures": {
+      "classes": 200,
+      "gaps": 132,
+      "cover": {
+        "adopted": 25,
+        "paths": 25,
+        "origins": 1
+      },
+      "total": {
+        "adopted": 77,
+        "paths": 77,
+        "origins": 52
+      },
+      "unknownOrigins": 3,
+      "unknownPaths": 4,
+      "cause": "Round 3 plans ODIN for infra.power.outage. The class has one live source and stays a gap. Round 3 gives the origins of EMSC in each region, and EMSC is a planned source. The round adopts no source, so the measures do not change."
+    }
+  },
+  {
+    "round": 4,
+    "date": "2026-11-16",
+    "by": "One session, for the adapter of the EMSC event service (AL-14), then a check of each fact in the tests of the adapter.",
+    "method": "The check of one planned source before its adapter. It read one answer of the event service with its headers and event types. The link rule of the core matched each event of the answer to the USGS feed of the same day.",
+    "lists": [
+      "EMSC seismic portal, the FDSN event service: https://www.seismicportal.eu/fdsnws/event/1/",
+      "EMSC seismic portal, the terms: https://www.seismicportal.eu/terms.html"
+    ],
+    "queries": [],
+    "notes": [
+      "The answer of 2026-11-16 05:28 UTC held 183 events of M2.5 or more of the past day. Its headers had a weak ETag, Cache-Control max-age=15 and no Last-Modified.",
+      "The answer also set a cookie of the load balancer. The adapter does not keep it.",
+      "The answer has explosions and landslides too, with the event types of the ISC. The adapter makes no report of them.",
+      "The link rule of the core (merge rule 3: 30 seconds, 100 km and a magnitude difference of 1.0) joins 30 events of the USGS feed of 03:27 UTC with their events in EMSC. It joins no two events of one source.",
+      "For 22 of the 30 events, EMSC gave the solution of a network of the ANSS, so the incident has one origin. The other 8 have a second origin.",
+      "The event service and the stream of EMSC have one host. So the round moves the stream to later."
+    ],
+    "studies": [],
+    "measures": {
+      "classes": 200,
+      "gaps": 132,
+      "cover": {
+        "adopted": 25,
+        "paths": 25,
+        "origins": 1
+      },
+      "total": {
+        "adopted": 78,
+        "paths": 78,
+        "origins": 52
+      },
+      "unknownOrigins": 3,
+      "unknownPaths": 4,
+      "cause": "Round 4 adopts the EMSC event service for geo.earthquake. The class now has 3 adopted sources on 3 paths with no shared part, so the adopted and path totals each gain 1. In the US, EMSC gives the solutions of the US networks, so the origin count of the class stays 2."
+    }
+  },
+  {
+    "round": 5,
+    "date": "2026-11-16",
+    "by": "One session, for the adapter of the tsunami warning centers (AL-14), then a check of each fact in the tests of the adapter.",
+    "method": "The check of one planned source before its adapter. It read the latest CAP file of each center with its headers, and three bulletins of one past event. The merge of the core joined the bulletins.",
+    "lists": [
+      "The tsunami warning centers, the help page with the feeds: https://www.tsunami.gov/?page=help",
+      "The tsunami warning centers, the CAP page: https://www.tsunami.gov/?page=cap",
+      "The tsunami warning centers, the past events: https://www.tsunami.gov/php/previousEvents.php",
+      "The disclaimer of the NWS: https://www.weather.gov/disclaimer"
+    ],
+    "queries": [],
+    "notes": [
+      "The site has no terms page. Its footer links to the disclaimer of the NWS, which puts the information in the public domain.",
+      "The latest file of each center, at 2026-11-16 11:34 UTC, held a statement (Tsunami Information) with no VTEC and no zone. Its only area was a circle of radius 0 at the epicenter.",
+      "The answers had Content-Type text/xml, a Last-Modified time and no ETag. The adapter sends If-Modified-Since.",
+      "Bulletin 2 of the event t06p1k (2025-07-29, off Kamchatka) holds a warning, an advisory and a watch, each in its own info block with its own zones and VTEC.",
+      "Bulletin 35 of the event cancels the last advisory with msgType Update. It references the 34 earlier bulletins, and its only area is the circle at the epicenter.",
+      "The site keeps each bulletin of each past event at its own URL. The file of a center holds only its latest message, so a poll once a minute does not see a message that the center replaces in less than one minute."
+    ],
+    "studies": [],
+    "measures": {
+      "classes": 200,
+      "gaps": 132,
+      "cover": {
+        "adopted": 26,
+        "paths": 26,
+        "origins": 1
+      },
+      "total": {
+        "adopted": 79,
+        "paths": 79,
+        "origins": 52
+      },
+      "unknownOrigins": 3,
+      "unknownPaths": 4,
+      "cause": "Round 5 adopts the CAP files of the tsunami warning centers for geo.tsunami. The class now has 2 adopted sources with no risk on 2 paths with no shared part, so its adopted and path layers reach the cover. The NWS is the only origin of the class, so the origin layers do not change."
+    }
+  },
+  {
+    "round": 6,
+    "date": "2026-11-16",
+    "by": "One session, for the adapter of the space weather messages of the SWPC (AL-14), then a check of each fact in the tests of the adapter.",
+    "method": "The check of one planned source before its adapter. It read the list alerts.json with its headers, and two monthly archive files. The merge of the core joined the days of the watches.",
+    "lists": [
+      "The SWPC, the data access page: https://www.spaceweather.gov/content/data-access",
+      "The SWPC, the subscription services: https://www.spaceweather.gov/content/subscription-services",
+      "The SWPC, the alerts, watches and warnings: https://www.spaceweather.gov/products/alerts-watches-and-warnings",
+      "The list of the messages: https://services.swpc.noaa.gov/products/alerts.json",
+      "The monthly archive files of the messages: ftp://ftp.swpc.noaa.gov/pub/alerts/",
+      "The disclaimer of the NWS: https://www.weather.gov/disclaimer"
+    ],
+    "queries": [],
+    "notes": [
+      "The SWPC is a part of the NWS, so the disclaimer of the NWS puts its messages in the public domain.",
+      "The list held 71 messages of the past 30 days, newest first, at 2026-11-16 15:53 UTC. Each entry has the code of a product, the issue time in UTC and the text of the message.",
+      "The answers had an ETag, a Last-Modified time and max-age=60. CloudFront serves the host. The adapter sends If-None-Match and If-Modified-Since.",
+      "A watch gives the highest level of the G scale for each of three days. The days of consecutive watches overlap, so each day is a report of its own, and a later watch replaces the forecast of a day.",
+      "The text of an alert or a watch of the G scale tells the geomagnetic latitude of the effects, for example poleward of 60 degrees. The adapter gives two caps around the geomagnetic poles of WMM2025.",
+      "The archive of May 2024 holds the G4 and G5 watches of the storm of 10 and 11 May. The list of 2026-11-16 holds no level above G2, and no level of the S or R scales."
+    ],
+    "studies": [],
+    "measures": {
+      "classes": 200,
+      "gaps": 132,
+      "cover": {
+        "adopted": 26,
+        "paths": 26,
+        "origins": 1
+      },
+      "total": {
+        "adopted": 83,
+        "paths": 83,
+        "origins": 56
+      },
+      "unknownOrigins": 3,
+      "unknownPaths": 4,
+      "cause": "Round 6 adopts the list of the SWPC for the four classes of space weather. Each class now has 1 adopted source on 1 path, with 1 origin, so the adopted, path and origin totals each gain 4. One source is below the cover of 2, so the cover does not change."
+    }
+  },
+  {
+    "round": 7,
+    "date": "2026-11-16",
+    "by": "One session, for the kinds of the general CAP reader (AL-14), then a check of each kind in the tests of format-cap.",
+    "method": "The check of the WMO register before the general CAP reader. It read the register, 4 feeds, 10 messages, the OASIS Event Terms List and the CAP profile of MeteoAlarm. The tests map 2 real messages of the hub.",
+    "lists": [
+      "The WMO Register of Alerting Authorities, its RSS index: https://alertingauthority.wmo.int/rss.xml",
+      "The OASIS Event Terms List for CAP 1.2: https://docs.oasis-open.org/emergency/cap-etl/v1.2/cap-etl-v1.2.html",
+      "The MeteoAlarm feeds: https://feeds.meteoalarm.org/",
+      "The MeteoAlarm warnings and their CAP profile: https://meteoalarm.readthedocs.io/en/latest/warnings.html",
+      "The CAP profile of MET Norway: https://docs.api.met.no/doc/metalerts/CAP-v1-profile"
+    ],
+    "queries": [],
+    "notes": [
+      "The register had 303 alerting authorities on 2026-11-16. 224 of them gave a CAP feed, on 92 hosts. The repository keeps no copy of the register, because each entry names a person as its author.",
+      "The hub cap-sources.s3.amazonaws.com holds the feeds of many authorities. Each feed of the hub gives its copyright as public domain. 5 of the 6 messages of the hub in the round gave the OASIS event code OET:v1.2.",
+      "The OASIS list 1.2 has 224 terms, OET-000 to OET-223. The numbers of version 1.0 are different, so format-cap reads only the codes of version 1.2.",
+      "The CAP profile of MeteoAlarm gives the awareness type of each warning as a parameter, for example 10; rain. The CAP feed of the DWD gives no awareness type and no OASIS code.",
+      "The feed page of MeteoAlarm names more requirements for redistribution in its Terms and Conditions. That page needs JavaScript, so the round did not read it. The repository keeps no message of MeteoAlarm.",
+      "The taxonomy gains met.rain. Before this round, the rain warnings of MeteoAlarm and of the OASIS list had no code of their own."
+    ],
+    "studies": [],
+    "measures": {
+      "classes": 201,
+      "gaps": 131,
+      "cover": {
+        "adopted": 26,
+        "paths": 26,
+        "origins": 1
+      },
+      "total": {
+        "adopted": 83,
+        "paths": 83,
+        "origins": 56
+      },
+      "unknownOrigins": 3,
+      "unknownPaths": 5,
+      "cause": "Round 7 adds the class met.rain and the planned source wmo-cap-feeds. met.rain and met.lightning each have 2 planned sources with no risk, so the gaps go from 132 to 131 of 201 classes. No source is adopted, so the layers do not change. The path of wmo-cap-feeds is unknown, because its feeds are on 92 hosts."
+    }
+  },
+  {
+    "round": 8,
+    "date": "2026-11-16",
+    "by": "One session, after the merge of the adapter source-nwws (AL-30). The tests of the atlas check the descriptor of the adapter.",
+    "method": "The adoption of the NWWS-OI adapter. The round read the NWWS page and the disclaimer of the NWS, and it made a DNS lookup of the XMPP server. The facts of the stream come from four live sessions of the adapter on 2026-11-16.",
+    "lists": [
+      "The NOAA Weather Wire Service: https://www.weather.gov/nwws/",
+      "The disclaimer of the NWS: https://www.weather.gov/disclaimer"
+    ],
+    "queries": [],
+    "notes": [
+      "NWWS-OI sends each NWS product to one XMPP room. The adapter keeps the CAP messages of the NWS, the same messages that the NWS API gives.",
+      "The XMPP server is nwws-oi.weather.gov, with no content network. The path of the NWS API has api.weather.gov and Akamai. Thus the two NWS sources share no part of a path.",
+      "The two NWS sources share the origins nws and us-alerting-authorities. Thus the layer of the origins does not change.",
+      "The NWWS page tells of planned transitions of the NWS servers, up to four times a month, with an outage of 10 to 90 minutes. The NWS API source covers these outages.",
+      "A join of the room gives only its last 25 products again. Thus a gap in the stream can lose a product, and the NWS API source finds it.",
+      "These 15 classes get a second source with no risk, so they are not gaps after this round: cbrne.hazardous-materials, fire.structure, geo.earthquake.early-warning, infra.dam.failure, infra.telecom.911-outage, met.outlook, met.special, safety.civil-danger, safety.civil-emergency, safety.evacuation, safety.local-emergency, safety.shelter-in-place, security.blue-alert, security.child-abduction, security.law-enforcement.",
+      "Each of these classes has only the origins of the NWS. Thus its layer of the origins stays at 1, and a fault at the NWS stops both sources.",
+      "The old reasons of these gaps stay true for a second origin. fire.structure: no public national feed of fire dispatch exists, and PulsePoint has no public API.",
+      "geo.earthquake.early-warning: round 1 found no open machine feed of the warnings themselves. infra.dam.failure: round 1 opened no feed for each dam.",
+      "The other classes of the list have a later source with its reason in its record, or round 1 found no other source."
+    ],
+    "studies": [],
+    "measures": {
+      "classes": 201,
+      "gaps": 116,
+      "cover": {
+        "adopted": 51,
+        "paths": 51,
+        "origins": 1
+      },
+      "total": {
+        "adopted": 134,
+        "paths": 134,
+        "origins": 56
+      },
+      "unknownOrigins": 3,
+      "unknownPaths": 5,
+      "cause": "Round 8 adopts NWWS-OI, a second path of the NWS for its 51 classes. The cover of the adopted sources and of the paths goes from 26 to 51 classes, and the gaps go from 131 to 116 of 201 classes. Both NWS sources have the same origins, so the origin layers do not change."
+    }
+  },
+  {
+    "round": 9,
+    "date": "2026-11-16",
+    "by": "One session, for the second origins of space weather and the internet sources of the order of work, then a check of each fact in the pages and in single reads.",
+    "method": "Web searches, then reads of the pages of each source with a generic agent. One small read of the GFZ web service and one of the IODA alerts checked the format and the delay. A DNS lookup of each host checked the content networks.",
+    "lists": [
+      "The data page and the web service of the GFZ Kp index: https://kp.gfz.de/en/data",
+      "The product list of the SIDC: https://sidc.be/registration/registration_main.php",
+      "The OpenAPI page of the IODA API: https://api.ioda.inetintel.cc.gatech.edu/v2/",
+      "The RIS commercial use page of the RIPE NCC: https://www.ripe.net/analyse/internet-measurements/routing-information-service-ris/commercial-use/"
+    ],
+    "queries": [
+      "GFZ Kp index nowcast data access license CC BY 4.0 JSON API kp.gfz.de",
+      "IODA Internet Outage Detection and Analysis API terms of use data license",
+      "RIPE RIS Live terms of use data license RIPE NCC routing data",
+      "Bureau of Meteorology Space Weather Services API get-alert geomagnetic warning free API key documentation",
+      "SIDC STCE space weather alerts presto RSS feed machine readable solar flare alert",
+      "IODA API documentation api.ioda.inetintel.cc.gatech.edu v2 outages alerts terms acceptable use",
+      "\"IODA\" inetintel gatech \"acceptable use\" OR \"terms of use\" OR \"data use\" OR \"acknowledge\" outage data researchers",
+      "RIS Live websocket wss://ris-live.ripe.net/v1/ws/?client= ris_subscribe documentation"
+    ],
+    "notes": [
+      "Before round 9, each class of space weather had one source with no risk, the SWPC, with the NWS as its only origin.",
+      "GFZ gives the planetary Kp and the half-hourly Hp30 under CC BY 4.0, with no key. A Kp of 5 or more is a storm on the G scale of NOAA.",
+      "Some of the 13 Kp observatories are observatories of the USGS that the SWPC also reads. Thus the two origins share a part of their raw data.",
+      "The Space Weather API of the Bureau of Meteorology gives magnetic alerts and warnings of the Australian region. It needs a key from a registration with a name and an email address.",
+      "The SIDC sends its alerts only by email. Its flare alert reads the GOES data of NOAA, so it is a second issuer, not a second sensor.",
+      "The IODA API answered one read with no key. No page gives terms for its data, so the plan waits for written terms before an adapter.",
+      "The terms of service of the RIPE NCC cover the automated use of RIS Live. The RIS Live manual page gave a general page of the RIPE NCC.",
+      "The classes that are not gaps after this round: geo.space-weather, geo.space-weather.geomagnetic-storm, infra.internet.outage, infra.internet.shutdown."
+    ],
+    "studies": [],
+    "measures": {
+      "classes": 201,
+      "gaps": 112,
+      "cover": {
+        "adopted": 51,
+        "paths": 51,
+        "origins": 1
+      },
+      "total": {
+        "adopted": 134,
+        "paths": 134,
+        "origins": 56
+      },
+      "unknownOrigins": 3,
+      "unknownPaths": 6,
+      "cause": "Round 9 plans GFZ and the Bureau of Meteorology as the second and third origins of the geomagnetic storm, and plans IODA with no key. The gaps go from 116 to 112 of 201 classes. No source is adopted, so the layers do not change. The email alerts of the SIDC add 1 source with an unknown path."
+    }
+  },
+  {
+    "round": 10,
+    "date": "2026-11-17",
+    "by": "One session, for the indicators of the threat level: a catalog of the sources of each dimension, then a draft of the atlas records and a check of each draft.",
+    "method": "Web searches, then reads of the pages of each source with a generic agent, one group of dimensions at a time. A count of the systems file of GBFS checked its size. One request to each host of the two streams checked that it answers.",
+    "lists": [
+      "The systems catalog of GBFS: https://github.com/MobilityData/gbfs/blob/master/systems.csv",
+      "The feed catalog of the Mobility Database: https://mobilitydatabase.org/about",
+      "The specification and the feed registry of WZDx: https://github.com/usdot-jpo-ode/wzdx",
+      "The public API of Statuspage: https://metastatuspage.com/api",
+      "The API of Cloudflare Radar: https://developers.cloudflare.com/radar/",
+      "The API of Energy-Charts: https://api.energy-charts.info/llms.txt",
+      "The EventStreams service of Wikimedia: https://wikitech.wikimedia.org/wiki/Event_Platform/EventStreams_HTTP_Service",
+      "The Jetstream service of Bluesky: https://bsky.network/docs/jetstream",
+      "The API of adsb.lol: https://github.com/adsblol/api",
+      "The open data of the EIA: https://www.eia.gov/opendata/",
+      "The API of NASA FIRMS: https://firms.modaps.eosdis.nasa.gov/api/"
+    ],
+    "queries": [
+      "WZDx feed registry number of feeds state DOT data.transportation.gov",
+      "Waze for Cities data feed partner program public access terms",
+      "Network Rail open data feeds TRUST train movements STOMP registration licence Rail Data Marketplace",
+      "National Rail Darwin Push Port open data licence real-time delays cancellations access",
+      "SNCF API open data temps réel GTFS-RT perturbations clé API licence ODbL",
+      "GBFS adoption number of bike share systems cities 2025 MobilityData",
+      "nasstatus.faa.gov api airport-status-information XML ground stop ground delay program feed",
+      "ADS-B Exchange API pricing RapidAPI enterprise terms non-commercial",
+      "Kystverket AIS open data real-time TCP stream Norwegian Coastal Administration licence NLOD",
+      "IMF PortWatch daily chokepoint transit calls data ArcGIS API download update weekly 2019",
+      "aisstream.io free websocket API key global AIS terms of service",
+      "Danish Maritime Authority AIS data download aisdata.ais.dk historical daily files terms",
+      "NGA MSI API broadcast warnings NAVAREA JSON msi.nga.mil api publications broadcast-warn",
+      "Cloudflare Radar API data license CC BY-NC 4.0 traffic anomalies outages annotations endpoint free",
+      "IODA API documentation signals outages alerts BGP active probing telescope no authentication terms of use",
+      "Internet Health Report IIJ API ihr.iijlab.net disconnections network delay AS hegemony REST API",
+      "\"Cloudflare Radar\" \"CC BY-NC 4.0\" data licensed",
+      "IODA API v2 api.ioda.inetintel.cc.gatech.edu signals raw country datasource example",
+      "Energy-Charts API Fraunhofer ISE public_power frequency endpoint license CC BY 4.0 no key",
+      "ENTSO-E Transparency Platform RESTful API security token request email rate limit 400 requests per minute terms",
+      "EIA-930 hourly electric grid monitor balancing authorities demand forecast update lag history July 2015",
+      "NESO data portal API CKAN demand data system frequency one second open licence no key",
+      "UK Fuel Finder open data API forecourt prices statutory scheme 2025 developer access",
+      "EURDEP data access public API WFS gamma dose rate JRC REM terms automated download",
+      "Safecast API api.safecast.org measurements json CC0 license realtime sensors tt.safecast.org",
+      "BfS Geoportal Nutzungsbedingungen ODL opendata Lizenz dl-de/by-2-0 Messstellen Anzahl",
+      "USGS Water Data APIs api.waterdata.usgs.gov continuous values replace waterservices instantaneous values decommission API key",
+      "GloFAS data access Copernicus EWDS river discharge forecast API account licence",
+      "ECDC ERVISS respiratory virus surveillance data GitHub CSV weekly European data open licence",
+      "data.cdc.gov NWSS wastewater viral activity level dataset Socrata API SARS-CoV-2 influenza RSV weekly",
+      "data.cdc.gov NSSP emergency department visit trajectories percent visits COVID influenza RSV state county dataset",
+      "Google Trends API alpha 2025 official announcement access limited testers",
+      "Reddit Data API terms free tier 100 queries per minute OAuth approval required 2025 responsible builder policy",
+      "Bluesky Jetstream public instances jetstream2.us-east.bsky.network subscribe wantedCollections cursor replay no auth",
+      "NASA Black Marble VNP46A1 daily night lights near real time Earthdata login LAADS latency",
+      "Copernicus Emergency Management Service rapid mapping activations API feed GeoRSS JSON public",
+      "FIRMS MAP_KEY transaction limit 5000 per 10 minute interval area API VIIRS NRT within 3 hours day range 1-10",
+      "PurpleAir API points pricing free points new account 2025 terms of service data redistribution",
+      "EMSC felt reports testimonies API LastQuake data access seismicportal websocket felt reports count",
+      "WFP market prices data API HDX VAM DataBridges API key food prices weekly monthly",
+      "Seattle Real Time Fire 911 Calls dataset kzjm-xkqj updated every 5 minutes Socrata",
+      "AFIR dynamic data charging point availability national access point requirement April 2025 open data",
+      "Open Charge Map API key required terms of use license data CC BY rate limit",
+      "Mobility Database API refresh token access token catalog feeds_v2.csv download GTFS-RT feeds count",
+      "Google Cloud status incidents.json feed AWS Health Dashboard RSS public JSON Azure status RSS feed",
+      "ansperformance.eu data download daily IFR flights airport traffic delays CSV Eurocontrol open data licence",
+      "OpenSky Network terms of use data non-commercial research REST API redistribution",
+      "Transitland API v2 API key free tier limits GTFS realtime feeds terms",
+      "FRED API key free terms of use VIX daily series rate limit 120 requests per minute",
+      "Open311 GeoReport v2 cities list endpoints service requests public API",
+      "TSA checkpoint travel numbers daily throughput page data download",
+      "Downdetector API pricing enterprise access terms automated scraping prohibited",
+      "HERE Traffic API v7 flow incidents free tier transactions per month base plan terms caching",
+      "Flightradar24 terms of service scraping prohibited API subscription GPS jamming map data",
+      "TomTom API free tier 2500 requests per day evaluation terms storing traffic data prohibited",
+      "dumps.wikimedia.org pageviews hourly files all articles format delay",
+      "\"ioda\" api \"outages/events\" OR \"signals/raw\" inetintel gatech json",
+      "511.org open data API token rate limit 60 requests per hour traffic events WZDx transit GTFS-RT regional",
+      "Blitzortung data terms of use commercial automated access not allowed lightning data",
+      "IMF PortWatch terms of use data reuse attribution license",
+      "Trafikverket open API key free road traffic train announcements delays Sweden licence CC0"
+    ],
+    "notes": [
+      "Round 10 adds indicators: measures that are not events, but add to the threat level of a place. Traffic, rail, flights, power, the internet and public attention are examples. The core has 36 dimensions of them.",
+      "A source of indicators has the field dimensions. It can have no class, so the gate of the classes does not count it. The measure dimensions counts each dimension with 2 or more live sources with no risk.",
+      "Each new source has the decision plan, later or reject, and no adapter. The adapters of indicators start after the contract of the indicators is in the core.",
+      "The terms of most new sources give only a licence. Round 10 gives unclear to their automated use when the text gives no rule for it, and limited when it gives a rate or a condition.",
+      "The catalog read reports that the terms of FRED forbid wholesale downloading. So its automated use is limited. The data of the Cloudflare Radar API is under CC BY-NC 4.0, so its redistribution is limited.",
+      "Two drafts were copies of round 9 records: ioda of ioda-api, and wzdx-registry of wzdx-feeds. Round 10 adds their dimensions and evidence to those records."
+    ],
+    "studies": [],
+    "measures": {
+      "classes": 201,
+      "gaps": 112,
+      "cover": {
+        "adopted": 51,
+        "paths": 51,
+        "origins": 1
+      },
+      "total": {
+        "adopted": 134,
+        "paths": 134,
+        "origins": 56
+      },
+      "unknownOrigins": 4,
+      "unknownPaths": 30,
+      "dimensions": 2,
+      "cause": "Round 10 adds 63 sources of indicators, and gives dimensions to 23 older sources. No class gets a live source, so the gaps and the layers do not change. 2 of 36 dimensions have 2 or more live sources with no risk. The unknown origins go from 3 to 4, and the unknown paths from 6 to 30."
+    }
+  }
+]

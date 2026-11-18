@@ -3,10 +3,28 @@
  * shapes. The view also gives each watched place with its highest level and its gaps of coverage. The view is a pure
  * calculation. A renderer draws it, and a store of shapes gives the outline of each region code.
  */
-import { higherLevel, matchPlaces } from "./assess.ts";
-import { ASSESSED_LEVELS, type Area, type AssessedLevel, type Assessment, type Coverage, type Incident, type Kind, type PlaceId, type Position, type RegionCode, type ReportId, type Severity, type Instant } from "./contracts.ts";
+import { compareCodeUnits } from "@mark1russell7/text/order";
+import { assess, higherLevel, matchPlaces, reachedAssessment } from "./assess.ts";
+import {
+  ASSESSED_LEVELS,
+  type Area,
+  type AssessedLevel,
+  type Assessment,
+  type AssessPolicy,
+  type Coverage,
+  type Incident,
+  type Kind,
+  type PersonWatch,
+  type PlaceId,
+  type Position,
+  type RegionCode,
+  type ReportId,
+  type Severity,
+  type Instant,
+  type Status,
+} from "./contracts.ts";
 import { coverageShort } from "./coverage.ts";
-import { areasWithoutBlocks } from "./shapes.ts";
+import { areasWithoutBlocks, distinctShapes } from "./shapes.ts";
 
 /** A shape of the map in WGS 84: a polygon or a circle. A region code gets its shapes from the store. */
 export type MapShape = Extract<Area, { readonly type: "polygon" } | { readonly type: "circle" }>;
@@ -41,13 +59,18 @@ export interface MapInput {
 /** An incident on the map. */
 export interface MapIncident {
   readonly anchor: ReportId;
+  /**
+   * The status of the incident. A renderer shows each status other than `actual` with a look and a legend entry of its own.
+   * Thus a test or an exercise does not look like a real alert.
+   */
+  readonly status: Status;
   readonly kind: Kind;
   /** The highest level of the incident over each person, or `none` when no person gets it. */
   readonly level: AssessedLevel;
   readonly severity: Severity;
   readonly onset?: Instant;
   readonly expires?: Instant;
-  /** The shapes of the areas: each polygon, each circle and the shapes of each region code. */
+  /** The shapes of the areas: each polygon, each circle and the shapes of each region code. Each shape comes one time. */
   readonly shapes: readonly MapShape[];
   /** The region codes of the areas with no shape in the store. The renderer lists them as text. */
   readonly unshaped: readonly RegionCode[];
@@ -98,13 +121,43 @@ export interface MapRegion {
  * address only, because the view holds the labels and the positions of the places. The local page draws this answer.
  */
 export interface MapPayload {
+  /** The format of the payload. A page of another format tells the reader to start the runtime of its own version. */
+  readonly format: typeof MAP_FORMAT;
+  /** The time of the view: the time of the last pass, or `null` before the first pass. */
+  readonly at: Instant | null;
   readonly view: MapView;
   /** The regions under the view: the zones and the counties of each watched state, from the store of shapes. */
   readonly basemap: readonly MapRegion[];
 }
 
-/** The severities, from the highest. */
-const SEVERITY_ORDER: readonly Severity[] = ["extreme", "severe", "moderate", "minor", "unknown"];
+/** The name of the format of the map payload. A change that breaks a reader gets a new name. */
+export const MAP_FORMAT = "alerts-map/1";
+
+/** These are the inputs of the payload of the map route. */
+export interface MapPayloadInput extends Omit<MapInput, "assessments"> {
+  /** The time of the view: the time of the last pass, or `null` before the first pass. */
+  readonly at: Instant | null;
+  /** The watches of the people. The payload assesses each live incident for each person at `at`. */
+  readonly people: readonly PersonWatch[];
+  /** The policy of the assessment: the policy of the delivery. The default is the policy of the core. */
+  readonly policy?: AssessPolicy;
+  /** The regions under the view, from the store of shapes. */
+  readonly basemap: readonly MapRegion[];
+}
+
+/**
+ * This function gives the payload of the map route. It assesses each live incident for each person with the policy of the
+ * delivery. Thus the level on the map is the level that reaches the person. A mute with the effect `absent` gives `none`.
+ */
+export function mapPayload(input: MapPayloadInput): MapPayload {
+  const { at, people, policy, basemap, ...view } = input;
+  const live = view.incidents.filter((incident) => incident.live);
+  const assessments = live.flatMap((incident) => people.map((person) => reachedAssessment(assess(incident, person, view.places, policy, at ?? undefined))));
+  return { format: MAP_FORMAT, at, view: mapView({ ...view, assessments }), basemap };
+}
+
+/** The severities, from the highest. The map and the history sort by this order. */
+export const SEVERITY_ORDER: readonly Severity[] = ["extreme", "severe", "moderate", "minor", "unknown"];
 
 /**
  * This function gives the rank of the size of a region code, from the smallest. An NWS zone (`KSZ083`)
@@ -148,28 +201,25 @@ export function mapView(input: MapInput): MapView {
           const found = input.shape(code);
           if (found === undefined) {
             missing.push(code);
-            unshaped.set(codeKey(code), code);
+            unshaped.set(regionCodeKey(code), code);
           } else shapes.push(...found);
         }
       }
       return {
         anchor: incident.anchor,
+        status: incident.status,
         kind: incident.kind,
         level: levels.get(incident.anchor) ?? "none",
         severity: incident.severity,
         ...(incident.onset === undefined ? {} : { onset: incident.onset }),
         ...(incident.expires === undefined ? {} : { expires: incident.expires }),
-        shapes,
+        // A zone and its county can give one outline from the store. The renderer draws each shape one time.
+        shapes: distinctShapes(shapes),
         unshaped: missing,
         places: matchPlaces(incident, input.places).map((match) => match.place),
       };
     })
-    .sort(
-      (a, b) =>
-        ASSESSED_LEVELS.indexOf(b.level) - ASSESSED_LEVELS.indexOf(a.level) ||
-        SEVERITY_ORDER.indexOf(a.severity) - SEVERITY_ORDER.indexOf(b.severity) ||
-        compareText(a.anchor, b.anchor),
-    );
+    .sort(compareMapIncidents);
 
   const places = input.places.map((place): MapPlace => {
     const gaps = input.coverage.filter((entry) => entry.place === place.id && coverageShort(entry)).map((entry) => entry.kind);
@@ -180,14 +230,14 @@ export function mapView(input: MapInput): MapView {
       shapes: smallestShapes(place.codes, input.shape),
       level: placeLevels.get(place.id) ?? "none",
       incidents: incidents.filter((incident) => incident.places.includes(place.id)).map((incident) => incident.anchor),
-      gaps: [...new Set(gaps)].sort(compareText),
+      gaps: [...new Set(gaps)].sort(compareCodeUnits),
     };
   });
 
   return {
     incidents,
     places,
-    unshaped: [...unshaped.values()].sort((a, b) => compareText(a.system, b.system) || compareText(a.code, b.code)),
+    unshaped: [...unshaped.values()].sort(compareRegionCodes),
   };
 }
 
@@ -201,10 +251,17 @@ function smallestShapes(codes: readonly RegionCode[], shape: ShapeLookup): reado
   return [];
 }
 
-function codeKey(code: RegionCode): string {
+/** This function compares two incidents of the map: the higher level first. In one level, the order is the severity, then the anchor. */
+export function compareMapIncidents(a: MapIncident, b: MapIncident): number {
+  return ASSESSED_LEVELS.indexOf(b.level) - ASSESSED_LEVELS.indexOf(a.level) || SEVERITY_ORDER.indexOf(a.severity) - SEVERITY_ORDER.indexOf(b.severity) || compareCodeUnits(a.anchor, b.anchor);
+}
+
+/** This function gives the key of a region code: one text for each system and code. Two equal codes give one key. */
+export function regionCodeKey(code: RegionCode): string {
   return `${code.system}\u0000${code.code}`;
 }
 
-function compareText(a: string, b: string): number {
-  return a < b ? -1 : a > b ? 1 : 0;
+/** This function compares two region codes by the system, then by the code. */
+export function compareRegionCodes(a: RegionCode, b: RegionCode): number {
+  return compareCodeUnits(a.system, b.system) || compareCodeUnits(a.code, b.code);
 }

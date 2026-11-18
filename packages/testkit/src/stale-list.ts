@@ -279,8 +279,8 @@ export async function runStaleArm(arm: StaleArm, settings: StaleSettings = CASE_
   const outcomes: FetchOutcome[] = [];
   const source: SourceProcedures = {
     ...inner,
-    fetch: async (input) => {
-      const outcome = await inner.fetch(input);
+    fetch: async (input, signal) => {
+      const outcome = await inner.fetch(input, signal);
       outcomes.push(outcome);
       return outcome;
     },

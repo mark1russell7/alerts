@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json.schemastore.org/package",
+  "name": "@mark1russell7/alerts-channel-twilio",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The Twilio voice call channel of the alert system: its descriptor, the send of a call, and the three Functions of the outage call.",
+  "type": "module",
+  "main": "./src/index.ts",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.test.json"
+  },
+  "devDependencies": {
+    "@mark1russell7/cue": "^2.0.0",
+    "@types/node": "^26.6.5",
+    "@vitest/coverage-v8": "^5.0.3",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.3"
+  },
+  "dependencies": {
+    "@mark1russell7/alerts": "workspace:*",
+    "@mark1russell7/algebra": "^0.9.5",
+    "@mark1russell7/rigor-generators": "^0.1.18",
+    "@mark1russell7/text": "^0.0.13",
+    "@procedures/notify": "^0.63.0",
+    "esbuild": "^0.28.2",
+    "polite-crawler": "^0.7.3",
+    "zod": "^4.6.7"
+  }
+}

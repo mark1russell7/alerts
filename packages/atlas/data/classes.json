@@ -1,0 +1,3234 @@
+[
+  {
+    "id": "cbrne.biological",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "CDC HAN on a suspected deliberate release"
+    ],
+    "references": [
+      "CAP 1.2: CBRNE",
+      "UNDRR-ISC HIPs 2025: BI"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
+    "id": "cbrne.explosion",
+    "subjectKinds": [
+      "place",
+      "entity"
+    ],
+    "examples": [
+      "Fertilizer depot explosion"
+    ],
+    "references": [
+      "CAP 1.2: CBRNE",
+      "EM-DAT: Technological > Industrial > Explosion"
+    ],
+    "gap": "No live structured source. News and local alerts report these first.",
+    "round": 1
+  },
+  {
+    "id": "cbrne.hazardous-materials",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "Hazardous Materials Warning: ammonia leak, shelter in place",
+      "Tanker truck leak closes a highway"
+    ],
+    "references": [
+      "CAP 1.2: CBRNE",
+      "CISA sectors: Chemical",
+      "FEMA Lifelines: Hazardous Materials",
+      "EM-DAT: Technological > Industrial > Chemical spill, Gas leak, Poisoning",
+      "NWS/SAME: HMW Hazardous Materials Warning"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
+    "id": "cbrne.nuclear-plant",
+    "subjectKinds": [
+      "entity",
+      "place"
+    ],
+    "examples": [
+      "NRC event notification: reactor scram at a named plant",
+      "Unusual Event declared"
+    ],
+    "references": [
+      "CISA sectors: Nuclear Reactors, Materials and Waste",
+      "UNDRR-ISC HIPs 2025: TL Nuclear Plant Failure",
+      "NWS/SAME: NUW Nuclear Power Plant Warning"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
+    "id": "cbrne.radiological",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "Radiological Hazard Warning",
+      "Gamma dose rate rise at monitors"
+    ],
+    "references": [
+      "CAP 1.2: CBRNE",
+      "NWS/SAME: RHW Radiological Hazard Warning",
+      "UNDRR-ISC HIPs 2025: TL radiation"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
+    "id": "civic.court-ruling",
+    "subjectKinds": [
+      "entity",
+      "topic"
+    ],
+    "examples": [
+      "New filing on a followed docket"
+    ],
+    "references": [
+      "No hazard list names this class."
+    ],
+    "gap": "The CourtListener page redirected; not read.",
+    "round": 1
+  },
+  {
+    "id": "civic.economy",
+    "subjectKinds": [
+      "place",
+      "topic",
+      "entity"
+    ],
+    "examples": [
+      "New sanctions on a country's banks"
+    ],
+    "references": [
+      "https://ofac.treasury.gov/recent-actions"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
+    "id": "civic.economy.enforcement",
+    "subjectKinds": [
+      "entity"
+    ],
+    "examples": [
+      "The Fed issues a cease-and-desist order to a bank"
+    ],
+    "references": [
+      "https://www.federalreserve.gov/feeds/feeds.htm"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
+    "id": "civic.economy.fiscal",
+    "subjectKinds": [
+      "topic"
+    ],
+    "examples": [
+      "Treasury cash balance falls near the debt-limit date"
+    ],
+    "references": [
+      "https://fiscaldata.treasury.gov/api-documentation/"
+    ],
+    "gap": "Only the Treasury Fiscal Data API, and my test call to it failed to connect.",
+    "round": 1
+  },
+  {
+    "id": "civic.election",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "Registration deadline in 7 days",
+      "Polling place moved"
+    ],
+    "references": [
+      "No hazard list names this class. Found by the search for missing classes."
+    ],
+    "gap": "Not researched in round 1.",
+    "round": 1
+  },
+  {
+    "id": "civic.emergency-declaration",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "Major Disaster Declaration for named counties"
+    ],
+    "references": [
+      "FEMA OpenFEMA",
+      "CISA sectors: Government Services and Facilities"
+    ],
+    "gap": "The Federal Register API page redirected to a bot check. OpenFEMA did not name its declarations dataset on the page opened.",
+    "round": 1
+  },
+  {
+    "id": "civic.government-operating-status",
+    "subjectKinds": [
+      "place",
+      "entity"
+    ],
+    "examples": [
+      "OPM: federal offices in the DC area closed"
+    ],
+    "references": [
+      "CISA sectors: Government Services and Facilities",
+      "FEMA Lifelines: Safety and Security > Government Service"
+    ],
+    "gap": "OPM covers only the DC area and names no feed. State and city closures are separate.",
+    "round": 1
+  },
+  {
+    "id": "civic.government-shutdown",
+    "subjectKinds": [
+      "topic"
+    ],
+    "examples": [
+      "Federal shutdown: parks closed, some services stopped"
+    ],
+    "references": [
+      "No hazard list names this class. Found by the search for missing classes."
+    ],
+    "gap": "No structured source found. Agencies post contingency plans.",
+    "round": 1
+  },
+  {
+    "id": "civic.labor-action",
+    "subjectKinds": [
+      "place",
+      "entity"
+    ],
+    "examples": [
+      "Postal workers strike suspends international mail"
+    ],
+    "references": [
+      "MAX Security: Industrial action",
+      "Riskline: strikes"
+    ],
+    "gap": "The tracker page showed navigation only. No live feed seen.",
+    "round": 1
+  },
+  {
+    "id": "civic.planned-event",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "Stadium event tonight: road closures near the venue"
+    ],
+    "references": [
+      "PredictHQ (not opened)",
+      "UNDRR-ISC HIPs 2025: SO0302 Stampede (lead indicator)"
+    ],
+    "gap": "One source, ticketed events only.",
+    "round": 1
+  },
+  {
+    "id": "civic.public-holiday",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "Bank holiday Monday"
+    ],
+    "references": [
+      "No hazard list names this class."
+    ],
+    "gap": "The API page redirected; not read.",
+    "round": 1
+  },
+  {
+    "id": "civic.regulation",
+    "subjectKinds": [
+      "topic"
+    ],
+    "examples": [
+      "Final rule published with an effective date"
+    ],
+    "references": [
+      "No hazard list names this class."
+    ],
+    "gap": "The Federal Register page redirected to a bot check. Congress and regulations.gov were not opened.",
+    "round": 1
+  },
+  {
+    "id": "civic.sanctions",
+    "subjectKinds": [
+      "place",
+      "entity"
+    ],
+    "examples": [
+      "New sanctions block transfers to a country's banks",
+      "A general license allows a wind-down",
+      "OFAC: Iran-related designations"
+    ],
+    "references": [
+      "https://ofac.treasury.gov/recent-actions",
+      "WEF Global Risks: geoeconomic confrontation (not opened)"
+    ],
+    "gap": "Round 1 found 1 adopted or planned source with no risk: ofac-sanctions-list-service. ofac-recent-actions is later: see the reason of each.",
+    "round": 1
+  },
+  {
+    "id": "civic.school-closure",
+    "subjectKinds": [
+      "place",
+      "entity"
+    ],
+    "examples": [
+      "District closed for snow"
+    ],
+    "references": [
+      "No hazard list names this class. Found by the search for missing classes."
+    ],
+    "gap": "Per district and per local media. No national source.",
+    "round": 1
+  },
+  {
+    "id": "civic.tax-relief",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "IRS: various deadlines postponed for a state"
+    ],
+    "references": [
+      "No hazard list names this class. Found by the search for missing classes."
+    ],
+    "gap": "One source, a page with no feed.",
+    "round": 1
+  },
+  {
+    "id": "cyber.advisory.ics",
+    "subjectKinds": [
+      "entity"
+    ],
+    "examples": [
+      "CISA ICS advisory for a PLC family",
+      "CISA ICS medical advisory for an infusion pump"
+    ],
+    "references": [
+      "CISA sectors: Critical Manufacturing, Energy, Water and Wastewater, Healthcare and Public Health"
+    ],
+    "gap": "One source opened (CISA ICS and ICS medical RSS). Vendor PSIRT feeds (for example Siemens ProductCERT) were not opened in round 1.",
+    "round": 1
+  },
+  {
+    "id": "cyber.campaign",
+    "subjectKinds": [
+      "topic"
+    ],
+    "examples": [
+      "CISA/FBI joint cybersecurity advisory on a ransomware group",
+      "CISA malware analysis report"
+    ],
+    "references": [
+      "UNDRR-ISC HIPs 2025: TL Advanced Persistent Threat",
+      "CISA sectors: Information Technology"
+    ],
+    "gap": "One source opened. The UK NCSC feed page returned 404. Other national CERT feeds are for round 2.",
+    "round": 1
+  },
+  {
+    "id": "cyber.data-breach",
+    "subjectKinds": [
+      "entity"
+    ],
+    "examples": [
+      "HIBP latest breach: a service with 2 million email addresses",
+      "HHS OCR breach report for a health plan"
+    ],
+    "references": [
+      "UNDRR-ISC HIPs 2025: TL Data Breach"
+    ],
+    "gap": "Round 1 found 1 adopted or planned source with no risk: hibp-api. hhs-ocr-breach-portal is later: see the reason of each.",
+    "round": 1
+  },
+  {
+    "id": "cyber.ddos",
+    "subjectKinds": [
+      "entity",
+      "place"
+    ],
+    "examples": [
+      "A record DDoS against a bank's website"
+    ],
+    "references": [
+      "UNDRR-ISC HIPs 2025: TL Denial of Service"
+    ],
+    "gap": "Only Cloudflare Radar is a candidate, and its attack endpoints were not opened in round 1.",
+    "round": 1
+  },
+  {
+    "id": "cyber.ransomware.victim",
+    "subjectKinds": [
+      "entity"
+    ],
+    "examples": [
+      "A ransomware group posts a hospital system on its leak site"
+    ],
+    "references": [
+      "UNDRR-ISC HIPs 2025: TL Malware",
+      "Dataminr: cyber risk"
+    ],
+    "gap": "One source opened. Leak-site claims are unverified. Victim statements and state notices are for round 2.",
+    "round": 1
+  },
+  {
+    "id": "cyber.software.end-of-life",
+    "subjectKinds": [
+      "entity"
+    ],
+    "examples": [
+      "An operating system version reaches end of life next month"
+    ],
+    "references": [
+      "No reference list names this class. Found by the search for missing classes."
+    ],
+    "gap": "One source (489 products). Vendor lifecycle pages are the primary sources but have no common format.",
+    "round": 1
+  },
+  {
+    "id": "cyber.supply-chain.malicious-package",
+    "subjectKinds": [
+      "entity"
+    ],
+    "examples": [
+      "GitHub malware advisory for an npm package that steals tokens"
+    ],
+    "references": [
+      "UNDRR-ISC HIPs 2025: TL Supply Chain Attack"
+    ],
+    "gap": "GitHub lists type=malware advisories (seen). The OSV home page did not name its MAL- records, so OSV coverage of malware is not confirmed.",
+    "round": 1
+  },
+  {
+    "id": "cyber.vulnerability.exploited",
+    "subjectKinds": [
+      "entity",
+      "topic"
+    ],
+    "examples": [
+      "CISA adds a CVE of a VPN appliance to the KEV catalog with a due date",
+      "CISA alert: CISA Adds Two Known Exploited Vulnerabilities to Catalog"
+    ],
+    "references": [
+      "CISA sectors: Information Technology",
+      "UNDRR-ISC HIPs 2025: TL cyber hazards (Malware, Advanced Persistent Threat)",
+      "Dataminr: cyber risk",
+      "MAX Security: Cyber"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
+    "id": "cyber.vulnerability.published",
+    "subjectKinds": [
+      "entity"
+    ],
+    "examples": [
+      "GitHub reviewed advisory for an npm package, fixed in 4.2.1",
+      "OSV record for a PyPI package version range",
+      "NVD CVE with CVSS 9.8"
+    ],
+    "references": [
+      "CISA sectors: Information Technology",
+      "UNDRR-ISC HIPs 2025: TL cyber hazards"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
+    "id": "env.air-quality",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "AirNow forecast AQI 160 (Unhealthy) for a reporting area",
+      "NWS Air Quality Alert"
+    ],
+    "references": [
+      "CAP 1.2: Env",
+      "NWS API: Air Quality Alert, Air Stagnation Advisory",
+      "UNDRR-ISC HIPs 2025: EN0103 Ambient (Outdoor) Air Pollution",
+      "FEMA lifelines: Hazardous Materials > Pollutants"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
+    "id": "env.air-quality.smoke",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "HMS heavy smoke polygon over a metro area",
+      "NWS Dense Smoke Advisory"
+    ],
+    "references": [
+      "UNDRR-ISC HIPs 2025: MH0205 Smoke",
+      "NWS API: Dense Smoke Advisory"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
+    "id": "env.air-stagnation",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "NWS Air Stagnation Advisory"
+    ],
+    "references": [
+      "NWS API: Air Stagnation Advisory",
+      "NWS VTEC phenomena: AS Air Stagnation"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
+    "id": "env.pest-quarantine",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "Spotted lanternfly quarantine expanded to new counties",
+      "Fruit fly quarantine on home-grown fruit"
+    ],
+    "references": [
+      "EM-DAT: Biological > Infestation",
+      "UNDRR-ISC HIPs 2025: BI0401 Insect Pest Infestations, BI0403 Invasive weed/species, BI0501-BI0503 plant diseases"
+    ],
+    "gap": "APHIS has pest pages and an IPHIS system, but no quarantine feed was confirmed. The Federal Register carries the federal orders (see civic.regulation).",
+    "round": 1
+  },
+  {
+    "id": "env.pollen",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "Tree pollen index very high for the next 2 days"
+    ],
+    "references": [
+      "None of the lists names it. Found by search for health signals."
+    ],
+    "gap": "Only one machine source was confirmed (Google Pollen API, a commercial cloud API). Official pollen counts come from local stations with no open feed found.",
+    "round": 1
+  },
+  {
+    "id": "env.smoke",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "NWS Dense Smoke Advisory"
+    ],
+    "references": [
+      "NWS API: Dense Smoke Advisory",
+      "NWS VTEC phenomena: MS Marine Dense Smoke, SM Dense Smoke"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
+    "id": "env.spill",
+    "subjectKinds": [
+      "place",
+      "entity"
+    ],
+    "examples": [
+      "NRC report: crude oil discharge into a river from a pipeline",
+      "NOAA IncidentNews: vessel grounding with fuel sheen"
+    ],
+    "references": [
+      "EM-DAT: Industrial accident > Oil spill, Chemical spill",
+      "UNDRR-ISC HIPs 2025: TL0301 Leaks and Spills, TL0302 Pollution",
+      "FEMA lifelines: Hazardous Materials",
+      "CAP 1.2: Env"
+    ],
+    "gap": "Round 1 found 1 adopted or planned source with no risk: noaa-incidentnews. nrc-uscg-reports is later: see the reason of each.",
+    "round": 1
+  },
+  {
+    "id": "env.uv",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "EPA daily UV alert flag for a ZIP code"
+    ],
+    "references": [
+      "UNDRR-ISC HIPs 2025: ET0202 UV Radiation"
+    ],
+    "gap": "Only the EPA UV forecast was confirmed (US, by ZIP or city). Global UV sources were not opened in round 1.",
+    "round": 1
+  },
+  {
+    "id": "env.water.beach-advisory",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "Beach closed for high Enterococcus counts"
+    ],
+    "references": [
+      "None of the lists names it directly. HIPs 2025: TL0503 Wastewater"
+    ],
+    "gap": "Only EPA BEACON was confirmed, with no stated update speed. States and counties post daily status on their own pages.",
+    "round": 1
+  },
+  {
+    "id": "env.water.drinking-advisory",
+    "subjectKinds": [
+      "place",
+      "entity"
+    ],
+    "examples": [
+      "Boil water notice for a water system after a main break",
+      "Do not drink order after chemical contamination"
+    ],
+    "references": [
+      "CISA sectors: Water and Wastewater Systems",
+      "FEMA lifelines: Water Systems > Potable Water Infrastructure; Food, Hydration, Shelter > Hydration",
+      "UNDRR-ISC HIPs 2025: TL0210 Water Supply Failure"
+    ],
+    "gap": "No national feed. Only 13 US states publish advisories in an accessible form and only West Virginia was described with an API (Nicholas Institute analysis). Utilities post notices locally.",
+    "round": 1
+  },
+  {
+    "id": "env.water.harmful-algal-bloom",
+    "subjectKinds": [
+      "place",
+      "entity"
+    ],
+    "examples": [
+      "CyAN index high for a reservoir that supplies drinking water",
+      "Lake Erie HAB bulletin"
+    ],
+    "references": [
+      "UNDRR-ISC HIPs 2025: BI0603 Harmful Algal Blooms, CH0605 Marine Toxins"
+    ],
+    "gap": "Round 1 found 0 adopted or planned sources with no risk. epa-cyan-api is later, noaa-hab-forecasts is later: see the reason of each.",
+    "round": 1
+  },
+  {
+    "id": "env.water.sewage-overflow",
+    "subjectKinds": [
+      "place",
+      "entity"
+    ],
+    "examples": [
+      "Combined sewer overflow active at an outfall upstream of a swimming area"
+    ],
+    "references": [
+      "CISA sectors: Water and Wastewater Systems",
+      "FEMA lifelines: Water Systems > Wastewater Management",
+      "UNDRR-ISC HIPs 2025: TL0503 Wastewater, TL0214 Drain and Sewer Flooding"
+    ],
+    "gap": "No confirmed feed in round 1. England has storm overflow data (page did not render). US utilities publish CSO notices locally.",
+    "round": 1
+  },
+  {
+    "id": "fire.burn-ban",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "County burn ban in effect",
+      "Stage 2 fire restrictions on national forest land"
+    ],
+    "references": [
+      "None of the lists names it. Found by search for local fire orders."
+    ],
+    "gap": "No national feed. Counties, states and land agencies post orders on pages. NPS alerts carry fire restrictions for parks only.",
+    "round": 1
+  },
+  {
+    "id": "fire.structure",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "PulsePoint incident: commercial structure fire",
+      "NWS/IPAWS Fire Warning for a spreading urban fire"
+    ],
+    "references": [
+      "CAP 1.2: Fire",
+      "FEMA lifelines: Safety and Security > Fire Service",
+      "EM-DAT: Fire (Industrial), Fire (Miscellaneous)",
+      "UNDRR-ISC HIPs 2025: TL0305 Fire",
+      "PulsePoint",
+      "Citizen"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
+    "id": "fire.weather",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "NWS Red Flag Warning",
+      "NWS Extreme Fire Danger",
+      "NWS Fire Weather Watch"
+    ],
+    "references": [
+      "NWS API: Red Flag Warning, Fire Weather Watch, Extreme Fire Danger",
+      "MeteoAlarm labels: forest fire, grass fire"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
+    "id": "fire.wildfire",
+    "subjectKinds": [
+      "place",
+      "entity"
+    ],
+    "examples": [
+      "New WFIGS incident: 500 acres, 0 percent contained",
+      "InciWeb incident update for a named fire"
+    ],
+    "references": [
+      "CAP 1.2: Fire",
+      "NWS/SAME: FRW Fire Warning",
+      "EM-DAT: Climatological > Wildfire",
+      "UNDRR-ISC HIPs 2025: EN0205 Wildfires",
+      "PulsePoint public interest alerts: wildland fires",
+      "MeteoAlarm labels: forest fire, grass fire"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
+    "id": "fire.wildfire.hotspot",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "VIIRS hotspot inside a watched area",
+      "HMS analyst-reviewed fire detection"
+    ],
+    "references": [
+      "EM-DAT: Wildfire",
+      "Copernicus/NASA fire services"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
+    "id": "geo.avalanche",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "Avalanche center danger level 4 (High) for a forecast zone",
+      "NWS Avalanche Warning"
+    ],
+    "references": [
+      "NWS/SAME: AVA, AVW",
+      "EM-DAT: Mass movement > Avalanche",
+      "UNDRR-ISC HIPs 2025: MH0801 Avalanche",
+      "MeteoAlarm label: avalanche"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
+    "id": "geo.debris-flow",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [],
+    "references": [
+      "NWS VTEC phenomena: DF Debris Flow"
+    ],
+    "gap": "Round 1 found 1 adopted or planned source with no risk: iem-vtec. usgs-landslide-program is later: see the reason of each.",
+    "round": 1
+  },
+  {
+    "id": "geo.earthquake",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "USGS: M 6.1 earthquake 20 km SW of a city, significant feed entry",
+      "EMSC websocket insert: M4.8 in a Flinn-Engdahl region"
+    ],
+    "references": [
+      "CAP 1.2: Geo",
+      "NWS/SAME: EQW Earthquake Warning",
+      "EM-DAT: Geophysical > Earthquake > Ground movement",
+      "UNDRR-ISC HIPs 2025: GH0101 Earthquake",
+      "GDACS",
+      "MAX Security: Earthquake"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
+    "id": "geo.earthquake.early-warning",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "NWS/IPAWS event type 'Earthquake Warning' (EQW) for a county"
+    ],
+    "references": [
+      "NWS/SAME: EQW Earthquake Warning",
+      "NWS API alert types: Earthquake Warning"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
+    "id": "geo.fireball",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "CNEOS fireball record with radiated energy and impact energy in kilotons"
+    ],
+    "references": [
+      "EM-DAT: Impact > Airburst",
+      "UNDRR-ISC HIPs 2025: ET0201 Airburst"
+    ],
+    "gap": "Only the JPL Fireball API was confirmed. It lists events after the fact. Public fireball report networks were not opened in round 1.",
+    "round": 1
+  },
+  {
+    "id": "geo.landslide",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "USGS emergency post-fire debris-flow hazard assessment for a new burn area"
+    ],
+    "references": [
+      "CAP 1.2: Geo (includes landslides)",
+      "EM-DAT: Mass movement (dry and wet)",
+      "UNDRR-ISC HIPs 2025: GH0300-GH0311"
+    ],
+    "gap": "No national real-time landslide warning feed was found. USGS gives assessments and monitoring stations. NWS flash flood warnings sometimes name debris flows, but this was not confirmed.",
+    "round": 1
+  },
+  {
+    "id": "geo.near-earth-object",
+    "subjectKinds": [
+      "entity",
+      "topic"
+    ],
+    "examples": [
+      "Sentry adds an object with Torino scale 1",
+      "ESA NEOCC risk list entry with a raised impact probability"
+    ],
+    "references": [
+      "EM-DAT: Extra-terrestrial > Impact",
+      "UNDRR-ISC HIPs 2025: ET0205 Near-Earth Object, ET0203 Meteorite Impact"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
+    "id": "geo.space-debris.reentry",
+    "subjectKinds": [
+      "entity",
+      "place"
+    ],
+    "examples": [
+      "Space-Track TIP message: predicted decay epoch with a window of plus or minus minutes"
+    ],
+    "references": [
+      "UNDRR-ISC HIPs 2025: ET0206 Space Debris, ET0204 Space Hazard / Accident"
+    ],
+    "gap": "Round 1 found 1 adopted or planned source with no risk: space-track-api. esa-reentry-predictions is later: see the reason of each.",
+    "round": 1
+  },
+  {
+    "id": "geo.space-weather",
+    "subjectKinds": [
+      "topic",
+      "place"
+    ],
+    "examples": [
+      "SWPC Alert: Geomagnetic K-index of 7 (G3)",
+      "SWPC Watch: G4 or greater predicted"
+    ],
+    "references": [
+      "EM-DAT: Extra-terrestrial > Space weather",
+      "UNDRR-ISC HIPs 2025: ET0101-ET0104"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
+    "id": "geo.space-weather.geomagnetic-storm",
+    "subjectKinds": [
+      "topic",
+      "place"
+    ],
+    "examples": [
+      "SWPC Warning: Geomagnetic K-index of 7 or greater expected"
+    ],
+    "references": [
+      "EM-DAT: Space weather > Geomagnetic storm",
+      "UNDRR-ISC HIPs 2025: ET0101 Geomagnetic Disturbance"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
+    "id": "geo.space-weather.radio-blackout",
+    "subjectKinds": [
+      "topic"
+    ],
+    "examples": [
+      "SWPC Alert: X-ray Flux exceeded M5 (R2)"
+    ],
+    "references": [
+      "EM-DAT: Space weather > Radio disturbance",
+      "UNDRR-ISC HIPs 2025: ET0103 Solar Flare, ET0102 Ionospheric Disturbance"
+    ],
+    "gap": "Round 6 adopts swpc-products-json, the only source with no risk. Its only origin is the NWS. swpc-email is later: see the reason of each.",
+    "round": 1
+  },
+  {
+    "id": "geo.space-weather.solar-radiation-storm",
+    "subjectKinds": [
+      "topic"
+    ],
+    "examples": [
+      "SWPC Alert: Proton Event 10 MeV integral flux exceeded 10 pfu (S1)"
+    ],
+    "references": [
+      "EM-DAT: Space weather > Energetic particles",
+      "UNDRR-ISC HIPs 2025: ET0104 Solar Energetic Particles"
+    ],
+    "gap": "Round 6 adopts swpc-products-json, the only source with no risk. Its only origin is the NWS. swpc-email is later: see the reason of each.",
+    "round": 1
+  },
+  {
+    "id": "geo.subsidence",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "A sinkhole closes a road and a water main"
+    ],
+    "references": [
+      "EM-DAT: Sudden Subsidence (dry and wet)",
+      "UNDRR-ISC HIPs 2025: GH0308 Sinkhole, GH0309 Subsidence and Uplift"
+    ],
+    "gap": "No real-time feed found. Reports come from local roads, utilities and news. The road-closure feeds (WZDx, 511) carry the effect on roads.",
+    "round": 1
+  },
+  {
+    "id": "geo.tsunami",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "NTWC Tsunami Warning for a coast after an M8 earthquake",
+      "PTWC tsunami threat message for Pacific coasts"
+    ],
+    "references": [
+      "CAP 1.2: Geo",
+      "NWS/SAME: TSA, TSW",
+      "NWS API: Tsunami Advisory, Tsunami Warning, Tsunami Watch",
+      "EM-DAT: Earthquake > Tsunami",
+      "UNDRR-ISC HIPs 2025: MH0705 Tsunami"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
+    "id": "geo.volcano",
+    "subjectKinds": [
+      "place",
+      "entity"
+    ],
+    "examples": [
+      "USGS VONA: Aviation Color Code raised to ORANGE for a named volcano",
+      "NWS Volcano Warning for a county"
+    ],
+    "references": [
+      "NWS/SAME: VOW Volcano Warning",
+      "NWS API: Volcano Warning, Ashfall Advisory, Ashfall Warning",
+      "EM-DAT: Geophysical > Volcanic activity",
+      "UNDRR-ISC HIPs 2025: GH0201-GH0205",
+      "MAX Security: Volcano"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
+    "id": "geo.volcano.ashfall",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "Washington VAAC volcanic ash advisory with an ash cloud polygon",
+      "NWS Ashfall Advisory"
+    ],
+    "references": [
+      "EM-DAT: Volcanic activity > Ash fall",
+      "UNDRR-ISC HIPs 2025: GH0202 Ash/Tephra Fall",
+      "NWS API: Ashfall Advisory, Ashfall Warning"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
+    "id": "health.animal-disease",
+    "subjectKinds": [
+      "place",
+      "topic"
+    ],
+    "examples": [
+      "APHIS confirms HPAI in a commercial flock",
+      "WOAH immediate notification of African swine fever"
+    ],
+    "references": [
+      "UNDRR-ISC HIPs 2025: BI0245 Avian Influenza, BI03 Animal Infectious Diseases",
+      "CISA sectors: Food and Agriculture",
+      "FEMA lifelines: Food, Hydration, Shelter > Agriculture"
+    ],
+    "gap": "Round 1 found 0 adopted or planned sources with no risk. aphis-hpai is later, woah-wahis is later: see the reason of each.",
+    "round": 1
+  },
+  {
+    "id": "health.drug-shortage",
+    "subjectKinds": [
+      "topic",
+      "entity"
+    ],
+    "examples": [
+      "FDA lists a new shortage of an injectable drug"
+    ],
+    "references": [
+      "FEMA lifelines: Health and Medical > Medical Supply Chain",
+      "CISA sectors: Healthcare and Public Health"
+    ],
+    "gap": "Round 1 found 1 adopted or planned source with no risk: openfda-drug-shortages. ashp-drug-shortages is later: see the reason of each.",
+    "round": 1
+  },
+  {
+    "id": "health.drug-supply-threat",
+    "subjectKinds": [
+      "place",
+      "topic"
+    ],
+    "examples": [
+      "CDC HAN on a nitazene in counterfeit pills",
+      "NPS Discovery public alert on a new adulterant"
+    ],
+    "references": [
+      "UNDRR-ISC HIPs 2025: CH0604 Opioids & Other Addictive Substances, CH0603 Methanol"
+    ],
+    "gap": "Round 1 found 1 adopted or planned source with no risk: cdc-han. cfsre-nps-discovery is later: see the reason of each.",
+    "round": 1
+  },
+  {
+    "id": "health.hospital-capacity",
+    "subjectKinds": [
+      "place",
+      "entity"
+    ],
+    "examples": [
+      "Emergency departments on diversion during a flu surge"
+    ],
+    "references": [
+      "FEMA Lifelines: Health and Medical > Medical Care, Patient Movement",
+      "CISA sectors: Healthcare and Public Health"
+    ],
+    "gap": "No public feed was found in round 1. Diversion status is shared among hospitals and agencies.",
+    "round": 1
+  },
+  {
+    "id": "health.outbreak",
+    "subjectKinds": [
+      "place",
+      "topic"
+    ],
+    "examples": [
+      "WHO Disease Outbreak News: Marburg virus disease in a country",
+      "CDC HAN Health Advisory on measles cases"
+    ],
+    "references": [
+      "CAP 1.2: Health",
+      "EM-DAT: Biological > Epidemic",
+      "UNDRR-ISC HIPs 2025: BI01-BI02 infectious diseases",
+      "FEMA lifelines: Health and Medical > Public Health",
+      "MAX Security: Health",
+      "Riskline: Health and Medical",
+      "Dataminr (health risks)"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
+    "id": "health.outbreak.foodborne",
+    "subjectKinds": [
+      "topic",
+      "entity",
+      "place"
+    ],
+    "examples": [
+      "FDA CORE: Salmonella outbreak linked to a product, 45 cases, traceback started",
+      "FSIS public health alert for a meat product"
+    ],
+    "references": [
+      "UNDRR-ISC HIPs 2025: BI0104 Foodborne Diseases, BI0210 E. coli, BI0218 Listeriosis",
+      "CISA sectors: Food and Agriculture"
+    ],
+    "gap": "Round 1 found 0 adopted or planned sources with no risk. fda-core-investigations is later, fsis-recall-api is later: see the reason of each.",
+    "round": 1
+  },
+  {
+    "id": "health.travel-notice",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "CDC Level 2 notice: Chikungunya in a country"
+    ],
+    "references": [
+      "MAX Security: Health, Travel",
+      "Riskline: Health and Medical"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
+    "id": "health.wastewater-signal",
+    "subjectKinds": [
+      "place",
+      "topic"
+    ],
+    "examples": [
+      "Measles detected in wastewater at a treatment plant",
+      "Influenza A level high at a sewershed"
+    ],
+    "references": [
+      "None of the lists names it. Found by search for early health signals."
+    ],
+    "gap": "Round 1 found 0 adopted or planned sources with no risk. cdc-nwss is later, wastewaterscan is later: see the reason of each.",
+    "round": 1
+  },
+  {
+    "id": "infra.cloud.outage",
+    "subjectKinds": [
+      "entity"
+    ],
+    "examples": [
+      "Google Cloud: multiple services with issues in europe-west2",
+      "Azure status RSS entry for a region"
+    ],
+    "references": [
+      "CISA sectors: Information Technology",
+      "UNDRR-ISC HIPs 2025: TL Critical Infrastructure Failure",
+      "StatusGator",
+      "IsDown",
+      "Downdetector"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
+    "id": "infra.dam.failure",
+    "subjectKinds": [
+      "place",
+      "entity"
+    ],
+    "examples": [
+      "Flash Flood Emergency for a dam failure downstream"
+    ],
+    "references": [
+      "CISA sectors: Dams",
+      "UNDRR-ISC HIPs 2025: TL Dam failure",
+      "EM-DAT: Technological > Miscellaneous > Collapse"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
+    "id": "infra.fuel.shortage",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "Many stations without gasoline after a pipeline shutdown",
+      "Many stations in a city report no gasoline after a storm"
+    ],
+    "references": [
+      "FEMA Lifelines: Energy > Fuel",
+      "UNDRR-ISC HIPs 2025: TL Supply Chain Failure",
+      "https://tracker.gasbuddy.com/"
+    ],
+    "gap": "Round 1 found 1 adopted or planned source with no risk: eia-api. gasbuddy-availability-tracker is later: see the reason of each.",
+    "round": 1
+  },
+  {
+    "id": "infra.gas.pipeline-incident",
+    "subjectKinds": [
+      "place",
+      "entity"
+    ],
+    "examples": [
+      "Natural gas transmission line rupture and fire"
+    ],
+    "references": [
+      "CISA sectors: Energy",
+      "FEMA Lifelines: Energy > Fuel",
+      "EM-DAT: Technological > Industrial > Explosion"
+    ],
+    "gap": "PHMSA page returned 403. Both sources are slow records, not live alerts.",
+    "round": 1
+  },
+  {
+    "id": "infra.gnss.interference",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "GPS interference test notice for an area",
+      "Jamming over a sea region"
+    ],
+    "references": [
+      "No hazard list names this class. Found by the search for missing classes."
+    ],
+    "gap": "The NAVCEN page returned 403. Crowd maps of jamming were not opened.",
+    "round": 1
+  },
+  {
+    "id": "infra.internet.bgp",
+    "subjectKinds": [
+      "entity"
+    ],
+    "examples": [
+      "Cloudflare Radar hijack event with confidence 9 for a bank's prefix"
+    ],
+    "references": [
+      "Cloudflare Radar",
+      "No hazard list names this class. Found by the search for missing classes."
+    ],
+    "gap": "The RIS Live pages returned 404, so only the Cloudflare endpoints were seen.",
+    "round": 1
+  },
+  {
+    "id": "infra.internet.dns-cdn",
+    "subjectKinds": [
+      "entity"
+    ],
+    "examples": [
+      "A CDN configuration error makes many sites return errors"
+    ],
+    "references": [
+      "No reference list names this class. Found by the search for missing classes."
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
+    "id": "infra.internet.outage",
+    "subjectKinds": [
+      "place",
+      "entity"
+    ],
+    "examples": [
+      "IODA: drop in active probing and BGP signals for a country",
+      "Cloudflare Radar outage annotation for an ISP"
+    ],
+    "references": [
+      "CISA sectors: Communications",
+      "FEMA Lifelines: Communications > Infrastructure",
+      "UNDRR-ISC HIPs 2025: TL0212 Radio/Telecom Failure",
+      "Cloudflare Radar",
+      "IODA",
+      "ThousandEyes"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
+    "id": "infra.internet.shutdown",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "Mobile data cut in a region during protests",
+      "Social platforms blocked nationwide"
+    ],
+    "references": [
+      "Access Now KeepItOn",
+      "IODA",
+      "Cloudflare Radar"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
+    "id": "infra.payments.outage",
+    "subjectKinds": [
+      "entity"
+    ],
+    "examples": [
+      "A card network outage at checkout",
+      "A bank's app and transfers are down",
+      "FedNow service disruption",
+      "A card processor declines payments"
+    ],
+    "references": [
+      "FEMA Lifelines: Communications > Finance",
+      "CISA sectors: Financial Services",
+      "https://app.frbservices.org/app/status/serviceStatus.do"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
+    "id": "infra.postal.disruption",
+    "subjectKinds": [
+      "place",
+      "entity"
+    ],
+    "examples": [
+      "USPS: flooding may delay mail in a state",
+      "International mail to a country suspended by a strike"
+    ],
+    "references": [
+      "CISA sectors: Transportation Systems > Postal and Shipping"
+    ],
+    "gap": "One source, a web page with no feed. Other postal operators are for round 2.",
+    "round": 1
+  },
+  {
+    "id": "infra.power.grid-emergency",
+    "subjectKinds": [
+      "place",
+      "entity"
+    ],
+    "examples": [
+      "ERCOT Conservation Appeal for 4 PM to 9 PM",
+      "ERCOT EEA Level 3: controlled outages under way"
+    ],
+    "references": [
+      "CISA sectors: Energy",
+      "FEMA Lifelines: Energy > Power Grid"
+    ],
+    "gap": "ERCOT notices come by email, text and app, not a feed. EIA hourly demand shows stress but not the notices. Other ISO notices are for round 2.",
+    "round": 1
+  },
+  {
+    "id": "infra.power.load-shedding",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "Stage 4 load shedding, area block 2 off 14:00 to 16:30"
+    ],
+    "references": [
+      "No reference list names this class. Found by the search for missing classes."
+    ],
+    "gap": "One candidate. Its page showed only a title, so no facts were seen.",
+    "round": 1
+  },
+  {
+    "id": "infra.power.outage",
+    "subjectKinds": [
+      "place",
+      "entity"
+    ],
+    "examples": [
+      "120,000 customers out in a county after a storm",
+      "Utility outage map: estimated restoration 18:00"
+    ],
+    "references": [
+      "UNDRR-ISC HIPs 2025: TL0209 Power Outage",
+      "CISA sectors: Energy",
+      "FEMA Lifelines: Energy > Power Grid",
+      "EM-DAT: Technological > Miscellaneous"
+    ],
+    "gap": "Round 3 plans ODIN (odin-ornl): a free public API of the active outages by county, from 159 utilities. No second live source is found. The map of each utility has the same origin, and PowerOutage.us returned 403. EAGLE-I gives only a historic release each year (eagle-i-history).",
+    "round": 1
+  },
+  {
+    "id": "infra.power.psps",
+    "subjectKinds": [
+      "place",
+      "entity"
+    ],
+    "examples": [
+      "A utility notice: PSPS possible in 48 hours for named circuits"
+    ],
+    "references": [
+      "FEMA Lifelines: Energy > Power Grid",
+      "No hazard list names this class."
+    ],
+    "gap": "The CPUC page lists utilities and past events only. Live notices are on each utility site, not opened in round 1.",
+    "round": 1
+  },
+  {
+    "id": "infra.saas.outage",
+    "subjectKinds": [
+      "entity"
+    ],
+    "examples": [
+      "GitHub status: incident Investigating for Actions",
+      "Crowd reports spike for a bank app"
+    ],
+    "references": [
+      "CISA sectors: Information Technology",
+      "StatusGator",
+      "IsDown",
+      "Downdetector"
+    ],
+    "gap": "Round 1 found 1 adopted or planned source with no risk: statuspage-public-api. statusgator is later, downdetector is later: see the reason of each.",
+    "round": 1
+  },
+  {
+    "id": "infra.structure.collapse",
+    "subjectKinds": [
+      "place",
+      "entity"
+    ],
+    "examples": [
+      "Bridge collapse closes an interstate"
+    ],
+    "references": [
+      "UNDRR-ISC HIPs 2025: TL Building/Bridge/Tunnel failure",
+      "EM-DAT: Technological > Miscellaneous > Collapse"
+    ],
+    "gap": "No structured source exists. News and social media report these first.",
+    "round": 1
+  },
+  {
+    "id": "infra.supply-chain.disruption",
+    "subjectKinds": [
+      "place",
+      "entity"
+    ],
+    "examples": [
+      "Canal transits fall by half during a drought",
+      "Port closed by a storm"
+    ],
+    "references": [
+      "UNDRR-ISC HIPs 2025: TL Supply Chain Failure",
+      "WEF Global Risks (not opened)"
+    ],
+    "gap": "PortWatch page showed only its title. No other source was opened.",
+    "round": 1
+  },
+  {
+    "id": "infra.telecom.911-outage",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "NWS alert '911 Telephone Outage Emergency' with a ten-digit number"
+    ],
+    "references": [
+      "NWS/SAME: TOE 911 Telephone Outage Emergency",
+      "FEMA Lifelines: Communications > 911 and Dispatch"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
+    "id": "infra.telecom.outage",
+    "subjectKinds": [
+      "place",
+      "entity"
+    ],
+    "examples": [
+      "FCC DIRS: 30% of cell sites out in a county",
+      "A national carrier outage"
+    ],
+    "references": [
+      "UNDRR-ISC HIPs 2025: TL0211 Emergency Telecom Failure, TL0212 Radio/Telecom Failure",
+      "CISA sectors: Communications",
+      "FEMA Lifelines: Communications"
+    ],
+    "gap": "Both pages refused the fetch tool (403 and blocked). Facts are not confirmed.",
+    "round": 1
+  },
+  {
+    "id": "infra.timekeeping",
+    "subjectKinds": [
+      "place",
+      "topic"
+    ],
+    "examples": [
+      "tz database 2026f: a country cancels daylight saving time"
+    ],
+    "references": [
+      "No reference list names this class. Found by the search for missing classes."
+    ],
+    "gap": "One source. Its page did not confirm the announcement list.",
+    "round": 1
+  },
+  {
+    "id": "infra.water.outage",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "A water main break leaves part of a city without water"
+    ],
+    "references": [
+      "UNDRR-ISC HIPs 2025: TL0210 Water Supply Failure",
+      "CISA sectors: Water and Wastewater Systems",
+      "FEMA Lifelines: Water Systems > Potable Water"
+    ],
+    "gap": "No national feed exists in the US. Notices are per utility. Round 2 checks state boil-water feeds.",
+    "round": 1
+  },
+  {
+    "id": "market.bank",
+    "subjectKinds": [
+      "entity",
+      "place"
+    ],
+    "examples": [
+      "FDIC closes a bank",
+      "A bank app is down"
+    ],
+    "references": [
+      "https://www.fdic.gov/bank-failures/failed-bank-list"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
+    "id": "market.bank.failure",
+    "subjectKinds": [
+      "entity",
+      "place"
+    ],
+    "examples": [
+      "FDIC closes a state bank and another bank takes its deposits",
+      "Regulator closes a bank on a Friday"
+    ],
+    "references": [
+      "https://www.fdic.gov/bank-failures/failed-bank-list",
+      "UNDRR-ISC HIPs 2025: SO0401 Financial Shock",
+      "CISA sectors: Financial Services"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
+    "id": "market.bank.outage",
+    "subjectKinds": [
+      "entity"
+    ],
+    "examples": [
+      "A neobank's card payments fail for hours"
+    ],
+    "references": [
+      "https://status.chime.com/api/v2/status.json"
+    ],
+    "gap": "Only self-reported status pages of single banks; no independent outage source with clear terms.",
+    "round": 1
+  },
+  {
+    "id": "market.broker.outage",
+    "subjectKinds": [
+      "entity"
+    ],
+    "examples": [
+      "A broker app cannot place orders on a high-volume day"
+    ],
+    "references": [
+      "https://status.robinhood.com/api/v2/status.json"
+    ],
+    "gap": "Only self-reported status pages; Downdetector is paid and was seen only in search results.",
+    "round": 1
+  },
+  {
+    "id": "market.credit.rating",
+    "subjectKinds": [
+      "entity",
+      "place"
+    ],
+    "examples": [
+      "A rating agency cuts the US sovereign rating"
+    ],
+    "references": [],
+    "gap": "Not researched in round 1.",
+    "round": 1
+  },
+  {
+    "id": "market.credit.sovereign-debt",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "Rating downgrade of a country"
+    ],
+    "references": [
+      "WEF Global Risks: debt (not opened)"
+    ],
+    "gap": "Covered by the finance agent.",
+    "round": 1
+  },
+  {
+    "id": "market.crypto",
+    "subjectKinds": [
+      "entity"
+    ],
+    "examples": [
+      "USDC trades at 0.90",
+      "An exchange stops withdrawals",
+      "Stablecoin trades at 0.90"
+    ],
+    "references": [
+      "https://stablecoins.llama.fi/stablecoins?includePrices=true",
+      "Owner request"
+    ],
+    "gap": "The two planned sources give different children: the status pages give exchange outages and chain halts, and DefiLlama gives depegs. No leaf code has 2 sources.",
+    "round": 1
+  },
+  {
+    "id": "market.crypto.chain-halt",
+    "subjectKinds": [
+      "entity"
+    ],
+    "examples": [
+      "A chain stops producing blocks for five hours"
+    ],
+    "references": [
+      "https://status.solana.com/api/v2/status.json"
+    ],
+    "gap": "Only the Solana status page; other chains were not researched.",
+    "round": 1
+  },
+  {
+    "id": "market.crypto.depeg",
+    "subjectKinds": [
+      "entity"
+    ],
+    "examples": [
+      "A dollar stablecoin falls to 0.95"
+    ],
+    "references": [
+      "https://api-docs.defillama.com/llms-free.txt"
+    ],
+    "gap": "DefiLlama is the only candidate; CoinGecko needs a key and its terms were not opened.",
+    "round": 1
+  },
+  {
+    "id": "market.crypto.exchange-outage",
+    "subjectKinds": [
+      "entity"
+    ],
+    "examples": [
+      "An exchange halts withdrawals during a market crash"
+    ],
+    "references": [
+      "https://status.coinbase.com/api/v2/status.json"
+    ],
+    "gap": "Only self-reported status pages; Binance blocks reads from the US.",
+    "round": 1
+  },
+  {
+    "id": "market.crypto.hack",
+    "subjectKinds": [
+      "entity"
+    ],
+    "examples": [
+      "A bridge loses $100M to an exploit"
+    ],
+    "references": [
+      "https://api-docs.defillama.com/llms-pro.txt"
+    ],
+    "gap": "Only the paid DefiLlama hacks API; no free source found.",
+    "round": 1
+  },
+  {
+    "id": "market.exchange",
+    "subjectKinds": [
+      "entity"
+    ],
+    "examples": [
+      "Exchange systems affected",
+      "Market closed for a holiday"
+    ],
+    "references": [
+      "https://www.nasdaqtrader.com/Trader.aspx?id=MarketSystemStatus"
+    ],
+    "gap": "Round 1 found 0 adopted or planned sources with no risk. nasdaq-system-status is later, nyse-market-status is reject, nyse-holidays-page is later: see the reason of each.",
+    "round": 1
+  },
+  {
+    "id": "market.exchange.closure",
+    "subjectKinds": [
+      "entity",
+      "topic"
+    ],
+    "examples": [
+      "Early close at 1:00 p.m. ET on the day after Thanksgiving"
+    ],
+    "references": [
+      "https://www.nyse.com/markets/hours-calendars"
+    ],
+    "gap": "Only the NYSE page, copied by hand; unscheduled closures need news sources.",
+    "round": 1
+  },
+  {
+    "id": "market.exchange.outage",
+    "subjectKinds": [
+      "entity"
+    ],
+    "examples": [
+      "Options market reports a system issue and stops quoting"
+    ],
+    "references": [
+      "https://www.nasdaqtrader.com/Trader.aspx?id=MarketSystemStatus"
+    ],
+    "gap": "Only the Nasdaq status page is usable; the NYSE status page has no feed and is barred by the ICE terms.",
+    "round": 1
+  },
+  {
+    "id": "market.halt",
+    "subjectKinds": [
+      "entity",
+      "topic"
+    ],
+    "examples": [
+      "Market-wide Level 1 halt",
+      "A held stock halted for news",
+      "Exchange halts a stock pending news"
+    ],
+    "references": [
+      "https://www.nasdaqtrader.com/Trader.aspx?id=TradeHaltCodes",
+      "Owner request"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
+    "id": "market.halt.marketwide",
+    "subjectKinds": [
+      "topic"
+    ],
+    "examples": [
+      "S&P 500 falls 7% and all US equity trading stops for 15 minutes"
+    ],
+    "references": [
+      "https://www.nasdaqtrader.com/Trader.aspx?id=TradeHaltCodes"
+    ],
+    "gap": "Only the Nasdaq halt RSS is usable; the NYSE file is barred by the ICE terms. The fetched Nasdaq feed showed NASDAQ and AMEX halts; NYSE-listed coverage was not checked.",
+    "round": 1
+  },
+  {
+    "id": "market.halt.security",
+    "subjectKinds": [
+      "entity"
+    ],
+    "examples": [
+      "A held stock is halted with code T1, news pending"
+    ],
+    "references": [
+      "https://www.nasdaqtrader.com/Trader.aspx?id=TradeHaltCodes"
+    ],
+    "gap": "Only the Nasdaq halt RSS is usable; the NYSE file is barred by the ICE terms. NYSE-listed coverage of the Nasdaq feed was not checked.",
+    "round": 1
+  },
+  {
+    "id": "market.halt.suspension",
+    "subjectKinds": [
+      "entity"
+    ],
+    "examples": [
+      "SEC suspends trading in a small company that was promoted by spam"
+    ],
+    "references": [
+      "https://www.sec.gov/enforcement-litigation/trading-suspensions/rss"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
+    "id": "market.indicator.recession",
+    "subjectKinds": [
+      "topic"
+    ],
+    "examples": [
+      "An unemployment-based recession rule triggers",
+      "Unemployment rule triggers"
+    ],
+    "references": [
+      "https://fred.stlouisfed.org/docs/api/terms_of_use.html",
+      "WEF Global Risks: economic downturn (not opened)"
+    ],
+    "gap": "Only FRED; specific indicator series were not checked.",
+    "round": 1
+  },
+  {
+    "id": "market.investor.alert",
+    "subjectKinds": [
+      "entity",
+      "topic"
+    ],
+    "examples": [
+      "SEC charges a crypto lender with fraud"
+    ],
+    "references": [
+      "https://www.sec.gov/about/rss-feeds"
+    ],
+    "gap": "Only SEC feeds; investor.gov returned 403 and the FINRA RSS path returned 404.",
+    "round": 1
+  },
+  {
+    "id": "market.prediction",
+    "subjectKinds": [
+      "topic",
+      "entity",
+      "place"
+    ],
+    "examples": [
+      "Fed rate-cut odds jump",
+      "A new market on a bank failure",
+      "Contract on an event jumps from 20% to 70%"
+    ],
+    "references": [
+      "https://polymarket.com/accuracy",
+      "Owner request"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
+    "id": "market.prediction.move",
+    "subjectKinds": [
+      "topic",
+      "entity",
+      "place"
+    ],
+    "examples": [
+      "Fed hold odds fall from 90% to 70% in one hour",
+      "Election odds move 11 points after a debate"
+    ],
+    "references": [
+      "https://arxiv.org/html/2603.03152v2",
+      "https://docs.polymarket.com/developers/CLOB/timeseries"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
+    "id": "market.prediction.new",
+    "subjectKinds": [
+      "topic",
+      "entity",
+      "place"
+    ],
+    "examples": [
+      "A new market on a bank failure trades $1M in a day"
+    ],
+    "references": [
+      "https://docs.polymarket.com/developers/CLOB/websocket/wss-overview"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
+    "id": "market.prediction.resolution",
+    "subjectKinds": [
+      "topic",
+      "entity",
+      "place"
+    ],
+    "examples": [
+      "A government shutdown market resolves YES"
+    ],
+    "references": [
+      "https://docs.polymarket.com/developers/CLOB/websocket/wss-overview"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
+    "id": "market.prediction.threshold",
+    "subjectKinds": [
+      "topic",
+      "place"
+    ],
+    "examples": [
+      "Hurricane landfall market passes 50%",
+      "Recession market passes 60%"
+    ],
+    "references": [
+      "https://docs.kalshi.com/api-reference/market/get-market-candlesticks"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
+    "id": "market.prediction.volume",
+    "subjectKinds": [
+      "topic",
+      "entity"
+    ],
+    "examples": [
+      "Nobel Peace Prize market volume surges the evening before the announcement"
+    ],
+    "references": [
+      "https://www.theblock.co/post/374199/officials-probe-polymarket-over-suspicious-trades-predicting-nobel-peace-prize-winner-reports"
+    ],
+    "gap": "Volume comes from the same venue APIs (Polymarket Gamma); only one adopt or candidate source lists it.",
+    "round": 1
+  },
+  {
+    "id": "market.price",
+    "subjectKinds": [
+      "topic",
+      "place",
+      "entity"
+    ],
+    "examples": [
+      "VIX doubles",
+      "Diesel reaches a record"
+    ],
+    "references": [
+      "https://gasprices.aaa.com/"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
+    "id": "market.price.commodity",
+    "subjectKinds": [
+      "topic"
+    ],
+    "examples": [
+      "Crude oil rises 10% in a day",
+      "Natural gas price doubles in a week"
+    ],
+    "references": [
+      "https://www.eia.gov/opendata/",
+      "WEF Global Risks (not opened)"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
+    "id": "market.price.fuel",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "State average diesel passes $6"
+    ],
+    "references": [
+      "https://gasprices.aaa.com/"
+    ],
+    "gap": "EIA is the only adopt or candidate source (weekly retail prices); AAA daily averages have no API and no stated terms.",
+    "round": 1
+  },
+  {
+    "id": "market.price.fx",
+    "subjectKinds": [
+      "topic",
+      "place"
+    ],
+    "examples": [
+      "The yen falls 5% against the dollar in a week",
+      "Currency devalued 20% overnight"
+    ],
+    "references": [
+      "https://frankfurter.dev/",
+      "Owner request"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
+    "id": "market.price.move",
+    "subjectKinds": [
+      "entity",
+      "topic"
+    ],
+    "examples": [
+      "Bitcoin falls 15% in a day",
+      "Index down 7%, market-wide halt"
+    ],
+    "references": [
+      "https://www.coingecko.com/en/api/pricing.md",
+      "WEF Global Risks: asset bubble burst (not opened)",
+      "UNDRR-ISC HIPs 2025: SO0401 Financial Shock"
+    ],
+    "gap": "No free intraday stock index source with clear terms found; FRED and Cboe give daily values.",
+    "round": 1
+  },
+  {
+    "id": "market.price.volatility",
+    "subjectKinds": [
+      "topic"
+    ],
+    "examples": [
+      "VIX closes above 40"
+    ],
+    "references": [
+      "https://www.cboe.com/tradable_products/vix/vix_historical_data/"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
+    "id": "market.rates.mortgage",
+    "subjectKinds": [
+      "topic"
+    ],
+    "examples": [
+      "The 30-year fixed rate falls below 6.5%"
+    ],
+    "references": [
+      "https://www.freddiemac.com/pmms"
+    ],
+    "gap": "Round 1 found 1 adopted or planned source with no risk: fred-api. freddie-mac-pmms is later: see the reason of each.",
+    "round": 1
+  },
+  {
+    "id": "market.release",
+    "subjectKinds": [
+      "topic"
+    ],
+    "examples": [
+      "CPI at 8:30 AM ET",
+      "FOMC decision"
+    ],
+    "references": [
+      "https://www.bls.gov/schedule/news_release/"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
+    "id": "market.release.fomc",
+    "subjectKinds": [
+      "topic"
+    ],
+    "examples": [
+      "The FOMC cuts the target range by 0.25 points",
+      "Emergency rate cut"
+    ],
+    "references": [
+      "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
+      "Owner request"
+    ],
+    "gap": "Round 1 found 1 adopted or planned source with no risk: fed-rss. fed-fomc-calendar is later: see the reason of each.",
+    "round": 1
+  },
+  {
+    "id": "market.release.macro",
+    "subjectKinds": [
+      "topic"
+    ],
+    "examples": [
+      "Employment Situation at 8:30 AM ET",
+      "GDP second estimate",
+      "CPI above forecast",
+      "Payrolls far below forecast"
+    ],
+    "references": [
+      "https://www.bls.gov/schedule/news_release/",
+      "https://www.bea.gov/news/schedule",
+      "https://ideas.repec.org/a/cup/jfinqa/v54y2019i01p449-479_00.html",
+      "Owner request"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
+    "id": "met.beach-hazards",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "NWS Beach Hazards Statement"
+    ],
+    "references": [
+      "NWS API: Beach Hazards Statement"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
+    "id": "met.blowing-dust",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "NWS Blowing Dust Advisory",
+      "NWS Blowing Dust Warning"
+    ],
+    "references": [
+      "NWS API: Blowing Dust Advisory, Blowing Dust Warning",
+      "NWS VTEC phenomena: DU Blowing Dust"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
+    "id": "met.cold",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "NWS Extreme Cold Warning",
+      "NWS Freeze Warning",
+      "MeteoAlarm cold weather warning"
+    ],
+    "references": [
+      "NWS API: Extreme Cold Warning, Cold Weather Advisory, Freeze Warning, Frost Advisory",
+      "EM-DAT: Extreme temperature > Cold wave, Severe winter conditions",
+      "UNDRR-ISC HIPs 2025: MH0502 Cold Wave, MH0504 Freeze, MH0505 Frost"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
+    "id": "met.drought",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "US Drought Monitor: a county moves to D3 Extreme Drought"
+    ],
+    "references": [
+      "EM-DAT: Climatological > Drought",
+      "UNDRR-ISC HIPs 2025: MH0401 Drought",
+      "GDACS"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
+    "id": "met.dust-storm",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "NWS Dust Storm Warning on an interstate",
+      "NWS Blowing Dust Advisory"
+    ],
+    "references": [
+      "NWS/SAME: DSW",
+      "NWS API: Blowing Dust Advisory, Blowing Dust Warning, Dust Advisory",
+      "EM-DAT: Storm > Sand/Dust storm",
+      "UNDRR-ISC HIPs 2025: MH0201 Dust Storm or Sandstorm"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
+    "id": "met.flood",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "NWS Flood Warning for a river at a gauge",
+      "GDACS flood alert for a country"
+    ],
+    "references": [
+      "CAP 1.2: Met (includes floods)",
+      "NWS/SAME: FLA, FLW, FLS",
+      "EM-DAT: Hydrological > Flood",
+      "UNDRR-ISC HIPs 2025: MH0600 Flooding",
+      "PulsePoint public interest alerts: flooding"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
+    "id": "met.flood.coastal",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "NWS Storm Surge Warning",
+      "NWS Coastal Flood Advisory at high tide",
+      "Tide gauge water level above a flood threshold"
+    ],
+    "references": [
+      "NWS/SAME: CFA, CFW, SSA, SSW",
+      "EM-DAT: Flood > Coastal flood; Storm > Storm surge",
+      "UNDRR-ISC HIPs 2025: MH0601, MH0703 Storm Surge",
+      "MeteoAlarm label: coastal flood"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
+    "id": "met.flood.flash",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "NWS Flash Flood Warning, flash flood emergency wording",
+      "MeteoAlarm flash flood warning"
+    ],
+    "references": [
+      "NWS/SAME: FFA, FFW, FFS",
+      "EM-DAT: Flood > Flash flood",
+      "UNDRR-ISC HIPs 2025: MH0603 Flash Flooding",
+      "MeteoAlarm label: flash flood"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
+    "id": "met.flood.river",
+    "subjectKinds": [
+      "place",
+      "entity"
+    ],
+    "examples": [
+      "River gauge forecast to reach moderate flood stage",
+      "USGS WaterAlert: gauge height above a set threshold"
+    ],
+    "references": [
+      "EM-DAT: Flood > Riverine flood",
+      "UNDRR-ISC HIPs 2025: MH0604 Fluvial Flooding"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
+    "id": "met.fog",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "NWS Dense Fog Advisory",
+      "MeteoAlarm fog warning"
+    ],
+    "references": [
+      "NWS API: Dense Fog Advisory, Freezing Fog Advisory",
+      "EM-DAT: Meteorological > Fog",
+      "UNDRR-ISC HIPs 2025: MH0202 Fog",
+      "MeteoAlarm label: fog"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
+    "id": "met.freeze",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "NWS Freeze Warning",
+      "NWS Freeze Watch"
+    ],
+    "references": [
+      "NWS API: Freeze Warning, Freeze Watch",
+      "NWS VTEC phenomena: FZ Freeze, HZ Hard Freeze"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
+    "id": "met.frost",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "NWS Frost Advisory"
+    ],
+    "references": [
+      "NWS API: Frost Advisory",
+      "NWS VTEC phenomena: FR Frost"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
+    "id": "met.heat",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "NWS Extreme Heat Warning",
+      "NWS HeatRisk level 4 (magenta)",
+      "MeteoAlarm heat warning"
+    ],
+    "references": [
+      "NWS API: Extreme Heat Warning, Extreme Heat Watch, Heat Advisory",
+      "EM-DAT: Extreme temperature > Heat wave",
+      "UNDRR-ISC HIPs 2025: MH0501 Heatwave",
+      "WEF Global Risks: extreme weather events"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
+    "id": "met.lightning",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "Lightning strikes detected within 10 km of a stadium"
+    ],
+    "references": [
+      "EM-DAT: Storm > Lightning/Thunderstorms",
+      "UNDRR-ISC HIPs 2025: MH0102 Lightning",
+      "MeteoAlarm label: lightning"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
+    "id": "met.marine",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "NWS Special Marine Warning",
+      "NWS Gale Warning",
+      "NHC high seas forecast"
+    ],
+    "references": [
+      "NWS/SAME: SMW",
+      "NWS API: Small Craft Advisory, Gale Warning, Hazardous Seas Warning, Heavy Freezing Spray Warning",
+      "MeteoAlarm labels: high waves, dangerous sea"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
+    "id": "met.outlook",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "NWS Hazardous Weather Outlook"
+    ],
+    "references": [
+      "NWS API: Hazardous Weather Outlook",
+      "NWS/SAME: HWO Hazardous Weather Outlook"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
+    "id": "met.rain",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "MeteoAlarm rain warning",
+      "A heavy rain warning in the CAP feed of a national weather service"
+    ],
+    "references": [
+      "OASIS Event Terms List 1.2: OET-159 rain",
+      "MeteoAlarm awareness type: 10; rain"
+    ],
+    "gap": null,
+    "round": 7
+  },
+  {
+    "id": "met.rip-current",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "NWS Rip Current Statement"
+    ],
+    "references": [
+      "NWS API: Rip Current Statement"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
+    "id": "met.severe-weather",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "NWS Severe Thunderstorm Warning",
+      "MeteoAlarm orange wind warning for a region",
+      "ECCC CAP warning"
+    ],
+    "references": [
+      "CAP 1.2: Met",
+      "NWS/SAME weather codes",
+      "EM-DAT: Meteorological > Storm",
+      "UNDRR-ISC HIPs 2025: MH clusters",
+      "MAX Security: Weather",
+      "Everbridge (product page: weather)"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
+    "id": "met.special",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "NWS Special Weather Statement"
+    ],
+    "references": [
+      "NWS API: Special Weather Statement",
+      "NWS/SAME: SPS Special Weather Statement"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
+    "id": "met.surf",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "NWS High Surf Advisory",
+      "NWS High Surf Warning"
+    ],
+    "references": [
+      "NWS API: High Surf Advisory, High Surf Warning",
+      "UNDRR-ISC HIPs 2025: MH0701 Rogue Wave"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
+    "id": "met.surge",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "NWS Storm Surge Warning",
+      "NWS Storm Surge Watch"
+    ],
+    "references": [
+      "NWS API: Storm Surge Warning, Storm Surge Watch",
+      "NWS/SAME: SSW Storm Surge Warning, SSA Storm Surge Watch",
+      "NWS VTEC phenomena: SS Storm Surge"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
+    "id": "met.thunderstorm",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "NWS Severe Thunderstorm Warning with 2 inch hail",
+      "MeteoAlarm thunderstorm warning"
+    ],
+    "references": [
+      "NWS/SAME: SVA, SVR, SVS",
+      "EM-DAT: Storm > Hail, Derecho, Lightning/Thunderstorms",
+      "UNDRR-ISC HIPs 2025: MH0101 Downburst, MH0103 Thunderstorm, MH0302 Derecho, MH0404 Hail"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
+    "id": "met.tornado",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "NWS Tornado Warning, radar indicated rotation",
+      "NWS Tornado Watch for many counties"
+    ],
+    "references": [
+      "NWS/SAME: TOA, TOR",
+      "EM-DAT: Storm > Tornado",
+      "UNDRR-ISC HIPs 2025: MH0305 Tornado",
+      "MeteoAlarm label: tornado"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
+    "id": "met.tropical",
+    "subjectKinds": [
+      "place",
+      "entity"
+    ],
+    "examples": [
+      "NHC public advisory for a named hurricane",
+      "GDACS red alert for a tropical cyclone",
+      "NWS Hurricane Warning"
+    ],
+    "references": [
+      "NWS/SAME: HUA, HUW, HLS, TRA, TRW",
+      "EM-DAT: Storm > Tropical cyclone",
+      "UNDRR-ISC HIPs 2025: MH0309 Tropical Cyclone",
+      "GDACS",
+      "MeteoAlarm labels: hurricane, tropical storm"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
+    "id": "met.wind",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "NWS Extreme Wind Warning",
+      "NWS High Wind Warning",
+      "MeteoAlarm wind warning"
+    ],
+    "references": [
+      "NWS/SAME: EWW, HWA, HWW",
+      "UNDRR-ISC HIPs 2025: MH0301 Wind, MH0303 Gale, MH0304 Squall",
+      "MeteoAlarm label: wind"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
+    "id": "met.winter",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "NWS Ice Storm Warning",
+      "NWS Snow Squall Warning",
+      "MeteoAlarm snow-ice warning"
+    ],
+    "references": [
+      "NWS/SAME: BZW, WSA, WSW, SQW",
+      "EM-DAT: Storm > Blizzard/Winter storm",
+      "UNDRR-ISC HIPs 2025: MH0403 Blizzard, MH0406 Snow Storm, MH0506 Freezing Rain"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
+    "id": "rescue.disaster-assistance",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "FEMA Individual Assistance approved for a county"
+    ],
+    "references": [
+      "CAP 1.2: Rescue",
+      "FEMA Lifelines: Food, Hydration, Shelter"
+    ],
+    "gap": "The OpenFEMA page did not name recovery center datasets. Check the dataset list in round 2.",
+    "round": 1
+  },
+  {
+    "id": "rescue.search-and-rescue",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "Coast Guard searches for an overdue boat"
+    ],
+    "references": [
+      "CAP 1.2: Rescue",
+      "FEMA Lifelines: Safety and Security > Search and Rescue"
+    ],
+    "gap": "No public structured source was found. Coast Guard news releases are text only.",
+    "round": 1
+  },
+  {
+    "id": "rescue.shelter-open",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "Red Cross shelter open at a high school"
+    ],
+    "references": [
+      "CAP 1.2: Rescue",
+      "FEMA Lifelines: Food, Hydration, Shelter > Shelter"
+    ],
+    "gap": "The FEMA open shelters map service timed out. Not confirmed.",
+    "round": 1
+  },
+  {
+    "id": "safety.civil-danger",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "NWS Civil Danger Warning"
+    ],
+    "references": [
+      "NWS API: Civil Danger Warning",
+      "NWS/SAME: CDW Civil Danger Warning"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
+    "id": "safety.civil-emergency",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "NWS Civil Emergency Message"
+    ],
+    "references": [
+      "NWS/SAME: CEM Civil Emergency Message"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
+    "id": "safety.crowd-crush",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "Crowd crush at a festival exit"
+    ],
+    "references": [
+      "UNDRR-ISC HIPs 2025: SO0302 Stampede or Crushing"
+    ],
+    "gap": "No structured source exists. Planned events (civic.planned-event) are the lead indicator.",
+    "round": 1
+  },
+  {
+    "id": "safety.evacuation",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "Evacuation Immediate for a wildfire zone"
+    ],
+    "references": [
+      "NWS/SAME: EVI Evacuation Immediate",
+      "CAP 1.2 responseType: Evacuate",
+      "FEMA Lifelines: Safety and Security"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
+    "id": "safety.local-emergency",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "NWS Local Area Emergency"
+    ],
+    "references": [
+      "NWS API: Local Area Emergency",
+      "NWS/SAME: LAE Local Area Emergency"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
+    "id": "safety.national-emergency",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "SAME EAN Emergency Action Notification"
+    ],
+    "references": [
+      "NWS/SAME: EAN Emergency Action Notification"
+    ],
+    "gap": "Round 1 found 0 adopted or planned sources with no risk. ipaws-open has a risk, so the gate does not count it: see the risks of the record. Round 1 found no other source.",
+    "round": 1
+  },
+  {
+    "id": "safety.public-lands-closure",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "NPS alert: road closed by rockfall"
+    ],
+    "references": [
+      "No hazard list names this class. Found by the search for missing classes."
+    ],
+    "gap": "One source. Forest Service and state park notices are for round 2.",
+    "round": 1
+  },
+  {
+    "id": "safety.recall",
+    "subjectKinds": [
+      "entity",
+      "topic"
+    ],
+    "examples": [
+      "Health Canada recall of a children's product",
+      "FDA Class I recall"
+    ],
+    "references": [
+      "CAP 1.2: Safety",
+      "UNDRR-ISC HIPs 2025: CH0602 Substandard and Falsified Medical Products",
+      "FEMA Lifelines: Food, Hydration, Shelter > Food",
+      "CISA sectors: Food and Agriculture"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
+    "id": "safety.recall.consumer-product",
+    "subjectKinds": [
+      "entity"
+    ],
+    "examples": [
+      "CPSC recall of a space heater for fire hazard"
+    ],
+    "references": [
+      "CAP 1.2: Safety"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
+    "id": "safety.recall.drug",
+    "subjectKinds": [
+      "entity"
+    ],
+    "examples": [
+      "Blood pressure tablets recalled for an impurity"
+    ],
+    "references": [
+      "UNDRR-ISC HIPs 2025: CH0602 Substandard and Falsified Medical Products",
+      "FEMA Lifelines: Health and Medical > Medical Supply Chain"
+    ],
+    "gap": "WHO medical product alerts were not opened in round 1.",
+    "round": 1
+  },
+  {
+    "id": "safety.recall.food",
+    "subjectKinds": [
+      "entity"
+    ],
+    "examples": [
+      "Undeclared peanut in cookies, Class I",
+      "FSIS public health alert for ground beef"
+    ],
+    "references": [
+      "CAP 1.2: Safety",
+      "CISA sectors: Food and Agriculture",
+      "FEMA Lifelines: Food"
+    ],
+    "gap": "Round 1 found 1 adopted or planned source with no risk: canada-recalls. fsis-recall-api is later, openfda-enforcement is later: see the reason of each.",
+    "round": 1
+  },
+  {
+    "id": "safety.recall.medical-device",
+    "subjectKinds": [
+      "entity"
+    ],
+    "examples": [
+      "Insulin pump recall for a software fault"
+    ],
+    "references": [
+      "CISA sectors: Healthcare and Public Health"
+    ],
+    "gap": "Round 1 found 1 adopted or planned source with no risk: canada-recalls. openfda-enforcement is later: see the reason of each.",
+    "round": 1
+  },
+  {
+    "id": "safety.recall.vehicle",
+    "subjectKinds": [
+      "entity"
+    ],
+    "examples": [
+      "NHTSA campaign: park outside, risk of fire",
+      "Airbag inflator recall"
+    ],
+    "references": [
+      "CAP 1.2: Safety",
+      "CISA sectors: Transportation Systems"
+    ],
+    "gap": "One source. The Transport Canada recall page returned 404, and the Canadian recall site did not list vehicles.",
+    "round": 1
+  },
+  {
+    "id": "safety.scam",
+    "subjectKinds": [
+      "topic"
+    ],
+    "examples": [
+      "FTC alert: scammers impersonate the FTC"
+    ],
+    "references": [
+      "No hazard list names this class. Found by the search for missing classes."
+    ],
+    "gap": "One source. FBI IC3 public service announcements were not opened.",
+    "round": 1
+  },
+  {
+    "id": "safety.shelter-in-place",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "Shelter in Place Warning after a chemical plant fire"
+    ],
+    "references": [
+      "NWS/SAME: SPW Shelter in Place Warning",
+      "CAP 1.2 responseType: Shelter"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
+    "id": "safety.wildlife",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "Trail closed for bear activity"
+    ],
+    "references": [
+      "UNDRR-ISC HIPs 2025: BI0604 Human-Wildlife Conflict"
+    ],
+    "gap": "Only NPS alerts of this kind were seen.",
+    "round": 1
+  },
+  {
+    "id": "security.active-threat",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "Police report an active shooter at a mall"
+    ],
+    "references": [
+      "Dataminr: first alerts",
+      "Everbridge",
+      "Citizen",
+      "MAX Security: Shooting"
+    ],
+    "gap": "Round 1 found 0 adopted or planned sources with no risk. Round 1 found no other source.",
+    "round": 1
+  },
+  {
+    "id": "security.air-raid",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "Air raid alert active in an oblast",
+      "Rocket alert for a city"
+    ],
+    "references": [
+      "CAP 1.2: Security",
+      "Liveuamap"
+    ],
+    "gap": "Country-specific. The Israeli Home Front Command page returned 403.",
+    "round": 1
+  },
+  {
+    "id": "security.armed-conflict",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "ACLED event: shelling in a district",
+      "UCDP GED candidate event"
+    ],
+    "references": [
+      "UNDRR-ISC HIPs 2025: SO armed conflict",
+      "WEF Global Risks: state-based armed conflict (not opened)",
+      "MAX Security: Military",
+      "Liveuamap"
+    ],
+    "gap": "Round 1 found 1 adopted or planned source with no risk: gdelt-events. acled-api is later, ucdp-api is later: see the reason of each.",
+    "round": 1
+  },
+  {
+    "id": "security.blue-alert",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "Blue Alert with a suspect vehicle"
+    ],
+    "references": [
+      "NWS/SAME: BLU Blue Alert"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
+    "id": "security.child-abduction",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "NWS alert type Child Abduction Emergency for a state"
+    ],
+    "references": [
+      "NWS/SAME: CAE Child Abduction Emergency",
+      "CAP 1.2: Rescue"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
+    "id": "security.civil-unrest",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "ACLED protest event",
+      "A march closes a city center"
+    ],
+    "references": [
+      "UNDRR-ISC HIPs 2025: SO0103 Civil Unrest",
+      "MAX Security: Demonstration, Unrest",
+      "Riskline: unrest",
+      "Crisis24"
+    ],
+    "gap": "ACLED is weekly. GDELT is fast but noisy (machine-coded news).",
+    "round": 1
+  },
+  {
+    "id": "security.crime",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "City open data: burglary reports this week"
+    ],
+    "references": [
+      "Citizen",
+      "Crisis24: crime risk",
+      "Riskline: crime"
+    ],
+    "gap": "Round 1 found 0 adopted or planned sources with no risk. Round 1 found no other source.",
+    "round": 1
+  },
+  {
+    "id": "security.curfew",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "Overnight curfew in a city after unrest"
+    ],
+    "references": [
+      "MAX Security: Curfew",
+      "Riskline"
+    ],
+    "gap": "No structured source. Local orders and news report these.",
+    "round": 1
+  },
+  {
+    "id": "security.explosive-ordnance",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "WWII bomb found; area evacuated during defusal"
+    ],
+    "references": [
+      "UNDRR-ISC HIPs 2025: SO Explosive Ordnance"
+    ],
+    "gap": "No structured source. Local police and city notices report these.",
+    "round": 1
+  },
+  {
+    "id": "security.kidnap",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "Kidnap wave on a highway"
+    ],
+    "references": [
+      "MAX Security: Kidnapping",
+      "Crisis24",
+      "Riskline"
+    ],
+    "gap": "Only commercial risk products and travel advice text cover this.",
+    "round": 1
+  },
+  {
+    "id": "security.law-enforcement",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "Law Enforcement Warning: stay indoors, armed suspect"
+    ],
+    "references": [
+      "NWS/SAME: LEW Law Enforcement Warning",
+      "CAP 1.2: Security"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
+    "id": "security.maritime-threat",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "UKMTO incident: vessel attacked in the southern Red Sea",
+      "NGA ASAM report"
+    ],
+    "references": [
+      "MAX Security: Maritime",
+      "CISA sectors: Transportation Systems > Maritime",
+      "FEMA Lifelines: Transportation > Maritime"
+    ],
+    "gap": "NGA MSI returned 503 and UKMTO returned 403. Facts not confirmed.",
+    "round": 1
+  },
+  {
+    "id": "security.missing-person",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "SAME MEP Missing and Endangered Persons"
+    ],
+    "references": [
+      "NWS/SAME: MEP Missing and Endangered Persons"
+    ],
+    "gap": "Round 1 found 0 adopted or planned sources with no risk. ipaws-open has a risk, so the gate does not count it: see the risks of the record. Round 1 found no other source.",
+    "round": 1
+  },
+  {
+    "id": "security.terrorism",
+    "subjectKinds": [
+      "place",
+      "topic"
+    ],
+    "examples": [
+      "NTAS Bulletin on a heightened threat environment"
+    ],
+    "references": [
+      "CAP 1.2: Security",
+      "MAX Security: Terrorism",
+      "Riskline: terrorism",
+      "Crisis24: terrorism",
+      "UNDRR-ISC HIPs 2025: SO Violence"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
+    "id": "security.travel-advisory",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "FCDO advises against all travel to a region",
+      "State Department raises a country to Level 4"
+    ],
+    "references": [
+      "Riskline",
+      "Crisis24 country risk ratings",
+      "International SOS"
+    ],
+    "gap": "The State Department page returned 403.",
+    "round": 1
+  },
+  {
+    "id": "system.test",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "Required Monthly Test",
+      "NWS alert type Test"
+    ],
+    "references": [
+      "NWS/SAME: RMT, RWT, DMO",
+      "CAP 1.2 status: Test, Exercise"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
+    "id": "transport.air.accident",
+    "subjectKinds": [
+      "place",
+      "entity"
+    ],
+    "examples": [
+      "Airliner runway excursion"
+    ],
+    "references": [
+      "EM-DAT: Technological > Transport > Air",
+      "UNDRR-ISC HIPs 2025: TL04 transport accidents"
+    ],
+    "gap": "NTSB rendered only a title and ASN returned 403.",
+    "round": 1
+  },
+  {
+    "id": "transport.air.conflict-zone",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "EASA CZIB for a country's airspace"
+    ],
+    "references": [
+      "MAX Security: Aviation"
+    ],
+    "gap": "One source. FAA flight prohibitions were not opened.",
+    "round": 1
+  },
+  {
+    "id": "transport.air.disruption",
+    "subjectKinds": [
+      "place",
+      "entity"
+    ],
+    "examples": [
+      "Ground Delay Program at a hub, average 90 minutes",
+      "Airport closure for snow removal"
+    ],
+    "references": [
+      "CAP 1.2: Transport",
+      "FEMA Lifelines: Transportation > Aviation",
+      "CISA sectors: Transportation Systems > Aviation"
+    ],
+    "gap": "One source for the US. Eurocontrol and other regions were not opened.",
+    "round": 1
+  },
+  {
+    "id": "transport.air.hazard-weather",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "Convective SIGMET",
+      "Volcanic ash SIGMET"
+    ],
+    "references": [
+      "CAP 1.2: Met, Transport"
+    ],
+    "gap": null,
+    "round": 1
+  },
+  {
+    "id": "transport.air.notam",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "TFR for a VIP visit",
+      "Runway closed NOTAM"
+    ],
+    "references": [
+      "CISA sectors: Transportation Systems > Aviation"
+    ],
+    "gap": "The FAA API portal rendered only Loading. Access terms not seen.",
+    "round": 1
+  },
+  {
+    "id": "transport.rail.accident",
+    "subjectKinds": [
+      "place",
+      "entity"
+    ],
+    "examples": [
+      "Freight derailment with a tank car leak"
+    ],
+    "references": [
+      "EM-DAT: Technological > Transport > Rail",
+      "FEMA Lifelines: Transportation > Railway",
+      "UNDRR-ISC HIPs 2025: TL04 transport accidents"
+    ],
+    "gap": "Both are records after the fact, not live alerts.",
+    "round": 1
+  },
+  {
+    "id": "transport.road.border-wait",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "Wait of 3 hours at a crossing"
+    ],
+    "references": [
+      "No hazard list names this class. Found by the search for missing classes."
+    ],
+    "gap": "The CBP page showed only a title.",
+    "round": 1
+  },
+  {
+    "id": "transport.road.incident",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "Interstate closed both ways after a crash",
+      "WZDx work zone with lane closures"
+    ],
+    "references": [
+      "CAP 1.2: Transport",
+      "FEMA Lifelines: Transportation > Highway/Roadway",
+      "EM-DAT: Transport > Road"
+    ],
+    "gap": "The WZDx page returned 403. Each state runs its own 511 system, and each system needs its own adapter.",
+    "round": 1
+  },
+  {
+    "id": "transport.sea.navigational-warning",
+    "subjectKinds": [
+      "place"
+    ],
+    "examples": [
+      "NAVAREA IV warning of a missile test area"
+    ],
+    "references": [
+      "CAP 1.2: Transport",
+      "FEMA Lifelines: Transportation > Maritime"
+    ],
+    "gap": "NGA MSI returned 503.",
+    "round": 1
+  },
+  {
+    "id": "transport.space.launch",
+    "subjectKinds": [
+      "place",
+      "entity"
+    ],
+    "examples": [
+      "Launch window tonight, sonic boom advisory for nearby counties"
+    ],
+    "references": [
+      "No hazard list names this class. Found by the search for missing classes."
+    ],
+    "gap": "One source. FAA launch closure notices were not opened.",
+    "round": 1
+  },
+  {
+    "id": "transport.transit.service-alert",
+    "subjectKinds": [
+      "entity",
+      "place"
+    ],
+    "examples": [
+      "GTFS-RT alert: line suspended between two stations"
+    ],
+    "references": [
+      "FEMA Lifelines: Transportation > Mass Transit"
+    ],
+    "gap": "The GTFS-RT spec page returned 403. Feeds are per agency.",
+    "round": 1
+  }
+]

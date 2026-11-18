@@ -20,7 +20,9 @@
     "**/*.spec.ts",
     "**/*.spec.tsx"
   ],
-  "technicalNouns": [],
+  "technicalNouns": [
+    "reading"
+  ],
   "technicalVerbs": [],
   "properNouns": [
     "ASD",

@@ -1,8 +1,8 @@
 import { random, seedsFrom } from "@mark1russell7/rigor-generators";
 import { describe, expect, expectTypeOf, it } from "vitest";
 import { z } from "zod";
-import { assess, DEFAULT_ASSESS_POLICY } from "./assess.ts";
-import { CONFIG_FORMAT, loadConfig, type AlertConfig } from "./config.ts";
+import { assess, COVERAGE_KIND, DEFAULT_ASSESS_POLICY } from "./assess.ts";
+import { CONFIG_FORMAT, CONFIG_PART_FORMAT, configHash, COPY_FORMAT, copyProblems, loadConfig, ONLY_COPY, type AlertConfig, type CopySettings } from "./config.ts";
 import type {
   Acknowledgment,
   EndMark,
@@ -68,12 +68,14 @@ import type {
   Urgency,
   Watch,
   WatchedPlace,
+  WhyLimit,
 } from "./contracts.ts";
 import { coverage } from "./coverage.ts";
 import { escalate } from "./escalation.ts";
 import { observeFetch, startHealth } from "./health.ts";
 import { messageKey, observationId, reportId } from "./ids.ts";
-import { lateness, type Lateness, type LatenessLimit, type LatenessState } from "./lateness.ts";
+import { lateness, limitRule, type Lateness, type LatenessLimit, type LatenessState } from "./lateness.ts";
+import { DEFAULT_LINK_POLICY, type LinkFamily, type LinkPolicy } from "./link.ts";
 import { incidents, normalize } from "./merge.ts";
 import * as schemas from "./schemas.ts";
 import {
@@ -82,6 +84,13 @@ import {
   addressSchema,
   addressValueSchema,
   alertConfigSchema,
+  configPartSchema,
+  drillConfigSchema,
+  expectationConfigSchema,
+  outageConfigSchema,
+  outagePersonConfigSchema,
+  spendConfigSchema,
+  tryChainSchema,
   areaSchema,
   assessedLevelSchema,
   assessmentSchema,
@@ -95,6 +104,9 @@ import {
   channelIdSchema,
   checkWith,
   contactConfigSchema,
+  copyListenSchema,
+  copyPeerSchema,
+  copySettingsSchema,
   correlationKeySchema,
   coverageSchema,
   cursorSchema,
@@ -112,6 +124,7 @@ import {
   instantSchema,
   isContactUrl,
   kindClassSchema,
+  kindCodeSchema,
   kindSchema,
   latenessLimitSchema,
   latenessSchema,
@@ -119,6 +132,8 @@ import {
   levelRuleSchema,
   levelSchema,
   levelTableSchema,
+  linkFamilySchema,
+  linkPolicySchema,
   locateOutcomeSchema,
   mapProblemSchema,
   mapResultSchema,
@@ -127,6 +142,7 @@ import {
   observationSchema,
   operationSchema,
   parseConfig,
+  parseCopySettings,
   personConfigSchema,
   personIdSchema,
   personWatchSchema,
@@ -154,8 +170,10 @@ import {
   urgencySchema,
   watchedPlaceSchema,
   watchSchema,
+  whyLimitSchema,
 } from "./schemas.ts";
-import { NO_SYSTEM_LINES, SOURCE_SUBJECT, systemReports } from "./system-reports.ts";
+import { DRILL_SUBJECT, NO_SYSTEM_LINES, SOURCE_SUBJECT, systemReports } from "./system-reports.ts";
+import { categoryOf, TAXONOMY } from "./taxonomy.ts";
 
 const SEEDS = seedsFrom(process.env["SEED"], [1, 2, 3, 4, 5, 6, 7, 8]);
 const HOUR = 3_600_000;
@@ -185,7 +203,7 @@ const DESCRIPTOR: SourceDescriptor = {
   title: "NWS API",
   origins: ["nws"],
   dependsOn: ["provider:nws-api", "cdn:akamai"],
-  uses: ["internet", "power"],
+  uses: ["internet", "dns", "power"],
   kinds: ["met"],
   coverage: [{ type: "code", system: "state", code: "KS" }],
   transport: "poll",
@@ -199,7 +217,7 @@ const CHANNEL: ChannelDescriptor = {
   id: PUSHOVER,
   title: "Pushover",
   dependsOn: ["provider:pushover", "provider:apns"],
-  uses: ["internet", "power"],
+  uses: ["internet", "dns", "power"],
   breaksThrough: true,
   repeats: true,
   ack: "poll",
@@ -320,6 +338,7 @@ describe("the type of each schema", () => {
     expectTypeOf<z.output<typeof levelSchema>>().toEqualTypeOf<Level>();
     expectTypeOf<z.output<typeof channelDescriptorSchema>>().toEqualTypeOf<ChannelDescriptor>();
     expectTypeOf<z.output<typeof messageSchema>>().toEqualTypeOf<Message>();
+    expectTypeOf<z.output<typeof whyLimitSchema>>().toEqualTypeOf<WhyLimit>();
     expectTypeOf<z.output<typeof addressSchema>>().toEqualTypeOf<Address>();
     expectTypeOf<z.output<typeof receiptSchema>>().toEqualTypeOf<Receipt>();
     expectTypeOf<z.output<typeof sendOutcomeSchema>>().toEqualTypeOf<SendOutcome>();
@@ -343,6 +362,8 @@ describe("the type of each schema", () => {
     expectTypeOf<z.output<typeof latenessStateSchema>>().toEqualTypeOf<LatenessState>();
     expectTypeOf<z.output<typeof latenessLimitSchema>>().toEqualTypeOf<LatenessLimit>();
     expectTypeOf<z.output<typeof latenessSchema>>().toEqualTypeOf<Lateness>();
+    expectTypeOf<z.output<typeof linkFamilySchema>>().toEqualTypeOf<LinkFamily>();
+    expectTypeOf<z.output<typeof linkPolicySchema>>().toEqualTypeOf<LinkPolicy>();
   });
 
   it("is the input type too", () => {
@@ -376,11 +397,157 @@ describe("the gate of schemaOf", () => {
   });
 });
 
+// The names of the exported schemas, in the order of the code units. Two changes that each add a name merge into the
+// correct list, or into a conflict of the text. Two changes that each add 1 to a count merge into a wrong count.
+const SCHEMA_NAMES = [
+  "acknowledgmentSchema",
+  "addressFieldSchema",
+  "addressSchema",
+  "addressValueSchema",
+  "alertConfigSchema",
+  "areaSchema",
+  "assessPolicySchema",
+  "assessReasonSchema",
+  "assessedLevelSchema",
+  "assessmentSchema",
+  "balanceHealthSchema",
+  "balanceReadSchema",
+  "balanceStageSchema",
+  "canaryResultSchema",
+  "categorySchema",
+  "cellResourceSchema",
+  "certaintySchema",
+  "channelDescriptorSchema",
+  "channelIdSchema",
+  "channelQuotaSchema",
+  "configPartSchema",
+  "contactConfigSchema",
+  "copyHealthSchema",
+  "copyIdSchema",
+  "copyListenSchema",
+  "copyPeerSchema",
+  "copyReadSchema",
+  "copySettingsSchema",
+  "copyStageSchema",
+  "correlationKeySchema",
+  "coverageSchema",
+  "cursorSchema",
+  "deliverySchema",
+  "deliveryStateSchema",
+  "deliveryStatusSchema",
+  "dimensionIdSchema",
+  "drillConfigSchema",
+  "drillPathSchema",
+  "drillWindowSchema",
+  "durationSchema",
+  "edgeKindSchema",
+  "edgeOriginSchema",
+  "endMarkSchema",
+  "escalationEndSchema",
+  "escalationPolicySchema",
+  "escalationStepSchema",
+  "estimateSchema",
+  "expectationConfigSchema",
+  "expectedHarmSchema",
+  "fetchFailureSchema",
+  "fetchOutcomeSchema",
+  "fetchRecordSchema",
+  "healthPayloadSchema",
+  "healthStateSchema",
+  "historyChangeSchema",
+  "historyIncidentSchema",
+  "historyPayloadSchema",
+  "historyPlaceSchema",
+  "historyRegionSchema",
+  "incidentLineSchema",
+  "incidentSchema",
+  "indicatorAreaKindSchema",
+  "indicatorAreaSchema",
+  "instantSchema",
+  "interestEdgeSchema",
+  "interestGraphSchema",
+  "kindClassSchema",
+  "kindCodeSchema",
+  "kindPriorSchema",
+  "kindSchema",
+  "latenessLimitSchema",
+  "latenessSchema",
+  "latenessStateSchema",
+  "levelRuleSchema",
+  "levelSchema",
+  "levelTableSchema",
+  "linkFamilySchema",
+  "linkPolicySchema",
+  "locateOutcomeSchema",
+  "mapProblemSchema",
+  "mapResultSchema",
+  "mapShapeSchema",
+  "measureDeclarationSchema",
+  "messageSchema",
+  "moveSchema",
+  "muteEffectSchema",
+  "muteSchema",
+  "nodeKeySchema",
+  "observationIdSchema",
+  "observationSchema",
+  "operationSchema",
+  "optInConfigSchema",
+  "outageConfigSchema",
+  "outagePersonConfigSchema",
+  "ownBaselineSchema",
+  "personConfigSchema",
+  "personIdSchema",
+  "personWatchSchema",
+  "placeConfigSchema",
+  "placeIdSchema",
+  "positionSchema",
+  "probabilitySchema",
+  "providerBalanceSchema",
+  "quietWindowSchema",
+  "quotaHealthSchema",
+  "quotaStageSchema",
+  "rankDelaysSchema",
+  "readHealthSchema",
+  "readingSchema",
+  "receiptSchema",
+  "regionCodeSchema",
+  "relevancePathSchema",
+  "relevancePolicySchema",
+  "relevanceSchema",
+  "reportIdSchema",
+  "reportSchema",
+  "responseTypeSchema",
+  "scoreFactorSchema",
+  "scorePriorsSchema",
+  "secretRefSchema",
+  "sendOutcomeSchema",
+  "severitySchema",
+  "shadowScoreSchema",
+  "significanceSchema",
+  "sourceDescriptorSchema",
+  "sourceHealthSchema",
+  "sourceHealthViewSchema",
+  "sourceIdSchema",
+  "spendConfigSchema",
+  "statusSchema",
+  "subjectEntrySchema",
+  "subjectKindSchema",
+  "subjectSchema",
+  "subjectWatchSchema",
+  "transportSchema",
+  "tryChainSchema",
+  "urgencySchema",
+  "watchSchema",
+  "watchedPlaceSchema",
+  "whyLimitSchema",
+  "whyRecordSchema",
+] as const;
+
 describe("the JSON Schema of each schema", () => {
   const exported = Object.entries(schemas).filter(([name]) => name.endsWith("Schema"));
 
   it("has each exported schema", () => {
-    expect(exported.length).toBe(80);
+    expect(exported.map(([name]) => name).sort()).toEqual([...SCHEMA_NAMES]);
     for (const [name, schema] of exported) expect(schema instanceof z.ZodType, name).toBe(true);
   });
 
@@ -397,6 +564,33 @@ describe("the JSON Schema of each schema", () => {
     expect(z.toJSONSchema(durationSchema)).toMatchObject({ type: "number", minimum: 0 });
     expect(z.toJSONSchema(kindSchema)).toMatchObject({ required: ["code", "label"] });
   });
+
+  it("gives the closed list of the kind codes, and the parse takes exactly the codes of the list", () => {
+    const codes = Object.keys(TAXONOMY);
+    const covered = codes.filter((code) => categoryOf(code) !== "system").map((code) => `${COVERAGE_KIND}.${code}`);
+    const json = z.toJSONSchema(kindCodeSchema) as { $ref?: string; $defs?: Record<string, { type?: string; enum?: string[] }> };
+    expect(json.$ref).toBe("#/$defs/KindCode");
+    expect(json.$defs?.["KindCode"]?.type).toBe("string");
+    const list = json.$defs?.["KindCode"]?.enum ?? [];
+    expect(list.length).toBe(codes.length + covered.length);
+    expect(new Set(list)).toEqual(new Set([...codes, ...covered]));
+    expect(list).toEqual([...list].sort());
+    const inList = new Set(list);
+    const near = list.flatMap((code) => [code, `${code}.x`, code.slice(0, -1), code.toUpperCase(), `${COVERAGE_KIND}.${code}`]);
+    for (const code of [...near, "", "toString", "__proto__"]) expect(kindCodeSchema.safeParse(code).success, code).toBe(inList.has(code));
+  });
+
+  it("puts the list one time in $defs, and each kind field refers to it", () => {
+    const list = (z.toJSONSchema(kindCodeSchema) as { $defs?: Record<string, { enum?: string[] }> }).$defs?.["KindCode"]?.enum ?? [];
+    expect(list).toContain("met.tornado");
+    const config = z.toJSONSchema(alertConfigSchema) as { $defs?: Record<string, { enum?: string[] }> };
+    expect(config.$defs?.["KindCode"]?.enum).toEqual(list);
+    const text = JSON.stringify(config);
+    expect(text.split(JSON.stringify(list)).length - 1).toBe(1);
+    expect(text).toContain('"$ref":"#/$defs/KindCode"');
+    const priors = JSON.stringify(z.toJSONSchema(schemas.scorePriorsSchema));
+    expect(priors).toContain('"propertyNames":{"$ref":"#/$defs/KindCode"}');
+  });
 });
 
 describe("the round trip of real values", () => {
@@ -406,6 +600,24 @@ describe("the round trip of real values", () => {
     holds(sourceDescriptorSchema, { ...DESCRIPTOR, listing: "snapshot" });
     fails(sourceDescriptorSchema, { ...DESCRIPTOR, listing: "stream" });
     holds(channelDescriptorSchema, CHANNEL);
+    holds(channelDescriptorSchema, { ...CHANNEL, maxInFlight: 2 });
+    fails(channelDescriptorSchema, { ...CHANNEL, maxInFlight: 0 });
+    fails(channelDescriptorSchema, { ...CHANNEL, maxInFlight: 1.5 });
+    holds(channelDescriptorSchema, { ...CHANNEL, why: { chars: 80 } });
+    fails(channelDescriptorSchema, { ...CHANNEL, why: { chars: 0 } });
+    const user = { name: "user", required: true, pattern: "[A-Za-z0-9]{30}", form: "30 letters and digits" };
+    holds(channelDescriptorSchema, { ...CHANNEL, address: [user, { ...user, name: "device", required: false }] });
+    holds(channelDescriptorSchema, { ...CHANNEL, address: [] });
+    fails(channelDescriptorSchema, { ...CHANNEL, address: [{ ...user, pattern: "[A-Z" }] });
+    fails(channelDescriptorSchema, { ...CHANNEL, address: [{ ...user, name: "" }] });
+    fails(channelDescriptorSchema, { ...CHANNEL, address: [{ ...user, form: "" }] });
+    fails(channelDescriptorSchema, { ...CHANNEL, address: [{ ...user, extra: true }] });
+    holds(whyLimitSchema, { chars: 40 });
+    holds(whyLimitSchema, { words: 12 });
+    holds(whyLimitSchema, { chars: 80, words: 12 });
+    fails(whyLimitSchema, { chars: 1.5 });
+    fails(whyLimitSchema, { words: 0 });
+    fails(whyLimitSchema, { lines: 2 });
     holds(observationSchema, OBSERVATION);
     holds(reportSchema, WARNING);
     holds(mapResultSchema, { reports: [WARNING], problems: [{ path: "features[3].properties.onset", message: "The onset is not a date.", fatal: false }] });
@@ -466,6 +678,8 @@ describe("the round trip of real values", () => {
         quiet: send.quiet,
       };
       holds(messageSchema, message);
+      holds(messageSchema, { ...message, why: "Why: your place is in the area" });
+      fails(messageSchema, { ...message, why: "" });
       const delivery: Delivery = { key: message.key, incident: send.incident, level: send.level, person: send.person, channel: send.channel, step: send.step, at: T0 + 500, receipt: { receipt: "r1" } };
       holds(deliverySchema, delivery);
     }
@@ -486,9 +700,9 @@ describe("the round trip of real values", () => {
       { expectation: expectation.id, report: reportId({ source: API, key: "k2", sent: T0 }), started: T0 + 60_000 },
     ];
     for (const at of [T0, T0 + HOUR]) {
-      for (const entry of lateness(checks, [expectation], { [expectation.id]: limit }, at)) holds(latenessSchema, entry);
+      for (const entry of lateness(checks, [expectation], at, { delay: () => limit.delay, misses: () => limit.misses })) holds(latenessSchema, entry);
     }
-    for (const entry of lateness(checks, [expectation], {}, T0)) holds(latenessSchema, entry);
+    for (const entry of lateness(checks, [expectation], T0, limitRule({ quantile: 0.99, level: 0.95 }))) holds(latenessSchema, entry);
   });
 });
 
@@ -505,6 +719,20 @@ describe("the value rules", () => {
     fails(reportSchema, { ...WARNING, kind: { code: "met.tornadoo", label: "Tornado Warning" } });
     holds(kindSchema, { code: "other.unknown", label: "Unknown event" });
     holds(kindSchema, { code: "system.coverage.met.flood.flash", label: "Coverage" });
+  });
+
+  it("each kind that a person or an adapter names is a code of the taxonomy, or a prefix of one by its parts", () => {
+    for (const code of ["met", "met.flood", "met.flood.flash", "system.coverage.met.tornado"]) holds(kindCodeSchema, code);
+    for (const code of ["met.fl", "met.tornadoes", "hydro", "", "Met.Tornado", "toString"]) fails(kindCodeSchema, code);
+    holds(watchSchema, { places: [KANSAS], kinds: ["met.flood"] });
+    fails(watchSchema, { places: [KANSAS], kinds: ["met.fl"] });
+    fails(sourceDescriptorSchema, { ...DESCRIPTOR, kinds: ["met", "hydro"] });
+    holds(levelRuleSchema, { kinds: ["met.wind"], max: "notice" });
+    fails(levelRuleSchema, { kinds: ["met.tornadoo"], max: "notice" });
+    holds(subjectWatchSchema, { system: "topic", id: "infra.power.outage" });
+    holds(subjectWatchSchema, { system: "topic" });
+    holds(subjectWatchSchema, { system: "iptc", id: "medtop:20000137" });
+    fails(subjectWatchSchema, { system: "topic", id: "infra.power.outages" });
   });
 
   it("each id is a non-empty string", () => {
@@ -632,6 +860,50 @@ describe("the private configuration", () => {
     expect(loaded.recipients.map((recipient) => recipient.addresses)).toEqual([{ [PUSHOVER]: { user: "user-test", device: "phone" } }]);
   });
 
+  it("accepts the drills, and refuses a bad day, a bad id and a path that is not a channel", () => {
+    const drill = { id: "push-weekly", person: PERSON, path: { kind: "channel", channel: PUSHOVER }, every: 6 * 86_400_000, window: { zone: "America/Chicago", start: "11:00", end: "17:00", days: [6] }, ackWithin: 1_800_000 } as const;
+    // The person watches the drills, thus the route sends each drill to the person.
+    const watcher = { watch: { person: PERSON, places: [KANSAS.id], rules: [], subjects: [{ system: DRILL_SUBJECT }] }, label: "Person A" };
+    // The failure of a drill goes at the level notice, on a channel other than the path of the drill.
+    const second: ChannelDescriptor = { ...CHANNEL, id: "sms" as ChannelId, title: "SMS", ack: "none" };
+    const notice = { level: "notice" as const, steps: [{ channel: second.id, at: 0 }], exhaustedAfter: 600_000 };
+    const drilled = { ...CONFIG, people: [watcher], drills: [drill], policies: [ESCALATION, notice], contacts: [...CONFIG.contacts, { person: PERSON, channel: second.id, address: { to: { secret: "SMS_TO" } } }] };
+    holds(alertConfigSchema, drilled);
+    const parsed = alertConfigSchema.parse(JSON.parse(JSON.stringify(drilled)));
+    expect(loadConfig(parsed, [CHANNEL, second], (name) => (name === "PUSHOVER_USER" || name === "SMS_TO" ? "value-test" : undefined)).problems).toEqual([]);
+    holds(drillConfigSchema, { ...drill, window: { zone: "UTC", start: "09:00", end: "10:00" } });
+    fails(drillConfigSchema, { ...drill, window: { ...drill.window, days: [7] } });
+    fails(drillConfigSchema, { ...drill, window: { ...drill.window, days: [1.5] } });
+    fails(drillConfigSchema, { ...drill, id: "Push Weekly" });
+    fails(drillConfigSchema, { ...drill, path: { kind: "outage" } });
+    fails(drillConfigSchema, { ...drill, every: -1 });
+    holds(drillConfigSchema, { ...drill, copies: ["home", "cloud-2"] });
+    fails(drillConfigSchema, { ...drill, copies: ["Home"] });
+    // An empty list starts the drill in no copy. The flip is a list of one copy.
+    fails(drillConfigSchema, { ...drill, copies: [] });
+    holds(drillConfigSchema, { ...drill, copies: ["home"] });
+  });
+
+  it("checks the failure of a drill with the policy of a subject, and a real notice keeps its policy", () => {
+    const drill = { id: "push-weekly", person: PERSON, path: { kind: "channel", channel: PUSHOVER }, every: 6 * 86_400_000, window: { zone: "America/Chicago", start: "11:00", end: "17:00", days: [6] }, ackWithin: 1_800_000 } as const;
+    const watcher = { watch: { person: PERSON, places: [KANSAS.id], rules: [], subjects: [{ system: DRILL_SUBJECT }] }, label: "Person A" };
+    const second: ChannelDescriptor = { ...CHANNEL, id: "sms" as ChannelId, title: "SMS", ack: "none" };
+    // The notices of the person go only on the channel of the drill. Thus the failure of the drill sends nothing.
+    const notice = { level: "notice" as const, steps: [{ channel: PUSHOVER, at: 0 }], exhaustedAfter: 600_000 };
+    const contacts = [...CONFIG.contacts, { person: PERSON, channel: second.id, address: { to: { secret: "SMS_TO" } } }];
+    const secret = (name: string): string | undefined => (name === "PUSHOVER_USER" || name === "SMS_TO" ? "value-test" : undefined);
+    const load = (policies: readonly unknown[]) => loadConfig(alertConfigSchema.parse(JSON.parse(JSON.stringify({ ...CONFIG, people: [watcher], drills: [drill], policies, contacts }))), [CHANNEL, second], secret).problems;
+    expect(load([ESCALATION, notice])).toEqual([
+      `The failure of the drill push-weekly reaches the person ${PERSON} at the level notice, and its policy has no step on a channel other than pushover. It sends nothing.`,
+    ]);
+    // A policy of notice about the drills adds a step on the second channel for the drill reports only.
+    const drills = { ...notice, about: { system: DRILL_SUBJECT }, steps: [...notice.steps, { channel: second.id, at: 0 }] };
+    holds(escalationPolicySchema, drills);
+    expect(load([ESCALATION, notice, drills])).toEqual([]);
+    fails(escalationPolicySchema, { ...drills, about: { id: "push-weekly" } });
+    fails(escalationPolicySchema, { ...drills, about: { system: DRILL_SUBJECT, extra: 1 } });
+  });
+
   it("refuses a wrong form, and leaves the references to the load", () => {
     fails(alertConfigSchema, { ...CONFIG, format: "alerts-config/2" });
     fails(alertConfigSchema, { ...CONFIG, extra: 1 });
@@ -643,8 +915,116 @@ describe("the private configuration", () => {
     fails(contactConfigSchema, { person: PERSON, channel: PUSHOVER, address: { user: 7 } });
     fails(placeConfigSchema, { id: KANSAS.id, codes: KANSAS.codes, bufferKm: 0 });
     fails(personConfigSchema, { watch: { person: PERSON, places: [], rules: [] }, policies: [{ ...ESCALATION, level: "loud" }] });
+    fails(alertConfigSchema, { ...CONFIG, expectations: [{ id: "api-to-wea", since: "2026-11-16" }] });
+    fails(alertConfigSchema, { ...CONFIG, expectations: [{ id: "api-to-wea" }] });
+    fails(expectationConfigSchema, { id: "api-to-wea", since: 0, extra: 1 });
+    holds(alertConfigSchema, { ...CONFIG, expectations: [{ id: "api-to-wea", since: 1_794_700_000_000 }] });
     // A person who watches a place that the configuration does not have is a problem of the load, not of the form.
     holds(alertConfigSchema, { ...CONFIG, people: [{ watch: { person: PERSON, places: ["place:z"], rules: [] } }] });
+  });
+
+  it("checks the form of a spend entry, and leaves the provider, the reserve and the time zone to the load", () => {
+    const spend = { provider: "provider:pushover", monthlyUsd: 10, reserveUsd: 3, floor: 5, timeZone: "America/Chicago" };
+    holds(alertConfigSchema, { ...CONFIG, spend: [spend] });
+    const { reserveUsd: _reserve, ...noReserve } = spend;
+    holds(spendConfigSchema, { ...noReserve, floor: -1 });
+    fails(spendConfigSchema, { ...spend, reserveUsd: undefined });
+    for (const bad of [{ monthlyUsd: 0 }, { monthlyUsd: -1 }, { reserveUsd: -1 }, { floor: "5" }, { timeZone: "" }, { provider: "" }, { currency: "USD" }]) fails(spendConfigSchema, { ...spend, ...bad });
+    // A reserve above the cap and a bad zone are problems of the load, with the names of the fields.
+    holds(spendConfigSchema, { ...spend, reserveUsd: 20, timeZone: "Mars/Olympus" });
+    // The fixed costs: each one has a name and a cost of 0 or more. Fixed costs above the cap are a problem of the load.
+    holds(spendConfigSchema, { ...spend, fixed: [{ what: "toll-free number", usd: 2.15 }, { what: "free", usd: 0 }] });
+    holds(spendConfigSchema, { ...spend, fixed: [{ what: "rent", usd: 50 }] });
+    for (const bad of [[{ what: "", usd: 1 }], [{ what: "rent", usd: -1 }], [{ what: "rent" }], [{ what: "rent", usd: 1, extra: 1 }], {}]) fails(spendConfigSchema, { ...spend, fixed: bad });
+  });
+
+  it("checks the form of the outage call, and leaves the people and the channels to the load", () => {
+    const outage = { people: [{ person: PERSON, chain: { steps: ["twilio-call", "twilio-call"] } }] };
+    holds(alertConfigSchema, { ...CONFIG, outage });
+    holds(outageConfigSchema, { people: [] });
+    holds(tryChainSchema, { steps: [] });
+    fails(alertConfigSchema, { ...CONFIG, outage: undefined });
+    fails(outageConfigSchema, { people: [{ person: PERSON }] });
+    fails(outageConfigSchema, { people: [{ person: PERSON, chain: { steps: ["twilio-call"] }, to: "x" }] });
+    fails(outagePersonConfigSchema, { person: PERSON, chain: { steps: [7] } });
+    fails(tryChainSchema, { steps: "twilio-call" });
+  });
+
+  it("checks the form of the settings of a copy", () => {
+    const home: CopySettings = { format: COPY_FORMAT, id: "home", rank: 0, listen: { host: "100.64.0.1", port: 4751 }, peers: [{ id: "cloud", url: "http://cloud.example.ts.net:4751" }], pingKey: "HEALTHCHECKS_PING_URL_HOME" };
+    holds(copySettingsSchema, home);
+    holds(copySettingsSchema, ONLY_COPY);
+    holds(copySettingsSchema, { ...home, accounts: { nwws: 2 } });
+    holds(copySettingsSchema, { ...home, configFrom: "cloud" });
+    for (const configFrom of ["Cloud", "", 2]) fails(copySettingsSchema, { ...home, configFrom });
+    for (const accounts of [{ nwws: 0 }, { nwws: 1.5 }, { nwws: "2" }, { "": 2 }, []]) fails(copySettingsSchema, { ...home, accounts });
+    holds(copyListenSchema, { host: "home.example.ts.net", port: 65535 });
+    holds(copyPeerSchema, { id: "c-2", url: "https://[fd7a:115c::1]:4751/exchange" });
+    for (const bad of [{ format: "alerts-copy/2" }, { id: "Home" }, { id: "" }, { id: "-home" }, { id: "a".repeat(33) }, { rank: -1 }, { rank: 0.5 }, { pingKey: "lower" }, { pingKey: "" }, { extra: 1 }]) fails(copySettingsSchema, { ...home, ...bad });
+    for (const bad of [{ port: 0 }, { port: 65536 }, { port: 1.5 }, { host: "" }]) fails(copyListenSchema, { host: "100.64.0.1", port: 4751, ...bad });
+    for (const url of ["ftp://cloud.example:4751", "http://user@cloud.example:4751", "http://cloud.example:4751/?q=1", "http://cloud.example:4751/#f", "cloud.example:4751", "http://", "http://-cloud.example"]) fails(copyPeerSchema, { id: "cloud", url });
+  });
+
+  it("finds the problems of the ranks, the ids and the address of a copy, and the problems hold no URL", () => {
+    const listen = { host: "100.64.0.1", port: 4751 };
+    const url = "http://cloud.example.ts.net:4751";
+    const base: CopySettings = { format: COPY_FORMAT, id: "home", rank: 1, listen, peers: [{ id: "cloud", url }] };
+    expect(copyProblems(base)).toEqual([]);
+    expect(copyProblems(ONLY_COPY)).toEqual([]);
+    // The copy configFrom is a copy of peers, not this copy and not an unknown copy.
+    expect(copyProblems({ ...base, configFrom: "cloud" })).toEqual([]);
+    expect(copyProblems({ ...base, configFrom: "home" })).toEqual(["configFrom: the id is not the id of a copy in peers."]);
+    expect(copyProblems({ ...base, configFrom: "other" })).toHaveLength(1);
+    // A rank is lower than the count of the copies.
+    expect(copyProblems({ ...base, rank: 2 })).toHaveLength(1);
+    expect(copyProblems({ format: COPY_FORMAT, id: "home", rank: 1 })).toHaveLength(1);
+    // A repeated id, the id of this copy, and a repeated URL.
+    const repeated = copyProblems({ ...base, peers: [{ id: "cloud", url }, { id: "cloud", url: `${url}/b` }, { id: "home", url }] });
+    expect(repeated).toHaveLength(3);
+    // A copy with other copies listens, and not on all the interfaces.
+    expect(copyProblems({ format: COPY_FORMAT, id: "home", rank: 0, peers: [{ id: "cloud", url }] })).toHaveLength(1);
+    for (const host of ["0.0.0.0", "::", "[::]", "*"]) expect(copyProblems({ ...base, listen: { host, port: 4751 } })).toHaveLength(1);
+    for (const problem of [...repeated, ...copyProblems({ ...base, listen: { host: "0.0.0.0", port: 4751 } })]) {
+      expect(problem).not.toContain(url);
+      expect(problem).not.toContain("example");
+    }
+  });
+
+  it("reads the text of copy.json: the JSON, then the schema, then the problems", () => {
+    const home: CopySettings = { format: COPY_FORMAT, id: "home", rank: 0, listen: { host: "100.64.0.1", port: 4751 }, peers: [{ id: "cloud", url: "http://cloud.example.ts.net:4751" }] };
+    const read = parseCopySettings(JSON.stringify(home));
+    expect(read.tag).toBe("ok");
+    if (read.tag === "ok") expect(read.value).toEqual(home);
+    const notJson = parseCopySettings("{ id: home");
+    expect(notJson).toEqual({ tag: "err", error: ["The settings of the copy are not valid JSON."] });
+    const badUrl = parseCopySettings(JSON.stringify({ ...home, peers: [{ id: "cloud", url: "http://user:pass@cloud.example.ts.net:4751" }] }));
+    expect(badUrl.tag).toBe("err");
+    if (badUrl.tag === "err") for (const problem of badUrl.error) expect(problem).not.toContain("pass@");
+    const badRank = parseCopySettings(JSON.stringify({ ...home, rank: 3 }));
+    expect(badRank.tag).toBe("err");
+    if (badRank.tag === "err") expect(badRank.error).toHaveLength(1);
+  });
+
+  it("checks the form of the link policy of the merge", () => {
+    holds(linkPolicySchema, DEFAULT_LINK_POLICY);
+    holds(alertConfigSchema, { ...CONFIG, link: DEFAULT_LINK_POLICY });
+    holds(alertConfigSchema, { ...CONFIG, link: { families: [] } });
+    const family = DEFAULT_LINK_POLICY.families[0]!;
+    const { magnitude: _magnitude, ...noMagnitude } = family;
+    holds(linkFamilySchema, noMagnitude);
+    holds(linkFamilySchema, { ...family, family: "geo" });
+    fails(linkFamilySchema, { ...family, magnitude: undefined });
+    for (const bad of [{ windowMs: 0 }, { windowMs: -1 }, { windowMs: 1.5 }, { distanceKm: -1 }, { magnitude: -1 }, { family: "not.a.kind" }, { family: "" }, { extra: 1 }]) fails(linkFamilySchema, { ...family, ...bad });
+    fails(linkPolicySchema, { families: [family], extra: 1 });
+    fails(alertConfigSchema, { ...CONFIG, link: { families: [{ ...family, windowMs: 0 }] } });
+  });
+
+  it("takes a policy of the assessment, and refuses a policy with a kind that the taxonomy does not have", () => {
+    holds(alertConfigSchema, { ...CONFIG, assess: DEFAULT_ASSESS_POLICY });
+    holds(alertConfigSchema, { ...CONFIG, assess: { ...DEFAULT_ASSESS_POLICY, relevance: { hopCap: 2, topPaths: 1, mandatory: "absent", entryMax: "notice" } } });
+    const [first, ...others] = DEFAULT_ASSESS_POLICY.classes;
+    fails(alertConfigSchema, { ...CONFIG, assess: { ...DEFAULT_ASSESS_POLICY, classes: [{ ...first!, kinds: ["met.no-such-kind"] }, ...others] } });
+    fails(alertConfigSchema, { ...CONFIG, assess: { ...DEFAULT_ASSESS_POLICY, extra: 1 } });
   });
 
   const store = (name: string): string | undefined => (name === "PUSHOVER_USER" ? "user-test" : undefined);
@@ -671,6 +1051,37 @@ describe("the private configuration", () => {
     expect(pathsOf(JSON.stringify(wrong))).toEqual(["places[0].bufferKm", "places[1].codes[0].code"]);
     // The form holds, and the load finds the secret that the store does not have.
     expect(problemsOf(JSON.stringify(CONFIG), () => undefined)).toEqual([expect.stringContaining("names the secret PUSHOVER_USER")]);
+  });
+
+  it("merges the parts of a configuration, and gives the problems of each part with its name", () => {
+    const { places, people, contacts, ...rest } = CONFIG;
+    const root = JSON.stringify({ ...rest, places: [], people: [], contacts: [] });
+    const directory = { name: "directory", text: JSON.stringify({ format: CONFIG_PART_FORMAT, places, people }) };
+    const addresses = { name: "addresses", text: JSON.stringify({ format: CONFIG_PART_FORMAT, contacts }) };
+    const parsed = parseConfig(root, [CHANNEL], store, [directory, addresses]);
+    expect(parsed.tag).toBe("ok");
+    if (parsed.tag === "ok") {
+      expect(parsed.value.config).toEqual(CONFIG);
+      expect(configHash(parsed.value.config)).toBe(configHash(CONFIG));
+    }
+    // The schema refuses a field of the root in a part.
+    holds(configPartSchema, { format: CONFIG_PART_FORMAT });
+    fails(configPartSchema, { format: CONFIG_PART_FORMAT, policies: [] });
+    fails(configPartSchema, { format: CONFIG_FORMAT, places });
+    const problemsWith = (parts: readonly { name: string; text: string }[], text = root): readonly string[] => {
+      const result = parseConfig(text, [CHANNEL], store, parts);
+      return result.tag === "err" ? result.error : [];
+    };
+    expect(problemsWith([directory, { name: "addresses", text: "{" }])).toEqual(["The part addresses is not valid JSON."]);
+    expect(problemsWith([directory, { name: "Bad Name", text: "{" }])).toEqual(["Part 1 is not valid JSON."]);
+    expect(problemsWith([directory, { name: "addresses", text: JSON.stringify({ format: CONFIG_PART_FORMAT, contacts, drills: [] }) }])).toEqual(["The part addresses: (root): Unrecognized key: \"drills\""]);
+    // The problems of the root and of each part come together, before the merge.
+    expect(problemsWith([{ name: "addresses", text: "[]" }], "{")).toEqual(["The configuration is not valid JSON.", "The part addresses: (root): Invalid input: expected object, received array"]);
+    // An entry in two files is a problem of the merge. A missing contact is a problem of the load.
+    expect(problemsWith([directory, addresses, { name: "copy", text: JSON.stringify({ format: CONFIG_PART_FORMAT, places: [places[0]] }) }])).toEqual([
+      `The place ${places[0]!.id} is in the part copy and in the part directory.`,
+    ]);
+    expect(problemsWith([directory])).toEqual([expect.stringContaining(PERSON)]);
   });
 
   it("accepts only printable ASCII in a contact, with no space, no parenthesis and no backslash", () => {

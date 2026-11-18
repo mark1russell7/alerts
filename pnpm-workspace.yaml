@@ -1,6 +1,12 @@
 packages:
   - "packages/*"
 
+# A shortcut with an end: @procedures/peer 0.60.0 asks for service ^0.8.3, and the runtime uses service ^0.9.3.
+# The override keeps one copy of service in the tree, thus one ServiceBuilder type and one clock. It ends when client 0.64.0
+# widens the range of @procedures/peer to ^0.9.0. Then remove this override.
+overrides:
+  "@mark1russell7/service": "^0.9.3"
+
 # Packages allowed to run install scripts. Since pnpm 11 every other package that has one fails the install.
 # A git-hosted package is approved by its repository URL, so a new commit of cue needs no new approval.
 allowBuilds:

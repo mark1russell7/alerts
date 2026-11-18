@@ -12,9 +12,11 @@
 
 import type { Machine, Transition } from "@mark1russell7/algebra";
 import { inWindow, windowProblems } from "@mark1russell7/algebra/clock";
+import { compareCodeUnits } from "@mark1russell7/text/order";
 import { LEVELS } from "./contracts.ts";
 import type {
   Acknowledgment,
+  ChannelDescriptor,
   ChannelId,
   Delivery,
   Duration,
@@ -71,8 +73,14 @@ export const ESCALATION_MACHINE: Machine = {
   },
   knobs: {
     step_at: { key: "EscalationStep.at", scope: "policy", unit: "ms", default: null, note: "the time from the start to the first step" },
-    step_wait: { key: "the time from one step of the policy to the next", scope: "policy", unit: "ms", default: null, note: "the policy gives one for each step" },
-    rank_wait: { key: "rank × rankDelay of the copy", scope: "cell", unit: "ms", default: null, note: "a copy waits for its rank before each send" },
+    step_wait: { key: "the time from one step of the policy to the next", scope: "policy", unit: "ms", default: null, note: "the policy gives one for each step. At a rank above 0, the rank floor of a channel changes it" },
+    rank_wait: {
+      key: "rank × max(the rank delay of the level, the rank floor of the channel of the step)",
+      scope: "cell",
+      unit: "ms",
+      default: null,
+      note: "a copy waits for its rank before each send. The rank delay of a level can be 0, then each copy sends a step of a channel with no floor at once",
+    },
     exhausted_after: { key: "EscalationPolicy.exhaustedAfter", scope: "policy", unit: "ms", default: null },
   },
   timers: {
@@ -95,6 +103,7 @@ export const ESCALATION_MACHINE: Machine = {
       arms: ["enter:last"],
       cancels: ["app.ack", "app.end"],
       fires: "timer.exhaust",
+      note: "it does not arm in the silent mode of a mute: a quiet message asks for no acknowledgment",
     },
   },
   transitions: [
@@ -130,17 +139,71 @@ export interface EscalationInput {
   readonly cancelled?: ReadonlySet<string> | undefined;
   /** The rank of this copy of the system, from 0. A copy waits `rank × rankDelay` before each send. */
   readonly rank?: number | undefined;
+  /** The wait of one rank at the level of the policy. `rankDelayOf` gives it from the table of the levels. */
   readonly rankDelay?: Duration | undefined;
+  /**
+   * The least wait of one rank before a step of each channel: the rank floor. A channel with no entry has the floor 0.
+   * `rankFloors` gives the floor of each exclusive channel.
+   */
+  readonly floors?: ReadonlyMap<ChannelId, Duration> | undefined;
   /** The quiet window of the person, from `PersonWatch.quiet`. A send below `life-safety` in the window is quiet. */
   readonly quiet?: QuietWindow | undefined;
+  /**
+   * The episode of the escalation: the count of the earlier ends of the escalations of the person in the incident.
+   * The default is 0. Each send has it, thus `messageKey` gives new keys after an end.
+   */
+  readonly episode?: number | undefined;
+  /**
+   * True: the escalation is in the silent mode of a mute. Each send is quiet, also at `life-safety`, and the exhaust
+   * timer does not arm. The caller gives the steps of the mode: `route` gives step 0 at most.
+   */
+  readonly silent?: boolean | undefined;
   readonly now: Instant;
+}
+
+/**
+ * The wait of one rank of a copy, for each level. A level with no entry takes the default of the caller. With 0 at a
+ * level, each copy sends each step of the level at once, thus a person gets one message from each copy.
+ */
+export type RankDelays = Readonly<Partial<Record<Level, Duration>>>;
+
+/** The longest rank delay of a level in a configuration: one hour. The longest rank floor is the same. */
+export const RANK_DELAY_LIMIT: Duration = 60 * 60_000;
+
+/**
+ * This function gives the rank floor of each exclusive channel: `floor`. A person takes one message of such a channel at a
+ * time. Thus a copy with a rank above 0 waits for the delivery of rank 0 before its step of the channel.
+ */
+export function rankFloors(channels: readonly ChannelDescriptor[], floor: Duration | undefined): ReadonlyMap<ChannelId, Duration> {
+  return new Map(floor === undefined ? [] : channels.filter((channel) => channel.exclusive === true).map((channel) => [channel.id, floor] as const));
+}
+
+/** This function gives the problems of a rank floor: it is a whole number of milliseconds up to `RANK_DELAY_LIMIT`. */
+export function rankFloorProblems(floor: Duration | undefined): string[] {
+  return floor === undefined || (Number.isInteger(floor) && floor >= 0 && floor <= RANK_DELAY_LIMIT)
+    ? []
+    : [`The rank floor is not a whole number of milliseconds from 0 to ${RANK_DELAY_LIMIT}.`];
+}
+
+/** This function gives the rank delay of a level: its entry in the table, or else the default. */
+export function rankDelayOf(level: Level, delays: RankDelays | undefined, fallback: Duration | undefined): Duration | undefined {
+  return delays?.[level] ?? fallback;
+}
+
+/** This function gives the problems of a table of rank delays. Each problem names a level, and each value is a whole number of milliseconds up to `RANK_DELAY_LIMIT`. */
+export function rankDelayProblems(delays: RankDelays): string[] {
+  return Object.entries(delays).flatMap(([level, delay]) =>
+    delay !== undefined && Number.isInteger(delay) && delay >= 0 && delay <= RANK_DELAY_LIMIT ? [] : [`The rank delay of the level ${level} is not a whole number of milliseconds from 0 to ${RANK_DELAY_LIMIT}.`],
+  );
 }
 
 /** A send that is due. The runtime makes the delivery key with `messageKey` of this value. */
 export interface EscalationSend extends MessageKeyInput {
   readonly channel: ChannelId;
-  /** The time at which the step became due. */
+  /** The time at which the step became due. It holds `wait`. */
   readonly due: Instant;
+  /** The wait of the rank of this copy before the send: `rank × max(rankDelay, floor)` for the channel. At 0, each copy sends the step at once. */
+  readonly wait: Duration;
   /** True: the channel sends in its silent mode. The value is for a send at `now`. `Message.quiet` takes it. */
   readonly quiet: boolean;
 }
@@ -182,15 +245,17 @@ const ACTIVE: ReadonlySet<EscalationState> = new Set(["sent", "last", "exhausted
  * the same plan, and it does not throw. Two copies of the system with the same merge state give the
  * same plan, apart from the wait of their rank.
  *
- * - A step is due at `start + step.at + rank × rankDelay`. Each due step without a delivery in the
- *   ledger is a send, also a late one. The system prefers a duplicate to a miss.
+ * - A step is due at `start + step.at + wait`. The wait of a step is `rank × max(rankDelay, floor)`, with the floor of
+ *   the channel of the step. Each due step without a delivery in the ledger is a send, also a late one. The system
+ *   prefers a duplicate to a miss.
  * - An acknowledgment stops the sends, and each delivery becomes a cancel. The end does the same.
- * - The exhaustion comes `exhaustedAfter` after the last step. The repeats continue after it.
+ * - The exhaustion comes `exhaustedAfter` after the latest due time of a step. The repeats continue after it.
  * - A failed send makes no delivery, so its step stays due and the next plan sends it again.
  * - The delivery is at least once, not exactly once. A crash after a send and before its record
  *   gives a second send with the same `messageKey`. A channel that drops a repeated key drops it.
  * - A send below `life-safety` at `now` in the quiet window of the person is quiet. A send of
- *   `life-safety` is not quiet at any time.
+ *   `life-safety` is not quiet in the window.
+ * - In the silent mode of a mute, each send is quiet, also at `life-safety`, and the exhaustion does not come.
  */
 export function escalate(input: EscalationInput): EscalationPlan {
   const { policy, person, incident, now } = input;
@@ -203,8 +268,12 @@ export function escalate(input: EscalationInput): EscalationPlan {
   const covers = (ack: Acknowledgment): boolean => reports.has(ack.incident) && ack.person === person && LEVELS.indexOf(ack.level) >= least;
   const acknowledgment = input.acknowledgments.filter(covers).sort(byTimeThenVia)[0];
   const steps = policy.steps;
-  const wait = nonNegative(input.rank) * nonNegative(input.rankDelay);
-  const quiet = level !== "life-safety" && inQuietWindow(input.quiet, now);
+  const rank = nonNegative(input.rank);
+  const delay = nonNegative(input.rankDelay);
+  // Each step has its wait: a step of an exclusive channel waits at least the floor of the channel for each rank.
+  const waits = steps.map((step) => rank * Math.max(delay, nonNegative(input.floors?.get(step.channel))));
+  const silent = input.silent === true;
+  const quiet = silent || (level !== "life-safety" && inQuietWindow(input.quiet, now));
 
   // A step time that is not a number of 0 or more counts as 0: escalationProblems reports it, and a send comes early, not late.
   const offsets = steps.map((step) => nonNegative(step.at));
@@ -216,9 +285,12 @@ export function escalate(input: EscalationInput): EscalationPlan {
     if (offset !== undefined && Number.isFinite(delivery.at)) start = Math.min(start, delivery.at - offset);
   }
 
-  const events: Event[] = offsets.map((offset, index) => ({ at: start + offset + wait, on: ESCALATION_EVENTS.step, order: 2, step: index }));
-  const lastAt = Math.max(0, ...offsets);
-  events.push({ at: start + lastAt + nonNegative(policy.exhaustedAfter) + wait, on: ESCALATION_EVENTS.exhaust, order: 3, step: -1 });
+  const dueAt = offsets.map((offset, index) => offset + (waits[index] ?? 0));
+  const events: Event[] = dueAt.map((at, index) => ({ at: start + at, on: ESCALATION_EVENTS.step, order: 2, step: index }));
+  // The latest due time of a step. A policy with no step has the wait of the rank delay.
+  const lastAt = Math.max(rank * delay, ...dueAt);
+  // A quiet message asks for no acknowledgment, thus the silent mode has no exhaustion.
+  if (!silent) events.push({ at: start + lastAt + nonNegative(policy.exhaustedAfter), on: ESCALATION_EVENTS.exhaust, order: 3, step: -1 });
   // An acknowledgment in the merge state occurred, also when the clock of its copy is ahead or broken.
   if (acknowledgment !== undefined) {
     events.push({ at: Number.isFinite(acknowledgment.at) ? Math.min(acknowledgment.at, now) : now, on: ESCALATION_EVENTS.ack, order: 0, step: -1 });
@@ -226,7 +298,9 @@ export function escalate(input: EscalationInput): EscalationPlan {
   if (input.endsAt !== undefined && Number.isFinite(input.endsAt)) events.push({ at: input.endsAt, on: ESCALATION_EVENTS.end, order: 1, step: -1 });
   events.sort((a, b) => a.at - b.at || a.order - b.order || a.step - b.step);
 
-  const instance = `${incident.anchor} ${level} ${person}`;
+  // An episode that is not a whole number above 0 counts as 0.
+  const episode = input.episode !== undefined && Number.isSafeInteger(input.episode) && input.episode > 0 ? input.episode : 0;
+  const instance = `${incident.anchor} ${level} ${person}${episode === 0 ? "" : ` ${episode}`}`;
   const transitions: Transition[] = [];
   const due: number[] = [];
   let state: EscalationState = "idle";
@@ -258,17 +332,17 @@ export function escalate(input: EscalationInput): EscalationPlan {
   const sends: EscalationSend[] = ACTIVE.has(state)
     ? due.flatMap((index) => {
         const step = steps[index];
-        const offset = offsets[index] ?? 0;
+        const wait = waits[index] ?? 0;
         return step === undefined || delivered.has(index)
           ? []
-          : [{ incident: incident.anchor, level, person, step: index, channel: step.channel, due: start + offset + wait, quiet }];
+          : [{ incident: incident.anchor, level, person, step: index, ...(episode === 0 ? {} : { episode }), channel: step.channel, due: start + (dueAt[index] ?? 0), wait, quiet }];
       })
     : [];
 
   const cancels: Delivery[] = [];
   if (FINAL.has(state)) {
     const seen = new Set<string>(input.cancelled ?? []);
-    for (const delivery of [...deliveries].sort((a, b) => byTime(a.at, b.at) || compare(a.key, b.key))) {
+    for (const delivery of [...deliveries].sort((a, b) => byTime(a.at, b.at) || compareCodeUnits(a.key, b.key))) {
       if (seen.has(delivery.key)) continue;
       seen.add(delivery.key);
       cancels.push(delivery);
@@ -325,8 +399,6 @@ export function quietWindowProblems(window: QuietWindow): string[] {
 
 const nonNegative = (value: number | undefined): number => (value !== undefined && Number.isFinite(value) && value > 0 ? value : 0);
 
-const compare = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
-
 /** This order puts a time that is not a number last, so the order of the input has no effect. */
 const byTime = (a: number, b: number): number => {
   const x = Number.isFinite(a) ? a : Number.POSITIVE_INFINITY;
@@ -335,5 +407,5 @@ const byTime = (a: number, b: number): number => {
 };
 
 function byTimeThenVia(a: Acknowledgment, b: Acknowledgment): number {
-  return byTime(a.at, b.at) || compare(a.via, b.via);
+  return byTime(a.at, b.at) || compareCodeUnits(a.via, b.via);
 }

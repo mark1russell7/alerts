@@ -38,7 +38,7 @@ export interface DeliveryFixture {
 }
 
 /** This function gives a test value of 30 letters and digits: the word, then zeros. */
-function testKey(word: string): string {
+export function testKey(word: string): string {
   if (!/^[a-z]{1,30}$/.test(word)) throw new RangeError(`The word "${word}" is not 1 to 30 small letters.`);
   return word + "0".repeat(30 - word.length);
 }
@@ -88,7 +88,7 @@ export function deliveryFixture(source: string, word: string): DeliveryFixture {
       title: `The source of ${source}`,
       origins: ["nws"],
       dependsOn: [`provider:${source}`],
-      uses: ["internet", "power"],
+      uses: ["internet", "dns", "power"],
       kinds: ["met"],
       coverage: [{ type: "code", system: "ugc", code: "KSZ083" }],
       transport: "poll",

@@ -3,8 +3,22 @@
  * the owner, and the load that checks it and makes the recipients. The repository holds no
  * configuration. The functions are pure, and the caller gives the secrets.
  */
-import type { Address, ChannelDescriptor, ChannelId, EscalationPolicy, PersonId, PersonWatch, PlaceId, Position, RegionCode, SourceId, WatchedPlace } from "./contracts.ts";
-import { recipientProblems, type Recipient } from "./delivery.ts";
+import { localTime } from "@mark1russell7/algebra/clock";
+import { err, ok, type Result } from "@mark1russell7/optional";
+import { canonicalHash } from "@mark1russell7/rigor-generators";
+import { compareCodeUnits } from "@mark1russell7/text/order";
+import type { Address, AssessPolicy, ChannelDescriptor, ChannelId, Duration, EscalationPolicy, Instant, InterestGraph, NodeKey, PersonId, PersonWatch, PlaceId, Position, RegionCode, SourceId, WatchedPlace } from "./contracts.ts";
+import { assess, DEFAULT_ASSESS_POLICY, DRILL_KIND, matchSubjects, reachedAssessment } from "./assess.ts";
+import { policyFor, recipientProblems, ruleSteps, type ChannelRule, type Recipient } from "./delivery.ts";
+import { DRILL_PROBES, drillProblems, nextDrillAt, type DrillConfig } from "./drill.ts";
+import { incidents, normalize } from "./merge.ts";
+import { optInFields, resolveOptIn, type OptInConfig, type OptInRecord } from "./opt-in.ts";
+import { DRILL_SUBJECT, NO_SYSTEM_LINES, systemReports } from "./system-reports.ts";
+import type { TryChain } from "./chain.ts";
+import type { Expectation } from "./lateness.ts";
+import { rankDelayProblems, rankFloorProblems, type RankDelays } from "./escalation.ts";
+import type { LinkPolicy } from "./link.ts";
+import { placeNode, placeOfNode, type WhyLabels } from "./why.ts";
 
 /** The name of the format of a configuration. A change that breaks a configuration gets a new name. */
 export const CONFIG_FORMAT = "alerts-config/1";
@@ -39,7 +53,10 @@ export interface PersonConfig {
   readonly watch: PersonWatch;
   /** The name of the person for the UI. */
   readonly label?: string;
-  /** The escalation policies of the person. When it is absent, the policies of the configuration apply. */
+  /**
+   * The escalation policies of the person. When it is absent, the policies of the configuration apply. A person with
+   * policies of their own gets no policy of the configuration, also no policy with a subject.
+   */
   readonly policies?: readonly EscalationPolicy[];
 }
 
@@ -49,6 +66,60 @@ export interface ContactConfig {
   readonly channel: ChannelId;
   /** The fields of the address that the channel reads, for example `user` for Pushover. */
   readonly address: Readonly<Record<string, AddressValue>>;
+}
+
+/**
+ * The money rules of one paid provider account: the cap of the spend of its channels, and the floor of its balance.
+ * The values are private. Only the configuration holds them.
+ */
+export interface SpendConfig {
+  /** The provider, as an id in the `dependsOn` of its channels: for example `provider:twilio`. */
+  readonly provider: string;
+  /** The most that the channels of the account spend in one calendar month, in US dollars. */
+  readonly monthlyUsd: number;
+  /**
+   * The fixed costs of the account in each month, for example the rent of each phone number. The sends of a month get
+   * the monthly cap less these costs (`sendCapUsd`). The default is no fixed cost.
+   */
+  readonly fixed?: readonly FixedCost[];
+  /** The last part of the cap of the sends that only `life-safety` messages use, in US dollars. The default is 0. */
+  readonly reserveUsd?: number;
+  /** Below this balance of the account, in the currency of the account, the system reports the line `low`. */
+  readonly floor: number;
+  /** The time zone of the start of the month, as an IANA name: for example `America/New_York`. */
+  readonly timeZone: string;
+}
+
+/** One fixed cost of a provider account in each month, for example the rent of one phone number. */
+export interface FixedCost {
+  /** The name of the cost, for example `toll-free number`. */
+  readonly what: string;
+  /** The cost in each month, in US dollars. */
+  readonly usd: number;
+}
+
+/**
+ * This function gives the part of the monthly cap of a spend entry that the sends get, in US dollars. That part is the
+ * cap less the fixed costs. The value is 0 or less when the fixed costs use all of the cap.
+ */
+export function sendCapUsd(spend: Pick<SpendConfig, "monthlyUsd" | "fixed">): number {
+  return spend.monthlyUsd - (spend.fixed ?? []).reduce((sum, cost) => sum + cost.usd, 0);
+}
+
+/** One person of the outage call, with the chain of the tries of the person. */
+export interface OutagePersonConfig {
+  readonly person: PersonId;
+  /** The channel of each try, in order. The address of a try is the contact of the person on its channel. */
+  readonly chain: TryChain;
+}
+
+/**
+ * The outage call: the calls to people when the outside check finds the instance down. The provider of
+ * the calls makes them, so they work while the instance is down. A deploy copies the list to the provider.
+ */
+export interface OutageConfig {
+  /** The people of the outage call, in the order of the first calls. */
+  readonly people: readonly OutagePersonConfig[];
 }
 
 /** The private configuration of the people and the places. Each copy of the system loads the same configuration. */
@@ -64,6 +135,223 @@ export interface AlertConfig {
    * server of another party gives it in the User-Agent. Without it, the User-Agent has no contact.
    */
   readonly contact?: string;
+  /** The settings of the expectations of the instance. Each entry names an expectation by its id. */
+  readonly expectations?: readonly ExpectationConfig[];
+  /** The money rules of each paid provider account. A provider with no entry has no cap and no watch of its balance. */
+  readonly spend?: readonly SpendConfig[];
+  /** The policy of the link rule of the merge. Without it, the instance uses `DEFAULT_LINK_POLICY`. */
+  readonly link?: LinkPolicy;
+  /** The outage call. Without it, an outage of the instance calls no person. */
+  readonly outage?: OutageConfig;
+  /**
+   * The wait of one rank of a copy, for each level. A level with no entry takes the default of the runtime. Each copy
+   * loads the same table. With 0 for `life-safety`, each copy sends each life-safety step at once.
+   * Two copies with different tables are safe. The copy of rank 0 sends at once in each case. A copy with no
+   * entry for a level waits the default.
+   */
+  readonly rankDelay?: RankDelays;
+  /**
+   * The least wait of one rank before a step of an exclusive channel, as a call. Without it, the runtime gives its
+   * default. A phone takes one call at a time. Thus a copy with rank 1 waits for the call of rank 0 in its ledger.
+   */
+  readonly rankFloor?: Duration;
+  /**
+   * The policy of the assessment: the statuses, the tables of the levels and the relevance policy. When it is absent,
+   * the default policy of the core applies. A policy here replaces the full default policy.
+   */
+  readonly assess?: AssessPolicy;
+  /** The drills of the live paths. Without them, the instance starts no drill. */
+  readonly drills?: readonly DrillConfig[];
+  /**
+   * The private opt-in list of the texts. A channel with an address field of `optIn` sends only to a phone on this
+   * list, and a STOP reply removes the number. The list holds phone numbers: keep it out of each public text.
+   */
+  readonly optIn?: readonly OptInConfig[];
+}
+
+/** The name of the format of a part of the configuration. A change that breaks a part gets a new name. */
+export const CONFIG_PART_FORMAT = "alerts-config-part/1";
+
+/**
+ * A part of the configuration from one writer: places, people and contacts. Each writer keeps its own file, so
+ * two writers do not overwrite each other. The root configuration keeps the other fields: policies, drills and spend.
+ */
+export interface ConfigPart {
+  readonly format: typeof CONFIG_PART_FORMAT;
+  readonly places?: readonly PlaceConfig[];
+  readonly people?: readonly PersonConfig[];
+  readonly contacts?: readonly ContactConfig[];
+}
+
+/** A part with its name. The name of a part in a file is the name of the file with no `.json`. */
+export interface NamedPart {
+  readonly name: string;
+  readonly part: ConfigPart;
+}
+
+/** The name of a part has small letters, digits and hyphens. It starts with a letter and has 40 characters or fewer. */
+export const PART_NAME: RegExp = /^[a-z][a-z0-9-]{0,39}$/u;
+
+/** This function gives the name of a part at the start of a problem. A bad name can hold any text, thus the label gives the index of the part. */
+export function partLabel(name: string, index: number): string {
+  return PART_NAME.test(name) ? `The part ${name}` : `Part ${String(index)}`;
+}
+
+/**
+ * This function merges the parts into the root configuration. The entries of the root come first. The entries of
+ * the parts come after them, in the order of the names. Thus the order of the reads does not change the merge or its hash.
+ *
+ * The merge finds a bad name and two parts with one name. It also finds an entry in two files: a place, a person, or
+ * a contact of one person on one channel. Two entries with one id in one file are a problem of `loadConfig`. A problem
+ * names ids and parts, and holds no other value.
+ */
+export function mergeParts(root: AlertConfig, parts: readonly NamedPart[]): Result<AlertConfig, readonly string[]> {
+  const problems: string[] = [];
+  const names = new Set<string>();
+  const good: NamedPart[] = [];
+  parts.forEach((named, index) => {
+    if (!PART_NAME.test(named.name)) problems.push(`The name of part ${index} is not small letters, digits and hyphens with a letter first, up to 40 characters.`);
+    else if (names.has(named.name)) problems.push(`Two parts have the name ${named.name}.`);
+    else good.push(named);
+    names.add(named.name);
+  });
+  good.sort((a, b) => compareCodeUnits(a.name, b.name));
+
+  // The file of each key, the first time the merge sees it. A key twice in one file is a problem of the load.
+  const fileOf = new Map<string, string>();
+  const claim = (key: string, file: string, what: string): void => {
+    const first = fileOf.get(key);
+    if (first === undefined) fileOf.set(key, file);
+    else if (first !== file) problems.push(`${what} is in ${first} and in ${file}.`);
+  };
+  const files: readonly { readonly file: string; readonly part: Omit<ConfigPart, "format"> }[] = [
+    { file: "the root configuration", part: root },
+    ...good.map(({ name, part }) => ({ file: `the part ${name}`, part })),
+  ];
+  for (const { file, part } of files) {
+    for (const place of part.places ?? []) claim(`place\u0000${place.id}`, file, `The place ${place.id}`);
+    for (const { watch } of part.people ?? []) claim(`person\u0000${watch.person}`, file, `The person ${watch.person}`);
+    for (const { person, channel } of part.contacts ?? []) claim(`contact\u0000${person}\u0000${channel}`, file, `The contact of the person ${person} on the channel ${channel}`);
+  }
+  if (problems.length > 0) return err(problems);
+  return ok({
+    ...root,
+    places: files.flatMap(({ part }) => part.places ?? []),
+    people: files.flatMap(({ part }) => part.people ?? []),
+    contacts: files.flatMap(({ part }) => part.contacts ?? []),
+  });
+}
+
+/** The name of the format of the settings of one copy of the system. A change that breaks a file gets a new name. */
+export const COPY_FORMAT = "alerts-copy/1";
+
+/** The address and the port of the exchange of a copy. */
+export interface CopyListen {
+  /** The address of the computer on the tailnet. An address of all interfaces is a problem. */
+  readonly host: string;
+  readonly port: number;
+}
+
+/** Another copy of the system, as one copy sees it. */
+export interface CopyPeer {
+  /** The id of the other copy. */
+  readonly id: string;
+  /** The URL of the exchange of the other copy, with `http` or `https`. */
+  readonly url: string;
+}
+
+/**
+ * The settings of one copy of the system: the file `copy.json`. Each copy has its own file. The configuration and the
+ * secrets are the same in each copy. A runtime with no file is the only copy, `ONLY_COPY`.
+ */
+export interface CopySettings {
+  readonly format: typeof COPY_FORMAT;
+  /** The name of the copy, for example `home` or `cloud`. Two copies do not have the same id. */
+  readonly id: string;
+  /** The order of the copy, from 0. A copy waits its rank times the rank delay before each send. */
+  readonly rank: number;
+  /** The address of the exchange of this copy. A copy with other copies needs it. */
+  readonly listen?: CopyListen;
+  /** The other copies. */
+  readonly peers?: readonly CopyPeer[];
+  /** The key of the secrets with the ping URL of the first check of this copy. The runtime gives a default key. */
+  readonly pingKey?: string;
+  /**
+   * The number of the account of each source with an account, by the id of the source. The keys of account 2 end in
+   * `_2`. The default is account 1. Two copies do not share an account, because an account has one session.
+   */
+  readonly accounts?: Readonly<Record<string, number>>;
+  /**
+   * The id of the copy that gives the configuration of this copy: `config.json` and the parts. Without it, this copy
+   * keeps its own files. The id is the id of a copy of `peers`. Each copy keeps its own `secrets.env` and `copy.json`.
+   */
+  readonly configFrom?: string;
+}
+
+/** The settings of a runtime with no file `copy.json`: the only copy, with rank 0 and no exchange. */
+export const ONLY_COPY: CopySettings = { format: COPY_FORMAT, id: "only", rank: 0 };
+
+// The addresses of all the interfaces. The exchange does not listen on them: only the tailnet reaches it.
+const ALL_INTERFACES: ReadonlySet<string> = new Set(["0.0.0.0", "::", "[::]", "*"]);
+
+/**
+ * This function gives the problems of the settings of a copy that a schema cannot find. Each problem names a field,
+ * and it holds no address and no URL.
+ *
+ * - A rank is lower than the count of the copies, because the ranks of the copies are 0, 1, 2 and up.
+ * - The other copies have different ids and URLs, and no other copy has the id of this copy.
+ * - A copy with other copies has the address `listen`, and the address is not an address of all interfaces.
+ * - The field `configFrom` names a copy of `peers`.
+ */
+export function copyProblems(settings: CopySettings): string[] {
+  const problems: string[] = [];
+  const peers = settings.peers ?? [];
+  if (settings.rank > peers.length) problems.push(`The rank is ${String(settings.rank)}, but the copies are ${String(peers.length + 1)}. A rank is lower than the count of the copies.`);
+  const ids = new Set<string>([settings.id]);
+  const urls = new Set<string>();
+  peers.forEach((peer, at) => {
+    if (ids.has(peer.id)) problems.push(`peers[${String(at)}]: the id ${peer.id} is the id of this copy or of an earlier copy.`);
+    if (urls.has(peer.url)) problems.push(`peers[${String(at)}]: the URL is the URL of an earlier copy.`);
+    ids.add(peer.id);
+    urls.add(peer.url);
+  });
+  if (settings.configFrom !== undefined && !peers.some((peer) => peer.id === settings.configFrom)) problems.push("configFrom: the id is not the id of a copy in peers.");
+  if (peers.length > 0 && settings.listen === undefined) problems.push("A copy with other copies needs the address listen of its exchange.");
+  if (settings.listen !== undefined && ALL_INTERFACES.has(settings.listen.host)) problems.push("listen.host: the exchange does not listen on all the interfaces. Give the tailnet address of the computer.");
+  return problems;
+}
+
+/** The settings of one expectation of the instance, for example the WEA check of a copy source. */
+export interface ExpectationConfig {
+  /** The id of the expectation. */
+  readonly id: string;
+  /** The start of a new record of the checks of the expectation. The value goes into `Expectation.since`. */
+  readonly since: Instant;
+}
+
+/**
+ * This function gives the expectations with the settings of the configuration. The `since` of each
+ * entry goes into the expectation with its id. An expectation with no entry stays the same.
+ */
+export function configuredExpectations(expectations: readonly Expectation[], settings: readonly ExpectationConfig[] = []): Expectation[] {
+  const byId = new Map(settings.map((entry) => [entry.id, entry]));
+  return expectations.map((expectation) => {
+    const entry = byId.get(expectation.id);
+    return entry === undefined ? expectation : { ...expectation, since: entry.since };
+  });
+}
+
+/**
+ * This function checks the settings of expectations against the expectations of an instance. It finds
+ * an entry with an unknown id, and a `since` after the time `at`. A `since` in the future stops the
+ * record until that time, so the source cannot be late.
+ */
+export function expectationProblems(settings: readonly ExpectationConfig[] | undefined, expectations: readonly Expectation[], at: Instant): string[] {
+  const known = new Set(expectations.map((expectation) => expectation.id));
+  return (settings ?? []).flatMap((entry) => [
+    ...(known.has(entry.id) ? [] : [`The configuration sets the expectation ${entry.id}, and the instance has no such expectation.`]),
+    ...(entry.since > at ? [`The since of the expectation ${entry.id} is in the future. The check of the source then has no record until that time.`] : []),
+  ]);
 }
 
 /** The secret store of the instance. It gives the value of a key, or `undefined` when it has no such key. */
@@ -78,6 +366,8 @@ export interface LoadedConfig {
    * no value of a secret, no label and no position. The runtime does not start with a problem.
    */
   readonly problems: readonly string[];
+  /** The opt-in list of the texts, with the value of each number. */
+  readonly optIn: readonly OptInRecord[];
 }
 
 /**
@@ -86,6 +376,16 @@ export interface LoadedConfig {
  * - two places or two people with one id, and a place with no region code
  * - a place of a person or of a rule that the configuration or the person does not have
  * - a contact of an unknown person, two contacts of a person on one channel, and a secret that the store does not have
+ * - two settings of one expectation
+ * - two spend entries of one provider, and a provider that no channel depends on
+ * - a reserve of a spend entry that is not below its cap, and a time zone that is not an IANA name
+ * - an unknown person of the outage call, a person two times in it, and a chain with no step
+ * - a step of the outage call on a channel with no contact of the person
+ * - a rank delay that is not a whole number of milliseconds up to `RANK_DELAY_LIMIT`
+ * - two drills with one id, a drill of an unknown person, and a drill on a channel with no contact of the person
+ * - a drill of a person who does not watch `DRILL_SUBJECT`
+ * - a run or a failure of a drill that sends nothing to its person: no policy of its level, or no step after the rules
+ * - each problem of `drillProblems` for each drill
  * - each problem of `recipientProblems` for each person.
  */
 export function loadConfig(config: AlertConfig, channels: readonly ChannelDescriptor[], secret: SecretLookup): LoadedConfig {
@@ -110,6 +410,13 @@ export function loadConfig(config: AlertConfig, channels: readonly ChannelDescri
         if (!own.has(place)) problems.push(`Rule ${index} of the person ${person} names the place ${place}, and the person does not watch it. The rule matches no incident there.`);
       }
     });
+    problems.push(...relevanceProblems(watch, own));
+  }
+
+  const expectations = new Set<string>();
+  for (const { id } of config.expectations ?? []) {
+    if (expectations.has(id)) problems.push(`Two settings of expectations have the id ${id}.`);
+    expectations.add(id);
   }
 
   // Maps, not objects: an id or a field such as `constructor` is then a plain key.
@@ -139,6 +446,51 @@ export function loadConfig(config: AlertConfig, channels: readonly ChannelDescri
     ofPerson.set(channel, Object.fromEntries(fields));
   }
 
+  // Each value of an opt-in field needs a record. A channel of texts then sends only to a person who agreed.
+  const { records: optIn, problems: optInFound } = resolveOptIn(config.optIn ?? [], secret);
+  problems.push(...optInFound);
+  const listed = new Set(optIn.map((record) => record.number));
+  for (const channel of channels) {
+    for (const field of optInFields(channel)) {
+      for (const [person, ofPerson] of addresses) {
+        const value = ofPerson.get(channel.id)?.[field.name];
+        if (value !== undefined && !listed.has(value)) problems.push(`The field ${field.name} of the contact of ${person} on ${channel.id} is not on the opt-in list. The channel sends nothing to it.`);
+      }
+    }
+  }
+
+  const providers = new Set<string>();
+  for (const spend of config.spend ?? []) {
+    const { provider } = spend;
+    if (providers.has(provider)) problems.push(`Two spend entries are for the provider ${provider}.`);
+    providers.add(provider);
+    // A typo of a provider gives a cap that no send takes from.
+    if (!channels.some((channel) => channel.dependsOn.includes(provider))) problems.push(`The spend entry of ${provider} names a provider that no channel depends on.`);
+    // The fixed costs come first. Thus the reserve is a part of the cap of the sends, and the sends get more than 0.
+    const sends = sendCapUsd(spend);
+    if (!(sends > 0)) problems.push(`The fixed costs of the spend of ${provider} use all of its monthly cap. No send can go.`);
+    else if (!((spend.reserveUsd ?? 0) < sends)) problems.push(`The reserve of the spend of ${provider} is not below its monthly cap less its fixed costs.`);
+    if (localTime(0, spend.timeZone) === undefined) problems.push(`The time zone of the spend of ${provider} is not an IANA name.`);
+  }
+
+  problems.push(...rankDelayProblems(config.rankDelay ?? {}));
+  problems.push(...rankFloorProblems(config.rankFloor));
+
+  const called = new Set<string>();
+  for (const { person, chain } of config.outage?.people ?? []) {
+    if (called.has(person)) problems.push(`The outage call has the person ${person} two times.`);
+    called.add(person);
+    if (!people.has(person)) {
+      problems.push(`The outage call names the person ${person}, and the configuration has no such person.`);
+      continue;
+    }
+    if (chain.steps.length === 0) problems.push(`The outage chain of the person ${person} has no step, so no outage call reaches the person.`);
+    for (const channel of new Set(chain.steps)) {
+      if (!channels.some((known) => known.id === channel)) problems.push(`The outage chain of the person ${person} uses the channel ${channel}, and the instance has no such channel.`);
+      else if (addresses.get(person)?.has(channel) !== true) problems.push(`The outage chain of the person ${person} uses the channel ${channel}, and the person has no contact on it.`);
+    }
+  }
+
   const recipients = config.people.map((entry): Recipient => {
     const recipient: Recipient = {
       watch: entry.watch,
@@ -148,7 +500,113 @@ export function loadConfig(config: AlertConfig, channels: readonly ChannelDescri
     for (const problem of recipientProblems(recipient, channels)) problems.push(`The person ${entry.watch.person}: ${problem}`);
     return recipient;
   });
-  return { recipients, problems };
+
+  const drills = new Set<string>();
+  const recipientOf = new Map(recipients.map((recipient) => [recipient.watch.person as string, recipient]));
+  const rulesOf = new Map<string, ChannelRule[]>();
+  for (const drill of config.drills ?? []) {
+    const { id, person, path } = drill;
+    if (drills.has(id)) problems.push(`Two drills have the id ${id}.`);
+    drills.add(id);
+    const recipient = recipientOf.get(person);
+    if (recipient === undefined) problems.push(`The drill ${id} is for the person ${person}, and the configuration has no such person.`);
+    else {
+      if (addresses.get(person)?.has(path.channel) !== true) problems.push(`The drill ${id} uses the channel ${path.channel}, and the person ${person} has no contact on it.`);
+      // The route sends the drill report only to a person who watches its subject.
+      const watched = (recipient.watch.subjects ?? []).some((watch) => watch.system === DRILL_SUBJECT && (watch.id === undefined || watch.id === id));
+      if (!watched) problems.push(`The drill ${id} is for the person ${person}, and the person does not watch the subject ${DRILL_SUBJECT}. The drill does not reach the person.`);
+      const rules = drillRules(drill);
+      rulesOf.set(person, [...(rulesOf.get(person) ?? []), ...rules]);
+      // A run goes only to the person of the drill. Another person who watches the drill gets no step of a run, and
+      // still gets the failure.
+      for (const other of recipients) {
+        if (other.watch.person === person || matchSubjects({ about: [{ system: DRILL_SUBJECT, id }] }, other.watch.subjects ?? []).length === 0) continue;
+        rulesOf.set(other.watch.person, [...(rulesOf.get(other.watch.person) ?? []), { kinds: [`${DRILL_KIND}.run`], about: { system: DRILL_SUBJECT, id }, keep: "only", channels: [] }]);
+      }
+      if (watched) problems.push(...drillPlanProblems(drill, { ...recipient, channelRules: [...(recipient.channelRules ?? []), ...rules] }, config.assess ?? DEFAULT_ASSESS_POLICY));
+    }
+    problems.push(...drillProblems(drill, channels, recipient?.watch.quiet));
+  }
+  const ruled = recipients.map((recipient) => {
+    const rules = rulesOf.get(recipient.watch.person);
+    return rules === undefined ? recipient : { ...recipient, channelRules: [...(recipient.channelRules ?? []), ...rules] };
+  });
+  return { recipients: ruled, problems, optIn };
+}
+
+/**
+ * This function gives the two channel rules of a drill. A run goes only on the channel of the path. A failure goes on
+ * each other channel of the person, because the path can be the broken part. `loadConfig` adds them to the person.
+ */
+export function drillRules(drill: DrillConfig): ChannelRule[] {
+  const about = { system: DRILL_SUBJECT, id: drill.id };
+  return [
+    { kinds: [`${DRILL_KIND}.run`], about, keep: "only", channels: [drill.path.channel] },
+    { kinds: [`${DRILL_KIND}.failed`], about, keep: "except", channels: [drill.path.channel] },
+  ];
+}
+
+// The plans of a drill for its person: the system fold makes the reports of a run and of its failure, the assessment
+// gives their levels, and the channel rules keep the steps. Thus the check reads the same code as the runtime.
+function drillPlanProblems(drill: DrillConfig, recipient: Recipient, policy: AssessPolicy): string[] {
+  const at = DRILL_PROBES.map((from) => nextDrillAt(drill, [], from, recipient.watch.quiet)).find((start) => start !== undefined);
+  // A drill with no start has a problem of `drillProblems`.
+  if (at === undefined) return [];
+  const snapshot = { sources: [], health: [], coverage: [], threats: [], drills: [{ copy: "probe", drill, run: { drill: drill.id, at } }] };
+  const run = systemReports(NO_SYSTEM_LINES, snapshot, at);
+  const end = at + drill.ackWithin;
+  const failed = systemReports(run.lines, snapshot, end);
+  const { id, person, path } = drill;
+  const plans = [
+    { name: "run", reports: run.reports, at },
+    { name: "failure", reports: failed.reports.filter((report) => report.kind.code === `${DRILL_KIND}.failed`), at: end },
+  ];
+  const problems: string[] = [];
+  for (const plan of plans) {
+    for (const incident of incidents(normalize({ reports: plan.reports }), plan.at)) {
+      const level = reachedAssessment(assess(incident, recipient.watch, [], policy, plan.at)).level;
+      const found = level === "none" ? undefined : policyFor(recipient.policies, level, incident);
+      if (found === undefined) {
+        problems.push(`The ${plan.name} of the drill ${id} reaches the person ${person} at the level ${level}, and the person has no policy of it. It sends nothing.`);
+        continue;
+      }
+      const kept = ruleSteps(found, recipient.channelRules, incident).policy;
+      if (kept.steps.length > 0) continue;
+      const which = plan.name === "run" ? `no step on the channel ${path.channel}` : `no step on a channel other than ${path.channel}`;
+      problems.push(`The ${plan.name} of the drill ${id} reaches the person ${person} at the level ${level}, and its policy has ${which}. It sends nothing.`);
+    }
+  }
+  return problems;
+}
+
+// The place ids of the place nodes of a graph, in the order of the edges and then of the mutes.
+function graphPlaces(graph: InterestGraph): PlaceId[] {
+  const nodes = [...graph.edges.flatMap((edge) => [edge.from, edge.to]), ...graph.mutes.flatMap((mute) => mute.subjects ?? [])];
+  return [...new Set(nodes.flatMap((node) => placeOfNode(node) ?? []))];
+}
+
+/**
+ * This function gives the problems of the interest graph and of the rule of the life-safety warnings of a person. The
+ * set `own` holds the places of the person. A graph of another person makes the relevance fail at each incident. A
+ * place node or a rule at a place that the person does not watch matches no incident.
+ */
+function relevanceProblems(watch: PersonWatch, own: ReadonlySet<string>): string[] {
+  const person = watch.person;
+  const problems: string[] = [];
+  const graph = watch.interests;
+  if (graph !== undefined) {
+    if (graph.person !== person) problems.push(`The interest graph of the person ${person} is of the person ${graph.person}. The relevance fails, and the places decide.`);
+    for (const place of graphPlaces(graph)) {
+      if (!own.has(place)) problems.push(`The interest graph of the person ${person} names the place ${place}, and the person does not watch it.`);
+    }
+  }
+  for (const rule of watch.mandatory ?? []) {
+    if (!own.has(rule.place)) problems.push(`The rule of the life-safety warnings of the person ${person} names the place ${rule.place}, and the person does not watch it.`);
+  }
+  if (graph === undefined && (watch.mandatory?.length ?? 0) > 0) {
+    problems.push(`The person ${person} has rules of the life-safety warnings and no interest graph. The rules have no effect without a graph.`);
+  }
+  return problems;
 }
 
 /**
@@ -162,6 +620,27 @@ export function localPlaces(config: AlertConfig): WatchedPlace[] {
 /** This function gives the places of the configuration for one source. A place has a position only when it shares it with that source. */
 export function sourcePlaces(config: AlertConfig, source: SourceId): WatchedPlace[] {
   return config.places.map((place) => watchedPlace(place, place.sharePosition?.includes(source) === true));
+}
+
+/**
+ * This function gives the labels of the places of the configuration, by their node keys `place:<id>`. The labels
+ * stay on the machine of the instance: the runtime puts them only in the why line of a message.
+ */
+export function placeLabels(config: AlertConfig): WhyLabels {
+  const labels = new Map<NodeKey, string>(config.places.map((place) => [placeNode(place.id), place.label]));
+  return (node) => labels.get(node);
+}
+
+/** The scheme of the hash of a configuration. A new scheme gives a new hash to each configuration. */
+export const CONFIG_HASH_SCHEME = "alerts-config-hash/1";
+
+/**
+ * This function gives the hash of a configuration: the SHA-256 of its canonical JSON (RFC 8785), as 64 hex characters.
+ * The order of the keys does not change the hash. The copies of the system compare their hashes in the exchange.
+ * A different hash tells that two copies can route an alert in two ways. The hash holds no value of the configuration.
+ */
+export function configHash(config: AlertConfig): string {
+  return canonicalHash([CONFIG_HASH_SCHEME, config], { form: "json" });
 }
 
 // A watched place has no label. It has the position only when `withPosition` is true.

@@ -1,7 +1,7 @@
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { CONFIG_FORMAT, type AlertConfig, type ChannelDescriptor, type ChannelId, type PersonId, type PlaceId } from "@mark1russell7/alerts";
+import { CONFIG_FORMAT, CONFIG_PART_FORMAT, type AlertConfig, type ChannelDescriptor, type ChannelId, type PersonId, type PlaceId } from "@mark1russell7/alerts";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   alertsHome,
@@ -12,13 +12,19 @@ import {
   DEFAULT_ALERTS_HOME,
   envSecrets,
   fileSource,
+  NO_PARTS,
+  noParts,
   parseSecrets,
+  PARTS_FOLDER,
+  readParts,
   readText,
   requireKey,
   SECRETS_FILE,
   type ConfigSource,
   type InstanceCheck,
+  type PartsTexts,
   type PrivateTexts,
+  withPart,
 } from "./config.ts";
 
 const PUSHOVER = "pushover" as ChannelId;
@@ -28,7 +34,7 @@ const CHANNEL: ChannelDescriptor = {
   id: PUSHOVER,
   title: "Pushover",
   dependsOn: ["provider:pushover"],
-  uses: ["internet", "power"],
+  uses: ["internet", "dns", "power"],
   breaksThrough: true,
   repeats: true,
   ack: "poll",
@@ -51,6 +57,10 @@ const SECRETS = envSecrets({ PUSHOVER_USER: `${PRIVATE}-user` });
 const textSource = (text: string): ConfigSource => ({ name: "The test source", read: async () => text });
 // The check of an instance with the one channel and no problem of its own.
 const CHECK: InstanceCheck = { channels: [CHANNEL], problems: () => [] };
+// A part with a second public place in Kansas, with a made-up label.
+const PART_PLACE = { id: "place:b" as PlaceId, label: "Place B", codes: [{ system: "ugc" as const, code: "KSZ083" }], bufferKm: 0 };
+const PART = JSON.stringify({ format: CONFIG_PART_FORMAT, places: [PART_PLACE] });
+const partsOf = (...parts: readonly (readonly [string, string])[]): PartsTexts => ({ files: parts.map(([name, part]) => ({ name, file: { text: part } })) });
 
 describe("alertsHome and configPath", () => {
   // Absolute paths on each system: on Windows, resolve adds the drive.
@@ -130,6 +140,46 @@ describe("parseSecrets", () => {
   });
 });
 
+describe("readParts and withPart", () => {
+  let home = "";
+  beforeAll(async () => {
+    home = await mkdtemp(join(tmpdir(), `alerts-parts-${PRIVATE}-`));
+  });
+  afterAll(async () => {
+    await rm(home, { recursive: true, force: true });
+  });
+
+  it("gives no parts for a missing folder, and the code of another error of the read of the folder", async () => {
+    expect(await readParts(join(home, "absent"))).toEqual(NO_PARTS);
+    expect(noParts(NO_PARTS)).toBe(true);
+    expect(noParts(undefined)).toBe(true);
+    // A file in place of the folder cannot be read as a folder.
+    await writeFile(join(home, "file"), "", "utf8");
+    const parts = await readParts(join(home, "file"));
+    expect(parts).toEqual({ code: expect.stringMatching(/^E[A-Z]+$/u) });
+    expect(noParts(parts)).toBe(false);
+  });
+
+  it("reads each file that ends with .json in the order of the code units of the names, and ignores each other file", async () => {
+    const folder = join(home, PARTS_FOLDER);
+    await mkdir(folder);
+    await Promise.all([["b.json", "B"], ["a-2.json", "A2"], ["Z.json", "Z"], ["a.next.tmp", "{"], ["notes.txt", "x"]].map(([name, part]) => writeFile(join(folder, name ?? ""), part ?? "", "utf8")));
+    // A folder with a name that ends with .json cannot be read as a file. The read gives its code, not a path.
+    await mkdir(join(folder, "c.json"));
+    const parts = await readParts(folder);
+    expect("files" in parts ? parts.files.map(({ name }) => name) : parts).toEqual(["Z", "a-2", "b", "c"]);
+    expect("files" in parts ? parts.files.map(({ file }) => ("text" in file ? file.text : "code")) : parts).toEqual(["Z", "A2", "B", "code"]);
+    expect(JSON.stringify(parts)).not.toContain(PRIVATE);
+  });
+
+  it("puts a new text of a part in place of its file, or adds it in the order of the names", () => {
+    const parts = partsOf(["a", "1"], ["c", "3"]);
+    expect(withPart(parts, { name: "c", file: { text: "new" } })).toEqual(partsOf(["a", "1"], ["c", "new"]));
+    expect(withPart(parts, { name: "b", file: { text: "2" } })).toEqual(partsOf(["a", "1"], ["b", "2"], ["c", "3"]));
+    expect(withPart({ code: "EACCES" }, { name: "b", file: { text: "2" } })).toEqual({ code: "EACCES" });
+  });
+});
+
 describe("checkTexts", () => {
   const texts = (config: string, secrets = `PUSHOVER_USER=${PRIVATE}-user\n`): PrivateTexts => ({ config: { text: config }, secrets: { text: secrets } });
 
@@ -150,6 +200,16 @@ describe("checkTexts", () => {
     expect(problemsOf("{")).toEqual(["The configuration is not valid JSON."]);
     expect(problemsOf(JSON.stringify({ ...CONFIG, extra: 1 }))).toHaveLength(1);
     expect(problemsOf(JSON.stringify(CONFIG), "OTHER=value\n")).toEqual([expect.stringContaining("names the secret PUSHOVER_USER")]);
+  });
+
+  it("merges the parts into the configuration, and gives the read errors of the parts with their names", () => {
+    const parted = (parts: PartsTexts): PrivateTexts => ({ ...texts(JSON.stringify(CONFIG)), parts });
+    const checked = checkTexts(parted(partsOf(["extra", PART])), CHECK);
+    expect(checked.tag === "ok" ? checked.value.parsed.config.places : checked).toEqual([...CONFIG.places, PART_PLACE]);
+    expect(checkTexts(parted({ code: "EACCES" }), CHECK)).toEqual({ tag: "err", error: [`The folder ${PARTS_FOLDER} cannot be read (EACCES).`] });
+    const unread: PartsTexts = { files: [{ name: "extra", file: { code: "EISDIR" } }, { name: `${PRIVATE} name`, file: { code: "EACCES" } }] };
+    expect(checkTexts(parted(unread), CHECK)).toEqual({ tag: "err", error: ["The part extra cannot be read (EISDIR).", "Part 1 cannot be read (EACCES)."] });
+    expect(checkTexts(parted(partsOf(["extra", "{"])), CHECK)).toEqual({ tag: "err", error: ["The part extra is not valid JSON."] });
   });
 
   it("gives the problems of secrets.env first, and then the read error of the configuration with its name", () => {
@@ -208,6 +268,20 @@ describe("checkConfig", () => {
   it("gives the name of the source and the code of its read error", async () => {
     await writeSecrets(`PUSHOVER_USER=${PRIVATE}-user\n`);
     expect(await checkConfig(fileSource(join(home, "absent.json")), home, CHECK)).toEqual({ tag: "err", error: ["The configuration file cannot be read (ENOENT)."] });
+  });
+
+  it("checks the parts of the private folder, with a new text of a part in place of its file", async () => {
+    await writeSecrets(`PUSHOVER_USER=${PRIVATE}-user\n`);
+    const folder = join(home, PARTS_FOLDER);
+    await mkdir(folder, { recursive: true });
+    await writeFile(join(folder, "extra.json"), "{", "utf8");
+    const source = textSource(JSON.stringify(CONFIG));
+    expect(await checkConfig(source, home, CHECK)).toEqual({ tag: "err", error: ["The part extra is not valid JSON."] });
+    const checked = await checkConfig(source, home, CHECK, { name: "extra", source: textSource(PART) });
+    expect(checked.tag === "ok" ? checked.value.config.places : checked).toEqual([...CONFIG.places, PART_PLACE]);
+    // A new part goes into the check with the parts of the folder.
+    expect(await checkConfig(source, home, CHECK, { name: "other", source: textSource(PART) })).toEqual({ tag: "err", error: ["The part extra is not valid JSON."] });
+    await rm(folder, { recursive: true });
   });
 
   it("gives the problems of secrets.env before it reads the configuration", async () => {

@@ -2,15 +2,38 @@
  * This module makes the events of one fetch. It is pure: the runtime gives the outcome, the times and
  * the ids that the log has. The runtime applies the map of a source to each observation of the fetch.
  * The fatal and lossy problems of the last passed fetch give the health. The log keeps only the new observations and
- * their reports, thus a read that repeats does not make the file larger.
+ * their reports, thus a read that repeats does not make the file larger. The readings of the new observations go to the
+ * store of the readings, not to the log.
  */
-import type { CanaryResult, FetchOutcome, FetchRecord, Instant, MapProblem, MapResult, Observation, ObservationId, Report, SourceId, SourceProcedures } from "@mark1russell7/alerts";
+import {
+  checkWith,
+  readingProblems,
+  readingSchema,
+  type CanaryResult,
+  type FetchOutcome,
+  type FetchRecord,
+  type Instant,
+  type MapProblem,
+  type MapResult,
+  type Observation,
+  type ObservationId,
+  type Reading,
+  type Report,
+  type SourceDescriptor,
+  type SourceId,
+  type SourceProcedures,
+} from "@mark1russell7/alerts";
 import { errorMessage } from "@mark1russell7/text";
-import { envelope, type FetchEvent, type ObservationEvent } from "./events.ts";
+import { envelope, frameTag, type FetchEvent, type ObservationEvent } from "./events.ts";
 
-/** The input of `fetchEvents`. */
+/** The input of `fetchStep` and `fetchEvents`. */
 export interface FetchInput {
   readonly source: SourceId;
+  /**
+   * The descriptor of the source. The check of each reading reads the declarations of its measures. Without the
+   * descriptor, the step keeps no reading, and each reading is a lossy problem.
+   */
+  readonly descriptor?: SourceDescriptor;
   /** The map and the canary check of the source. */
   readonly procedures: Pick<SourceProcedures, "map" | "check">;
   /** The start and the end of the fetch. */
@@ -19,16 +42,34 @@ export interface FetchInput {
   readonly outcome: FetchOutcome;
   /** This function tells if the log has an observation. */
   readonly known: (id: ObservationId) => boolean;
+  /** The count of the steps of the wall clock in the log. The id of the fetch has its frame tag. The default is 0. */
+  readonly frame?: number;
+}
+
+/** The events and the readings of one fetch. The log keeps the events, and the store of the readings keeps the readings. */
+export interface FetchStep {
+  readonly events: (ObservationEvent | FetchEvent)[];
+  /** The readings of the new observations that pass their checks, in the order of the map. */
+  readonly readings: readonly Reading[];
 }
 
 /** This function gives the events of one fetch: one event for each new observation, then the fetch event. */
 export function fetchEvents(input: FetchInput): (ObservationEvent | FetchEvent)[] {
+  return fetchStep(input).events;
+}
+
+/**
+ * This function gives the events and the readings of one fetch. Each reading of a new observation gets two checks: the
+ * schema of a reading, and the declaration of its measure with `readingProblems`. It must also name its own observation.
+ * A reading that fails a check is a lossy problem of its observation, and the store does not get it.
+ */
+export function fetchStep(input: FetchInput): FetchStep {
   const { source, started, ended, outcome } = input;
   const took = Math.max(0, ended - started);
-  const id = `fetch:${source}:${started}`;
+  const id = `fetch:${source}:${started}${frameTag(input.frame ?? 0)}`;
   if (!outcome.ok) {
     const record: FetchRecord = { source, at: started, took, failure: outcome.failure, fresh: 0, fatal: 0 };
-    return [{ ...envelope("fetch", id, ended), record, reports: [], problems: [] }];
+    return { events: [{ ...envelope("fetch", id, ended), record, reports: [], problems: [] }], readings: [] };
   }
   // A fetch can give an observation twice. Each id counts once.
   const unique = [...new Map(outcome.observations.map((observation) => [observation.id, observation])).values()];
@@ -38,13 +79,17 @@ export function fetchEvents(input: FetchInput): (ObservationEvent | FetchEvent)[
   let lossy = 0;
   const reports: Report[] = [];
   const problems: MapProblem[] = [];
+  const readings: Reading[] = [];
   for (const observation of unique) {
     const result = mapSafely(input.procedures, observation);
-    fatal += result.problems.filter((problem) => problem.fatal).length;
-    lossy += result.problems.filter((problem) => problem.lossy === true).length;
+    const checked = checkReadings(result.readings, observation.id, source, input.descriptor);
+    const found = [...result.problems, ...checked.problems];
+    fatal += found.filter((problem) => problem.fatal).length;
+    lossy += found.filter((problem) => problem.lossy === true).length;
     if (!isFresh.has(observation.id)) continue;
     reports.push(...result.reports);
-    problems.push(...result.problems);
+    problems.push(...found);
+    readings.push(...checked.readings);
   }
   const canary = checkSafely(input.procedures, outcome.observations);
   const record: FetchRecord = {
@@ -57,7 +102,36 @@ export function fetchEvents(input: FetchInput): (ObservationEvent | FetchEvent)[
     ...(canary === undefined ? {} : { canary }),
   };
   const observed = fresh.map((observation): ObservationEvent => ({ ...envelope("observation", observation.id, ended), observation }));
-  return [...observed, { ...envelope("fetch", id, ended), record, ...(outcome.cursor === undefined ? {} : { cursor: outcome.cursor }), reports, problems }];
+  const events = [...observed, { ...envelope("fetch", id, ended), record, ...(outcome.cursor === undefined ? {} : { cursor: outcome.cursor }), reports, problems }];
+  return { events, readings };
+}
+
+// A lossy problem at a path: the map lost a value of the message.
+const lossyAt =
+  (path: string) =>
+  (message: string): MapProblem => ({ path, message, fatal: false, lossy: true });
+
+// The readings of one map result that pass their checks, and a lossy problem for each other reading. The value comes from
+// an adapter, thus the function checks the list too. A reading must name its observation, because the key of the store holds it.
+function checkReadings(given: unknown, observation: ObservationId, source: SourceId, descriptor: SourceDescriptor | undefined): { readings: Reading[]; problems: MapProblem[] } {
+  if (given === undefined) return { readings: [], problems: [] };
+  if (!Array.isArray(given)) return { readings: [], problems: [lossyAt("readings")("The readings of the map are not a list.")] };
+  const readings: Reading[] = [];
+  const problems: MapProblem[] = [];
+  for (const [index, value] of (given as readonly unknown[]).entries()) {
+    const at = lossyAt(`readings[${String(index)}]`);
+    const checked = checkWith(readingSchema, value);
+    if (checked.tag === "err") {
+      problems.push(...checked.error.map(at));
+      continue;
+    }
+    const reading = checked.value;
+    const found = descriptor === undefined ? [`The runtime has no declaration of the measures of ${source}.`] : readingProblems(reading, descriptor);
+    if (reading.observation !== observation) found.push("The reading names an observation other than the observation of its message.");
+    if (found.length > 0) problems.push(...found.map(at));
+    else readings.push(reading);
+  }
+  return { readings, problems };
 }
 
 // A map that throws is a fault of the adapter. It is a fatal problem of its observation, thus the health

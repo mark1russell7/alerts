@@ -1,9 +1,27 @@
 import { join, resolve } from "node:path";
 import { valueIn } from "@mark1russell7/quantity";
-import { groupProblems, renderTaskXml, serviceProblems, superviseGroup } from "@mark1russell7/service/host";
+import { groupProblems, renderSystemdUnit, renderTaskXml, serviceProblems, superviseGroup } from "@mark1russell7/service/host";
 import { fakeHost } from "@mark1russell7/service/testing";
 import { describe, expect, it } from "vitest";
-import { declareSupervisor, HOST_PORTS, hostGroup, hostTask, READY_WITHIN, readinessProbe, RUNTIME_GRACE, RUNTIME_PROFILE, shutdownCap, supervisorDiscovery, supervisorHome } from "./host.ts";
+import {
+  declareSupervisor,
+  discoveryPid,
+  HOST_PORTS,
+  hostFolder,
+  hostGroup,
+  hostTask,
+  READY_WITHIN,
+  readinessProbe,
+  RUNTIME_GRACE,
+  RUNTIME_PROFILE,
+  RUNTIME_PROGRAM,
+  runtimeDiscovery,
+  shutdownCap,
+  SUPERVISOR_GRACE,
+  SUPERVISOR_PROFILE,
+  supervisorDiscovery,
+  supervisorHome,
+} from "./host.ts";
 import { STOP_MESSAGE } from "./index.ts";
 import { INSTANCE_TIMES } from "./instance.ts";
 
@@ -119,5 +137,32 @@ describe("the host of the instance", () => {
     expect(xml).toContain("<BootTrigger>");
     expect(xml).toContain("<Interval>PT1M</Interval>");
     expect(xml).toContain("S4U");
+  });
+
+  it("gives a systemd unit in which only the supervisor gets the stop signal, with a stop grace that holds its longest shutdown", () => {
+    const spec = hostTask(OPTIONS);
+    expect(spec.stopsChildren).toBe(true);
+    expect(msOf(SUPERVISOR_GRACE)).toBeGreaterThan(msOf(shutdownCap(SUPERVISOR_PROFILE)));
+    // The longest shutdown of the supervisor holds the stop grace of the runtime.
+    expect(msOf(shutdownCap(SUPERVISOR_PROFILE))).toBeGreaterThan(msOf(RUNTIME_GRACE));
+    const unit = renderSystemdUnit(spec);
+    expect(unit).toContain("KillMode=mixed");
+    expect(unit).toContain(`TimeoutStopSec=${Math.ceil(msOf(SUPERVISOR_GRACE) / 1000)}`);
+    expect(unit).toContain("Restart=always");
+  });
+});
+
+describe("the discovery file of the runtime", () => {
+  it("is the file of the runtime program in the folder of the host", () => {
+    expect(hostGroup(OPTIONS).programs.map((program) => program.name)).toEqual([RUNTIME_PROGRAM]);
+    expect(runtimeDiscovery(HOME)).toBe(join(hostFolder(HOME), `${RUNTIME_PROGRAM}.json`));
+  });
+
+  it("gives the process ID of a discovery file, and no ID for a file with no process", () => {
+    expect(discoveryPid({ text: JSON.stringify({ pid: 4242, startedAt: "2026-11-16T07:00:00Z", port: 4750 }) })).toBe(4242);
+    expect(discoveryPid({ code: "ENOENT" })).toBeUndefined();
+    expect(discoveryPid({ text: "{" })).toBeUndefined();
+    expect(discoveryPid({ text: "null" })).toBeUndefined();
+    for (const pid of [0, -1, 1.5, "4242", Number.MAX_SAFE_INTEGER + 1]) expect(discoveryPid({ text: JSON.stringify({ pid }) })).toBeUndefined();
   });
 });
