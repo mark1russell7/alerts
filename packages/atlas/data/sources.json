@@ -459,6 +459,46 @@
     "round": 1
   },
   {
+    "id": "apple-system-status",
+    "name": "Apple System Status and Developer System Status",
+    "classes": [
+      "infra.saas.outage"
+    ],
+    "dimensions": [
+      "online-service-status"
+    ],
+    "url": "https://www.apple.com/support/systemstatus/",
+    "access": "page",
+    "auth": "none",
+    "terms": {
+      "url": "https://www.apple.com/legal/internet-services/terms/site.html",
+      "automated": "forbidden",
+      "redistribution": "unclear",
+      "note": "The terms of the site, updated on 2009-11-20, forbid a robot, a spider or another automatic device that accesses, copies or monitors a part of the site."
+    },
+    "cost": "free",
+    "delay": "unknown",
+    "history": "unknown",
+    "rateLimit": "unknown",
+    "calibration": null,
+    "coverage": "The services of Apple, and the developer services, for example the Apple Push Notification service (APNs).",
+    "origins": [
+      "apple"
+    ],
+    "path": [
+      "unknown"
+    ],
+    "subjectIds": null,
+    "risks": [],
+    "decision": "reject",
+    "adapter": null,
+    "reason": "The terms of the site forbid an automatic device. The round did not read the status pages. The push service of Apple stays a gap, with this reason.",
+    "evidence": [
+      "https://www.apple.com/legal/internet-services/terms/site.html"
+    ],
+    "round": 14
+  },
+  {
     "id": "ashp-drug-shortages",
     "name": "ASHP current drug shortages",
     "classes": [
@@ -4247,6 +4287,49 @@
       "https://www.metro-magazine.com/blogposts/mobility-data-sharing-standards-openness-or-monopolies"
     ],
     "round": 10
+  },
+  {
+    "id": "firebase-status",
+    "name": "Firebase Status Dashboard incidents JSON",
+    "classes": [
+      "infra.cloud.outage"
+    ],
+    "dimensions": [
+      "online-service-status"
+    ],
+    "url": "https://status.firebase.google.com/incidents.json",
+    "access": "api",
+    "auth": "none",
+    "terms": {
+      "url": null,
+      "automated": "unclear",
+      "redistribution": "unclear",
+      "note": "Terms not opened. The file has the format of Google Cloud Service Health."
+    },
+    "cost": "free",
+    "delay": "unknown",
+    "history": "unknown",
+    "rateLimit": "No published limit. The adapter asks once each 2 minutes.",
+    "calibration": null,
+    "coverage": "Public incidents of the Firebase products, with no location.",
+    "origins": [
+      "google"
+    ],
+    "path": [
+      "status.firebase.google.com"
+    ],
+    "subjectIds": [
+      "domain"
+    ],
+    "risks": [],
+    "decision": "adopt",
+    "adapter": "@mark1russell7/alerts-source-gcp",
+    "reason": "The Firebase incidents in the format of Google Cloud, with no key. The runtime reads it only when a person can get its reports, with the rule of a status page. Cloud Messaging sends the push messages of Android apps.",
+    "evidence": [
+      "https://status.firebase.google.com/incidents.json",
+      "https://status.firebase.google.com/products.json"
+    ],
+    "round": 14
   },
   {
     "id": "gcp-status-json",

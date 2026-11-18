@@ -786,11 +786,13 @@
       "The outages of Cloudflare Radar: https://api.cloudflare.com/client/v4/radar/annotations/outages",
       "The traffic anomalies of Cloudflare Radar: https://api.cloudflare.com/client/v4/radar/traffic_anomalies",
       "The RSS feed of Azure Status: https://rssfeed.azure.status.microsoft/en-us/status/feed/",
-      "The feed catalog of the Mobility Database: https://files.mobilitydatabase.org/feeds_v2.csv"
+      "The incidents of the Firebase Status Dashboard: https://status.firebase.google.com/incidents.json",
+      "The feed catalog of the Mobility Database: https://files.mobilitydatabase.org/feeds_v2.csv",
+      "The terms of use of the Apple site: https://www.apple.com/legal/internet-services/terms/site.html"
     ],
     "queries": [],
     "notes": [
-      "The atlas adopts three adapters that the runtime reads: eia-930, cloudflare-radar-api and azure-status-rss.",
+      "The atlas adopts four sources that the runtime reads: eia-930, cloudflare-radar-api, azure-status-rss and firebase-status.",
       "The EIA-930 demand gets its own source, eia-930, with the dimension power-demand. The source eia-api keeps the supply and the fuel prices, and stays planned.",
       "The host api.eia.gov is a canonical name of api.data.gov, which sends the requests on to cloud.gov. The new part provider:api-data-gov is in both EIA paths and in the EIA-930 descriptor.",
       "The EIA key goes in the query of each URL, as the API needs. The adapter removes it from each URL, message and observation id.",
@@ -798,6 +800,9 @@
       "The Radar data is under CC BY-NC 4.0. The system has no commercial use, so the atlas gives the limit in the terms and no risk. A commercial use needs a new decision.",
       "BoM keeps its risk, because BoM permits personal use only. That limit is narrower than no commercial use.",
       "The Azure adapter is in the runtime, so azure-status-rss is adopted. Its path has cdn:akamai, as round 13 found.",
+      "The GCP adapter also reads the Firebase Status Dashboard. The new source firebase-status shares the adapter, so the descriptor test counts each adopted adapter once.",
+      "Firebase answers from the front end of Google, as Google Cloud does. Its origin is google, the origin of gcp-status-json.",
+      "The atlas rejects the status pages of Apple. The terms of the site forbid an automatic device, so the round did not read the pages. The push service of Apple stays a gap.",
       "The runtime reads the GTFS Realtime alerts of each feed of the catalog whose box meets a place. Each feed is one source, so gtfs-rt-alerts stays planned, as the status pages do.",
       "The catalog of the Mobility Database gives no signal. It was a planned source of the transit alerts. The atlas rejects it as a source, and the transit class keeps its gap.",
       "The public file of the catalog needs no account, and its host has the headers of Google Cloud Storage. The part api.mobilitydatabase.org goes out of the atlas, because no source uses it."
@@ -812,14 +817,14 @@
         "origins": 4
       },
       "total": {
-        "adopted": 145,
-        "paths": 145,
+        "adopted": 146,
+        "paths": 146,
         "origins": 67
       },
       "unknownOrigins": 4,
       "unknownPaths": 30,
       "dimensions": 5,
-      "cause": "Round 14 adopts three planned sources. Radar adds one adopted source to five classes, and Azure a third to the cloud outages, so each total goes up by 6. The cover stays at 54. No Radar class has a second adopted source: IODA is planned, and DDoS and BGP have no second source."
+      "cause": "Round 14 adopts three planned sources and one new source. Radar adds an adopted source to five classes. Azure and Firebase add two to the cloud outages. So the adopted and path totals go up by 7, and the origin total by 6, because Firebase has the origin of Google Cloud. The cover stays at 54. No Radar class has a second adopted source: IODA is planned, and DDoS and BGP have no second source."
     }
   }
 ]

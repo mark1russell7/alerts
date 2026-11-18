@@ -768,6 +768,12 @@
     "note": "The host of the feed of gcp-status-json."
   },
   {
+    "id": "status.firebase.google.com",
+    "name": "status.firebase.google.com",
+    "kind": "host",
+    "note": "The host of the feed of firebase-status. Google answers from its own front end, the provider of the feed."
+  },
+  {
     "id": "statusgator.com",
     "name": "statusgator.com",
     "kind": "host",

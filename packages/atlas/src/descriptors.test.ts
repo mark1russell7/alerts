@@ -7,7 +7,7 @@ import { KEV_DESCRIPTOR } from "@mark1russell7/alerts-source-cisa-kev";
 import { EMSC_DESCRIPTOR } from "@mark1russell7/alerts-source-emsc";
 import { EIA_930_DESCRIPTOR } from "@mark1russell7/alerts-source-eia-930";
 import { ENERGY_CHARTS_DESCRIPTOR } from "@mark1russell7/alerts-source-energy-charts";
-import { GCP_DESCRIPTOR } from "@mark1russell7/alerts-source-gcp";
+import { FIREBASE_DESCRIPTOR, GCP_DESCRIPTOR } from "@mark1russell7/alerts-source-gcp";
 import { GFZ_DESCRIPTOR } from "@mark1russell7/alerts-source-gfz";
 import { IEM_DESCRIPTOR } from "@mark1russell7/alerts-source-iem";
 import { IPAWS_DESCRIPTOR } from "@mark1russell7/alerts-source-ipaws";
@@ -29,7 +29,7 @@ const DESCRIPTORS: Readonly<Record<string, readonly SourceDescriptor[]>> = {
   "@mark1russell7/alerts-source-eia-930": [EIA_930_DESCRIPTOR],
   "@mark1russell7/alerts-source-emsc": [EMSC_DESCRIPTOR],
   "@mark1russell7/alerts-source-energy-charts": [ENERGY_CHARTS_DESCRIPTOR],
-  "@mark1russell7/alerts-source-gcp": [GCP_DESCRIPTOR],
+  "@mark1russell7/alerts-source-gcp": [GCP_DESCRIPTOR, FIREBASE_DESCRIPTOR],
   "@mark1russell7/alerts-source-gfz": [GFZ_DESCRIPTOR],
   "@mark1russell7/alerts-source-iem": [IEM_DESCRIPTOR],
   "@mark1russell7/alerts-source-ipaws": [IPAWS_DESCRIPTOR],
@@ -50,7 +50,8 @@ const adopted = atlas.sources.filter((source) => source.decision === "adopt");
 
 describe("the paths of the atlas and the descriptors of the adapters", () => {
   it("has the descriptors of each adopted adapter", () => {
-    expect(adopted.map((source) => source.adapter).sort()).toEqual(Object.keys(DESCRIPTORS).sort());
+    // Two sources can share one adapter, for example the two dashboards of Google.
+    expect([...new Set(adopted.map((source) => source.adapter))].sort()).toEqual(Object.keys(DESCRIPTORS).sort());
   });
 
   // A shared CDN or carrier is a common fault of two sources. When one list lacks it, the coverage counts two sources as apart.
