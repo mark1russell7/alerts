@@ -35,6 +35,7 @@ import {
   type CellResource,
   type Certainty,
   type ChannelDescriptor,
+  type ChannelFailureKind,
   type ChannelId,
   type ChannelQuota,
   type CopyRead,
@@ -157,12 +158,12 @@ import {
   type SecretRef,
 } from "./config.ts";
 import type { TryChain } from "./chain.ts";
-import type { ChannelDownConfig } from "./channel-down.ts";
+import type { ChannelDownConfig, ChannelRun } from "./channel-down.ts";
 import type { EscalationEnd, Recipient } from "./delivery.ts";
 import type { DrillConfig, DrillPath } from "./drill.ts";
 import { OPT_IN_WAYS, type OptInConfig, type OptInRecord } from "./opt-in.ts";
 import type { RankDelays } from "./escalation.ts";
-import { HEALTH_FORMAT, type BalanceHealth, type CopyHealth, type HealthPayload, type QuotaHealth, type ReadHealth, type SourceHealthView } from "./health-payload.ts";
+import { HEALTH_FORMAT, type BalanceHealth, type ChannelHealth, type CopyHealth, type HealthPayload, type QuotaHealth, type ReadHealth, type SourceHealthView } from "./health-payload.ts";
 import type { InterestRow } from "./interest-defaults.ts";
 import { INTERESTS_FORMAT, type InterestsPayload, type InterestsPerson } from "./interests-payload.ts";
 import { HISTORY_FORMAT, type HistoryChange, type HistoryIncident, type HistoryPayload, type HistoryPlace, type HistoryRegion } from "./history.ts";
@@ -832,6 +833,11 @@ export const addressSchema: z.ZodType<Address, Address> = schemaOf<Address>()(z.
 /** This schema checks the receipt of a sent message. */
 export const receiptSchema: z.ZodType<Receipt, Receipt> = schemaOf<Receipt>()(z.record(z.string(), z.string()).readonly());
 
+/** This schema checks the kind of a failed send (`ChannelFailureKind`). */
+export const channelFailureKindSchema: z.ZodType<ChannelFailureKind, ChannelFailureKind> = schemaOf<ChannelFailureKind>()(
+  z.enum(["network", "timeout", "server", "rate-limited", "reserved", "auth", "refused", "consent", "quiet", "expired"]),
+);
+
 /** This schema checks the result of a send. */
 export const sendOutcomeSchema: z.ZodType<SendOutcome, SendOutcome> = schemaOf<SendOutcome>()(
   z
@@ -839,7 +845,7 @@ export const sendOutcomeSchema: z.ZodType<SendOutcome, SendOutcome> = schemaOf<S
       z.strictObject({ ok: z.literal(true), receipt: receiptSchema, accepted: instantSchema }),
       z.strictObject({
         ok: z.literal(false),
-        kind: z.enum(["network", "timeout", "server", "rate-limited", "reserved", "auth", "refused", "consent", "quiet", "expired"]),
+        kind: channelFailureKindSchema,
         message: z.string(),
         retryAfter: durationSchema.exactOptional(),
       }),
@@ -1754,6 +1760,35 @@ export const readHealthSchema: z.ZodType<ReadHealth, ReadHealth> = schemaOf<Read
     .readonly(),
 );
 
+/** This schema checks the run of failed calls of one channel of a copy (AL-65). */
+export const channelRunSchema: z.ZodType<ChannelRun, ChannelRun> = schemaOf<ChannelRun>()(
+  z
+    .strictObject({
+      channel: channelIdSchema,
+      failures: z.number().int().min(1, "A run has one failed call or more."),
+      first: instantSchema,
+      last: instantSchema,
+      kind: channelFailureKindSchema,
+      reached: z.boolean(),
+    })
+    .readonly(),
+);
+
+/** This schema checks the health of one channel of this copy: its endpoints, its last good call, its run and the down flag. */
+export const channelHealthSchema: z.ZodType<ChannelHealth, ChannelHealth> = schemaOf<ChannelHealth>()(
+  z
+    .strictObject({
+      copy: z.string().min(1, "The id of a copy is a non-empty string."),
+      channel: channelIdSchema,
+      title: z.string(),
+      api: z.array(z.lazy(() => nodeKeySchema)).readonly().exactOptional(),
+      run: channelRunSchema.exactOptional(),
+      good: instantSchema.exactOptional(),
+      down: z.boolean(),
+    })
+    .readonly(),
+);
+
 /** This schema checks the answer of the health route of the runtime. */
 export const healthPayloadSchema: z.ZodType<HealthPayload, HealthPayload> = schemaOf<HealthPayload>()(
   z
@@ -1768,6 +1803,7 @@ export const healthPayloadSchema: z.ZodType<HealthPayload, HealthPayload> = sche
       quotas: z.array(quotaHealthSchema).readonly(),
       balances: z.array(balanceHealthSchema).readonly(),
       reads: z.array(readHealthSchema).readonly(),
+      channels: z.array(channelHealthSchema).readonly(),
     })
     .readonly(),
 );

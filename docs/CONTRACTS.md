@@ -1571,14 +1571,16 @@ The API also serves the built local page (`packages/site/dist`) on the same addr
 
 The route `GET /health` of the runtime gives the `HealthPayload` of `healthPayload`. The page reads it on its own origin, next to the map. `healthPayloadSchema` checks it.
 
-- `format`: `alerts-health/3` (`HEALTH_FORMAT`). A change that breaks a reader gets a new name. The second format added `reads`.
+- `format`: `alerts-health/4` (`HEALTH_FORMAT`). A change that breaks a reader gets a new name. The second format added `reads`.
 - The third format gives the list `floors` of each balance in place of one `floor` (AL-61).
+- The fourth format adds `channels` (AL-65). The schema refuses an unknown field, thus an added field breaks a reader too.
 - `at`: the time of the last pass, or `null` before the first pass. The sources, the lateness and the coverage come from that pass.
 - `now`: the time of the read. The stages of the copies and of the balances are at this time.
 - `sources`: the health of each source. The last failure keeps its time and its kind, and not its message, because a message can hold the address of a fetch.
 - `lateness` and `coverage`: the lists of the view of the last pass.
 - `copies`, `quotas` and `balances`: each watch with its stages. The stages come from `copyStages`, `quotaStages` and `balanceStages`, thus the page and the system reports agree.
 - `reads`: each read on a schedule other than the balances, for example the replies of the texts and the spend of Twilio. Each read has the end of its last read that passed, a `failed` flag and the time of its next read. It holds no message and no value of the read.
+- `channels`: each channel of this copy at the time of the read (`Runtime.channels`). Each channel has its endpoints, the time of its last good call and its run of failed calls. The run keeps the kind of each failure, and not its message. The flag `down` is `runOpens` of the run under the policy `channelDown` of the configuration. A probe that passes gives a new time in `good` and ends the run.
 
 The coverage holds the ids of the places. Thus only the loopback address gives the route, as for the map.
 
@@ -1596,7 +1598,7 @@ The panel "Indicators" of the local page shows the field `breadth` of the live m
 - Two sentences sum the payload: the sources, and the quotas and balances that stop or limit a message. A link at the top of the page has the same sentences.
 - Each source has a row with its state, the time since its last good read and the kinds that it covers. The source that needs attention is first.
 - A source that is down or late needs attention. A source is late when an entry of `lateness` has the state `late` and names it in `to`.
-- A quota, a balance or a copy gets a row only when it has a stage. A read gets a row only when its last read failed.
+- A quota, a balance or a copy gets a row only when it has a stage. A read gets a row only when its last read failed. A channel gets a row only when it has a run of failed calls. A down channel stops each message on it.
 - The health is of the present. For a past time of the scrubber, the panel tells that it stays at the present.
 - After a failed read, the panel keeps the last rows. One sentence tells the time of that read in place of the two sentences.
 

@@ -6,6 +6,7 @@
 import { delay, frameClock, wallClock, type Clock, type WallClock } from "@mark1russell7/algebra/clock";
 import {
   balanceFloors,
+  channelDownPolicy,
   CLOCK_STEP_ABOVE,
   configuredExpectations,
   DEFAULT_LINK_POLICY,
@@ -939,7 +940,7 @@ export function openInstance(options: InstanceOptions): Instance {
       ...(latest?.breadth === undefined ? {} : { breadth: latest.breadth }),
     });
   };
-  // The health reads the view of the last pass. The watches of the copies and of the balances are at the time of the read.
+  // The health reads the view of the last pass. The watches of the copies, the balances and the channels are at the time of the read.
   const health = (): HealthPayload =>
     healthPayload({
       at: latest?.at ?? null,
@@ -951,6 +952,8 @@ export function openInstance(options: InstanceOptions): Instance {
       quotas: quotas(),
       balances: balances.flatMap((watch) => watch.balance() ?? []),
       reads: reads.map((watch) => watch.health()),
+      channels: runtime.channels(),
+      channelDown: channelDownPolicy(runtime.config.channelDown),
     });
   // The history reads the merge state at the time of the read, with the link rule of the view and the delivery.
   const link = linkRule(runtime.config.link ?? DEFAULT_LINK_POLICY);
