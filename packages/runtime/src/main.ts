@@ -37,7 +37,7 @@
  * check stops the runtime. The supervisor starts it again.
  */
 import { randomUUID } from "node:crypto";
-import { rm } from "node:fs/promises";
+import { mkdir, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { configHash } from "@mark1russell7/alerts";
@@ -51,10 +51,11 @@ import { redactSecrets } from "@mark1russell7/text/redact";
 import { SqliteHostStateStore } from "polite-crawler";
 import { fetchTransport, quotaGate } from "polite-crawler/api";
 import { writeFileAtomic } from "@procedures/fs/files";
+import { configFilesOf, configSync } from "./config-sync.ts";
 import { alertsHome, ConfigRefused, configPath, envSecrets } from "./config.ts";
 import { pageFolder, pageWarning, readPageState } from "./api.ts";
 import { COPY_TOKEN_KEY } from "./copy.ts";
-import { EXCHANGE_TOKEN_LENGTH, exchangeCall, exchangeHost } from "./exchange-http.ts";
+import { configFilesCall, EXCHANGE_TOKEN_LENGTH, exchangeCall, exchangeHost } from "./exchange-http.ts";
 import { heartbeat, heldOf, type PassSummary } from "./heartbeat.ts";
 import { holdHome } from "./home-lock.ts";
 import { quotaNote } from "./quota.ts";
@@ -63,7 +64,7 @@ import { daemonCheck, instanceCheck, LOUD_PING_URL_KEY, openInstance, pingKeyOf,
 import { openCheckedRuntimeLog } from "./log.ts";
 import type { ExchangeRound } from "./peers.ts";
 import { openReadingStore, READINGS_FILE } from "./readings.ts";
-import { GOOD_FILE, privateFiles, reloadHook, startConfig, type CheckOf } from "./reload.ts";
+import { GOOD_FILE, privateFiles, readStartTexts, reloadHook, startConfig, type CheckOf } from "./reload.ts";
 import { shapeReport, zoneCodesText } from "./shapes.ts";
 import { supervisor } from "./supervise.ts";
 
@@ -153,12 +154,42 @@ async function runtime(): Promise<ServiceBuilder> {
     }),
   );
 
+  // A copy with the field configFrom takes config.json and the parts from that copy (AL-17). The sync writes the files before a
+  // read of the reload hook, thus the hook reads the whole set and starts the runtime again.
+  const configSource = copy.configFrom === undefined ? undefined : peers.find((peer) => peer.id === copy.configFrom);
+  const sync =
+    name !== "daemon" || configSource === undefined || token === undefined
+      ? undefined
+      : configSync({
+          source: configSource,
+          files,
+          checkOf,
+          read: () => instance.copies?.worker?.watches().find((watch) => watch.copy === configSource.id)?.read,
+          call: configFilesCall({ token }),
+          clock: wall,
+          ports: {
+            read: () => readStartTexts(files),
+            makeFolder: async (path) => {
+              await mkdir(path, { recursive: true, mode: 0o700 });
+            },
+            write: (path, text) => writeFileAtomic(path, text, { mode: 0o600 }),
+            remove: (path) => rm(path, { force: true }),
+          },
+          report: (message) => console.error(`The sync of the configuration: ${message}`),
+        });
   // A change of the private files, or a restart request, restarts the runtime. Only the profile daemon has a supervisor that starts it again.
   const reload =
     name === "daemon"
       ? reloadHook({
           files,
           checkOf,
+          ...(sync === undefined
+            ? {}
+            : {
+                beforeRead: async () => {
+                  await sync.step();
+                },
+              }),
           started: loaded.texts,
           request: loaded.request,
           restart: (cause) => {
@@ -238,7 +269,7 @@ async function runtime(): Promise<ServiceBuilder> {
 
   // The listener of the exchange is on the address listen of copy.json. Only the token check of the host guards it.
   const copies = instance.copies;
-  const host = copies === undefined || copy.listen === undefined || token === undefined ? undefined : exchangeHost({ source: copies.source, token, listen: copy.listen });
+  const host = copies === undefined || copy.listen === undefined || token === undefined ? undefined : exchangeHost({ source: copies.source, token, listen: copy.listen, configFiles: configFilesOf({ copy, use: loaded.use, texts: loaded.texts, configHash: configHash(config.config) }) });
   const exchange = { ...(copies?.loop === undefined ? {} : { loop: copies.loop }), ...(host === undefined ? {} : { host }) };
 
   // The built local page. The line tells the state of the page, and it holds no path.
