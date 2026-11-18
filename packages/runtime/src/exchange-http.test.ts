@@ -7,8 +7,9 @@ import type { CopyListen, CopyPeer } from "@mark1russell7/alerts";
 import { embeddedProcess, service, type ServiceBuilder } from "@mark1russell7/service";
 import { ms, seconds } from "@procedures/client";
 import { describe, expect, it } from "vitest";
+import { CONFIG_FILES_FORMAT, type ConfigFiles } from "./config-sync.ts";
 import { EXCHANGE_FORMAT, EXCHANGE_PAGE, type ExchangePage } from "./exchange.ts";
-import { EXCHANGE_BASE_PATH, EXCHANGE_TOKEN_LENGTH, exchangeBaseUrl, exchangeCall, exchangeHost } from "./exchange-http.ts";
+import { configFilesCall, EXCHANGE_BASE_PATH, EXCHANGE_TOKEN_LENGTH, exchangeBaseUrl, exchangeCall, exchangeHost } from "./exchange-http.ts";
 import { parseEntries, type EntriesInput, type EntriesSource } from "./peers.ts";
 
 const T0 = 1_775_066_400_000;
@@ -58,9 +59,9 @@ const sourceOf = (reads: EntriesInput[]): EntriesSource => ({
   configHash: HASH,
 });
 
-async function serve(): Promise<Served> {
+async function serve(configFiles?: ConfigFiles): Promise<Served> {
   const reads: EntriesInput[] = [];
-  const host = exchangeHost({ source: sourceOf(reads), token: TOKEN, listen: LOOPBACK });
+  const host = exchangeHost({ source: sourceOf(reads), token: TOKEN, listen: LOOPBACK, ...(configFiles === undefined ? {} : { configFiles }) });
   const life = await host.declare(serviceOf("exchange-test")).run({ process: embeddedProcess() });
   const address = host.info.endpoints().find((endpoint) => endpoint.type === "http")?.address;
   if (address === undefined) {
@@ -130,6 +131,25 @@ describe("the HTTP transport of the exchange", () => {
       expect(served.reads).toEqual([]);
     } finally {
       expect(await served.stop()).toBe(0);
+    }
+  });
+
+  it("serves the texts of the configuration to a call with the token, and only when the host has them", async () => {
+    const files: ConfigFiles = { format: CONFIG_FILES_FORMAT, copy: "copy-b", configHash: HASH, files: { config: "{}", parts: [{ name: "extra", text: "{}" }] } };
+    const served = await serve(files);
+    try {
+      expect(await configFilesCall({ token: TOKEN })(served.peer, signal())).toEqual(files);
+      await expect(configFilesCall({ token: OTHER_TOKEN })(served.peer, signal())).rejects.toThrow();
+      // The log stays on the same host.
+      expect(await exchangeCall({ token: TOKEN })(served.peer, { after: 0 }, signal())).toEqual({ page: pageOf(0), time: T0, configHash: HASH });
+    } finally {
+      expect(await served.stop()).toBe(0);
+    }
+    const plain = await serve();
+    try {
+      await expect(configFilesCall({ token: TOKEN })(plain.peer, signal())).rejects.toThrow();
+    } finally {
+      expect(await plain.stop()).toBe(0);
     }
   });
 

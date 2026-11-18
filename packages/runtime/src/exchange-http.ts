@@ -4,13 +4,16 @@
  * section "The exchange" of `docs/CONTRACTS.md`.
  *
  * - The host checks the token of each request. The runtime has no route and no token check of its own.
- * - The host serves only the procedure `alerts.log.entries`, and the procedure changes nothing.
+ * - The host serves only the procedures `alerts.log.entries` and `alerts.config.files`, and they change nothing.
+ * - The procedure `alerts.config.files` gives the texts of `config.json` and of the parts for the sync of the
+ *   configuration (AL-17). It gives no text of `secrets.env` and no text of `copy.json`.
  * - The listener is on the address `listen` of `copy.json`: the tailnet address of the computer.
  */
 import { Client, createProcedure, createRegistry, hostPolicy, HttpTransport, ms, pathToMethod, type ProcedureRegistry } from "@procedures/client";
 import { createProcedureHost, LOCAL_LISTENER_KNOBS, type ProcedureHost } from "@procedures/peer";
 import type { CopyListen, CopyPeer } from "@mark1russell7/alerts";
 import * as z from "zod";
+import type { ConfigFiles, ConfigFilesCall } from "./config-sync.ts";
 import { EXCHANGE_LIMIT } from "./copy.ts";
 import { EXCHANGE_PAGE } from "./exchange.ts";
 import { serveEntries, type EntriesInput, type EntriesSource, type ExchangeCall } from "./peers.ts";
@@ -20,6 +23,12 @@ export const ENTRIES_PATH: readonly string[] = Object.freeze(["alerts", "log", "
 
 /** The name of the procedure that gives the shared events of the log. */
 export const ENTRIES_KEY = "alerts.log.entries";
+
+/** The path of the procedure that gives the texts of the configuration of the copy. */
+export const CONFIG_FILES_PATH: readonly string[] = Object.freeze(["alerts", "config", "files"]);
+
+/** The name of the procedure that gives the texts of the configuration of the copy. */
+export const CONFIG_FILES_KEY = "alerts.config.files";
 
 /** The path of the procedures on the listener of the exchange. The reader adds it to the URL of each other copy. */
 export const EXCHANGE_BASE_PATH = "/exchange";
@@ -33,11 +42,27 @@ const entriesInput = z.strictObject({
   limit: z.int().min(1).max(EXCHANGE_PAGE).optional(),
 });
 
-/** This function gives the registry of the exchange: the procedure `alerts.log.entries` on the parts of one runtime. */
-export function entriesRegistry(source: EntriesSource): ProcedureRegistry {
+/**
+ * This function gives the registry of the exchange: the procedure `alerts.log.entries` on the parts of one runtime. With
+ * `configFiles`, the registry also has the procedure `alerts.config.files`, which gives that answer.
+ */
+export function entriesRegistry(source: EntriesSource, configFiles?: ConfigFiles): ProcedureRegistry {
+  const files =
+    configFiles === undefined
+      ? []
+      : [
+          createProcedure()
+            .path([...CONFIG_FILES_PATH])
+            .input(z.strictObject({}))
+            .output(z.unknown())
+            .meta({ description: "The texts of config.json and of the parts of the copy, for the sync of the configuration.", effects: { reads: ["alerts.config"], writes: [] } })
+            .handler(async (): Promise<unknown> => configFiles)
+            .build(),
+        ];
   return createRegistry({
     name: "alerts-exchange",
     procedures: [
+      ...files,
       createProcedure()
         .path([...ENTRIES_PATH])
         .input(entriesInput)
@@ -60,6 +85,8 @@ export interface ExchangeHostOptions {
   readonly token: string;
   /** The address and the port of the listener: the field `listen` of `copy.json`. */
   readonly listen: CopyListen;
+  /** The answer of the procedure `alerts.config.files`. Without it, the host does not serve the procedure. */
+  readonly configFiles?: ConfigFiles;
 }
 
 /**
@@ -75,8 +102,8 @@ export function exchangeHost(options: ExchangeHostOptions): ProcedureHost {
   if (token.length < EXCHANGE_TOKEN_LENGTH) throw new Error(`The token of the exchange has fewer than ${EXCHANGE_TOKEN_LENGTH} characters.`);
   return createProcedureHost({
     name: "exchange",
-    registry: entriesRegistry(options.source),
-    policy: hostPolicy({ token, readOnly: true, strictCalls: true, expose: [ENTRIES_KEY], timeout: ms(EXCHANGE_LIMIT) }),
+    registry: entriesRegistry(options.source, options.configFiles),
+    policy: hostPolicy({ token, readOnly: true, strictCalls: true, expose: options.configFiles === undefined ? [ENTRIES_KEY] : [ENTRIES_KEY, CONFIG_FILES_KEY], timeout: ms(EXCHANGE_LIMIT) }),
     faces: { http: { basePath: EXCHANGE_BASE_PATH } },
     listen: [{ name: "exchange", host: listen.host, port: listen.port, knobs: LOCAL_LISTENER_KNOBS }],
     // The probes of the service are on the probe port of the loopback. The listener on the tailnet gives no probe.
@@ -108,10 +135,23 @@ export function exchangeBaseUrl(peer: CopyPeer): string {
  * the token in the header `Authorization`. The worker of the exchange gives the time limit and the stop as the signal.
  */
 export function exchangeCall(options: ExchangeCallOptions): ExchangeCall {
-  const clients = new Map<string, Client>();
+  const clientOf = exchangeClients(options);
   const method = pathToMethod(ENTRIES_PATH);
+  return (peer, input, signal) => clientOf(peer).call<EntriesInput, unknown>(method, input, { signal });
+}
+
+/** This function gives the call of the procedure `alerts.config.files` over HTTP, as `exchangeCall` does for the log. */
+export function configFilesCall(options: ExchangeCallOptions): ConfigFilesCall {
+  const clientOf = exchangeClients(options);
+  const method = pathToMethod(CONFIG_FILES_PATH);
+  return (peer, signal) => clientOf(peer).call<Record<string, never>, unknown>(method, {}, { signal });
+}
+
+// One client of `@procedures/client` for each other copy, with the token in the header `Authorization`.
+function exchangeClients(options: ExchangeCallOptions): (peer: CopyPeer) => Client {
+  const clients = new Map<string, Client>();
   const headers = { Authorization: `Bearer ${options.token}` };
-  const clientOf = (peer: CopyPeer): Client => {
+  return (peer) => {
     const known = clients.get(peer.id);
     if (known !== undefined) return known;
     const transport = new HttpTransport({ baseUrl: exchangeBaseUrl(peer), defaultHeaders: headers, ...(options.fetch === undefined ? {} : { fetch: options.fetch }) });
@@ -119,5 +159,4 @@ export function exchangeCall(options: ExchangeCallOptions): ExchangeCall {
     clients.set(peer.id, client);
     return client;
   };
-  return (peer, input, signal) => clientOf(peer).call<EntriesInput, unknown>(method, input, { signal });
 }

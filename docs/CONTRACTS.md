@@ -60,11 +60,13 @@ The links are transitive: when A links to B and B links to C, the three reports 
 
 Two sources can report one real event with different ids. Then no reference and no correlation key joins their reports, and the person gets two alerts for one event. The link rule joins them.
 
-The rule comes from a policy, `LinkPolicy`. The function `linkRule` makes the rule of a policy. The first policy, `DEFAULT_LINK_POLICY`, has one family: `geo.earthquake`. Two reports of this family link when:
+The rule comes from a policy, `LinkPolicy`. The function `linkRule` makes the rule of a policy. The first policy, `DEFAULT_LINK_POLICY`, has two families. Two reports of the family `geo.earthquake` link when:
 
 - their onsets are 30 s apart or less
 - the centers of their circle areas are 100 km apart or less, on the great circle
 - the values of their parameter `magnitude` are 1.0 apart or less.
+
+Two reports of the family `geo.space-weather.geomagnetic-storm` link when two limits hold. Their onsets are 6 hours apart or less, and the centers of their circle areas are 100 km apart or less. Each source of the family gives the polar caps of `polarCaps`, so the centers are the geomagnetic poles. The onset of an alert of the SWPC is in the 3-hour interval of the index Kp of GFZ, so the window is two intervals. This window is a shortcut with no measure. A capture of one storm of the two sources replaces it (AL-14).
 
 The rule is on the safe side. A false join can hide a second event after an acknowledgment, but a false split gives only a second alert. Thus:
 
@@ -485,8 +487,16 @@ The opt-in list of the texts is the field `optIn` of the private configuration (
 - `optedIn` folds the record of a number and its STOP and START replies. The last reply decides, and a STOP wins a tie.
 - A number with no record has no opt-in. A START reply does not add a number. A new yes is a record with a later time.
 - The kind `consent` does not stop the deliveries of the channel to the other people, as `reserved` does not.
-- Twilio keeps its own STOP handling. Until the read of the replies, the runtime does not keep a STOP. Twilio refuses each later text, and a START works at once.
-- The read of the STOP and START replies comes next (AL-56). Then the runtime keeps each reply, and the fold uses it.
+- Twilio keeps its own STOP handling. The runtime reads the replies too, and the fold uses them.
+
+The watch of the replies (`replyWatch` of the runtime, AL-56) gives the opt-in of the text channel:
+
+- `readTwilioReplies` reads the received texts to the number of the texts from the time of the first record. A STOP or START keyword of Twilio gives a change.
+- The read gives all the changes, not only the new ones. Thus the runtime keeps no state of the replies, and a restart reads them again.
+- A read that cannot read each page fails, and gives no part of the list. A part of the list can miss a STOP.
+- The watch reads at the first pass, then each 5 minutes. A failed read keeps the last changes and retries after 5 minutes.
+- A refusal of Twilio with the error 21610 is a STOP until the next read that passed. That read has the reply.
+- A failed read is a note in the body of each ping of the heartbeat. The note holds no number and no message of Twilio.
 
 The cap of the spend of a Twilio channel is two gates of `polite-crawler/api`, with one store, one key and one quota name:
 
@@ -514,7 +524,7 @@ A copy of the system is one runtime on one computer: a cell. When one computer, 
 
 ### The settings of a copy
 
-Each copy loads the same `config.json` and `secrets.env`. The file `copy.json` of `ALERTS_HOME` gives the settings of one copy, and each copy has its own file:
+Each copy loads the same configuration: `config.json` and the parts. The sync of the configuration keeps them the same. Each copy has its own `secrets.env`, because two copies do not share an account of a source. The file `copy.json` of `ALERTS_HOME` gives the settings of one copy, and each copy has its own file:
 
 - `format`: the text `alerts-copy/1`.
 - `id`: the name of the copy, for example `home` or `cloud`. Two copies do not have the same id.
@@ -522,6 +532,8 @@ Each copy loads the same `config.json` and `secrets.env`. The file `copy.json` o
 - `listen`: the address and the port of the exchange. The address is the tailnet address of the computer, not all addresses.
 - `peers`: the id and the URL of the exchange of each other copy.
 - `pingKey`: the key of `secrets.env` that holds the ping URL of the first check of this copy. The default is `HEALTHCHECKS_PING_URL`. It is not the key of the loud check, because the copies share the loud check.
+- `accounts`: the number of the account of each source with an account, by the id of the source. The keys of account 2 end in `_2`. The default is account 1.
+- `configFrom`: the id of the copy that gives the configuration of this copy. It is the id of a copy of `peers`. The section "The sync of the configuration" tells the steps.
 
 Without `copy.json`, the runtime is the only copy. It has rank 0 and no exchange. The key `COPY_TOKEN` of `secrets.env` gives the token of the exchange, the same for each copy. The check of the profile `daemon` needs it when the copy has other copies.
 
@@ -609,13 +621,34 @@ The worker of the exchange (`exchangeWorker` of the runtime) does the reads:
 The HTTP transport (`exchange-http.ts` of the runtime) carries the reads:
 
 - The procedures host of the exchange has the base path `/exchange` on the address `listen`. The reader adds the base path to the URL of each other copy.
-- The host serves only `alerts.log.entries`, and it is read-only. Its probes are off, because the probes of the service stay on the loopback.
+- The host serves only `alerts.log.entries` and `alerts.config.files`, and it is read-only. Its probes are off, because the probes of the service stay on the loopback.
 - Each call needs the token `COPY_TOKEN` in the header `Authorization`. A call with another token or with no token gets 401, and the source reads no page.
 - The token has 32 characters or more. Without it, a copy with other copies or with the address `listen` does not start.
 - The host checks the input before the handler. `after` is a whole number of 0 or more, and `limit` is from 1 to 500. The input has no other field.
 - The reader keeps one client of `@procedures/client` for each other copy. The worker gives the time limit and the stop as the signal of each call.
 - The hash of the configuration is the SHA-256 of its canonical JSON (RFC 8785), with the scheme `alerts-config-hash/1` (`configHash` of the core). The order of the keys does not change it.
 - The entry writes each problem of a page to its output. It writes a failure of the reads of a copy one time at its start, and one time at its end.
+
+### The sync of the configuration
+
+A copy with the field `configFrom` in `copy.json` is a mirror. It takes `config.json` and the parts from the copy of that field (AL-17).
+
+- The source copy serves the procedure `alerts.config.files` on the host of its exchange. The procedure gives the texts of `config.json` and of each part of its start.
+- The procedure gives no text of `secrets.env` and no text of `copy.json`. Each copy keeps its own keys and settings.
+- A copy with `configFrom` serves no texts, with the cause `mirror`. Thus the sync has no chain and no loop.
+- A copy that started with the last good set serves no texts, with the cause `good`. Its private files have problems.
+
+The mirror does these steps before each read of the reload hook (`config-sync.ts` of the runtime):
+
+1. It reads the texts only when the last read of the source tells another hash of the configuration. After a read, the next read waits 10 minutes or more.
+2. It checks the texts with its own `secrets.env` and `copy.json`, as a start does. The texts also give the hash of the source. Texts with problems change no file.
+3. It writes each changed part, removes each part that the source does not have, and writes `config.json` last. Each write goes to a temporary file first.
+4. Then the reload hook reads the whole set. A set that passes the check starts the runtime again.
+
+- The mirror tells each refusal one time, until a different refusal. A problem holds no text of a file, no address and no URL.
+- A write that fails can leave a mix of two sets. The check refuses a mix with problems. A mix that passes gives another hash, thus the next try corrects it.
+- The texts go only over the exchange: the tailnet, with the token.
+- Add the field `configFrom` only after the code of the mirror has it. An older runtime refuses an unknown field of `copy.json`.
 
 ### The checks of the copies
 
@@ -1432,7 +1465,8 @@ The file `schemas.ts` of the core has one zod 4 schema for each data type of the
 - The season of a baseline is in UTC. A change of the clock moves a local rush hour by 1 h in UTC. A season in the local time of the area, with the civil time of `@mark1russell7/algebra`, replaces it.
 - Some units of the indicator sources are not in the grammar of `@mark1russell7/quantity`. They are `MW`, `MWh`, `µSv/h`, `µg`, `hPa`, `Bq`, `ppm` and each currency other than `USD`. A measure in such a unit fails its schema until the package adds the unit.
 - The procedure tools take the schema of each input and output from `schemas.ts`.
-- The link rule has one family, the earthquakes. Each other kind with two sources of different ids gets its family with its second source.
+- The link rule has two families, the earthquakes and the geomagnetic storms. Each other kind with two sources of different ids gets its family with its second source.
+- The window of 6 hours of the geomagnetic storms is a shortcut. A capture of one storm of GFZ and the SWPC gives the largest difference of their onsets (AL-14).
 - The calculation of the level from probabilities and costs (AL-31), with the base rates from the event log.
 - The count of misses that ends a report of a snapshot source is 2 (`SNAPSHOT_MISSES`). This value is a shortcut. A measure of the flap rate of the IEM list replaces it (AL-8).
 - The merge state grows with each report. A compaction of the incidents that ended before a horizon keeps it small. It must keep the three laws.
@@ -1440,4 +1474,4 @@ The file `schemas.ts` of the core has one zod 4 schema for each data type of the
 - The park times of the hosts in `polite-crawler` do not move at a step of the wall clock.
 - The quota gates read the wall clock with no frame. Their windows are civil times, thus a step changes them as it changes the calendar.
 - A system report does not name its copy. With two copies, the owner cannot tell which copy has the fault.
-- A copy gets `config.json` and `secrets.env` by a copy of the files over the tailnet. A sync of the files is not in the code. The check of the hash finds a difference.
+- A copy gets `secrets.env` and `copy.json` by a copy of the files over the tailnet. The sync of the configuration does not copy them, because they hold the keys and the settings of each copy.

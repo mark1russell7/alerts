@@ -38,12 +38,23 @@ export interface LinkPolicy {
 }
 
 /**
- * The first policy. Two earthquake reports link when their onsets are 30 s apart or less, their epicenters
- * 100 km apart or less, and their magnitudes 1.0 apart or less. One capture of EMSC and USGS (2026-11-16)
- * matched each of its 30 shared events at 20 s and 100 km. The largest time difference was 6.3 s.
+ * The first policy, with two families.
+ *
+ * Two earthquake reports link when their onsets are 30 s apart or less, their epicenters 100 km apart or less, and
+ * their magnitudes 1.0 apart or less. One capture of EMSC and USGS (2026-11-16) matched each of its 30 shared events
+ * at 20 s and 100 km. The largest time difference was 6.3 s.
+ *
+ * Two reports of a geomagnetic storm link when their onsets are 6 hours apart or less. Each source of the family
+ * gives the polar caps of one model of the poles. Thus the centers are 0 km apart. The limit of 100 km keeps a
+ * different model. The onset of an alert of the SWPC is in the 3-hour interval of the index Kp of GFZ, so the
+ * window is two intervals. This window is a shortcut with no measure. It ends when a capture of one storm of the
+ * two sources gives the largest difference (AL-14).
  */
 export const DEFAULT_LINK_POLICY: LinkPolicy = {
-  families: [{ family: "geo.earthquake", windowMs: 30_000, distanceKm: 100, magnitude: 1 }],
+  families: [
+    { family: "geo.earthquake", windowMs: 30_000, distanceKm: 100, magnitude: 1 },
+    { family: "geo.space-weather.geomagnetic-storm", windowMs: 6 * 3_600_000, distanceKm: 100 },
+  ],
 };
 
 /** The name of the parameter of a report that holds its magnitude. */

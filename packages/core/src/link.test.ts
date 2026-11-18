@@ -186,6 +186,41 @@ describe("the link rule of the earthquakes (merge rule 3)", () => {
   });
 });
 
+describe("the link rule of the geomagnetic storms (merge rule 3)", () => {
+  // The polar caps of G4: a circle around each geomagnetic pole, as `polarCaps` of the space weather package gives them.
+  const CAPS: readonly Area[] = [
+    { type: "circle", center: [-72.7, 80.8], radiusKm: 5004 },
+    { type: "circle", center: [107.3, -80.8], radiusKm: 5004 },
+  ];
+  const storm = (key: string, source: string, onset: number, areas: readonly Area[] = CAPS): Report =>
+    quake({ key, source, kind: "geo.space-weather.geomagnetic-storm", onset, magnitude: null, areas });
+
+  it("joins an interval of GFZ and an alert of the SWPC with the threshold time in that interval", () => {
+    const gfz = storm("2024-05-10T15:00:00Z", "gfz", T0);
+    const swpc = storm("ALTK08", "swpc", T0 + 2 * HOUR + 50 * 60 * SECOND);
+    const [one, ...rest] = incidents(normalize({ reports: [gfz, swpc] }), T0, { link: RULE });
+    expect(rest).toEqual([]);
+    expect(one?.corroboration).toBe(2);
+  });
+
+  it.each<[string, number, readonly Area[], boolean]>([
+    ["6 hours apart", 6 * HOUR, CAPS, true],
+    ["6 hours and 1 ms apart", 6 * HOUR + 1, CAPS, false],
+    ["the poles of another model 89 km away", HOUR, CAPS.map((area) => (area.type === "circle" ? { ...area, center: [area.center[0], area.center[1] - 0.8] as const } : area)), true],
+    ["no circle area", HOUR, [{ type: "code", system: "gfz-kp-interval", code: "2024-05-10T15:00:00Z" }], false],
+  ])("at the limits of the family: %s links is %s", (_name, apart, areas, links) => {
+    const gfz = storm("k1", "gfz", T0);
+    const swpc = storm("k2", "swpc", T0 + apart, areas);
+    expect(RULE.matches(gfz, swpc)).toBe(links);
+    expect(RULE.matches(swpc, gfz)).toBe(links);
+  });
+
+  it("keeps two storms of one source apart, and links no earthquake to a storm", () => {
+    expect(sizes([storm("k1", "gfz", T0), storm("k2", "gfz", T0 + HOUR)])).toEqual([1, 1]);
+    expect(RULE.matches(storm("k1", "gfz", T0), quake({ key: "us1", areas: CAPS }))).toBe(false);
+  });
+});
+
 // A random report near HERE, so that some pairs link and some do not.
 function randomQuake(r: Random, index: number): Report {
   return quake({

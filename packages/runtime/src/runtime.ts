@@ -19,6 +19,7 @@ import type { RuntimeLog } from "./log.ts";
 import { READING_RETENTION, type ReadingStore } from "./readings.ts";
 import { SNAPSHOT_MISSES, snapshotStep } from "./snapshot.ts";
 import { retention, retiredEvent, type RetentionOptions } from "./retention.ts";
+import type { ReadWatch } from "./schedule.ts";
 import { fold, rebuild, type ExchangeCursor, type RuntimeState } from "./state.ts";
 import { earliest, nextFetch, systemEvent, systemView, type SystemView, type ViewConfig } from "./view.ts";
 
@@ -82,6 +83,11 @@ export interface RuntimeOptions {
    * its fetches. Each stage of a balance is a line of system reports.
    */
   readonly balances?: readonly BalanceWatch[];
+  /**
+   * The other watches that read on a schedule: for example the watch of the replies of the texts. Each pass starts
+   * `check` of each watch, next to its fetches. A step of the wall clock moves their times.
+   */
+  readonly reads?: readonly ReadWatch[];
   /**
    * The checks of the other copies. Each pass waits for `ready` before its view. Thus the first delivery step after a
    * start sees the sends of the other copies, and it does not repeat them.
@@ -305,6 +311,8 @@ export function openRuntime(options: RuntimeOptions): Runtime {
   const watches = options.balances ?? [];
   const providers = watches.map((watch) => watch.provider);
   if (new Set(providers).size !== providers.length) throw new Error("Two balance watches have the same provider. Give one watch to each account.");
+  // Each watch that reads on a schedule: the balance watches and the other reads.
+  const scheduled: readonly ReadWatch[] = [...watches, ...(options.reads ?? [])];
 
   // A fault of the store of a gate ends no line of a quota. The notes of the heartbeat tell of the fault.
   const readQuotas = (): readonly ChannelQuota[] | undefined => {
@@ -328,7 +336,7 @@ export function openRuntime(options: RuntimeOptions): Runtime {
     }
     const conflicts = append([{ ...envelope("clock", `clock:${state.steps.length + 1}`, clock.now() + size), size }]);
     dispatcher?.shift(size);
-    for (const watch of watches) watch.shift(size);
+    for (const watch of scheduled) watch.shift(size);
     options.copies?.shift(size);
     frame.mark();
     return { size, conflicts };
@@ -352,7 +360,7 @@ export function openRuntime(options: RuntimeOptions): Runtime {
         return nextFetch(state, descriptor) <= start ? [{ source, descriptor }] : [];
       });
       // A watch reads only when it is due, and its check does not throw. It runs next to the fetches.
-      const checks = Promise.all(watches.map((watch) => watch.check(clock, stop)));
+      const checks = Promise.all(scheduled.map((watch) => watch.check(clock, stop)));
       // Each fetch ends before the pass ends, also when one of them fails. Thus no fetch of a pass runs on in the next pass.
       const settled = await Promise.allSettled(due.map(({ source, descriptor }) => fetchOne(source, descriptor, stop)));
       await checks;
@@ -391,7 +399,7 @@ export function openRuntime(options: RuntimeOptions): Runtime {
 
       // A source or a balance watch can come due after `start`, while the fetches of the pass run. A fetch that runs to its
       // limit of one interval also ends at its next fetch. Such work is due, not a fault: its wake is the first instant after the pass.
-      const nextWork = earliest([...config.sources.map((descriptor) => nextFetch(state, descriptor)), ...watches.map((watch) => watch.nextReadAt())]);
+      const nextWork = earliest([...config.sources.map((descriptor) => nextFetch(state, descriptor)), ...scheduled.map((watch) => watch.nextReadAt())]);
       const wakeAt = earliest([nextWork === undefined ? undefined : Math.max(nextWork, at + 1), view.wakeAt, delivery?.wakeAt, drilled.wakeAt]);
       const pass: Pass = {
         at,
