@@ -58,6 +58,7 @@ import { EXCHANGE_TOKEN_LENGTH, exchangeCall, exchangeHost } from "./exchange-ht
 import { heartbeat, heldOf, type PassSummary } from "./heartbeat.ts";
 import { holdHome } from "./home-lock.ts";
 import { quotaNote } from "./quota.ts";
+import { replyNotes } from "./replies.ts";
 import { PROFILES, declare } from "./index.ts";
 import { daemonCheck, instanceCheck, LOUD_PING_URL_KEY, openInstance, pingKeyOf, pingTargets, userAgent } from "./instance.ts";
 import { openCheckedRuntimeLog } from "./log.ts";
@@ -147,8 +148,8 @@ async function runtime(): Promise<ServiceBuilder> {
       clock: wall,
       userAgent: agent,
       held: (at) => heldOf(instance.runtime.state(), at),
-      // The body of each ping tells the state of each quota. Thus the check shows the reserve.
-      notes: () => instance.quotas().map(quotaNote),
+      // The body of each ping tells the state of each quota, and a failed read of the replies of the texts. Thus the check shows the reserve.
+      notes: () => [...instance.quotas().map(quotaNote), ...replyNotes(instance.replies)],
       onError: (message) => console.error(redactSecrets(target.key === LOUD_PING_URL_KEY ? `The loud check: ${message}` : message, values)),
     }),
   );

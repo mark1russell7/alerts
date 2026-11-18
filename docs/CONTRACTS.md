@@ -485,8 +485,16 @@ The opt-in list of the texts is the field `optIn` of the private configuration (
 - `optedIn` folds the record of a number and its STOP and START replies. The last reply decides, and a STOP wins a tie.
 - A number with no record has no opt-in. A START reply does not add a number. A new yes is a record with a later time.
 - The kind `consent` does not stop the deliveries of the channel to the other people, as `reserved` does not.
-- Twilio keeps its own STOP handling. Until the read of the replies, the runtime does not keep a STOP. Twilio refuses each later text, and a START works at once.
-- The read of the STOP and START replies comes next (AL-56). Then the runtime keeps each reply, and the fold uses it.
+- Twilio keeps its own STOP handling. The runtime reads the replies too, and the fold uses them.
+
+The watch of the replies (`replyWatch` of the runtime, AL-56) gives the opt-in of the text channel:
+
+- `readTwilioReplies` reads the received texts to the number of the texts from the time of the first record. A STOP or START keyword of Twilio gives a change.
+- The read gives all the changes, not only the new ones. Thus the runtime keeps no state of the replies, and a restart reads them again.
+- A read that cannot read each page fails, and gives no part of the list. A part of the list can miss a STOP.
+- The watch reads at the first pass, then each 5 minutes. A failed read keeps the last changes and retries after 5 minutes.
+- A refusal of Twilio with the error 21610 is a STOP until the next read that passed. That read has the reply.
+- A failed read is a note in the body of each ping of the heartbeat. The note holds no number and no message of Twilio.
 
 The cap of the spend of a Twilio channel is two gates of `polite-crawler/api`, with one store, one key and one quota name:
 
