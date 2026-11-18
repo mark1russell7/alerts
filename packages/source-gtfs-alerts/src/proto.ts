@@ -1,10 +1,10 @@
 /**
  * The part of the GTFS Realtime schema that the source reads: the feed message, its header, and the service alert of each
- * entity. The field numbers come from `gtfs-realtime.proto` of the GTFS Realtime reference (Apache License 2.0,
- * https://gtfs.org/documentation/realtime/proto/). The decoder skips each field that is not in this part, for example
- * the trip updates and the vehicle positions of a feed that mixes them with the alerts.
+ * entity. The field numbers come from `gtfs-realtime.proto` of the GTFS Realtime reference, under the Apache License
+ * 2.0: `https://gtfs.org/documentation/realtime/proto/`. The decoder skips each field that is not in this part. A feed can
+ * mix the alerts with trip updates and vehicle positions, and the decoder skips them.
  *
- * Each field is optional here, also the fields that the reference marks as required. Thus a feed with a missing field
+ * Each field is optional here, also the fields that the reference marks as necessary. Thus a feed with a missing field
  * gives a problem of the map, not an exception of the decoder. The enums stay numbers, so a new value of the reference
  * is not lost.
  */
@@ -15,7 +15,7 @@ const optional = (type: string, id: number): { type: string; id: number } => ({ 
 const repeated = (type: string, id: number): { rule: string; type: string; id: number } => ({ rule: "repeated", type, id });
 
 /** The descriptor of the part of the schema, in the JSON format of protobufjs. */
-export const GTFS_REALTIME_DESCRIPTOR = {
+export const GTFS_REALTIME_DESCRIPTOR: protobuf.INamespace = {
   nested: {
     transit_realtime: {
       nested: {
