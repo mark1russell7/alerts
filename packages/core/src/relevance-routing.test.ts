@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { AssessPolicy, Assessment, Incident, InterestEdge, InterestGraph, Mute, PersonId, PersonWatch, PlaceId, Position, ReportId, WatchedPlace } from "./contracts.ts";
 import { DEFAULT_ASSESS_POLICY, assess } from "./assess.ts";
+import { personInterests } from "./config.ts";
 import { DEFAULT_RELEVANCE_POLICY } from "./relevance.ts";
 import { assessPolicySchema, assessmentSchema, personWatchSchema } from "./schemas.ts";
 
@@ -200,5 +201,33 @@ describe("the routing by the relevance (AL-35 step 5)", () => {
     expect(personWatchSchema.safeParse({ ...watch, interests: { ...graph([]), format: "alerts-interest/0" } }).success).toBe(false);
     expect(assessPolicySchema.safeParse({ ...DEFAULT_ASSESS_POLICY, relevance: DEFAULT_RELEVANCE_POLICY }).success).toBe(true);
     expect(assessPolicySchema.safeParse({ ...DEFAULT_ASSESS_POLICY, relevance: { ...DEFAULT_RELEVANCE_POLICY, entryMax: "loud" } }).success).toBe(false);
+  });
+});
+
+// A source of the work topics gives an incident with no area and one subject, as a catalog of exploited flaws does.
+describe("the routing of a work topic (AL-35)", () => {
+  const flaw = (severity: Incident["severity"]) =>
+    incident({ kind: "cyber.vulnerability.exploited", severity, areas: [], about: [{ system: "cve", id: "CVE-2026-0001" }] });
+  // The watch of a person with the work software, as the configuration joins it (`personInterests`).
+  const worker = (rules: PersonWatch["rules"] = []) => personInterests({ watch: watcher(undefined, { rules }), defaults: { works: ["software"] } }).watch;
+
+  it("sends an exploited flaw to a person with the work software, up to the entry limit", () => {
+    // With no work, the flaw has no place and no watched subject.
+    expect(run(flaw("moderate"), watcher()).level).toBe("none");
+    const moderate = run(flaw("moderate"), worker());
+    expect(moderate.level).toBe("notice");
+    expect(moderate.places).toEqual([]);
+    expect(moderate.reasons).toContainEqual(expect.objectContaining({ kind: "reach", reached: ["topic:cyber.vulnerability.exploited"] }));
+    // A severe flaw is urgent, not life-safety: the entry limit of the policy is urgent.
+    expect(run(flaw("severe"), worker()).level).toBe("urgent");
+    expect(run(flaw("extreme"), worker()).level).toBe("urgent");
+  });
+
+  it("lowers the level of a work topic with a rule of the person", () => {
+    const digest = worker([{ kinds: ["cyber.vulnerability.exploited"], max: "digest" }]);
+    expect(run(flaw("moderate"), digest).level).toBe("digest");
+    expect(run(flaw("severe"), digest).level).toBe("digest");
+    // A rule of another kind does not change the level.
+    expect(run(flaw("moderate"), worker([{ kinds: ["met"], max: "digest" }])).level).toBe("notice");
   });
 });
