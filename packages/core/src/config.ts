@@ -15,7 +15,7 @@ import { DRILL_PROBES, drillProblems, nextDrillAt, type DrillConfig } from "./dr
 import { composeInterests, deliveryLayer, placesLayer, servicesLayer, workLayer, type InterestRow } from "./interest-defaults.ts";
 import { incidents, normalize } from "./merge.ts";
 import { optInFields, resolveOptIn, type OptInConfig, type OptInRecord } from "./opt-in.ts";
-import { CHANNEL_SUBJECT, DRILL_SUBJECT, NO_SYSTEM_LINES, systemReports } from "./system-reports.ts";
+import { CHANNEL_SUBJECT, DRILL_SUBJECT, NO_SYSTEM_LINES, systemReports, type SourceClearConfig } from "./system-reports.ts";
 import type { TryChain } from "./chain.ts";
 import type { Expectation } from "./lateness.ts";
 import { rankDelayProblems, rankFloorProblems, type RankDelays } from "./escalation.ts";
@@ -208,6 +208,11 @@ export interface AlertConfig {
    * least 60 s open a line (`DEFAULT_CHANNEL_DOWN`).
    */
   readonly channelDown?: ChannelDownConfig;
+  /**
+   * The policy of the end of the line of a down source (AL-75): the time that a source stays up before its line ends.
+   * Without it, the time is 15 minutes or 3 intervals of the source, the longer (`DEFAULT_SOURCE_CLEAR`).
+   */
+  readonly sourceClear?: SourceClearConfig;
   /**
    * The send limit of each person (AL-72): the most new escalations of each level below `life-safety` in one window,
    * over all the copies. Each field that is absent keeps its default (`DEFAULT_SEND_LIMITS`).
