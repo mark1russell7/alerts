@@ -161,6 +161,34 @@ export interface Refusal {
    * channel is larger, a delivery on the channel came after the refusal in the log.
    */
   readonly deliveries: number;
+  /** The count of the refusals of the key in a row, with this refusal (`refusalStreak`). */
+  readonly streak: number;
+}
+
+/**
+ * The default longest wait between two tries of a refused send: 10 minutes. On 2026-11-18 a refused send went again
+ * each 10 seconds through a burst (AL-72). A refusal tells that the channel has no message, thus a quick retry helps little.
+ */
+export const REFUSAL_LIMIT: Duration = 600_000;
+
+/**
+ * This function tells if the log keeps a refusal at the time `at`. The log keeps the last refusal of a key until its
+ * retry time plus `REFUSAL_LIMIT`, or plus its wait when the wait is longer. A delivery of the key ends it.
+ *
+ * - A retry comes at its retry time or later. A burst or a restart can put it later, thus the refusal stays past it.
+ * - A refusal that the log keeps does not hold a send after its retry time. Each reader of a wait examines the retry time.
+ */
+export function refusalKept(refusal: Pick<Refusal, "at" | "retryAt">, at: Instant): boolean {
+  return at < refusal.retryAt + Math.max(REFUSAL_LIMIT, refusal.retryAt - refusal.at);
+}
+
+/**
+ * This function gives the count of the refusals of a key in a row at the time `at`. A key with no refusal that the log
+ * keeps (`refusalKept`) has the count 0. The wait of the next try of a refused send doubles for each refusal in a row.
+ */
+export function refusalStreak(refusals: Readonly<Record<string, Refusal>>, key: string, at: Instant): number {
+  const refusal = refusals[key];
+  return refusal !== undefined && refusalKept(refusal, at) ? refusal.streak : 0;
 }
 
 /** The send of an open copy. */
@@ -365,7 +393,8 @@ function foldRest(state: RuntimeState, event: RuntimeEvent, context: FoldContext
     case "settled":
       return { ...base, copies: without(state.copies, event.copy) };
     case "refused": {
-      const refusal: Refusal = { channel: event.channel, kind: event.kind, at: event.time, retryAt: event.retryAt, deliveries: state.delivered[event.channel] ?? 0 };
+      const streak = refusalStreak(state.refusals, event.key, event.time) + 1;
+      const refusal: Refusal = { channel: event.channel, kind: event.kind, at: event.time, retryAt: event.retryAt, deliveries: state.delivered[event.channel] ?? 0, streak };
       const refusals = { ...waiting(state.refusals, event.time), [event.key]: refusal };
       return { ...base, refusals, copies: event.copy === undefined ? state.copies : without(state.copies, event.copy) };
     }
@@ -538,9 +567,10 @@ export function shiftState(state: RuntimeState, size: Duration): RuntimeState {
   };
 }
 
-// The refusals with a retry after the time `at`. A refusal with an earlier retry holds no send and no channel after a restart.
+// The refusals that the log keeps at the time `at` (`refusalKept`). A refusal with an earlier retry holds no send and no
+// channel after a restart, because each reader of a wait examines the retry time. Its count of refusals in a row stays.
 function waiting(refusals: Readonly<Record<string, Refusal>>, at: Instant): Readonly<Record<string, Refusal>> {
-  const kept = Object.entries(refusals).filter(([, refusal]) => refusal.retryAt > at);
+  const kept = Object.entries(refusals).filter(([, refusal]) => refusalKept(refusal, at));
   return kept.length === Object.keys(refusals).length ? refusals : Object.fromEntries(kept);
 }
 

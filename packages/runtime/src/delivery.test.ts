@@ -34,10 +34,11 @@ import {
 } from "@mark1russell7/alerts";
 import { describe, expect, it } from "vitest";
 import type { DeliveryOptions } from "./delivery.ts";
+import { envelope, type RuntimeEvent } from "./events.ts";
 import { heldOf, holdStep } from "./heartbeat.ts";
 import { openRuntimeLog, type RuntimeLog } from "./log.ts";
 import { openRuntime, type RuntimeOptions } from "./runtime.ts";
-import { rebuild } from "./state.ts";
+import { rebuild, REFUSAL_LIMIT, refusalStreak } from "./state.ts";
 
 const T0 = Date.UTC(2026, 3, 1, 18, 0, 0);
 const SECOND = 1000;
@@ -382,7 +383,7 @@ describe("the delivery step of a pass", () => {
     const before = open({ pushover: { send: () => ({ ok: false, kind: "rate-limited", message: "The quota is used.", retryAfter: 90 * SECOND }) } }, log, clock);
     await before.runtime.pass();
     const key = before.pushover.send[0]!.key;
-    expect(before.runtime.state().refusals).toEqual({ [key]: { channel: PUSHOVER, kind: "rate-limited", at: T0, retryAt: T0 + 90 * SECOND, deliveries: 0 } });
+    expect(before.runtime.state().refusals).toEqual({ [key]: { channel: PUSHOVER, kind: "rate-limited", at: T0, retryAt: T0 + 90 * SECOND, deliveries: 0, streak: 1 } });
     // The refusal ends the copy, thus the restart does not stop it.
     expect(before.runtime.state().copies).toEqual({});
 
@@ -1485,9 +1486,7 @@ describe("the send limit in the passes of the runtime (AL-72)", () => {
     }),
   };
 
-  function openBurst(sms: Script = {}, extra: Partial<DeliveryOptions> = { sendLimits: LIMITS }) {
-    const clock = fakeWallClock(T0);
-    const log = openRuntimeLog(":memory:");
+  function openBurst(sms: Script = {}, extra: Partial<DeliveryOptions> = { sendLimits: LIMITS }, log = openRuntimeLog(":memory:"), clock = fakeWallClock(T0)) {
     const pushover = channel(PUSHOVER, "poll", () => clock.now());
     const text = channel(SMS, "none", () => clock.now(), sms);
     const runtime = openRuntime({
@@ -1541,6 +1540,46 @@ describe("the send limit in the passes of the runtime (AL-72)", () => {
       await clock.advance(wait);
     }
     expect(waits).toEqual([15 * SECOND, 30 * SECOND, 60 * SECOND, 60 * SECOND, 60 * SECOND]);
+    log.close();
+  });
+
+  it("doubles the wait of each key when two keys are refused in one pass, also with a restart between the rounds", async () => {
+    const refuse: Script = { send: () => ({ ok: false, kind: "refused", message: "The number is not valid." }) };
+    for (const restart of [false, true]) {
+      const first = openBurst(refuse);
+      const { clock, log } = first;
+      let { runtime } = first;
+      const waits: number[][] = [];
+      for (let round = 0; round < 4; round += 1) {
+        const pass = await runtime.pass();
+        const failures = pass.delivery?.failures.filter((failure) => failure.call === "send") ?? [];
+        expect(failures.map((failure) => failure.kind)).toEqual(["refused", "refused"]);
+        const round_ = failures.map((failure) => failure.retryAt - clock.now());
+        waits.push(round_);
+        await clock.advance(Math.max(...round_));
+        if (restart) {
+          await runtime.close();
+          ({ runtime } = openBurst(refuse, undefined, log, clock));
+        }
+      }
+      expect(waits, restart ? "with a restart" : "in one process").toEqual([15, 30, 60, 120].map((wait) => [wait * SECOND, wait * SECOND]));
+      log.close();
+    }
+  });
+
+  it("keeps the count of the refusals of a key past its retry time, also after a refusal of another key", () => {
+    const { log, runtime } = openBurst();
+    const refusedAt = (key: string, time: number, wait: number): RuntimeEvent => ({ ...envelope("refused", `refused:${key}@${time}`, time), key, channel: SMS, kind: "refused", retryAt: time + wait });
+    // Key a is refused 2 times. A refusal of key b after the retry time of a does not end the count of a.
+    const events = [refusedAt("a", T0, 15 * SECOND), refusedAt("a", T0 + 15 * SECOND, 30 * SECOND), refusedAt("b", T0 + 50 * SECOND, 15 * SECOND)];
+    const state = rebuild(events, runtime.config);
+    expect(refusalStreak(state.refusals, "a", T0 + 50 * SECOND)).toBe(2);
+    expect(refusalStreak(state.refusals, "b", T0 + 50 * SECOND)).toBe(1);
+    // The count ends after the retry time plus the refusal limit.
+    expect(refusalStreak(state.refusals, "a", T0 + 45 * SECOND + REFUSAL_LIMIT)).toBe(0);
+    const late = rebuild([...events, refusedAt("b", T0 + 70 * SECOND + REFUSAL_LIMIT, 15 * SECOND)], runtime.config);
+    expect(Object.keys(late.refusals)).toEqual(["b"]);
+    expect(late.refusals["b"]?.streak).toBe(1);
     log.close();
   });
 });
