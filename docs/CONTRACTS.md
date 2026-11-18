@@ -904,6 +904,8 @@ The record of a digest:
 - The merge state keeps each delivery. Thus a restart and each other copy know the incidents that a digest told.
 - A failed send writes nothing, and the digest stays due. The flight limit and the refusals apply as to each other send.
 - A copy of rank N waits N times the rank delay of the level `digest` before a send. On an exclusive channel, the rank floor applies.
+- Each step of a person sends one digest for each digest time, across the copies. A digest delivery of the step at or after the digest time keeps the step quiet.
+- Thus the entries that only one copy knows, for example its own system reports, wait for the next digest. A night entry of that kind gets no second message.
 - The title gives the count of the entries. The body has one line for each entry, after its level when that level is not `digest`.
 
 ## Levels and the first night rule
