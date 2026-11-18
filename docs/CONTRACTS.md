@@ -1036,7 +1036,9 @@ The deaths of one NCEI event are too high for some kinds: NCEI enters many event
 - The harm of a kind under an alert is the deaths and injuries of the NCEI events of the NCEI kind of the alert kind. The function `nceiKindOf` gives that NCEI kind, with the same prefix rule as the score. An event is under an alert when an alert row of the same county or zone (UGC) is active. The time of the event is from its begin minus one hour (`UNDER_MARGIN_MS`) to its end.
 - The section also has the NCEI harm of each kind in the years, so the share of the harm under an alert is a division. It also counts the events that the join cannot place, by reason: marine, area, time zone or time.
 - NCEI gives its own state codes to the territories and the waters. The join reads them (`NCEI_TERRITORIES`, `NCEI_WATERS`). A water event meets only the rows of its marine zone, for example a hurricane warning of `GMZ335`.
-- A county event meets only the county rows of an alert, and a zone event meets only its zone rows. Thus an alert of zones and the events of counties have no common harm. The section keeps the rows of each alert in counties and in zones (`areas`).
+- A county event meets only the county rows of an alert, and a zone event meets only its zone rows. Thus an alert of zones and the events of counties have no common harm.
+- Format 4 (`alerts-rates/4`) gives the areas of each kind and significance, and the harm in them, in counties and in zones, in each year (`byArea`). An area is one alert in one county or zone. It counts one time, in the VTEC year of the alert.
+- Format 4 also gives the placed events of the NCEI kind in counties and in zones (`placed`). The prior of an alert takes the kind of area with more events.
 
 The runtime reads the committed priors at its start (`committedPriors` of the package `rates`). A fault of the file stops only the score, and each alert goes on:
 
