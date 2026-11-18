@@ -27,7 +27,7 @@ import {
   type TryChain,
   type TryEnd,
 } from "@mark1russell7/alerts";
-import { firstInstantOf, localTime } from "@mark1russell7/algebra/clock";
+import { localTime, monthOf } from "@mark1russell7/algebra/clock";
 import { z } from "zod";
 // The descriptor module, not `index.ts`: the bundle of each Function then holds no send code of the channel.
 import { CHANNEL_ID, TWILIO_TEXT_LIMIT, twilioCallDescriptor } from "./descriptor.ts";
@@ -408,16 +408,6 @@ function urlOf(base: string, path: string, cursor: OutageCursor, version: string
 
 const DAY = 24 * 60 * 60_000;
 
-/**
- * This function gives the start of the calendar month of `at` in the time zone `zone`: the first instant of its first day.
- * A name that is not a time zone gives the instant 31 days before `at`. Thus the cap then counts more calls, not fewer.
- */
-export function monthStartOf(at: Instant, zone: string): Instant {
-  const local = localTime(at, zone);
-  const start = local === undefined ? undefined : firstInstantOf(Date.UTC(local.year, local.month - 1, 1), zone);
-  return start ?? at - 31 * DAY;
-}
-
 /** The counts of the recent sends for the two caps: the calls and the texts. */
 interface CallCounts {
   readonly window: number;
@@ -425,8 +415,9 @@ interface CallCounts {
 }
 
 // A send in the time `capWindow` before `at` counts for the cap of the window. A send from the start of the month counts for the monthly cap.
+// A name that is not a time zone gives the start 31 days before `at`. Thus the cap then counts more calls, not fewer.
 function callCounts(list: OutageList, at: Instant, recent: readonly Instant[]): CallCounts {
-  const from = monthStartOf(at, list.month.timeZone);
+  const from = monthOf(at, list.month.timeZone)?.start ?? at - 31 * DAY;
   return {
     window: recent.filter((time) => time > at - list.capWindow && time <= at).length,
     month: recent.filter((time) => time >= from && time <= at).length,
