@@ -2,7 +2,7 @@
  * The schedule of the reads of a watch: the balance and the spend of a provider, and the replies of the texts. The runtime
  * starts `check` of each watch in each pass. A watch reads only when it is due.
  */
-import type { Duration, Instant } from "@mark1russell7/alerts";
+import type { Duration, Instant, ReadHealth } from "@mark1russell7/alerts";
 import type { WallClock } from "@mark1russell7/algebra/clock";
 import { errorMessage } from "@mark1russell7/text";
 import { limited } from "./limit.ts";
@@ -94,4 +94,12 @@ export function readSchedule<R>(options: ReadScheduleOptions<R>): ReadSchedule {
       if (next !== undefined) next += size;
     },
   };
+}
+
+/**
+ * This function gives the health of a read on a schedule. The health has the end of the last read that passed, the
+ * state of the last read and the time of the next read. It holds no message of a failure.
+ */
+export function readHealth(what: string, schedule: Pick<ReadSchedule, "failure" | "nextReadAt">, passedAt: Instant | undefined): ReadHealth {
+  return { what, at: passedAt ?? null, failed: schedule.failure() !== undefined, next: schedule.nextReadAt() ?? null };
 }

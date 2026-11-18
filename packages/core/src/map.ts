@@ -5,6 +5,7 @@
  */
 import { compareCodeUnits } from "@mark1russell7/text/order";
 import { assess, higherLevel, matchPlaces, reachedAssessment } from "./assess.ts";
+import type { IndicatorBreadth } from "./breadth.ts";
 import {
   ASSESSED_LEVELS,
   type Area,
@@ -128,6 +129,11 @@ export interface MapPayload {
   readonly view: MapView;
   /** The regions under the view: the zones and the counties of each watched state, from the store of shapes. */
   readonly basemap: readonly MapRegion[];
+  /**
+   * The breadth of the indicator signals at the time of the view, in the world and at each place. A runtime with no store
+   * of the readings has no field. The breadth is of the last pass, thus a past map of the history has no breadth.
+   */
+  readonly breadth?: IndicatorBreadth;
 }
 
 /** The name of the format of the map payload. A change that breaks a reader gets a new name. */
@@ -143,6 +149,8 @@ export interface MapPayloadInput extends Omit<MapInput, "assessments"> {
   readonly policy?: AssessPolicy;
   /** The regions under the view, from the store of shapes. */
   readonly basemap: readonly MapRegion[];
+  /** The breadth of the indicator signals of the last pass. Without it, the payload has no field `breadth`. */
+  readonly breadth?: IndicatorBreadth;
 }
 
 /**
@@ -150,10 +158,10 @@ export interface MapPayloadInput extends Omit<MapInput, "assessments"> {
  * delivery. Thus the level on the map is the level that reaches the person. A mute with the effect `absent` gives `none`.
  */
 export function mapPayload(input: MapPayloadInput): MapPayload {
-  const { at, people, policy, basemap, ...view } = input;
+  const { at, people, policy, basemap, breadth, ...view } = input;
   const live = view.incidents.filter((incident) => incident.live);
   const assessments = live.flatMap((incident) => people.map((person) => reachedAssessment(assess(incident, person, view.places, policy, at ?? undefined))));
-  return { format: MAP_FORMAT, at, view: mapView({ ...view, assessments }), basemap };
+  return { format: MAP_FORMAT, at, view: mapView({ ...view, assessments }), basemap, ...(breadth === undefined ? {} : { breadth }) };
 }
 
 /** The severities, from the highest. The map and the history sort by this order. */

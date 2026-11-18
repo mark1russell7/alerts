@@ -4,7 +4,8 @@
  * (NCEI Storm Events). It also holds the CAP certainty bands of `format-cap` in its file.
  *
  * The functions are pure. The script `scripts/measure.ts` fetches the data, writes `data/rates.json`
- * and compares a new measure with the committed file.
+ * and compares a new measure with the committed file. The function `priorsOf` gives the priors of the
+ * shadow score from the file, and the script writes them to `data/priors.json`.
  */
 
 export {
@@ -67,5 +68,6 @@ export {
   type RatesInput,
   type Share,
 } from "./rates.ts";
+export { priorsOf } from "./priors.ts";
 export { ratesSummary, TOP_TYPES, type GateResult } from "./summary.ts";
 export { COW_YEARS, eachYear, lastFullYear, measureYears, NCEI_YEARS, parseYears, type Years } from "./years.ts";

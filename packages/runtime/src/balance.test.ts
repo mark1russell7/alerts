@@ -6,7 +6,7 @@ import type { ChannelId } from "@mark1russell7/alerts";
 import { SqliteHostStateStore } from "polite-crawler";
 import { memoryQuotaStore, quotaGate, type QuotaStore } from "polite-crawler/api";
 import { describe, expect, it } from "vitest";
-import { balanceWatch, spendGates, spendQuota, spendUnits, spendWatch, type BalanceReading, type BalanceWatchOptions, type SpendReading, type SpendWatchOptions } from "./balance.ts";
+import { balanceWatch, spendGates, spendNotes, spendQuota, spendUnits, spendWatch, type BalanceReading, type BalanceWatchOptions, type SpendReading, type SpendWatchOptions } from "./balance.ts";
 
 const T0 = Date.UTC(2026, 10, 15, 12);
 const HOUR = 3_600_000;
@@ -14,7 +14,7 @@ const DAY = 24 * HOUR;
 const CALL = "twilio-call" as ChannelId;
 
 function watchOf(read: BalanceWatchOptions["read"], extra: Partial<BalanceWatchOptions> = {}) {
-  return balanceWatch({ provider: "provider:twilio", title: "Twilio", channels: [CALL], floor: 5, read, ...extra });
+  return balanceWatch({ provider: "provider:twilio", title: "Twilio", channels: [CALL], floors: [5], read, ...extra });
 }
 
 // A reader that gives the next answer of a list, and counts its reads.
@@ -39,7 +39,7 @@ describe("the balance watch", () => {
     expect(watch.balance()).toBeUndefined();
     expect(watch.nextReadAt()).toBeUndefined();
     await watch.check(clock);
-    expect(watch.balance()).toEqual({ provider: "provider:twilio", title: "Twilio", channels: [CALL], floor: 5, maxAge: 2 * DAY, since: T0, read: { balance: 12.5, currency: "USD", at: T0 } });
+    expect(watch.balance()).toEqual({ provider: "provider:twilio", title: "Twilio", channels: [CALL], floors: [5], maxAge: 2 * DAY, since: T0, read: { balance: 12.5, currency: "USD", at: T0 } });
     expect(watch.nextReadAt()).toBe(T0 + DAY);
     await clock.advance(DAY - 1);
     await watch.check(clock);
@@ -106,10 +106,11 @@ describe("the balance watch", () => {
     expect(reader.reads()).toBe(1);
   });
 
-  it("refuses a watch with no channel, a floor that is not a number or a time that is not valid", () => {
+  it("refuses a watch with no channel, no floor, a floor that is not a number or a time that is not valid", () => {
     const read = scripted([ok(1)]).read;
     expect(() => watchOf(read, { channels: [] })).toThrow("has no channel");
-    expect(() => watchOf(read, { floor: Number.NaN })).toThrow("not a number");
+    expect(() => watchOf(read, { floors: [5, Number.NaN] })).toThrow("not a number");
+    expect(() => watchOf(read, { floors: [] })).toThrow("no floor");
     for (const extra of [{ every: 0 }, { retry: -1 }, { maxAge: 1.5 }, { limit: Number.POSITIVE_INFINITY }]) expect(() => watchOf(read, extra), JSON.stringify(extra)).toThrow("whole count");
   });
 });
@@ -139,6 +140,27 @@ describe("the spend watch", () => {
     const watch = spendWatch({ provider: "provider:twilio", gates, timeZone: ZONE, read, ...options });
     return { clock, gates, watch, froms, reads: () => reads };
   }
+
+  it("gives its health with no amount and no message", async () => {
+    const { clock, watch } = setup([spent(3.2105), { ok: false, message: "Twilio did not give the usage totalprice (server)." }]);
+    expect(watch.health()).toEqual({ what: "spend of provider:twilio", at: null, failed: false, next: null });
+    await watch.check(clock);
+    expect(watch.health()).toEqual({ what: "spend of provider:twilio", at: T0, failed: false, next: T0 + HOUR });
+    await clock.advance(HOUR);
+    await watch.check(clock);
+    expect(watch.health()).toEqual({ what: "spend of provider:twilio", at: T0, failed: true, next: T0 + HOUR + 15 * 60_000 });
+  });
+
+  it("gives a note for the heartbeat after a failed read, with the provider and no amount", async () => {
+    const { clock, watch } = setup([{ ok: false, message: "Twilio did not give the usage totalprice (server): 12.34" }, spent(1)]);
+    expect(spendNotes(undefined)).toEqual([]);
+    expect(spendNotes(watch)).toEqual([]);
+    await watch.check(clock);
+    expect(spendNotes(watch)).toEqual(["The last read of the spend of provider:twilio failed. The cap has no usage outside the sends since the last read that passed."]);
+    await clock.advance(15 * 60_000);
+    await watch.check(clock);
+    expect(spendNotes(watch)).toEqual([]);
+  });
 
   it("reads the spend from the start of the month at the first check, then each hour, and makes the count of the gates larger", async () => {
     const { clock, gates, watch, froms, reads } = setup([spent(3.2105), spent(2), spent(4)]);

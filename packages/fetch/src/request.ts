@@ -1,11 +1,12 @@
 /**
- * The request of a source: one GET to the API of the source through polite-crawler, at the pace of
- * its host, with a time limit. The result is an answer, or a failure of the fetch. Only the abort of
- * the caller throws.
+ * The request of a source: one GET or one POST to the API of the source through polite-crawler.
+ * The request keeps the pace of its host and has a time limit. The result is an answer, or a failure of the fetch. Only
+ * the abort of the caller throws.
  */
 
 import type { FetchFailure, FetchSignal, SourceId } from "@mark1russell7/alerts";
 import { errorMessage } from "@mark1russell7/text";
+import { redactSecrets } from "@mark1russell7/text/redact";
 import { ApiError, poll, send, type Answer, type Conditions, type Pace, type Send, type Transport } from "polite-crawler/api";
 
 import { failureOf, type Detail } from "./failure.ts";
@@ -34,14 +35,30 @@ export interface RequesterOptions {
   readonly timeoutMs?: number;
   /** The reader of the problem text of an answer that is not a success. The default reads no text. */
   readonly detail?: Detail;
+  /**
+   * The secrets of the requests, for example an API key in the body of each POST. The requester removes each of them
+   * from each message of a failure. The default is no secret.
+   */
+  readonly secrets?: readonly string[];
 }
 
-/** One request of a source. */
-export interface Request {
+/**
+ * One request of a source. A request with no body is a GET, and it can be conditional. A request with a body is a POST,
+ * and it has no conditions.
+ */
+export type Request = RequestPath & (ConditionalGet | Post);
+
+/** The path and the words of one request. */
+export interface RequestPath {
   /** The path after the base URL, with its query. */
   readonly path: string;
   /** The words that tell what the request asks for, in a message of polite-crawler, for example `the recent alerts`. */
   readonly what: string;
+}
+
+/** A GET, with a store of validators or with no store. */
+export interface ConditionalGet {
+  readonly body?: undefined;
   /**
    * The store of the validators of a conditional GET. With a store, the request is a `poll` of
    * polite-crawler, and a 304 answer is a success. With no store, a 304 answer is a failure.
@@ -49,10 +66,21 @@ export interface Request {
   readonly conditions?: Conditions;
 }
 
-/** The result of one request. The latency is the time of the transport only, not the wait of the scheduler. */
+/** A POST with a body. The headers of the requester give its `content-type`. */
+export interface Post {
+  /** The body of the POST, for example a JSON text. */
+  readonly body: string;
+  readonly conditions?: undefined;
+}
+
+/**
+ * The result of one request. The latency is the time of the transport only, not the wait of the scheduler. A failure
+ * has the answer when the server answered, so a source can read its error codes. The body of that answer can hold a
+ * secret: the source does not put it in a message.
+ */
 export type Requested =
   | { readonly ok: true; readonly url: string; readonly answer: Answer; readonly latency: number }
-  | { readonly ok: false; readonly url: string; readonly failure: FetchFailure };
+  | { readonly ok: false; readonly url: string; readonly failure: FetchFailure; readonly answer?: Answer };
 
 /** The requests of one source, on one base URL. */
 export interface Requester {
@@ -62,7 +90,7 @@ export interface Requester {
   readonly host: string;
   /** The time limit of one request, in milliseconds. */
   readonly timeoutMs: number;
-  /** This function sends one request. It throws only when the signal of the caller aborts. */
+  /** This function sends one request: a GET, or a POST with a body. It throws only when the signal of the caller aborts. */
   get(request: Request, signal?: FetchSignal): Promise<Requested>;
 }
 
@@ -94,6 +122,8 @@ function withoutEndSlashes(url: string): string {
  * - An exchange with no answer gives the failure `network`, with the error of polite-crawler.
  * - An answer that is not a success gives the failure of `failureOf`.
  * - The abort of the signal of the caller throws its reason. It is not a failure of the source.
+ *
+ * The message of each failure has no secret of `options.secrets`: `redactSecrets` of `@mark1russell7/text` removes them.
  */
 export function createRequester(options: RequesterOptions): Requester {
   const baseUrl = withoutEndSlashes(options.baseUrl);
@@ -101,9 +131,16 @@ export function createRequester(options: RequesterOptions): Requester {
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const minIntervalMs = options.minIntervalMs ?? DEFAULT_MIN_INTERVAL_MS;
   const { pace, transport, source, headers, detail } = options;
+  const secrets = options.secrets ?? [];
   const now = pace.now;
+  const failed = (url: string, failure: FetchFailure, answer?: Answer): Requested => ({
+    ok: false,
+    url,
+    failure: secrets.length === 0 ? failure : { ...failure, message: redactSecrets(failure.message, secrets) },
+    ...(answer === undefined ? {} : { answer }),
+  });
 
-  async function get({ path, what, conditions }: Request, signal?: FetchSignal): Promise<Requested> {
+  async function get({ path, what, body, conditions }: Request, signal?: FetchSignal): Promise<Requested> {
     const stop = abortSignalOf(signal);
     const url = `${baseUrl}${path}`;
     let timedOut = false;
@@ -119,19 +156,20 @@ export function createRequester(options: RequesterOptions): Requester {
         latency = now() - started;
       }
     };
-    const input: Send = { source, host, minIntervalMs, what, exchange: { method: "GET", url, headers, body: null } };
+    const exchange = { method: body === undefined ? "GET" : "POST", url, headers, body: body ?? null };
+    const input: Send = { source, host, minIntervalMs, what, exchange, ...(secrets.length === 0 ? {} : { secrets, redact: redactSecrets }) };
     let answer: Answer;
     try {
       answer = conditions === undefined ? await send(pace, timed, input, stop) : await poll(pace, timed, conditions, input, stop);
     } catch (error) {
       if (signal?.aborted === true) throw error;
-      if (timedOut) return { ok: false, url, failure: { kind: "timeout", message: `no answer in ${String(timeoutMs)} ms: ${url}` } };
+      if (timedOut) return failed(url, { kind: "timeout", message: `no answer in ${String(timeoutMs)} ms: ${url}` });
       const message = error instanceof ApiError ? error.message : errorMessage(error);
-      return { ok: false, url, failure: { kind: "network", message } };
+      return failed(url, { kind: "network", message });
     }
     const { outcome } = answer.classified;
     if (outcome === "ok" || (outcome === "not-modified" && conditions !== undefined)) return { ok: true, url, answer, latency };
-    return { ok: false, url, failure: failureOf(answer, detail) };
+    return failed(url, failureOf(answer, detail), answer);
   }
 
   return { baseUrl, host, timeoutMs, get };

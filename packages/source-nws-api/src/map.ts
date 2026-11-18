@@ -34,10 +34,10 @@ import {
   capTime,
   capValue,
 } from "@mark1russell7/alerts-format-cap";
-import { hasVtec, isSameCode, isUgcCode, NWS_ORIGIN, parseVtec, resolveKind, vtecKey, type Vtec } from "@mark1russell7/alerts-format-nws";
+import { hasVtec, isSameCode, isUgcCode, NWS_API_SOURCE, NWS_ORIGIN, parseVtec, resolveKind, vtecKey, type Vtec } from "@mark1russell7/alerts-format-nws";
 
 /** The id of this source. */
-export const SOURCE_ID = "nws-api" as SourceId;
+export const SOURCE_ID: SourceId = NWS_API_SOURCE;
 
 /** The fields of the properties of an NWS alert that the map function knows. A different field is a note. */
 export const KNOWN_FIELDS: ReadonlySet<string> = new Set([

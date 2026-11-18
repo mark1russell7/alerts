@@ -1,6 +1,7 @@
 import { random, seedsFrom } from "@mark1russell7/rigor-generators";
 import { describe, expect, it } from "vitest";
 import { assess, DEFAULT_ASSESS_POLICY, reachedAssessment } from "./assess.ts";
+import type { IndicatorBreadth } from "./breadth.ts";
 import type { Area, AssessedLevel, Assessment, Coverage, Incident, PersonId, PersonWatch, PlaceId, RegionCode, ReportId, Severity } from "./contracts.ts";
 import { MAP_FORMAT, mapPayload, mapView, regionRank, type MapInput, type MapPayloadInput, type MapPlaceInput, type MapRegion, type MapShape, type ShapeLookup } from "./map.ts";
 
@@ -193,6 +194,19 @@ describe("the payload of the map route", () => {
     const payload = mapPayload(payloadInput());
     expect([payload.format, payload.at, payload.basemap]).toEqual([MAP_FORMAT, AT, basemap]);
     expect(mapPayload(payloadInput({ at: null })).at).toBeNull();
+  });
+
+  it("carries the breadth of the indicator signals, and has no field without it", () => {
+    const breadth: IndicatorBreadth = {
+      world: { signals: ["grid-frequency"], read: ["grid-frequency"], dimensions: [{ dimension: "grid-frequency", read: 1, signals: 1, noRead: 0 }] },
+      places: [
+        { place: PLACE_A, signals: [], read: [], dimensions: [] },
+        { place: PLACE_B, signals: [], read: [], dimensions: [] },
+      ],
+      unplaced: [],
+    };
+    expect(mapPayload(payloadInput({ breadth })).breadth).toEqual(breadth);
+    expect("breadth" in mapPayload(payloadInput())).toBe(false);
   });
 
   it("gives the level that the delivery gives the person", () => {

@@ -617,7 +617,7 @@ describe("the Twilio call channel of the instance", () => {
     // The cap is 10 US dollars with a reserve of 3, in cents. One call takes 4 cents.
     expect(instance.quotas()).toContainEqual({ channel: call, limit: 1_000, reserve: 300, used: 4, unit: "cents", resetAt: expect.any(Number) });
     expect(twilio.calls.filter((entry) => entry.method === "GET" && entry.url.endsWith("/Balance.json"))).toHaveLength(1);
-    expect(instance.balances.map((watch) => [watch.provider, watch.balance()?.read?.balance, watch.balance()?.floor])).toEqual([["provider:twilio", 12.5, 5]]);
+    expect(instance.balances.map((watch) => [watch.provider, watch.balance()?.read?.balance, watch.balance()?.floors])).toEqual([["provider:twilio", 12.5, [5]]]);
   });
 
   it("calls from a copy with rank 1 one rank floor after its push, also with no rank delay at the level (AL-15)", async () => {

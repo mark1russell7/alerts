@@ -30,7 +30,7 @@ const STATES: readonly HealthState[] = ["unknown", "healthy", "slow", "failing",
 
 const row = (state: HealthState, late = false, source = "one"): SourceRow => ({ source, state, late, read: "", readAt: undefined, why: [], covers: undefined });
 const rows = (...states: HealthState[]): SourceRow[] => states.map((state, index) => row(state, false, `source-${String(index)}`));
-const health = (parts: Partial<HealthPayload>): HealthPayload => ({ ...HEALTHY_FIXTURE, copies: [], quotas: [], balances: [], ...parts });
+const health = (parts: Partial<HealthPayload>): HealthPayload => ({ ...HEALTHY_FIXTURE, copies: [], quotas: [], balances: [], reads: [], ...parts });
 const quota = (used: number, stages: HealthPayload["quotas"][number]["stages"], more: object = {}): HealthPayload["quotas"][number] => ({
   quota: { channel: "text" as ChannelId, limit: 100, reserve: 10, used, ...more },
   stages,
@@ -40,7 +40,7 @@ const balance = (stages: HealthPayload["balances"][number]["stages"], amount: nu
     provider: "provider:voice-co",
     title,
     channels: channels as ChannelId[],
-    floor: 5,
+    floors: [5],
     maxAge: DAY,
     since: HEALTH_AT - 30 * DAY,
     ...(amount === undefined ? {} : { read: { balance: amount, currency: "USD", at: HEALTH_AT - 26 * HOUR } }),
@@ -219,13 +219,14 @@ describe("the facts of the delivery", () => {
     expect(deliveryFacts(FIRST_FIXTURE, HEALTH_AT, clock)).toEqual([]);
   });
 
-  it("puts the fact that stops a message first, then the quotas, the balances and the copies", () => {
+  it("puts the fact that stops a message first, then the quotas, the balances, the copies and the reads", () => {
     expect(deliveryFacts(HEALTH_FIXTURE, HEALTH_AT, clock)).toEqual([
       { part: "balance", name: "Voice Co", tone: "bad", word: "Empty", text: "The balance is 0.00 USD. The provider refuses each paid message on the channel voice.", stopped: ["voice"], limited: [] },
       { part: "quota", name: "text", tone: "warn", word: "Reserve", text: "7 of 100 messages are left. The channel sends only life-safety messages. The window ends at 00:00.", stopped: [], limited: ["text"] },
       { part: "copy", name: "cabin-copy", tone: "warn", word: "Not read", text: "The last read of the copy was 3 hours ago. The two copies can both send an alert.", stopped: [], limited: [] },
+      { part: "read", name: "replies of the texts", tone: "warn", word: "Read failed", text: "The last read of the replies of the texts failed. The last read that passed was 40 minutes ago. The next read is at 21:05.", stopped: [], limited: [] },
     ]);
-    expect(Object.keys(PART_WORDS)).toEqual(["quota", "balance", "copy"]);
+    expect(Object.keys(PART_WORDS)).toEqual(["quota", "balance", "copy", "read"]);
   });
 
   it("tells the worst stage of a quota", () => {
@@ -245,6 +246,9 @@ describe("the facts of the delivery", () => {
 
   it("tells the worst stage of a balance, and that the runtime cannot read it", () => {
     expect(facts({ balances: [balance(["low"], 3.2)] })).toMatchObject([{ tone: "warn", word: "Low", text: "The balance is 3.20 USD, and the floor is 5.00 USD.", stopped: [] }]);
+    // With two floors, the text gives the lowest floor that the balance is below.
+    const two = balance(["low"], 1.5);
+    expect(facts({ balances: [{ ...two, balance: { ...two.balance, floors: [5, 2] } }] })).toMatchObject([{ word: "Low", text: "The balance is 1.50 USD, and the floor is 2.00 USD." }]);
     expect(facts({ balances: [balance(["low", "empty"], -1.5, ["voice", "text"])] })).toMatchObject([
       { tone: "bad", word: "Empty", text: "The balance is -1.50 USD. The provider refuses each paid message on the channels voice and text.", stopped: ["voice", "text"] },
     ]);
@@ -254,6 +258,16 @@ describe("the facts of the delivery", () => {
     expect(facts({ balances: [balance(["low", "unread"], 3.2)] })).toMatchObject([
       { word: "Low", text: "The balance is 3.20 USD, and the floor is 5.00 USD. The last read of the balance was 26 hours ago. The runtime cannot see a low balance." },
     ]);
+  });
+
+  it("tells a failed read on a schedule, the time of the last read that passed and the next read", () => {
+    const read = (at: number | null, failed: boolean, next: number | null = HEALTH_AT + 5 * MINUTE): HealthPayload["reads"][number] => ({ what: "replies of the texts", at, failed, next });
+    expect(facts({ reads: [read(HEALTH_AT - 2 * MINUTE, false)] })).toEqual([]);
+    expect(facts({ reads: [read(null, false)] })).toEqual([]);
+    expect(facts({ reads: [read(HEALTH_AT - 40 * MINUTE, true)] })).toEqual([
+      { part: "read", name: "replies of the texts", tone: "warn", word: "Read failed", text: "The last read of the replies of the texts failed. The last read that passed was 40 minutes ago. The next read is at 21:05.", stopped: [], limited: [] },
+    ]);
+    expect(facts({ reads: [read(null, true, null)] })).toMatchObject([{ text: "No read of the replies of the texts passed yet." }]);
   });
 
   it("names a provider with no title by its id", () => {
@@ -308,6 +322,8 @@ describe("the sentence of the delivery", () => {
     expect(deliveryVerdict(HEALTHY_FIXTURE, [])).toEqual({ tone: "good", text: "No quota and no balance stops a message." });
     expect(verdict({ quotas: [quota(1, [])] })).toEqual({ tone: "good", text: "No quota and no balance stops a message." });
     expect(verdict({})).toEqual({ tone: "quiet", text: "The runtime watches no quota and no balance." });
+    // A failed read is a fact that needs attention. It stops no message.
+    expect(verdict({ reads: [{ what: "spend of provider:voice-co", at: null, failed: true, next: null }] })).toEqual({ tone: "warn", text: "No quota and no balance stops a message. 1 fact below needs attention." });
     expect(deliveryVerdict(FIRST_FIXTURE, [])).toEqual({ tone: "quiet", text: "The runtime watches no quota and no balance." });
   });
 });

@@ -157,7 +157,7 @@ import type { EscalationEnd, Recipient } from "./delivery.ts";
 import type { DrillConfig, DrillPath } from "./drill.ts";
 import { OPT_IN_WAYS, type OptInConfig, type OptInRecord } from "./opt-in.ts";
 import type { RankDelays } from "./escalation.ts";
-import { HEALTH_FORMAT, type BalanceHealth, type CopyHealth, type HealthPayload, type QuotaHealth, type SourceHealthView } from "./health-payload.ts";
+import { HEALTH_FORMAT, type BalanceHealth, type CopyHealth, type HealthPayload, type QuotaHealth, type ReadHealth, type SourceHealthView } from "./health-payload.ts";
 import { HISTORY_FORMAT, type HistoryChange, type HistoryIncident, type HistoryPayload, type HistoryPlace, type HistoryRegion } from "./history.ts";
 import type { MapShape } from "./map.ts";
 import type { Lateness, LatenessLimit, LatenessState } from "./lateness.ts";
@@ -1428,7 +1428,7 @@ export const spendConfigSchema: z.ZodType<SpendConfig, SpendConfig> = schemaOf<S
         .readonly()
         .exactOptional(),
       reserveUsd: z.number().nonnegative().exactOptional(),
-      floor: z.number(),
+      floor: z.union([z.number(), z.array(z.number()).min(1, "The list of floors has one floor or more.").readonly()]),
       timeZone: z.string().min(1),
     })
     .readonly(),
@@ -1653,7 +1653,7 @@ export const providerBalanceSchema: z.ZodType<ProviderBalance, ProviderBalance> 
       provider: z.string().min(1, "The provider is a non-empty string."),
       title: z.string(),
       channels: z.array(channelIdSchema).readonly(),
-      floor: z.number(),
+      floors: z.array(z.number()).min(1, "The list of floors has one floor or more.").readonly(),
       maxAge: durationSchema,
       since: instantSchema,
       read: balanceReadSchema.exactOptional(),
@@ -1664,6 +1664,18 @@ export const providerBalanceSchema: z.ZodType<ProviderBalance, ProviderBalance> 
 /** This schema checks the health of the balance of one provider account: the balance and its stages. */
 export const balanceHealthSchema: z.ZodType<BalanceHealth, BalanceHealth> = schemaOf<BalanceHealth>()(
   z.strictObject({ balance: providerBalanceSchema, stages: z.array(balanceStageSchema).readonly() }).readonly(),
+);
+
+/** This schema checks the health of one read on a schedule of the runtime. */
+export const readHealthSchema: z.ZodType<ReadHealth, ReadHealth> = schemaOf<ReadHealth>()(
+  z
+    .strictObject({
+      what: z.string().min(1, "The words of a read are a non-empty string."),
+      at: instantSchema.nullable(),
+      failed: z.boolean(),
+      next: instantSchema.nullable(),
+    })
+    .readonly(),
 );
 
 /** This schema checks the answer of the health route of the runtime. */
@@ -1679,6 +1691,7 @@ export const healthPayloadSchema: z.ZodType<HealthPayload, HealthPayload> = sche
       copies: z.array(copyHealthSchema).readonly(),
       quotas: z.array(quotaHealthSchema).readonly(),
       balances: z.array(balanceHealthSchema).readonly(),
+      reads: z.array(readHealthSchema).readonly(),
     })
     .readonly(),
 );

@@ -90,7 +90,8 @@ describe("createRequester", () => {
 
   it("gives a failure for a 304 with no store of conditions", async () => {
     const result = await requesterWith([reply(304)]).requester.get({ path: "/a", what: "a" });
-    expect(result).toEqual({ ok: false, url: "https://api.test/v1/a", failure: { kind: "refused", message: "304 Not Modified (not-modified)" } });
+    expect(result).toMatchObject({ ok: false, url: "https://api.test/v1/a", failure: { kind: "refused", message: "304 Not Modified (not-modified)" } });
+    expect(!result.ok && result.answer?.reply.status).toBe(304);
   });
 
   it("maps an answer that is not a success with the reader of the problem text", async () => {
@@ -110,6 +111,36 @@ describe("createRequester", () => {
     const result = await broken.get({ path: "/a", what: "a" });
     expect(result).toMatchObject({ ok: false, failure: { kind: "network" } });
     expect(!result.ok && result.failure.message).toContain("connection reset");
+  });
+
+  it("sends a POST with the body, and the message of a failure has no secret", async () => {
+    const key = "key-5e1c7a";
+    const refusal = JSON.stringify({ errors: [{ message: `Unsupported API key: ${key}`, code: 21 }] });
+    const firstError = (text: string): string | undefined => (JSON.parse(text) as { errors: { message: string }[] }).errors[0]?.message;
+    const { requester, sent } = requesterWith([reply(403, refusal)], { detail: firstError, secrets: [key], headers: { "content-type": "application/json" } });
+    const body = JSON.stringify({ api_key: key });
+    const result = await requester.get({ path: "/get-mag-alert", what: "the current alert", body });
+    expect(sent).toEqual([{ method: "POST", url: "https://api.test/v1/get-mag-alert", headers: { "content-type": "application/json" }, body }]);
+    expect(result).toMatchObject({ ok: false, failure: { kind: "refused" } });
+    expect(!result.ok && result.failure.message).toContain("Unsupported API key");
+    expect(!result.ok && result.failure.message).not.toContain(key);
+    expect(!result.ok && result.answer?.reply.status).toBe(403);
+  });
+
+  it("removes the secrets from the message of an error of the transport", async () => {
+    const key = "key-5e1c7a";
+    const broken = requesterWith(
+      [
+        async () => {
+          throw new Error(`the body ${key} was cut`);
+        },
+      ],
+      { secrets: [key] },
+    ).requester;
+    const result = await broken.get({ path: "/a", what: "a", body: "{}" });
+    expect(result).toMatchObject({ ok: false, failure: { kind: "network" } });
+    expect(!result.ok && result.failure.message).toContain("was cut");
+    expect(!result.ok && result.failure.message).not.toContain(key);
   });
 
   it("gives the failure timeout at the end of the time limit", async () => {

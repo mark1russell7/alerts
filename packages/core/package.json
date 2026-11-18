@@ -12,7 +12,7 @@
     "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.test.json"
   },
   "dependencies": {
-    "@mark1russell7/algebra": "^0.9.5",
+    "@mark1russell7/algebra": "^0.9.7",
     "@mark1russell7/collections": "^0.11.2",
     "@mark1russell7/geo": "^0.5.3",
     "@mark1russell7/interval": "^0.1.0",
