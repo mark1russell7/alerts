@@ -25,6 +25,7 @@ fetch ──► Observation ──► map ──► Report ──► merge state
 | --- | --- | --- |
 | `@mark1russell7/alerts` | `packages/core` | The contracts, the merge, the assessment, the routing, the escalation, the health and the coverage. Pure functions on an injected clock. |
 | `@mark1russell7/alerts-format-<name>` | `packages/format-<name>` | The reader of one message format that two or more sources use: `format-cap` for CAP 1.2, `format-nws` for VTEC and the NWS kinds. |
+| `@mark1russell7/alerts-<hazard>` | `packages/<hazard>` | The facts of one hazard that two or more sources share: `quake` for the shaking of an earthquake, `space-weather` for the NOAA scales, the scale G from Kp and the polar caps. |
 | `@mark1russell7/alerts-fetch` | `packages/fetch` | The fetch parts that the sources share: the request through polite-crawler, and the map from an answer to a failure. |
 | `@mark1russell7/alerts-source-<id>` | `packages/source-<id>` | One source adapter as procedures. |
 | `@mark1russell7/alerts-atlas` | `packages/atlas` | The source atlas: each signal class, the candidate sources of each class with a decision and its reason, and the records of the research rounds. Its gate needs 2 or more sources with no risk for each class, or a reason. It measures the layers of the cover of each class. |
@@ -1058,6 +1059,9 @@ The package `@mark1russell7/alerts-channel-twilio` operates the chain on the ser
 - The setup of the runtime refuses an outage call with no spend entry for Twilio. Each problem of the monthly cap names no count, because the spend cap is private.
 - A gap stays open: the spend gate of the instance does not count the calls of the Functions. Thus one month can have more calls than the cap, by the calls of the Functions.
 - The end of the gap is AL-57. The gate also reads the usage records of Twilio for the local month, in whole UTC days. It uses the larger of that amount and its own count, by the rule of `@mark1russell7/stack-spend`.
+- `spendWatch` of the runtime reads the spend of the provider each hour, from the start of the month of the cap. It notes the spend in the count of the gates. The count does not become smaller, thus the gate keeps the larger amount.
+- A failed read goes to the health of the watch, and the watch reads again after 15 minutes. A read that ends in the next month does not change the count.
+- The watch of Twilio starts after the release of `@procedures/notify` 0.63.0, which reads the usage records.
 - If the move of the status callback fails, the end has no `acked=1`. Then the chain calls again. That is the safe side.
 - Each handler gives the script of the call as data. The Function renders it with the TwiML builders of `@procedures/notify/twilio`.
 - `outageListOf` makes the list from the field `outage` of the private configuration and the recipients of `loadConfig`. The number of each person is the contact of the person on `twilio-call`.

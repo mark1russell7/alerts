@@ -19,20 +19,12 @@ export {
   ALERT_LIFE_MS,
   ENTRY_FIELDS,
   entryTime,
-  GEOMAGNETIC_POLES,
-  GEOMAGNETIC_STORM_KIND,
   kindOf,
   mapObservation,
-  POLEWARD_BY_LEVEL,
-  polarCaps,
   PRODUCTS,
-  RADIO_BLACKOUT_KIND,
-  SEVERITY_BY_LEVEL,
   SHORT_ALERT_LIFE_MS,
   SIGNIFICANCE,
-  SOLAR_RADIATION_STORM_KIND,
   SOURCE_ID,
-  SPACE_WEATHER_KIND,
   SWPC_KINDS,
   SWPC_PAGE,
   SWPC_SENDER,
@@ -41,7 +33,7 @@ export {
 } from "./map.ts";
 export type { Family, Product } from "./map.ts";
 export { HEADS, messageTime, monthOf, parseMessage, periodEnd, polewardOf, scaleLevel, statedScale, watchDays } from "./text.ts";
-export type { Head, MessageText, Parsed, ScaleLevel, WatchDay } from "./text.ts";
+export type { Head, MessageText, Parsed, WatchDay } from "./text.ts";
 
 /**
  * This function makes the procedures of the SWPC source: `describe`, `fetch` and `map`. The source has no `check`,
