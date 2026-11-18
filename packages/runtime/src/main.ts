@@ -65,6 +65,7 @@ import { PROFILES, declare } from "./index.ts";
 import { daemonCheck, instanceCheck, LOUD_PING_URL_KEY, openInstance, pingKeyOf, pingTargets, userAgent } from "./instance.ts";
 import { openCheckedRuntimeLog } from "./log.ts";
 import type { ExchangeRound } from "./peers.ts";
+import { loadPriors } from "./priors.ts";
 import { openReadingStore, READINGS_FILE } from "./readings.ts";
 import { GOOD_FILE, privateFiles, readStartTexts, reloadHook, startConfig, type CheckOf } from "./reload.ts";
 import { shapeReport, zoneCodesText } from "./shapes.ts";
@@ -224,10 +225,13 @@ async function runtime(): Promise<ServiceBuilder> {
   // A broken file of readings goes into quarantine, and the store starts empty. Each series has no read until its history fills again.
   const readings = openReadingStore(join(home, READINGS_FILE));
   if (readings.quarantined !== undefined) console.error(`The file ${READINGS_FILE} was broken. It is in quarantine, and the store of readings starts empty.`);
+  // The priors of the shadow score. A fault of the file stops only the score.
+  const priors = loadPriors((message) => console.error(message));
   const instance = openInstance({
     config,
     secret,
     log,
+    ...(priors === undefined ? {} : { priors }),
     clock: realClock,
     wall,
     transport: fetchTransport({ userAgent: agent }),
