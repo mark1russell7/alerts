@@ -5,12 +5,13 @@
  */
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { add, sum, type Quantity } from "@mark1russell7/quantity";
+import { add, sum, valueIn, type Quantity } from "@mark1russell7/quantity";
 import { daemon, service, type Profile, type ServiceBuilder } from "@mark1russell7/service";
 import type { GroupSpec, ServiceSpec } from "@mark1russell7/service/host";
 import { holdingPasses, READINESS, STARTUP_BUDGET, STOP_MESSAGE } from "./index.ts";
 import { alertsHome, HOME_VARIABLE, type FileText } from "./config.ts";
 import { INSTANCE_TIMES } from "./instance.ts";
+import { parseStartTimes, readyWindow, startTimesPath, type ReadyWindow } from "./start-times.ts";
 
 const ms = (value: number): Quantity => ({ value, unit: "ms" });
 const s = (value: number): Quantity => ({ value, unit: "s" });
@@ -37,6 +38,11 @@ export interface HostOptions {
   readonly node: string;
   readonly port?: number | undefined;
   readonly probePort?: number | undefined;
+  /**
+   * The ready window of the runtime. The default is `READY_WITHIN`. The supervisor gives the window of the measured starts
+   * of its host (`hostReadyWindow`).
+   */
+  readonly readyWithin?: Quantity | undefined;
 }
 
 /** The shutdown profile of the runtime under the supervisor: `daemon`, with a drain that holds the pass in flight. */
@@ -77,6 +83,14 @@ export const RUNTIME_PROGRAM = "runtime";
 /** The discovery file of the runtime. The supervisor writes the process ID of each start of the runtime into it. */
 export const runtimeDiscovery = (home: string): string => join(hostFolder(home), `${RUNTIME_PROGRAM}.json`);
 
+/**
+ * This function gives the ready window of the runtime from the measured starts of the host, in the file `host/start-times.json`.
+ * The window is not shorter than `READY_WITHIN`. The function `read` gives the text of a file, or `undefined` when the file is missing.
+ */
+export function hostReadyWindow(home: string, read: (path: string) => string | undefined): ReadyWindow {
+  return readyWindow(parseStartTimes(read(startTimesPath(hostFolder(home)))), valueIn(READY_WITHIN, "ms"));
+}
+
 /** This function gives the process ID in the text of a discovery file, or `undefined` when the text has no process ID. */
 export function discoveryPid(text: FileText): number | undefined {
   if ("code" in text) return undefined;
@@ -92,7 +106,7 @@ export function discoveryPid(text: FileText): number | undefined {
 /**
  * This function gives the group of the supervisor: one program, the runtime.
  *
- * - The runtime is ready when `/readiness` passes, in its startup budget plus one readiness interval.
+ * - The runtime is ready when `/readiness` passes in the ready window: `options.readyWithin`, or else `READY_WITHIN`.
  * - A ready runtime that fails `/liveness` 3 times in sequence, 10 s apart, stops. Then the supervisor
  *   starts it again. One slow answer does not stop it.
  * - The stop goes on the IPC channel, because a Windows process cannot catch a signal of its parent.
@@ -112,7 +126,7 @@ export function hostGroup(options: HostOptions): GroupSpec {
         cwd: options.root,
         env: { ALERTS_HOME: options.home, PORT: String(port), PROBE_PORT: String(probePort), SERVICE_PROFILE: "daemon" },
         ipc: true,
-        ready: { probe: readinessProbe(probePort), interval: ms(500), timeout: ms(250), within: READY_WITHIN },
+        ready: { probe: readinessProbe(probePort), interval: ms(500), timeout: ms(250), within: options.readyWithin ?? READY_WITHIN },
         alive: { probe: { kind: "http", url: `${probes}/liveness` }, interval: s(10), timeout: s(2), failures: 3 },
         stop: { grace: RUNTIME_GRACE, message: STOP_MESSAGE },
         listen: { port, url: `http://127.0.0.1:${port}/` },

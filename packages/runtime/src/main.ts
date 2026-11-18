@@ -37,7 +37,7 @@
  * check stops the runtime. The supervisor starts it again.
  */
 import { randomUUID } from "node:crypto";
-import { mkdir, rm } from "node:fs/promises";
+import { mkdir, readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { configHash } from "@mark1russell7/alerts";
@@ -70,7 +70,18 @@ import { openReadingStore, READINGS_FILE } from "./readings.ts";
 import { GOOD_FILE, privateFiles, readStartTexts, reloadHook, startConfig, type CheckOf } from "./reload.ts";
 import { shapeReport, zoneCodesText } from "./shapes.ts";
 import { openTransitCache, TRANSIT_FILE, transitReport, transitText } from "./transit.ts";
+import { hostFolder } from "./host.ts";
+import { addStartTime, startTimesPath, type StartTime } from "./start-times.ts";
 import { supervisor } from "./supervise.ts";
+
+/** This function adds one measured start to the file of the start times in the folder of the host. */
+async function recordStart(home: string, start: StartTime): Promise<void> {
+  const folder = hostFolder(home);
+  const path = startTimesPath(folder);
+  const text = await readFile(path, "utf8").catch(() => undefined);
+  await mkdir(folder, { recursive: true });
+  await writeFileAtomic(path, addStartTime(text, start));
+}
 
 /** This function gives a port from the environment, or the fallback when the variable is not set. */
 const port = (name: string, fallback: number): number => {
@@ -212,8 +223,13 @@ async function runtime(): Promise<ServiceBuilder> {
     reload?.onPass();
     if (marked || service.lifecycle?.state !== "running") return;
     marked = true;
+    // The time from the start of the process to this pass is one measured start of the host. The supervisor sets its ready window from these times.
+    const started = { at: new Date(wall.now()).toISOString(), ms: Math.round(process.uptime() * 1000) };
     void loaded.ready().then((notes) => {
       for (const note of notes) console.error(note);
+    });
+    void recordStart(home, started).catch((error: unknown) => {
+      console.error(`The start time of the runtime is not in its file: ${errorMessage(error)}`);
     });
   };
 
