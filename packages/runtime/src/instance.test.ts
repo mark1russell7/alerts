@@ -32,6 +32,7 @@ import { memoryCache, type ShapeCache } from "@mark1russell7/alerts-shapes-nws";
 import { CANARY_PATH, createNwsSource } from "@mark1russell7/alerts-source-nws-api";
 import { fakeSessions, NWWS_DESCRIPTOR } from "@mark1russell7/alerts-source-nwws";
 import { SWPC_KINDS } from "@mark1russell7/alerts-source-swpc";
+import { KEV_KINDS } from "@mark1russell7/alerts-source-cisa-kev";
 import { ENERGY_CHARTS_MEASURES, SOURCE_ID as ENERGY_CHARTS_SOURCE, WINDOW_MINUTES } from "@mark1russell7/alerts-source-energy-charts";
 import { memoryQuotaStore, quotaGate, type Exchange, type Transport } from "polite-crawler/api";
 import { DEFAULT_POLICY } from "polite-crawler/politeness";
@@ -138,6 +139,17 @@ function energyChartsAnswer(url: URL): string {
 }
 
 /**
+ * The answer of CISA to the request of the KEV catalog. It has one real entry of the recorded catalog of the package
+ * `source-cisa-kev`, with its dates moved to the day of the tests. The entry is due 14 days after the tests.
+ */
+function kevAnswer(): string {
+  const catalog = JSON.parse(fixture("alerts-source-cisa-kev", "kev-20261117.json")) as { vulnerabilities: Record<string, unknown>[] } & Record<string, unknown>;
+  const day = (offset: number): string => new Date(T0 + offset * 86_400_000).toISOString().slice(0, 10);
+  const entry = { ...catalog.vulnerabilities[0], dateAdded: day(0), dueDate: day(14) };
+  return JSON.stringify({ ...catalog, catalogVersion: day(0).replaceAll("-", "."), dateReleased: new Date(T0 - 3_600_000).toISOString(), count: 1, vulnerabilities: [entry] });
+}
+
+/**
  * A fake network with recorded answers. The NWS API gives the Flood Warning to the request of the
  * state, the keepalive to the canary, and no alert to the WEA request. The IPAWS feed has no alert.
  *
@@ -146,7 +158,7 @@ function energyChartsAnswer(url: URL): string {
  * The SWPC gives its recorded list of 2026-11-16. Its caps are far from the place, and its other messages have no area.
  *
  * GFZ gives a quiet value of the index Kp for each interval of the window of the query (`gfzAnswer`). Energy-Charts gives
- * the nominal frequency for each second of the query (`energyChartsAnswer`).
+ * the nominal frequency for each second of the query (`energyChartsAnswer`). CISA gives a catalog with one live entry (`kevAnswer`).
  *
  * Each exchange takes `delay` milliseconds of real time, as on a busy runner. With `Infinity`, no exchange ends.
  */
@@ -164,6 +176,7 @@ function network(delay = 0) {
     if (url.hostname === "www.seismicportal.eu") return { status: 200, statusText: "OK", headers: { "content-type": "application/json" }, body: fixture("alerts-source-emsc", "query-2.5_day-20261116T0528Z.json") };
     if (url.hostname === "services.swpc.noaa.gov") return { status: 200, statusText: "OK", headers: { "content-type": "application/json" }, body: fixture("alerts-source-swpc", "alerts-20261116T1553Z.json") };
     if (url.hostname === "kp.gfz.de") return { status: 200, statusText: "OK", headers: { "content-type": "application/json" }, body: gfzAnswer(url) };
+    if (url.hostname === "www.cisa.gov") return { status: 200, statusText: "OK", headers: { "content-type": "application/json" }, body: kevAnswer() };
     if (url.hostname === "api.energy-charts.info") return { status: 200, statusText: "OK", headers: { "content-type": "application/json" }, body: energyChartsAnswer(url) };
     if (url.hostname === "www.tsunami.gov") {
       const name = url.pathname.endsWith("/PHEBCAP.xml") ? "PHEBCAP-20261116T1134Z.xml" : "PAAQCAP-20261116T1134Z.xml";
@@ -283,7 +296,7 @@ describe("openInstance", () => {
   it("sends a recorded NWS warning for a watched county to the person on Pushover", async () => {
     const { instance, clock, net, server } = await open();
     const pass = await finish(clock, instance.runtime.pass());
-    expect(pass.fetched).toEqual(["nws-api", "ipaws", "usgs", "emsc", "tsunami-ntwc", "tsunami-ptwc", "swpc", "gfz", "energy-charts"]);
+    expect(pass.fetched).toEqual(["nws-api", "ipaws", "usgs", "emsc", "tsunami-ntwc", "tsunami-ptwc", "swpc", "gfz", "energy-charts", "cisa-kev"]);
     // A fetch that ran out of time names its cause here, before the checks of the send.
     expect(pass.view?.health.map((health) => [health.source, health.state])).toEqual([
       ["nws-api", "healthy"],
@@ -295,6 +308,7 @@ describe("openInstance", () => {
       ["swpc", "healthy"],
       ["gfz", "healthy"],
       ["energy-charts", "healthy"],
+      ["cisa-kev", "healthy"],
     ]);
     expect(server.calls).toHaveLength(1);
     const [call] = server.calls;
@@ -384,11 +398,11 @@ describe("openInstance", () => {
     const outside = { ...CONFIG.places[0]!, at: [LONGITUDE, 28.46] as const };
     const { instance, clock, server } = open(store(SECRETS), { ...CONFIG, places: [outside] });
     const pass = await finish(clock, instance.runtime.pass());
-    expect(pass.fetched).toEqual(["nws-api", "ipaws", "usgs", "emsc", "tsunami-ntwc", "tsunami-ptwc", "swpc", "gfz", "energy-charts"]);
+    expect(pass.fetched).toEqual(["nws-api", "ipaws", "usgs", "emsc", "tsunami-ntwc", "tsunami-ptwc", "swpc", "gfz", "energy-charts", "cisa-kev"]);
     expect(server.calls).toHaveLength(0);
     // The USGS and EMSC give earthquake incidents too, the tsunami centers give expired statements, and the SWPC gives
     // space weather. The order of the incidents is the order of their anchors.
-    const incident = pass.view.incidents.find((one) => !["geo.earthquake", "geo.tsunami", ...SWPC_KINDS].includes(one.kind.code));
+    const incident = pass.view.incidents.find((one) => !["geo.earthquake", "geo.tsunami", ...SWPC_KINDS, ...KEV_KINDS].includes(one.kind.code));
     expect(incident?.areas.some((area) => area.type === "polygon")).toBe(true);
     expect(matchPlaces(incident!, [outside])).toEqual([]);
     // With a buffer of 10 km, the polygon is in the buffer of the place, and the distance decides the match.
@@ -412,6 +426,7 @@ describe("openInstance", () => {
       ["swpc", "healthy"],
       ["gfz", "healthy"],
       ["energy-charts", "healthy"],
+      ["cisa-kev", "healthy"],
     ]);
     expect(server.calls.map((call) => call.fields["title"])).toEqual([expect.stringContaining("Flood Warning")]);
   });
@@ -429,6 +444,7 @@ describe("openInstance", () => {
       ["swpc", "The fetch took longer than 5000 ms."],
       ["gfz", "The fetch took longer than 5000 ms."],
       ["energy-charts", "The fetch took longer than 5000 ms."],
+      ["cisa-kev", "The fetch took longer than 5000 ms."],
     ]);
   });
 
@@ -449,11 +465,20 @@ describe("openInstance", () => {
     }
   });
 
+  it("gives an incident with no area for the live entry of the KEV catalog, and no call to a person with no work", async () => {
+    const { instance, clock, server } = open();
+    const pass = await finish(clock, instance.runtime.pass());
+    const flaws = pass.view.incidents.filter((incident) => KEV_KINDS.includes(incident.kind.code));
+    expect(flaws.map((incident) => [incident.areas, incident.about.map((subject) => subject.system)])).toEqual([[[], ["cve"]]]);
+    expect(flaws[0]?.expires).toBe(Date.parse(new Date(T0 + 15 * 86_400_000).toISOString().slice(0, 10)));
+    expect(server.calls.map((call) => call.fields["title"])).toEqual([expect.stringContaining("Flood Warning")]);
+  });
+
   it("gives no contact in the User-Agent without a contact in the configuration, and no request holds a position or an account", async () => {
     const { instance, clock, net } = await open();
     await finish(clock, instance.runtime.pass());
     const hosts = new Set(net.exchanges.map((exchange) => new URL(exchange.url).hostname));
-    expect(hosts).toEqual(new Set(["api.weather.gov", "apps.fema.gov", "earthquake.usgs.gov", "www.seismicportal.eu", "www.tsunami.gov", "services.swpc.noaa.gov", "kp.gfz.de", "api.energy-charts.info"]));
+    expect(hosts).toEqual(new Set(["api.weather.gov", "apps.fema.gov", "earthquake.usgs.gov", "www.seismicportal.eu", "www.tsunami.gov", "services.swpc.noaa.gov", "kp.gfz.de", "api.energy-charts.info", "www.cisa.gov"]));
     for (const exchange of net.exchanges) {
       expect(exchange.headers["user-agent"]).toBe(USER_AGENT_NAME);
       const text = JSON.stringify(exchange);
@@ -477,7 +502,7 @@ describe("openInstance", () => {
     // The refresh starts after the pass, and it starts no request that can end after the next fetch of a source.
     const next = Math.min(...instance.runtime.config.sources.map((source) => nextFetch(instance.runtime.state(), source)));
     expect(clock.now()).toBeLessThanOrEqual(next);
-    expect(pass.fetched).toEqual(["nws-api", "ipaws", "usgs", "emsc", "tsunami-ntwc", "tsunami-ptwc", "swpc", "gfz", "energy-charts"]);
+    expect(pass.fetched).toEqual(["nws-api", "ipaws", "usgs", "emsc", "tsunami-ntwc", "tsunami-ptwc", "swpc", "gfz", "energy-charts", "cisa-kev"]);
     expect(outcomes).toHaveLength(1);
     expect(outcomes[0]?.ok).toBe(true);
     await instance.shapes.close();
@@ -554,7 +579,7 @@ describe("openInstance", () => {
   it("gives the loop the times of the sources and of the channel", async () => {
     const { instance } = await open();
     const intervals = instance.runtime.config.sources.map((source) => source.interval);
-    expect(instance.runtime.config.sources.map((source) => source.id)).toEqual(["nws-api", "ipaws", "usgs", "emsc", "tsunami-ntwc", "tsunami-ptwc", "swpc", "gfz", "energy-charts"].map((id) => id as SourceId));
+    expect(instance.runtime.config.sources.map((source) => source.id)).toEqual(["nws-api", "ipaws", "usgs", "emsc", "tsunami-ntwc", "tsunami-ptwc", "swpc", "gfz", "energy-charts", "cisa-kev"].map((id) => id as SourceId));
     // The limit of a fetch is its interval, up to the shortest interval. Thus the 10 minutes of GFZ do not make the pass long.
     expect(instance.runtime.config.sources.map(INSTANCE_FETCH_LIMIT)).toEqual(intervals.map(() => 60_000));
     expect(instance.loop.times).toEqual({
@@ -965,7 +990,7 @@ describe("the check of the instance", () => {
 
   it("does not count a global source as the cover of a place", () => {
     const global = INSTANCE_SOURCES.filter((descriptor) => descriptor.coverage === "global");
-    expect(global.map((descriptor) => descriptor.id)).toEqual(["swpc", "gfz"]);
+    expect(global.map((descriptor) => descriptor.id)).toEqual(["swpc", "gfz", "cisa-kev"]);
     expect(instanceProblems(parse(CONFIG, store(SECRETS)), store(SECRETS), global, 0)).toEqual([expect.stringContaining("No regional source covers the place place-1.")]);
   });
 

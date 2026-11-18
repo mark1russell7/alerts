@@ -65,6 +65,7 @@ import { createNwsSource, NWS_DESCRIPTOR } from "@mark1russell7/alerts-source-nw
 import { createNwwsSource, SOURCE_ID as NWWS_SOURCE, type NwwsAccount, type OpenSession } from "@mark1russell7/alerts-source-nwws";
 import { createGfzSource, GFZ_DESCRIPTOR } from "@mark1russell7/alerts-source-gfz";
 import { createEnergyChartsSource, ENERGY_CHARTS_DESCRIPTOR } from "@mark1russell7/alerts-source-energy-charts";
+import { createKevSource, KEV_DESCRIPTOR } from "@mark1russell7/alerts-source-cisa-kev";
 import { createSwpcSource, SWPC_DESCRIPTOR } from "@mark1russell7/alerts-source-swpc";
 import { createTsunamiSource, descriptorOf as tsunamiDescriptor, TSUNAMI_CENTERS, type TsunamiCenter, type TsunamiFetchOptions } from "@mark1russell7/alerts-source-tsunami";
 import { createUsgsSource, USGS_DESCRIPTOR } from "@mark1russell7/alerts-source-usgs";
@@ -282,6 +283,9 @@ const tsunamiFactory =
  *
  * Energy-Charts gives the grid frequency of Continental Europe as indicator readings, and no event. The store of the
  * readings keeps them.
+ *
+ * CISA KEV gives the known exploited flaws of software, with no area. The work `software` of `WORK_DEFAULTS` in the core
+ * names their kind.
  */
 export const INSTANCE_SOURCES: readonly SourceDescriptor[] = [
   NWS_DESCRIPTOR,
@@ -292,6 +296,7 @@ export const INSTANCE_SOURCES: readonly SourceDescriptor[] = [
   SWPC_DESCRIPTOR,
   GFZ_DESCRIPTOR,
   ENERGY_CHARTS_DESCRIPTOR,
+  KEV_DESCRIPTOR,
 ];
 
 /** The expectations of the instance. The field `expectations` of the configuration sets their `since`. */
@@ -620,10 +625,10 @@ export interface Instance {
  * problem. A problem is a missing token, a key with a bad form, or a place that no regional source covers.
  * The message names ids, fields and the names of secrets, and no value.
  *
- * - The sources are the NWS API, IPAWS, the USGS, EMSC, the two tsunami warning centers, the SWPC, GFZ and
- *   Energy-Charts. The stream of NWWS-OI is a source when the secrets have the keys of the account of the copy
- *   (`nwwsSetup`). Each source gets the codes of the places. It gets the position of a place only when the place shares it with that source. The USGS,
- *   EMSC, the centers, the SWPC, GFZ and Energy-Charts ask for no place.
+ * - The sources are the NWS API, IPAWS, the USGS, EMSC, the two tsunami warning centers, the SWPC, GFZ,
+ *   Energy-Charts and CISA KEV. The stream of NWWS-OI is a source when the secrets have the keys of the account of the
+ *   copy (`nwwsSetup`). Each source gets the codes of the places. It gets the position of a place only when the place shares it with that source. The USGS,
+ *   EMSC, the centers, the SWPC, GFZ, Energy-Charts and CISA KEV ask for no place.
  * - The channels are Pushover, and the Twilio call channel when the secrets have its keys. Each time of the delivery comes
  *   from a fact of the channels.
  * - A spend entry of a channel gives its cap and the watch of the balance of its account.
@@ -633,7 +638,7 @@ export function openInstance(options: InstanceOptions): Instance {
   const { clock } = options;
   // A change of the wall clock of CLOCK_STEP_ABOVE or less is a drift. A larger change is a step of the clock.
   const wall = frameClock(options.wall, clock, { driftLimit: CLOCK_STEP_ABOVE });
-  const factories = [createNwsSource, createIpawsSource, createUsgsSource, createEmscSource, ...TSUNAMI.map((center) => tsunamiFactory(center)), createSwpcSource, createGfzSource, createEnergyChartsSource] as const;
+  const factories = [createNwsSource, createIpawsSource, createUsgsSource, createEmscSource, ...TSUNAMI.map((center) => tsunamiFactory(center)), createSwpcSource, createGfzSource, createEnergyChartsSource, createKevSource] as const;
   const pace = sourcePace(clock, wall, factories.length);
   // One User-Agent for each request of the instance: the sources and the store of shapes.
   const agent = userAgent(options.config.config.contact);
