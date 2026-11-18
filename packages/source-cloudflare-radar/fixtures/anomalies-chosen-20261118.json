@@ -1,0 +1,104 @@
+{
+  "success": true,
+  "errors": [],
+  "result": {
+    "trafficAnomalies": [
+      {
+        "visibleInDataSources": [
+          "HTTP_ORIGINS"
+        ],
+        "uuid": "4cb4fb16-0be1-4e2b-bb13-d4a86cdf3a5c",
+        "type": "ORIGIN",
+        "status": "TP",
+        "startDate": "2026-10-20T05:45:00Z",
+        "endDate": "2026-10-20T14:00:00Z",
+        "locationDetails": null,
+        "asnDetails": null,
+        "originDetails": {
+          "origin": "google-europe-west2",
+          "name": "Google Cloud europe-west2"
+        },
+        "outageId": "1727"
+      },
+      {
+        "visibleInDataSources": [
+          "HTTP_ORIGINS"
+        ],
+        "uuid": "e02a5ade-2ab9-4e52-8aed-31792bb446b3",
+        "type": "ORIGIN",
+        "status": "TP",
+        "startDate": "2026-11-03T03:30:00Z",
+        "endDate": "2026-11-03T05:00:00Z",
+        "locationDetails": null,
+        "asnDetails": null,
+        "originDetails": {
+          "origin": "oracle-eu-frankfurt-1",
+          "name": "Oracle Cloud eu-frankfurt-1"
+        },
+        "outageId": null
+      },
+      {
+        "visibleInDataSources": [
+          "HTTP",
+          "NET"
+        ],
+        "uuid": "f2ecf7cb-1e7d-4be9-b2b8-3b662716025e",
+        "type": "AS",
+        "status": "UNVERIFIED",
+        "startDate": "2026-08-29T00:15:00Z",
+        "endDate": "2026-08-29T10:00:00Z",
+        "locationDetails": null,
+        "asnDetails": {
+          "asn": "9924",
+          "name": "TFN-TW",
+          "location": {
+            "code": "TW",
+            "name": "Taiwan"
+          }
+        },
+        "originDetails": null,
+        "outageId": null
+      },
+      {
+        "visibleInDataSources": [
+          "HTTP",
+          "NET"
+        ],
+        "uuid": "c944b2a9-c863-4f9d-8c9d-99b20c19f429",
+        "type": "LOCATION",
+        "status": "VERIFIED",
+        "startDate": "2026-11-05T18:00:00Z",
+        "endDate": "2026-11-05T20:15:00Z",
+        "locationDetails": {
+          "code": "AW",
+          "name": "Aruba"
+        },
+        "asnDetails": null,
+        "originDetails": null,
+        "outageId": "1746"
+      },
+      {
+        "visibleInDataSources": [
+          "NET",
+          "HTTP"
+        ],
+        "uuid": "e5a243d0-42f7-4f38-a574-63284f08921f",
+        "type": "AS",
+        "status": "VERIFIED",
+        "startDate": "2026-11-06T16:45:00Z",
+        "endDate": "2026-11-06T18:45:00Z",
+        "locationDetails": null,
+        "asnDetails": {
+          "asn": "6400",
+          "name": "Claro Dominicana",
+          "location": {
+            "code": "DO",
+            "name": "Dominican Republic"
+          }
+        },
+        "originDetails": null,
+        "outageId": "1747"
+      }
+    ]
+  }
+}

@@ -68,6 +68,7 @@ import { createNwwsSource, SOURCE_ID as NWWS_SOURCE, type NwwsAccount, type Open
 import { createGfzSource, GFZ_DESCRIPTOR } from "@mark1russell7/alerts-source-gfz";
 import { createEnergyChartsSource, ENERGY_CHARTS_DESCRIPTOR } from "@mark1russell7/alerts-source-energy-charts";
 import { createKevSource, KEV_DESCRIPTOR } from "@mark1russell7/alerts-source-cisa-kev";
+import { createRadarAnomaliesSource, createRadarOutagesSource, type RadarSourceOptions } from "@mark1russell7/alerts-source-cloudflare-radar";
 import { AWS_DOMAIN, AWS_KIND, createAwsSource } from "@mark1russell7/alerts-source-aws";
 import { createBomSwsSource, type BomSwsFetchOptions } from "@mark1russell7/alerts-source-bom-sws";
 import { createGcpSource, GCP_KIND, GOOGLE_DASHBOARDS, type GcpFetchOptions } from "@mark1russell7/alerts-source-gcp";
@@ -299,6 +300,20 @@ const bomFactory =
     createBomSwsSource({ ...options, apiKey });
 
 /**
+ * The name of the key of `secrets.env` that holds the API token of Cloudflare Radar. With the token, the instance reads
+ * the confirmed internet outages and the traffic anomalies of Radar.
+ */
+export const CLOUDFLARE_RADAR_KEY = "CLOUDFLARE_RADAR_TOKEN";
+
+/** This function gives the factories of the two Radar sources with the token of the secrets. The token goes only into the header `authorization`. */
+const radarFactories = (token: string) =>
+  [createRadarOutagesSource, createRadarAnomaliesSource].map(
+    (create) =>
+      (options: Omit<RadarSourceOptions, "token">): SourceProcedures =>
+        create({ ...options, token }),
+  );
+
+/**
  * The feeds of the cloud providers: the dashboards of Google (Google Cloud and Firebase) and AWS. A report of such a feed
  * has no area. Thus the instance reads a feed only when one of its persons can get its reports, with the rule of a status
  * page (`watchReads`). The keys of the products of a dashboard are its keys of components.
@@ -330,8 +345,9 @@ const PROVIDER_FEEDS = [
  * not in this list, because the persons choose them. The feeds of Google Cloud (`source-gcp`) and AWS (`source-aws`)
  * have the same rule.
  *
- * BoM (`source-bom-sws`) is a source only when the secrets have its key. Thus it is not in the list. Each page, each
- * feed and BoM have a longer interval than the shortest interval of the list. Thus the times of the loop stay the same.
+ * BoM (`source-bom-sws`) and the two sources of Cloudflare Radar (`source-cloudflare-radar`) are sources only when the
+ * secrets have their keys. Thus they are not in the list. Each page, each feed, BoM and Radar have a longer interval
+ * than the shortest interval of the list. Thus the times of the loop stay the same.
  */
 export const INSTANCE_SOURCES: readonly SourceDescriptor[] = [
   NWS_DESCRIPTOR,
@@ -675,12 +691,13 @@ export interface Instance {
  *
  * - The sources are the NWS API, IPAWS, the USGS, EMSC, the two tsunami warning centers, the SWPC, GFZ,
  *   Energy-Charts and CISA KEV. The stream of NWWS-OI is a source when the secrets have the keys of the account of the
- *   copy (`nwwsSetup`). BoM is a source when the secrets have its key (`BOM_SWS_KEY`). Each status page that one of the
+ *   copy (`nwwsSetup`). BoM is a source when the secrets have its key (`BOM_SWS_KEY`). The outages and the traffic
+ *   anomalies of Cloudflare Radar are sources when the secrets have its token (`CLOUDFLARE_RADAR_KEY`). Each status page that one of the
  *   persons can get is a source (`pagesFor`). The feed of Google Cloud or AWS is a source when one of the persons can
  *   get its reports (`watchReads`).
  * - Each source gets the codes of the places. It gets the position of a place only when the place shares it with that
- *   source. The USGS, EMSC, the centers, the SWPC, GFZ, BoM, Energy-Charts, CISA KEV, Google Cloud, AWS and the status pages ask
- *   for no place.
+ *   source. The USGS, EMSC, the centers, the SWPC, GFZ, BoM, Energy-Charts, CISA KEV, Radar, Google Cloud, AWS and the
+ *   status pages ask for no place.
  * - The channels are Pushover, and the Twilio call channel when the secrets have its keys. Each time of the delivery comes
  *   from a fact of the channels.
  * - A spend entry of a channel gives its cap and the watch of the balance of its account.
@@ -697,6 +714,8 @@ export function openInstance(options: InstanceOptions): Instance {
   const feeds = PROVIDER_FEEDS.filter((feed) => watches.some((watch) => watchReads(watch, feed)));
   // BoM gives its data only with a key of an account. With no key, the instance does not read BoM.
   const bomKey = options.secret(BOM_SWS_KEY) ?? "";
+  // Radar gives its data only with a token of an account. With no token, the instance does not read Radar.
+  const radarToken = options.secret(CLOUDFLARE_RADAR_KEY) ?? "";
   const factories = [
     createNwsSource,
     createIpawsSource,
@@ -708,6 +727,7 @@ export function openInstance(options: InstanceOptions): Instance {
     ...(bomKey === "" ? [] : [bomFactory(bomKey)]),
     createEnergyChartsSource,
     createKevSource,
+    ...(radarToken === "" ? [] : radarFactories(radarToken)),
     ...feeds.map((feed) => feed.create),
     ...pages.map((page) => statusPageFactory(page)),
   ];
