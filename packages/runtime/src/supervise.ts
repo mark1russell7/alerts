@@ -11,7 +11,8 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ServiceBuilder } from "@mark1russell7/service";
 import { discoveryOf, nodeHostPorts, removeDiscovery, superviseGroup, writeDiscovery } from "@mark1russell7/service/host";
-import { declareSupervisor, hostGroup, supervisorDiscovery, supervisorHome } from "./host.ts";
+import { declareSupervisor, hostGroup, hostReadyWindow, supervisorDiscovery, supervisorHome } from "./host.ts";
+import { hostFileText, readyWindowText } from "./start-times.ts";
 
 // The folder of the package. The runtime starts from the same checkout as the supervisor.
 const ROOT = join(fileURLToPath(new URL(".", import.meta.url)), "..");
@@ -24,7 +25,10 @@ export function supervisor(argument: string | undefined): ServiceBuilder {
   // A console argument can be `~/x` or `./x`. The runtime gets the resolved folder, thus its files are the files of the supervisor.
   const home = supervisorHome(argument, process.cwd());
   const ports = nodeHostPorts();
-  const group = superviseGroup(hostGroup({ home, root: ROOT, node: process.execPath }), ports);
+  // The ready window comes from the measured starts of this host. A new window takes effect at the next start of the supervisor.
+  const window = hostReadyWindow(home, hostFileText);
+  console.log(readyWindowText(window));
+  const group = superviseGroup(hostGroup({ home, root: ROOT, node: process.execPath, readyWithin: { value: window.ms, unit: "ms" } }), ports);
   // The discovery file names this process. With it, the remove of the task stops the process tree.
   const discovery = supervisorDiscovery(home);
   return declareSupervisor({
