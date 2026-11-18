@@ -4,14 +4,14 @@
  * kind of the page. The head gives no report.
  *
  * The id of the incident is the key of the report. The report has no correlation key: two incidents of one service at
- * one time are two events. The domain of the service is the subject of the report, so a person who names the service
- * gets the report.
+ * one time are two events. The subject of the report is the domain of the service (`domain:github.com`). Thus a person who
+ * names the service gets the report.
  */
 
 import { categoryOf, kindLabel, Problems, reportId, type Instant, type MapResult, type Observation, type Report, type Severity, type Subject, type Urgency } from "@mark1russell7/alerts";
 import { errorMessage } from "@mark1russell7/text";
 
-import { SERVICE_SYSTEM, type StatusPage } from "./page.ts";
+import { SUBJECT_SYSTEM, type StatusPage } from "./page.ts";
 
 /** The fields of the body of an incident, in this order. The fetch keeps only these fields. */
 export const INCIDENT_FIELDS = ["id", "name", "status", "impact", "created_at", "updated_at", "started_at", "monitoring_at", "resolved_at", "shortlink", "components", "incident_updates"] as const;
@@ -129,7 +129,8 @@ function reportOf(observation: Observation, page: StatusPage, incident: Fields, 
   const components = componentsOf(incident);
   const effective = timeOf(incident, "created_at");
   const onset = timeOf(incident, "started_at");
-  const about: Subject[] = [{ system: SERVICE_SYSTEM, id: page.domain, label: page.title }, ...components.map((component) => ({ system: SERVICE_SYSTEM, id: `${page.domain}/${component}`, label: component }))];
+  // A component has no id in a system of the core. The parameter `component` gives its name.
+  const about: Subject[] = [{ system: SUBJECT_SYSTEM, id: page.domain, label: page.title }];
   return {
     id: reportId({ source: page.id, key, sent }),
     source: page.id,

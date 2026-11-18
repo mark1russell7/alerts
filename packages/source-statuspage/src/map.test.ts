@@ -4,7 +4,7 @@ import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import { incidentBody, readSummary } from "./fetch.ts";
 import { componentsOf, isHead, mapObservation, sentOf, SEVERITY_OF_IMPACT, updatesOf, URGENCY_OF_STATUS } from "./map.ts";
-import { SERVICE_SYSTEM } from "./page.ts";
+import { SUBJECT_SYSTEM } from "./page.ts";
 import { registeredPage } from "./register.ts";
 
 /** The real summaries of two pages, with a part of their components (`fixtures/README.md`). */
@@ -48,12 +48,7 @@ describe("mapObservation", () => {
     });
     expect(report.expires).toBeUndefined();
     expect(report.description).toMatch(/^A fix has been implemented and we are monitoring the results\./);
-    expect(report.about).toEqual([
-      { system: SERVICE_SYSTEM, id: "cloudflare.com", label: "Cloudflare" },
-      { system: SERVICE_SYSTEM, id: "cloudflare.com/Network", label: "Network" },
-      { system: SERVICE_SYSTEM, id: "cloudflare.com/Cloud Network Interconnect (CNI)", label: "Cloud Network Interconnect (CNI)" },
-      { system: SERVICE_SYSTEM, id: "cloudflare.com/Paris, France - (CDG)", label: "Paris, France - (CDG)" },
-    ]);
+    expect(report.about).toEqual([{ system: "domain", id: "cloudflare.com", label: "Cloudflare" }]);
     expect(report.parameters).toEqual({
       status: ["monitoring"],
       impact: ["minor"],
@@ -83,7 +78,7 @@ describe("mapObservation", () => {
       headline: "OpenAI: Costs API data is delayed",
       description: "We've pushed a fix and are monitoring the recovery.",
       web: "https://status.openai.com",
-      about: [{ system: SERVICE_SYSTEM, id: "openai.com", label: "OpenAI" }],
+      about: [{ system: SUBJECT_SYSTEM, id: "openai.com", label: "OpenAI" }],
     });
     expect(report.onset).toBeUndefined();
     expect(report.parameters["component"]).toBeUndefined();

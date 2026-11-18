@@ -3,7 +3,7 @@
  * register of this package names well-known pages. The config of an instance can name other pages.
  */
 
-import { knownKind, type Duration, type SourceId } from "@mark1russell7/alerts";
+import { knownKind, type Duration, type SourceId, type SubjectSystem } from "@mark1russell7/alerts";
 
 /** The config of one status page. */
 export interface StatusPage {
@@ -33,8 +33,11 @@ export const DEFAULT_INTERVAL: Duration = 120_000;
 /** The default longest normal time of one fetch. The summary of a large page is 230 KB. */
 export const DEFAULT_SLOW_AFTER: Duration = 15_000;
 
-/** The system of the subjects of each report: a service, with its domain as its id. */
-export const SERVICE_SYSTEM = "service";
+/**
+ * The system of the subject of each report: `domain`, with the domain of the service as its id. The core gives the
+ * subject the node `domain:<id>` of an interest graph. Thus a person who names the service gets the report.
+ */
+export const SUBJECT_SYSTEM: SubjectSystem = "domain";
 
 /**
  * This function tells if a URL is a base URL of a page. A base URL has `https:` and a host. It has no user, port, path,

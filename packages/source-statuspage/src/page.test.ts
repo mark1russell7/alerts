@@ -1,6 +1,6 @@
-import { knownKind, type SourceId } from "@mark1russell7/alerts";
+import { knownKind, SUBJECT_SYSTEMS, type SourceId } from "@mark1russell7/alerts";
 import { describe, expect, it } from "vitest";
-import { isDomain, isPageBase, pageProblems, type StatusPage } from "./page.ts";
+import { isDomain, isPageBase, pageProblems, SUBJECT_SYSTEM, type StatusPage } from "./page.ts";
 import { ATLASSIAN_STATUSPAGE, registeredPage, STATUS_PAGES } from "./register.ts";
 
 const GOOD: StatusPage = { id: "statuspage-example" as SourceId, title: "Example", base: "https://status.example.test", origin: "example", domain: "example.test", kind: "infra.saas.outage", dependsOn: [ATLASSIAN_STATUSPAGE] };
@@ -27,6 +27,12 @@ describe("pageProblems", () => {
   it("accepts only a domain name in lower case with two or more labels", () => {
     for (const domain of ["github.com", "bitbucket.org", "a-b.example.co"]) expect(isDomain(domain), domain).toBe(true);
     for (const domain of ["GitHub.com", "localhost", "github.com/", "-a.com", "a..com", ""]) expect(isDomain(domain), domain).toBe(false);
+  });
+});
+
+describe("SUBJECT_SYSTEM", () => {
+  it("is a system of entities of the core, so the interest graph of a person reads the subject", () => {
+    expect(SUBJECT_SYSTEMS[SUBJECT_SYSTEM]).toBe("entity");
   });
 });
 
