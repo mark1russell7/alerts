@@ -6,7 +6,7 @@
  * - NCEI Storm Events: one file of details for each year, as a stream. The script keeps only the sums of each type.
  *
  * The requests name no office and no state. The script examines robots.txt of each host first. It
- * writes `rates.json` and `summary.md` in the folder of `--out`. With `--check`, it compares each
+ * writes `rates.json`, the priors of the shadow score (`priors.json`) and `summary.md` in the folder of `--out`. With `--check`, it compares each
  * value with the gate interval of the committed file. A value out of its interval gives the exit
  * code 1. A value that the gate cannot read gives a warning annotation of the workflow, and no failure.
  *
@@ -32,6 +32,7 @@ import {
   NCEI_FOLDER_URL,
   NCEI_YEARS,
   parseYears,
+  priorsOf,
   RATES_FORMAT,
   ratesFile,
   ratesSummary,
@@ -208,6 +209,7 @@ const gate: GateResult = committed === undefined ? { committed: false } : { comm
 const summary = ratesSummary(file, gate);
 await mkdir(out, { recursive: true });
 await writeFile(join(out, "rates.json"), `${JSON.stringify(file, null, 2)}\n`);
+await writeFile(join(out, "priors.json"), `${JSON.stringify(priorsOf(file), null, 2)}\n`);
 await writeFile(join(out, "summary.md"), summary);
 const stepSummary = process.env["GITHUB_STEP_SUMMARY"];
 if (stepSummary !== undefined && stepSummary !== "") await appendFile(stepSummary, summary);
