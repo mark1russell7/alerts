@@ -9,8 +9,11 @@ import type { ChannelFailureKind, ChannelId, Duration, Instant, NodeKey } from "
  */
 export const COUNTED_FAILURES: readonly ChannelFailureKind[] = ["network", "timeout", "server", "auth"];
 
-/** The calls of a channel whose failures count in its run. A probe does not count: it ends a line, and it does not open one. */
-export const COUNTED_CALLS: readonly string[] = ["send", "status"];
+/**
+ * The calls of a channel whose failures count in its run. A failed probe counts too. Thus the probe of a quiet channel
+ * finds an outage before the next message.
+ */
+export const COUNTED_CALLS: readonly string[] = ["send", "status", "probe"];
 
 // The kinds of a failed call that got an answer from the provider. Such a call tells that the network of the copy works.
 const ANSWERED: readonly ChannelFailureKind[] = ["server", "auth"];
@@ -59,7 +62,7 @@ export interface ChannelRun {
 /** One failed call of a channel in a step of the delivery. */
 export interface ChannelCallFailure {
   readonly channel: ChannelId;
-  /** The call: `send`, `status`, `cancel` or another call. Only the calls of `COUNTED_CALLS` count. */
+  /** The call: `send`, `status`, `probe`, `cancel` or another call. Only the calls of `COUNTED_CALLS` count. */
   readonly call: string;
   readonly kind: string;
 }
