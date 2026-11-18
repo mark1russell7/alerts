@@ -4,12 +4,10 @@
  * - The runtime starts `check` of each watch in each pass. A watch reads only when it is due: at its first check, then once in each interval.
  * - A failed read keeps the last read that passed. The core gives the line `unread` when the last balance is too old.
  * - The watch keeps no record. After a restart, the first check reads again. The gates keep the count of the spend.
- * - The start of the month of a cap comes from `monthStartOf` of the Twilio channel, its one copy in this repository. Its
- *   home is the civil time of `@mark1russell7/algebra/clock`. It moves there when that entry has the month of an instant.
+ * - The start of the month of a cap comes from `monthOf` of `@mark1russell7/algebra/clock`.
  */
 import type { BalanceRead, ChannelDescriptor, ChannelId, Duration, Instant, ProviderBalance, ReadHealth, SpendConfig } from "@mark1russell7/alerts";
-import { localTime, type WallClock } from "@mark1russell7/algebra/clock";
-import { monthStartOf } from "@mark1russell7/alerts-channel-twilio";
+import { localTime, monthOf, type WallClock } from "@mark1russell7/algebra/clock";
 import { errorMessage } from "@mark1russell7/text";
 import { quotaGate, type Quota, type QuotaGate, type QuotaGateOptions } from "polite-crawler/api";
 import { readHealth, readSchedule } from "./schedule.ts";
@@ -184,6 +182,8 @@ export function spendWatch(options: SpendWatchOptions): SpendWatch {
   }
   const zone = options.timeZone;
   if (localTime(0, zone) === undefined) throw new Error(`The time zone of the spend watch of ${options.provider} is not an IANA time zone.`);
+  // The zone is valid, thus only an instant that is not a date gives no month.
+  const monthStart = (at: Instant): Instant | undefined => monthOf(at, zone)?.start;
   // The two gates have one name, one key and one store. Thus a note of one gate changes the count of both.
   const { gate } = options.gates;
   let last: SpendRead | undefined;
@@ -192,11 +192,14 @@ export function spendWatch(options: SpendWatchOptions): SpendWatch {
     every,
     retry,
     limit,
-    read: (signal, at) => options.read(monthStartOf(at, zone), signal),
+    read: (signal, at) => {
+      const start = monthStart(at);
+      return start === undefined ? Promise.resolve({ ok: false, message: "The time of the read has no month." }) : options.read(start, signal);
+    },
     use(reading, at, startedAt) {
       if (!reading.ok) return reading.message;
       if (!Number.isFinite(reading.usedUsd)) return "The read of the spend gave no finite amount.";
-      if (monthStartOf(at, zone) !== monthStartOf(startedAt, zone)) return "The month of the cap ended during the read of the spend.";
+      if (monthStart(at) !== monthStart(startedAt)) return "The month of the cap ended during the read of the spend.";
       // A credit gives a spend below 0. The count stays at the count of the gates.
       const units = spendUnits(Math.max(0, reading.usedUsd));
       try {
