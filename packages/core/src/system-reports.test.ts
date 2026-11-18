@@ -1,6 +1,7 @@
 import { random, seedsFrom } from "@mark1russell7/rigor-generators";
 import { describe, expect, it } from "vitest";
 import { assess } from "./assess.ts";
+import { CONFIG_FORMAT } from "./config.ts";
 import { messageOf } from "./delivery.ts";
 import type { ChannelId, ChannelQuota, CopyRead, CopyWatch, Coverage, HealthState, Incident, Observation, PersonId, PersonWatch, PlaceId, ProviderBalance, Report, ReportId, SourceDescriptor, SourceHealth, SourceId, WatchedPlace } from "./contracts.ts";
 import type { DrillConfig, DrillRun } from "./drill.ts";
@@ -14,6 +15,7 @@ import {
   balanceUnreadAt,
   CHANNEL_SUBJECT,
   contextSource,
+  DEFAULT_SOURCE_CLEAR,
   CLOCK_STEP_WINDOW,
   CLOCK_SUBJECT,
   COPY_SUBJECT,
@@ -30,6 +32,9 @@ import {
   recentStep,
   reportsShared,
   SHARED_HANDOVER,
+  sourceClearAt,
+  sourceClearPolicy,
+  sourceClearTime,
   sharedHandoverAt,
   SOURCE_SUBJECT,
   stepSizeText,
@@ -40,6 +45,7 @@ import {
   type SystemLines,
   type SystemSnapshot,
 } from "./system-reports.ts";
+import { alertConfigSchema, sourceClearConfigSchema } from "./schemas.ts";
 import { unknownKinds } from "./taxonomy.ts";
 
 const SEEDS = seedsFrom(process.env["SEED"], [1, 2, 3, 4, 5, 6, 7, 8]);
@@ -119,7 +125,11 @@ describe("the health reports", () => {
     const silent = systemReports(again.lines, snapshot({ health: [healthOf("silent", 300)] }), 300);
     expect(silent.reports).toMatchObject([{ op: "update", references: [alert!.key], kind: { code: "system.health.silent" } }]);
 
-    const up = systemReports(silent.lines, snapshot({ health: [healthOf("healthy", 400)] }), 400);
+    // A source that is up keeps its line for its clear time (AL-75). Then the line ends with a cancel.
+    const held = systemReports(silent.lines, snapshot({ health: [healthOf("healthy", 400)] }), 400);
+    expect(held.reports).toEqual([]);
+    expect(held.lines).toEqual(silent.lines);
+    const up = systemReports(held.lines, snapshot({ health: [healthOf("healthy", 400)] }), 400 + DEFAULT_SOURCE_CLEAR.floor);
     expect(up.reports).toMatchObject([{ op: "cancel", references: [silent.reports[0]!.key], response: ["allclear"], kind: { code: "system.health.silent" } }]);
     expect(up.lines.open).toEqual({});
 
@@ -140,7 +150,8 @@ describe("the health reports", () => {
     expect(levels(down.reports, NEIGHBOR)).toEqual(["none"]);
     const [incident] = incidents(normalize({ reports: down.reports }), 200);
     expect(assess(incident!, NEIGHBOR, PLACES).reasons).toEqual([{ kind: "no-subject" }]);
-    const up = systemReports(down.lines, snapshot({ health: [healthOf("healthy")] }), 300);
+    const up = systemReports(down.lines, snapshot({ health: [healthOf("healthy")] }), DEFAULT_SOURCE_CLEAR.floor);
+    expect(up.reports).toMatchObject([{ op: "cancel" }]);
     expect(levels([...down.reports, ...up.reports], OPERATOR)).toEqual(["none"]);
   });
 
@@ -166,6 +177,82 @@ describe("the health reports", () => {
     const one = (id: string): PersonWatch => ({ ...NEIGHBOR, subjects: [{ system: SOURCE_SUBJECT, id }] });
     expect(levels(down.reports, one("api"))).toEqual(["notice"]);
     expect(levels(down.reports, one("radio"))).toEqual(["none"]);
+  });
+});
+
+describe("the end of the line of a down source (AL-75)", () => {
+  const MINUTE = 60_000;
+
+  it("gives one incident for a source that fails 2 fetches of 4 for 20 minutes, and its cancel after the clear time", () => {
+    // Each fetch is one minute. The fetches 1 and 2 of each 4 fail, so the source is failing for 2 minutes, then up for 2.
+    let lines: SystemLines = NO_SYSTEM_LINES;
+    const reports: Report[] = [];
+    let since = 0;
+    let last: HealthState | undefined;
+    for (let minute = 0; minute < 20; minute += 1) {
+      const state: HealthState = minute % 4 < 2 ? "failing" : "healthy";
+      if (state !== last) since = minute * MINUTE;
+      last = state;
+      const step = systemReports(lines, snapshot({ health: [healthOf(state, since)] }), minute * MINUTE);
+      reports.push(...step.reports);
+      lines = step.lines;
+    }
+    // The old fold gave one alert and one cancel for each of the 5 flaps.
+    expect(reports.map((report) => report.op)).toEqual(["alert"]);
+    expect(incidents(normalize({ reports }), 20 * MINUTE)).toHaveLength(1);
+
+    // The source is up from minute 18. Its clear time is 15 minutes, so the line ends at minute 33 and not before.
+    const up = snapshot({ health: [healthOf("healthy", 18 * MINUTE)] });
+    expect(sourceClearAt(lines, up, 20 * MINUTE)).toEqual([33 * MINUTE]);
+    expect(systemReports(lines, up, 33 * MINUTE - 1).reports).toEqual([]);
+    const end = systemReports(lines, up, 33 * MINUTE);
+    expect(end.reports).toMatchObject([{ op: "cancel", references: [reports[0]!.key] }]);
+    expect(end.lines.open).toEqual({});
+    expect(sourceClearAt(end.lines, up, 33 * MINUTE)).toEqual([]);
+  });
+
+  it("gives an update when the source is down in another state during the clear time", () => {
+    const down = systemReports(NO_SYSTEM_LINES, snapshot({ health: [healthOf("failing", 0)] }), 0);
+    const up = systemReports(down.lines, snapshot({ health: [healthOf("healthy", MINUTE)] }), MINUTE);
+    expect(up.reports).toEqual([]);
+    const silent = systemReports(up.lines, snapshot({ health: [healthOf("silent", 2 * MINUTE)] }), 2 * MINUTE);
+    expect(silent.reports).toMatchObject([{ op: "update", references: [down.reports[0]!.key], kind: { code: "system.health.silent" } }]);
+  });
+
+  it("keeps the line of a slow or unknown source, and starts no line for it", () => {
+    const down = systemReports(NO_SYSTEM_LINES, snapshot({ health: [healthOf("failing", 0)] }), 0);
+    for (const state of ["slow", "unknown"] as const) {
+      expect(systemReports(down.lines, snapshot({ health: [healthOf(state, MINUTE)] }), 2 * MINUTE).reports).toEqual([]);
+      expect(systemReports(NO_SYSTEM_LINES, snapshot({ health: [healthOf(state, MINUTE)] }), 2 * MINUTE).reports).toEqual([]);
+    }
+  });
+
+  it("ends the line of a source that leaves the snapshot at once", () => {
+    const down = systemReports(NO_SYSTEM_LINES, snapshot({ health: [healthOf("failing", 0)] }), 0);
+    expect(systemReports(down.lines, snapshot({ health: [] }), MINUTE).reports).toMatchObject([{ op: "cancel" }]);
+  });
+
+  it("takes the clear time from the interval of a slow source and from the configuration", () => {
+    const hourly: SourceDescriptor = { ...API, interval: 60 * MINUTE };
+    expect(sourceClearTime(DEFAULT_SOURCE_CLEAR, API)).toBe(15 * MINUTE);
+    expect(sourceClearTime(DEFAULT_SOURCE_CLEAR, hourly)).toBe(180 * MINUTE);
+    expect(sourceClearTime(DEFAULT_SOURCE_CLEAR, undefined)).toBe(15 * MINUTE);
+    expect(sourceClearPolicy({ fetches: 1 })).toEqual({ floor: 15 * MINUTE, fetches: 1 });
+    expect(sourceClearPolicy()).toEqual(DEFAULT_SOURCE_CLEAR);
+
+    const down = systemReports(NO_SYSTEM_LINES, snapshot({ sources: [hourly], health: [healthOf("failing", 0)] }), 0);
+    const up = snapshot({ sources: [hourly], health: [healthOf("healthy", MINUTE)] });
+    expect(systemReports(down.lines, up, 61 * MINUTE).reports).toEqual([]);
+    expect(systemReports(down.lines, up, 181 * MINUTE).reports).toMatchObject([{ op: "cancel" }]);
+
+    // A policy of 0 and 0 ends the line at the first state that is up, as before AL-75.
+    expect(sourceClearConfigSchema.safeParse({ floor: 0, fetches: 0 }).success).toBe(true);
+    expect(sourceClearConfigSchema.safeParse({}).success).toBe(true);
+    expect(sourceClearConfigSchema.safeParse({ floor: -1 }).success).toBe(false);
+    expect(sourceClearConfigSchema.safeParse({ fetches: 1.5 }).success).toBe(false);
+    expect(sourceClearConfigSchema.safeParse({ fetches: 3, other: 1 }).success).toBe(false);
+    expect(alertConfigSchema.safeParse({ format: CONFIG_FORMAT, places: [], people: [], contacts: [], policies: [], sourceClear: { floor: 0 } }).error?.issues).toBeUndefined();
+    expect(systemReports(down.lines, { ...up, sourceClear: { floor: 0, fetches: 0 } }, MINUTE).reports).toMatchObject([{ op: "cancel" }]);
   });
 });
 
@@ -769,6 +856,20 @@ describe("the observe reports (AL-73)", () => {
     expect(codes(more.reports)).toEqual([["update", "system.health.observe-life-safety"]]);
   });
 
+  it("keeps the health line in its clear time and the held line of the same source open, because their names differ", () => {
+    const MINUTE = 60_000;
+    // The new source fails, then comes back at START. Its health line holds for its clear time of 15 minutes (AL-75).
+    const down = systemReports(NO_SYSTEM_LINES, snapshot({ sources: [API, NEW], health: [{ ...healthOf("failing", START - MINUTE), source: NEW.id }] }), START - MINUTE);
+    const both = (observing: readonly ObserveCondition[]) => snapshot({ sources: [API, NEW], health: [{ ...healthOf("healthy", START), source: NEW.id }], observing });
+    const open = systemReports(down.lines, both([held]), START);
+    expect(codes(open.reports)).toEqual([["alert", "system.health.observe"]]);
+    expect(Object.keys(open.lines.open).sort()).toEqual(["health/gtfs-new", "observe/gtfs-new/held"]);
+    // The clear time ends the health line only. The held line stays until its verdict passes.
+    const cleared = systemReports(open.lines, both([held]), START + 15 * MINUTE);
+    expect(codes(cleared.reports)).toEqual([["cancel", "system.health.failing"]]);
+    expect(Object.keys(cleared.lines.open)).toEqual(["observe/gtfs-new/held"]);
+  });
+
   it("gives a source of context only the level digest", () => {
     const open = systemReports(NO_SYSTEM_LINES, observed([{ ...held, source: CONTEXT.id }]), START);
     expect(open.reports).toMatchObject([{ severity: "minor", urgency: "future" }]);
@@ -902,7 +1003,9 @@ describe("the properties of the fold", () => {
       const quotas: ChannelQuota[] | undefined = r.chance(0.2)
         ? undefined
         : [{ channel: "pushover" as ChannelId, limit: 100, reserve: 10, used: r.int(70, 100), resetAt: 5_000_000, ...(r.chance(0.1) ? { blockedUntil: 5_000_000 } : {}) }];
-      const input = snapshot({ sources, health, coverage, lateness: late, threats: r.chance(0.3) ? [{ place: KANSAS.id, kind: TORNADO }] : [], ...(quotas === undefined ? {} : { quotas }) });
+      // A random floor of the clear time, with no intervals. The line of a source that is up stays open while the source is up for less than the floor.
+      const floor = r.pick([0, 20_000, 60_000, 200_000]);
+      const input = snapshot({ sources, health, coverage, lateness: late, threats: r.chance(0.3) ? [{ place: KANSAS.id, kind: TORNADO }] : [], ...(quotas === undefined ? {} : { quotas }), sourceClear: { floor, fetches: 0 } });
       const before = lines;
       const result = systemReports(lines, input, step * 1_000);
       const label = `seed ${seed} step ${step}`;
@@ -915,7 +1018,8 @@ describe("the properties of the fold", () => {
         expect(report.references, label).toEqual(report.op === "alert" ? [] : [before.open[name]!.key]);
       }
       // The open lines are the conditions of the snapshot.
-      const down = health.filter((entry) => ["failing", "silent", "changed"].includes(entry.state)).length + late.length;
+      const held = (entry: (typeof health)[number]): boolean => before.open[`health/${entry.source}`] !== undefined && step * 1_000 - entry.since < floor;
+      const down = health.filter((entry) => ["failing", "silent", "changed"].includes(entry.state) || held(entry)).length + late.length;
       const short = coverage.filter((entry) => !entry.proven || entry.independent < entry.required).length;
       const staged = quotas === undefined ? Object.keys(before.open).filter((name) => name.startsWith("quota/")).length : quotas.flatMap(quotaStages).length;
       expect(Object.keys(result.lines.open), label).toHaveLength(down + short + staged);

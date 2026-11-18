@@ -12,6 +12,7 @@ import {
   CLOCK_STEP_WINDOW,
   copyUnreadAt,
   sharedHandoverAt,
+  sourceClearAt,
   LOG_RECOVERY_WINDOW,
   coverage,
   incidents,
@@ -43,6 +44,7 @@ import {
   type LinkPolicy,
   type ObserveCondition,
   type SourceDescriptor,
+  type SourceClearConfig,
   type SourceHealth,
   type SystemStep,
   type WatchedPlace,
@@ -72,6 +74,8 @@ export interface ViewConfig extends FoldContext {
   readonly link?: LinkPolicy;
   /** The policy of a down channel (AL-65). Each absent field has its default of the core. */
   readonly channelDown?: ChannelDownConfig;
+  /** The policy of the end of the line of a down source (AL-75). Each absent field has its default of the core. */
+  readonly sourceClear?: SourceClearConfig;
 }
 
 /** The view of the system at one time. */
@@ -149,7 +153,7 @@ export function systemView(state: RuntimeState, config: ViewConfig, at: Instant,
   const checks = carriages(state.merge, found, config.expectations);
   const { lateness: late, folds: next } = latenessStep(checks, config.expectations, at, ruleOf(config.delay), folds);
   const covered = coverage({ sources: config.sources, health, late: lateSources(late), places: config.places, kinds: config.kinds, containing: containingCodes }, config.coverage);
-  const step = systemReports(state.lines, { sources: config.sources, health, coverage: covered, threats: threats(found, config.places), lateness: late, ...(quotas === undefined ? {} : { quotas }), ...(balances === undefined ? {} : { balances }), ...(copies === undefined ? {} : { copies }), ...(copy === undefined ? {} : { copy }), ...(drills === undefined ? {} : { drills }), ...(exhausted === undefined ? {} : { exhausted }), ...(channels === undefined ? {} : { channels }), ...(observing === undefined ? {} : { observing }), ...(config.channelDown === undefined ? {} : { channelDown: config.channelDown }), steps: state.steps, recoveries: state.recoveries }, at);
+  const step = systemReports(state.lines, { sources: config.sources, health, coverage: covered, threats: threats(found, config.places), lateness: late, ...(quotas === undefined ? {} : { quotas }), ...(balances === undefined ? {} : { balances }), ...(copies === undefined ? {} : { copies }), ...(copy === undefined ? {} : { copy }), ...(drills === undefined ? {} : { drills }), ...(exhausted === undefined ? {} : { exhausted }), ...(channels === undefined ? {} : { channels }), ...(observing === undefined ? {} : { observing }), ...(config.channelDown === undefined ? {} : { channelDown: config.channelDown }), ...(config.sourceClear === undefined ? {} : { sourceClear: config.sourceClear }), steps: state.steps, recoveries: state.recoveries }, at);
   // An incident that expires changes the threats, thus its end is a timer too.
   const ends = found.flatMap((incident) => (incident.live && incident.expires !== undefined && incident.expires > at ? [incident.expires] : []));
   // The handover of the facts of a shared account is a timer too, because this copy then reports a low balance.
@@ -157,7 +161,9 @@ export function systemView(state: RuntimeState, config: ViewConfig, at: Instant,
   const unread = [...(balances ?? []).map(balanceUnreadAt), ...(copies ?? []).map(copyUnreadAt), ...(handover === undefined ? [] : [handover])].filter((time) => time > at);
   const stepped = recentStep(state.steps, at);
   const recovered = recentRecovery(state.recoveries, at);
-  const wakeAt = earliest([...steps.map((entry) => entry.wakeAt), ...late.map((entry) => entry.wakeAt), ...ends, ...unread, stepped === undefined ? undefined : stepped.at + CLOCK_STEP_WINDOW, recovered === undefined ? undefined : recovered.at + LOG_RECOVERY_WINDOW]);
+  // The end of the clear time of each source that is up with an open line is a timer too (AL-75).
+  const cleared = sourceClearAt(step.lines, { sources: config.sources, health, ...(config.sourceClear === undefined ? {} : { sourceClear: config.sourceClear }) }, at);
+  const wakeAt = earliest([...steps.map((entry) => entry.wakeAt), ...late.map((entry) => entry.wakeAt), ...ends, ...unread, ...cleared, stepped === undefined ? undefined : stepped.at + CLOCK_STEP_WINDOW, recovered === undefined ? undefined : recovered.at + LOG_RECOVERY_WINDOW]);
   return { at, health, incidents: found, lateness: late, coverage: covered, step, ...(wakeAt === undefined ? {} : { wakeAt }), folds: next };
 }
 

@@ -319,6 +319,14 @@ Each report has an observation: the canonical JSON of its facts. The log keeps i
 
 A health report has no area. Its subject is `{ system: "alerts.source", id: <source id> }`. So it goes only to a person who watches that subject in `PersonWatch.subjects`. Its kind is `system.health.<state>`, and it gets `notice` at most. The health of a source whose kinds are all kinds of context has the severity `minor` and the urgency `future`. So it gets `digest` at most.
 
+The health line of a source that comes back stays open for its clear time. Thus a source that flaps gives one incident, not one incident for each flap.
+
+- The clear time is `max(floor, fetches × interval)`. The field `sourceClear` of the configuration gives `floor` and `fetches`, and the defaults are 15 minutes and 3.
+- While the source is up for less than its clear time, the line keeps its down state, and no report goes. A new down state in that time gives an `update`.
+- At the clear time, the line ends with a `cancel`. The runtime wakes at that time (`sourceClearAt`), also when no fetch is due.
+- A source that leaves the configuration ends its line at once. A `slow` or `unknown` state keeps an open line and starts no line.
+- The policy `{ floor: 0, fetches: 0 }` ends the line at the first state that is up.
+
 A coverage report has the area of the watched place, `{ type: "place", place }`. So it goes to each person who watches that place. Its kind is `system.coverage.<kind>`. Its severity and urgency come from the gap:
 
 | Gap | Severity, urgency | Life-safety kind | Other kind |

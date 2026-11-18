@@ -185,29 +185,34 @@ describe("the sources", () => {
     }
   });
 
-  it("step 6: the API is back, and the core cancels each system report", () => {
+  it("step 6: the API is back, the core cancels the coverage reports, and the health report stays open for its clear time", () => {
     const frame = frames[BACK]!;
     expect(states(frame)).toEqual(["nws-api healthy", "radio-x healthy"]);
     expect(short(frame)).toEqual([]);
     expect(frame.sources.transitions).toEqual([{ machine: "alerts.health", instance: "nws-api", from: "failing", on: "app.fetch-passed", to: "healthy", at: OUTAGE.to + 400 }]);
     const alerts = frames[STOPS]!.sources.reports.map((report) => report.key);
-    expect(frame.sources.reports.map((report) => report.op)).toEqual(["cancel", "cancel", "cancel"]);
-    expect(frame.sources.reports.map((report) => report.references)).toEqual(alerts.map((key) => [key]));
+    expect(frame.sources.reports.map((report) => report.op)).toEqual(["cancel", "cancel"]);
+    expect(frame.sources.reports.map((report) => report.references)).toEqual(alerts.filter((key) => key.startsWith("coverage/")).map((key) => [key]));
     expect(systemLines(BACK)).toEqual([
       "system.coverage.met.flood.flash home-a ended 2 | person-a none | ended",
       "system.coverage.met.flood.flash home-a ended 2 | person-b none | ended",
       "system.coverage.met.flood.flash home-b ended 2 | person-a none | ended",
       "system.coverage.met.flood.flash home-b ended 2 | person-b none | ended",
-      "system.health.failing ended 2 | person-a none | ended",
-      "system.health.failing ended 2 | person-b none | ended",
+      // The health report stays open, with no new report. Thus no new send goes.
+      "system.health.failing live 1 | person-a notice | table subject",
+      "system.health.failing live 1 | person-b none | no-subject",
     ]);
   });
 
-  it("make no system report after the API is back", () => {
+  it("cancel the health report after 15 minutes of good fetches, and make no system report after that", () => {
+    const alerts = frames[STOPS]!.sources.reports.map((report) => report.key);
+    const cleared = frames[BACK + 1]!;
+    expect(cleared.sources.reports.map((report) => report.op)).toEqual(["cancel"]);
+    expect(cleared.sources.reports.map((report) => report.references)).toEqual(alerts.filter((key) => key.startsWith("health/")).map((key) => [key]));
     for (const frame of frames.slice(BACK + 1)) {
       expect(states(frame)).toEqual(["nws-api healthy", "radio-x healthy"]);
       expect(short(frame)).toEqual([]);
-      expect(frame.sources.reports).toEqual([]);
+      if (frame !== cleared) expect(frame.sources.reports).toEqual([]);
       expect(frame.sources.incidents.every((incident) => !incident.live)).toBe(true);
     }
   });

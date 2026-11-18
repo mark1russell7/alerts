@@ -961,6 +961,7 @@ export function openInstance(options: InstanceOptions): Instance {
       delay: DELAY_LIMITS,
       ...(config.link === undefined ? {} : { link: config.link }),
       ...(config.channelDown === undefined ? {} : { channelDown: config.channelDown }),
+      ...(config.sourceClear === undefined ? {} : { sourceClear: config.sourceClear }),
     },
     run: options.run,
     copy: copy.id,
