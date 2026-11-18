@@ -30,11 +30,13 @@ import type { TwilioFetch } from "@mark1russell7/alerts-channel-twilio";
 import { PUSHOVER_QUOTA, PUSHOVER_RESERVE_NOTICES, PUSHOVER_TIMEOUT_MS, type PushoverChannelOptions } from "@mark1russell7/alerts-channel-pushover";
 import { memoryCache, type ShapeCache } from "@mark1russell7/alerts-shapes-nws";
 import { CANARY_PATH, createNwsSource } from "@mark1russell7/alerts-source-nws-api";
+import { fakeSessions, NWWS_DESCRIPTOR } from "@mark1russell7/alerts-source-nwws";
 import { SWPC_KINDS } from "@mark1russell7/alerts-source-swpc";
 import { memoryQuotaStore, quotaGate, type Exchange, type Transport } from "polite-crawler/api";
 import { DEFAULT_POLICY } from "polite-crawler/politeness";
 import { afterEach, describe, expect, it } from "vitest";
-import { CHECKS_KEY, checksKeys, DAEMON_CHECK, daemonCheck, DELIVERY_TIMES, INSTANCE_CHANNELS, INSTANCE_CHECK, INSTANCE_EXPECTATIONS, INSTANCE_SOURCES, INSTANCE_TIMES, instanceProblems, LOUD_PING_URL_KEY, openInstance, PING_URL_KEY, pingKeyOf, pingTargets, RANK_DELAY, RANK_FLOOR, SOURCE_POLICY, sourcePace, twilioSetup, USER_AGENT_NAME, type Instance, type InstanceOptions } from "./instance.ts";
+import { ACCOUNT_SOURCES, CHECKS_KEY, checksKeys, DAEMON_CHECK, daemonCheck, DELIVERY_TIMES, INSTANCE_CHANNELS, INSTANCE_CHECK, INSTANCE_EXPECTATIONS, INSTANCE_SOURCES, INSTANCE_TIMES, instanceCheck, instanceProblems, LOUD_PING_URL_KEY, nwwsKeys, nwwsSetup, openInstance, PING_URL_KEY, pingKeyOf, pingTargets, RANK_DELAY, RANK_FLOOR, SOURCE_POLICY, sourcePace, twilioSetup, USER_AGENT_NAME, type Instance, type InstanceOptions } from "./instance.ts";
+import { heartbeatGap } from "./heartbeat.ts";
 import { spendGates, spendQuota } from "./balance.ts";
 import { CLOCK_SKEW_LIMIT, COPY_TOKEN_KEY, EXCHANGE_EVERY, EXCHANGE_LIMIT } from "./copy.ts";
 import { overdueLimit } from "./delivery.ts";
@@ -741,6 +743,80 @@ describe("the Twilio call channel of the instance", () => {
     const noKeys = messageOf(() => open(store({ ...SECRETS, OUTAGE_TOKEN: "o".repeat(40), PHONE: TWILIO.PHONE }), config));
     expect(noKeys).toContain("the secret store has no keys of Twilio that pass the check");
     for (const problem of [noToken, badToken, noKeys]) expect(problem).not.toMatch(/bad-value|o{40}|s{32}|\+999/u);
+  });
+});
+
+describe("the NWWS-OI source of the instance", () => {
+  // Fake keys of two accounts. A test looks for them in each message.
+  const ACCOUNT_1 = { NWWS_OI_USER_1: "operator-one", NWWS_OI_PASSWORD_1: "password-one" };
+  const ACCOUNT_2 = { NWWS_OI_USER_2: "operator-two", NWWS_OI_PASSWORD_2: "password-two" };
+  const VALUES = [...Object.values(ACCOUNT_1), ...Object.values(ACCOUNT_2)];
+  const SECOND: CopySettings = { ...ONLY_COPY, accounts: { nwws: 2 } };
+
+  it("names the keys of each account, and only the stream has an account", () => {
+    expect(nwwsKeys(1)).toEqual({ username: "NWWS_OI_USER_1", password: "NWWS_OI_PASSWORD_1" });
+    expect(nwwsKeys(2)).toEqual({ username: "NWWS_OI_USER_2", password: "NWWS_OI_PASSWORD_2" });
+    expect(ACCOUNT_SOURCES).toEqual([NWWS_DESCRIPTOR.id]);
+  });
+
+  it("adds the stream with the keys of account 1, fetches it in a pass, and ends its session at the close of the runtime", async () => {
+    const fake = fakeSessions((session) => session.join());
+    const { instance, clock } = open(store({ ...SECRETS, ...ACCOUNT_1 }), CONFIG, 0, TEST_FETCH_LIMIT, { nwwsOpen: fake.open });
+    expect(instance.runtime.config.sources.map((source) => source.id)).toEqual([...INSTANCE_SOURCES.map((source) => source.id), NWWS_DESCRIPTOR.id]);
+    // The first fetch opens the session, not the start.
+    expect(fake.sessions).toHaveLength(0);
+    const pass = await finish(clock, instance.runtime.pass());
+    expect(pass.fetched).toContain(NWWS_DESCRIPTOR.id);
+    expect(fake.sessions).toHaveLength(1);
+    expect(fake.last().options).toMatchObject({ username: "operator-one", password: "password-one" });
+    expect(fake.last().closed).toBe(false);
+    await instance.runtime.close();
+    expect(fake.last().closed).toBe(true);
+    await expect(instance.runtime.pass()).rejects.toThrow("The runtime is closed");
+    expect(fake.sessions).toHaveLength(1);
+  });
+
+  it("uses the keys of the account of the copy", async () => {
+    const fake = fakeSessions((session) => session.join());
+    const { instance, clock } = open(store({ ...SECRETS, ...ACCOUNT_1, ...ACCOUNT_2 }), CONFIG, 0, TEST_FETCH_LIMIT, { nwwsOpen: fake.open, copy: SECOND });
+    await finish(clock, instance.runtime.pass());
+    expect(fake.last().options).toMatchObject({ username: "operator-two", password: "password-two" });
+    await instance.runtime.close();
+  });
+
+  it("has no stream without the keys of account 1 and with no account in the copy", () => {
+    const { instance } = open();
+    expect(instance.runtime.config.sources.map((source) => source.id)).not.toContain(NWWS_DESCRIPTOR.id);
+    expect(nwwsSetup(store(SECRETS))).toEqual({ tag: "ok", value: undefined });
+    // The keys of account 2 alone give no stream to a copy with the default account.
+    expect(nwwsSetup(store({ ...SECRETS, ...ACCOUNT_2 }))).toEqual({ tag: "ok", value: undefined });
+  });
+
+  it("does not start with one key of a pair, an account of the copy with no keys, or an account of a source with no account, and no problem holds a value", () => {
+    const half = messageOf(() => open(store({ ...SECRETS, NWWS_OI_USER_1: "operator-one" })));
+    expect(half).toContain("The secret store has one key of the NWWS-OI account 1, and it has no value for NWWS_OI_PASSWORD_1. Give the two keys, or none.");
+    const noKeys = messageOf(() => open(store({ ...SECRETS, ...ACCOUNT_1 }), CONFIG, 0, TEST_FETCH_LIMIT, { copy: SECOND }));
+    expect(noKeys).toContain("The file copy.json gives the NWWS-OI account 2 to this copy, and the secret store has no value for NWWS_OI_USER_2, NWWS_OI_PASSWORD_2.");
+    const unknown = messageOf(() => open(store(SECRETS), CONFIG, 0, TEST_FETCH_LIMIT, { copy: { ...ONLY_COPY, accounts: { usgs: 1 } } }));
+    expect(unknown).toContain("The file copy.json: the field accounts names the source usgs. Only these sources have an account: nwws.");
+    for (const message of [half, noKeys, unknown]) for (const value of VALUES) expect(message).not.toContain(value);
+  });
+
+  it("checks the account of the copy before the start, as the start does", () => {
+    const secret = store({ ...SECRETS, ...ACCOUNT_1 });
+    const parsed = parseConfig(JSON.stringify(CONFIG), INSTANCE_CHANNELS, secret);
+    if (parsed.tag === "err") throw new Error(parsed.error.join("\n"));
+    const problem = "The file copy.json gives the NWWS-OI account 2 to this copy, and the secret store has no value for NWWS_OI_USER_2, NWWS_OI_PASSWORD_2.";
+    expect(INSTANCE_CHECK.problems(parsed.value, secret)).toEqual([]);
+    expect(instanceCheck(SECOND).problems(parsed.value, secret)).toEqual([problem]);
+    expect(daemonCheck(SECOND).problems(parsed.value, secret)).toContain(problem);
+    expect(instanceProblems(parsed.value, secret, INSTANCE_SOURCES, T0, SECOND)).toEqual([problem]);
+  });
+
+  it("keeps the times of the host: the stream makes only the cap of the retry shorter, thus the gap of the heartbeat stays a bound", () => {
+    const { instance } = open(store({ ...SECRETS, ...ACCOUNT_1 }), CONFIG, 0, TEST_FETCH_LIMIT, { nwwsOpen: fakeSessions().open });
+    expect(instance.loop.times).toEqual({ ...INSTANCE_TIMES, retryCap: NWWS_DESCRIPTOR.interval });
+    expect(heartbeatGap(instance.loop.times)).toBeLessThan(heartbeatGap(INSTANCE_TIMES));
   });
 });
 
