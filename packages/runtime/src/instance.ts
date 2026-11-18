@@ -533,6 +533,14 @@ export function instanceServices(secret: SecretLookup): ContactServices {
 }
 
 /**
+ * This function gives the services of the contacts that the route `GET /interests` shows. A text shows the SMS node of its
+ * region with no type of the sender. The type of the real sender is a private fact. The load keeps the full node.
+ */
+export function shownServices(secret: SecretLookup): ContactServices {
+  return instanceServices((name) => (name === TWILIO_TEXT_FROM_KEY ? undefined : secret(name)));
+}
+
+/**
  * This function gives the check of a configuration file for the instance of a copy. The check has the channels, the
  * services of the contacts and the problems that stop the start.
  */
@@ -776,8 +784,7 @@ export function openInstance(options: InstanceOptions): Instance {
   if (problems.length > 0) throw new Error(`The instance does not start. The configuration has these problems:\n- ${problems.join("\n- ")}`);
   const token = options.secret(PUSHOVER_TOKEN) ?? "";
   // The configuration does not change in a process. Thus the rows of the interests are the same at each read.
-  const contactServices = instanceCheck(copy).services?.(options.secret);
-  const interests = interestsPayload(config, INSTANCE_CHANNELS, contactServices === undefined ? undefined : { secret: options.secret, services: contactServices });
+  const interests = interestsPayload(config, INSTANCE_CHANNELS, { secret: options.secret, services: shownServices(options.secret) });
 
   // The store of shapes shares the pace of the sources. Thus its requests to the NWS API keep the rests of that host.
   const store = options.shapes === undefined ? undefined : createShapeStore({ pace, transport: options.transport, userAgent: agent, cache: options.shapes });
