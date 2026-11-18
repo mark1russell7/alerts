@@ -33,6 +33,7 @@ import { CANARY_PATH, createNwsSource } from "@mark1russell7/alerts-source-nws-a
 import { fakeSessions, NWWS_DESCRIPTOR } from "@mark1russell7/alerts-source-nwws";
 import { SWPC_KINDS } from "@mark1russell7/alerts-source-swpc";
 import { KEV_KINDS } from "@mark1russell7/alerts-source-cisa-kev";
+import { GCP_DESCRIPTOR } from "@mark1russell7/alerts-source-gcp";
 import { descriptorOf as statusPageDescriptor, STATUS_PAGES, type StatusPage } from "@mark1russell7/alerts-source-statuspage";
 import { ENERGY_CHARTS_MEASURES, SOURCE_ID as ENERGY_CHARTS_SOURCE, WINDOW_MINUTES } from "@mark1russell7/alerts-source-energy-charts";
 import { memoryQuotaStore, quotaGate, type Exchange, type Transport } from "polite-crawler/api";
@@ -168,6 +169,19 @@ function statusPageAnswer(page: StatusPage): string {
   return JSON.stringify({ ...summary, page: { ...summary.page, updated_at: time(-10) }, incidents: page.id === "statuspage-github" ? live : [] });
 }
 
+/**
+ * The answer of Google Cloud Service Health to the request of its history. It is the first recorded incident of the package
+ * `source-gcp` as it was after its first update. Its times move to the time of the tests. The incident has no end.
+ */
+function gcpAnswer(): string {
+  const [outage] = JSON.parse(fixture("alerts-source-gcp", "incidents-20261118.json")) as Record<string, unknown>[];
+  const { end: _end, ...live } = outage!;
+  const time = (minutes: number): string => new Date(T0 + minutes * 60_000).toISOString();
+  const region = [{ title: "Delhi (asia-south2)", id: "asia-south2" }];
+  const latest = { created: time(-10), modified: time(-10), when: time(-10), text: "We are investigating an issue in asia-south2.", status: "SERVICE_DISRUPTION", affected_locations: region };
+  return JSON.stringify([{ ...live, begin: time(-30), created: time(-20), modified: time(-10), most_recent_update: latest, updates: [latest], currently_affected_locations: region, previously_affected_locations: [] }]);
+}
+
 /** The status page of each host. */
 const STATUS_HOSTS: ReadonlyMap<string, StatusPage> = new Map(STATUS_PAGES.map((page) => [new URL(page.base).hostname, page]));
 
@@ -181,7 +195,7 @@ const STATUS_HOSTS: ReadonlyMap<string, StatusPage> = new Map(STATUS_PAGES.map((
  *
  * GFZ gives a quiet value of the index Kp for each interval of the window of the query (`gfzAnswer`). Energy-Charts gives
  * the nominal frequency for each second of the query (`energyChartsAnswer`). CISA gives a catalog with one live entry (`kevAnswer`).
- * Each status page gives its summary (`statusPageAnswer`).
+ * Each status page gives its summary (`statusPageAnswer`). Google Cloud gives one live incident (`gcpAnswer`).
  *
  * Each exchange takes `delay` milliseconds of real time, as on a busy runner. With `Infinity`, no exchange ends.
  */
@@ -201,6 +215,7 @@ function network(delay = 0) {
     if (url.hostname === "kp.gfz.de") return { status: 200, statusText: "OK", headers: { "content-type": "application/json" }, body: gfzAnswer(url) };
     const statusPage = STATUS_HOSTS.get(url.hostname);
     if (statusPage !== undefined) return { status: 200, statusText: "OK", headers: { "content-type": "application/json; charset=utf-8" }, body: statusPageAnswer(statusPage) };
+    if (url.hostname === "status.cloud.google.com") return { status: 200, statusText: "OK", headers: { "content-type": "application/json" }, body: gcpAnswer() };
     if (url.hostname === "www.cisa.gov") return { status: 200, statusText: "OK", headers: { "content-type": "application/json" }, body: kevAnswer() };
     if (url.hostname === "api.energy-charts.info") return { status: 200, statusText: "OK", headers: { "content-type": "application/json" }, body: energyChartsAnswer(url) };
     if (url.hostname === "www.tsunami.gov") {
@@ -499,29 +514,42 @@ describe("openInstance", () => {
     expect(server.calls.map((call) => call.fields["title"])).toEqual([expect.stringContaining("Flood Warning")]);
   });
 
-  it("reads the status pages that a person with the work software can get, and gives an incident with the domain of the service as its subject", async () => {
+  it("reads the status pages and the feed of Google Cloud that a person with the work software can get, with the services and the regions as subjects", async () => {
     const software: AlertConfig = { ...CONFIG, people: CONFIG.people.map((entry) => ({ ...entry, defaults: { works: ["software"] } })) };
     const { instance, clock, net } = open(store(SECRETS), software);
     const pass = await finish(clock, instance.runtime.pass());
     const pages = STATUS_PAGES.filter((page) => ["infra.saas.outage", "infra.cloud.outage", "infra.internet.dns-cdn"].includes(page.kind));
     expect(pages.length).toBeGreaterThan(20);
-    expect(pass.fetched).toEqual(["nws-api", "ipaws", "usgs", "emsc", "tsunami-ntwc", "tsunami-ptwc", "swpc", "gfz", "energy-charts", "cisa-kev", ...pages.map((page) => page.id)]);
+    expect(pass.fetched).toEqual(["nws-api", "ipaws", "usgs", "emsc", "tsunami-ntwc", "tsunami-ptwc", "swpc", "gfz", "energy-charts", "cisa-kev", "gcp-status", ...pages.map((page) => page.id)]);
+    expect(pass.view.health.find((health) => health.source === "gcp-status")?.state).toBe("healthy");
     expect(pass.view.health.filter((health) => health.source.startsWith("statuspage-")).map((health) => [health.source, health.state])).toEqual(pages.map((page) => [page.id, "healthy"]));
     const asked = new Set(net.exchanges.map((exchange) => new URL(exchange.url)).filter((url) => STATUS_HOSTS.has(url.hostname)).map((url) => url.origin + url.pathname));
     expect(asked).toEqual(new Set(pages.map((page) => `${page.base}/api/v2/summary.json`)));
     const outages = pass.view.incidents.filter((incident) => incident.kind.code === "infra.saas.outage");
     expect(outages.map((incident) => [incident.areas, incident.about])).toEqual([[[], [{ system: "domain", id: "github.com", label: "GitHub" }]]]);
+    const clouds = pass.view.incidents.filter((incident) => incident.kind.code === "infra.cloud.outage");
+    expect(clouds.map((incident) => [incident.areas, incident.about])).toEqual([
+      [
+        [],
+        [
+          { system: "domain", id: "cloud.google.com", label: "Google Cloud" },
+          { system: "provider-region", id: "gcp/asia-south2", label: "Delhi (asia-south2)" },
+        ],
+      ],
+    ]);
   });
 
-  it("reads no status page for persons with no work, no service and no subject watch", async () => {
+  it("reads no status page and no feed of Google Cloud for persons with no work, no service and no subject watch", async () => {
     const { instance, clock, net } = open();
     await finish(clock, instance.runtime.pass());
-    expect(net.exchanges.filter((exchange) => STATUS_HOSTS.has(new URL(exchange.url).hostname))).toEqual([]);
-    expect(instance.runtime.config.sources.some((source) => source.id.startsWith("statuspage-"))).toBe(false);
+    expect(net.exchanges.filter((exchange) => STATUS_HOSTS.has(new URL(exchange.url).hostname) || new URL(exchange.url).hostname === "status.cloud.google.com")).toEqual([]);
+    expect(instance.runtime.config.sources.some((source) => source.id.startsWith("statuspage-") || source.id === "gcp-status")).toBe(false);
   });
 
   it("keeps the times of the loop with each status page: each page has a longer interval than the shortest of the list", () => {
     const shortest = Math.min(...INSTANCE_SOURCES.map((source) => source.interval));
+    expect(GCP_DESCRIPTOR.interval).toBeGreaterThanOrEqual(shortest);
+    expect(INSTANCE_FETCH_LIMIT(GCP_DESCRIPTOR)).toBe(shortest);
     for (const page of STATUS_PAGES) {
       expect(statusPageDescriptor(page).interval, page.id).toBeGreaterThanOrEqual(shortest);
       expect(INSTANCE_FETCH_LIMIT(statusPageDescriptor(page)), page.id).toBe(shortest);

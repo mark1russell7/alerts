@@ -68,7 +68,8 @@ import { createNwwsSource, SOURCE_ID as NWWS_SOURCE, type NwwsAccount, type Open
 import { createGfzSource, GFZ_DESCRIPTOR } from "@mark1russell7/alerts-source-gfz";
 import { createEnergyChartsSource, ENERGY_CHARTS_DESCRIPTOR } from "@mark1russell7/alerts-source-energy-charts";
 import { createKevSource, KEV_DESCRIPTOR } from "@mark1russell7/alerts-source-cisa-kev";
-import { createStatusPageSource, pagesFor, type StatusPage, type StatusPageFetchOptions } from "@mark1russell7/alerts-source-statuspage";
+import { createGcpSource, GCP_DOMAIN, GCP_KIND } from "@mark1russell7/alerts-source-gcp";
+import { createStatusPageSource, pagesFor, watchReads, type StatusPage, type StatusPageFetchOptions } from "@mark1russell7/alerts-source-statuspage";
 import { createSwpcSource, SWPC_DESCRIPTOR } from "@mark1russell7/alerts-source-swpc";
 import { createTsunamiSource, descriptorOf as tsunamiDescriptor, TSUNAMI_CENTERS, type TsunamiCenter, type TsunamiFetchOptions } from "@mark1russell7/alerts-source-tsunami";
 import { createUsgsSource, USGS_DESCRIPTOR } from "@mark1russell7/alerts-source-usgs";
@@ -297,8 +298,9 @@ const statusPageFactory =
  * names their kind.
  *
  * The instance also reads the status pages that one of its persons can get (`pagesFor` of `source-statuspage`). They are
- * not in this list, because the persons choose them. Each page has a longer interval than the shortest interval of the
- * list. Thus the times of the loop stay the same.
+ * not in this list, because the persons choose them. The feed of Google Cloud Service Health (`source-gcp`) has the same
+ * rule. Each page and the feed have a longer interval than the shortest interval of the list. Thus the times of the loop
+ * stay the same.
  */
 export const INSTANCE_SOURCES: readonly SourceDescriptor[] = [
   NWS_DESCRIPTOR,
@@ -642,8 +644,11 @@ export interface Instance {
  *
  * - The sources are the NWS API, IPAWS, the USGS, EMSC, the two tsunami warning centers, the SWPC, GFZ,
  *   Energy-Charts and CISA KEV. The stream of NWWS-OI is a source when the secrets have the keys of the account of the
- *   copy (`nwwsSetup`). Each status page that one of the persons can get is a source (`pagesFor`). Each source gets the codes of the places. It gets the position of a place only when the place shares it with that source. The USGS,
- *   EMSC, the centers, the SWPC, GFZ, Energy-Charts, CISA KEV and the status pages ask for no place.
+ *   copy (`nwwsSetup`). Each status page that one of the persons can get is a source (`pagesFor`). The feed of Google
+ *   Cloud Service Health is a source when one of the persons can get its reports (`watchReads`).
+ * - Each source gets the codes of the places. It gets the position of a place only when the place shares it with that
+ *   source. The USGS, EMSC, the centers, the SWPC, GFZ, Energy-Charts, CISA KEV, Google Cloud and the status pages ask
+ *   for no place.
  * - The channels are Pushover, and the Twilio call channel when the secrets have its keys. Each time of the delivery comes
  *   from a fact of the channels.
  * - A spend entry of a channel gives its cap and the watch of the balance of its account.
@@ -654,7 +659,10 @@ export function openInstance(options: InstanceOptions): Instance {
   // A change of the wall clock of CLOCK_STEP_ABOVE or less is a drift. A larger change is a step of the clock.
   const wall = frameClock(options.wall, clock, { driftLimit: CLOCK_STEP_ABOVE });
   // A report of a status page has no area. Thus the instance reads only the pages that one of its persons can get.
-  const pages = pagesFor(options.config.recipients.map((recipient) => recipient.watch));
+  const watches = options.config.recipients.map((recipient) => recipient.watch);
+  const pages = pagesFor(watches);
+  // The feed of Google Cloud has no area either. Its domain and its kind choose it with the same rule as a page.
+  const cloud = watches.some((watch) => watchReads(watch, { domain: GCP_DOMAIN, kind: GCP_KIND }));
   const factories = [
     createNwsSource,
     createIpawsSource,
@@ -665,6 +673,7 @@ export function openInstance(options: InstanceOptions): Instance {
     createGfzSource,
     createEnergyChartsSource,
     createKevSource,
+    ...(cloud ? [createGcpSource] : []),
     ...pages.map((page) => statusPageFactory(page)),
   ];
   const pace = sourcePace(clock, wall, factories.length);
