@@ -1,10 +1,13 @@
 import type { SourceDescriptor } from "@mark1russell7/alerts";
 import { AWS_DESCRIPTOR } from "@mark1russell7/alerts-source-aws";
+import { AZURE_DESCRIPTOR } from "@mark1russell7/alerts-source-azure";
 import { BOM_SWS_DESCRIPTOR } from "@mark1russell7/alerts-source-bom-sws";
+import { ANOMALIES_DESCRIPTOR, OUTAGES_DESCRIPTOR } from "@mark1russell7/alerts-source-cloudflare-radar";
 import { KEV_DESCRIPTOR } from "@mark1russell7/alerts-source-cisa-kev";
 import { EMSC_DESCRIPTOR } from "@mark1russell7/alerts-source-emsc";
+import { EIA_930_DESCRIPTOR } from "@mark1russell7/alerts-source-eia-930";
 import { ENERGY_CHARTS_DESCRIPTOR } from "@mark1russell7/alerts-source-energy-charts";
-import { GCP_DESCRIPTOR } from "@mark1russell7/alerts-source-gcp";
+import { FIREBASE_DESCRIPTOR, GCP_DESCRIPTOR } from "@mark1russell7/alerts-source-gcp";
 import { GFZ_DESCRIPTOR } from "@mark1russell7/alerts-source-gfz";
 import { IEM_DESCRIPTOR } from "@mark1russell7/alerts-source-iem";
 import { IPAWS_DESCRIPTOR } from "@mark1russell7/alerts-source-ipaws";
@@ -19,11 +22,14 @@ import { readAtlas } from "./read.ts";
 /** The descriptors of each adapter that the atlas adopts. A new adopted adapter needs a row here. */
 const DESCRIPTORS: Readonly<Record<string, readonly SourceDescriptor[]>> = {
   "@mark1russell7/alerts-source-aws": [AWS_DESCRIPTOR],
+  "@mark1russell7/alerts-source-azure": [AZURE_DESCRIPTOR],
   "@mark1russell7/alerts-source-bom-sws": [BOM_SWS_DESCRIPTOR],
+  "@mark1russell7/alerts-source-cloudflare-radar": [OUTAGES_DESCRIPTOR, ANOMALIES_DESCRIPTOR],
   "@mark1russell7/alerts-source-cisa-kev": [KEV_DESCRIPTOR],
+  "@mark1russell7/alerts-source-eia-930": [EIA_930_DESCRIPTOR],
   "@mark1russell7/alerts-source-emsc": [EMSC_DESCRIPTOR],
   "@mark1russell7/alerts-source-energy-charts": [ENERGY_CHARTS_DESCRIPTOR],
-  "@mark1russell7/alerts-source-gcp": [GCP_DESCRIPTOR],
+  "@mark1russell7/alerts-source-gcp": [GCP_DESCRIPTOR, FIREBASE_DESCRIPTOR],
   "@mark1russell7/alerts-source-gfz": [GFZ_DESCRIPTOR],
   "@mark1russell7/alerts-source-iem": [IEM_DESCRIPTOR],
   "@mark1russell7/alerts-source-ipaws": [IPAWS_DESCRIPTOR],
@@ -44,7 +50,8 @@ const adopted = atlas.sources.filter((source) => source.decision === "adopt");
 
 describe("the paths of the atlas and the descriptors of the adapters", () => {
   it("has the descriptors of each adopted adapter", () => {
-    expect(adopted.map((source) => source.adapter).sort()).toEqual(Object.keys(DESCRIPTORS).sort());
+    // Two sources can share one adapter, for example the two dashboards of Google.
+    expect([...new Set(adopted.map((source) => source.adapter))].sort()).toEqual(Object.keys(DESCRIPTORS).sort());
   });
 
   // A shared CDN or carrier is a common fault of two sources. When one list lacks it, the coverage counts two sources as apart.
