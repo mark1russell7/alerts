@@ -19,6 +19,7 @@
     "polite-crawler": "^0.7.3"
   },
   "devDependencies": {
+    "@mark1russell7/alerts-source-swpc": "workspace:*",
     "@mark1russell7/cue": "^2.0.0",
     "@types/node": "^26.6.5",
     "@vitest/coverage-v8": "^5.0.3",
