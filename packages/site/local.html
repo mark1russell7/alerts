@@ -6,7 +6,7 @@
 <meta name="color-scheme" content="light dark">
 <meta name="robots" content="noindex">
 <title>alerts: the live map</title>
-<meta name="description" content="The live map of the alert runtime on this computer: the incidents, their levels, the watched places, the map of each past time and the health of each source.">
+<meta name="description" content="The live map of the alert runtime on this computer: the incidents, their levels, the watched places, the map of each past time, the health of each source and the indicators.">
 <link rel="stylesheet" href="./src/style.css">
 </head>
 <body>
@@ -65,6 +65,15 @@
       <p id="health-problem" class="hint health-problem" role="status" hidden></p>
       <div id="health" class="health-rows"></div>
       <p id="health-hint" class="hint">A source that needs attention is first. The health comes from the runtime on this computer, and it is the health of the present.</p>
+    </section>
+
+    <section class="panel indicator-panel" aria-labelledby="indicators-h">
+      <h2 id="indicators-h">Indicators</h2>
+      <div id="indicator-sum" class="verdicts" aria-live="polite">
+        <p class="verdict waiting" data-tone="quiet"><span>Reading the indicators.</span></p>
+      </div>
+      <div id="indicators" class="health-rows"></div>
+      <p class="hint">An indicator is a measure with a normal level, for example the grid frequency. Many dimensions out of their normal level at one time is a strong sign. The indicators are of the present, also when the map shows a past time.</p>
     </section>
   </div>
 </main>

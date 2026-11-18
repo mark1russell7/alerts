@@ -772,6 +772,8 @@ export function openInstance(options: InstanceOptions): Instance {
       ...(options.priors === undefined ? {} : { priors: options.priors }),
       shape: shapes.lookup,
       basemap: shapes.basemap(),
+      // The breadth of the indicator signals of the last pass. A runtime with no store of the readings has none.
+      ...(latest?.breadth === undefined ? {} : { breadth: latest.breadth }),
     });
   };
   // The health reads the view of the last pass. The watches of the copies and of the balances are at the time of the read.

@@ -1193,7 +1193,8 @@ main.local {
   outline-offset: 2px;
 }
 
-.health-panel {
+.health-panel,
+.indicator-panel {
   grid-column: 1 / -1;
 }
 
