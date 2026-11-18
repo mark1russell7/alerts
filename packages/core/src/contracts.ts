@@ -508,6 +508,11 @@ export interface MapProblem {
 export interface MapResult {
   readonly reports: readonly Report[];
   readonly problems: readonly MapProblem[];
+  /**
+   * The readings of the indicator measures in the message. The runtime checks each reading against the declaration of
+   * its measure, and keeps it in the store of the readings, not in the event log. A source with no measures gives no field.
+   */
+  readonly readings?: readonly Reading[];
 }
 
 /** The result of the canary check of a source. */
