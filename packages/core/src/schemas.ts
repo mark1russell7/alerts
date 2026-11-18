@@ -1443,7 +1443,7 @@ export const spendConfigSchema: z.ZodType<SpendConfig, SpendConfig> = schemaOf<S
         .readonly()
         .exactOptional(),
       reserveUsd: z.number().nonnegative().exactOptional(),
-      floor: z.number(),
+      floor: z.union([z.number(), z.array(z.number()).min(1, "The list of floors has one floor or more.").readonly()]),
       timeZone: z.string().min(1),
     })
     .readonly(),
@@ -1668,7 +1668,7 @@ export const providerBalanceSchema: z.ZodType<ProviderBalance, ProviderBalance> 
       provider: z.string().min(1, "The provider is a non-empty string."),
       title: z.string(),
       channels: z.array(channelIdSchema).readonly(),
-      floor: z.number(),
+      floors: z.array(z.number()).min(1, "The list of floors has one floor or more.").readonly(),
       maxAge: durationSchema,
       since: instantSchema,
       read: balanceReadSchema.exactOptional(),
