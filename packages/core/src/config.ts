@@ -4,7 +4,9 @@
  * configuration. The functions are pure, and the caller gives the secrets.
  */
 import { localTime } from "@mark1russell7/algebra/clock";
+import { err, ok, type Result } from "@mark1russell7/optional";
 import { canonicalHash } from "@mark1russell7/rigor-generators";
+import { compareCodeUnits } from "@mark1russell7/text/order";
 import type { Address, AssessPolicy, ChannelDescriptor, ChannelId, Duration, EscalationPolicy, Instant, InterestGraph, NodeKey, PersonId, PersonWatch, PlaceId, Position, RegionCode, SourceId, WatchedPlace } from "./contracts.ts";
 import { assess, DEFAULT_ASSESS_POLICY, DRILL_KIND, matchSubjects, reachedAssessment } from "./assess.ts";
 import { policyFor, recipientProblems, ruleSteps, type ChannelRule, type Recipient } from "./delivery.ts";
@@ -165,6 +167,74 @@ export interface AlertConfig {
    * list, and a STOP reply removes the number. The list holds phone numbers: keep it out of each public text.
    */
   readonly optIn?: readonly OptInConfig[];
+}
+
+/** The name of the format of a part of the configuration. A change that breaks a part gets a new name. */
+export const CONFIG_PART_FORMAT = "alerts-config-part/1";
+
+/**
+ * A part of the configuration from one writer: places, people and contacts. Each writer keeps its own file, so
+ * two writers do not overwrite each other. The root configuration keeps the other fields: policies, drills and spend.
+ */
+export interface ConfigPart {
+  readonly format: typeof CONFIG_PART_FORMAT;
+  readonly places?: readonly PlaceConfig[];
+  readonly people?: readonly PersonConfig[];
+  readonly contacts?: readonly ContactConfig[];
+}
+
+/** A part with its name. The name of a part in a file is the name of the file with no `.json`. */
+export interface NamedPart {
+  readonly name: string;
+  readonly part: ConfigPart;
+}
+
+/** The name of a part has small letters, digits and hyphens. It starts with a letter and has 40 characters or fewer. */
+export const PART_NAME: RegExp = /^[a-z][a-z0-9-]{0,39}$/u;
+
+/**
+ * This function merges the parts into the root configuration. The entries of the root come first. The entries of
+ * the parts come after them, in the order of the names. Thus the order of the reads does not change the merge or its hash.
+ *
+ * The merge finds a bad name and two parts with one name. It also finds an entry in two files: a place, a person, or
+ * a contact of one person on one channel. Two entries with one id in one file are a problem of `loadConfig`. A problem
+ * names ids and parts, and holds no other value.
+ */
+export function mergeParts(root: AlertConfig, parts: readonly NamedPart[]): Result<AlertConfig, readonly string[]> {
+  const problems: string[] = [];
+  const names = new Set<string>();
+  const good: NamedPart[] = [];
+  parts.forEach((named, index) => {
+    if (!PART_NAME.test(named.name)) problems.push(`The name of part ${index} is not small letters, digits and hyphens with a letter first, up to 40 characters.`);
+    else if (names.has(named.name)) problems.push(`Two parts have the name ${named.name}.`);
+    else good.push(named);
+    names.add(named.name);
+  });
+  good.sort((a, b) => compareCodeUnits(a.name, b.name));
+
+  // The file of each key, the first time the merge sees it. A key twice in one file is a problem of the load.
+  const fileOf = new Map<string, string>();
+  const claim = (key: string, file: string, what: string): void => {
+    const first = fileOf.get(key);
+    if (first === undefined) fileOf.set(key, file);
+    else if (first !== file) problems.push(`${what} is in ${first} and in ${file}.`);
+  };
+  const files: readonly { readonly file: string; readonly part: Omit<ConfigPart, "format"> }[] = [
+    { file: "the root configuration", part: root },
+    ...good.map(({ name, part }) => ({ file: `the part ${name}`, part })),
+  ];
+  for (const { file, part } of files) {
+    for (const place of part.places ?? []) claim(`place\u0000${place.id}`, file, `The place ${place.id}`);
+    for (const { watch } of part.people ?? []) claim(`person\u0000${watch.person}`, file, `The person ${watch.person}`);
+    for (const { person, channel } of part.contacts ?? []) claim(`contact\u0000${person}\u0000${channel}`, file, `The contact of the person ${person} on the channel ${channel}`);
+  }
+  if (problems.length > 0) return err(problems);
+  return ok({
+    ...root,
+    places: files.flatMap(({ part }) => part.places ?? []),
+    people: files.flatMap(({ part }) => part.people ?? []),
+    contacts: files.flatMap(({ part }) => part.contacts ?? []),
+  });
 }
 
 /** The name of the format of the settings of one copy of the system. A change that breaks a file gets a new name. */

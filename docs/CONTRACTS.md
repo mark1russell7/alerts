@@ -193,6 +193,24 @@ The three baselines:
 4. **A version keeps two methods apart.** A source changes the version of a series when its method changes, for example a new instrument. `seriesKey` holds the version, so a baseline does not cross a change of method.
 5. **A missing value is not a normal value.** A source with no backfill starts with an empty history. A series with no recent reading has no read, not a normal level.
 
+### The read of a series
+
+The function `readSeries` of `baseline.ts` reads one series at one time. It gives one of three reads:
+
+| Read | When |
+| --- | --- |
+| `score` | The latest value has a robust score, a signal and a normal level, the `center`. |
+| `flag` | The measure has the baseline `flag`. The flag of the latest reading is the signal. |
+| `no-read` | The series has no reading (`no-reading`), no recent reading (`stale`) or too few values in its history (`few-samples`). |
+
+- The score is the robust z-score of Iglewicz and Hoaglin, from `modifiedZ` of `@mark1russell7/rigor-statistics`. An absolute score of 3.5 or more in the direction of the measure is a signal.
+- With the baseline `none`, the history holds the values at the same time of the week, within 1 h, in the 28 days before the latest value. A policy can choose the same time of the day, or each time.
+- With the baseline `expected`, the read scores the residual: the value minus the expected value. The center is the expected value plus the median residual.
+- A series is stale after 3 cadences with no new value, plus the delay of the measure. The cadence of the reading comes first, then the cadence of the measure. With no cadence, a series is stale after 6 h.
+- The history needs 8 values or more. A new series and a new version of a series have no read until then.
+- The order of the readings does not change the read. Of two readings at one time, the reading with the smaller observation id counts.
+- `DEFAULT_BASELINE` holds these values. A seeded gate test holds that a history with too few values gives no score.
+
 ## Health and coverage
 
 The core calculates the health of each source from the records of its fetches, not the adapter. The runtime writes one `FetchRecord` when each fetch ends. The health is a state machine on `@mark1russell7/algebra`, and `HEALTH_MACHINE` is its document.
@@ -812,6 +830,7 @@ The assessment reads no clock. The caller gives the time `at`, and only a window
 
 - Each person can have a quiet window (`PersonWatch.quiet`): a time zone, and a start and an end in local times, for example `22:00` to `07:00`. An equal start and end give the full day.
 - In the window, each send below `life-safety` is quiet. A `life-safety` send ignores the window. It wakes the person.
+- A channel with no silent mode, as a call or a text, sends no quiet message. It gives the kind `quiet`. The step stays due, and it goes at the first try after the window.
 - The quiet value is for the time of the send. A step that became due before the end of the window and goes out after it is not quiet.
 - `inQuietWindow` is `inWindow` of `@mark1russell7/algebra/clock`. It calculates the local time in the time zone of the window. Thus the window follows the change to and from daylight saving time.
 - Tests hold a window across midnight, the two days of the change, an hour that occurs two times and an hour that does not occur.
@@ -957,7 +976,8 @@ The runtime cannot tell the person that it stopped. A check of Healthchecks.io t
 - A pass in which a channel gave `auth`, `refused` or `rate-limited` to a send pings `/fail`, because then the system cannot tell the person.
 - A pass with an overdue send pings `/fail`, whatever the kind of its failures. An overdue send is due, and it has no delivery `overdueAfter` after its due time. A reset or a server error that lasts thus also pings `/fail`.
 - `overdueLimit` gives `overdueAfter`: one pass limit and two full tries, each to its flight limit and its retry. It is 140 seconds for the instance. The due time comes from the log, thus a restart keeps it.
-- A send that a channel gave `reserved` or `consent` does not ping `/fail`, and it is not overdue. A `consent` refusal is the choice of the person: a STOP reply. The channel keeps the last units of its quota for `life-safety`, thus it still tells the person of the highest level.
+- A send that a channel gave `reserved`, `consent`, `quiet` or `expired` does not ping `/fail`, and it is not overdue (`REFUSAL_FAULTS`). A `consent` refusal is the choice of the person: a STOP reply.
+- A `quiet` refusal is a quiet message on a channel with no silent mode, as a call at night. An `expired` refusal is a message that expired before the send. Neither is a fault of the channel. The channel keeps the last units of its quota for `life-safety`, thus it still tells the person of the highest level.
 - The body of each ping also gives the state of the quota of each channel with a quota.
 - The fail of a channel holds until a send on the channel goes, or until the pass of the retry has no refusal on it. The delivery step sends a failed call again at the first pass at or after its `retryAt`. Thus the check does not go down and up at each retry.
 - The fail of a channel holds across a restart. At its first pass, the hook starts from `heldOf` of the log. It gives each refusal with a retry after that pass and with no later delivery on its channel. The order of the log decides, not the times. Thus a restart does not ping `success` while the channel refuses.
@@ -1118,6 +1138,18 @@ The schema `alertConfigSchema` checks the JSON of the configuration first. Then 
 A problem names ids, fields and the names of secrets. It does not hold the value of a secret, a label or a position.
 
 The function `parseConfig` reads the JSON text of the configuration. It checks the JSON, then the schema, then the references. Its result is a `Result` of `@mark1russell7/optional`: the configuration, the recipients and the opt-in list with the value of each number, or the problems. The runtime starts only with an `ok` result. A problem of the JSON does not quote the text, because the text can hold a private value.
+
+#### The parts of the configuration
+
+Two writers of one file overwrite each other. Thus each writer of places, people and contacts can keep its own part, `ConfigPart` (`alerts-config-part/1`). A part has only the fields `places`, `people` and `contacts`. The root configuration keeps the other fields.
+
+- The name of a part has small letters, digits and hyphens, with a letter first. It has 40 characters or fewer.
+- The function `mergeParts` puts the entries of the root first. The entries of the parts come after them, in the order of the names.
+- Thus the order of the reads does not change the merge or its hash. Each copy gets the same hash from the same files.
+- The merge finds a bad name and two parts with one name. It also finds an entry in two files: a place, a person, or a contact of a person on one channel.
+- A problem of a bad name gives the index of the part, not the name, because the name can hold any text.
+
+`parseConfig` takes the texts of the parts as its fourth argument. It checks the JSON and the schema of the root and of each part, and gives all their problems together. Then it merges the parts and checks the references of the merge with `loadConfig`. A problem of a part starts with the name of the part. With no parts, the result is the same as before.
 
 The runtime reads two private files in the folder `ALERTS_HOME`, or in `~/.alerts` with no variable: the configuration `config.json` and the keys `secrets.env`. A procedure that gives the configuration replaces the file later.
 
@@ -1341,7 +1373,8 @@ The file `schemas.ts` of the core has one zod 4 schema for each data type of the
 
 ## Open points
 
-- The indicator contract has no score yet. The next changes add the baseline and the score of each series. Then they add the store of the readings and the breadth of the signals in the threat level.
+- No store keeps the indicator readings yet. The next changes add the store of the readings and the breadth of the signals in the threat level.
+- The season of a baseline is in UTC. A change of the clock moves a local rush hour by 1 h in UTC. A season in the local time of the area, with the civil time of `@mark1russell7/algebra`, replaces it.
 - Some units of the indicator sources are not in the grammar of `@mark1russell7/quantity`. They are `MW`, `MWh`, `µSv/h`, `µg`, `hPa`, `Bq`, `ppm` and each currency other than `USD`. A measure in such a unit fails its schema until the package adds the unit.
 - The procedure tools take the schema of each input and output from `schemas.ts`.
 - The link rule has one family, the earthquakes. Each other kind with two sources of different ids gets its family with its second source.

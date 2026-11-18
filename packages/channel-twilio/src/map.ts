@@ -32,6 +32,11 @@ export interface TwilioCallMapOptions {
 /** The reason that the channel does not make a call. */
 export interface Refusal {
   readonly refused: string;
+  /**
+   * `quiet` for a quiet message, and `expired` for a message that expired before the send. These kinds are not a
+   * fault of the channel. Without the field, the kind of the send is `refused`.
+   */
+  readonly kind?: "quiet" | "expired";
 }
 
 // A part of the spoken text as one sentence: one space between two words, and a stop at the end.
@@ -76,8 +81,8 @@ export function spokenTextOf(message: Message): string {
  * - The call says its text `CALL_REPEATS` times, and its machine detection tells a person from a machine.
  */
 export function twilioCallOf(message: Message, address: Address, at: Instant, options: TwilioCallMapOptions): TwilioCall | Refusal {
-  if (message.quiet) return { refused: "A call has no silent mode, thus a quiet message gets no call." };
-  if (message.expires !== undefined && message.expires <= at) return { refused: "The message expired before the send." };
+  if (message.quiet) return { refused: "A call has no silent mode, thus a quiet message gets no call.", kind: "quiet" };
+  if (message.expires !== undefined && message.expires <= at) return { refused: "The message expired before the send.", kind: "expired" };
   const problems = addressProblems(address, twilioCallDescriptor());
   const to = address["to"];
   if (problems.length > 0 || to === undefined) return { refused: problems.join(" ") };

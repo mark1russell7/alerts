@@ -178,7 +178,7 @@ export function createPushoverChannel(options: PushoverChannelOptions): ChannelP
       const at = now();
       if (!isPushoverKey(options.token)) return { ok: false, kind: "auth", message: "The API token is not 30 letters and digits." };
       const mapped = pushoverMessageOf(message, address, at, options, copy);
-      if ("refused" in mapped) return { ok: false, kind: "refused", message: mapped.refused };
+      if ("refused" in mapped) return { ok: false, kind: mapped.kind ?? "refused", message: mapped.refused };
       let request: PushoverRequest;
       try {
         request = pushoverSendRequest(options.token, mapped);

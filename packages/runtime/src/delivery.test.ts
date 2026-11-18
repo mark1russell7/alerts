@@ -1020,6 +1020,18 @@ describe("the delivery step of a pass", () => {
     log.close();
   });
 
+  it("does not give a quiet call at night or an expired message as overdue", async () => {
+    for (const kind of ["quiet", "expired"] as const) {
+      const night: Script = { send: () => ({ ok: false, kind, message: "A call has no silent mode, thus a quiet message gets no call." }) };
+      const { clock, runtime, log } = open({ pushover: night }, openRuntimeLog(":memory:"), fakeWallClock(T0), { overdueAfter: 60 * SECOND });
+      const first = await runtime.pass();
+      expect(first.delivery?.failures.map((failure) => failure.kind)).toEqual([kind]);
+      await clock.advance(120 * SECOND);
+      expect((await runtime.pass()).delivery?.overdue).toEqual([]);
+      log.close();
+    }
+  });
+
   it("does not give a send that the person refused with a STOP reply as overdue", async () => {
     const stopped: Script = { send: () => ({ ok: false, kind: "consent", message: "The number replied STOP." }) };
     const { clock, runtime, log } = open({ pushover: stopped }, openRuntimeLog(":memory:"), fakeWallClock(T0), { overdueAfter: 60 * SECOND });
