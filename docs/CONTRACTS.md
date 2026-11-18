@@ -1009,10 +1009,13 @@ The table becomes the calculation of AL-31. The calculation multiplies the proba
 
 The shadow score (`shadowScore`) is the first step. It operates next to the table, and it does not decide a level:
 
-- The priors (`ScorePriors`, format `alerts-priors/1`) are data. For each prefix of a kind, they give the verified share of its warnings and the deaths and injuries of one event. For each CAP certainty value, they give a probability.
-- The probability of an observed event is that of the certainty `observed`. The probability of a warning is the verified share of its kind. The measure of the warnings decides over the certainty word of the sender. Each other incident gets the probability of its certainty.
+- The priors (`ScorePriors`, format `alerts-priors/2`) are data. For each prefix of a kind, they give the verified share of its warnings and the deaths and injuries of one event. For each CAP certainty value, they give a probability.
+- Format 2 adds the harm in one area under one active alert of a kind, for each significance (`KindPrior.under`). The measure counts each event under an alert, so it holds the probability of the event.
+- An incident with a significance and a measure of its alerts gets the basis `alert`. Its expected harm is that measure. The longest prefix of the kind with a measure of that significance decides.
+- An observed event gets the basis `event`. The measure under an alert also counts the alerts with no event, thus it is too low for an event that occurs.
+- On the basis `event`, the probability of an observed event is that of the certainty `observed`. The probability of a warning is the verified share of its kind. The measure of the warnings decides over the certainty word of the sender. Each other incident gets the probability of its certainty.
 - For each field, the longest prefix of the kind with that field decides. A prefix ends at a dot, as in `hasKind`.
-- Each value has its interval. The score keeps the key of the priors that gave each factor, so the UI tells the source.
+- Each value has its interval. The score keeps the key of the priors that gave each factor, so the UI tells the source. A factor of the table `under` also keeps the significance and the kind of area.
 - The expected harm (`expectedOf`) is the probability times the deaths, and the probability times the injuries. `mul` of `@mark1russell7/interval` rounds each interval outward. Thus the interval holds each exact product.
 - Each count of the priors is from 0 to `Number.MAX_SAFE_INTEGER`. Thus each product has a finite interval.
 - A factor that the priors do not give makes a score with no read. The score names each missing factor. It does not take 0 or a default value.
@@ -1027,8 +1030,11 @@ The priors come from the base rates of the package `rates` (`priorsOf`). The fil
 - The percentile bootstrap over the years holds the change from year to year. Its seed comes from the kind and the field. It applies only when each year has an event. Otherwise a draw of the years can have no event.
 - A kind with no event in the years gives no prior of deaths and no prior of injuries. Thus the score has no read for that kind.
 - The probability of a CAP certainty is the middle of its band. Its interval is the band.
+- The harm under an alert of a kind and a significance comes from the section `under` of format 4. It is the harm in one kind of area over the areas of that kind (`areaTypeOf`). Its interval is that of the deaths of one event, with the areas as the units.
+- `areaTypeOf` takes the kind of area with more placed events of the kind. On a tie, the kind of area with more areas decides. On a tie of the areas too, the counties decide.
+- A kind with no NCEI kind gives no harm under an alert. NCEI does not measure its harm, and 0 is not a measure.
 
-The deaths of one NCEI event are too high for some kinds: NCEI enters many events of these kinds because a person was hurt. An example is rip currents. Thus format 3 of the base rates (`alerts-rates/3`) adds the section `under`, the harm under an active alert. Step 4 of AL-31 takes the priors of each alert from it. The priors and the gate do not read it at this time:
+The deaths of one NCEI event are too high for some kinds: NCEI enters many events of these kinds because a person was hurt. An example is rip currents. Thus format 3 of the base rates (`alerts-rates/3`) adds the section `under`, the harm under an active alert. Step 4 of AL-31 takes the priors of each alert from it (format 4). The gate does not read it at this time:
 
 - The alerts come from the archive of the VTEC alerts of IEM (`watchwarn.py`), one national request for each month. The requests do not ask for the marine phenomena (`MARINE_PHENOMENA`, with the reason).
 - An alert is one event number of one office, in one VTEC year, for one phenomenon and one significance. A watch of the Storm Prediction Center and a tropical alert have a national number. Their alerts count one time for all the offices (`NATIONAL_NUMBERS`, with the reason). The measure checks this list against the data (`numberingDoubts`). A doubt is a warning of the workflow.
@@ -1036,12 +1042,14 @@ The deaths of one NCEI event are too high for some kinds: NCEI enters many event
 - The harm of a kind under an alert is the deaths and injuries of the NCEI events of the NCEI kind of the alert kind. The function `nceiKindOf` gives that NCEI kind, with the same prefix rule as the score. An event is under an alert when an alert row of the same county or zone (UGC) is active. The time of the event is from its begin minus one hour (`UNDER_MARGIN_MS`) to its end.
 - The section also has the NCEI harm of each kind in the years, so the share of the harm under an alert is a division. It also counts the events that the join cannot place, by reason: marine, area, time zone or time.
 - NCEI gives its own state codes to the territories and the waters. The join reads them (`NCEI_TERRITORIES`, `NCEI_WATERS`). A water event meets only the rows of its marine zone, for example a hurricane warning of `GMZ335`.
-- A county event meets only the county rows of an alert, and a zone event meets only its zone rows. Thus an alert of zones and the events of counties have no common harm. The section keeps the rows of each alert in counties and in zones (`areas`).
+- A county event meets only the county rows of an alert, and a zone event meets only its zone rows. Thus an alert of zones and the events of counties have no common harm.
+- Format 4 (`alerts-rates/4`) gives the areas of each kind and significance, and the harm in them, in counties and in zones, in each year (`byArea`). An area is one alert in one county or zone. It counts one time, in the VTEC year of the alert.
+- Format 4 also gives the placed events of the NCEI kind in counties and in zones (`placed`). The prior of an alert takes the kind of area with more events.
 
 The runtime reads the committed priors at its start (`committedPriors` of the package `rates`). A fault of the file stops only the score, and each alert goes on:
 
 - The map route gives the score of each incident that reaches a person (the field `shadow` of each incident of the view).
-- The log keeps the score at the start of each escalation (the field `shadow` of the event `escalation`). Thus a later study can compare each decision of the table with its score.
+- The log keeps the score at the start of each escalation (the field `shadow` of the event `escalation`). Thus a later study can compare each decision of the table with its score. A score of a log line from before the basis `alert` has no field `basis`. Its basis is `event`.
 - `shadowDifferences` gives each pair of incidents where the table and the score disagree. The table gives one incident the higher level. The score gives the other more expected deaths and more expected injuries, and the intervals do not overlap. Thus the rule needs no weight between a death and an injury.
 
 ## The service

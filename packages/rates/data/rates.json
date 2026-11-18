@@ -1,6 +1,6 @@
 {
-  "format": "alerts-rates/3",
-  "fetched": "2026-11-18T11:56:31.321Z",
+  "format": "alerts-rates/4",
+  "fetched": "2026-11-18T14:03:56.553Z",
   "level": 0.95,
   "methods": {
     "share": "The Wilson score interval of the verified warnings in all the warnings, at the level of the file.",
@@ -5603,6 +5603,10 @@
             "injuries": 0
           }
         },
+        "placed": {
+          "counties": 0,
+          "zones": 0
+        },
         "significances": {
           "Y": {
             "alerts": {
@@ -5667,9 +5671,79 @@
                 "injuries": 0
               }
             },
-            "areas": {
-              "counties": 0,
-              "zones": 701
+            "byArea": {
+              "counties": {
+                "areas": {
+                  "2021": 0,
+                  "2022": 0,
+                  "2023": 0,
+                  "2024": 0,
+                  "2025": 0
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              },
+              "zones": {
+                "areas": {
+                  "2021": 16,
+                  "2022": 214,
+                  "2023": 235,
+                  "2024": 67,
+                  "2025": 162
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              }
             }
           }
         }
@@ -5705,6 +5779,10 @@
             "deaths": 0,
             "injuries": 0
           }
+        },
+        "placed": {
+          "counties": 0,
+          "zones": 0
         },
         "significances": {
           "Y": {
@@ -5754,9 +5832,79 @@
               }
             },
             "byType": {},
-            "areas": {
-              "counties": 0,
-              "zones": 214
+            "byArea": {
+              "counties": {
+                "areas": {
+                  "2021": 0,
+                  "2022": 0,
+                  "2023": 0,
+                  "2024": 0,
+                  "2025": 0
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              },
+              "zones": {
+                "areas": {
+                  "2021": 1,
+                  "2022": 28,
+                  "2023": 71,
+                  "2024": 70,
+                  "2025": 41
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              }
             }
           }
         }
@@ -5790,6 +5938,10 @@
             "deaths": 0,
             "injuries": 0
           }
+        },
+        "placed": {
+          "counties": 0,
+          "zones": 0
         },
         "significances": {
           "W": {
@@ -5875,9 +6027,79 @@
                 "injuries": 64
               }
             },
-            "areas": {
-              "counties": 0,
-              "zones": 56538
+            "byArea": {
+              "counties": {
+                "areas": {
+                  "2021": 0,
+                  "2022": 0,
+                  "2023": 0,
+                  "2024": 0,
+                  "2025": 0
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              },
+              "zones": {
+                "areas": {
+                  "2021": 9491,
+                  "2022": 15521,
+                  "2023": 10370,
+                  "2024": 9952,
+                  "2025": 11124
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              }
             }
           },
           "A": {
@@ -5938,9 +6160,79 @@
                 "injuries": 37
               }
             },
-            "areas": {
-              "counties": 0,
-              "zones": 34775
+            "byArea": {
+              "counties": {
+                "areas": {
+                  "2021": 0,
+                  "2022": 0,
+                  "2023": 0,
+                  "2024": 0,
+                  "2025": 0
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              },
+              "zones": {
+                "areas": {
+                  "2021": 6382,
+                  "2022": 9944,
+                  "2023": 6250,
+                  "2024": 5791,
+                  "2025": 6407
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              }
             }
           }
         }
@@ -5976,6 +6268,10 @@
             "deaths": 0,
             "injuries": 0
           }
+        },
+        "placed": {
+          "counties": 0,
+          "zones": 0
         },
         "significances": {
           "W": {
@@ -6025,9 +6321,79 @@
               }
             },
             "byType": {},
-            "areas": {
-              "counties": 0,
-              "zones": 78
+            "byArea": {
+              "counties": {
+                "areas": {
+                  "2021": 0,
+                  "2022": 0,
+                  "2023": 0,
+                  "2024": 0,
+                  "2025": 0
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              },
+              "zones": {
+                "areas": {
+                  "2021": 8,
+                  "2022": 3,
+                  "2023": 3,
+                  "2024": 13,
+                  "2025": 48
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              }
             }
           },
           "A": {
@@ -6077,9 +6443,79 @@
               }
             },
             "byType": {},
-            "areas": {
-              "counties": 0,
-              "zones": 129
+            "byArea": {
+              "counties": {
+                "areas": {
+                  "2021": 0,
+                  "2022": 0,
+                  "2023": 0,
+                  "2024": 0,
+                  "2025": 0
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              },
+              "zones": {
+                "areas": {
+                  "2021": 49,
+                  "2022": 0,
+                  "2023": 0,
+                  "2024": 0,
+                  "2025": 70
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              }
             }
           },
           "Y": {
@@ -6129,9 +6565,79 @@
               }
             },
             "byType": {},
-            "areas": {
-              "counties": 0,
-              "zones": 245
+            "byArea": {
+              "counties": {
+                "areas": {
+                  "2021": 0,
+                  "2022": 0,
+                  "2023": 0,
+                  "2024": 0,
+                  "2025": 0
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              },
+              "zones": {
+                "areas": {
+                  "2021": 22,
+                  "2022": 101,
+                  "2023": 1,
+                  "2024": 0,
+                  "2025": 114
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              }
             }
           }
         }
@@ -6168,6 +6674,10 @@
             "deaths": 0,
             "injuries": 0
           }
+        },
+        "placed": {
+          "counties": 0,
+          "zones": 0
         },
         "significances": {
           "Y": {
@@ -6217,9 +6727,79 @@
               }
             },
             "byType": {},
-            "areas": {
-              "counties": 0,
-              "zones": 10
+            "byArea": {
+              "counties": {
+                "areas": {
+                  "2021": 0,
+                  "2022": 0,
+                  "2023": 0,
+                  "2024": 0,
+                  "2025": 0
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              },
+              "zones": {
+                "areas": {
+                  "2021": 0,
+                  "2022": 8,
+                  "2023": 2,
+                  "2024": 0,
+                  "2025": 0
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              }
             }
           }
         }
@@ -6255,6 +6835,10 @@
             "deaths": 4,
             "injuries": 1
           }
+        },
+        "placed": {
+          "counties": 0,
+          "zones": 9
         },
         "significances": {
           "S": {
@@ -6325,9 +6909,79 @@
                 "injuries": 2
               }
             },
-            "areas": {
-              "counties": 0,
-              "zones": 8993
+            "byArea": {
+              "counties": {
+                "areas": {
+                  "2021": 0,
+                  "2022": 0,
+                  "2023": 0,
+                  "2024": 0,
+                  "2025": 0
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              },
+              "zones": {
+                "areas": {
+                  "2021": 1674,
+                  "2022": 1759,
+                  "2023": 1857,
+                  "2024": 1828,
+                  "2025": 1850
+                },
+                "harm": {
+                  "2021": {
+                    "events": 1,
+                    "deaths": 1,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 1,
+                    "deaths": 0,
+                    "injuries": 1
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 3,
+                    "deaths": 4,
+                    "injuries": 1
+                  }
+                }
+              }
             }
           }
         }
@@ -6361,6 +7015,10 @@
             "deaths": 0,
             "injuries": 0
           }
+        },
+        "placed": {
+          "counties": 0,
+          "zones": 0
         },
         "significances": {
           "W": {
@@ -6426,9 +7084,79 @@
                 "injuries": 1
               }
             },
-            "areas": {
-              "counties": 0,
-              "zones": 476
+            "byArea": {
+              "counties": {
+                "areas": {
+                  "2021": 0,
+                  "2022": 0,
+                  "2023": 0,
+                  "2024": 0,
+                  "2025": 0
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              },
+              "zones": {
+                "areas": {
+                  "2021": 70,
+                  "2022": 63,
+                  "2023": 83,
+                  "2024": 22,
+                  "2025": 238
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              }
             }
           },
           "Y": {
@@ -6509,9 +7237,79 @@
                 "injuries": 7
               }
             },
-            "areas": {
-              "counties": 0,
-              "zones": 3230
+            "byArea": {
+              "counties": {
+                "areas": {
+                  "2021": 0,
+                  "2022": 0,
+                  "2023": 0,
+                  "2024": 0,
+                  "2025": 0
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              },
+              "zones": {
+                "areas": {
+                  "2021": 382,
+                  "2022": 728,
+                  "2023": 523,
+                  "2024": 348,
+                  "2025": 1234
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              }
             }
           }
         }
@@ -6545,6 +7343,10 @@
             "deaths": 0,
             "injuries": 0
           }
+        },
+        "placed": {
+          "counties": 0,
+          "zones": 0
         },
         "significances": {
           "Y": {
@@ -6615,9 +7417,79 @@
                 "injuries": 0
               }
             },
-            "areas": {
-              "counties": 0,
-              "zones": 16215
+            "byArea": {
+              "counties": {
+                "areas": {
+                  "2021": 0,
+                  "2022": 0,
+                  "2023": 0,
+                  "2024": 0,
+                  "2025": 0
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              },
+              "zones": {
+                "areas": {
+                  "2021": 0,
+                  "2022": 0,
+                  "2023": 0,
+                  "2024": 325,
+                  "2025": 15801
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              }
             }
           }
         }
@@ -6654,6 +7526,10 @@
             "deaths": 5,
             "injuries": 0
           }
+        },
+        "placed": {
+          "counties": 0,
+          "zones": 57
         },
         "significances": {
           "W": {
@@ -6714,9 +7590,79 @@
                 "injuries": 0
               }
             },
-            "areas": {
-              "counties": 0,
-              "zones": 2768
+            "byArea": {
+              "counties": {
+                "areas": {
+                  "2021": 0,
+                  "2022": 0,
+                  "2023": 0,
+                  "2024": 0,
+                  "2025": 0
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              },
+              "zones": {
+                "areas": {
+                  "2021": 0,
+                  "2022": 0,
+                  "2023": 0,
+                  "2024": 3,
+                  "2025": 2740
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 5,
+                    "deaths": 5,
+                    "injuries": 0
+                  }
+                }
+              }
             }
           },
           "A": {
@@ -6766,9 +7712,79 @@
               }
             },
             "byType": {},
-            "areas": {
-              "counties": 0,
-              "zones": 1811
+            "byArea": {
+              "counties": {
+                "areas": {
+                  "2021": 0,
+                  "2022": 0,
+                  "2023": 0,
+                  "2024": 0,
+                  "2025": 0
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              },
+              "zones": {
+                "areas": {
+                  "2021": 0,
+                  "2022": 0,
+                  "2023": 0,
+                  "2024": 0,
+                  "2025": 1811
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              }
             }
           }
         }
@@ -6804,6 +7820,10 @@
             "deaths": 22,
             "injuries": 1
           }
+        },
+        "placed": {
+          "counties": 0,
+          "zones": 102
         },
         "significances": {
           "W": {
@@ -6889,9 +7909,79 @@
                 "injuries": 51
               }
             },
-            "areas": {
-              "counties": 0,
-              "zones": 6292
+            "byArea": {
+              "counties": {
+                "areas": {
+                  "2021": 0,
+                  "2022": 0,
+                  "2023": 0,
+                  "2024": 0,
+                  "2025": 0
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              },
+              "zones": {
+                "areas": {
+                  "2021": 1644,
+                  "2022": 2878,
+                  "2023": 531,
+                  "2024": 1180,
+                  "2025": 0
+                },
+                "harm": {
+                  "2021": {
+                    "events": 7,
+                    "deaths": 56,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 1,
+                    "deaths": 1,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 1,
+                    "deaths": 1,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              }
             }
           },
           "A": {
@@ -6952,9 +8042,79 @@
                 "injuries": 0
               }
             },
-            "areas": {
-              "counties": 0,
-              "zones": 3172
+            "byArea": {
+              "counties": {
+                "areas": {
+                  "2021": 0,
+                  "2022": 0,
+                  "2023": 0,
+                  "2024": 0,
+                  "2025": 0
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              },
+              "zones": {
+                "areas": {
+                  "2021": 479,
+                  "2022": 1813,
+                  "2023": 202,
+                  "2024": 678,
+                  "2025": 0
+                },
+                "harm": {
+                  "2021": {
+                    "events": 1,
+                    "deaths": 40,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              }
             }
           },
           "Y": {
@@ -7060,9 +8220,79 @@
                 "injuries": 21
               }
             },
-            "areas": {
-              "counties": 0,
-              "zones": 25169
+            "byArea": {
+              "counties": {
+                "areas": {
+                  "2021": 0,
+                  "2022": 0,
+                  "2023": 0,
+                  "2024": 0,
+                  "2025": 0
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              },
+              "zones": {
+                "areas": {
+                  "2021": 5022,
+                  "2022": 10826,
+                  "2023": 2665,
+                  "2024": 6081,
+                  "2025": 0
+                },
+                "harm": {
+                  "2021": {
+                    "events": 5,
+                    "deaths": 7,
+                    "injuries": 1
+                  },
+                  "2022": {
+                    "events": 3,
+                    "deaths": 4,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 2,
+                    "deaths": 2,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 7,
+                    "deaths": 10,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              }
             }
           }
         }
@@ -7098,6 +8328,10 @@
             "deaths": 17,
             "injuries": 78
           }
+        },
+        "placed": {
+          "counties": 0,
+          "zones": 32
         },
         "significances": {
           "W": {
@@ -7158,9 +8392,79 @@
                 "injuries": 2
               }
             },
-            "areas": {
-              "counties": 1809,
-              "zones": 0
+            "byArea": {
+              "counties": {
+                "areas": {
+                  "2021": 271,
+                  "2022": 375,
+                  "2023": 209,
+                  "2024": 204,
+                  "2025": 750
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              },
+              "zones": {
+                "areas": {
+                  "2021": 0,
+                  "2022": 0,
+                  "2023": 0,
+                  "2024": 0,
+                  "2025": 0
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              }
             }
           },
           "Y": {
@@ -7221,9 +8525,79 @@
                 "injuries": 1
               }
             },
-            "areas": {
-              "counties": 2335,
-              "zones": 0
+            "byArea": {
+              "counties": {
+                "areas": {
+                  "2021": 228,
+                  "2022": 719,
+                  "2023": 397,
+                  "2024": 439,
+                  "2025": 552
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              },
+              "zones": {
+                "areas": {
+                  "2021": 0,
+                  "2022": 0,
+                  "2023": 0,
+                  "2024": 0,
+                  "2025": 0
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              }
             }
           }
         }
@@ -7259,6 +8633,10 @@
             "deaths": 17,
             "injuries": 8
           }
+        },
+        "placed": {
+          "counties": 107,
+          "zones": 0
         },
         "significances": {
           "W": {
@@ -7339,9 +8717,79 @@
                 "injuries": 26
               }
             },
-            "areas": {
-              "counties": 19663,
-              "zones": 99
+            "byArea": {
+              "counties": {
+                "areas": {
+                  "2021": 4573,
+                  "2022": 3222,
+                  "2023": 3248,
+                  "2024": 3987,
+                  "2025": 4633
+                },
+                "harm": {
+                  "2021": {
+                    "events": 4,
+                    "deaths": 4,
+                    "injuries": 3
+                  },
+                  "2022": {
+                    "events": 7,
+                    "deaths": 11,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 16,
+                    "deaths": 23,
+                    "injuries": 2
+                  },
+                  "2024": {
+                    "events": 11,
+                    "deaths": 15,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 10,
+                    "deaths": 9,
+                    "injuries": 2
+                  }
+                }
+              },
+              "zones": {
+                "areas": {
+                  "2021": 10,
+                  "2022": 20,
+                  "2023": 29,
+                  "2024": 15,
+                  "2025": 25
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              }
             }
           },
           "A": {
@@ -7472,9 +8920,79 @@
                 "injuries": 3
               }
             },
-            "areas": {
-              "counties": 571,
-              "zones": 55182
+            "byArea": {
+              "counties": {
+                "areas": {
+                  "2021": 82,
+                  "2022": 125,
+                  "2023": 198,
+                  "2024": 39,
+                  "2025": 125
+                },
+                "harm": {
+                  "2021": {
+                    "events": 2,
+                    "deaths": 2,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 1,
+                    "deaths": 2,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              },
+              "zones": {
+                "areas": {
+                  "2021": 2764,
+                  "2022": 11573,
+                  "2023": 11855,
+                  "2024": 14615,
+                  "2025": 14271
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              }
             }
           },
           "Y": {
@@ -7565,9 +9083,79 @@
                 "injuries": 180
               }
             },
-            "areas": {
-              "counties": 108460,
-              "zones": 360
+            "byArea": {
+              "counties": {
+                "areas": {
+                  "2021": 24776,
+                  "2022": 21112,
+                  "2023": 20997,
+                  "2024": 19910,
+                  "2025": 21661
+                },
+                "harm": {
+                  "2021": {
+                    "events": 4,
+                    "deaths": 3,
+                    "injuries": 2
+                  },
+                  "2022": {
+                    "events": 5,
+                    "deaths": 8,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 13,
+                    "deaths": 14,
+                    "injuries": 7
+                  },
+                  "2024": {
+                    "events": 6,
+                    "deaths": 8,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 6,
+                    "deaths": 5,
+                    "injuries": 5
+                  }
+                }
+              },
+              "zones": {
+                "areas": {
+                  "2021": 62,
+                  "2022": 72,
+                  "2023": 76,
+                  "2024": 62,
+                  "2025": 88
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              }
             }
           }
         }
@@ -7603,6 +9191,10 @@
             "deaths": 1,
             "injuries": 1
           }
+        },
+        "placed": {
+          "counties": 0,
+          "zones": 4
         },
         "significances": {
           "W": {
@@ -7668,9 +9260,79 @@
                 "injuries": 0
               }
             },
-            "areas": {
-              "counties": 0,
-              "zones": 2086
+            "byArea": {
+              "counties": {
+                "areas": {
+                  "2021": 0,
+                  "2022": 0,
+                  "2023": 0,
+                  "2024": 0,
+                  "2025": 0
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              },
+              "zones": {
+                "areas": {
+                  "2021": 287,
+                  "2022": 392,
+                  "2023": 411,
+                  "2024": 675,
+                  "2025": 297
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 1,
+                    "deaths": 0,
+                    "injuries": 1
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 1,
+                    "deaths": 1,
+                    "injuries": 1
+                  }
+                }
+              }
             }
           },
           "A": {
@@ -7720,9 +9382,79 @@
               }
             },
             "byType": {},
-            "areas": {
-              "counties": 0,
-              "zones": 1593
+            "byArea": {
+              "counties": {
+                "areas": {
+                  "2021": 0,
+                  "2022": 0,
+                  "2023": 0,
+                  "2024": 0,
+                  "2025": 0
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              },
+              "zones": {
+                "areas": {
+                  "2021": 201,
+                  "2022": 278,
+                  "2023": 290,
+                  "2024": 559,
+                  "2025": 264
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              }
             }
           },
           "Y": {
@@ -7808,9 +9540,79 @@
                 "injuries": 1
               }
             },
-            "areas": {
-              "counties": 0,
-              "zones": 14186
+            "byArea": {
+              "counties": {
+                "areas": {
+                  "2021": 0,
+                  "2022": 0,
+                  "2023": 0,
+                  "2024": 0,
+                  "2025": 0
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              },
+              "zones": {
+                "areas": {
+                  "2021": 2062,
+                  "2022": 2319,
+                  "2023": 3333,
+                  "2024": 4009,
+                  "2025": 2157
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              }
             }
           },
           "S": {
@@ -7876,9 +9678,79 @@
                 "injuries": 0
               }
             },
-            "areas": {
-              "counties": 0,
-              "zones": 4652
+            "byArea": {
+              "counties": {
+                "areas": {
+                  "2021": 0,
+                  "2022": 0,
+                  "2023": 0,
+                  "2024": 0,
+                  "2025": 0
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              },
+              "zones": {
+                "areas": {
+                  "2021": 770,
+                  "2022": 660,
+                  "2023": 1024,
+                  "2024": 1361,
+                  "2025": 812
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              }
             }
           }
         }
@@ -7914,6 +9786,10 @@
             "deaths": 209,
             "injuries": 20
           }
+        },
+        "placed": {
+          "counties": 281,
+          "zones": 0
         },
         "significances": {
           "W": {
@@ -7999,9 +9875,79 @@
                 "injuries": 200
               }
             },
-            "areas": {
-              "counties": 49695,
-              "zones": 0
+            "byArea": {
+              "counties": {
+                "areas": {
+                  "2021": 10200,
+                  "2022": 8331,
+                  "2023": 7877,
+                  "2024": 10598,
+                  "2025": 12683
+                },
+                "harm": {
+                  "2021": {
+                    "events": 77,
+                    "deaths": 128,
+                    "injuries": 46
+                  },
+                  "2022": {
+                    "events": 33,
+                    "deaths": 70,
+                    "injuries": 13
+                  },
+                  "2023": {
+                    "events": 27,
+                    "deaths": 34,
+                    "injuries": 13
+                  },
+                  "2024": {
+                    "events": 51,
+                    "deaths": 115,
+                    "injuries": 13
+                  },
+                  "2025": {
+                    "events": 57,
+                    "deaths": 198,
+                    "injuries": 14
+                  }
+                }
+              },
+              "zones": {
+                "areas": {
+                  "2021": 0,
+                  "2022": 0,
+                  "2023": 0,
+                  "2024": 0,
+                  "2025": 0
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              }
             }
           },
           "A": {
@@ -8077,9 +10023,79 @@
                 "injuries": 2
               }
             },
-            "areas": {
-              "counties": 63,
-              "zones": 12496
+            "byArea": {
+              "counties": {
+                "areas": {
+                  "2021": 36,
+                  "2022": 12,
+                  "2023": 0,
+                  "2024": 4,
+                  "2025": 11
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              },
+              "zones": {
+                "areas": {
+                  "2021": 11855,
+                  "2022": 253,
+                  "2023": 111,
+                  "2024": 77,
+                  "2025": 123
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              }
             }
           }
         }
@@ -8116,6 +10132,10 @@
             "deaths": 0,
             "injuries": 0
           }
+        },
+        "placed": {
+          "counties": 0,
+          "zones": 0
         },
         "significances": {
           "W": {
@@ -8176,9 +10196,79 @@
                 "injuries": 1
               }
             },
-            "areas": {
-              "counties": 0,
-              "zones": 121
+            "byArea": {
+              "counties": {
+                "areas": {
+                  "2021": 0,
+                  "2022": 0,
+                  "2023": 0,
+                  "2024": 0,
+                  "2025": 0
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              },
+              "zones": {
+                "areas": {
+                  "2021": 48,
+                  "2022": 32,
+                  "2023": 15,
+                  "2024": 13,
+                  "2025": 13
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              }
             }
           },
           "A": {
@@ -8228,9 +10318,79 @@
               }
             },
             "byType": {},
-            "areas": {
-              "counties": 0,
-              "zones": 63
+            "byArea": {
+              "counties": {
+                "areas": {
+                  "2021": 0,
+                  "2022": 0,
+                  "2023": 0,
+                  "2024": 0,
+                  "2025": 0
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              },
+              "zones": {
+                "areas": {
+                  "2021": 24,
+                  "2022": 15,
+                  "2023": 9,
+                  "2024": 6,
+                  "2025": 9
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              }
             }
           },
           "Y": {
@@ -8286,9 +10446,79 @@
                 "injuries": 1
               }
             },
-            "areas": {
-              "counties": 0,
-              "zones": 339
+            "byArea": {
+              "counties": {
+                "areas": {
+                  "2021": 0,
+                  "2022": 0,
+                  "2023": 0,
+                  "2024": 0,
+                  "2025": 0
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              },
+              "zones": {
+                "areas": {
+                  "2021": 167,
+                  "2022": 59,
+                  "2023": 43,
+                  "2024": 27,
+                  "2025": 42
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              }
             }
           }
         }
@@ -8324,6 +10554,10 @@
             "deaths": 17,
             "injuries": 8
           }
+        },
+        "placed": {
+          "counties": 107,
+          "zones": 0
         },
         "significances": {
           "W": {
@@ -8414,9 +10648,79 @@
                 "injuries": 36
               }
             },
-            "areas": {
-              "counties": 28279,
-              "zones": 0
+            "byArea": {
+              "counties": {
+                "areas": {
+                  "2021": 6724,
+                  "2022": 4369,
+                  "2023": 4651,
+                  "2024": 7564,
+                  "2025": 4970
+                },
+                "harm": {
+                  "2021": {
+                    "events": 7,
+                    "deaths": 7,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 5,
+                    "deaths": 8,
+                    "injuries": 1
+                  },
+                  "2023": {
+                    "events": 5,
+                    "deaths": 6,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 14,
+                    "deaths": 16,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 9,
+                    "deaths": 9,
+                    "injuries": 2
+                  }
+                }
+              },
+              "zones": {
+                "areas": {
+                  "2021": 0,
+                  "2022": 0,
+                  "2023": 0,
+                  "2024": 0,
+                  "2025": 0
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              }
             }
           },
           "A": {
@@ -8466,9 +10770,79 @@
               }
             },
             "byType": {},
-            "areas": {
-              "counties": 159,
-              "zones": 1555
+            "byArea": {
+              "counties": {
+                "areas": {
+                  "2021": 3,
+                  "2022": 21,
+                  "2023": 32,
+                  "2024": 78,
+                  "2025": 25
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              },
+              "zones": {
+                "areas": {
+                  "2021": 210,
+                  "2022": 154,
+                  "2023": 230,
+                  "2024": 639,
+                  "2025": 322
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              }
             }
           },
           "Y": {
@@ -8539,9 +10913,79 @@
                 "injuries": 96
               }
             },
-            "areas": {
-              "counties": 3703,
-              "zones": 0
+            "byArea": {
+              "counties": {
+                "areas": {
+                  "2021": 804,
+                  "2022": 774,
+                  "2023": 617,
+                  "2024": 569,
+                  "2025": 939
+                },
+                "harm": {
+                  "2021": {
+                    "events": 1,
+                    "deaths": 1,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              },
+              "zones": {
+                "areas": {
+                  "2021": 0,
+                  "2022": 0,
+                  "2023": 0,
+                  "2024": 0,
+                  "2025": 0
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              }
             }
           }
         }
@@ -8577,6 +11021,10 @@
             "deaths": 8,
             "injuries": 9
           }
+        },
+        "placed": {
+          "counties": 0,
+          "zones": 77
         },
         "significances": {
           "Y": {
@@ -8657,9 +11105,79 @@
                 "injuries": 5
               }
             },
-            "areas": {
-              "counties": 0,
-              "zones": 127210
+            "byArea": {
+              "counties": {
+                "areas": {
+                  "2021": 0,
+                  "2022": 0,
+                  "2023": 0,
+                  "2024": 0,
+                  "2025": 0
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              },
+              "zones": {
+                "areas": {
+                  "2021": 25040,
+                  "2022": 18986,
+                  "2023": 23649,
+                  "2024": 30894,
+                  "2025": 27780
+                },
+                "harm": {
+                  "2021": {
+                    "events": 12,
+                    "deaths": 10,
+                    "injuries": 23
+                  },
+                  "2022": {
+                    "events": 8,
+                    "deaths": 6,
+                    "injuries": 44
+                  },
+                  "2023": {
+                    "events": 9,
+                    "deaths": 13,
+                    "injuries": 68
+                  },
+                  "2024": {
+                    "events": 14,
+                    "deaths": 8,
+                    "injuries": 55
+                  },
+                  "2025": {
+                    "events": 3,
+                    "deaths": 2,
+                    "injuries": 1
+                  }
+                }
+              }
             }
           }
         }
@@ -8695,6 +11213,10 @@
             "deaths": 0,
             "injuries": 3
           }
+        },
+        "placed": {
+          "counties": 0,
+          "zones": 9
         },
         "significances": {
           "Y": {
@@ -8755,9 +11277,79 @@
                 "injuries": 0
               }
             },
-            "areas": {
-              "counties": 0,
-              "zones": 3269
+            "byArea": {
+              "counties": {
+                "areas": {
+                  "2021": 0,
+                  "2022": 0,
+                  "2023": 0,
+                  "2024": 0,
+                  "2025": 0
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              },
+              "zones": {
+                "areas": {
+                  "2021": 904,
+                  "2022": 610,
+                  "2023": 485,
+                  "2024": 450,
+                  "2025": 799
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 1,
+                    "deaths": 0,
+                    "injuries": 2
+                  }
+                }
+              }
             }
           }
         }
@@ -8793,6 +11385,10 @@
             "deaths": 0,
             "injuries": 0
           }
+        },
+        "placed": {
+          "counties": 0,
+          "zones": 3
         },
         "significances": {
           "W": {
@@ -8873,9 +11469,79 @@
                 "injuries": 1
               }
             },
-            "areas": {
-              "counties": 0,
-              "zones": 40078
+            "byArea": {
+              "counties": {
+                "areas": {
+                  "2021": 0,
+                  "2022": 0,
+                  "2023": 0,
+                  "2024": 0,
+                  "2025": 0
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              },
+              "zones": {
+                "areas": {
+                  "2021": 7874,
+                  "2022": 8964,
+                  "2023": 10130,
+                  "2024": 6013,
+                  "2025": 7095
+                },
+                "harm": {
+                  "2021": {
+                    "events": 1,
+                    "deaths": 1,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 1,
+                    "deaths": 0,
+                    "injuries": 5
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              }
             }
           },
           "A": {
@@ -8936,9 +11602,79 @@
                 "injuries": 1
               }
             },
-            "areas": {
-              "counties": 0,
-              "zones": 22047
+            "byArea": {
+              "counties": {
+                "areas": {
+                  "2021": 0,
+                  "2022": 0,
+                  "2023": 0,
+                  "2024": 0,
+                  "2025": 0
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              },
+              "zones": {
+                "areas": {
+                  "2021": 3940,
+                  "2022": 4520,
+                  "2023": 6207,
+                  "2024": 2690,
+                  "2025": 4690
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              }
             }
           }
         }
@@ -8974,6 +11710,10 @@
             "deaths": 0,
             "injuries": 0
           }
+        },
+        "placed": {
+          "counties": 0,
+          "zones": 3
         },
         "significances": {
           "W": {
@@ -9049,9 +11789,79 @@
                 "injuries": 17
               }
             },
-            "areas": {
-              "counties": 0,
-              "zones": 3873
+            "byArea": {
+              "counties": {
+                "areas": {
+                  "2021": 0,
+                  "2022": 0,
+                  "2023": 0,
+                  "2024": 0,
+                  "2025": 0
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              },
+              "zones": {
+                "areas": {
+                  "2021": 1037,
+                  "2022": 1424,
+                  "2023": 114,
+                  "2024": 1298,
+                  "2025": 0
+                },
+                "harm": {
+                  "2021": {
+                    "events": 1,
+                    "deaths": 1,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              }
             }
           },
           "A": {
@@ -9107,9 +11917,79 @@
                 "injuries": 0
               }
             },
-            "areas": {
-              "counties": 0,
-              "zones": 1493
+            "byArea": {
+              "counties": {
+                "areas": {
+                  "2021": 0,
+                  "2022": 0,
+                  "2023": 0,
+                  "2024": 0,
+                  "2025": 0
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              },
+              "zones": {
+                "areas": {
+                  "2021": 167,
+                  "2022": 837,
+                  "2023": 34,
+                  "2024": 455,
+                  "2025": 0
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              }
             }
           }
         }
@@ -9143,6 +12023,10 @@
             "deaths": 0,
             "injuries": 0
           }
+        },
+        "placed": {
+          "counties": 0,
+          "zones": 0
         },
         "significances": {
           "Y": {
@@ -9203,9 +12087,79 @@
                 "injuries": 19
               }
             },
-            "areas": {
-              "counties": 0,
-              "zones": 35614
+            "byArea": {
+              "counties": {
+                "areas": {
+                  "2021": 0,
+                  "2022": 0,
+                  "2023": 0,
+                  "2024": 0,
+                  "2025": 0
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              },
+              "zones": {
+                "areas": {
+                  "2021": 7340,
+                  "2022": 7205,
+                  "2023": 6679,
+                  "2024": 7693,
+                  "2025": 6696
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              }
             }
           }
         }
@@ -9241,6 +12195,10 @@
             "deaths": 163,
             "injuries": 51
           }
+        },
+        "placed": {
+          "counties": 0,
+          "zones": 635
         },
         "significances": {
           "Y": {
@@ -9321,9 +12279,79 @@
                 "injuries": 29
               }
             },
-            "areas": {
-              "counties": 0,
-              "zones": 107776
+            "byArea": {
+              "counties": {
+                "areas": {
+                  "2021": 0,
+                  "2022": 0,
+                  "2023": 0,
+                  "2024": 0,
+                  "2025": 0
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              },
+              "zones": {
+                "areas": {
+                  "2021": 12736,
+                  "2022": 21443,
+                  "2023": 26567,
+                  "2024": 26711,
+                  "2025": 19109
+                },
+                "harm": {
+                  "2021": {
+                    "events": 1,
+                    "deaths": 1,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 11,
+                    "deaths": 6,
+                    "injuries": 56
+                  },
+                  "2023": {
+                    "events": 13,
+                    "deaths": 12,
+                    "injuries": 208
+                  },
+                  "2024": {
+                    "events": 14,
+                    "deaths": 12,
+                    "injuries": 116
+                  },
+                  "2025": {
+                    "events": 7,
+                    "deaths": 3,
+                    "injuries": 18
+                  }
+                }
+              }
             }
           }
         }
@@ -9360,6 +12388,10 @@
             "deaths": 90,
             "injuries": 326
           }
+        },
+        "placed": {
+          "counties": 0,
+          "zones": 356
         },
         "significances": {
           "W": {
@@ -9436,9 +12468,79 @@
                 "injuries": 34
               }
             },
-            "areas": {
-              "counties": 0,
-              "zones": 25658
+            "byArea": {
+              "counties": {
+                "areas": {
+                  "2021": 0,
+                  "2022": 0,
+                  "2023": 0,
+                  "2024": 0,
+                  "2025": 0
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              },
+              "zones": {
+                "areas": {
+                  "2021": 1828,
+                  "2022": 3102,
+                  "2023": 11787,
+                  "2024": 5601,
+                  "2025": 3171
+                },
+                "harm": {
+                  "2021": {
+                    "events": 51,
+                    "deaths": 289,
+                    "injuries": 67
+                  },
+                  "2022": {
+                    "events": 48,
+                    "deaths": 177,
+                    "injuries": 101
+                  },
+                  "2023": {
+                    "events": 112,
+                    "deaths": 645,
+                    "injuries": 1628
+                  },
+                  "2024": {
+                    "events": 48,
+                    "deaths": 210,
+                    "injuries": 100
+                  },
+                  "2025": {
+                    "events": 37,
+                    "deaths": 81,
+                    "injuries": 284
+                  }
+                }
+              }
             }
           },
           "A": {
@@ -9500,9 +12602,79 @@
                 "injuries": 0
               }
             },
-            "areas": {
-              "counties": 0,
-              "zones": 11686
+            "byArea": {
+              "counties": {
+                "areas": {
+                  "2021": 0,
+                  "2022": 0,
+                  "2023": 0,
+                  "2024": 0,
+                  "2025": 0
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              },
+              "zones": {
+                "areas": {
+                  "2021": 1377,
+                  "2022": 1170,
+                  "2023": 4393,
+                  "2024": 2253,
+                  "2025": 2491
+                },
+                "harm": {
+                  "2021": {
+                    "events": 1,
+                    "deaths": 3,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 1,
+                    "deaths": 0,
+                    "injuries": 20
+                  },
+                  "2023": {
+                    "events": 5,
+                    "deaths": 7,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              }
             }
           }
         }
@@ -9538,6 +12710,10 @@
             "deaths": 39,
             "injuries": 49
           }
+        },
+        "placed": {
+          "counties": 0,
+          "zones": 349
         },
         "significances": {
           "S": {
@@ -9623,9 +12799,79 @@
                 "injuries": 1
               }
             },
-            "areas": {
-              "counties": 0,
-              "zones": 11839
+            "byArea": {
+              "counties": {
+                "areas": {
+                  "2021": 0,
+                  "2022": 0,
+                  "2023": 0,
+                  "2024": 0,
+                  "2025": 0
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              },
+              "zones": {
+                "areas": {
+                  "2021": 2334,
+                  "2022": 2467,
+                  "2023": 2400,
+                  "2024": 2494,
+                  "2025": 2024
+                },
+                "harm": {
+                  "2021": {
+                    "events": 40,
+                    "deaths": 46,
+                    "injuries": 19
+                  },
+                  "2022": {
+                    "events": 28,
+                    "deaths": 26,
+                    "injuries": 23
+                  },
+                  "2023": {
+                    "events": 42,
+                    "deaths": 46,
+                    "injuries": 39
+                  },
+                  "2024": {
+                    "events": 34,
+                    "deaths": 37,
+                    "injuries": 18
+                  },
+                  "2025": {
+                    "events": 15,
+                    "deaths": 13,
+                    "injuries": 13
+                  }
+                }
+              }
             }
           }
         }
@@ -9661,6 +12907,10 @@
             "deaths": 17,
             "injuries": 13
           }
+        },
+        "placed": {
+          "counties": 0,
+          "zones": 61
         },
         "significances": {
           "W": {
@@ -9726,9 +12976,79 @@
                 "injuries": 3
               }
             },
-            "areas": {
-              "counties": 0,
-              "zones": 997
+            "byArea": {
+              "counties": {
+                "areas": {
+                  "2021": 0,
+                  "2022": 0,
+                  "2023": 0,
+                  "2024": 0,
+                  "2025": 0
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              },
+              "zones": {
+                "areas": {
+                  "2021": 145,
+                  "2022": 185,
+                  "2023": 282,
+                  "2024": 235,
+                  "2025": 148
+                },
+                "harm": {
+                  "2021": {
+                    "events": 2,
+                    "deaths": 2,
+                    "injuries": 1
+                  },
+                  "2022": {
+                    "events": 2,
+                    "deaths": 0,
+                    "injuries": 3
+                  },
+                  "2023": {
+                    "events": 2,
+                    "deaths": 0,
+                    "injuries": 7
+                  },
+                  "2024": {
+                    "events": 6,
+                    "deaths": 4,
+                    "injuries": 6
+                  },
+                  "2025": {
+                    "events": 1,
+                    "deaths": 1,
+                    "injuries": 0
+                  }
+                }
+              }
             }
           },
           "Y": {
@@ -9809,9 +13129,79 @@
                 "injuries": 2
               }
             },
-            "areas": {
-              "counties": 0,
-              "zones": 7588
+            "byArea": {
+              "counties": {
+                "areas": {
+                  "2021": 0,
+                  "2022": 0,
+                  "2023": 0,
+                  "2024": 0,
+                  "2025": 0
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              },
+              "zones": {
+                "areas": {
+                  "2021": 1096,
+                  "2022": 1507,
+                  "2023": 1603,
+                  "2024": 1782,
+                  "2025": 1475
+                },
+                "harm": {
+                  "2021": {
+                    "events": 4,
+                    "deaths": 5,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 5,
+                    "deaths": 0,
+                    "injuries": 12
+                  },
+                  "2023": {
+                    "events": 4,
+                    "deaths": 2,
+                    "injuries": 14
+                  },
+                  "2024": {
+                    "events": 3,
+                    "deaths": 3,
+                    "injuries": 2
+                  },
+                  "2025": {
+                    "events": 5,
+                    "deaths": 4,
+                    "injuries": 1
+                  }
+                }
+              }
             }
           }
         }
@@ -9847,6 +13237,10 @@
             "deaths": 0,
             "injuries": 0
           }
+        },
+        "placed": {
+          "counties": 0,
+          "zones": 3
         },
         "significances": {
           "W": {
@@ -9912,9 +13306,79 @@
                 "injuries": 2
               }
             },
-            "areas": {
-              "counties": 0,
-              "zones": 323
+            "byArea": {
+              "counties": {
+                "areas": {
+                  "2021": 0,
+                  "2022": 0,
+                  "2023": 0,
+                  "2024": 0,
+                  "2025": 0
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              },
+              "zones": {
+                "areas": {
+                  "2021": 88,
+                  "2022": 63,
+                  "2023": 53,
+                  "2024": 115,
+                  "2025": 4
+                },
+                "harm": {
+                  "2021": {
+                    "events": 1,
+                    "deaths": 1,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 1,
+                    "deaths": 8,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              }
             }
           },
           "A": {
@@ -9970,9 +13434,79 @@
                 "injuries": 0
               }
             },
-            "areas": {
-              "counties": 0,
-              "zones": 402
+            "byArea": {
+              "counties": {
+                "areas": {
+                  "2021": 0,
+                  "2022": 0,
+                  "2023": 0,
+                  "2024": 0,
+                  "2025": 0
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              },
+              "zones": {
+                "areas": {
+                  "2021": 100,
+                  "2022": 89,
+                  "2023": 71,
+                  "2024": 138,
+                  "2025": 4
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              }
             }
           }
         }
@@ -10009,6 +13543,10 @@
             "deaths": 41,
             "injuries": 148
           }
+        },
+        "placed": {
+          "counties": 545,
+          "zones": 0
         },
         "significances": {
           "W": {
@@ -10099,9 +13637,79 @@
                 "injuries": 1449
               }
             },
-            "areas": {
-              "counties": 287228,
-              "zones": 95
+            "byArea": {
+              "counties": {
+                "areas": {
+                  "2021": 43931,
+                  "2022": 50172,
+                  "2023": 66836,
+                  "2024": 58932,
+                  "2025": 67357
+                },
+                "harm": {
+                  "2021": {
+                    "events": 61,
+                    "deaths": 17,
+                    "injuries": 75
+                  },
+                  "2022": {
+                    "events": 68,
+                    "deaths": 31,
+                    "injuries": 68
+                  },
+                  "2023": {
+                    "events": 101,
+                    "deaths": 33,
+                    "injuries": 247
+                  },
+                  "2024": {
+                    "events": 100,
+                    "deaths": 47,
+                    "injuries": 138
+                  },
+                  "2025": {
+                    "events": 94,
+                    "deaths": 28,
+                    "injuries": 125
+                  }
+                }
+              },
+              "zones": {
+                "areas": {
+                  "2021": 2,
+                  "2022": 0,
+                  "2023": 38,
+                  "2024": 31,
+                  "2025": 24
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              }
             }
           },
           "A": {
@@ -10187,9 +13795,79 @@
                 "injuries": 166
               }
             },
-            "areas": {
-              "counties": 93318,
-              "zones": 4650
+            "byArea": {
+              "counties": {
+                "areas": {
+                  "2021": 15540,
+                  "2022": 16009,
+                  "2023": 23319,
+                  "2024": 19233,
+                  "2025": 19154
+                },
+                "harm": {
+                  "2021": {
+                    "events": 27,
+                    "deaths": 7,
+                    "injuries": 31
+                  },
+                  "2022": {
+                    "events": 35,
+                    "deaths": 18,
+                    "injuries": 43
+                  },
+                  "2023": {
+                    "events": 67,
+                    "deaths": 23,
+                    "injuries": 185
+                  },
+                  "2024": {
+                    "events": 51,
+                    "deaths": 20,
+                    "injuries": 83
+                  },
+                  "2025": {
+                    "events": 48,
+                    "deaths": 18,
+                    "injuries": 64
+                  }
+                }
+              },
+              "zones": {
+                "areas": {
+                  "2021": 968,
+                  "2022": 830,
+                  "2023": 1131,
+                  "2024": 920,
+                  "2025": 801
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              }
             }
           }
         }
@@ -10225,6 +13903,10 @@
             "deaths": 64,
             "injuries": 257
           }
+        },
+        "placed": {
+          "counties": 452,
+          "zones": 0
         },
         "significances": {
           "W": {
@@ -10305,9 +13987,79 @@
                 "injuries": 2939
               }
             },
-            "areas": {
-              "counties": 30094,
-              "zones": 0
+            "byArea": {
+              "counties": {
+                "areas": {
+                  "2021": 5091,
+                  "2022": 4871,
+                  "2023": 5259,
+                  "2024": 7753,
+                  "2025": 7117
+                },
+                "harm": {
+                  "2021": {
+                    "events": 69,
+                    "deaths": 106,
+                    "injuries": 862
+                  },
+                  "2022": {
+                    "events": 60,
+                    "deaths": 24,
+                    "injuries": 291
+                  },
+                  "2023": {
+                    "events": 81,
+                    "deaths": 91,
+                    "injuries": 919
+                  },
+                  "2024": {
+                    "events": 96,
+                    "deaths": 50,
+                    "injuries": 626
+                  },
+                  "2025": {
+                    "events": 79,
+                    "deaths": 64,
+                    "injuries": 241
+                  }
+                }
+              },
+              "zones": {
+                "areas": {
+                  "2021": 0,
+                  "2022": 0,
+                  "2023": 0,
+                  "2024": 0,
+                  "2025": 0
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              }
             }
           },
           "A": {
@@ -10398,9 +14150,79 @@
                 "injuries": 2691
               }
             },
-            "areas": {
-              "counties": 47477,
-              "zones": 2434
+            "byArea": {
+              "counties": {
+                "areas": {
+                  "2021": 7350,
+                  "2022": 8240,
+                  "2023": 8950,
+                  "2024": 12391,
+                  "2025": 10524
+                },
+                "harm": {
+                  "2021": {
+                    "events": 64,
+                    "deaths": 104,
+                    "injuries": 818
+                  },
+                  "2022": {
+                    "events": 58,
+                    "deaths": 22,
+                    "injuries": 233
+                  },
+                  "2023": {
+                    "events": 75,
+                    "deaths": 88,
+                    "injuries": 872
+                  },
+                  "2024": {
+                    "events": 83,
+                    "deaths": 47,
+                    "injuries": 569
+                  },
+                  "2025": {
+                    "events": 68,
+                    "deaths": 56,
+                    "injuries": 199
+                  }
+                }
+              },
+              "zones": {
+                "areas": {
+                  "2021": 467,
+                  "2022": 554,
+                  "2023": 355,
+                  "2024": 804,
+                  "2025": 254
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              }
             }
           }
         }
@@ -10438,6 +14260,10 @@
             "deaths": 0,
             "injuries": 0
           }
+        },
+        "placed": {
+          "counties": 0,
+          "zones": 32
         },
         "significances": {
           "W": {
@@ -10503,9 +14329,79 @@
                 "injuries": 6
               }
             },
-            "areas": {
-              "counties": 0,
-              "zones": 595
+            "byArea": {
+              "counties": {
+                "areas": {
+                  "2021": 0,
+                  "2022": 0,
+                  "2023": 0,
+                  "2024": 0,
+                  "2025": 0
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              },
+              "zones": {
+                "areas": {
+                  "2021": 102,
+                  "2022": 123,
+                  "2023": 86,
+                  "2024": 279,
+                  "2025": 0
+                },
+                "harm": {
+                  "2021": {
+                    "events": 9,
+                    "deaths": 28,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 9,
+                    "deaths": 93,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 2,
+                    "deaths": 1,
+                    "injuries": 8
+                  },
+                  "2024": {
+                    "events": 9,
+                    "deaths": 15,
+                    "injuries": 81
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              }
             }
           },
           "A": {
@@ -10561,9 +14457,79 @@
                 "injuries": 1
               }
             },
-            "areas": {
-              "counties": 0,
-              "zones": 640
+            "byArea": {
+              "counties": {
+                "areas": {
+                  "2021": 0,
+                  "2022": 0,
+                  "2023": 0,
+                  "2024": 0,
+                  "2025": 0
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              },
+              "zones": {
+                "areas": {
+                  "2021": 141,
+                  "2022": 131,
+                  "2023": 105,
+                  "2024": 257,
+                  "2025": 0
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              }
             }
           },
           "S": {
@@ -10613,9 +14579,79 @@
               }
             },
             "byType": {},
-            "areas": {
-              "counties": 0,
-              "zones": 17
+            "byArea": {
+              "counties": {
+                "areas": {
+                  "2021": 0,
+                  "2022": 0,
+                  "2023": 0,
+                  "2024": 0,
+                  "2025": 0
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              },
+              "zones": {
+                "areas": {
+                  "2021": 2,
+                  "2022": 0,
+                  "2023": 4,
+                  "2024": 8,
+                  "2025": 3
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              }
             }
           }
         }
@@ -10652,6 +14688,10 @@
             "deaths": 0,
             "injuries": 0
           }
+        },
+        "placed": {
+          "counties": 0,
+          "zones": 62
         },
         "significances": {
           "W": {
@@ -10732,9 +14772,79 @@
                 "injuries": 15
               }
             },
-            "areas": {
-              "counties": 0,
-              "zones": 3411
+            "byArea": {
+              "counties": {
+                "areas": {
+                  "2021": 0,
+                  "2022": 0,
+                  "2023": 0,
+                  "2024": 0,
+                  "2025": 0
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              },
+              "zones": {
+                "areas": {
+                  "2021": 820,
+                  "2022": 621,
+                  "2023": 543,
+                  "2024": 1123,
+                  "2025": 59
+                },
+                "harm": {
+                  "2021": {
+                    "events": 1,
+                    "deaths": 9,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 11,
+                    "deaths": 34,
+                    "injuries": 2
+                  },
+                  "2023": {
+                    "events": 6,
+                    "deaths": 3,
+                    "injuries": 3
+                  },
+                  "2024": {
+                    "events": 37,
+                    "deaths": 78,
+                    "injuries": 10
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              }
             }
           },
           "A": {
@@ -10790,9 +14900,79 @@
                 "injuries": 0
               }
             },
-            "areas": {
-              "counties": 0,
-              "zones": 2219
+            "byArea": {
+              "counties": {
+                "areas": {
+                  "2021": 0,
+                  "2022": 0,
+                  "2023": 0,
+                  "2024": 0,
+                  "2025": 0
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              },
+              "zones": {
+                "areas": {
+                  "2021": 580,
+                  "2022": 422,
+                  "2023": 306,
+                  "2024": 848,
+                  "2025": 62
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              }
             }
           }
         }
@@ -10829,6 +15009,10 @@
             "deaths": 0,
             "injuries": 0
           }
+        },
+        "placed": {
+          "counties": 0,
+          "zones": 1
         },
         "significances": {
           "W": {
@@ -10878,9 +15062,79 @@
               }
             },
             "byType": {},
-            "areas": {
-              "counties": 0,
-              "zones": 10
+            "byArea": {
+              "counties": {
+                "areas": {
+                  "2021": 0,
+                  "2022": 0,
+                  "2023": 0,
+                  "2024": 0,
+                  "2025": 0
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              },
+              "zones": {
+                "areas": {
+                  "2021": 0,
+                  "2022": 0,
+                  "2023": 10,
+                  "2024": 0,
+                  "2025": 0
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              }
             }
           },
           "A": {
@@ -10930,9 +15184,79 @@
               }
             },
             "byType": {},
-            "areas": {
-              "counties": 0,
-              "zones": 17
+            "byArea": {
+              "counties": {
+                "areas": {
+                  "2021": 0,
+                  "2022": 0,
+                  "2023": 0,
+                  "2024": 0,
+                  "2025": 0
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              },
+              "zones": {
+                "areas": {
+                  "2021": 0,
+                  "2022": 1,
+                  "2023": 16,
+                  "2024": 0,
+                  "2025": 0
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              }
             }
           }
         }
@@ -10968,6 +15292,10 @@
             "deaths": 11,
             "injuries": 10
           }
+        },
+        "placed": {
+          "counties": 0,
+          "zones": 123
         },
         "significances": {
           "Y": {
@@ -11108,9 +15436,79 @@
                 "injuries": 10
               }
             },
-            "areas": {
-              "counties": 0,
-              "zones": 125260
+            "byArea": {
+              "counties": {
+                "areas": {
+                  "2021": 0,
+                  "2022": 0,
+                  "2023": 0,
+                  "2024": 0,
+                  "2025": 0
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              },
+              "zones": {
+                "areas": {
+                  "2021": 19398,
+                  "2022": 29116,
+                  "2023": 23322,
+                  "2024": 25688,
+                  "2025": 26170
+                },
+                "harm": {
+                  "2021": {
+                    "events": 9,
+                    "deaths": 3,
+                    "injuries": 11
+                  },
+                  "2022": {
+                    "events": 7,
+                    "deaths": 5,
+                    "injuries": 5
+                  },
+                  "2023": {
+                    "events": 20,
+                    "deaths": 16,
+                    "injuries": 16
+                  },
+                  "2024": {
+                    "events": 20,
+                    "deaths": 7,
+                    "injuries": 20
+                  },
+                  "2025": {
+                    "events": 10,
+                    "deaths": 6,
+                    "injuries": 6
+                  }
+                }
+              }
             }
           }
         }
@@ -11146,6 +15544,10 @@
             "deaths": 11,
             "injuries": 10
           }
+        },
+        "placed": {
+          "counties": 0,
+          "zones": 123
         },
         "significances": {
           "W": {
@@ -11195,9 +15597,79 @@
               }
             },
             "byType": {},
-            "areas": {
-              "counties": 80,
-              "zones": 0
+            "byArea": {
+              "counties": {
+                "areas": {
+                  "2021": 26,
+                  "2022": 20,
+                  "2023": 12,
+                  "2024": 22,
+                  "2025": 0
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              },
+              "zones": {
+                "areas": {
+                  "2021": 0,
+                  "2022": 0,
+                  "2023": 0,
+                  "2024": 0,
+                  "2025": 0
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              }
             }
           }
         }
@@ -11233,6 +15705,10 @@
             "deaths": 7,
             "injuries": 9
           }
+        },
+        "placed": {
+          "counties": 0,
+          "zones": 104
         },
         "significances": {
           "W": {
@@ -11338,9 +15814,79 @@
                 "injuries": 2
               }
             },
-            "areas": {
-              "counties": 0,
-              "zones": 24914
+            "byArea": {
+              "counties": {
+                "areas": {
+                  "2021": 0,
+                  "2022": 0,
+                  "2023": 0,
+                  "2024": 0,
+                  "2025": 0
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              },
+              "zones": {
+                "areas": {
+                  "2021": 4803,
+                  "2022": 5624,
+                  "2023": 4341,
+                  "2024": 4212,
+                  "2025": 5868
+                },
+                "harm": {
+                  "2021": {
+                    "events": 21,
+                    "deaths": 7,
+                    "injuries": 23
+                  },
+                  "2022": {
+                    "events": 8,
+                    "deaths": 7,
+                    "injuries": 5
+                  },
+                  "2023": {
+                    "events": 15,
+                    "deaths": 10,
+                    "injuries": 16
+                  },
+                  "2024": {
+                    "events": 16,
+                    "deaths": 8,
+                    "injuries": 12
+                  },
+                  "2025": {
+                    "events": 4,
+                    "deaths": 3,
+                    "injuries": 3
+                  }
+                }
+              }
             }
           },
           "A": {
@@ -11396,9 +15942,79 @@
                 "injuries": 43
               }
             },
-            "areas": {
-              "counties": 0,
-              "zones": 17069
+            "byArea": {
+              "counties": {
+                "areas": {
+                  "2021": 0,
+                  "2022": 0,
+                  "2023": 0,
+                  "2024": 0,
+                  "2025": 0
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              },
+              "zones": {
+                "areas": {
+                  "2021": 3462,
+                  "2022": 3421,
+                  "2023": 2924,
+                  "2024": 3005,
+                  "2025": 4249
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              }
             }
           }
         }
@@ -11434,6 +16050,10 @@
             "deaths": 11,
             "injuries": 10
           }
+        },
+        "placed": {
+          "counties": 0,
+          "zones": 123
         },
         "significances": {
           "Y": {
@@ -11494,9 +16114,79 @@
                 "injuries": 0
               }
             },
-            "areas": {
-              "counties": 0,
-              "zones": 7126
+            "byArea": {
+              "counties": {
+                "areas": {
+                  "2021": 0,
+                  "2022": 0,
+                  "2023": 0,
+                  "2024": 0,
+                  "2025": 0
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              },
+              "zones": {
+                "areas": {
+                  "2021": 2456,
+                  "2022": 1296,
+                  "2023": 1039,
+                  "2024": 992,
+                  "2025": 1331
+                },
+                "harm": {
+                  "2021": {
+                    "events": 1,
+                    "deaths": 1,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 1,
+                    "deaths": 1,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              }
             }
           }
         }
@@ -11532,6 +16222,10 @@
             "deaths": 2,
             "injuries": 13
           }
+        },
+        "placed": {
+          "counties": 0,
+          "zones": 29
         },
         "significances": {
           "W": {
@@ -11607,9 +16301,79 @@
                 "injuries": 4
               }
             },
-            "areas": {
-              "counties": 0,
-              "zones": 3741
+            "byArea": {
+              "counties": {
+                "areas": {
+                  "2021": 0,
+                  "2022": 0,
+                  "2023": 0,
+                  "2024": 0,
+                  "2025": 0
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              },
+              "zones": {
+                "areas": {
+                  "2021": 412,
+                  "2022": 1074,
+                  "2023": 730,
+                  "2024": 613,
+                  "2025": 906
+                },
+                "harm": {
+                  "2021": {
+                    "events": 3,
+                    "deaths": 3,
+                    "injuries": 3
+                  },
+                  "2022": {
+                    "events": 10,
+                    "deaths": 52,
+                    "injuries": 1
+                  },
+                  "2023": {
+                    "events": 2,
+                    "deaths": 0,
+                    "injuries": 5
+                  },
+                  "2024": {
+                    "events": 3,
+                    "deaths": 1,
+                    "injuries": 2
+                  },
+                  "2025": {
+                    "events": 3,
+                    "deaths": 2,
+                    "injuries": 6
+                  }
+                }
+              }
             }
           }
         }
@@ -11645,6 +16409,10 @@
             "deaths": 1,
             "injuries": 0
           }
+        },
+        "placed": {
+          "counties": 0,
+          "zones": 18
         },
         "significances": {
           "W": {
@@ -11705,9 +16473,79 @@
                 "injuries": 1
               }
             },
-            "areas": {
-              "counties": 0,
-              "zones": 1410
+            "byArea": {
+              "counties": {
+                "areas": {
+                  "2021": 0,
+                  "2022": 0,
+                  "2023": 0,
+                  "2024": 0,
+                  "2025": 0
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              },
+              "zones": {
+                "areas": {
+                  "2021": 371,
+                  "2022": 364,
+                  "2023": 365,
+                  "2024": 92,
+                  "2025": 217
+                },
+                "harm": {
+                  "2021": {
+                    "events": 2,
+                    "deaths": 2,
+                    "injuries": 1
+                  },
+                  "2022": {
+                    "events": 1,
+                    "deaths": 1,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 1,
+                    "deaths": 1,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 3,
+                    "deaths": 6,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 1,
+                    "deaths": 1,
+                    "injuries": 0
+                  }
+                }
+              }
             }
           }
         }
@@ -11743,6 +16581,10 @@
             "deaths": 0,
             "injuries": 5
           }
+        },
+        "placed": {
+          "counties": 0,
+          "zones": 6
         },
         "significances": {
           "W": {
@@ -11798,9 +16640,79 @@
                 "injuries": 4
               }
             },
-            "areas": {
-              "counties": 0,
-              "zones": 428
+            "byArea": {
+              "counties": {
+                "areas": {
+                  "2021": 0,
+                  "2022": 0,
+                  "2023": 0,
+                  "2024": 0,
+                  "2025": 0
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              },
+              "zones": {
+                "areas": {
+                  "2021": 50,
+                  "2022": 83,
+                  "2023": 36,
+                  "2024": 90,
+                  "2025": 156
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 2,
+                    "deaths": 3,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 1,
+                    "deaths": 0,
+                    "injuries": 1
+                  },
+                  "2025": {
+                    "events": 2,
+                    "deaths": 0,
+                    "injuries": 3
+                  }
+                }
+              }
             }
           }
         }
@@ -11834,6 +16746,10 @@
             "deaths": 0,
             "injuries": 0
           }
+        },
+        "placed": {
+          "counties": 0,
+          "zones": 0
         },
         "significances": {
           "W": {
@@ -11883,9 +16799,79 @@
               }
             },
             "byType": {},
-            "areas": {
-              "counties": 4858,
-              "zones": 0
+            "byArea": {
+              "counties": {
+                "areas": {
+                  "2021": 360,
+                  "2022": 1203,
+                  "2023": 517,
+                  "2024": 1395,
+                  "2025": 1383
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              },
+              "zones": {
+                "areas": {
+                  "2021": 0,
+                  "2022": 0,
+                  "2023": 0,
+                  "2024": 0,
+                  "2025": 0
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              }
             }
           }
         }
@@ -11922,6 +16908,10 @@
             "deaths": 34,
             "injuries": 26
           }
+        },
+        "placed": {
+          "counties": 0,
+          "zones": 180
         },
         "significances": {
           "W": {
@@ -12037,9 +17027,79 @@
                 "injuries": 84
               }
             },
-            "areas": {
-              "counties": 0,
-              "zones": 30389
+            "byArea": {
+              "counties": {
+                "areas": {
+                  "2021": 0,
+                  "2022": 0,
+                  "2023": 0,
+                  "2024": 0,
+                  "2025": 0
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              },
+              "zones": {
+                "areas": {
+                  "2021": 6180,
+                  "2022": 7106,
+                  "2023": 5325,
+                  "2024": 5088,
+                  "2025": 6547
+                },
+                "harm": {
+                  "2021": {
+                    "events": 27,
+                    "deaths": 22,
+                    "injuries": 34
+                  },
+                  "2022": {
+                    "events": 55,
+                    "deaths": 22,
+                    "injuries": 88
+                  },
+                  "2023": {
+                    "events": 23,
+                    "deaths": 7,
+                    "injuries": 113
+                  },
+                  "2024": {
+                    "events": 23,
+                    "deaths": 32,
+                    "injuries": 39
+                  },
+                  "2025": {
+                    "events": 27,
+                    "deaths": 28,
+                    "injuries": 20
+                  }
+                }
+              }
             }
           },
           "A": {
@@ -12105,9 +17165,79 @@
                 "injuries": 16
               }
             },
-            "areas": {
-              "counties": 0,
-              "zones": 30557
+            "byArea": {
+              "counties": {
+                "areas": {
+                  "2021": 0,
+                  "2022": 0,
+                  "2023": 0,
+                  "2024": 0,
+                  "2025": 0
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              },
+              "zones": {
+                "areas": {
+                  "2021": 6229,
+                  "2022": 7236,
+                  "2023": 5378,
+                  "2024": 4600,
+                  "2025": 7105
+                },
+                "harm": {
+                  "2021": {
+                    "events": 1,
+                    "deaths": 1,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 1,
+                    "deaths": 9,
+                    "injuries": 16
+                  },
+                  "2025": {
+                    "events": 1,
+                    "deaths": 3,
+                    "injuries": 0
+                  }
+                }
+              }
             }
           }
         }
@@ -12144,6 +17274,10 @@
             "deaths": 31,
             "injuries": 123
           }
+        },
+        "placed": {
+          "counties": 0,
+          "zones": 280
         },
         "significances": {
           "Y": {
@@ -12259,9 +17393,79 @@
                 "injuries": 382
               }
             },
-            "areas": {
-              "counties": 0,
-              "zones": 102480
+            "byArea": {
+              "counties": {
+                "areas": {
+                  "2021": 0,
+                  "2022": 0,
+                  "2023": 0,
+                  "2024": 0,
+                  "2025": 0
+                },
+                "harm": {
+                  "2021": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2022": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2023": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2024": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  },
+                  "2025": {
+                    "events": 0,
+                    "deaths": 0,
+                    "injuries": 0
+                  }
+                }
+              },
+              "zones": {
+                "areas": {
+                  "2021": 19815,
+                  "2022": 23923,
+                  "2023": 17500,
+                  "2024": 17099,
+                  "2025": 22416
+                },
+                "harm": {
+                  "2021": {
+                    "events": 20,
+                    "deaths": 22,
+                    "injuries": 125
+                  },
+                  "2022": {
+                    "events": 47,
+                    "deaths": 19,
+                    "injuries": 66
+                  },
+                  "2023": {
+                    "events": 45,
+                    "deaths": 17,
+                    "injuries": 72
+                  },
+                  "2024": {
+                    "events": 13,
+                    "deaths": 9,
+                    "injuries": 24
+                  },
+                  "2025": {
+                    "events": 38,
+                    "deaths": 16,
+                    "injuries": 95
+                  }
+                }
+              }
             }
           }
         }

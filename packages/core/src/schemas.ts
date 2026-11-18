@@ -64,6 +64,7 @@ import {
   type Instant,
   type Kind,
   type KindClass,
+  type AlertArea,
   type KindPrior,
   type Level,
   type MeasureDeclaration,
@@ -98,6 +99,7 @@ import {
   type Severity,
   type ShadowScore,
   type Significance,
+  type UnderPrior,
   type SourceDescriptor,
   type SourceHealth,
   type SourceId,
@@ -1054,6 +1056,14 @@ export const probabilitySchema: z.ZodType<Estimate, Estimate> = estimateIn(0, 1)
  */
 export const estimateSchema: z.ZodType<Estimate, Estimate> = estimateIn(0, Number.MAX_SAFE_INTEGER);
 
+/** This schema checks a kind of area of an alert. */
+export const alertAreaSchema: z.ZodType<AlertArea, AlertArea> = schemaOf<AlertArea>()(z.enum(["county", "zone"]));
+
+/** This schema checks the harm in one area under one active alert. */
+export const underPriorSchema: z.ZodType<UnderPrior, UnderPrior> = schemaOf<UnderPrior>()(
+  z.strictObject({ deaths: estimateSchema, injuries: estimateSchema, area: alertAreaSchema }).readonly(),
+);
+
 /** This schema checks the priors of one kind. */
 export const kindPriorSchema: z.ZodType<KindPrior, KindPrior> = schemaOf<KindPrior>()(
   z
@@ -1061,15 +1071,16 @@ export const kindPriorSchema: z.ZodType<KindPrior, KindPrior> = schemaOf<KindPri
       verified: probabilitySchema.exactOptional(),
       deaths: estimateSchema.exactOptional(),
       injuries: estimateSchema.exactOptional(),
+      under: z.partialRecord(significanceSchema, underPriorSchema).readonly().exactOptional(),
     })
     .readonly(),
 );
 
-/** This schema checks a file of priors, `alerts-priors/1`. */
+/** This schema checks a file of priors, `alerts-priors/2`. */
 export const scorePriorsSchema: z.ZodType<ScorePriors, ScorePriors> = schemaOf<ScorePriors>()(
   z
     .strictObject({
-      format: z.literal("alerts-priors/1"),
+      format: z.literal("alerts-priors/2"),
       kinds: z.record(kindCodeSchema, kindPriorSchema).readonly(),
       certainty: z
         .strictObject({
@@ -1084,30 +1095,49 @@ export const scorePriorsSchema: z.ZodType<ScorePriors, ScorePriors> = schemaOf<S
     .readonly(),
 );
 
+const priorKey = z.string().min(1, "A key of the priors is a non-empty string.");
+
 /** This schema checks one factor of a shadow score. */
 export const scoreFactorSchema: z.ZodType<ScoreFactor, ScoreFactor> = schemaOf<ScoreFactor>()(
   z
     .strictObject({
       estimate: estimateSchema,
-      from: z.strictObject({ table: z.enum(["kinds", "certainty"]), key: z.string().min(1, "A key of the priors is a non-empty string.") }).readonly(),
+      from: z.union([
+        z.strictObject({ table: z.enum(["kinds", "certainty"]), key: priorKey }).readonly(),
+        z.strictObject({ table: z.literal("under"), key: priorKey, significance: significanceSchema, area: alertAreaSchema }).readonly(),
+      ]),
     })
     .readonly(),
 );
+
+// A factor of the table `under`.
+const underFactorSchema = scoreFactorSchema.refine((factor) => factor.from.table === "under", "A factor of the basis alert comes from the table under.");
 
 /** This schema checks the expected harm of a shadow score. */
 export const expectedHarmSchema: z.ZodType<ExpectedHarm, ExpectedHarm> = schemaOf<ExpectedHarm>()(
   z.strictObject({ deaths: estimateSchema, injuries: estimateSchema }).readonly(),
 );
 
-/** This schema checks a shadow score. A score with no read names one or more factors that the priors do not give. */
+/**
+ * This schema checks a shadow score. A score with no read names one or more factors that the priors do not give. A score
+ * of the basis `alert` has its factors from the table `under`.
+ */
 export const shadowScoreSchema: z.ZodType<ShadowScore, ShadowScore> = schemaOf<ShadowScore>()(
   z
-    .discriminatedUnion("read", [
+    .union([
       z.strictObject({
         read: z.literal(true),
+        basis: z.literal("event").exactOptional(),
         probability: scoreFactorSchema,
         deaths: scoreFactorSchema,
         injuries: scoreFactorSchema,
+        expected: expectedHarmSchema,
+      }),
+      z.strictObject({
+        read: z.literal(true),
+        basis: z.literal("alert"),
+        deaths: underFactorSchema,
+        injuries: underFactorSchema,
         expected: expectedHarmSchema,
       }),
       z.strictObject({

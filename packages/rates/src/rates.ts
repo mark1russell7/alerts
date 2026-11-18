@@ -36,9 +36,10 @@ import { eachYear, type Years } from "./years.ts";
 
 /**
  * The format of the file. A change of its structure gives a new number. Format 2 adds the no reads and the unverified
- * phenomena. Format 3 adds the section `under`: the alerts of each kind and the harm under an active alert.
+ * phenomena. Format 3 adds the section `under`: the alerts of each kind and the harm under an active alert. Format 4
+ * gives the areas of the alerts and the harm in them, in counties and in zones, in each year (`UnderRate.byArea`).
  */
-export const RATES_FORMAT = "alerts-rates/3";
+export const RATES_FORMAT = "alerts-rates/4";
 
 /** The level of each interval. */
 export const LEVEL = 0.95;

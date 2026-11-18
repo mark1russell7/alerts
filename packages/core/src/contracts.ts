@@ -1257,30 +1257,58 @@ export interface KindPrior {
   readonly deaths?: Estimate;
   /** The injuries in one event of the kind. */
   readonly injuries?: Estimate;
+  /** The harm in one area under one active alert of the kind, for each significance with a measure. */
+  readonly under?: Readonly<Partial<Record<Significance, UnderPrior>>>;
+}
+
+/** The kinds of area of an alert: a county, or a forecast zone. */
+export type AlertArea = "county" | "zone";
+
+/**
+ * The harm in one area under one active alert of a kind and a significance. An area is one alert in one county or one
+ * zone. The measure counts each event under an active alert. Thus it holds the probability of the event.
+ */
+export interface UnderPrior {
+  /** The deaths in one area under one alert. */
+  readonly deaths: Estimate;
+  /** The injuries in one area under one alert. */
+  readonly injuries: Estimate;
+  /** The kind of area of the measure. The measure takes the kind of area that has most of the events of the kind. */
+  readonly area: AlertArea;
 }
 
 /**
  * The priors of the shadow score. Each factor comes from a public measure, not from a guess. The
- * format of the file is `alerts-priors/1`.
+ * format of the file is `alerts-priors/2`. Format 2 adds the harm under an active alert (`KindPrior.under`).
  */
 export interface ScorePriors {
-  readonly format: "alerts-priors/1";
+  readonly format: "alerts-priors/2";
   /** The priors of the kinds, by prefixes of the taxonomy codes. For each field, the longest prefix of a kind with that field decides. */
   readonly kinds: Readonly<Record<string, KindPrior>>;
   /** The probability of each CAP certainty value, from 0 to 1. */
   readonly certainty: Readonly<Partial<Record<Certainty, Estimate>>>;
 }
 
+/**
+ * The source of a factor of a shadow score in the priors.
+ *
+ * - The table `kinds` has a prefix of the kind as its key. The table `certainty` has a CAP certainty value.
+ * - The table `under` has a prefix of the kind, the significance and the kind of area of the measure.
+ */
+export type ScoreSource =
+  | { readonly table: "kinds" | "certainty"; readonly key: string }
+  | { readonly table: "under"; readonly key: string; readonly significance: Significance; readonly area: AlertArea };
+
 /** One factor of a shadow score, with the key of the priors that gave it. */
 export interface ScoreFactor {
   readonly estimate: Estimate;
-  /** The table of the priors and its key: a prefix of `kinds`, or a value of `certainty`. */
-  readonly from: { readonly table: "kinds" | "certainty"; readonly key: string };
+  /** The table of the priors and its key. */
+  readonly from: ScoreSource;
 }
 
 /**
- * The expected harm of an incident: the probability of the event times the deaths and the injuries of
- * one event. Each interval holds each product of a point of the two intervals.
+ * The expected harm of an incident in one area. The basis `event` gives the probability of the event times the
+ * deaths and the injuries of one event. Then each interval holds each product of a point of the two intervals.
  */
 export interface ExpectedHarm {
   readonly deaths: Estimate;
@@ -1291,13 +1319,21 @@ export interface ExpectedHarm {
 export type ScoreGap = "probability" | "deaths" | "injuries";
 
 /**
- * The shadow score of an incident: the probability of the event and the harm of one event. The score
- * does not decide a level at this time. The table decides, and the assessment shows the score next to it.
- * A score with a gap has no read, and it shows each factor that the priors do not give.
+ * The shadow score of an incident. The score does not decide a level at this time. The table decides, and the
+ * assessment shows the score next to it.
+ *
+ * - The basis `event` is the probability of the event times the harm of one event.
+ * - The basis `alert` is the harm in one area under one active alert of the kind and the significance.
+ * - A score with a gap has no read, and it shows each factor that the priors do not give.
  */
 export type ShadowScore =
   | {
       readonly read: true;
+      /**
+       * The basis of the score. A score of a log line from before the basis `alert` has no field `basis`. Its basis is
+       * `event`.
+       */
+      readonly basis?: "event";
       /** The probability that the event occurs. */
       readonly probability: ScoreFactor;
       /** The deaths in one event of the kind. */
@@ -1305,6 +1341,16 @@ export type ShadowScore =
       /** The injuries in one event of the kind. */
       readonly injuries: ScoreFactor;
       /** The probability times the deaths and the injuries of one event. */
+      readonly expected: ExpectedHarm;
+    }
+  | {
+      readonly read: true;
+      readonly basis: "alert";
+      /** The deaths in one area under one alert, from the table `under`. */
+      readonly deaths: ScoreFactor;
+      /** The injuries in one area under one alert, from the table `under`. */
+      readonly injuries: ScoreFactor;
+      /** The expected harm. It is the estimate of each factor, because the measure holds the probability of the event. */
       readonly expected: ExpectedHarm;
     }
   | { readonly read: false; readonly missing: readonly ScoreGap[] };

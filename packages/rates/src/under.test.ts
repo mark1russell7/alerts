@@ -171,6 +171,7 @@ describe("the section of the harm under an active alert", () => {
       nceiKind: "met.tornado",
       nceiTypes: ["Tornado"],
       ncei: { "2024": { events: 1, deaths: 2, injuries: 5 }, "2025": { events: 2, deaths: 5, injuries: 1 } },
+      placed: { counties: 2, zones: 0 },
       significances: {
         W: {
           alerts: { "2024": 2, "2025": 0 },
@@ -178,7 +179,10 @@ describe("the section of the harm under an active alert", () => {
           harm: { "2024": { events: 1, deaths: 2, injuries: 5 }, "2025": { events: 0, deaths: 0, injuries: 0 } },
           total: { alerts: 2, harm: { events: 1, deaths: 2, injuries: 5 } },
           byType: { "Thunderstorm Wind": { events: 1, deaths: 0, injuries: 1 }, Tornado: { events: 1, deaths: 2, injuries: 5 } },
-          areas: { counties: 2, zones: 0 },
+          byArea: {
+            counties: { areas: { "2024": 2, "2025": 0 }, harm: { "2024": { events: 1, deaths: 2, injuries: 5 }, "2025": { events: 0, deaths: 0, injuries: 0 } } },
+            zones: { areas: { "2024": 0, "2025": 0 }, harm: { "2024": { events: 0, deaths: 0, injuries: 0 }, "2025": { events: 0, deaths: 0, injuries: 0 } } },
+          },
         },
       },
     });
@@ -190,7 +194,9 @@ describe("the section of the harm under an active alert", () => {
     expect(heat?.alerts).toEqual({ "2024": 1, "2025": 1 });
     expect(heat?.phenomena).toEqual({ EH: 1, XH: 1 });
     expect(heat?.total).toEqual({ alerts: 2, harm: { events: 1, deaths: 3, injuries: 0 } });
-    expect(heat?.areas).toEqual({ counties: 0, zones: 2 });
+    expect(heat?.byArea.zones).toEqual({ areas: { "2024": 1, "2025": 1 }, harm: { "2024": { events: 1, deaths: 3, injuries: 0 }, "2025": { events: 0, deaths: 0, injuries: 0 } } });
+    expect(heat?.byArea.counties.areas).toEqual({ "2024": 0, "2025": 0 });
+    expect(section.kinds["met.heat.extreme"]?.placed).toEqual({ counties: 0, zones: 1 });
   });
 
   it("keeps the method, the windows, the checks and the events that the join cannot place", () => {
