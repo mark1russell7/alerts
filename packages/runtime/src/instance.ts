@@ -823,6 +823,7 @@ export function openInstance(options: InstanceOptions): Instance {
       expectations: configuredExpectations(INSTANCE_EXPECTATIONS, config.expectations),
       delay: DELAY_LIMITS,
       ...(config.link === undefined ? {} : { link: config.link }),
+      ...(config.channelDown === undefined ? {} : { channelDown: config.channelDown }),
     },
     run: options.run,
     copy: copy.id,

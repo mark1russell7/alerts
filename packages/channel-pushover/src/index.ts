@@ -1,14 +1,15 @@
 /**
  * The Pushover channel of the alert system. It gives the procedures of the channel contract of
- * `@mark1russell7/alerts`: `describe`, `send`, `status` and `cancel`. The calls of the Pushover API
+ * `@mark1russell7/alerts`: `describe`, `send`, `status`, `cancel` and `probe`. The calls of the Pushover API
  * come from `@procedures/notify/pushover`.
  */
 
-import { COPY_ID, LEVELS, WHY_LIMITS, type AddressField, type ChannelDescriptor, type ChannelId, type ChannelProcedures, type Instant, type SendOutcome } from "@mark1russell7/alerts";
+import { COPY_ID, LEVELS, WHY_LIMITS, type AddressField, type ChannelDescriptor, type ChannelId, type ChannelProcedures, type Instant, type ProbeOutcome, type SendOutcome } from "@mark1russell7/alerts";
 import { isQuotaError, type Quota, type QuotaError, type QuotaGate, type QuotaReading, type QuotaState } from "polite-crawler/api";
 import {
   callPushover,
   extractPushoverCancelled,
+  extractPushoverLimits,
   extractPushoverReceipt,
   extractPushoverSent,
   PUSHOVER_KEY,
@@ -16,6 +17,7 @@ import {
   PUSHOVER_RETRY_MIN_MS,
   pushoverCancelByTagRequest,
   pushoverCancelRequest,
+  pushoverLimitsRequest,
   pushoverReceiptRequest,
   type PushoverFailure,
   type PushoverFetch,
@@ -256,6 +258,22 @@ export function createPushoverChannel(options: PushoverChannelOptions): ChannelP
       const result = await call(request, extractPushoverCancelled);
       // A refusal tells that Pushover does not know the receipt: it is old, or it is not of this application. Nothing repeats under it.
       if (!result.ok && result.kind !== "refused") throw new Error(`Pushover did not stop the repeats (${result.kind}): ${result.errors.join(" ")}`);
+    },
+
+    // The read of the limits of the application sends nothing and costs nothing. A pass tells that Pushover takes the token (AL-65).
+    async probe(): Promise<ProbeOutcome> {
+      if (!isPushoverKey(options.token)) return { ok: false, kind: "auth", message: "The API token is not 30 letters and digits." };
+      const result = await call(pushoverLimitsRequest(options.token), extractPushoverLimits);
+      if (!result.ok) return { ok: false, kind: result.kind, message: result.errors.join(" ") };
+      // The read gives the count of the month, thus the gate gets it as a reading of an answer.
+      if (options.quota !== undefined) {
+        try {
+          options.quota.note({ remaining: result.limits.remaining, resetAt: result.limits.resetAt });
+        } catch {
+          // The count of the gate can be low until the next answer. The probe has its outcome.
+        }
+      }
+      return { ok: true, at: now() };
     },
   };
 }

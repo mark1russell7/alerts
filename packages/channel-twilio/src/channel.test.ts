@@ -280,3 +280,30 @@ describe("the cancel", () => {
     await expect(channel.cancel({ receipt: { call: SID } })).rejects.toThrow("Twilio did not end the call (server)");
   });
 });
+
+describe("the probe of the call channel", () => {
+  const balance: Answer = { status: 200, body: { balance: "12.5", currency: "USD", account_sid: ACCOUNT } };
+
+  it("reads the balance of the account, makes no call, and gives the time of the pass", async () => {
+    const fake = server(balance);
+    expect(await channelOf(fake).probe?.()).toEqual({ ok: true, at: AT });
+    expect(fake.calls).toMatchObject([{ method: "GET", url: `https://api.twilio.com/2010-04-01/Accounts/${ACCOUNT}/Balance.json` }]);
+  });
+
+  it("gives refused credentials, a server error and a network fault as failures", async () => {
+    const fake = server({ status: 401, body: { code: 20003, message: "Authenticate" } }, { status: 503, body: {} }, new TypeError("fetch failed"));
+    const channel = channelOf(fake);
+    const kinds = [];
+    for (let index = 0; index < 3; index += 1) {
+      const outcome = await channel.probe?.();
+      kinds.push(outcome?.ok === false ? outcome.kind : "ok");
+    }
+    expect(kinds).toEqual(["auth", "server", "network"]);
+  });
+
+  it("refuses an account SID of the wrong form with no request", async () => {
+    const fake = server();
+    expect(await channelOf(fake, { credentials: { accountSid: "AC1", secret: "fake-secret" } }).probe?.()).toMatchObject({ ok: false, kind: "auth" });
+    expect(fake.calls).toEqual([]);
+  });
+});
