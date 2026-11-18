@@ -1,4 +1,5 @@
 @import "@mark1russell7/visuals/labels.css";
+@import "@mark1russell7/visuals/scrubber.css";
 
 :root {
   --page: #fbfbfa;
@@ -1016,6 +1017,39 @@ main.local {
   font-size: 1.05rem;
 }
 
+/* The time scrubber of the local page. It is below the map, so a hand on it does not hide the map. */
+
+.time-box {
+  --scrubber-surface: var(--page);
+  --scrubber-focus: var(--link);
+  margin-top: 0.75rem;
+}
+
+/* The note of a past time. Its line has the color of the axis, because it tells the time of the scrubber. */
+.past {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  margin: 0.5rem 0 0;
+  padding: 0.5rem 0 0.5rem 0.75rem;
+  border-left: 0.2rem solid var(--ink);
+  font-size: 0.875rem;
+}
+
+.past[hidden] {
+  display: none;
+}
+
+.past span {
+  flex: 1 1 16rem;
+}
+
+.time-problem {
+  margin: 0.5rem 0 0;
+}
+
 .map .incident:focus-visible {
   outline: 3px solid var(--link);
 }
@@ -1068,6 +1102,164 @@ main.local {
 
 #incidents + #unshaped:not(:empty) {
   margin-top: 1rem;
+}
+
+/* The health of the sources on the local page: a link at the top, and a panel below the map */
+
+/* The sign of a tone. It has the color of its text, and a word tells the same fact beside it. */
+.sign {
+  flex: none;
+  width: 0.9em;
+  height: 0.9em;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.chip.toned {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+/* One sentence that sums the health. Its sign is on a disc of the color of its tone, and its text has the color of the page text. */
+.verdict {
+  --tone: var(--quiet);
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin: 0;
+  font-weight: 600;
+}
+
+.verdict[data-tone="good"] { --tone: var(--ok); }
+.verdict[data-tone="warn"] { --tone: var(--urgent); }
+.verdict[data-tone="bad"] { --tone: var(--ls); }
+
+.verdict .sign,
+.verdict.waiting::before {
+  flex: none;
+  width: 1.25rem;
+  height: 1.25rem;
+  margin-top: 0.125rem;
+  border-radius: 50%;
+  background: var(--tone);
+}
+
+.verdict .sign {
+  padding: 0.2rem;
+  color: var(--page);
+  stroke-width: 2.2;
+}
+
+/* Before the first read, a sentence has an empty disc in the place of its sign. Thus its text does not move when the sign comes. */
+.verdict.waiting::before {
+  content: "";
+  opacity: 0.4;
+}
+
+/* The link at the top keeps the height of its line before the health comes. */
+.brief {
+  min-height: 2rem;
+  margin: 0 0 0.75rem;
+}
+
+.brief a {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1.5rem;
+  margin-left: -0.375rem;
+  padding: 0.25rem 0.625rem 0.25rem 0.375rem;
+  border-radius: 0.5rem;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.brief .verdict > span {
+  text-decoration: underline;
+  text-decoration-color: var(--none);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
+}
+
+.brief a:hover {
+  background: var(--panel);
+}
+
+.brief a:focus-visible {
+  outline: 2px solid var(--link);
+  outline-offset: 2px;
+}
+
+.health-panel {
+  grid-column: 1 / -1;
+}
+
+.verdicts {
+  display: grid;
+  gap: 0.375rem;
+  margin: 0.5rem 0 0.75rem;
+  font-size: 1.05rem;
+}
+
+.health-past {
+  margin: 0.25rem 0 0.75rem;
+}
+
+.health-problem {
+  margin: 0 0 0.75rem;
+}
+
+#health-hint {
+  margin: 0.75rem 0 0;
+}
+
+.source-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* One source, or one fact of the delivery: its name, its state, its time and the sentences that tell more. */
+.source-row {
+  display: grid;
+  grid-template-columns: minmax(8rem, 13rem) minmax(7rem, 10rem) minmax(13rem, 16rem) minmax(0, 1fr);
+  gap: 0.125rem 1rem;
+  align-items: baseline;
+  padding: 0.5rem 0;
+  border-top: 1px solid var(--line);
+  font-size: 0.9rem;
+}
+
+.source-name {
+  font-size: 0.95rem;
+  overflow-wrap: anywhere;
+}
+
+.source-state {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.source-read,
+.source-more .covers {
+  color: var(--quiet);
+}
+
+.source-more:empty {
+  display: none;
+}
+
+.source-more p {
+  margin: 0;
+}
+
+.panel .delivery-h {
+  margin: 1rem 0 0.375rem;
+  font-size: 0.95rem;
 }
 
 @media (max-width: 60rem) {
@@ -1159,9 +1351,50 @@ main.local {
   }
 }
 
+@media (max-width: 44rem) {
+  /* A narrow page has two lines in the link at the top: one for each sentence. */
+  .brief {
+    min-height: 4rem;
+  }
+
+  /* The name and the state of a source are on one line. The other parts are below, each on the whole width. */
+  .source-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .source-state {
+    justify-content: flex-end;
+  }
+
+  .source-read,
+  .source-more {
+    grid-column: 1 / -1;
+  }
+}
+
 @media (prefers-reduced-motion: no-preference) {
   .map .incident,
   .rail .step {
     transition: opacity 0.2s, background-color 0.2s, border-color 0.2s;
   }
+}
+
+/* The pages of the alert texts: the privacy policy, the terms and the opt-in. */
+main.texts li {
+  margin: 0.25rem 0;
+}
+
+main.texts .standard {
+  margin: 0.75rem 0;
+  padding: 0.25rem 1rem;
+  border-left: 0.25rem solid var(--line);
+  background: var(--panel);
+}
+
+main.texts .record {
+  overflow: auto;
+  padding: 0.75rem 1rem;
+  border-radius: 0.375rem;
+  background: var(--panel);
+  white-space: pre;
 }

@@ -1,6 +1,6 @@
 # Contracts
 
-This file gives the three contracts of the alert system: the event, the source and the channel. The sources effort and the delivery effort start from them. The types are in [`packages/core/src/contracts.ts`](../packages/core/src/contracts.ts), in the package `@mark1russell7/alerts`.
+This file gives the contracts of the alert system: the event, the indicator, the source and the channel. The sources effort and the delivery effort start from them. The types are in [`packages/core/src/contracts.ts`](../packages/core/src/contracts.ts), in the package `@mark1russell7/alerts`.
 
 Status: draft, 2026-11-14. The core effort owns this file. To change a contract, write to the core effort first.
 
@@ -150,6 +150,84 @@ The rules of each adapter:
 
 The testkit gives one conformance suite, and each adapter passes it. The suite examines the laws of `map` on the fixtures and on mutated fixtures. It examines the outcomes of `fetch` behind a fault proxy: cut, delay, reset, 429, 500 and a changed body. It also examines the descriptor.
 
+## The indicator contract
+
+An indicator is a measure that is not an event, for example road traffic, rail delays or grid frequency. One indicator alone tells little. Many indicators that leave their normal level at one time in one area are a signal. This signal can come before an official alert. The types are in `contracts.ts`, and the checks are in `indicators.ts`.
+
+- `DIMENSIONS` is the closed list of the 36 dimensions. A dimension is one kind of measure, for example `rail` or `grid-frequency`. A new dimension is a change of the contract.
+- A source declares its measures in the field `measures` of its `SourceDescriptor`. A source with no measures gives only events.
+- A `Reading` is one value of one series of a measure at one time. A series is a station, a link or a zone of the source.
+
+### The declaration of a measure
+
+| Field | Rule |
+| --- | --- |
+| `id` | Small letters, digits and hyphens, with a letter first. It is unique in its source. |
+| `dimension` | One id of `DIMENSIONS`. |
+| `unit` | A unit in the grammar of `@mark1russell7/quantity`, for example `{vehicle}/h`, `km/h`, `Hz` or `m^3/s`. |
+| `area` | The kind of the area of each reading: `code`, `point`, `line`, `polygon`, `zone` or `world`. |
+| `moves` | The direction of a change that is a signal: `rise`, `drop` or `both`. A cancelled train is a rise, and a station that goes offline is a drop. |
+| `baseline` | The baseline that the source gives: `none`, `expected` or `flag`. |
+| `cadence`, `delay`, `backfill` | Optional times in milliseconds. An absent time is not known. A cadence and a backfill are more than 0. |
+
+The direction belongs to the measure, not to the dimension. For example, the delays of a rail line rise and its trips in service drop.
+
+The three baselines:
+
+- With `none`, the core computes the normal level of each series from its history.
+- With `expected`, each reading holds the expected value of the source, for example a load forecast or a timetable.
+- With `flag`, each reading tells if the source marks the value as an anomaly.
+
+### The areas of a reading
+
+- A `code` area is a region code, for example a country (`iso3166-1`), a subdivision (`iso3166-2`) or an NWS zone (`ugc`).
+- A `point` is a station, a gauge, a sensor or a vehicle. A `line` is a road link or a rail line, with two positions or more.
+- A `polygon` is a grid cell or a box that the caller chose.
+- A `zone` is a zone of the domain of the source, for example an electricity bidding zone. A table of the atlas gives the regions of each zone.
+- A `world` area has no place, for example a market series or a service of the world.
+
+### The rules of a reading
+
+1. **The schema checks the form.** `readingSchema` refuses a value that is not finite, an empty series id, a bad version and a line with one position.
+2. **The declaration checks the meaning.** `readingProblems` refuses a measure that the source does not declare, an area of another kind and the field of another baseline. It also refuses a value below 0 of a count, for example `{event}` or `{trip}/h`.
+3. **The time of a reading is the time of its value.** It is not the time of the fetch.
+   - A reading can give the cadence of its series, as the source states it. For example, each GBFS file states its ttl.
+   - This cadence replaces the cadence of the measure for the series. A general reader of many feeds needs it, because each feed has its own cadence.
+4. **A version keeps two methods apart.** A source changes the version of a series when its method changes, for example a new instrument. `seriesKey` holds the version, so a baseline does not cross a change of method.
+5. **A missing value is not a normal value.** A source with no backfill starts with an empty history. A series with no recent reading has no read, not a normal level.
+
+### The read of a series
+
+The function `readSeries` of `baseline.ts` reads one series at one time. It gives one of three reads:
+
+| Read | When |
+| --- | --- |
+| `score` | The latest value has a robust score, a signal and a normal level, the `center`. |
+| `flag` | The measure has the baseline `flag`. The flag of the latest reading is the signal. |
+| `no-read` | The series has no reading (`no-reading`), no recent reading (`stale`) or too few values in its history (`few-samples`). |
+
+- The score is the robust z-score of Iglewicz and Hoaglin, from `modifiedZ` of `@mark1russell7/rigor-statistics`. An absolute score of 3.5 or more in the direction of the measure is a signal.
+- With the baseline `none`, the history holds the values at the same time of the week, within 1 h, in the 28 days before the latest value. A policy can choose the same time of the day, or each time.
+- With the baseline `expected`, the read scores the residual: the value minus the expected value. The center is the expected value plus the median residual.
+- A series is stale after 3 cadences with no new value, plus the delay of the measure. The cadence of the reading comes first, then the cadence of the measure. With no cadence, a series is stale after 6 h.
+- The history needs 8 values or more. A new series and a new version of a series have no read until then.
+- The order of the readings does not change the read. Of two readings at one time, the reading with the smaller observation id counts.
+- `DEFAULT_BASELINE` holds these values. A seeded gate test holds that a history with too few values gives no score.
+
+### The store of the readings
+
+The map of a source gives its readings in the field `readings` of `MapResult`. The runtime keeps them in the file `readings.sqlite` of the home folder, not in the event log.
+
+- The fetch step checks each reading of a new observation: the schema of a reading, then `readingProblems`. The reading must also name its own observation.
+- A reading that fails a check is a lossy problem of its observation, at the path `readings[n]`. The store does not get it.
+- The runtime writes the readings of a fetch before its events. A failed write of the log gives the readings again at the next fetch.
+- The key of a reading is its source, measure, series, version, time and observation. A second write of a key changes nothing.
+- The read of a series gives each version, in the order of the times. The function `readSeries` takes this list.
+- The store deletes each reading that is older than `READING_RETENTION`: the window of `DEFAULT_BASELINE` and one day. The deletion is at most once in each hour.
+- A fault of the store does not stop the pass, because the alerts do not need the readings. The entry writes the kind of the error to the output.
+- A broken file goes into quarantine, and the store starts empty. A source does not give its old readings again, thus each series has no read until its history fills.
+- Each copy keeps its own readings. The exchange of the copies does not send them.
+
 ## Health and coverage
 
 The core calculates the health of each source from the records of its fetches, not the adapter. The runtime writes one `FetchRecord` when each fetch ends. The health is a state machine on `@mark1russell7/algebra`, and `HEALTH_MACHINE` is its document.
@@ -278,12 +356,15 @@ A drill report has no area. Its subject is `{ system: "alerts.drill", id: <drill
 | `drill/<copy>/<id>` | `system.drill.run` | The last run waits for its acknowledgment | `life-safety` (`extreme`, `immediate`) |
 | `drill/<copy>/<id>/failed` | `system.drill.failed` | The verdict of the last run is `failed` | `notice` at most |
 | `drill/<copy>/<id>/no-start` | `system.drill.failed` | The drill has no next start | `notice` at most |
+| `drill/<copy>/<id>/missed` | `system.drill.failed` | The window of the next start after the last run ended with no run | `notice` at most |
 
 - `DrillSnapshot` gives the copy, the drill and its last run. A drill that is due has a run that starts at the time of the snapshot.
 - The facts of the run line are the copy, the drill and the start. An acknowledgment in the time cancels the line.
 - At the end of the time, the run line ends, and the failed line opens. A late acknowledgment gives an update of the failed line.
 - The next run ends the failed line. A snapshot with no drills keeps each open line of a drill.
 - A snapshot with `noStart` opens the line `no-start`, with the reason `no-start`. A next start ends it.
+- A snapshot with `missed` opens the line `missed`, with the reason `missed` and the missed start as its onset. The next run ends it.
+- `missedDrillAt(drill, runs, at, quiet)` gives the missed start. A late start in the same window is not a miss, and before the first run nothing is missed.
 
 `latestIn(items, at, window)` gives the latest item in a window before a time. `recentStep` and `recentRecovery` use it.
 `threats(incidents, places)` gives the watches and the warnings. A threat is a live incident with the status `actual` at a watched place. Its stage is `watch`, `warning` or absent. A report of the core has the status `system`, so it is not a threat.
@@ -359,15 +440,44 @@ The Twilio call channel makes one voice call for each send:
 - A call that nobody answered, and a call that Twilio could not make, are `failed`. The escalation goes to its next step.
 - `cancel` ends the call in each state. Twilio refuses the end of a call that it does not know, and the cancel ends with no error.
 - `readTwilioBalance` reads the balance of the account. It gives each failure as a value.
-- `twilioSetupProblems` checks the credentials and the number that calls, with no request. A problem names the field, and no value.
+- `twilioSetupProblems` checks the credentials, the number that calls and the number that texts, with no request. A problem names the field, and no value.
+- A failure of a send has the mark `[number]` in place of each phone number of the send. An error of Twilio can quote a number.
 
-The cap of the spend of a call channel is two gates of `polite-crawler/api`, with one store, one key and one quota name:
+The Twilio text channel `twilio-text` sends one SMS message for each send (AL-56):
 
+- The text has the title, the why line and the body as sentences, with `TWILIO_TEXT_LIMIT` (160) code points or fewer. The cut is at the end of a word.
+- The address is the address of a call: the field `to`, in E.164 form. The sender is the registered number of the texts.
+- A quiet message, a message that expired and an address with a problem get no text. The outcome is `refused`.
+- The channel does not break through the silent mode, and it does not repeat. Its `ack` is `none`.
+- A text that the carrier delivered is `delivered`. A text that did not go, or that the carrier did not deliver, is `failed`.
+- `cancel` does nothing. Twilio cannot stop a text in its queue.
+- A text costs `TWILIO_TEXT_COST_USD` (4 cents): 3 segments and the carrier fees, rounded up. Thus a text costs no more than a call.
+- A text goes only to a number with the opt-in. Each other send fails with the kind `consent`, and Twilio gets no request.
+- Twilio refuses a text to a number that replied STOP (Twilio error 21610). The channel then records the STOP and gives `consent`.
+
+The opt-in list of the texts is the field `optIn` of the private configuration (`opt-in.ts`). The list holds phone numbers, so the repository holds only its form and its checks:
+
+- A record has the number, the time of the yes in UTC with seconds, the way (`written` or `spoken`) and the version of the consent words.
+- The number is a phone number in E.164 form, or the name of a secret, as the address of a contact.
+- The opt-in page of the site gives the consent words of each version, `texts-consent/1` first.
+- An address field of a descriptor with `optIn` needs a record for each value. The address of `twilio-text` has it, and the address of a call does not.
+- `optedIn` folds the record of a number and its STOP and START replies. The last reply decides, and a STOP wins a tie.
+- A number with no record has no opt-in. A START reply does not add a number. A new yes is a record with a later time.
+- The kind `consent` does not stop the deliveries of the channel to the other people, as `reserved` does not.
+- Twilio keeps its own STOP handling. Until the read of the replies, the runtime does not keep a STOP. Twilio refuses each later text, and a START works at once.
+- The read of the STOP and START replies comes next (AL-56). Then the runtime keeps each reply, and the fold uses it.
+
+The cap of the spend of a Twilio channel is two gates of `polite-crawler/api`, with one store, one key and one quota name:
+
+- The limit of the gates is the monthly cap less the fixed costs of the spend entry (`fixed`). A fixed cost is, for example, the rent of a phone number.
+- The reserve is a part of that limit. `loadConfig` refuses fixed costs that use all of the cap, and a reserve that is not below the rest.
 - The two gates count the same units. The gate of `life-safety` has no reserve. Thus only `life-safety` uses the last part of the cap.
 - A full cap gives `rate-limited`. A cap in its reserve gives `reserved` to a message below `life-safety`.
 - A call that Twilio refused, did not authorize or limited gives its units back. Twilio made no call.
 - A network fault, a time-out and a server error keep the units, because the call can have started.
 - A fault of the store of a gate does not stop a call. The call goes with no count.
+- The text channel takes its units from the same gates as the call channel. Thus one cap holds the calls and the texts of the account.
+- `takeSpend` in `spend.ts` takes the units for each channel. The quota line of the status is the line of `twilio-call`.
 
 ## The delivery promise
 
@@ -652,9 +762,19 @@ A channel rule (`ChannelRule`) of a person keeps or removes the steps of a plan 
 - The rules do not change the why record of the route.
 - A plan with no step sends nothing. `escalate` gives it the state `exhausted` at its end.
 
+A policy can have a subject (`EscalationPolicy.about`, AL-43). The function `policyFor` gives the policy of a level for an incident in `route` and in the check of a drill:
+
+- An incident with the status `system`, `test` or `exercise` gets the first policy of the level whose subject matches a subject of the incident. The match is `matchSubjects`, the match of the channel rules.
+- Each other incident, and an incident with no such policy, gets the first policy of the level with no subject. Thus no policy with a subject changes the plan of a real warning.
+- When two policies of a level match one incident, the first one in the list applies. An example is a policy about `alerts.drill` and a policy about `alerts.drill` with an id.
+- The channel rules apply to the chosen policy. The why record does not change.
+- A person with policies of their own gets no policy of the configuration, also no policy with a subject.
+- An example: a policy of `notice` about `alerts.drill` with a call. The failure of a push drill then calls the person, and a real notice stays a push.
+
 A recipient has no problem from `recipientProblems` before it gets alerts:
 
-- A person who watches a place or a subject has a policy of the level `life-safety`.
+- A person who watches a place or a subject has a policy of the level `life-safety` with no subject.
+- No two policies have the same level and the same subject.
 - No rule keeps a life-safety kind, or the coverage of one, below `life-safety`. A rule with no kinds applies to each kind.
 - Each rule names kinds of the taxonomy, and the quiet window has a good time zone and good local times.
 - Each channel rule has one or more kinds of the taxonomy, and each of its channels is a channel of the instance.
@@ -727,6 +847,7 @@ The assessment reads no clock. The caller gives the time `at`, and only a window
 
 - Each person can have a quiet window (`PersonWatch.quiet`): a time zone, and a start and an end in local times, for example `22:00` to `07:00`. An equal start and end give the full day.
 - In the window, each send below `life-safety` is quiet. A `life-safety` send ignores the window. It wakes the person.
+- A channel with no silent mode, as a call or a text, sends no quiet message. It gives the kind `quiet`. The step stays due, and it goes at the first try after the window.
 - The quiet value is for the time of the send. A step that became due before the end of the window and goes out after it is not quiet.
 - `inQuietWindow` is `inWindow` of `@mark1russell7/algebra/clock`. It calculates the local time in the time zone of the window. Thus the window follows the change to and from daylight saving time.
 - Tests hold a window across midnight, the two days of the change, an hour that occurs two times and an hour that does not occur.
@@ -773,6 +894,7 @@ The function `openInstance` makes the instance of the owner from the private con
 
 - The sources are the NWS API and IPAWS. The channels are Pushover, and the Twilio call channel when `secrets.env` has its keys.
 - The keys of Twilio are `TWILIO_ACCOUNT_SID`, `TWILIO_API_KEY_SID`, `TWILIO_API_KEY_SECRET` and `TWILIO_FROM`. An API key signs each request.
+- The optional key `TWILIO_TEXT_FROM` adds the text channel. It holds the registered sender of texts: a phone of a 10DLC campaign or a verified toll-free phone.
 - A spend entry of a provider of a channel gives the cap of the channel. The count of the cap is in `quotas.sqlite`.
 - The spend entry of Twilio also gives the watch of the balance: one read each day, and its floor.
 - Each source gets the watch of `sourcePlaces`. Thus a source gets the region codes, and a position only when the place shares it with that source.
@@ -786,11 +908,18 @@ The instance does not start when it finds one of these problems:
 - a missing secret, or an API token that does not have the form of a Pushover key (30 letters and digits)
 - each problem of `parseConfig`: the JSON, the schema, the references and the fields of each address on its channel
 - some keys of Twilio and not all, or a key of Twilio with a bad form
-- a step of a policy on a channel that the instance has no sender for. Without the keys of Twilio, the call channel has no sender.
+- the key `TWILIO_TEXT_FROM` with no keys of Twilio, or a value of the key that is not in E.164 form
+- a step of a policy on a channel that the instance has no sender for. Without the keys of Twilio, the call channel has no sender. Without `TWILIO_TEXT_FROM`, the text channel has no sender.
 - a step on a channel with a cost, when the configuration has no spend entry for a provider of the channel
 - a place that no regional source covers. Usually the place does not have a code of each level: the zone, the county, SAME, the state and the country. A source with the coverage `global`, for example the SWPC, covers each place with no code. Thus the check does not count it.
 
 The environment gives `PORT` (8080), `PROBE_PORT` (9090) and `SERVICE_PROFILE` (`local`, `daemon` or `pod`). The folder `ALERTS_HOME` (`.alerts` in the home folder) holds the private files: `config.json`, `secrets.env`, the log `runtime.sqlite` and the outlines of the zones `shapes.sqlite`. It also holds the counts of the quotas, `quotas.sqlite`. No repository holds them. A problem of `secrets.env` names its line and its key, and no value. The output of a failed pass shows no value of `secrets.env`.
+
+Each runtime takes the lock `home.lock` of the folder at its start, before it reads or writes a file of the folder (AL-58). The lock is the instance lock of `@mark1russell7/service/host`:
+
+- While a live runtime holds the lock, a second runtime on the folder stops at its start. It writes no event, it fetches nothing and it sends nothing. The supervisor starts it again after its backoff.
+- The shutdown releases the lock last, after the log closes. A lock of a process that stopped is stale, and the next start removes it.
+- The test `home-lock.test.ts` starts the entry on a folder that the test holds. The entry stops with the error `HomeHeld` and writes no file.
 
 After each pass, the runtime gets the outlines of the zones of the watched states. It stops before the next fetch of the alerts. A broken file of outlines goes into quarantine, and the runtime gets the outlines again.
 
@@ -864,7 +993,8 @@ The runtime cannot tell the person that it stopped. A check of Healthchecks.io t
 - A pass in which a channel gave `auth`, `refused` or `rate-limited` to a send pings `/fail`, because then the system cannot tell the person.
 - A pass with an overdue send pings `/fail`, whatever the kind of its failures. An overdue send is due, and it has no delivery `overdueAfter` after its due time. A reset or a server error that lasts thus also pings `/fail`.
 - `overdueLimit` gives `overdueAfter`: one pass limit and two full tries, each to its flight limit and its retry. It is 140 seconds for the instance. The due time comes from the log, thus a restart keeps it.
-- A send that a channel gave `reserved` does not ping `/fail`, and it is not overdue. The channel keeps the last units of its quota for `life-safety`, thus it still tells the person of the highest level.
+- A send that a channel gave `reserved`, `consent`, `quiet` or `expired` does not ping `/fail`, and it is not overdue (`REFUSAL_FAULTS`). A `consent` refusal is the choice of the person: a STOP reply.
+- A `quiet` refusal is a quiet message on a channel with no silent mode, as a call at night. An `expired` refusal is a message that expired before the send. Neither is a fault of the channel. The channel keeps the last units of its quota for `life-safety`, thus it still tells the person of the highest level.
 - The body of each ping also gives the state of the quota of each channel with a quota.
 - The fail of a channel holds until a send on the channel goes, or until the pass of the retry has no refusal on it. The delivery step sends a failed call again at the first pass at or after its `retryAt`. Thus the check does not go down and up at each retry.
 - The fail of a channel holds across a restart. At its first pass, the hook starts from `heldOf` of the log. It gives each refusal with a retry after that pass and with no later delivery on its channel. The order of the log decides, not the times. Thus a restart does not ping `success` while the channel refuses.
@@ -896,14 +1026,21 @@ The package `@mark1russell7/alerts-channel-twilio` operates the chain on the ser
 - `outageStart` gets the webhook of the outside check. It starts the first call of each person.
 - `outagePress` gets the key of the person. A 1 moves the status callback of the live call to a URL with `acked=1`.
 - `outageEnded` gets the status callback at the end of each call. It gives the next call by `chainNext`.
+- A chain that ends with no key press sends one SMS message to the person (AL-56). The list must have `textMessage`, and the person must have `text`. A chain with a key press sends no text.
 - The URL of each callback holds the outage, the person, the step and the version of the list. A callback of another version starts no call.
 - Twilio signs each request to the press and end Functions. Thus a person outside Twilio cannot make a step. The entry is public, and it checks its own token.
 - A cap counts the calls of the Twilio number in a time window. A try above the cap makes no call.
 - A monthly cap counts the calls of the number from the start of the calendar month. The month starts in the time zone of the spend entry of Twilio.
-- The monthly cap is the spend cap of Twilio in whole calls of 4 cents, at most 1000. Each call of the number counts, also a call of the instance.
+- The monthly cap is the spend cap of Twilio less its fixed costs, in whole calls of 4 cents, at most 1000. Each call of the number counts, also a call of the instance.
+- Each cap counts a text as one call. The recent sends are the calls of `OUTAGE_FROM` and the texts of `OUTAGE_TEXT_FROM`.
+- The SMS message has at most `OUTAGE_TEXT_LIMIT` (160) code points. That is at most 3 segments of 1.4 cents, so a text costs no more than a call.
+- A failed read of the recent texts goes to the log, with no number. Then the caps count the calls only.
 - The setup of the runtime refuses an outage call with no spend entry for Twilio. Each problem of the monthly cap names no count, because the spend cap is private.
 - A gap stays open: the spend gate of the instance does not count the calls of the Functions. Thus one month can have more calls than the cap, by the calls of the Functions.
 - The end of the gap is AL-57. The gate also reads the usage records of Twilio for the local month, in whole UTC days. It uses the larger of that amount and its own count, by the rule of `@mark1russell7/stack-spend`.
+- `spendWatch` of the runtime reads the spend of the provider each hour, from the start of the month of the cap. It notes the spend in the count of the gates. The count does not become smaller, thus the gate keeps the larger amount.
+- A failed read goes to the health of the watch, and the watch reads again after 15 minutes. A read that ends in the next month does not change the count.
+- The watch of Twilio starts after the release of `@procedures/notify` 0.63.0, which reads the usage records.
 - If the move of the status callback fails, the end has no `acked=1`. Then the chain calls again. That is the safe side.
 - Each handler gives the script of the call as data. The Function renders it with the TwiML builders of `@procedures/notify/twilio`.
 - `outageListOf` makes the list from the field `outage` of the private configuration and the recipients of `loadConfig`. The number of each person is the contact of the person on `twilio-call`.
@@ -916,6 +1053,7 @@ The package `@mark1russell7/alerts-channel-twilio` operates the chain on the ser
 The module `deploy.ts` of the package puts the three Functions and the list on one service of Twilio Serverless. `twilioServerlessDeploy` of `@procedures/notify/twilio-serverless` sends the requests.
 
 - `outageDeployPlan` gives the plan: the bundles of the Functions, the list as a private asset, the build, and the variables `OUTAGE_TOKEN` and `OUTAGE_FROM`.
+- A plan with a sender of texts also sets the variable `OUTAGE_TEXT_FROM`.
 - The version of the plan is the start of the content hash of the files and of the build. A second deploy of the same plan reads three lists and changes nothing.
 - The variables are not in the version. A new token or a new number changes only the variables.
 - `deployOutage` makes the bundles with esbuild, and then it deploys the plan. It loads esbuild only when it deploys.
@@ -925,6 +1063,9 @@ The module `deploy.ts` of the package puts the three Functions and the list on o
 The runtime operates the deploy in the worker `outage` of its service (`outage.ts`), beside the worker `passes`.
 
 - `outageSetup` reads the field `outage`, the keys of Twilio and the key `OUTAGE_TOKEN`. A missing key, a token of a bad form or a bad list stops the start.
+- The setup of Twilio reads the key `TWILIO_TEXT_FROM` for the outage call and the text channel. A value that is not in E.164 form stops the start.
+- With the key, the list has the text `OUTAGE_TEXT_MESSAGE`, and the deploy gives the number to the Functions. Without the key, the outage call sends no text.
+- Only a person whose number is on the opt-in list gets the text. The list then has `text` for the person, and the cap counts one text for the person.
 - The worker deploys after the startup. A change of the private files restarts the runtime, so a new list deploys at once.
 - Once in each day, the worker deploys again. Thus a change on the side of Twilio heals in a day.
 - A failed deploy goes again after a backoff: one minute, then double, up to one hour. The pass limit bounds one deploy, so the drain of the service holds it.
@@ -967,11 +1108,12 @@ The system fold gives the drill lines (the section of the system reports). The m
 - An acknowledgment in the user interface or on another channel does not test the path, thus it does not count.
 - `drillStep` gives the snapshots of the view and the next wake: the next start, or the end of the time of the acknowledgment.
 - A drill with no next start gets `noStart`, and the system fold opens its line `no-start`.
+- A drill whose last window ended with no run gets `missed`. A copy that stops for the full window sends this failure at its next pass.
+- A stopped copy cannot send. The outage call tells of a stopped copy, and `missed` tells later that the drill did not test the path.
 - The event `drill` stays in its copy, because each copy has its own drill lines.
 
 The next steps are these:
 
-- A watchdog finds a drill that does not start in its window, for example when the runtime stops for the full window.
 - The map and the explanation of a route show the steps that the channel rules remove (`Route.ruled`).
 - Then comes a drill of the outage call.
 
@@ -1000,6 +1142,7 @@ The schema `alertConfigSchema` checks the JSON of the configuration first. Then 
 - two places or two people with one id, and a place with no region code
 - a place of a person or of a rule that the configuration or the person does not have
 - a contact of an unknown person, two contacts of a person on one channel, and a secret with no value
+- each problem of `optInProblems`, a record whose secret has no value, and a value of an opt-in field with no record
 - two spend entries of one provider, and a provider that no channel depends on
 - a reserve of a spend entry that is not below its cap, and a time zone that is not an IANA name
 - an unknown person of the outage call, and a person two times in the call
@@ -1014,20 +1157,36 @@ The schema `alertConfigSchema` checks the JSON of the configuration first. Then 
 
 A problem names ids, fields and the names of secrets. It does not hold the value of a secret, a label or a position.
 
-The function `parseConfig` reads the JSON text of the configuration. It checks the JSON, then the schema, then the references. Its result is a `Result` of `@mark1russell7/optional`: the configuration and the recipients, or the problems. The runtime starts only with an `ok` result. A problem of the JSON does not quote the text, because the text can hold a private value.
+The function `parseConfig` reads the JSON text of the configuration. It checks the JSON, then the schema, then the references. Its result is a `Result` of `@mark1russell7/optional`: the configuration, the recipients and the opt-in list with the value of each number, or the problems. The runtime starts only with an `ok` result. A problem of the JSON does not quote the text, because the text can hold a private value.
 
-The runtime reads two private files in the folder `ALERTS_HOME`, or in `~/.alerts` with no variable: the configuration `config.json` and the keys `secrets.env`. A procedure that gives the configuration replaces the file later.
+#### The parts of the configuration
 
-The function `checkTexts` checks the texts of the two files, as the start does. It reads no file. The keys go through `parseEnvFile` of `@mark1russell7/service/host`, and `envSecrets` gives them as the secret store. The keys do not go into `process.env`, because each child process gets that environment. A read error gives only its code, because the path can hold a user name.
+Two writers of one file overwrite each other. Thus each writer of places, people and contacts can keep its own part, `ConfigPart` (`alerts-config-part/1`). A part has only the fields `places`, `people` and `contacts`. The root configuration keeps the other fields.
 
-The start keeps the last good set of the private files, and a change of the files restarts the runtime (`reload.ts`). The private files of a start are `config.json`, `secrets.env` and `copy.json`.
+- The name of a part has small letters, digits and hyphens, with a letter first. It has 40 characters or fewer.
+- The function `mergeParts` puts the entries of the root first. The entries of the parts come after them, in the order of the names.
+- Thus the order of the reads does not change the merge or its hash. Each copy gets the same hash from the same files.
+- The merge finds a bad name and two parts with one name. It also finds an entry in two files: a place, a person, or a contact of a person on one channel.
+- A problem of a bad name gives the index of the part, not the name, because the name can hold any text.
 
-- When the three files pass the check, the start uses them. A ready runtime writes them as the last good set `start.good.json`. The write is atomic, with the permissions 0600, because the set holds the keys.
+`parseConfig` takes the texts of the parts as its fourth argument. It checks the JSON and the schema of the root and of each part, and gives all their problems together. Then it merges the parts and checks the references of the merge with `loadConfig`. A problem of a part starts with the name of the part. With no parts, the result is the same as before.
+
+The runtime reads its private files in the folder `ALERTS_HOME`, or in `~/.alerts` with no variable. The files are the configuration `config.json`, the keys `secrets.env` and the folder `parts`. A procedure that gives the configuration replaces the files later.
+
+- The folder `parts` holds one file `<name>.json` for each part. The name of the file without `.json` is the name of the part.
+- The runtime reads only the files whose names end with `.json`, in the order of the names. It ignores each other file.
+- A missing folder gives a configuration with no parts. A read error of the folder or of a part gives its code, and the check refuses the files.
+
+The function `checkTexts` checks the texts of the private files, as the start does. It reads no file. The keys go through `parseEnvFile` of `@mark1russell7/service/host`, and `envSecrets` gives them as the secret store. The keys do not go into `process.env`, because each child process gets that environment. A read error gives only its code, because the path can hold a user name.
+
+The start keeps the last good set of the private files, and a change of the files restarts the runtime (`reload.ts`). The private files of a start are `config.json`, `secrets.env`, `copy.json` and the parts.
+
+- When the private files pass the check, the start uses them. A ready runtime writes them as the last good set `start.good.json`. The write is atomic, with the permissions 0600, because the set holds the keys.
 - The last good set is a second copy of `secrets.env`. On Windows, the permissions do nothing, and the file gets the access list of the folder, as `secrets.env` does.
 - After a change of a key, the old key stays in the set until the next ready start. A start on the set uses the old keys.
 - The runtime is ready when its service operates and one pass ended. Thus a start that throws, or a startup that fails, does not write the set.
 - When the files have problems, the start uses the last good set and gives the problems. Thus a bad edit does not stop the alerts.
-- Before a start uses the files, it writes the start marker `start.pending`. The marker holds the key of the start: the SHA-256 of the three texts and of the restart request. A ready runtime removes the marker.
+- Before a start uses the files, it writes the start marker `start.pending`. The marker holds the key of the start: the SHA-256 of the texts and of the restart request. A ready runtime removes the marker.
 - The marker counts the starts with its key that stopped before they were ready. One stop, for example a reboot or a power loss in the first pass, gives a second try of the files, with a note.
 - After `STOP_LIMIT` (2) stops in a row with one key, the start uses the last good set, and it keeps the marker. Thus each later start with the same files uses the set at once, and a crash loop stops.
 - A new restart request or a change of a file gives a new key. Then the next start uses the private files again.
@@ -1035,8 +1194,9 @@ The start keeps the last good set of the private files, and a change of the file
 - When the files and the last good set both have problems, `startConfig` throws `ConfigRefused`, and the process does not start.
 - The marker does not find a stop after the runtime is ready. A runtime that stops later gives no way back to an older set.
 - `GET /status` gives the files of the start: `start.use` is `files` or `good`, with the count of the reasons. The reasons are in the output of the runtime.
-- `install.ts status` reads the marker and checks the three files. A runtime on the last good set, or files with problems, give the code 1.
-- In the profile `daemon`, the hook of each pass reads the three files again. A change that passes the check stops the runtime, and the supervisor starts it again.
+- With no parts, the keys and the last good set are the same as before the parts. Thus an update of the code does not restart a runtime or change its set.
+- `install.ts status` reads the marker and checks the private files. A runtime on the last good set, or files with problems, give the code 1.
+- In the profile `daemon`, the hook of each pass reads the private files again. A change that passes the check stops the runtime, and the supervisor starts it again.
 - A change with problems gives its problems one time, and the runtime keeps the files of its start.
 - A new text of the restart request `restart.request` in the folder stops the runtime with no check. Then the supervisor starts it again.
 - A read error of the request gives no restart. The start reads the request too, thus the new runtime does not restart for the same request.
@@ -1057,6 +1217,12 @@ A writer of the configuration does these steps, thus the live instance does not 
 3. Rename the file to `config.json` only when the exit code is 0. Code 1 gives the problems, and code 2 gives a wrong command.
 
 The output of the check gives the count of the places, the people, the contacts and the policies, or the problems. It holds no value and no path.
+
+A writer of a part does these steps. The check reads `config.json` and the other parts, thus it finds an entry that is in two files.
+
+1. Write the new part in the folder `ALERTS_HOME`, not in the folder `parts`.
+2. Start `node src/check.ts --part <name> <file>` in the runtime package. The check uses the file in place of the part `<name>`.
+3. Rename the file to `parts/<name>.json` only when the exit code is 0. A bad name of a part gives the code 2.
 
 The runtime adds the codes of the zones near each place with a position (`withZoneCodes`). Thus a writer gives a position and one code of the state of the place. A `same` code of the county is better, because the IPAWS and radio alerts use it.
 
@@ -1132,6 +1298,10 @@ The API also serves the built local page (`packages/site/dist`) on the same addr
 - Each file gets the policy of the folder: no inline script, no inline style and no connection to another origin.
 - The theme before the first paint is the classic script `theme.js`, not an inline script. The plugin `themeFile` of `packages/site/theme-file.ts` adds it to the build and to the head of each page.
 - Build the page before the start of the runtime: `pnpm --filter ./packages/site build`. Without the build, the path `/` gives 404.
+- After each move of the checkout to a new commit, build the page again. The build needs no restart of the runtime.
+- The start line, `install.ts status` and `install.ts restart` tell if the page is not built, or older than its source files (`readPageState`).
+- The page is stale when a source file of a package is newer than `local.html`. The source files are `PAGE_SOURCES`.
+- An install with `--prod` has no `vite`, thus a copy on that install serves no page. The warning does not change the exit code of `status`.
 
 ### The health route
 
@@ -1146,6 +1316,16 @@ The route `GET /health` of the runtime gives the `HealthPayload` of `healthPaylo
 
 The coverage holds the ids of the places. Thus only the loopback address gives the route, as for the map.
 
+The local page shows the payload in the panel "Sources" (`packages/site/src/health-read.ts`, `health-view.ts`).
+
+- The page reads the route after each good read of the map. A runtime with no `health` option gives 404, and the panel tells that it has no health.
+- Two sentences sum the payload: the sources, and the quotas and balances that stop or limit a message. A link at the top of the page has the same sentences.
+- Each source has a row with its state, the time since its last good read and the kinds that it covers. The source that needs attention is first.
+- A source that is down or late needs attention. A source is late when an entry of `lateness` has the state `late` and names it in `to`.
+- A quota, a balance or a copy gets a row only when it has a stage.
+- The health is of the present. For a past time of the scrubber, the panel tells that it stays at the present.
+- After a failed read, the panel keeps the last rows. One sentence tells the time of that read in place of the two sentences.
+
 ### The history
 
 The function `historyPayload` gives the `HistoryPayload` of the route `GET /history`. A time scrubber of a page replays how each incident grew. `historyPayloadSchema` checks the payload. The runtime gives the route on the loopback address only.
@@ -1155,14 +1335,20 @@ The query `since` is one whole number of milliseconds since the epoch, with no s
 - `format`: `alerts-history/1` (`HISTORY_FORMAT`). A change that breaks a reader gets a new name.
 - `at`: the time of the last pass, or `null` before the first pass.
 - `since`: the payload has each incident with a change at this time or later. The value `null` gives each incident.
-- `next`: the time of the newest change of the merge state, or `null` with no change.
+- `next`: the newest time of a change or of a time edge of the merge state, or `null` with no change.
 - `incidents`: the history of each incident, in the order of the anchors. Each incident has each of its changes, from the oldest.
 - `regions`: the shapes of each region code of the changes, one time each. A change names its codes, and the shapes stay out of each change.
 
-A change comes at each time of entry of a report of the incident on this copy. An end mark of a known report also gives a change. The change has the parts of the incident that the copy knew at that time:
+A change comes at each time of entry of a report of the incident on this copy. An end mark of a known report also gives a change.
 
+A time edge gives a change when the view of the incident changes at that time with no new fact. The time edges are the expiry of a report, the end of the window `pastWithin` of a table and the end of a mute. They count up to `at`, or up to the newest time of entry when it is later. An import can come after the last pass. Thus the view at a time is the last change at or before that time. A reader needs no rule of its own for an expiry.
+
+The change has the parts of the incident that the copy knew at that time:
+
+- The change has the live parts, as the map has only live incidents. With no live part, it has each part, and `live` is false.
 - The level is the highest level over each person at that time, with the policy of the delivery and the mutes.
 - Two parts of an incident before their merge give one change. The change has the higher level and severity, and the areas of the two parts.
+- `places` has each watched place in the areas, in the order of the input places. The level of a place is the highest level of the assessments with the place. A matched place with no assessment has the level `none`. The map uses the same rule.
 - The time of entry comes from the clock of this copy. Thus a late import of a report of another copy comes after the `since` of a reader.
 
 The input `entered` gives the time of entry of each report and each end mark (`EntryTimes`). Without it, the history uses `OWN_ENTRY_TIMES`: the time of receipt of each report and the time of each end mark. The runtime keeps an index of the times of entry next to its state:
@@ -1179,8 +1365,17 @@ A reader keeps its histories by anchor:
 2. Read again with `since` set to the last `next`. The payload gives the incident of the newest change again, because one time can get a later report.
 3. Replace the history of each incident of the payload. Drop each history whose anchor is a report of an incident of the payload, because these incidents merged.
 4. When `next` is below `since`, a step of the clock moved the times back. Read again with no `since`.
+5. Read with no `since` at intervals. Only this read removes the history of an incident that the runtime retired.
 
-The work for an incident with no change at `since` or later is only the read of its times. The levels come from the watches of the people, thus only the loopback address gives the route.
+The module `history-reader.ts` of the core is this reader as a pure calculation:
+
+- `addHistory` adds one answer to the histories of a reader (`Histories`). It does the steps 3 and 4, and it gives the `since` of the next read.
+- `historyTimes` gives the times of the changes. A time scrubber shows a tick at each time.
+- `historyView` gives the view of the map at a time. It has the last change of each incident at or before that time, when that change is live.
+
+The reader has no rule of its own for an expiry, because a time edge gives a change. The view has the type of the view of the map route (`MapView`), so one renderer draws the two. The level of a place is the highest level of the place in the changes of the view. A place of the view has no gap, because the history has no coverage. The test `history-replay.test.ts` holds this view equal to the view of the map at each time.
+
+The work for an incident with no change and no time edge at `since` or later is only the read of its times. The levels come from the watches of the people, thus only the loopback address gives the route.
 
 ## Relevance
 
@@ -1209,6 +1404,10 @@ The file `schemas.ts` of the core has one zod 4 schema for each data type of the
 
 ## Open points
 
+- The threat level does not read the indicators yet. The next change adds the breadth of the signals: the count of the dimensions with a signal in an area.
+- A fault of the store of the readings goes only to the output. The health payload does not show it yet.
+- The season of a baseline is in UTC. A change of the clock moves a local rush hour by 1 h in UTC. A season in the local time of the area, with the civil time of `@mark1russell7/algebra`, replaces it.
+- Some units of the indicator sources are not in the grammar of `@mark1russell7/quantity`. They are `MW`, `MWh`, `µSv/h`, `µg`, `hPa`, `Bq`, `ppm` and each currency other than `USD`. A measure in such a unit fails its schema until the package adds the unit.
 - The procedure tools take the schema of each input and output from `schemas.ts`.
 - The link rule has two families, the earthquakes and the geomagnetic storms. Each other kind with two sources of different ids gets its family with its second source.
 - The window of 6 hours of the geomagnetic storms is a shortcut. A capture of one storm of GFZ and the SWPC gives the largest difference of their onsets (AL-14).

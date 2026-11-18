@@ -1,5 +1,5 @@
 /**
- * The contracts of the alert system: the event, the source and the channel.
+ * The contracts of the alert system: the event, the indicator, the source and the channel.
  *
  * The text of `docs/CONTRACTS.md` explains each part. All values are JSON values, so each type
  * crosses a procedure call, a log row and a copy of the system without a change.
@@ -222,6 +222,157 @@ export interface Report {
 }
 
 // =============================================================================
+// The indicator contract
+// =============================================================================
+
+/**
+ * The dimensions of the indicators. A dimension is one kind of measure, for example rail delays or grid frequency. The
+ * list is closed, as the taxonomy is. A new dimension is a change of the contract.
+ */
+export const DIMENSIONS = [
+  { id: "road-traffic", title: "Road traffic flow" },
+  { id: "road-events", title: "Road closures, incidents and work zones" },
+  { id: "rail", title: "Rail punctuality and cancellations" },
+  { id: "public-transit", title: "Bus, tram and metro service" },
+  { id: "micromobility", title: "Bike and scooter share" },
+  { id: "aviation-delays", title: "Airport delays and ground stops" },
+  { id: "air-traffic", title: "Aircraft in the air" },
+  { id: "air-passengers", title: "Air passengers and flights" },
+  { id: "gnss-interference", title: "GNSS interference" },
+  { id: "maritime-traffic", title: "Vessel traffic" },
+  { id: "port-activity", title: "Port calls and chokepoint transits" },
+  { id: "internet-connectivity", title: "Internet connectivity" },
+  { id: "internet-routing", title: "Internet routing and latency" },
+  { id: "online-service-status", title: "Online service status" },
+  { id: "power-demand", title: "Electric load" },
+  { id: "grid-frequency", title: "Grid frequency" },
+  { id: "power-supply", title: "Power generation and prices" },
+  { id: "fuel-prices", title: "Fuel prices and stock" },
+  { id: "radiation", title: "Ambient radiation" },
+  { id: "river-levels", title: "River levels and flow" },
+  { id: "sea-level", title: "Sea level" },
+  { id: "public-health", title: "Public health signals" },
+  { id: "outbreak-reports", title: "Official outbreak reports" },
+  { id: "online-attention", title: "Online attention" },
+  { id: "news-volume", title: "News volume" },
+  { id: "social-volume", title: "Social media volume" },
+  { id: "active-fires", title: "Active fires" },
+  { id: "night-lights", title: "Night lights" },
+  { id: "air-quality", title: "Air quality" },
+  { id: "felt-reports", title: "Felt reports" },
+  { id: "food-prices", title: "Food prices" },
+  { id: "ev-charging", title: "Electric vehicle charging" },
+  { id: "emergency-calls", title: "Emergency and service calls" },
+  { id: "border-crossings", title: "Border crossings" },
+  { id: "financial-markets", title: "Financial markets" },
+  { id: "disaster-mapping", title: "Satellite disaster mapping" },
+] as const;
+
+/** The id of a dimension of `DIMENSIONS`. */
+export type DimensionId = (typeof DIMENSIONS)[number]["id"];
+
+/** The ids of the dimensions, in the order of `DIMENSIONS`. */
+export const DIMENSION_IDS: readonly DimensionId[] = DIMENSIONS.map((dimension) => dimension.id);
+
+/**
+ * The kind of the area of the readings of a measure. A country and a subdivision are region codes, for example
+ * `iso3166-1` and `iso3166-2`. A grid cell and a box that the caller chose are polygons.
+ */
+export type IndicatorAreaKind = "code" | "point" | "line" | "polygon" | "zone" | "world";
+
+/** The kinds of the area of a reading, in their order in a report. */
+export const INDICATOR_AREA_KINDS: readonly IndicatorAreaKind[] = ["code", "point", "line", "polygon", "zone", "world"];
+
+/** The area of one reading. Its `type` is the area kind of the measure. */
+export type IndicatorArea =
+  /** A region by its code, for example a country, a state or an NWS zone. */
+  | ({ readonly type: "code" } & RegionCode)
+  /** A station, a gauge, a sensor or a vehicle. */
+  | { readonly type: "point"; readonly at: Position }
+  /** A road link or a rail line: two positions or more. */
+  | { readonly type: "line"; readonly path: readonly Position[] }
+  /** A grid cell, or a box that the caller chose. The first ring is the outside, and each ring closes on its first position. */
+  | { readonly type: "polygon"; readonly rings: readonly (readonly Position[])[] }
+  /**
+   * A zone of the domain of the source, for example an electricity bidding zone or a balancing authority. The
+   * system names the codes, for example `eic`. A table of the atlas gives the regions of each zone.
+   */
+  | { readonly type: "zone"; readonly system: string; readonly code: string }
+  /** No place: a market series, a subreddit or a service of the world. */
+  | { readonly type: "world" };
+
+/** The direction of a change that is a signal: `rise`, `drop` or `both`. */
+export type Move = "rise" | "drop" | "both";
+
+/** The directions of a change, in their order in a report. */
+export const MOVES: readonly Move[] = ["rise", "drop", "both"];
+
+/**
+ * The baseline that a source gives with its values. With `none`, the core computes the normal level of each
+ * series from its history. With `expected`, each reading holds the expected value of the source, for example a
+ * load forecast or a timetable. With `flag`, each reading tells if the source marks it as an anomaly.
+ */
+export type OwnBaseline = "none" | "expected" | "flag";
+
+/** The baselines that a source can give, in their order in a report. */
+export const OWN_BASELINES: readonly OwnBaseline[] = ["none", "expected", "flag"];
+
+/**
+ * One measure that a source gives. A source can give measures of two dimensions or more. Each measure has one
+ * dimension, one unit and one area kind.
+ */
+export interface MeasureDeclaration {
+  /** The id of the measure in its source: small letters, digits and hyphens, with a letter first. */
+  readonly id: string;
+  readonly dimension: DimensionId;
+  readonly title: string;
+  /** The unit of each value, in the grammar of `@mark1russell7/quantity`, for example `{vehicle}/h`, `km/h` or `Hz`. */
+  readonly unit: string;
+  readonly area: IndicatorAreaKind;
+  /** The direction of a change that is a signal. A cancelled train is a rise, and a station that goes offline is a drop. */
+  readonly moves: Move;
+  readonly baseline: OwnBaseline;
+  /** The time between two values of one series. Absent: the cadence is not known. */
+  readonly cadence?: Duration;
+  /** The time from the time of a value to its publication. Absent: the delay is not known. */
+  readonly delay?: Duration;
+  /** The history that the source gives at once. Absent: the source gives only live values, so a baseline starts empty. */
+  readonly backfill?: Duration;
+}
+
+/**
+ * One value of one series of a measure at one time. A series is a station, a link or a zone of the source. A
+ * reading does not change.
+ */
+export interface Reading {
+  readonly source: SourceId;
+  /** The id of the measure in the declaration of the source. The measure gives the dimension and the unit. */
+  readonly measure: string;
+  /** The id of the series in the measure, for example the id of a station. */
+  readonly series: string;
+  /**
+   * The version of the method of the series. The source changes it when its method changes, for example a new
+   * instrument. A baseline does not cross a version. Absent: the first version.
+   */
+  readonly version?: string;
+  /** The time of the value, not the time of the fetch. */
+  readonly at: Instant;
+  readonly value: number;
+  readonly area: IndicatorArea;
+  /**
+   * The cadence of the series, as the source states it, for example the ttl of a GBFS file. When it is present, it
+   * replaces the cadence of the measure for this series. A general reader of many feeds gives it.
+   */
+  readonly cadence?: Duration;
+  /** The expected value of the source. It is present only for a measure with the baseline `expected`. */
+  readonly expected?: number;
+  /** True when the source marks the value as an anomaly. It is present only for a measure with the baseline `flag`. */
+  readonly flagged?: boolean;
+  /** The raw message that gave the reading. */
+  readonly observation: ObservationId;
+}
+
+// =============================================================================
 // The source contract
 // =============================================================================
 
@@ -279,6 +430,8 @@ export interface SourceDescriptor {
   readonly listing?: "snapshot";
   /** A plain sentence of the canary check, when the source has one. */
   readonly canary?: string;
+  /** The measures of an indicator source. Absent: the source gives only events. */
+  readonly measures?: readonly MeasureDeclaration[];
 }
 
 /**
@@ -355,6 +508,11 @@ export interface MapProblem {
 export interface MapResult {
   readonly reports: readonly Report[];
   readonly problems: readonly MapProblem[];
+  /**
+   * The readings of the indicator measures in the message. The runtime checks each reading against the declaration of
+   * its measure, and keeps it in the store of the readings, not in the event log. A source with no measures gives no field.
+   */
+  readonly readings?: readonly Reading[];
 }
 
 /** The result of the canary check of a source. */
@@ -381,7 +539,7 @@ export interface FetchRecord {
   readonly fatal: number;
   /** The count of lossy problems that the map gave for the observations of the fetch. An absent count is 0. */
   readonly lossy?: number;
-  /** The result of the canary check of the observations of the fetch, when the source has a canary. */
+  /** The result of the canary check of the observations of the fetch, when the source has a canary and the check decides. */
   readonly canary?: CanaryResult;
 }
 
@@ -412,16 +570,21 @@ export interface FetchSignal {
  *   It can then throw the reason of the signal.
  * - `map`: a pure, total function. It does not throw, and the same observation gives the same
  *   reports with the same ids.
- * - `check`: a pure function. It examines the observations of a fetch against the canary.
+ * - `check`: it examines the observations of a fetch against the canary, and sends no request. It gives `undefined`
+ *   when it cannot decide yet: no read. The health then gets no canary event. A stream gives no read until its session
+ *   had one full period of its test message.
  * - `locate`: optional. It reads `network` and is idempotent. It gives the region codes of a
  *   position, for a source that has a lookup: the `/points` query of the NWS API.
+ * - `close`: optional. It ends the resources of the source, for example the session of a stream. The runtime starts
+ *   it one time, at the stop, after the last fetch. It does not throw.
  */
 export interface SourceProcedures {
   describe(): SourceDescriptor;
   fetch(input: { readonly watch: Watch; readonly cursor?: Cursor }, signal?: FetchSignal): Promise<FetchOutcome>;
   map(input: { readonly observation: Observation }): MapResult;
-  check?(input: { readonly observations: readonly Observation[] }): CanaryResult;
+  check?(input: { readonly observations: readonly Observation[] }): CanaryResult | undefined;
   locate?(input: { readonly at: Position }): Promise<LocateOutcome>;
+  close?(): Promise<void>;
 }
 
 /** The result of a lookup of the region codes of a position. */
@@ -555,6 +718,11 @@ export interface AddressField {
   readonly pattern: string;
   /** The form in words, for the text of a problem, for example `a phone number in E.164 form`. It tells no value. */
   readonly form: string;
+  /**
+   * True: each value of the field needs a record of the opt-in list of the configuration (`optIn`). A send to a value
+   * with no opt-in fails with the kind `consent`. The default is false.
+   */
+  readonly optIn?: boolean;
 }
 
 /** The facts of a channel. The core uses them for the escalation and the coverage of delivery. */
@@ -755,12 +923,15 @@ export interface ProviderBalance {
  * - `rate-limited`: the provider refuses each message until the retry.
  * - `reserved`: the channel keeps the last units of its quota for a higher level. It still sends a message of that level.
  * - `auth` and `refused`: the provider refused the key or the message.
+ * - `consent`: the address has no opt-in, or its person took the opt-in back with a STOP reply. The channel sent nothing.
+ * - `quiet`: the message is quiet, and the channel has no silent mode, as a call. The step goes after the quiet window.
+ * - `expired`: the message expired before the send. The channel sent nothing.
  */
 export type SendOutcome =
   | { readonly ok: true; readonly receipt: Receipt; readonly accepted: Instant }
   | {
       readonly ok: false;
-      readonly kind: "network" | "timeout" | "server" | "rate-limited" | "reserved" | "auth" | "refused";
+      readonly kind: "network" | "timeout" | "server" | "rate-limited" | "reserved" | "auth" | "refused" | "consent" | "quiet" | "expired";
       readonly message: string;
       readonly retryAfter?: Duration;
     };
@@ -817,9 +988,15 @@ export interface EscalationStep {
   readonly at: Duration;
 }
 
-/** The escalation of one level: the steps, until a person acknowledges. */
+/**
+ * The escalation of one level: the steps, until a person acknowledges. A policy with a subject (`about`) applies only
+ * to the incidents about that subject with the status `system`, `test` or `exercise`. For them, it replaces the policy
+ * of the level with no subject. Thus no policy with a subject changes the plan of a real warning.
+ */
 export interface EscalationPolicy {
   readonly level: Level;
+  /** The subject of the policy, as a subject watch. A subject watch with no id matches each subject of its system. */
+  readonly about?: SubjectWatch;
   readonly steps: readonly EscalationStep[];
   /** The time after the last step at which the escalation is exhausted. Exhausted is a system alert. */
   readonly exhaustedAfter: Duration;

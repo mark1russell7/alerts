@@ -19,7 +19,8 @@
  * The optional key `HEALTHCHECKS_LOUD_PING_URL` gives a second check. The heartbeat sends each ping to it too.
  *
  * The API also serves the built local page of `packages/site/dist` at the path `/`. Build it before the start:
- * `pnpm --filter ./packages/site build`. Without the build, the path `/` gives 404, and the routes still answer.
+ * `pnpm --filter ./packages/site build`. Without the build, the path `/` gives 404, and the routes still answer. The
+ * start line tells if the page is not built, or older than the source files of the checkout.
  *
  * The optional file `copy.json` gives the settings of this copy of the system (`copy.ts`): its rank and the key of its
  * first check. Without the file, the runtime is the only copy.
@@ -36,7 +37,7 @@
  * check stops the runtime. The supervisor starts it again.
  */
 import { randomUUID } from "node:crypto";
-import { access, rm } from "node:fs/promises";
+import { rm } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { configHash } from "@mark1russell7/alerts";
@@ -44,21 +45,24 @@ import { PUSHOVER_QUOTA, PUSHOVER_RESERVE_NOTICES } from "@mark1russell7/alerts-
 import { openShapeCache, SHAPES_FILE } from "@mark1russell7/alerts-shapes-nws";
 import { realClock, wallClock } from "@mark1russell7/algebra/clock";
 import type { ServiceBuilder } from "@mark1russell7/service";
+import { nodeHostPorts } from "@mark1russell7/service/host";
 import { errorMessage } from "@mark1russell7/text";
 import { redactSecrets } from "@mark1russell7/text/redact";
 import { SqliteHostStateStore } from "polite-crawler";
 import { fetchTransport, quotaGate } from "polite-crawler/api";
 import { writeFileAtomic } from "@procedures/fs/files";
 import { alertsHome, ConfigRefused, configPath, envSecrets } from "./config.ts";
-import { PAGE_INDEX, pageFolder } from "./api.ts";
+import { pageFolder, pageWarning, readPageState } from "./api.ts";
 import { COPY_TOKEN_KEY } from "./copy.ts";
 import { EXCHANGE_TOKEN_LENGTH, exchangeCall, exchangeHost } from "./exchange-http.ts";
 import { heartbeat, heldOf, type PassSummary } from "./heartbeat.ts";
+import { holdHome } from "./home-lock.ts";
 import { quotaNote } from "./quota.ts";
 import { PROFILES, declare } from "./index.ts";
-import { daemonCheck, INSTANCE_CHECK, LOUD_PING_URL_KEY, openInstance, pingKeyOf, pingTargets, userAgent } from "./instance.ts";
+import { daemonCheck, instanceCheck, LOUD_PING_URL_KEY, openInstance, pingKeyOf, pingTargets, userAgent } from "./instance.ts";
 import { openCheckedRuntimeLog } from "./log.ts";
 import type { ExchangeRound } from "./peers.ts";
+import { openReadingStore, READINGS_FILE } from "./readings.ts";
 import { GOOD_FILE, privateFiles, reloadHook, startConfig, type CheckOf } from "./reload.ts";
 import { shapeReport, zoneCodesText } from "./shapes.ts";
 import { supervisor } from "./supervise.ts";
@@ -78,12 +82,16 @@ async function runtime(): Promise<ServiceBuilder> {
   if (profile === undefined) throw new Error(`SERVICE_PROFILE is "${name}". The profiles are: ${Object.keys(PROFILES).join(", ")}.`);
 
   const home = alertsHome(process.env, process.cwd());
+  // The lock of the home folder comes before each read and each write of its files (AL-58). A second runtime on the folder
+  // stops here. A start that stops after this line leaves a stale lock, and the next start removes it.
+  const held = await holdHome(home, nodeHostPorts());
+  if (held.recovered !== undefined) console.log(`The lock of a runtime that stopped went: ${held.recovered}`);
 
   // The start checks config.json with the keys of secrets.env and the settings of copy.json. Files with problems, or files
   // of a start that stopped before it was ready, give way to the last good set. A problem names the line and the key of a
   // bad line, or the code of a read error. It holds no value, no address, no URL and no path.
   // The last good set holds the keys, thus each file that the start writes has the permissions 0600.
-  const checkOf: CheckOf = name === "daemon" ? daemonCheck : () => INSTANCE_CHECK;
+  const checkOf: CheckOf = name === "daemon" ? daemonCheck : instanceCheck;
   const files = privateFiles(home, configPath(process.env, process.cwd()));
   const loaded = await startConfig(files, checkOf, { write: (path, text) => writeFileAtomic(path, text, { mode: 0o600 }), remove: (path) => rm(path, { force: true }) });
   if (loaded.use === "good") console.error(`The runtime uses the last good set ${GOOD_FILE} of the private files:\n- ${loaded.fallback.join("\n- ")}`);
@@ -180,6 +188,9 @@ async function runtime(): Promise<ServiceBuilder> {
   // A broken file of shapes goes into quarantine, and the store starts empty. Then the outlines come again from the NWS API.
   const shapes = openShapeCache(join(home, SHAPES_FILE));
   if (shapes.quarantined !== undefined) console.error(`The file ${SHAPES_FILE} was broken. It is in quarantine, and the store of shapes starts empty.`);
+  // A broken file of readings goes into quarantine, and the store starts empty. Each series has no read until its history fills again.
+  const readings = openReadingStore(join(home, READINGS_FILE));
+  if (readings.quarantined !== undefined) console.error(`The file ${READINGS_FILE} was broken. It is in quarantine, and the store of readings starts empty.`);
   const instance = openInstance({
     config,
     secret,
@@ -200,6 +211,9 @@ async function runtime(): Promise<ServiceBuilder> {
     // The output gets no secret, also when an error quotes a request.
     onError: (error, failures) => console.error(`A pass failed (${failures} in sequence): ${redactSecrets(errorMessage(error), values)}`),
     shapes,
+    readings,
+    // The kind of the error only: its message can quote a value of a reading.
+    onReadingsFault: (error, action) => console.error(`The store of readings refused a write (${action}): ${error instanceof Error ? error.name : typeof error}.`),
     onShapes: (outcome) => {
       const report = shapeReport(outcome);
       if (report !== undefined) console.error(redactSecrets(report, values));
@@ -227,15 +241,12 @@ async function runtime(): Promise<ServiceBuilder> {
   const host = copies === undefined || copy.listen === undefined || token === undefined ? undefined : exchangeHost({ source: copies.source, token, listen: copy.listen });
   const exchange = { ...(copies?.loop === undefined ? {} : { loop: copies.loop }), ...(host === undefined ? {} : { host }) };
 
-  // The built local page. The line tells if the page is built, and it holds no path.
-  const page = pageFolder(fileURLToPath(new URL("..", import.meta.url)));
-  const built = await access(join(page, PAGE_INDEX)).then(
-    () => true,
-    () => false,
-  );
-  console.log(built ? "The API serves the local page at the path /." : "The local page is not built, thus the path / gives 404. Build it: pnpm --filter ./packages/site build");
+  // The built local page. The line tells the state of the page, and it holds no path.
+  const runtimeRoot = fileURLToPath(new URL("..", import.meta.url));
+  const page = pageFolder(runtimeRoot);
+  console.log(pageWarning(await readPageState(runtimeRoot)) ?? "The API serves the local page at the path /.");
 
-  // The service closes the log and the store of shapes in its shutdown.
+  // The service closes the log, the store of shapes and the sessions of the sources in its shutdown.
   const service = declare({
     port: port("PORT", 8080),
     probePort: port("PROBE_PORT", 9090),
@@ -244,6 +255,8 @@ async function runtime(): Promise<ServiceBuilder> {
     log,
     shapes: instance.shapes,
     quotas,
+    readings,
+    sources: instance.runtime,
     map: instance.map,
     health: instance.health,
     history: instance.history,
@@ -251,6 +264,7 @@ async function runtime(): Promise<ServiceBuilder> {
     ...(instance.outage === undefined ? {} : { outage: instance.outage }),
     start: { use: loaded.use, reasons: loaded.fallback.length },
     exchange,
+    home: held.lock,
   });
   return service;
 }

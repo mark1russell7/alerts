@@ -1,9 +1,9 @@
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { CONFIG_FORMAT, ONLY_COPY, type AlertConfig, type ChannelDescriptor, type ChannelId, type PersonId, type PlaceId } from "@mark1russell7/alerts";
+import { CONFIG_FORMAT, CONFIG_PART_FORMAT, ONLY_COPY, type AlertConfig, type ChannelDescriptor, type ChannelId, type PersonId, type PlaceId } from "@mark1russell7/alerts";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { ConfigRefused, type FileText, type InstanceCheck } from "./config.ts";
+import { ConfigRefused, NO_PARTS, PARTS_FOLDER, type FileText, type InstanceCheck, type PartsTexts } from "./config.ts";
 import {
   GOOD_FILE,
   goodText,
@@ -80,7 +80,10 @@ const read = (path: string): Promise<FileText> => readFile(path, "utf8").then(
   (text) => ({ text }),
   (error: unknown) => ({ code: (error as { code?: string }).code ?? "no code" }),
 );
-const textsOf = (config: string, secrets = KEYS, copy: FileText = NONE): StartTexts => ({ config: { text: config }, secrets: { text: secrets }, copy });
+const textsOf = (config: string, secrets = KEYS, copy: FileText = NONE, parts: PartsTexts = NO_PARTS): StartTexts => ({ config: { text: config }, secrets: { text: secrets }, copy, parts });
+// A part with a second public place in Kansas, and the texts of a folder with that one part.
+const PART = JSON.stringify({ format: CONFIG_PART_FORMAT, places: [{ id: "place:b", label: "Place B", codes: [{ system: "ugc", code: "KSZ083" }], bufferKm: 0 }] });
+const partsOf = (part: string): PartsTexts => ({ files: [{ name: "extra", file: { text: part } }] });
 
 describe("startConfig", () => {
   let home = "";
@@ -92,6 +95,19 @@ describe("startConfig", () => {
   });
   afterEach(async () => {
     await rm(home, { recursive: true, force: true });
+  });
+
+  it("merges the parts of the folder parts into the configuration of the start", async () => {
+    await write(files.config, GOOD);
+    await mkdir(files.parts);
+    await write(join(files.parts, "extra.json"), PART);
+    // The folder ignores a file with another end, for example a new part before its check.
+    await write(join(files.parts, "extra.next.json.tmp"), "{");
+    expect(files.parts).toBe(join(home, PARTS_FOLDER));
+    const started = await startConfig(files, CHECK_OF, PORTS);
+    expect(started.use).toBe("files");
+    expect(started.parsed.config.places.map((place) => place.id)).toEqual(["place:a", "place:b"]);
+    expect(started.texts).toEqual(textsOf(GOOD, KEYS, NONE, partsOf(PART)));
   });
 
   it("uses the private files when they pass the check, and writes the start marker with their key", async () => {
@@ -352,11 +368,31 @@ describe("the texts of the start files", () => {
     const texts = textsOf(GOOD, KEYS, { text: COPY_B });
     expect(parseGood({ text: goodText(texts) })).toEqual({ tag: "ok", value: texts });
     expect(parseMarker({ text: markerText({ key: "k", use: "good", starts: 2 }) })).toEqual({ key: "k", use: "good", starts: 2 });
+    const parted = textsOf(GOOD, KEYS, NONE, partsOf(PART));
+    expect(parseGood({ text: goodText(parted) })).toEqual({ tag: "ok", value: parted });
+    expect(parseGood({ text: goodText(textsOf(GOOD, KEYS, NONE, { code: "EACCES" })) })).toEqual({ tag: "ok", value: textsOf(GOOD, KEYS, NONE, { code: "EACCES" }) });
     // A marker with no count of the starts, or with a count of 0, is not a valid marker.
     expect(parseMarker({ text: JSON.stringify({ format: "alerts-start/1", key: "k", use: "files" }) })).toBeUndefined();
     expect(parseMarker({ text: JSON.stringify({ format: "alerts-start/1", key: "k", use: "files", starts: 0 }) })).toBeUndefined();
     expect(parseMarker({ text: JSON.stringify({ format: "alerts-start/1", key: "k", use: "other", starts: 1 }) })).toBeUndefined();
     expect(parseMarker(NONE)).toBeUndefined();
+  });
+
+  it("gives the keys and the last good set of a start with no parts as before the parts", () => {
+    const before: StartTexts = { config: { text: GOOD }, secrets: { text: KEYS }, copy: NONE };
+    expect(textsKey(textsOf(GOOD))).toBe(JSON.stringify([before.config, before.secrets, before.copy]));
+    expect(textsKey(before)).toBe(textsKey(textsOf(GOOD)));
+    expect(startKey(before, NONE)).toBe(startKey(textsOf(GOOD), NONE));
+    // A set from before the parts has no field parts, and it gives a start with no parts.
+    expect(goodText(textsOf(GOOD))).toBe(goodText(before));
+    expect(JSON.parse(goodText(textsOf(GOOD)))).not.toHaveProperty("parts");
+    expect(parseGood({ text: goodText(before) })).toEqual({ tag: "ok", value: textsOf(GOOD) });
+  });
+
+  it("gives another key for each part, each change of a part and an error of the read of the folder", () => {
+    const keys = [textsOf(GOOD), textsOf(GOOD, KEYS, NONE, partsOf(PART)), textsOf(GOOD, KEYS, NONE, partsOf(PART.replace("Place B", "Place C"))), textsOf(GOOD, KEYS, NONE, { code: "EACCES" })];
+    expect(new Set(keys.map(textsKey)).size).toBe(4);
+    expect(new Set(keys.map((texts) => startKey(texts, NONE))).size).toBe(4);
   });
 
   it("gives the files of a new runtime from its start marker", () => {
@@ -369,6 +405,16 @@ describe("the texts of the start files", () => {
 
 describe("reloadStep", () => {
   const start: ReloadState = { started: textsKey(textsOf(GOOD)), request: requestKey(NONE) };
+
+  it("restarts for a new part or a change of a part that passes the check, and refuses a bad part", () => {
+    expect(reloadStep(start, textsOf(GOOD, KEYS, NONE, partsOf(PART)), CHECK_OF, NONE).action).toEqual({ kind: "restart", cause: "changed" });
+    const parted: ReloadState = { started: textsKey(textsOf(GOOD, KEYS, NONE, partsOf(PART))), request: requestKey(NONE) };
+    expect(reloadStep(parted, textsOf(GOOD, KEYS, NONE, partsOf(PART)), CHECK_OF, NONE).action).toEqual({ kind: "none" });
+    // The removal of the part is a change too.
+    expect(reloadStep(parted, textsOf(GOOD), CHECK_OF, NONE).action).toEqual({ kind: "restart", cause: "changed" });
+    expect(reloadStep(start, textsOf(GOOD, KEYS, NONE, partsOf("{")), CHECK_OF, NONE).action).toEqual({ kind: "refused", problems: ["The part extra is not valid JSON."] });
+    expect(reloadStep(start, textsOf(GOOD, KEYS, NONE, { code: "EACCES" }), CHECK_OF, NONE).action).toEqual({ kind: "refused", problems: [`The folder ${PARTS_FOLDER} cannot be read (EACCES).`] });
+  });
 
   it("gives no action for the texts of the start", () => {
     expect(reloadStep(start, textsOf(GOOD), CHECK_OF, NONE)).toEqual({ state: start, action: { kind: "none" } });

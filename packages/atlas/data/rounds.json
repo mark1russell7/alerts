@@ -451,5 +451,205 @@
       "unknownPaths": 5,
       "cause": "Round 7 adds the class met.rain and the planned source wmo-cap-feeds. met.rain and met.lightning each have 2 planned sources with no risk, so the gaps go from 132 to 131 of 201 classes. No source is adopted, so the layers do not change. The path of wmo-cap-feeds is unknown, because its feeds are on 92 hosts."
     }
+  },
+  {
+    "round": 8,
+    "date": "2026-11-16",
+    "by": "One session, after the merge of the adapter source-nwws (AL-30). The tests of the atlas check the descriptor of the adapter.",
+    "method": "The adoption of the NWWS-OI adapter. The round read the NWWS page and the disclaimer of the NWS, and it made a DNS lookup of the XMPP server. The facts of the stream come from four live sessions of the adapter on 2026-11-16.",
+    "lists": [
+      "The NOAA Weather Wire Service: https://www.weather.gov/nwws/",
+      "The disclaimer of the NWS: https://www.weather.gov/disclaimer"
+    ],
+    "queries": [],
+    "notes": [
+      "NWWS-OI sends each NWS product to one XMPP room. The adapter keeps the CAP messages of the NWS, the same messages that the NWS API gives.",
+      "The XMPP server is nwws-oi.weather.gov, with no content network. The path of the NWS API has api.weather.gov and Akamai. Thus the two NWS sources share no part of a path.",
+      "The two NWS sources share the origins nws and us-alerting-authorities. Thus the layer of the origins does not change.",
+      "The NWWS page tells of planned transitions of the NWS servers, up to four times a month, with an outage of 10 to 90 minutes. The NWS API source covers these outages.",
+      "A join of the room gives only its last 25 products again. Thus a gap in the stream can lose a product, and the NWS API source finds it.",
+      "These 15 classes get a second source with no risk, so they are not gaps after this round: cbrne.hazardous-materials, fire.structure, geo.earthquake.early-warning, infra.dam.failure, infra.telecom.911-outage, met.outlook, met.special, safety.civil-danger, safety.civil-emergency, safety.evacuation, safety.local-emergency, safety.shelter-in-place, security.blue-alert, security.child-abduction, security.law-enforcement.",
+      "Each of these classes has only the origins of the NWS. Thus its layer of the origins stays at 1, and a fault at the NWS stops both sources.",
+      "The old reasons of these gaps stay true for a second origin. fire.structure: no public national feed of fire dispatch exists, and PulsePoint has no public API.",
+      "geo.earthquake.early-warning: round 1 found no open machine feed of the warnings themselves. infra.dam.failure: round 1 opened no feed for each dam.",
+      "The other classes of the list have a later source with its reason in its record, or round 1 found no other source."
+    ],
+    "studies": [],
+    "measures": {
+      "classes": 201,
+      "gaps": 116,
+      "cover": {
+        "adopted": 51,
+        "paths": 51,
+        "origins": 1
+      },
+      "total": {
+        "adopted": 134,
+        "paths": 134,
+        "origins": 56
+      },
+      "unknownOrigins": 3,
+      "unknownPaths": 5,
+      "cause": "Round 8 adopts NWWS-OI, a second path of the NWS for its 51 classes. The cover of the adopted sources and of the paths goes from 26 to 51 classes, and the gaps go from 131 to 116 of 201 classes. Both NWS sources have the same origins, so the origin layers do not change."
+    }
+  },
+  {
+    "round": 9,
+    "date": "2026-11-16",
+    "by": "One session, for the second origins of space weather and the internet sources of the order of work, then a check of each fact in the pages and in single reads.",
+    "method": "Web searches, then reads of the pages of each source with a generic agent. One small read of the GFZ web service and one of the IODA alerts checked the format and the delay. A DNS lookup of each host checked the content networks.",
+    "lists": [
+      "The data page and the web service of the GFZ Kp index: https://kp.gfz.de/en/data",
+      "The product list of the SIDC: https://sidc.be/registration/registration_main.php",
+      "The OpenAPI page of the IODA API: https://api.ioda.inetintel.cc.gatech.edu/v2/",
+      "The RIS commercial use page of the RIPE NCC: https://www.ripe.net/analyse/internet-measurements/routing-information-service-ris/commercial-use/"
+    ],
+    "queries": [
+      "GFZ Kp index nowcast data access license CC BY 4.0 JSON API kp.gfz.de",
+      "IODA Internet Outage Detection and Analysis API terms of use data license",
+      "RIPE RIS Live terms of use data license RIPE NCC routing data",
+      "Bureau of Meteorology Space Weather Services API get-alert geomagnetic warning free API key documentation",
+      "SIDC STCE space weather alerts presto RSS feed machine readable solar flare alert",
+      "IODA API documentation api.ioda.inetintel.cc.gatech.edu v2 outages alerts terms acceptable use",
+      "\"IODA\" inetintel gatech \"acceptable use\" OR \"terms of use\" OR \"data use\" OR \"acknowledge\" outage data researchers",
+      "RIS Live websocket wss://ris-live.ripe.net/v1/ws/?client= ris_subscribe documentation"
+    ],
+    "notes": [
+      "Before round 9, each class of space weather had one source with no risk, the SWPC, with the NWS as its only origin.",
+      "GFZ gives the planetary Kp and the half-hourly Hp30 under CC BY 4.0, with no key. A Kp of 5 or more is a storm on the G scale of NOAA.",
+      "Some of the 13 Kp observatories are observatories of the USGS that the SWPC also reads. Thus the two origins share a part of their raw data.",
+      "The Space Weather API of the Bureau of Meteorology gives magnetic alerts and warnings of the Australian region. It needs a key from a registration with a name and an email address.",
+      "The SIDC sends its alerts only by email. Its flare alert reads the GOES data of NOAA, so it is a second issuer, not a second sensor.",
+      "The IODA API answered one read with no key. No page gives terms for its data, so the plan waits for written terms before an adapter.",
+      "The terms of service of the RIPE NCC cover the automated use of RIS Live. The RIS Live manual page gave a general page of the RIPE NCC.",
+      "The classes that are not gaps after this round: geo.space-weather, geo.space-weather.geomagnetic-storm, infra.internet.outage, infra.internet.shutdown."
+    ],
+    "studies": [],
+    "measures": {
+      "classes": 201,
+      "gaps": 112,
+      "cover": {
+        "adopted": 51,
+        "paths": 51,
+        "origins": 1
+      },
+      "total": {
+        "adopted": 134,
+        "paths": 134,
+        "origins": 56
+      },
+      "unknownOrigins": 3,
+      "unknownPaths": 6,
+      "cause": "Round 9 plans GFZ and the Bureau of Meteorology as the second and third origins of the geomagnetic storm, and plans IODA with no key. The gaps go from 116 to 112 of 201 classes. No source is adopted, so the layers do not change. The email alerts of the SIDC add 1 source with an unknown path."
+    }
+  },
+  {
+    "round": 10,
+    "date": "2026-11-17",
+    "by": "One session, for the indicators of the threat level: a catalog of the sources of each dimension, then a draft of the atlas records and a check of each draft.",
+    "method": "Web searches, then reads of the pages of each source with a generic agent, one group of dimensions at a time. A count of the systems file of GBFS checked its size. One request to each host of the two streams checked that it answers.",
+    "lists": [
+      "The systems catalog of GBFS: https://github.com/MobilityData/gbfs/blob/master/systems.csv",
+      "The feed catalog of the Mobility Database: https://mobilitydatabase.org/about",
+      "The specification and the feed registry of WZDx: https://github.com/usdot-jpo-ode/wzdx",
+      "The public API of Statuspage: https://metastatuspage.com/api",
+      "The API of Cloudflare Radar: https://developers.cloudflare.com/radar/",
+      "The API of Energy-Charts: https://api.energy-charts.info/llms.txt",
+      "The EventStreams service of Wikimedia: https://wikitech.wikimedia.org/wiki/Event_Platform/EventStreams_HTTP_Service",
+      "The Jetstream service of Bluesky: https://bsky.network/docs/jetstream",
+      "The API of adsb.lol: https://github.com/adsblol/api",
+      "The open data of the EIA: https://www.eia.gov/opendata/",
+      "The API of NASA FIRMS: https://firms.modaps.eosdis.nasa.gov/api/"
+    ],
+    "queries": [
+      "WZDx feed registry number of feeds state DOT data.transportation.gov",
+      "Waze for Cities data feed partner program public access terms",
+      "Network Rail open data feeds TRUST train movements STOMP registration licence Rail Data Marketplace",
+      "National Rail Darwin Push Port open data licence real-time delays cancellations access",
+      "SNCF API open data temps réel GTFS-RT perturbations clé API licence ODbL",
+      "GBFS adoption number of bike share systems cities 2025 MobilityData",
+      "nasstatus.faa.gov api airport-status-information XML ground stop ground delay program feed",
+      "ADS-B Exchange API pricing RapidAPI enterprise terms non-commercial",
+      "Kystverket AIS open data real-time TCP stream Norwegian Coastal Administration licence NLOD",
+      "IMF PortWatch daily chokepoint transit calls data ArcGIS API download update weekly 2019",
+      "aisstream.io free websocket API key global AIS terms of service",
+      "Danish Maritime Authority AIS data download aisdata.ais.dk historical daily files terms",
+      "NGA MSI API broadcast warnings NAVAREA JSON msi.nga.mil api publications broadcast-warn",
+      "Cloudflare Radar API data license CC BY-NC 4.0 traffic anomalies outages annotations endpoint free",
+      "IODA API documentation signals outages alerts BGP active probing telescope no authentication terms of use",
+      "Internet Health Report IIJ API ihr.iijlab.net disconnections network delay AS hegemony REST API",
+      "\"Cloudflare Radar\" \"CC BY-NC 4.0\" data licensed",
+      "IODA API v2 api.ioda.inetintel.cc.gatech.edu signals raw country datasource example",
+      "Energy-Charts API Fraunhofer ISE public_power frequency endpoint license CC BY 4.0 no key",
+      "ENTSO-E Transparency Platform RESTful API security token request email rate limit 400 requests per minute terms",
+      "EIA-930 hourly electric grid monitor balancing authorities demand forecast update lag history July 2015",
+      "NESO data portal API CKAN demand data system frequency one second open licence no key",
+      "UK Fuel Finder open data API forecourt prices statutory scheme 2025 developer access",
+      "EURDEP data access public API WFS gamma dose rate JRC REM terms automated download",
+      "Safecast API api.safecast.org measurements json CC0 license realtime sensors tt.safecast.org",
+      "BfS Geoportal Nutzungsbedingungen ODL opendata Lizenz dl-de/by-2-0 Messstellen Anzahl",
+      "USGS Water Data APIs api.waterdata.usgs.gov continuous values replace waterservices instantaneous values decommission API key",
+      "GloFAS data access Copernicus EWDS river discharge forecast API account licence",
+      "ECDC ERVISS respiratory virus surveillance data GitHub CSV weekly European data open licence",
+      "data.cdc.gov NWSS wastewater viral activity level dataset Socrata API SARS-CoV-2 influenza RSV weekly",
+      "data.cdc.gov NSSP emergency department visit trajectories percent visits COVID influenza RSV state county dataset",
+      "Google Trends API alpha 2025 official announcement access limited testers",
+      "Reddit Data API terms free tier 100 queries per minute OAuth approval required 2025 responsible builder policy",
+      "Bluesky Jetstream public instances jetstream2.us-east.bsky.network subscribe wantedCollections cursor replay no auth",
+      "NASA Black Marble VNP46A1 daily night lights near real time Earthdata login LAADS latency",
+      "Copernicus Emergency Management Service rapid mapping activations API feed GeoRSS JSON public",
+      "FIRMS MAP_KEY transaction limit 5000 per 10 minute interval area API VIIRS NRT within 3 hours day range 1-10",
+      "PurpleAir API points pricing free points new account 2025 terms of service data redistribution",
+      "EMSC felt reports testimonies API LastQuake data access seismicportal websocket felt reports count",
+      "WFP market prices data API HDX VAM DataBridges API key food prices weekly monthly",
+      "Seattle Real Time Fire 911 Calls dataset kzjm-xkqj updated every 5 minutes Socrata",
+      "AFIR dynamic data charging point availability national access point requirement April 2025 open data",
+      "Open Charge Map API key required terms of use license data CC BY rate limit",
+      "Mobility Database API refresh token access token catalog feeds_v2.csv download GTFS-RT feeds count",
+      "Google Cloud status incidents.json feed AWS Health Dashboard RSS public JSON Azure status RSS feed",
+      "ansperformance.eu data download daily IFR flights airport traffic delays CSV Eurocontrol open data licence",
+      "OpenSky Network terms of use data non-commercial research REST API redistribution",
+      "Transitland API v2 API key free tier limits GTFS realtime feeds terms",
+      "FRED API key free terms of use VIX daily series rate limit 120 requests per minute",
+      "Open311 GeoReport v2 cities list endpoints service requests public API",
+      "TSA checkpoint travel numbers daily throughput page data download",
+      "Downdetector API pricing enterprise access terms automated scraping prohibited",
+      "HERE Traffic API v7 flow incidents free tier transactions per month base plan terms caching",
+      "Flightradar24 terms of service scraping prohibited API subscription GPS jamming map data",
+      "TomTom API free tier 2500 requests per day evaluation terms storing traffic data prohibited",
+      "dumps.wikimedia.org pageviews hourly files all articles format delay",
+      "\"ioda\" api \"outages/events\" OR \"signals/raw\" inetintel gatech json",
+      "511.org open data API token rate limit 60 requests per hour traffic events WZDx transit GTFS-RT regional",
+      "Blitzortung data terms of use commercial automated access not allowed lightning data",
+      "IMF PortWatch terms of use data reuse attribution license",
+      "Trafikverket open API key free road traffic train announcements delays Sweden licence CC0"
+    ],
+    "notes": [
+      "Round 10 adds indicators: measures that are not events, but add to the threat level of a place. Traffic, rail, flights, power, the internet and public attention are examples. The core has 36 dimensions of them.",
+      "A source of indicators has the field dimensions. It can have no class, so the gate of the classes does not count it. The measure dimensions counts each dimension with 2 or more live sources with no risk.",
+      "Each new source has the decision plan, later or reject, and no adapter. The adapters of indicators start after the contract of the indicators is in the core.",
+      "The terms of most new sources give only a licence. Round 10 gives unclear to their automated use when the text gives no rule for it, and limited when it gives a rate or a condition.",
+      "The catalog read reports that the terms of FRED forbid wholesale downloading. So its automated use is limited. The data of the Cloudflare Radar API is under CC BY-NC 4.0, so its redistribution is limited.",
+      "Two drafts were copies of round 9 records: ioda of ioda-api, and wzdx-registry of wzdx-feeds. Round 10 adds their dimensions and evidence to those records."
+    ],
+    "studies": [],
+    "measures": {
+      "classes": 201,
+      "gaps": 112,
+      "cover": {
+        "adopted": 51,
+        "paths": 51,
+        "origins": 1
+      },
+      "total": {
+        "adopted": 134,
+        "paths": 134,
+        "origins": 56
+      },
+      "unknownOrigins": 4,
+      "unknownPaths": 30,
+      "dimensions": 2,
+      "cause": "Round 10 adds 63 sources of indicators, and gives dimensions to 23 older sources. No class gets a live source, so the gaps and the layers do not change. 2 of 36 dimensions have 2 or more live sources with no risk. The unknown origins go from 3 to 4, and the unknown paths from 6 to 30."
+    }
   }
 ]

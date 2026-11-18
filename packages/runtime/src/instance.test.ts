@@ -30,11 +30,13 @@ import type { TwilioFetch } from "@mark1russell7/alerts-channel-twilio";
 import { PUSHOVER_QUOTA, PUSHOVER_RESERVE_NOTICES, PUSHOVER_TIMEOUT_MS, type PushoverChannelOptions } from "@mark1russell7/alerts-channel-pushover";
 import { memoryCache, type ShapeCache } from "@mark1russell7/alerts-shapes-nws";
 import { CANARY_PATH, createNwsSource } from "@mark1russell7/alerts-source-nws-api";
+import { fakeSessions, NWWS_DESCRIPTOR } from "@mark1russell7/alerts-source-nwws";
 import { SWPC_KINDS } from "@mark1russell7/alerts-source-swpc";
 import { memoryQuotaStore, quotaGate, type Exchange, type Transport } from "polite-crawler/api";
 import { DEFAULT_POLICY } from "polite-crawler/politeness";
 import { afterEach, describe, expect, it } from "vitest";
-import { CHECKS_KEY, checksKeys, DAEMON_CHECK, daemonCheck, DELIVERY_TIMES, INSTANCE_CHANNELS, INSTANCE_CHECK, INSTANCE_EXPECTATIONS, INSTANCE_SOURCES, INSTANCE_TIMES, instanceProblems, LOUD_PING_URL_KEY, openInstance, PING_URL_KEY, pingKeyOf, pingTargets, RANK_DELAY, RANK_FLOOR, SOURCE_POLICY, sourcePace, USER_AGENT_NAME, type Instance, type InstanceOptions } from "./instance.ts";
+import { ACCOUNT_SOURCES, CHECKS_KEY, checksKeys, DAEMON_CHECK, daemonCheck, DELIVERY_TIMES, INSTANCE_CHANNELS, INSTANCE_CHECK, INSTANCE_EXPECTATIONS, INSTANCE_SOURCES, INSTANCE_TIMES, instanceCheck, instanceProblems, LOUD_PING_URL_KEY, nwwsKeys, nwwsSetup, openInstance, PING_URL_KEY, pingKeyOf, pingTargets, RANK_DELAY, RANK_FLOOR, SOURCE_POLICY, sourcePace, twilioSetup, USER_AGENT_NAME, type Instance, type InstanceOptions } from "./instance.ts";
+import { heartbeatGap } from "./heartbeat.ts";
 import { spendGates, spendQuota } from "./balance.ts";
 import { CLOCK_SKEW_LIMIT, COPY_TOKEN_KEY, EXCHANGE_EVERY, EXCHANGE_LIMIT } from "./copy.ts";
 import { overdueLimit } from "./delivery.ts";
@@ -563,15 +565,20 @@ describe("the Twilio call channel of the instance", () => {
     ...(spend === undefined ? {} : { spend }),
   });
 
-  /** A fake Twilio server. It accepts each call, and it gives a balance of 12.50 US dollars. */
+  /** A fake Twilio server. It accepts each call and each text, and it gives a balance of 12.50 US dollars. */
   function twilioServer() {
     const calls: Array<{ url: string; method: string; authorization: string | undefined; fields: Record<string, string> }> = [];
     const fetch: TwilioFetch = async (url, init) => {
       calls.push({ url, method: init.method, authorization: init.headers["authorization"], fields: Object.fromEntries(new URLSearchParams(init.body ?? "")) });
-      const body = url.endsWith("/Balance.json") ? { balance: "12.50", currency: "USD" } : { sid: `CA${"a".repeat(32)}`, status: "queued" };
-      return { status: url.endsWith("/Calls.json") ? 201 : 200, text: async () => JSON.stringify(body), headers: { get: () => null } };
+      const body = url.endsWith("/Balance.json")
+        ? { balance: "12.50", currency: "USD" }
+        : url.endsWith("/Messages.json")
+          ? { sid: `SM${"b".repeat(32)}`, status: "queued" }
+          : { sid: `CA${"a".repeat(32)}`, status: "queued" };
+      return { status: url.endsWith("/Calls.json") || url.endsWith("/Messages.json") ? 201 : 200, text: async () => JSON.stringify(body), headers: { get: () => null } };
     };
-    return { fetch, calls, made: () => calls.filter((entry) => entry.method === "POST" && entry.url.endsWith("/Calls.json")) };
+    const posts = (resource: string) => calls.filter((entry) => entry.method === "POST" && entry.url.endsWith(resource));
+    return { fetch, calls, made: () => posts("/Calls.json"), texts: () => posts("/Messages.json") };
   }
 
   it("calls the person with the keys of the secrets, counts the call in the cap, and reads the balance", async () => {
@@ -632,6 +639,64 @@ describe("the Twilio call channel of the instance", () => {
     expect(instance.quotas().find((quota) => quota.channel === call)?.used).toBe(700);
   });
 
+  describe("the text channel", () => {
+    const text = "twilio-text" as ChannelId;
+    // A fake number of the texts. The number of a real sender needs a registration at Twilio.
+    const TEXTS = { ...TWILIO, TWILIO_TEXT_FROM: "+99900000003" };
+    // Each policy texts the person at once, next to the Pushover message.
+    const texting = (spend?: readonly SpendConfig[]): AlertConfig => ({
+      ...CONFIG,
+      contacts: [...CONFIG.contacts, { person, channel: text, address: { to: { secret: "PHONE" } } }],
+      // The person agreed to the texts before the start of the test.
+      optIn: [{ number: { secret: "PHONE" }, at: "2026-11-01T00:00:00Z", way: "written", words: "texts-consent/1" }],
+      policies: CONFIG.policies.map((entry) => ({ ...entry, steps: [...entry.steps, { channel: text, at: 0 }] })),
+      ...(spend === undefined ? {} : { spend }),
+    });
+
+    it("texts the person from the number of the texts, counts the text in the cap of the calls, and watches one balance", async () => {
+      const twilio = twilioServer();
+      const { instance, clock, server } = open(store({ ...SECRETS, ...TEXTS }), texting([SPEND]), undefined, undefined, { twilio: twilio.fetch, spendStore: memoryQuotaStore() });
+      const pass = await finish(clock, instance.runtime.pass());
+      expect(pass.delivery?.sent).toHaveLength(2);
+      expect(server.calls).toHaveLength(1);
+      expect(twilio.made()).toEqual([]);
+      const [sent] = twilio.texts();
+      expect(twilio.texts()).toHaveLength(1);
+      expect(sent?.url).toBe(`https://api.twilio.com/2010-04-01/Accounts/${TWILIO.TWILIO_ACCOUNT_SID}/Messages.json`);
+      expect(sent?.fields).toMatchObject({ To: TWILIO.PHONE, From: TEXTS.TWILIO_TEXT_FROM });
+      expect(sent?.fields["Body"]).toContain("Flood Warning");
+      expect([...(sent?.fields["Body"] ?? "")].length).toBeLessThanOrEqual(160);
+      expect(sent?.authorization).toBe(`Basic ${btoa(`${TWILIO.TWILIO_API_KEY_SID}:${TWILIO.TWILIO_API_KEY_SECRET}`)}`);
+      // The text takes 4 cents from the one cap of the account. The quota of the text is the quota of the calls.
+      expect(instance.quotas()).toContainEqual({ channel: call, limit: 1_000, reserve: 300, used: 4, unit: "cents", resetAt: expect.any(Number) });
+      expect(instance.quotas().map((quota) => quota.channel)).not.toContain(text);
+      expect(instance.balances.map((watch) => watch.provider)).toEqual(["provider:twilio"]);
+    });
+
+    it("does not start with a text step and no number of the texts, a number of a bad form, a number with no keys, no cap, or no opt-in", () => {
+      const more = () => ({ twilio: twilioServer().fetch, spendStore: memoryQuotaStore() });
+      const noFrom = messageOf(() => open(store({ ...SECRETS, ...TWILIO }), texting([SPEND]), undefined, undefined, more()));
+      expect(noFrom).toContain("uses the channel twilio-text, and the instance has no sender on it.");
+      const badFrom = messageOf(() => open(store({ ...SECRETS, ...TWILIO, TWILIO_TEXT_FROM: "+1-bad-value" }), texting([SPEND]), undefined, undefined, more()));
+      expect(badFrom).toContain("The keys of Twilio have a problem: The number that texts is not a phone number in E.164 form.");
+      const alone = messageOf(() => open(store({ ...SECRETS, TWILIO_TEXT_FROM: TEXTS.TWILIO_TEXT_FROM })));
+      expect(alone).toContain("The secret store has a value for TWILIO_TEXT_FROM, and no keys of Twilio.");
+      const noCap = messageOf(() => open(store({ ...SECRETS, ...TEXTS }), texting(), undefined, undefined, more()));
+      expect(noCap).toContain("The channel twilio-text costs money, and the configuration has no spend entry for its provider.");
+      const noOptIn = messageOf(() => open(store({ ...SECRETS, ...TEXTS }), { ...texting([SPEND]), optIn: [] }, undefined, undefined, more()));
+      expect(noOptIn).toContain(`The field to of the contact of ${person} on twilio-text is not on the opt-in list. The channel sends nothing to it.`);
+      for (const problem of [noFrom, badFrom, alone, noCap, noOptIn]) expect(problem).not.toMatch(/bad-value|s{32}|0{32}|1{32}|\+999/u);
+      // With the number of the texts and no step on the channel, the instance starts.
+      expect(() => open(store({ ...SECRETS, ...TEXTS }), CONFIG, undefined, undefined, more())).not.toThrow();
+    });
+
+    it("gives the number of the texts in the setup of Twilio, so the outage call gets it too", () => {
+      const setup = twilioSetup(store({ ...SECRETS, ...TEXTS }));
+      expect(setup).toEqual({ tag: "ok", value: expect.objectContaining({ from: TWILIO.TWILIO_FROM, textFrom: TEXTS.TWILIO_TEXT_FROM }) });
+      expect(twilioSetup(store({ ...SECRETS, ...TWILIO }))).toEqual({ tag: "ok", value: expect.not.objectContaining({ textFrom: expect.anything() }) });
+    });
+  });
+
   it("makes no call channel without the keys, and the heartbeat has only the Pushover quota", () => {
     const gate = quotaGate(PUSHOVER_QUOTA, { key: "pushover:app", now: () => T0 });
     const { instance } = open(undefined, undefined, undefined, undefined, { pushoverQuota: gate });
@@ -678,6 +743,80 @@ describe("the Twilio call channel of the instance", () => {
     const noKeys = messageOf(() => open(store({ ...SECRETS, OUTAGE_TOKEN: "o".repeat(40), PHONE: TWILIO.PHONE }), config));
     expect(noKeys).toContain("the secret store has no keys of Twilio that pass the check");
     for (const problem of [noToken, badToken, noKeys]) expect(problem).not.toMatch(/bad-value|o{40}|s{32}|\+999/u);
+  });
+});
+
+describe("the NWWS-OI source of the instance", () => {
+  // Fake keys of two accounts. A test looks for them in each message.
+  const ACCOUNT_1 = { NWWS_OI_USER_1: "operator-one", NWWS_OI_PASSWORD_1: "password-one" };
+  const ACCOUNT_2 = { NWWS_OI_USER_2: "operator-two", NWWS_OI_PASSWORD_2: "password-two" };
+  const VALUES = [...Object.values(ACCOUNT_1), ...Object.values(ACCOUNT_2)];
+  const SECOND: CopySettings = { ...ONLY_COPY, accounts: { nwws: 2 } };
+
+  it("names the keys of each account, and only the stream has an account", () => {
+    expect(nwwsKeys(1)).toEqual({ username: "NWWS_OI_USER_1", password: "NWWS_OI_PASSWORD_1" });
+    expect(nwwsKeys(2)).toEqual({ username: "NWWS_OI_USER_2", password: "NWWS_OI_PASSWORD_2" });
+    expect(ACCOUNT_SOURCES).toEqual([NWWS_DESCRIPTOR.id]);
+  });
+
+  it("adds the stream with the keys of account 1, fetches it in a pass, and ends its session at the close of the runtime", async () => {
+    const fake = fakeSessions((session) => session.join());
+    const { instance, clock } = open(store({ ...SECRETS, ...ACCOUNT_1 }), CONFIG, 0, TEST_FETCH_LIMIT, { nwwsOpen: fake.open });
+    expect(instance.runtime.config.sources.map((source) => source.id)).toEqual([...INSTANCE_SOURCES.map((source) => source.id), NWWS_DESCRIPTOR.id]);
+    // The first fetch opens the session, not the start.
+    expect(fake.sessions).toHaveLength(0);
+    const pass = await finish(clock, instance.runtime.pass());
+    expect(pass.fetched).toContain(NWWS_DESCRIPTOR.id);
+    expect(fake.sessions).toHaveLength(1);
+    expect(fake.last().options).toMatchObject({ username: "operator-one", password: "password-one" });
+    expect(fake.last().closed).toBe(false);
+    await instance.runtime.close();
+    expect(fake.last().closed).toBe(true);
+    await expect(instance.runtime.pass()).rejects.toThrow("The runtime is closed");
+    expect(fake.sessions).toHaveLength(1);
+  });
+
+  it("uses the keys of the account of the copy", async () => {
+    const fake = fakeSessions((session) => session.join());
+    const { instance, clock } = open(store({ ...SECRETS, ...ACCOUNT_1, ...ACCOUNT_2 }), CONFIG, 0, TEST_FETCH_LIMIT, { nwwsOpen: fake.open, copy: SECOND });
+    await finish(clock, instance.runtime.pass());
+    expect(fake.last().options).toMatchObject({ username: "operator-two", password: "password-two" });
+    await instance.runtime.close();
+  });
+
+  it("has no stream without the keys of account 1 and with no account in the copy", () => {
+    const { instance } = open();
+    expect(instance.runtime.config.sources.map((source) => source.id)).not.toContain(NWWS_DESCRIPTOR.id);
+    expect(nwwsSetup(store(SECRETS))).toEqual({ tag: "ok", value: undefined });
+    // The keys of account 2 alone give no stream to a copy with the default account.
+    expect(nwwsSetup(store({ ...SECRETS, ...ACCOUNT_2 }))).toEqual({ tag: "ok", value: undefined });
+  });
+
+  it("does not start with one key of a pair, an account of the copy with no keys, or an account of a source with no account, and no problem holds a value", () => {
+    const half = messageOf(() => open(store({ ...SECRETS, NWWS_OI_USER_1: "operator-one" })));
+    expect(half).toContain("The secret store has one key of the NWWS-OI account 1, and it has no value for NWWS_OI_PASSWORD_1. Give the two keys, or none.");
+    const noKeys = messageOf(() => open(store({ ...SECRETS, ...ACCOUNT_1 }), CONFIG, 0, TEST_FETCH_LIMIT, { copy: SECOND }));
+    expect(noKeys).toContain("The file copy.json gives the NWWS-OI account 2 to this copy, and the secret store has no value for NWWS_OI_USER_2, NWWS_OI_PASSWORD_2.");
+    const unknown = messageOf(() => open(store(SECRETS), CONFIG, 0, TEST_FETCH_LIMIT, { copy: { ...ONLY_COPY, accounts: { usgs: 1 } } }));
+    expect(unknown).toContain("The file copy.json: the field accounts names the source usgs. Only these sources have an account: nwws.");
+    for (const message of [half, noKeys, unknown]) for (const value of VALUES) expect(message).not.toContain(value);
+  });
+
+  it("checks the account of the copy before the start, as the start does", () => {
+    const secret = store({ ...SECRETS, ...ACCOUNT_1 });
+    const parsed = parseConfig(JSON.stringify(CONFIG), INSTANCE_CHANNELS, secret);
+    if (parsed.tag === "err") throw new Error(parsed.error.join("\n"));
+    const problem = "The file copy.json gives the NWWS-OI account 2 to this copy, and the secret store has no value for NWWS_OI_USER_2, NWWS_OI_PASSWORD_2.";
+    expect(INSTANCE_CHECK.problems(parsed.value, secret)).toEqual([]);
+    expect(instanceCheck(SECOND).problems(parsed.value, secret)).toEqual([problem]);
+    expect(daemonCheck(SECOND).problems(parsed.value, secret)).toContain(problem);
+    expect(instanceProblems(parsed.value, secret, INSTANCE_SOURCES, T0, SECOND)).toEqual([problem]);
+  });
+
+  it("keeps the times of the host: the stream makes only the cap of the retry shorter, thus the gap of the heartbeat stays a bound", () => {
+    const { instance } = open(store({ ...SECRETS, ...ACCOUNT_1 }), CONFIG, 0, TEST_FETCH_LIMIT, { nwwsOpen: fakeSessions().open });
+    expect(instance.loop.times).toEqual({ ...INSTANCE_TIMES, retryCap: NWWS_DESCRIPTOR.interval });
+    expect(heartbeatGap(instance.loop.times)).toBeLessThan(heartbeatGap(INSTANCE_TIMES));
   });
 });
 

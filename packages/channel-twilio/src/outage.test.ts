@@ -6,9 +6,12 @@ import {
   monthStartOf,
   cursorQuery,
   MAX_PRESS_ROUNDS,
+  OUTAGE_TEXT_LIMIT,
   OUTAGE_TEXTS,
   outageEnded,
   outageListProblems,
+  outageListSchema,
+  outageSends,
   outagePress,
   outageStart,
   parseCursor,
@@ -81,7 +84,9 @@ describe("outagePress", () => {
     const step = press("1");
     expect(step.script).toEqual({ kind: "say", text: OUTAGE_TEXTS.confirmed });
     expect(step.actions).toEqual([{ kind: "ack", person: p1, statusCallback: expect.stringContaining(`${BASE}/ended?`) }]);
-    expect(paramsOf(step.actions[0]!.statusCallback)).toEqual({ outage: String(AT), person: "0", step: "1", round: "0", list: "v1", acked: "1" });
+    const [ack] = step.actions;
+    if (ack?.kind !== "ack") throw new Error("The action is not an ack.");
+    expect(paramsOf(ack.statusCallback)).toEqual({ outage: String(AT), person: "0", step: "1", round: "0", list: "v1", acked: "1" });
   });
 
   it("asks again after another key, and ends after the last round", () => {
@@ -123,6 +128,62 @@ describe("outageEnded", () => {
     expect(outageEnded({ ...LIST, version: "v2" }, BASE, { ...Object.fromEntries(cursorQuery({ outage: AT, person: 0, step: 0, round: 0 }, "v1")), CallStatus: "busy" }, AT, [])).toEqual({ actions: [], notes: [{ kind: "stale" }] });
     expect(ended(7, "busy")).toEqual({ actions: [], notes: [{ kind: "exhausted", person: p1 }] });
     expect(ended(0, "busy", false, Array.from({ length: 10 }, () => AT))).toEqual({ actions: [], notes: [{ kind: "capped", person: p1, cap: "window" }] });
+  });
+});
+
+describe("the text after a chain", () => {
+  const TEXT = "The alert system is down. The calls got no confirmation.";
+  const WITH_TEXT: OutageList = { ...LIST, textMessage: TEXT, people: LIST.people.map((person) => ({ ...person, text: true })) };
+  const ended = (list: OutageList, step: number, CallStatus: string, recent: number[] = [], acked = false) =>
+    outageEnded(list, BASE, { ...Object.fromEntries(cursorQuery({ outage: AT, person: 0, step, round: 0 }, "v1", acked)), CallStatus }, AT + MINUTE, recent);
+
+  it("gives one text to the person at the end of a chain with no confirmation", () => {
+    expect(ended(WITH_TEXT, 2, "no-answer")).toEqual({
+      actions: [{ kind: "text", person: p1, to: "+15555550123", body: TEXT }],
+      notes: [{ kind: "exhausted", person: p1 }],
+    });
+  });
+
+  it("gives no text after a confirmation, before the last step, or with no text in the list", () => {
+    expect(ended(WITH_TEXT, 1, "completed", [], true).actions).toEqual([]);
+    expect(calls(ended(WITH_TEXT, 0, "busy").actions)).toHaveLength(1);
+    expect(ended(WITH_TEXT, 0, "busy").actions.filter((action) => action.kind === "text")).toEqual([]);
+    expect(ended(LIST, 2, "no-answer").actions).toEqual([]);
+  });
+
+  it("gives no text to a person with no opt-in", () => {
+    const optedOut: OutageList = { ...WITH_TEXT, people: LIST.people };
+    expect(ended(optedOut, 2, "no-answer")).toEqual({ actions: [], notes: [{ kind: "exhausted", person: p1 }] });
+    expect(outageListSchema.safeParse(WITH_TEXT).success).toBe(true);
+  });
+
+  it("counts a text as one call in each cap", () => {
+    const full = Array.from({ length: WITH_TEXT.maxCalls }, () => AT);
+    expect(ended(WITH_TEXT, 2, "busy", full)).toEqual({ actions: [], notes: [{ kind: "exhausted", person: p1 }, { kind: "text-capped", person: p1, cap: "window" }] });
+    const month = { ...WITH_TEXT, maxCalls: 1000, month: { maxCalls: 9, timeZone: "UTC" } };
+    expect(ended(month, 2, "busy", Array.from({ length: 9 }, () => AT - 2 * 60 * MINUTE)).notes).toContainEqual({ kind: "text-capped", person: p1, cap: "month" });
+  });
+
+  it("counts the texts in the sends of one outage", () => {
+    const callsOf = LIST.people.reduce((sum, person) => sum + person.chain.steps.length, 0);
+    expect(outageSends(LIST)).toBe(callsOf);
+    expect(outageSends(WITH_TEXT)).toBe(callsOf + LIST.people.length);
+    // Only a person with the opt-in counts a text.
+    expect(outageSends({ ...WITH_TEXT, people: [WITH_TEXT.people[0]!, LIST.people[1]!] })).toBe(callsOf + 1);
+  });
+
+  it("finds the problems of a text message: empty, too long, a control character, and a cap below the sends of one outage", () => {
+    expect(outageListProblems(WITH_TEXT)).toEqual([]);
+    expect(outageListProblems({ ...WITH_TEXT, textMessage: " " })).toContain("The SMS message is empty.");
+    expect(outageListProblems({ ...WITH_TEXT, textMessage: "x".repeat(OUTAGE_TEXT_LIMIT) })).toEqual([]);
+    expect(outageListProblems({ ...WITH_TEXT, textMessage: "é".repeat(OUTAGE_TEXT_LIMIT + 1) })).toContain(
+      `The SMS message has more than ${OUTAGE_TEXT_LIMIT} code points, so one text can cost more than one call.`,
+    );
+    expect(outageListProblems({ ...WITH_TEXT, textMessage: "down\u0007" })).toContain("The SMS message has a control character.");
+    const sends = outageSends(WITH_TEXT);
+    expect(outageListProblems({ ...WITH_TEXT, maxCalls: sends - 1 })).toContain(
+      `The cap of ${sends - 1} calls is below the ${sends} calls and texts of one outage, so the cap stops tries of one outage.`,
+    );
   });
 });
 

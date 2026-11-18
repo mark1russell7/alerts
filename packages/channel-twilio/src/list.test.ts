@@ -1,8 +1,8 @@
 import type { ChannelId, PersonId, Recipient } from "@mark1russell7/alerts";
 import { describe, expect, it } from "vitest";
 import { CHANNEL_ID } from "./descriptor.ts";
-import { OUTAGE_CAP_OUTAGES, OUTAGE_CAP_WINDOW, OUTAGE_MESSAGE, OUTAGE_REPEATS, OUTAGE_RING_SECONDS, outageListOf } from "./list.ts";
-import { outageListSchema, type OutageMonthCap } from "./outage.ts";
+import { OUTAGE_CAP_OUTAGES, OUTAGE_CAP_WINDOW, OUTAGE_MESSAGE, OUTAGE_REPEATS, OUTAGE_RING_SECONDS, OUTAGE_TEXT_MESSAGE, outageListOf } from "./list.ts";
+import { OUTAGE_TEXT_LIMIT, outageListSchema, type OutageMonthCap } from "./outage.ts";
 
 // Fake numbers only: 555-0100 to 555-0199 are numbers of fiction.
 const p1 = "person-1" as PersonId;
@@ -46,6 +46,30 @@ describe("outageListOf", () => {
     });
     // The Function reads the list with this schema.
     expect(outageListSchema.safeParse(JSON.parse(JSON.stringify(list))).success).toBe(true);
+  });
+
+  it("adds the text message, and counts one text for each person with the opt-in in the default cap", () => {
+    const { list, problems } = outageListOf(OUTAGE, RECIPIENTS, MONTH, { textMessage: OUTAGE_TEXT_MESSAGE, optIn: () => true });
+    expect(problems).toEqual([]);
+    expect(list.textMessage).toBe(OUTAGE_TEXT_MESSAGE);
+    expect(list.people.map((person) => person.text)).toEqual([true, true]);
+    // 5 calls and 2 texts in one outage.
+    expect(list.maxCalls).toBe(OUTAGE_CAP_OUTAGES * 7);
+    // Only the number of the opt-in list gets the text. Without the opt-in, no person gets it.
+    const one = outageListOf(OUTAGE, RECIPIENTS, MONTH, { textMessage: OUTAGE_TEXT_MESSAGE, optIn: (number) => number === "+15555550124" }).list;
+    expect(one.people.map((person) => person.text)).toEqual([undefined, true]);
+    expect(one.maxCalls).toBe(OUTAGE_CAP_OUTAGES * 6);
+    const none = outageListOf(OUTAGE, RECIPIENTS, MONTH, { textMessage: OUTAGE_TEXT_MESSAGE }).list;
+    expect(none.people.map((person) => person.text)).toEqual([undefined, undefined]);
+    expect(none.maxCalls).toBe(OUTAGE_CAP_OUTAGES * 5);
+    expect(outageListOf(OUTAGE, RECIPIENTS, MONTH, { optIn: () => true }).list.people.map((person) => person.text)).toEqual([undefined, undefined]);
+    expect(list.version).not.toBe(outageListOf(OUTAGE, RECIPIENTS, MONTH).list.version);
+    expect(outageListSchema.safeParse(JSON.parse(JSON.stringify(list))).success).toBe(true);
+  });
+
+  it("gives a default text of one segment: GSM-7 characters with no extension, and no more than the limit", () => {
+    expect(OUTAGE_TEXT_MESSAGE).toMatch(/^[A-Za-z0-9 .,:]+$/u);
+    expect(OUTAGE_TEXT_MESSAGE.length).toBeLessThanOrEqual(Math.min(OUTAGE_TEXT_LIMIT, 160));
   });
 
   it("gives the same version for the same list, and a new version for each change", () => {

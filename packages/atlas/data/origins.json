@@ -66,6 +66,12 @@
     "note": "The records of bls-api, bls-release-calendar name this issuer."
   },
   {
+    "id": "bom-sws",
+    "name": "Australian Bureau of Meteorology, Space Weather Services",
+    "issues": null,
+    "note": "The records of bom-sws-api name this issuer."
+  },
+  {
     "id": "canada-government",
     "name": "The departments of the Government of Canada (Health Canada, CFIA, Transport Canada)",
     "issues": null,
@@ -322,6 +328,12 @@
     "name": "Gemini",
     "issues": null,
     "note": "The records of gemini-prediction-api name this issuer."
+  },
+  {
+    "id": "gfz",
+    "name": "GFZ German Research Centre for Geosciences (the Kp index)",
+    "issues": null,
+    "note": "The records of gfz-kp-hpo name this issuer. Its Kp comes from 13 observatories, and some of them are observatories of the USGS that the SWPC also reads."
   },
   {
     "id": "github",
@@ -593,6 +605,12 @@
     "note": "Each vendor writes its own status page. StatusGator and the Statuspage API read these pages."
   },
   {
+    "id": "sidc",
+    "name": "SIDC, the Solar Influences Data Analysis Center (RWC-Belgium)",
+    "issues": null,
+    "note": "The records of sidc-alerts-email name this issuer."
+  },
+  {
     "id": "smarkets",
     "name": "Smarkets",
     "issues": null,
@@ -804,5 +822,281 @@
     "name": "The alerting authorities of the WMO Register of Alerting Authorities",
     "issues": null,
     "note": "The records of wmo-cap-feeds name this issuer. Each authority is a national weather service or an agency of civil protection of one country or territory."
+  },
+  {
+    "id": "adsb-exchange",
+    "name": "ADS-B Exchange",
+    "issues": null,
+    "note": "The record of adsb-exchange names this body."
+  },
+  {
+    "id": "adsb-lol",
+    "name": "adsb.lol, a network of volunteer ADS-B feeders",
+    "issues": null,
+    "note": "The record of adsb-lol names this body."
+  },
+  {
+    "id": "aishub",
+    "name": "AISHub, a data exchange of member AIS stations",
+    "issues": null,
+    "note": "The record of aishub names this body."
+  },
+  {
+    "id": "aisstream",
+    "name": "aisstream.io",
+    "issues": null,
+    "note": "The record of aisstream names this body."
+  },
+  {
+    "id": "autobahn-gmbh",
+    "name": "Die Autobahn GmbH des Bundes, the operator of the German Autobahn",
+    "issues": null,
+    "note": "The record of autobahn-api names this body."
+  },
+  {
+    "id": "bfs",
+    "name": "BfS, the Federal Office for Radiation Protection of Germany",
+    "issues": null,
+    "note": "The record of bfs-odl names this body."
+  },
+  {
+    "id": "bluesky",
+    "name": "Bluesky Social",
+    "issues": null,
+    "note": "The record of bluesky-jetstream names this body."
+  },
+  {
+    "id": "charge-point-operators",
+    "name": "The charge point operators of the EU member states",
+    "issues": null,
+    "note": "The record of afir-access-points names this body. Each operator gives its data to a national access point."
+  },
+  {
+    "id": "copernicus-ems",
+    "name": "The Copernicus Emergency Management Service of the European Union",
+    "issues": null,
+    "note": "The records of glofas and copernicus-ems-rapid-mapping name this body."
+  },
+  {
+    "id": "deutsche-bahn",
+    "name": "Deutsche Bahn",
+    "issues": null,
+    "note": "The record of db-timetables names this body."
+  },
+  {
+    "id": "environment-agency-england",
+    "name": "The Environment Agency of England",
+    "issues": null,
+    "note": "The record of ea-flood-monitoring names this body."
+  },
+  {
+    "id": "eurocontrol",
+    "name": "EUROCONTROL",
+    "issues": null,
+    "note": "The record of eurocontrol-traffic names this body."
+  },
+  {
+    "id": "european-tsos",
+    "name": "The transmission system operators of Europe",
+    "issues": null,
+    "note": "The records of entsoe-transparency and energy-charts-power name this body. ENTSO-E and Energy-Charts publish the data of these operators."
+  },
+  {
+    "id": "fao",
+    "name": "FAO, the Food and Agriculture Organization of the United Nations",
+    "issues": null,
+    "note": "The record of fao-food-price-index names this body."
+  },
+  {
+    "id": "fintraffic",
+    "name": "Fintraffic, the operator of the Digitraffic services of Finland",
+    "issues": null,
+    "note": "The records of digitraffic-road, digitraffic-rail and digitraffic-marine name this body."
+  },
+  {
+    "id": "fraunhofer-ise",
+    "name": "Fraunhofer ISE, the publisher of Energy-Charts",
+    "issues": null,
+    "note": "The record of energy-charts-frequency names this body. The catalog names one provider for the frequency."
+  },
+  {
+    "id": "gbfs-operators",
+    "name": "The operators of bike and scooter share systems, in their GBFS feeds",
+    "issues": null,
+    "note": "The record of gbfs-systems names this body. MobilityData keeps only the catalog of the systems."
+  },
+  {
+    "id": "gpsjam",
+    "name": "GPSJam",
+    "issues": null,
+    "note": "The record of gpsjam names this body. GPSJam makes its map from the data of other ADS-B networks."
+  },
+  {
+    "id": "iij",
+    "name": "IIJ (Internet Initiative Japan), the publisher of the Internet Health Report",
+    "issues": null,
+    "note": "The record of ihr names this body."
+  },
+  {
+    "id": "kraken",
+    "name": "Kraken, a crypto exchange",
+    "issues": null,
+    "note": "The record of kraken-ohlc names this body."
+  },
+  {
+    "id": "kystverket",
+    "name": "Kystverket, the Norwegian Coastal Administration",
+    "issues": null,
+    "note": "The record of kystverket-ais names this body."
+  },
+  {
+    "id": "mastodon-instances",
+    "name": "The servers (instances) of the Mastodon network",
+    "issues": null,
+    "note": "The record of mastodon-streaming names this body. Each connection reads one instance."
+  },
+  {
+    "id": "mts-k",
+    "name": "MTS-K, the market transparency unit for fuels of the German Federal Cartel Office",
+    "issues": null,
+    "note": "The record of tankerkoenig names this body. Tankerkoenig gives the MTS-K data again."
+  },
+  {
+    "id": "national-highways",
+    "name": "National Highways, the operator of the strategic road network of England",
+    "issues": null,
+    "note": "The record of webtris names this body."
+  },
+  {
+    "id": "ndw",
+    "name": "NDW (Nationaal Dataportaal Wegverkeer), the road traffic data portal of the Netherlands",
+    "issues": null,
+    "note": "The record of ndw-open-data names this body. NDW gives the data for the national, regional and city road authorities."
+  },
+  {
+    "id": "neso",
+    "name": "NESO, the National Energy System Operator of Great Britain",
+    "issues": null,
+    "note": "The records of neso-data-portal and carbon-intensity-gb name this body."
+  },
+  {
+    "id": "network-rail",
+    "name": "Network Rail, the operator of the rail infrastructure of Great Britain",
+    "issues": null,
+    "note": "The record of network-rail-feeds names this body."
+  },
+  {
+    "id": "open311-cities",
+    "name": "The cities that run Open311 GeoReport servers",
+    "issues": null,
+    "note": "The record of open311-georeport names this body."
+  },
+  {
+    "id": "opensky-network",
+    "name": "The OpenSky Network, a network of volunteer receivers",
+    "issues": null,
+    "note": "The record of opensky-rest names this body."
+  },
+  {
+    "id": "prix-carburants",
+    "name": "Prix des carburants, the fuel price service of the French government",
+    "issues": null,
+    "note": "The record of prix-carburants-fr names this body."
+  },
+  {
+    "id": "purpleair",
+    "name": "PurpleAir",
+    "issues": null,
+    "note": "The record of purpleair names this body."
+  },
+  {
+    "id": "rail-delivery-group",
+    "name": "Rail Delivery Group, with National Rail Enquiries and its Darwin system",
+    "issues": null,
+    "note": "The record of darwin-push-port names this body."
+  },
+  {
+    "id": "reddit",
+    "name": "Reddit",
+    "issues": null,
+    "note": "The record of reddit-data-api names this body."
+  },
+  {
+    "id": "safecast",
+    "name": "Safecast, a network of citizen radiation devices",
+    "issues": null,
+    "note": "The record of safecast names this body."
+  },
+  {
+    "id": "seattle-fire-department",
+    "name": "Seattle Fire Department",
+    "issues": null,
+    "note": "The record of seattle-fire-911 names this body."
+  },
+  {
+    "id": "sensor-community",
+    "name": "Sensor.Community, a network of citizen air sensors",
+    "issues": null,
+    "note": "The record of sensor-community names this body."
+  },
+  {
+    "id": "sncf",
+    "name": "SNCF, the national rail company of France",
+    "issues": null,
+    "note": "The record of sncf-gtfs-rt names this body."
+  },
+  {
+    "id": "tide-gauge-networks",
+    "name": "The national tide gauge networks that report to the IOC facility",
+    "issues": null,
+    "note": "The record of ioc-slsmf names this body. VLIZ runs the facility and does not make the readings."
+  },
+  {
+    "id": "tomtom",
+    "name": "TomTom",
+    "issues": null,
+    "note": "The record of tomtom-traffic names this body."
+  },
+  {
+    "id": "trafikverket",
+    "name": "Trafikverket, the Swedish Transport Administration",
+    "issues": null,
+    "note": "The record of trafikverket-open-api names this body."
+  },
+  {
+    "id": "tsa",
+    "name": "US Transportation Security Administration",
+    "issues": null,
+    "note": "The record of tsa-throughput names this body."
+  },
+  {
+    "id": "uk-fuel-traders",
+    "name": "The fuel traders of the United Kingdom, under the statutory scheme",
+    "issues": null,
+    "note": "The record of uk-fuel-finder names this body. The traders give their prices to the scheme."
+  },
+  {
+    "id": "waze",
+    "name": "Waze",
+    "issues": null,
+    "note": "The record of waze-for-cities names this body. The reports come from the users of Waze."
+  },
+  {
+    "id": "wfp",
+    "name": "WFP, the World Food Programme",
+    "issues": null,
+    "note": "The record of wfp-food-prices names this body."
+  },
+  {
+    "id": "wikimedia-foundation",
+    "name": "The Wikimedia Foundation",
+    "issues": null,
+    "note": "The records of wikimedia-pageviews and wikimedia-eventstreams name this body."
+  },
+  {
+    "id": "wsv",
+    "name": "WSV, the Federal Waterways and Shipping Administration of Germany",
+    "issues": null,
+    "note": "The record of pegelonline names this body."
   }
 ]

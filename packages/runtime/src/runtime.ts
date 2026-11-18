@@ -13,9 +13,10 @@ import { drillStarts, drillStep, type CopyDrill } from "./drills.ts";
 import { entryIndex } from "./entries.ts";
 import { envelope, EVENT_TYPES, type RuntimeEvent } from "./events.ts";
 import { importPage, sharePage, type ExchangePage, type ReceivedPage } from "./exchange.ts";
-import { fetchEvents } from "./fetch.ts";
+import { fetchStep } from "./fetch.ts";
 import { limited } from "./limit.ts";
 import type { RuntimeLog } from "./log.ts";
+import { READING_RETENTION, type ReadingStore } from "./readings.ts";
 import { SNAPSHOT_MISSES, snapshotStep } from "./snapshot.ts";
 import { retention, retiredEvent, type RetentionOptions } from "./retention.ts";
 import { fold, rebuild, type ExchangeCursor, type RuntimeState } from "./state.ts";
@@ -93,6 +94,18 @@ export interface RuntimeOptions {
    * drills, the view ends each open line of a drill of this copy.
    */
   readonly drills?: readonly CopyDrill[];
+  /**
+   * The store of the indicator readings. The runtime writes the readings of each fetch before its events. Without a store,
+   * the runtime keeps no reading.
+   */
+  readonly readings?: ReadingStore;
+  /** The age of the oldest reading that the store keeps. The default is `READING_RETENTION`. */
+  readonly readingsKeep?: Duration;
+  /**
+   * The runtime gives each fault of the store of the readings to this hook. A fault does not stop the pass: the alerts do
+   * not need the readings. The error can quote a value of a reading, thus the hook gives no value to an outside service.
+   */
+  readonly onReadingsFault?: (error: unknown, action: "add" | "prune") => void;
 }
 
 /** The result of one pass. */
@@ -167,6 +180,11 @@ export interface Runtime {
    * read that brought it, not the time of the other copy. The history route reads them.
    */
   entered(): EntryTimes;
+  /**
+   * This function ends the resources of the sources: it starts `close` of each source that has one, one time. A second
+   * call gives the same promise. It does not throw. A pass after the close throws.
+   */
+  close(): Promise<void>;
 }
 
 /**
@@ -231,6 +249,20 @@ export function openRuntime(options: RuntimeOptions): Runtime {
   const link = linkRule(config.link ?? DEFAULT_LINK_POLICY);
   let searched: Instant | undefined;
 
+  // The store of the readings. A fault goes to the hook, and the pass continues.
+  const store = options.readings;
+  const keep = options.readingsKeep ?? READING_RETENTION;
+  if (!Number.isFinite(keep) || keep <= 0) throw new Error(`The age of the oldest reading is ${keep}, not a finite number above 0.`);
+  let pruned: Instant | undefined;
+  const guarded = (action: "add" | "prune", work: (store: ReadingStore) => void): void => {
+    if (store === undefined) return;
+    try {
+      work(store);
+    } catch (error) {
+      options.onReadingsFault?.(error, action);
+    }
+  };
+
   const limit = options.snapshotMisses ?? SNAPSHOT_MISSES;
   if (!Number.isInteger(limit) || limit < 1) throw new Error(`The count of snapshot misses is ${limit}, not an integer of 1 or more.`);
 
@@ -255,7 +287,11 @@ export function openRuntime(options: RuntimeOptions): Runtime {
     // A failure after the stop is the stop, not a fault of the source. The log keeps no fetch, and the cursor stays.
     if (stopped && !outcome.ok) return [];
     const ended = clock.now();
-    const conflicts = append(fetchEvents({ source: descriptor.id, procedures: source, started, ended, outcome, known: (id) => log.has(id), frame: state.steps.length }));
+    const fetched = fetchStep({ source: descriptor.id, descriptor, procedures: source, started, ended, outcome, known: (id) => log.has(id), frame: state.steps.length });
+    // The readings go first. A failed write of the log leaves the observations new, thus the next fetch gives their readings
+    // again, and the store keeps each key once.
+    if (fetched.readings.length > 0) guarded("add", (readings) => readings.add(fetched.readings));
+    const conflicts = append(fetched.events);
     if (descriptor.listing !== "snapshot") return conflicts;
     // The step reads the merge state after the fetch, thus a new report of the fetch has no miss. It reads only the own
     // merge state: a report that only another copy sees does not end or come back in this copy.
@@ -298,11 +334,17 @@ export function openRuntime(options: RuntimeOptions): Runtime {
     return { size, conflicts };
   };
 
+  // The close of the sources, one time. A source that throws in its close does not stop the close of the other sources.
+  let closed: Promise<void> | undefined;
+  const close = (): Promise<void> =>
+    (closed ??= Promise.allSettled(options.sources.map((source) => Promise.resolve().then(() => source.close?.()))).then(() => undefined));
+
   return {
     config,
     state: () => state,
     skipped,
     async pass(stop) {
+      if (closed !== undefined) throw new Error("The runtime is closed: its sources have no session.");
       const stepped = followStep();
       const start = clock.now();
       const due = options.sources.flatMap((source, at) => {
@@ -341,6 +383,11 @@ export function openRuntime(options: RuntimeOptions): Runtime {
         const retired = retiredEvent(state, at, link, kept);
         if (retired !== undefined) conflicts.push(...append([retired]));
       }
+      // The old readings go at most once in each interval of the retirements.
+      if (store !== undefined && (pruned === undefined || at - pruned >= kept.every)) {
+        pruned = at;
+        guarded("prune", (readings) => readings.prune(at - keep));
+      }
 
       // A source or a balance watch can come due after `start`, while the fetches of the pass run. A fetch that runs to its
       // limit of one interval also ends at its next fetch. Such work is due, not a fault: its wake is the first instant after the pass.
@@ -368,6 +415,7 @@ export function openRuntime(options: RuntimeOptions): Runtime {
       return { imports: result.imports, next: result.position.next, problems: result.problems, conflicts };
     },
     entered: () => entries.times(state.own.merge),
+    close,
   };
 }
 

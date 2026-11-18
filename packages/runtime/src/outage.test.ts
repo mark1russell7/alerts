@@ -1,6 +1,6 @@
 import { fakeClock, type FakeClock, type WallClock } from "@mark1russell7/algebra/clock";
 import { CONFIG_FORMAT, parseConfig, type AlertConfig, type ChannelId, type EscalationPolicy, type PersonId, type PlaceId, type SecretLookup, type SpendConfig } from "@mark1russell7/alerts";
-import type { TwilioFetch, TwilioServerlessDeployResult } from "@mark1russell7/alerts-channel-twilio";
+import { OUTAGE_TEXT_MESSAGE, type TwilioFetch, type TwilioServerlessDeployResult } from "@mark1russell7/alerts-channel-twilio";
 import { detachedLifecycle } from "@mark1russell7/service/testing";
 import { afterEach, describe, expect, it } from "vitest";
 import { INSTANCE_CHANNELS } from "./instance.ts";
@@ -72,6 +72,24 @@ describe("outageSetup", () => {
     expect(setup.value.list.month).toEqual({ maxCalls: 250, timeZone: "America/Chicago" });
   });
 
+  it("gives the text and its sender with the number of the texts in the keys", () => {
+    const secret = store(SECRETS);
+    const setup = outageSetup(parse(withOutage([call, call]), secret), secret, { ...KEYS, textFrom: "+99900000003" });
+    if (setup.tag === "err" || setup.value === undefined) throw new Error("The setup has problems.");
+    expect(setup.value.textFrom).toBe("+99900000003");
+    expect(setup.value.list.textMessage).toBe(OUTAGE_TEXT_MESSAGE);
+    // The number of the person is not on the opt-in list. Thus the person gets no text.
+    expect(setup.value.list.people.map((entry) => entry.text)).toEqual([undefined]);
+    const yes = { number: { secret: "PHONE" }, at: "2026-11-17T21:30:00Z", way: "written" as const, words: "texts-consent/1" };
+    const listed = outageSetup(parse({ ...withOutage([call, call]), optIn: [yes] }, secret), secret, { ...KEYS, textFrom: "+99900000003" });
+    if (listed.tag === "err" || listed.value === undefined) throw new Error("The setup has problems.");
+    expect(listed.value.list.people.map((entry) => entry.text)).toEqual([true]);
+    const none = outageSetup(parse(withOutage([call, call]), secret), secret, KEYS);
+    if (none.tag === "err" || none.value === undefined) throw new Error("The setup has problems.");
+    expect(none.value).not.toHaveProperty("textFrom");
+    expect(none.value.list).not.toHaveProperty("textMessage");
+  });
+
   it("gives the problem of an outage call with no spend entry for Twilio", () => {
     const secret = store(SECRETS);
     const setup = outageSetup(parse(withOutage([call], []), secret), secret, KEYS);
@@ -85,6 +103,9 @@ describe("outageSetup", () => {
     expect(outageMonthCapOf({ monthlyUsd: 1000, timeZone: "UTC" }).maxCalls).toBe(1000);
     // A cap below one call gives 0 calls. The list then gives a problem, and no Function deploys.
     expect(outageMonthCapOf({ monthlyUsd: 0.03, timeZone: "UTC" }).maxCalls).toBe(0);
+    // The fixed costs come off the cap first: 15 US dollars less 3.30 is 1170 cents, or 292 whole calls.
+    expect(outageMonthCapOf({ monthlyUsd: 15, fixed: [{ what: "toll-free number", usd: 2.15 }, { what: "local number", usd: 1.15 }], timeZone: "UTC" }).maxCalls).toBe(292);
+    expect(outageMonthCapOf({ monthlyUsd: 3.3, fixed: [{ what: "numbers", usd: 3.3 }], timeZone: "UTC" }).maxCalls).toBe(0);
     const secret = store(SECRETS);
     const low = outageSetup(parse(withOutage([call], [{ ...SPEND, monthlyUsd: 0.03, reserveUsd: 0, floor: 0 }]), secret), secret, KEYS);
     expect(low.tag === "err" ? low.error : []).toContain("The monthly cap of calls is not a whole number from 1 to 1000.");

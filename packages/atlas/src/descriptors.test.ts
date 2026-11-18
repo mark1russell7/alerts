@@ -3,6 +3,7 @@ import { EMSC_DESCRIPTOR } from "@mark1russell7/alerts-source-emsc";
 import { IEM_DESCRIPTOR } from "@mark1russell7/alerts-source-iem";
 import { IPAWS_DESCRIPTOR } from "@mark1russell7/alerts-source-ipaws";
 import { NWS_DESCRIPTOR } from "@mark1russell7/alerts-source-nws-api";
+import { NWWS_DESCRIPTOR } from "@mark1russell7/alerts-source-nwws";
 import { SWPC_DESCRIPTOR } from "@mark1russell7/alerts-source-swpc";
 import { descriptorOf, TSUNAMI_CENTERS } from "@mark1russell7/alerts-source-tsunami";
 import { USGS_DESCRIPTOR } from "@mark1russell7/alerts-source-usgs";
@@ -15,6 +16,7 @@ const DESCRIPTORS: Readonly<Record<string, readonly SourceDescriptor[]>> = {
   "@mark1russell7/alerts-source-iem": [IEM_DESCRIPTOR],
   "@mark1russell7/alerts-source-ipaws": [IPAWS_DESCRIPTOR],
   "@mark1russell7/alerts-source-nws-api": [NWS_DESCRIPTOR],
+  "@mark1russell7/alerts-source-nwws": [NWWS_DESCRIPTOR],
   "@mark1russell7/alerts-source-swpc": [SWPC_DESCRIPTOR],
   "@mark1russell7/alerts-source-tsunami": [descriptorOf(TSUNAMI_CENTERS.ntwc), descriptorOf(TSUNAMI_CENTERS.ptwc)],
   "@mark1russell7/alerts-source-usgs": [USGS_DESCRIPTOR],
@@ -49,6 +51,18 @@ describe("the paths of the atlas and the descriptors of the adapters", () => {
         descriptor.dependsOn
           .filter((id) => SHARED_KINDS.includes(prefixOf(id) ?? "") && !source.path.includes(id))
           .map((id) => `the path of ${source.id} lacks ${id} of ${descriptor.id}`),
+      ),
+    );
+    expect(missing).toEqual([]);
+  });
+
+  // A measure of a dimension that the atlas does not give the source is a cover that the atlas does not count.
+  it("gives the dimension of each measure of a descriptor in the dimensions of its adopted source", () => {
+    const missing = adopted.flatMap((source) =>
+      (DESCRIPTORS[source.adapter ?? ""] ?? []).flatMap((descriptor) =>
+        (descriptor.measures ?? [])
+          .filter((measure) => source.dimensions?.includes(measure.dimension) !== true)
+          .map((measure) => `the dimensions of ${source.id} lack ${measure.dimension} of the measure ${measure.id} of ${descriptor.id}`),
       ),
     );
     expect(missing).toEqual([]);

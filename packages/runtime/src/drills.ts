@@ -3,7 +3,7 @@
  * of each due drill. It also gives the acknowledgment of each run and the next time when a drill changes. The functions
  * read no clock.
  */
-import { DRILL_KIND, drillDue, drillInCopy, nextDrillAt, type DrillConfig, type DrillRun, type DrillSnapshot, type Instant, type QuietWindow, type Recipient } from "@mark1russell7/alerts";
+import { DRILL_KIND, drillDue, drillInCopy, missedDrillAt, nextDrillAt, type DrillConfig, type DrillRun, type DrillSnapshot, type Instant, type QuietWindow, type Recipient } from "@mark1russell7/alerts";
 import { envelope, frameTag, type DrillEvent } from "./events.ts";
 import type { RuntimeState } from "./state.ts";
 
@@ -67,15 +67,20 @@ export interface DrillStep {
 /**
  * This function gives the drills of the view at the time `at`. A drill with no next start has `noStart`, and the system
  * fold gives a failure for it. A run that waits for its acknowledgment changes at the end of its time.
+ *
+ * A drill whose last window ended with no run has `missed` (`missedDrillAt`). This is the case when the copy stopped
+ * for the full window. The next pass after the restart gives the failure, and the next run ends it.
  */
 export function drillStep(state: Pick<RuntimeState, "drills" | "merge">, drills: readonly CopyDrill[], copy: string, at: Instant): DrillStep {
   const times: Instant[] = [];
   const snapshots = drills.map(({ drill, quiet }): DrillSnapshot => {
     const run = drillRunOf(state, copy, drill);
-    const next = nextDrillAt(drill, run === undefined ? [] : [run], at, quiet);
+    const runs = run === undefined ? [] : [run];
+    const next = nextDrillAt(drill, runs, at, quiet);
+    const missed = missedDrillAt(drill, runs, at, quiet);
     if (next !== undefined) times.push(next);
     if (run !== undefined && run.acked === undefined) times.push(run.at + drill.ackWithin);
-    return { copy, drill, ...(run === undefined ? {} : { run }), ...(next === undefined ? { noStart: true } : {}) };
+    return { copy, drill, ...(run === undefined ? {} : { run }), ...(next === undefined ? { noStart: true } : {}), ...(missed === undefined ? {} : { missed }) };
   });
   const later = times.filter((time) => time > at);
   return later.length === 0 ? { snapshots } : { snapshots, wakeAt: Math.min(...later) };

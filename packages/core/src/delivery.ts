@@ -40,7 +40,9 @@ import { assessmentWhy } from "./why.ts";
 export interface Recipient {
   /** The places, the subjects, the rules and the quiet window of the person. */
   readonly watch: PersonWatch;
-  /** The escalation policy of each level. A level with no policy starts no escalation for this person. */
+  /**
+   * The escalation policies of the person (`policyFor`). A level with no policy starts no escalation for this person.
+   */
   readonly policies: readonly EscalationPolicy[];
   /** The address of the person on each channel, by the channel id. */
   readonly addresses: Readonly<Record<string, Address>>;
@@ -87,6 +89,26 @@ export function ruleSteps(policy: EscalationPolicy, rules: readonly ChannelRule[
   const keeps = (channel: ChannelId): boolean => matched.every((index) => rules[index]!.channels.includes(channel) === (rules[index]!.keep === "only"));
   const dropped = policy.steps.flatMap((step, index) => (keeps(step.channel) ? [] : [index]));
   return { policy: dropped.length === 0 ? policy : { ...policy, steps: policy.steps.filter((step) => keeps(step.channel)) }, rules: matched, dropped };
+}
+
+/**
+ * This function gives the policy of a level for an incident. An incident with a status of `RULED_STATUSES` gets the
+ * first policy of the level whose subject matches a subject of the incident (`matchSubjects`). Each other incident,
+ * and an incident with no such policy, gets the first policy of the level with no subject.
+ */
+export function policyFor(policies: readonly EscalationPolicy[], level: Level, incident: Pick<Incident, "status" | "about">): EscalationPolicy | undefined {
+  const ofLevel = policies.filter((policy) => policy.level === level);
+  const ruled = RULED_STATUSES.includes(incident.status);
+  const about = ruled ? ofLevel.find((policy) => policy.about !== undefined && matchSubjects(incident, [policy.about]).length > 0) : undefined;
+  return about ?? ofLevel.find((policy) => policy.about === undefined);
+}
+
+/**
+ * This function gives the name of a policy in a problem: its level, and its subject when it has one.
+ */
+export function policyName(policy: EscalationPolicy): string {
+  const about = policy.about;
+  return about === undefined ? policy.level : `${policy.level} about ${about.system}${about.id === undefined ? "" : ` ${about.id}`}`;
 }
 
 /**
@@ -239,7 +261,7 @@ export function route(input: RouteInput): Route[] {
     const end = endOf(incident, now);
     for (const recipient of input.recipients) {
       const person = recipient.watch.person;
-      const policyOf = (level: Level): EscalationPolicy | undefined => recipient.policies.find((entry) => entry.level === level);
+      const policyOf = (level: Level): EscalationPolicy | undefined => policyFor(recipient.policies, level, incident);
       const mine = <T extends { readonly person: PersonId }>(items: readonly T[]): T[] => items.filter((item) => item.person === person);
       // The ends of the person in time order. Each one closes an episode. A change of the mode adds its end at `now`.
       const closes: EscalationEnd[] = mine(ends)
@@ -413,16 +435,19 @@ export function recipientProblems(recipient: Recipient, channels: readonly Chann
     const channel = known.get(id);
     if (channel !== undefined) problems.push(...addressProblems(address, channel));
   }
-  const seen = new Set<Level>();
+  // The level and the subject of each policy. Two policies with the same name: only the first one applies.
+  const seen = new Set<string>();
   for (const policy of recipient.policies) {
-    if (seen.has(policy.level)) problems.push(`Two policies have the level ${policy.level}. Only the first one applies.`);
-    seen.add(policy.level);
-    for (const problem of escalationProblems(policy)) problems.push(`The policy of ${policy.level}: ${problem}`);
+    const name = policyName(policy);
+    if (seen.has(name)) problems.push(`Two policies have the level ${name}. Only the first one applies.`);
+    seen.add(name);
+    for (const problem of escalationProblems(policy)) problems.push(`The policy of ${name}: ${problem}`);
     policy.steps.forEach((step, index) => {
-      if (!known.has(step.channel)) problems.push(`Step ${index} of ${policy.level} uses the channel ${step.channel}, and the system has no such channel.`);
-      if (recipient.addresses[step.channel] === undefined) problems.push(`Step ${index} of ${policy.level} uses the channel ${step.channel}, and the person has no address on it.`);
+      if (!known.has(step.channel)) problems.push(`Step ${index} of ${name} uses the channel ${step.channel}, and the system has no such channel.`);
+      if (recipient.addresses[step.channel] === undefined) problems.push(`Step ${index} of ${name} uses the channel ${step.channel}, and the person has no address on it.`);
     });
   }
+  // A policy with a subject does not apply to a real warning. Thus only a policy with no subject covers life-safety.
   const watches = recipient.watch.places.length > 0 || (recipient.watch.subjects ?? []).length > 0;
   if (watches && !seen.has("life-safety")) problems.push("The person watches a place or a subject, and has no policy of the level life-safety. A life-safety alert sends nothing to the person.");
   recipient.watch.rules.forEach((rule, index) => {

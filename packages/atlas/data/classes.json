@@ -46,7 +46,7 @@
       "EM-DAT: Technological > Industrial > Chemical spill, Gas leak, Poisoning",
       "NWS/SAME: HMW Hazardous Materials Warning"
     ],
-    "gap": "Round 1 found 1 adopted or planned source with no risk: nws-alerts-api. ipaws-open has a risk, so the gate does not count it: see the risks of the record. nrc-uscg-reports is later: see the reason of each.",
+    "gap": null,
     "round": 1
   },
   {
@@ -673,7 +673,7 @@
       "PulsePoint",
       "Citizen"
     ],
-    "gap": "No public national feed of fire dispatch exists. PulsePoint shows agency feeds in its app with no public API found. Some cities publish dispatch logs as open data.",
+    "gap": null,
     "round": 1
   },
   {
@@ -792,7 +792,7 @@
       "NWS/SAME: EQW Earthquake Warning",
       "NWS API alert types: Earthquake Warning"
     ],
-    "gap": "The NWS API lists the event type Earthquake Warning. No open machine feed of the warnings themselves was found in round 1. A warning that arrives late has no value.",
+    "gap": null,
     "round": 1
   },
   {
@@ -872,7 +872,7 @@
       "EM-DAT: Extra-terrestrial > Space weather",
       "UNDRR-ISC HIPs 2025: ET0101-ET0104"
     ],
-    "gap": "Round 6 adopts swpc-products-json, the only source with no risk. Its only origin is the NWS. swpc-email is later: see the reason of each.",
+    "gap": null,
     "round": 1
   },
   {
@@ -888,7 +888,7 @@
       "EM-DAT: Space weather > Geomagnetic storm",
       "UNDRR-ISC HIPs 2025: ET0101 Geomagnetic Disturbance"
     ],
-    "gap": "Round 6 adopts swpc-products-json, the only source with no risk. Its only origin is the NWS. swpc-email is later: see the reason of each.",
+    "gap": null,
     "round": 1
   },
   {
@@ -1162,7 +1162,7 @@
       "UNDRR-ISC HIPs 2025: TL Dam failure",
       "EM-DAT: Technological > Miscellaneous > Collapse"
     ],
-    "gap": "NWS flash flood products cover dam failures downstream, but no dam-specific feed was opened in round 1.",
+    "gap": null,
     "round": 1
   },
   {
@@ -1261,7 +1261,7 @@
       "IODA",
       "ThousandEyes"
     ],
-    "gap": "Round 1 found 1 adopted or planned source with no risk: cloudflare-radar-api. ioda-api is later, thousandeyes-outages is later: see the reason of each.",
+    "gap": null,
     "round": 1
   },
   {
@@ -1278,7 +1278,7 @@
       "IODA",
       "Cloudflare Radar"
     ],
-    "gap": "KeepItOn is a yearly dataset, so live detection depends on IODA and Cloudflare.",
+    "gap": null,
     "round": 1
   },
   {
@@ -1445,7 +1445,7 @@
       "NWS/SAME: TOE 911 Telephone Outage Emergency",
       "FEMA Lifelines: Communications > 911 and Dispatch"
     ],
-    "gap": "Round 1 found 1 adopted or planned source with no risk: nws-alerts-api. ipaws-open has a risk, so the gate does not count it: see the risks of the record. fcc-dirs is later: see the reason of each.",
+    "gap": null,
     "round": 1
   },
   {
@@ -2324,7 +2324,7 @@
       "NWS API: Hazardous Weather Outlook",
       "NWS/SAME: HWO Hazardous Weather Outlook"
     ],
-    "gap": "Round 1 found 1 adopted or planned source with no risk: nws-alerts-api. ipaws-open has a risk, so the gate does not count it: see the risks of the record. Round 1 found no other source.",
+    "gap": null,
     "round": 1
   },
   {
@@ -2390,7 +2390,7 @@
       "NWS API: Special Weather Statement",
       "NWS/SAME: SPS Special Weather Statement"
     ],
-    "gap": "Round 1 found 1 adopted or planned source with no risk: nws-alerts-api. ipaws-open has a risk, so the gate does not count it: see the risks of the record. Round 1 found no other source.",
+    "gap": null,
     "round": 1
   },
   {
@@ -2575,7 +2575,7 @@
       "NWS API: Civil Danger Warning",
       "NWS/SAME: CDW Civil Danger Warning"
     ],
-    "gap": "Round 1 found 1 adopted or planned source with no risk: nws-alerts-api. ipaws-open has a risk, so the gate does not count it: see the risks of the record. Round 1 found no other source.",
+    "gap": null,
     "round": 1
   },
   {
@@ -2589,7 +2589,7 @@
     "references": [
       "NWS/SAME: CEM Civil Emergency Message"
     ],
-    "gap": "Round 1 found 1 adopted or planned source with no risk: nws-alerts-api. ipaws-open has a risk, so the gate does not count it: see the risks of the record. Round 1 found no other source.",
+    "gap": null,
     "round": 1
   },
   {
@@ -2619,7 +2619,7 @@
       "CAP 1.2 responseType: Evacuate",
       "FEMA Lifelines: Safety and Security"
     ],
-    "gap": "Round 1 found 1 adopted or planned source with no risk: nws-alerts-api. ipaws-open has a risk, so the gate does not count it: see the risks of the record. Round 1 found no other source.",
+    "gap": null,
     "round": 1
   },
   {
@@ -2634,7 +2634,7 @@
       "NWS API: Local Area Emergency",
       "NWS/SAME: LAE Local Area Emergency"
     ],
-    "gap": "Round 1 found 1 adopted or planned source with no risk: nws-alerts-api. ipaws-open has a risk, so the gate does not count it: see the risks of the record. Round 1 found no other source.",
+    "gap": null,
     "round": 1
   },
   {
@@ -2786,7 +2786,7 @@
       "NWS/SAME: SPW Shelter in Place Warning",
       "CAP 1.2 responseType: Shelter"
     ],
-    "gap": "Round 1 found 1 adopted or planned source with no risk: nws-alerts-api. ipaws-open has a risk, so the gate does not count it: see the risks of the record. Round 1 found no other source.",
+    "gap": null,
     "round": 1
   },
   {
@@ -2865,7 +2865,7 @@
     "references": [
       "NWS/SAME: BLU Blue Alert"
     ],
-    "gap": "Round 1 found 1 adopted or planned source with no risk: nws-alerts-api. ipaws-open has a risk, so the gate does not count it: see the risks of the record. Round 1 found no other source.",
+    "gap": null,
     "round": 1
   },
   {
@@ -2880,7 +2880,7 @@
       "NWS/SAME: CAE Child Abduction Emergency",
       "CAP 1.2: Rescue"
     ],
-    "gap": "Round 1 found 1 adopted or planned source with no risk: nws-alerts-api. ipaws-open has a risk, so the gate does not count it: see the risks of the record. amber-alert-ojp is later: see the reason of each.",
+    "gap": null,
     "round": 1
   },
   {
@@ -2974,7 +2974,7 @@
       "NWS/SAME: LEW Law Enforcement Warning",
       "CAP 1.2: Security"
     ],
-    "gap": "Round 1 found 1 adopted or planned source with no risk: nws-alerts-api. ipaws-open has a risk, so the gate does not count it: see the risks of the record. Round 1 found no other source.",
+    "gap": null,
     "round": 1
   },
   {

@@ -15,6 +15,7 @@ import {
   localPlaces,
   mapPayload,
   ONLY_COPY,
+  optedIn,
   placeLabels,
   sourceCovers,
   sourcePlaces,
@@ -29,6 +30,7 @@ import {
   type HistoryPayload,
   type Instant,
   type MapPayload,
+  type OptInRecord,
   type ParsedConfig,
   type SecretLookup,
   type SourceDescriptor,
@@ -38,11 +40,16 @@ import {
 import {
   CHANNEL_ID as TWILIO_CHANNEL,
   createTwilioCallChannel,
+  createTwilioTextChannel,
   readTwilioBalance,
+  TEXT_CHANNEL_ID,
   TWILIO_CALL_COST_USD,
   TWILIO_CALL_TIMEOUT_MS,
+  TWILIO_TEXT_COST_USD,
   twilioCallDescriptor,
   twilioSetupProblems,
+  twilioTextDescriptor,
+  type TextOptIn,
   type TwilioCredentials,
   type TwilioFetch,
 } from "@mark1russell7/alerts-channel-twilio";
@@ -51,6 +58,7 @@ import { createEmscSource, EMSC_DESCRIPTOR } from "@mark1russell7/alerts-source-
 import { createIpawsSource, IPAWS_DESCRIPTOR, WEA_EXPECTATION } from "@mark1russell7/alerts-source-ipaws";
 import { createShapeStore, type ShapeCache, type ShapeStore } from "@mark1russell7/alerts-shapes-nws";
 import { createNwsSource, NWS_DESCRIPTOR } from "@mark1russell7/alerts-source-nws-api";
+import { createNwwsSource, SOURCE_ID as NWWS_SOURCE, type NwwsAccount, type OpenSession } from "@mark1russell7/alerts-source-nwws";
 import { createSwpcSource, SWPC_DESCRIPTOR } from "@mark1russell7/alerts-source-swpc";
 import { createTsunamiSource, descriptorOf as tsunamiDescriptor, TSUNAMI_CENTERS, type TsunamiCenter, type TsunamiFetchOptions } from "@mark1russell7/alerts-source-tsunami";
 import { createUsgsSource, USGS_DESCRIPTOR } from "@mark1russell7/alerts-source-usgs";
@@ -157,7 +165,7 @@ export { DELAY_LIMITS };
  * recipient against this list: the channel of each step, and the fields of each address. Thus the loader
  * and the instance agree on the channels.
  */
-export const INSTANCE_CHANNELS: readonly ChannelDescriptor[] = [pushoverDescriptor(), twilioCallDescriptor()];
+export const INSTANCE_CHANNELS: readonly ChannelDescriptor[] = [pushoverDescriptor(), twilioCallDescriptor(), twilioTextDescriptor()];
 
 /**
  * The names of the keys of `secrets.env` for the Twilio call channel. The secret is the secret of an API key
@@ -165,39 +173,88 @@ export const INSTANCE_CHANNELS: readonly ChannelDescriptor[] = [pushoverDescript
  */
 export const TWILIO_KEYS = { accountSid: "TWILIO_ACCOUNT_SID", keySid: "TWILIO_API_KEY_SID", secret: "TWILIO_API_KEY_SECRET", from: "TWILIO_FROM" } as const;
 
-/** The setup of the Twilio call channel: the credentials of the account and the number that calls. */
+/**
+ * The name of the key of `secrets.env` that holds the Twilio number of the texts. A text to a phone in the United States
+ * needs a registered sender: the phone of a 10DLC campaign or a verified toll-free phone. Without the key, the instance sends no text.
+ */
+export const TWILIO_TEXT_FROM_KEY = "TWILIO_TEXT_FROM";
+
+/** The setup of the Twilio channels: the credentials of the account, the number that calls and the number that texts. */
 export interface TwilioSetup {
   readonly credentials: TwilioCredentials;
   readonly from: string;
+  /** The number of the text channel and of the texts of the outage call, from the key `TWILIO_TEXT_FROM_KEY`. */
+  readonly textFrom?: string;
 }
 
 /**
- * This function gives the setup of the Twilio call channel from the secrets.
+ * This function gives the setup of the Twilio channels from the secrets.
  *
- * - With none of the keys of `TWILIO_KEYS`, it gives `undefined`. The instance then has no call channel.
+ * - With none of the keys of `TWILIO_KEYS`, it gives `undefined`. The instance then has no call channel and no text channel.
  * - With some keys and not all, or with a value of a bad form, it gives the problems. A problem names keys, and no value.
+ * - The key `TWILIO_TEXT_FROM_KEY` is optional. It needs the keys of `TWILIO_KEYS`.
  */
 export function twilioSetup(secret: SecretLookup): Result<TwilioSetup | undefined, readonly string[]> {
   const value = (name: string): string => secret(name) ?? "";
   const names = Object.values(TWILIO_KEYS);
   const missing = names.filter((name) => value(name) === "");
-  if (missing.length === names.length) return ok(undefined);
+  const textFrom = value(TWILIO_TEXT_FROM_KEY);
+  if (missing.length === names.length) {
+    return textFrom === "" ? ok(undefined) : err([`The secret store has a value for ${TWILIO_TEXT_FROM_KEY}, and no keys of Twilio. Give the keys of Twilio, or remove the value.`]);
+  }
   if (missing.length > 0) return err([`The secret store has some keys of Twilio, and it has no value for ${missing.join(", ")}. Give all the keys, or none.`]);
   const setup: TwilioSetup = {
     credentials: { accountSid: value(TWILIO_KEYS.accountSid), keySid: value(TWILIO_KEYS.keySid), secret: value(TWILIO_KEYS.secret) },
     from: value(TWILIO_KEYS.from),
+    ...(textFrom === "" ? {} : { textFrom }),
   };
-  const problems = twilioSetupProblems(setup.credentials, setup.from);
+  const problems = twilioSetupProblems(setup.credentials, setup.from, setup.textFrom);
   return problems.length === 0 ? ok(setup) : err(problems.map((problem) => `The keys of Twilio have a problem: ${problem}`));
 }
 
+/** The ids of the sources with an account. The field `accounts` of the settings of a copy names only these sources. */
+export const ACCOUNT_SOURCES: readonly string[] = [NWWS_SOURCE];
+
+/** This function gives the names of the keys of `secrets.env` for an account of NWWS-OI. The keys of account `n` end in `_n`. */
+export function nwwsKeys(account: number): { readonly username: string; readonly password: string } {
+  return { username: `NWWS_OI_USER_${String(account)}`, password: `NWWS_OI_PASSWORD_${String(account)}` };
+}
+
 /**
- * This function gives the channels that the instance sends on: Pushover, and the Twilio call channel when the secrets have
- * its keys. A step on another channel of `INSTANCE_CHANNELS` stops the start.
+ * This function gives the account of the NWWS-OI source of a copy from the secrets. The field `accounts` of the copy gives
+ * the number of the account. The default is account 1.
+ *
+ * - With no key of account 1, and no account in the copy, it gives `undefined`. The instance then has no NWWS-OI source.
+ * - With one key of the pair and not the other, it gives a problem. A problem names keys, and no value.
+ * - With an account in the copy and no key of that account, it gives a problem.
+ */
+export function nwwsSetup(secret: SecretLookup, copy: CopySettings = ONLY_COPY): Result<NwwsAccount | undefined, readonly string[]> {
+  const account = copy.accounts?.[NWWS_SOURCE];
+  const keys = nwwsKeys(account ?? 1);
+  const username = secret(keys.username) ?? "";
+  const password = secret(keys.password) ?? "";
+  if (username !== "" && password !== "") return ok({ username, password });
+  const missing = [keys.username, keys.password].filter((name) => (secret(name) ?? "") === "");
+  if (missing.length === 1) return err([`The secret store has one key of the NWWS-OI account ${String(account ?? 1)}, and it has no value for ${missing.join(", ")}. Give the two keys, or none.`]);
+  if (account === undefined) return ok(undefined);
+  return err([`The file ${COPY_FILE} gives the NWWS-OI account ${String(account)} to this copy, and the secret store has no value for ${missing.join(", ")}.`]);
+}
+
+/** This function gives the problems of the field `accounts` of a copy: each id of a source with no account. */
+function accountProblems(copy: CopySettings): string[] {
+  return Object.keys(copy.accounts ?? {})
+    .filter((id) => !ACCOUNT_SOURCES.includes(id))
+    .map((id) => `The file ${COPY_FILE}: the field accounts names the source ${id}. Only these sources have an account: ${ACCOUNT_SOURCES.join(", ")}.`);
+}
+
+/**
+ * This function gives the channels that the instance sends on. Pushover is always one. The Twilio call channel needs the keys of
+ * `TWILIO_KEYS`, and the text channel also needs `TWILIO_TEXT_FROM_KEY`. A step on another channel of `INSTANCE_CHANNELS` stops the start.
  */
 export function instanceSenders(secret: SecretLookup): readonly ChannelId[] {
   const twilio = twilioSetup(secret);
-  return twilio.tag === "ok" && twilio.value !== undefined ? [CHANNEL_ID, TWILIO_CHANNEL] : [CHANNEL_ID];
+  if (twilio.tag === "err" || twilio.value === undefined) return [CHANNEL_ID];
+  return twilio.value.textFrom === undefined ? [CHANNEL_ID, TWILIO_CHANNEL] : [CHANNEL_ID, TWILIO_CHANNEL, TEXT_CHANNEL_ID];
 }
 
 /** The tsunami warning centers of the NWS. Each center is a source of its own, with its own health. */
@@ -251,6 +308,9 @@ const CALL_LIMIT = Math.max(PUSHOVER_TIMEOUT_MS, TWILIO_CALL_TIMEOUT_MS);
 /**
  * The times of the loop of the instance. They come from the intervals of the sources and the time
  * limit of the Pushover channel. The host reads them before a start: the stop grace holds one pass.
+ *
+ * The stream of NWWS-OI has a shorter interval. It makes only the cap of the retry of its instance shorter, thus these
+ * times stay a bound of the times of each instance.
  */
 export const INSTANCE_TIMES: LoopTimes = loopTimes(INSTANCE_SOURCES, { delivery: { callLimit: CALL_LIMIT, retry: CALL_LIMIT } });
 
@@ -294,6 +354,8 @@ export const RANK_FLOOR: Duration = DELIVERY_TIMES.callLimit + 3 * EXCHANGE_EVER
  *
  * - a missing token, or a token with a bad form
  * - some keys of Twilio and not all, or a key of Twilio with a bad form
+ * - one key of the NWWS-OI account of the copy and not the other, or an account of the copy with no keys
+ * - an id of a source with no account in the field `accounts` of the copy
  * - a step of a policy on a channel with no sender
  * - a step on a channel with a cost, when the configuration has no spend entry for its provider
  * - a place that no regional source covers. A source with the coverage `global` covers each place, with no code.
@@ -304,7 +366,7 @@ export const RANK_FLOOR: Duration = DELIVERY_TIMES.callLimit + 3 * EXCHANGE_EVER
  *
  * The function `parseConfig` checks the fields of each address with the descriptors of `INSTANCE_CHANNELS`.
  */
-export function instanceProblems(parsed: ParsedConfig, secret: SecretLookup, descriptors: readonly SourceDescriptor[], at: Instant): string[] {
+export function instanceProblems(parsed: ParsedConfig, secret: SecretLookup, descriptors: readonly SourceDescriptor[], at: Instant, copy: CopySettings = ONLY_COPY): string[] {
   const token = secret(PUSHOVER_TOKEN) ?? "";
   // A bad key fails each send. Thus it stops the start, before the first alert.
   const tokenProblems =
@@ -316,6 +378,9 @@ export function instanceProblems(parsed: ParsedConfig, secret: SecretLookup, des
   // Bad keys of Twilio fail each call. Thus they stop the start, before the first alert.
   const twilio = twilioSetup(secret);
   const twilioProblems = twilio.tag === "err" ? twilio.error : [];
+  // A half of a key pair of NWWS-OI is a fault of the secret store, not a choice of no stream. Thus it stops the start.
+  const nwws = nwwsSetup(secret, copy);
+  const nwwsProblems = nwws.tag === "err" ? nwws.error : [];
   // A step on a channel with no sender fails each send of the step. Thus it stops the start.
   const senders = instanceSenders(secret);
   const senderProblems = parsed.recipients.flatMap((recipient) =>
@@ -349,6 +414,8 @@ export function instanceProblems(parsed: ParsedConfig, secret: SecretLookup, des
   return [
     ...tokenProblems,
     ...twilioProblems,
+    ...nwwsProblems,
+    ...accountProblems(copy),
     ...senderProblems,
     ...spendProblems,
     ...placeProblems,
@@ -357,20 +424,22 @@ export function instanceProblems(parsed: ParsedConfig, secret: SecretLookup, des
   ];
 }
 
-/** The check of a configuration file for the live instance: its channels and the problems that stop its start. */
-export const INSTANCE_CHECK: InstanceCheck = {
-  channels: INSTANCE_CHANNELS,
-  problems: (parsed, secret) => instanceProblems(parsed, secret, INSTANCE_SOURCES, wallClock().now()),
-};
+/** This function gives the check of a configuration file for the instance of a copy: its channels and the problems that stop its start. */
+export function instanceCheck(copy: CopySettings = ONLY_COPY): InstanceCheck {
+  return { channels: INSTANCE_CHANNELS, problems: (parsed, secret) => instanceProblems(parsed, secret, INSTANCE_SOURCES, wallClock().now(), copy) };
+}
+
+/** The check of a configuration file for the instance of the only copy: `instanceCheck(ONLY_COPY)`. */
+export const INSTANCE_CHECK: InstanceCheck = instanceCheck(ONLY_COPY);
 
 /**
  * This function gives the check of the live instance of a copy, the profile `daemon`. It adds the key of the first
- * check of the copy to `INSTANCE_CHECK`, because the live instance does not start without its heartbeat. A copy with
+ * check of the copy to `instanceCheck(copy)`, because the live instance does not start without its heartbeat. A copy with
  * other copies also needs the token of the exchange.
  */
 export function daemonCheck(copy: CopySettings): InstanceCheck {
   const pingKey = pingKeyOf(copy);
-  const ping = requireKey(INSTANCE_CHECK, pingKey, "The live instance needs its outside heartbeat.");
+  const ping = requireKey(instanceCheck(copy), pingKey, "The live instance needs its outside heartbeat.");
   const check = (copy.peers ?? []).length === 0 ? ping : requireKey(ping, COPY_TOKEN_KEY, "A copy with other copies needs the token of the exchange.");
   // The copies share the loud check. A copy that pings it as its first check hides the stop of the other copies.
   if (pingKey !== LOUD_PING_URL_KEY) return check;
@@ -397,6 +466,11 @@ export interface InstanceOptions {
   readonly wall: WallClock;
   /** The transport of the requests of the sources. A test gives a transport with faults. */
   readonly transport: Transport;
+  /**
+   * The function that opens a session of the NWWS-OI source. The default is the XMPP session of the source. A test
+   * gives a fake session. The instance has the source only when the secrets have the keys of the account of the copy.
+   */
+  readonly nwwsOpen?: OpenSession;
   /** The fetch of the Pushover channel. */
   readonly pushover: PushoverChannelOptions["fetch"];
   /**
@@ -443,6 +517,13 @@ export interface InstanceOptions {
   readonly shapes?: ShapeCache;
   /** The instance gives each refresh of the outlines to this function. */
   readonly onShapes?: (outcome: ShapeOutcome) => void;
+  /**
+   * The store of the indicator readings. The entry gives the file `readings.sqlite` of the private folder, and the service
+   * closes it. Without it, the instance keeps no reading.
+   */
+  readonly readings?: RuntimeOptions["readings"];
+  /** The instance gives each fault of the store of the readings to this function. */
+  readonly onReadingsFault?: RuntimeOptions["onReadingsFault"];
   /**
    * The instance starts this function one time, when new outlines change the codes of a place. The check is after a refresh
    * with requests, when no task is due. The entry of the profile `daemon` stops the runtime, and the supervisor starts it again.
@@ -510,9 +591,10 @@ export interface Instance {
  * problem. A problem is a missing token, a key with a bad form, or a place that no regional source covers.
  * The message names ids, fields and the names of secrets, and no value.
  *
- * - The sources are the NWS API, IPAWS, the USGS, EMSC, the two tsunami warning centers and the SWPC. Each source gets the
- *   codes of the places. It gets the position of a place only when the place shares it with that source. The USGS, EMSC,
- *   the centers and the SWPC ask for no place.
+ * - The sources are the NWS API, IPAWS, the USGS, EMSC, the two tsunami warning centers and the SWPC. The stream of
+ *   NWWS-OI is a source when the secrets have the keys of the account of the copy (`nwwsSetup`). Each source gets the
+ *   codes of the places. It gets the position of a place only when the place shares it with that source. The USGS,
+ *   EMSC, the centers and the SWPC ask for no place.
  * - The channels are Pushover, and the Twilio call channel when the secrets have its keys. Each time of the delivery comes
  *   from a fact of the channels.
  * - A spend entry of a channel gives its cap and the watch of the balance of its account.
@@ -526,13 +608,21 @@ export function openInstance(options: InstanceOptions): Instance {
   const pace = sourcePace(clock, wall, factories.length);
   // One User-Agent for each request of the instance: the sources and the store of shapes.
   const agent = userAgent(options.config.config.contact);
-  const sources = factories.map((make) => make({ pace, transport: options.transport, userAgent: agent }));
+  const polled = factories.map((make) => make({ pace, transport: options.transport, userAgent: agent }));
+  // The stream of NWWS-OI sends no request over HTTP, thus it has no pace. Its first fetch opens its session.
+  const copy = options.copy ?? ONLY_COPY;
+  const account = nwwsSetup(options.secret, copy);
+  const stream =
+    account.tag === "ok" && account.value !== undefined
+      ? createNwwsSource({ account: account.value, clock: wall, ...(options.nwwsOpen === undefined ? {} : { open: options.nwwsOpen }) })
+      : undefined;
+  const sources: readonly SourceProcedures[] = stream === undefined ? polled : [...polled, stream];
 
   const descriptors = sources.map((source) => source.describe());
   const kinds = [...new Set(descriptors.flatMap((descriptor) => descriptor.kinds))];
 
   const { config, recipients } = options.config;
-  const problems = instanceProblems(options.config, options.secret, descriptors, wall.now());
+  const problems = instanceProblems(options.config, options.secret, descriptors, wall.now(), copy);
   if (problems.length > 0) throw new Error(`The instance does not start. The configuration has these problems:\n- ${problems.join("\n- ")}`);
   const token = options.secret(PUSHOVER_TOKEN) ?? "";
 
@@ -573,9 +663,8 @@ export function openInstance(options: InstanceOptions): Instance {
     ...(options.pushoverQuota === undefined ? {} : { quota: options.pushoverQuota }),
     ...(options.pushoverReserveNotices === undefined ? {} : { reserveNotices: options.pushoverReserveNotices }),
   });
-  const twilio = twilioChannel(options, config.spend);
+  const twilio = twilioChannel(options, config.spend, options.config.optIn);
   // The worker of the exchange reads the runtime only in its rounds, after the start of the service. Thus it gets the runtime through a function.
-  const copy = options.copy ?? ONLY_COPY;
   const peers = copy.peers ?? [];
   const worker =
     peers.length === 0 || options.exchange === undefined
@@ -592,7 +681,8 @@ export function openInstance(options: InstanceOptions): Instance {
     ...(twilio?.gates === undefined ? [] : [channelQuota(TWILIO_CHANNEL, twilio.gates.gate, SPEND_UNIT)]),
   ];
   const balances = twilio?.watch === undefined ? [] : [twilio.watch];
-  const channels = twilio === undefined ? [pushover] : [pushover, twilio.channel];
+  // The text channel takes its units from the gates of the call channel. Thus the quota of the call channel counts the texts too.
+  const channels = twilio === undefined ? [pushover] : [pushover, twilio.channel, ...(twilio.text === undefined ? [] : [twilio.text])];
   // The labels of the places go only into the why line of each message. The policy of the configuration replaces the default policy of the core.
   const delivery: DeliveryOptions = {
     recipients,
@@ -632,6 +722,9 @@ export function openInstance(options: InstanceOptions): Instance {
     balances,
     // Each pass waits for the first round of the exchange, and its view has a line for each fault of another copy.
     ...(worker === undefined ? {} : { copies: worker }),
+    // The readings of each fetch go to their store, not to the log.
+    ...(options.readings === undefined ? {} : { readings: options.readings }),
+    ...(options.onReadingsFault === undefined ? {} : { onReadingsFault: options.onReadingsFault }),
     // After each pass, the store of shapes gets the outlines that are due, and it ends before the next fetch of a source.
     onPass: async (pass) => {
       latest = pass;
@@ -740,26 +833,37 @@ function outageWorker(options: InstanceOptions, limit: Duration): OutageDeployWo
   });
 }
 
-/** The Twilio call channel of an instance, its gates of the spend and the watch of its balance. */
+/** The Twilio call channel of an instance, its text channel, the gates of the spend and the watch of the balance. */
 interface TwilioParts {
   readonly channel: ChannelProcedures;
+  /** The text channel, when the secrets have the number of the texts. */
+  readonly text?: ChannelProcedures;
   readonly gates?: SpendGates;
   readonly watch?: BalanceWatch;
 }
 
 /**
- * This function makes the Twilio call channel when the secrets have its keys. The function `instanceProblems` checked the
- * keys before. A spend entry gives the cap and the watch of the balance. Its floor is in the currency of the account.
+ * This function makes the Twilio channels when the secrets have their keys. The function `instanceProblems` checked the keys before.
+ * A spend entry gives one cap of the two channels and the watch of the balance. Its floor is in the currency of the account.
  */
-function twilioChannel(options: InstanceOptions, spend: readonly SpendConfig[] | undefined): TwilioParts | undefined {
+function twilioChannel(options: InstanceOptions, spend: readonly SpendConfig[] | undefined, records: readonly OptInRecord[]): TwilioParts | undefined {
   const setup = twilioSetup(options.secret);
   if (setup.tag === "err" || setup.value === undefined) return undefined;
-  const { credentials, from } = setup.value;
+  const { credentials, from, textFrom } = setup.value;
   const fetch = options.twilio;
   if (fetch === undefined) throw new Error("The secret store has the keys of Twilio, and the instance has no fetch for the call channel.");
   const now = (): number => options.wall.now();
   const entry = spendEntryOf(twilioCallDescriptor(), spend);
-  if (entry === undefined) return { channel: createTwilioCallChannel({ credentials, from, fetch, now }) };
+  // The text channel sends only to a number of the opt-in list. Twilio keeps the state of the STOP and START replies, and
+  // refuses a text to a number that replied STOP. The runtime keeps no STOP until it reads the START replies too (the read
+  // of the replies, AL-56). Thus a START reply works at once, and each text to a number that replied STOP gives `consent`.
+  const optIn: TextOptIn = { has: (number, at) => optedIn(records, [], number, at), stopped: () => undefined };
+  // The text channel takes the gates of the call channel, with the units of one text.
+  const text = (gates?: SpendGates): { readonly text?: ChannelProcedures } =>
+    textFrom === undefined
+      ? {}
+      : { text: createTwilioTextChannel({ credentials, from: textFrom, fetch, now, optIn, ...(gates === undefined ? {} : { spend: { ...gates, units: spendUnits(TWILIO_TEXT_COST_USD) } }) }) };
+  if (entry === undefined) return { channel: createTwilioCallChannel({ credentials, from, fetch, now }), ...text() };
   const store = options.spendStore;
   if (store === undefined) throw new Error(`The configuration has a spend entry for ${entry.provider}, and the instance has no store for its count.`);
   // The key names the provider, not the account SID.
@@ -767,10 +871,10 @@ function twilioChannel(options: InstanceOptions, spend: readonly SpendConfig[] |
   const watch = balanceWatch({
     provider: entry.provider,
     title: "Twilio",
-    channels: [TWILIO_CHANNEL],
+    channels: textFrom === undefined ? [TWILIO_CHANNEL] : [TWILIO_CHANNEL, TEXT_CHANNEL_ID],
     floor: entry.floor,
     read: (signal) => readTwilioBalance({ credentials, fetch }, signal),
   });
   const channel = createTwilioCallChannel({ credentials, from, fetch, now, spend: { ...gates, units: spendUnits(TWILIO_CALL_COST_USD) } });
-  return { channel, gates, watch };
+  return { channel, gates, watch, ...text(gates) };
 }

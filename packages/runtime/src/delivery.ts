@@ -39,7 +39,7 @@ import {
 } from "@mark1russell7/alerts";
 import { errorMessage } from "@mark1russell7/text";
 import { compareCodeUnits } from "@mark1russell7/text/order";
-import { envelope, frameTag, type ChannelFailureKind, type RefusalKind, type RefusedEvent, type RuntimeEvent } from "./events.ts";
+import { envelope, frameTag, REFUSAL_FAULTS, type ChannelFailureKind, type RefusalKind, type RefusedEvent, type RuntimeEvent } from "./events.ts";
 import { limited } from "./limit.ts";
 import { cancelledKeys, type RuntimeState } from "./state.ts";
 import { earliest } from "./view.ts";
@@ -749,13 +749,15 @@ export function createDispatcher(options: DeliveryOptions, context: DeliveryCont
 
 /**
  * This function gives the overdue sends of each channel at `at`. An overdue send is a send of the routes after the
- * step, due for `after` or more. A send whose last refusal is `reserved` is not overdue. With no `after`, no send is overdue.
+ * step, due for `after` or more. With no `after`, no send is overdue. A send whose last refusal is not a fault of the
+ * channel is not overdue (`REFUSAL_FAULTS`). Examples are `consent`, a STOP reply, and `quiet`, a call in the quiet window.
  */
 function overdueSends(routes: readonly Route[], refusals: RuntimeState["refusals"], at: Instant, after: Duration | undefined): OverdueSends[] {
   if (after === undefined) return [];
   const byChannel = new Map<ChannelId, { readonly sends: number; readonly since: Instant }>();
   for (const send of routes.flatMap((entry) => entry.plan.sends)) {
-    if (at - send.due < after || refusals[messageKey(send)]?.kind === "reserved") continue;
+    const last = refusals[messageKey(send)]?.kind;
+    if (at - send.due < after || (last !== undefined && !REFUSAL_FAULTS[last])) continue;
     const before = byChannel.get(send.channel);
     byChannel.set(send.channel, { sends: (before?.sends ?? 0) + 1, since: Math.min(before?.since ?? send.due, send.due) });
   }

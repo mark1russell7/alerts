@@ -2,7 +2,7 @@ import { random, seedsFrom } from "@mark1russell7/rigor-generators";
 import { describe, expect, expectTypeOf, it } from "vitest";
 import { z } from "zod";
 import { assess, COVERAGE_KIND, DEFAULT_ASSESS_POLICY } from "./assess.ts";
-import { CONFIG_FORMAT, COPY_FORMAT, copyProblems, loadConfig, ONLY_COPY, type AlertConfig, type CopySettings } from "./config.ts";
+import { CONFIG_FORMAT, CONFIG_PART_FORMAT, configHash, COPY_FORMAT, copyProblems, loadConfig, ONLY_COPY, type AlertConfig, type CopySettings } from "./config.ts";
 import type {
   Acknowledgment,
   EndMark,
@@ -84,6 +84,7 @@ import {
   addressSchema,
   addressValueSchema,
   alertConfigSchema,
+  configPartSchema,
   drillConfigSchema,
   expectationConfigSchema,
   outageConfigSchema,
@@ -419,6 +420,7 @@ const SCHEMA_NAMES = [
   "channelDescriptorSchema",
   "channelIdSchema",
   "channelQuotaSchema",
+  "configPartSchema",
   "contactConfigSchema",
   "copyHealthSchema",
   "copyIdSchema",
@@ -433,6 +435,7 @@ const SCHEMA_NAMES = [
   "deliverySchema",
   "deliveryStateSchema",
   "deliveryStatusSchema",
+  "dimensionIdSchema",
   "drillConfigSchema",
   "drillPathSchema",
   "drillWindowSchema",
@@ -454,9 +457,12 @@ const SCHEMA_NAMES = [
   "historyChangeSchema",
   "historyIncidentSchema",
   "historyPayloadSchema",
+  "historyPlaceSchema",
   "historyRegionSchema",
   "incidentLineSchema",
   "incidentSchema",
+  "indicatorAreaKindSchema",
+  "indicatorAreaSchema",
   "instantSchema",
   "interestEdgeSchema",
   "interestGraphSchema",
@@ -476,15 +482,19 @@ const SCHEMA_NAMES = [
   "mapProblemSchema",
   "mapResultSchema",
   "mapShapeSchema",
+  "measureDeclarationSchema",
   "messageSchema",
+  "moveSchema",
   "muteEffectSchema",
   "muteSchema",
   "nodeKeySchema",
   "observationIdSchema",
   "observationSchema",
   "operationSchema",
+  "optInConfigSchema",
   "outageConfigSchema",
   "outagePersonConfigSchema",
+  "ownBaselineSchema",
   "personConfigSchema",
   "personIdSchema",
   "personWatchSchema",
@@ -497,6 +507,7 @@ const SCHEMA_NAMES = [
   "quotaHealthSchema",
   "quotaStageSchema",
   "rankDelaysSchema",
+  "readingSchema",
   "receiptSchema",
   "regionCodeSchema",
   "relevancePathSchema",
@@ -872,6 +883,26 @@ describe("the private configuration", () => {
     holds(drillConfigSchema, { ...drill, copies: ["home"] });
   });
 
+  it("checks the failure of a drill with the policy of a subject, and a real notice keeps its policy", () => {
+    const drill = { id: "push-weekly", person: PERSON, path: { kind: "channel", channel: PUSHOVER }, every: 6 * 86_400_000, window: { zone: "America/Chicago", start: "11:00", end: "17:00", days: [6] }, ackWithin: 1_800_000 } as const;
+    const watcher = { watch: { person: PERSON, places: [KANSAS.id], rules: [], subjects: [{ system: DRILL_SUBJECT }] }, label: "Person A" };
+    const second: ChannelDescriptor = { ...CHANNEL, id: "sms" as ChannelId, title: "SMS", ack: "none" };
+    // The notices of the person go only on the channel of the drill. Thus the failure of the drill sends nothing.
+    const notice = { level: "notice" as const, steps: [{ channel: PUSHOVER, at: 0 }], exhaustedAfter: 600_000 };
+    const contacts = [...CONFIG.contacts, { person: PERSON, channel: second.id, address: { to: { secret: "SMS_TO" } } }];
+    const secret = (name: string): string | undefined => (name === "PUSHOVER_USER" || name === "SMS_TO" ? "value-test" : undefined);
+    const load = (policies: readonly unknown[]) => loadConfig(alertConfigSchema.parse(JSON.parse(JSON.stringify({ ...CONFIG, people: [watcher], drills: [drill], policies, contacts }))), [CHANNEL, second], secret).problems;
+    expect(load([ESCALATION, notice])).toEqual([
+      `The failure of the drill push-weekly reaches the person ${PERSON} at the level notice, and its policy has no step on a channel other than pushover. It sends nothing.`,
+    ]);
+    // A policy of notice about the drills adds a step on the second channel for the drill reports only.
+    const drills = { ...notice, about: { system: DRILL_SUBJECT }, steps: [...notice.steps, { channel: second.id, at: 0 }] };
+    holds(escalationPolicySchema, drills);
+    expect(load([ESCALATION, notice, drills])).toEqual([]);
+    fails(escalationPolicySchema, { ...drills, about: { id: "push-weekly" } });
+    fails(escalationPolicySchema, { ...drills, about: { system: DRILL_SUBJECT, extra: 1 } });
+  });
+
   it("refuses a wrong form, and leaves the references to the load", () => {
     fails(alertConfigSchema, { ...CONFIG, format: "alerts-config/2" });
     fails(alertConfigSchema, { ...CONFIG, extra: 1 });
@@ -900,6 +931,10 @@ describe("the private configuration", () => {
     for (const bad of [{ monthlyUsd: 0 }, { monthlyUsd: -1 }, { reserveUsd: -1 }, { floor: "5" }, { timeZone: "" }, { provider: "" }, { currency: "USD" }]) fails(spendConfigSchema, { ...spend, ...bad });
     // A reserve above the cap and a bad zone are problems of the load, with the names of the fields.
     holds(spendConfigSchema, { ...spend, reserveUsd: 20, timeZone: "Mars/Olympus" });
+    // The fixed costs: each one has a name and a cost of 0 or more. Fixed costs above the cap are a problem of the load.
+    holds(spendConfigSchema, { ...spend, fixed: [{ what: "toll-free number", usd: 2.15 }, { what: "free", usd: 0 }] });
+    holds(spendConfigSchema, { ...spend, fixed: [{ what: "rent", usd: 50 }] });
+    for (const bad of [[{ what: "", usd: 1 }], [{ what: "rent", usd: -1 }], [{ what: "rent" }], [{ what: "rent", usd: 1, extra: 1 }], {}]) fails(spendConfigSchema, { ...spend, fixed: bad });
   });
 
   it("checks the form of the outage call, and leaves the people and the channels to the load", () => {
@@ -918,6 +953,8 @@ describe("the private configuration", () => {
     const home: CopySettings = { format: COPY_FORMAT, id: "home", rank: 0, listen: { host: "100.64.0.1", port: 4751 }, peers: [{ id: "cloud", url: "http://cloud.example.ts.net:4751" }], pingKey: "HEALTHCHECKS_PING_URL_HOME" };
     holds(copySettingsSchema, home);
     holds(copySettingsSchema, ONLY_COPY);
+    holds(copySettingsSchema, { ...home, accounts: { nwws: 2 } });
+    for (const accounts of [{ nwws: 0 }, { nwws: 1.5 }, { nwws: "2" }, { "": 2 }, []]) fails(copySettingsSchema, { ...home, accounts });
     holds(copyListenSchema, { host: "home.example.ts.net", port: 65535 });
     holds(copyPeerSchema, { id: "c-2", url: "https://[fd7a:115c::1]:4751/exchange" });
     for (const bad of [{ format: "alerts-copy/2" }, { id: "Home" }, { id: "" }, { id: "-home" }, { id: "a".repeat(33) }, { rank: -1 }, { rank: 0.5 }, { pingKey: "lower" }, { pingKey: "" }, { extra: 1 }]) fails(copySettingsSchema, { ...home, ...bad });
@@ -1007,6 +1044,37 @@ describe("the private configuration", () => {
     expect(pathsOf(JSON.stringify(wrong))).toEqual(["places[0].bufferKm", "places[1].codes[0].code"]);
     // The form holds, and the load finds the secret that the store does not have.
     expect(problemsOf(JSON.stringify(CONFIG), () => undefined)).toEqual([expect.stringContaining("names the secret PUSHOVER_USER")]);
+  });
+
+  it("merges the parts of a configuration, and gives the problems of each part with its name", () => {
+    const { places, people, contacts, ...rest } = CONFIG;
+    const root = JSON.stringify({ ...rest, places: [], people: [], contacts: [] });
+    const directory = { name: "directory", text: JSON.stringify({ format: CONFIG_PART_FORMAT, places, people }) };
+    const addresses = { name: "addresses", text: JSON.stringify({ format: CONFIG_PART_FORMAT, contacts }) };
+    const parsed = parseConfig(root, [CHANNEL], store, [directory, addresses]);
+    expect(parsed.tag).toBe("ok");
+    if (parsed.tag === "ok") {
+      expect(parsed.value.config).toEqual(CONFIG);
+      expect(configHash(parsed.value.config)).toBe(configHash(CONFIG));
+    }
+    // The schema refuses a field of the root in a part.
+    holds(configPartSchema, { format: CONFIG_PART_FORMAT });
+    fails(configPartSchema, { format: CONFIG_PART_FORMAT, policies: [] });
+    fails(configPartSchema, { format: CONFIG_FORMAT, places });
+    const problemsWith = (parts: readonly { name: string; text: string }[], text = root): readonly string[] => {
+      const result = parseConfig(text, [CHANNEL], store, parts);
+      return result.tag === "err" ? result.error : [];
+    };
+    expect(problemsWith([directory, { name: "addresses", text: "{" }])).toEqual(["The part addresses is not valid JSON."]);
+    expect(problemsWith([directory, { name: "Bad Name", text: "{" }])).toEqual(["Part 1 is not valid JSON."]);
+    expect(problemsWith([directory, { name: "addresses", text: JSON.stringify({ format: CONFIG_PART_FORMAT, contacts, drills: [] }) }])).toEqual(["The part addresses: (root): Unrecognized key: \"drills\""]);
+    // The problems of the root and of each part come together, before the merge.
+    expect(problemsWith([{ name: "addresses", text: "[]" }], "{")).toEqual(["The configuration is not valid JSON.", "The part addresses: (root): Invalid input: expected object, received array"]);
+    // An entry in two files is a problem of the merge. A missing contact is a problem of the load.
+    expect(problemsWith([directory, addresses, { name: "copy", text: JSON.stringify({ format: CONFIG_PART_FORMAT, places: [places[0]] }) }])).toEqual([
+      `The place ${places[0]!.id} is in the part copy and in the part directory.`,
+    ]);
+    expect(problemsWith([directory])).toEqual([expect.stringContaining(PERSON)]);
   });
 
   it("accepts only printable ASCII in a contact, with no space, no parenthesis and no backslash", () => {

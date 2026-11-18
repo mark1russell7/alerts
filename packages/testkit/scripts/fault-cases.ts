@@ -14,7 +14,9 @@ import { changesOf, runChangedFormat } from "../src/changed-format.ts";
 import { KILL_ARMS, KILL_GATES, runKillRestart } from "../src/kill-restart.ts";
 import { ACCEPT_ARMS, ACCEPT_GATES, runLateAccept } from "../src/late-accept.ts";
 import { runSlowSource, SLOW_ARMS, trickleMs } from "../src/slow-source.ts";
+import { NWWS_ARMS, NWWS_GATES, runNwwsStream } from "../src/nwws-stream.ts";
 import { DOWN_ARMS, runSourceDown } from "../src/source-down.ts";
+import { COPIES_ARMS, COPIES_GATES, runTwoCopies, type SentRecord } from "../src/two-copies.ts";
 import {
   COPY_ARMS,
   COPY_GATES,
@@ -335,4 +337,52 @@ report(kill.id, kill.verdict, [
   }),
   "",
   `Read: ${yes(kill.verdict.read)}. Arms: ${KILL_ARMS.join(", ")}. Known faults: none. Pass: **${yes(kill.verdict.pass)}**.`,
+]);
+
+const copies = await runTwoCopies();
+write("case-13.json", copies);
+const sent = (list: readonly SentRecord[]): string => list.map((one) => `${one.copy} at ${s(one.at)}`).join(", ") || "none";
+report(copies.id, copies.verdict, [
+  `## ${copies.id}: two copies and one phone`,
+  "",
+  `The case clock moves ${String(copies.settings.speed)} times faster than real time. Each arm has ${s(copies.settings.armMs)} s. The copy home has rank 0, and the copy cloud has rank 1.`,
+  `Each copy reads the other copy through a fault proxy. The rank delay of life-safety is 0, and the rank floor of a call is ${s(copies.times.rankFloor)} s. Two calls come ${s(copies.times.apartLimit)} s apart or more.`,
+  "",
+  `| Arm | First sight (s, home and cloud) | Pushes (s) | Calls (s) | Faults | Connections | Rounds (failed), home and cloud | ${COPIES_GATES.join(" | ")} |`,
+  `| --- | --- | --- | --- | --- | --- | --- | ${COPIES_GATES.map(() => "---").join(" | ")} |`,
+  ...COPIES_ARMS.map((arm) => {
+    const record = copies.records.find((one) => one.arm === arm);
+    const gates = copies.verdict.results[arm];
+    if (record === undefined) return `| ${arm} | - | - | - | - | - | - | ${COPIES_GATES.map(() => "-").join(" | ")} |`;
+    const seen = record.copies.map((copy) => s(copy.seenAt)).join(", ");
+    const rounds = record.copies.map((copy) => `${String(copy.rounds)} (${String(copy.failedRounds)})`).join(", ");
+    return `| ${arm} | ${seen} | ${sent(record.pushes)} | ${sent(record.calls)} | ${String(record.faults)} | ${String(record.connections)} | ${rounds} | ${COPIES_GATES.map((gate) => (gates === undefined ? "-" : yes(gates[gate]))).join(" | ")} |`;
+  }),
+  "",
+  `Read: ${yes(copies.verdict.read)}. Pass: **${yes(copies.verdict.pass)}**.`,
+]);
+
+const nwws = await runNwwsStream();
+write("case-14.json", nwws);
+const waits = (record: (typeof nwws.records)[number]): string =>
+  record.ends
+    .map((end, index) => {
+      const next = record.opens[index + 1];
+      return next === undefined ? "none" : `${String(next - end.at)} ms`;
+    })
+    .join(", ") || "-";
+report(nwws.id, nwws.verdict, [
+  `## ${nwws.id}: faults of the stream of NWWS-OI`,
+  "",
+  `The source of NWWS-OI holds one XMPP session with TLS to a scripted server, through a fault proxy. The faults of the proxy fall at byte ${String(nwws.point ?? "none")} of connection 0, in the middle of the product ${String(nwws.settings.faultAt)}. The stall limit of the source is ${String(nwws.settings.stallAfter)} ms.`,
+  "",
+  `| Arm | Fault at its point | Ends | Sessions | Wait before the next session | Products (distinct of all) | Each fetch complete | ${NWWS_GATES.join(" | ")} |`,
+  `| --- | --- | --- | --- | --- | --- | --- | ${NWWS_GATES.map(() => "---").join(" | ")} |`,
+  ...nwws.records.map((r) => {
+    const gates = nwws.verdict.results[r.arm]?.gates;
+    const ends = r.ends.map((end) => end.kind).join(", ") || "none";
+    return `| ${r.arm} | ${yes(r.faulted)} | ${ends} | ${String(r.opens.length)} | ${waits(r)} | ${String(new Set(r.serials).size)} of ${String(r.serials.length)} | ${yes(r.complete.every(Boolean))} | ${NWWS_GATES.map((gate) => yes(gates?.[gate] ?? false)).join(" | ")} |`;
+  }),
+  "",
+  `Read: ${yes(nwws.verdict.read)}. Arms: ${NWWS_ARMS.join(", ")}. Pass: **${yes(nwws.verdict.pass)}**.`,
 ]);

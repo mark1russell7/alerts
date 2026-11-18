@@ -1,8 +1,12 @@
 /**
  * One session of NWWS-OI: one XMPP connection that joins the room of NWWS-OI and gives each product of the room. This
  * module is the only one that imports `@xmpp/client`. The session does not reconnect: the supervisor decides each new
- * session. The session refuses a link that is not secure, because the server gets the password in SASL.
+ * session. The session sends no login on a link with no TLS, because the mechanism PLAIN of SASL sends the password.
  */
+
+// The reference brings the types of the package into each program that compiles this module, also the program of a
+// package that imports this package.
+/// <reference path="./xmpp-client.d.ts" />
 
 import { randomBytes } from "node:crypto";
 import type { Cancel, WallClock } from "@mark1russell7/algebra/clock";
@@ -99,7 +103,13 @@ export const openXmppSession: OpenSession = (options, handlers) => {
     domain: options.domain,
     resource: nickname,
     username: options.username,
-    password: options.password,
+    // The login goes only over TLS. On a link with no TLS, the session ends before it sends a mechanism or a password.
+    credentials: async (authenticate, mechanisms, _fast, entity) => {
+      if (!entity.isSecure()) throw new InsecureLinkError(NOT_SECURE);
+      const mechanism = mechanisms[0];
+      if (mechanism === undefined) throw new Error("the server offers no mechanism of the client");
+      await authenticate({ username: options.username, password: options.password }, mechanism);
+    },
     timeout: options.timeout,
   });
   // The supervisor decides each new session, so the client does not reconnect.
@@ -123,7 +133,8 @@ export const openXmppSession: OpenSession = (options, handlers) => {
     });
   };
   xmpp.on("error", (error) => end(`the connection failed: ${errorMessage(error)}`, failureKind(error)));
-  xmpp.on("offline", () => end("the connection closed"));
+  // The client tells `disconnect` at each close of the socket, also at a close of TCP with no close of the stream.
+  xmpp.on("disconnect", ({ clean }) => end(clean ? "the server closed the connection" : "the connection broke"));
   xmpp.on("stanza", (stanza) => {
     if (done) return;
     if (stanza.is("presence") && bareJid(stanza.attrs["from"]) === options.room) {
@@ -140,14 +151,14 @@ export const openXmppSession: OpenSession = (options, handlers) => {
   });
   xmpp.on("online", () => {
     if (done) return;
-    if (!xmpp.isSecure()) return end("the link is not secure: the server did not start TLS", "refused");
+    if (!xmpp.isSecure()) return end(NOT_SECURE, "refused");
     const history: Record<string, string> = { maxstanzas: String(options.history.maxStanzas) };
     if (options.history.since !== undefined) history["since"] = new Date(options.history.since).toISOString();
     const join = xml("presence", { to: `${options.room}/${nickname}` }, xml("x", { xmlns: MUC }, xml("history", history)));
     xmpp.send(join).then(beat, (error: unknown) => end(`the join failed: ${errorMessage(error)}`));
   });
   // The limit covers the connect, the login and the join. A session that is not in the room by then ends.
-  joinTimer = options.clock.after(options.timeout, () => end(`the session did not join the room in ${String(options.timeout / 1000)} s`));
+  joinTimer = options.clock.after(options.timeout, () => end(`the session did not join the room in ${String(options.timeout / 1000)} s`, "timeout"));
   xmpp.start().catch((error: unknown) => end(`the login failed: ${errorMessage(error)}`, failureKind(error)));
   return {
     close: async () => {
@@ -160,9 +171,17 @@ export const openXmppSession: OpenSession = (options, handlers) => {
   };
 };
 
+const NOT_SECURE = "the link is not secure: the server did not start TLS";
+
+/** The error of a link with no TLS. The session sends no login on such a link. */
+class InsecureLinkError extends Error {
+  override name = "InsecureLinkError";
+}
+
 // A SASL error of the server is a refused login. The library names its errors.
 function failureKind(error: unknown): EndKind {
   const name = error instanceof Error ? error.name : "";
+  if (name === "InsecureLinkError") return "refused";
   if (name === "SASLError") return "auth";
   if (name === "TimeoutError") return "timeout";
   return "network";

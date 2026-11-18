@@ -1,6 +1,6 @@
 import { random, seedsFrom } from "@mark1russell7/rigor-generators";
 import { describe, expect, it } from "vitest";
-import { CONFIG_FORMAT, configHash, drillRules, configuredExpectations, expectationProblems, loadConfig, localPlaces, placeLabels, sourcePlaces, type AlertConfig, type ContactConfig, type PersonConfig, type PlaceConfig, type SecretLookup } from "./config.ts";
+import { type AlertConfig, CONFIG_FORMAT, CONFIG_PART_FORMAT, configHash, configuredExpectations, type ContactConfig, drillRules, expectationProblems, loadConfig, localPlaces, mergeParts, type NamedPart, type PersonConfig, type PlaceConfig, placeLabels, type SecretLookup, sendCapUsd, sourcePlaces } from "./config.ts";
 import type { ChannelDescriptor, ChannelId, EscalationPolicy, InterestEdge, InterestGraph, NodeKey, PersonId, PlaceId, Position, SourceId } from "./contracts.ts";
 import { RANK_DELAY_LIMIT } from "./escalation.ts";
 import { DRILL_SUBJECT } from "./system-reports.ts";
@@ -168,6 +168,47 @@ describe("loadConfig", () => {
     ]);
   });
 
+  it("takes the fixed costs off the cap first: the reserve is a part of the rest, and the rest is above 0", () => {
+    const paid = [{ ...channel(pushover), dependsOn: ["provider:pushover"] }, channel(sms)];
+    const fixed = [
+      { what: "toll-free number", usd: 2.15 },
+      { what: "local number", usd: 1.15 },
+    ];
+    const spend = { provider: "provider:pushover", monthlyUsd: 15, fixed, reserveUsd: 3, floor: 5, timeZone: "America/Chicago" };
+    expect(sendCapUsd(spend)).toBeCloseTo(11.7, 9);
+    expect(sendCapUsd({ monthlyUsd: 15 })).toBe(15);
+    expect(loadConfig(config({ spend: [spend] }), paid, store).problems).toEqual([]);
+    expect(loadConfig(config({ spend: [{ ...spend, reserveUsd: 12 }] }), paid, store).problems).toEqual([
+      "The reserve of the spend of provider:pushover is not below its monthly cap less its fixed costs.",
+    ]);
+    expect(loadConfig(config({ spend: [{ ...spend, monthlyUsd: 3.3, reserveUsd: 0 }] }), paid, store).problems).toEqual([
+      "The fixed costs of the spend of provider:pushover use all of its monthly cap. No send can go.",
+    ]);
+  });
+
+  it("checks the opt-in list, and refuses a contact on a channel of texts with no record of its number", () => {
+    const texts = { ...channel("texts" as ChannelId), address: [{ name: "to", required: true, pattern: "\\+[0-9]{8,15}", form: "a phone number", optIn: true }] };
+    const number = "+15550100123";
+    const contact: ContactConfig = { person: p1, channel: texts.id, address: { to: number } };
+    const yes = { number, at: "2026-11-17T21:30:00Z", way: "written" as const, words: "texts-consent/1" };
+    const withTexts = (fields: Partial<AlertConfig>) => config({ contacts: [...contacts(p1), contact], ...fields });
+    expect(loadConfig(withTexts({ optIn: [yes] }), [...CHANNELS, texts], store).problems).toEqual([]);
+    const missing = loadConfig(withTexts({}), [...CHANNELS, texts], store).problems;
+    expect(missing).toEqual([`The field to of the contact of ${p1} on texts is not on the opt-in list. The channel sends nothing to it.`]);
+    const bad = loadConfig(withTexts({ optIn: [yes, { ...yes, at: "2026-11-17" }] }), [...CHANNELS, texts], store).problems;
+    expect(bad).toEqual(["Record 2 of the opt-in list has no time in UTC with seconds, as 2026-11-17T21:30:00Z.", "Records 1 and 2 of the opt-in list have the same number."]);
+    for (const problem of [...missing, ...bad]) expect(problem).not.toContain(number);
+    // The record can name the secret of the number, as the contact does.
+    const secret: SecretLookup = (name) => (name === "TEXT_NUMBER" ? number : store(name));
+    const bySecret = loadConfig(
+      config({ contacts: [...contacts(p1), { ...contact, address: { to: { secret: "TEXT_NUMBER" } } }], optIn: [{ ...yes, number: { secret: "TEXT_NUMBER" } }] }),
+      [...CHANNELS, texts],
+      secret,
+    );
+    expect(bySecret.problems).toEqual([]);
+    expect(bySecret.optIn).toEqual([yes]);
+  });
+
   it("checks each spend entry: one for each provider, a provider of a channel, a reserve below the cap, and an IANA time zone", () => {
     const paid = [{ ...channel(pushover), dependsOn: ["provider:pushover"] }, channel(sms)];
     const spend = { provider: "provider:pushover", monthlyUsd: 10, reserveUsd: 3, floor: 5, timeZone: "America/Chicago" };
@@ -181,7 +222,7 @@ describe("loadConfig", () => {
     ).problems;
     expect(problems).toEqual([
       "Two spend entries are for the provider provider:pushover.",
-      "The reserve of the spend of provider:pushover is not below its monthly cap.",
+      "The reserve of the spend of provider:pushover is not below its monthly cap less its fixed costs.",
       "The spend entry of provider:pushoverr names a provider that no channel depends on.",
       "The time zone of the spend of provider:pushoverr is not an IANA name.",
     ]);
@@ -406,5 +447,90 @@ describe("the settings of the expectations", () => {
   it("finds two settings of one expectation at the load", () => {
     const loaded = loadConfig(config({ expectations: [{ id: "api-to-wea", since: 1 }, { id: "api-to-wea", since: 2 }] }), CHANNELS, store);
     expect(loaded.problems).toEqual(["Two settings of expectations have the id api-to-wea."]);
+  });
+});
+
+describe("the parts of the configuration", () => {
+  const part = (name: string, fields: Partial<NamedPart["part"]> = {}): NamedPart => ({ name, part: { format: CONFIG_PART_FORMAT, ...fields } });
+  // The root keeps the policies, and no place, person or contact.
+  const root = config({ places: [], people: [], contacts: [] });
+
+  it("gives the root unchanged when there is no part", () => {
+    expect(mergeParts(config(), [])).toEqual({ tag: "ok", value: config() });
+  });
+
+  it("puts the entries of the root first, then the entries of each part in the order of the names", () => {
+    const merged = mergeParts(config({ places: [PLACES[0]!], people: [], contacts: [] }), [
+      part("zeta", { people: [person(p2, [work])], contacts: contacts(p2) }),
+      part("alpha", { places: [PLACES[1]!], people: [person(p1)], contacts: contacts(p1) }),
+    ]);
+    expect(merged.tag).toBe("ok");
+    if (merged.tag !== "ok") return;
+    expect(merged.value.places.map((place) => place.id)).toEqual([home, work]);
+    expect(merged.value.people.map(({ watch }) => watch.person)).toEqual([p1, p2]);
+    expect(merged.value.contacts.map((contact) => `${contact.person}/${contact.channel}`)).toEqual(["person-1/pushover", "person-1/sms", "person-2/pushover", "person-2/sms"]);
+    expect(merged.value.policies).toEqual(root.policies);
+    expect(loadConfig(merged.value, CHANNELS, store).problems).toEqual([]);
+  });
+
+  it("finds a place, a person and a contact in two files, and names only ids and parts", () => {
+    const merged = mergeParts(config(), [part("directory", { places: [PLACES[0]!], people: [person(p2)] }), part("people", { people: [person(p2)], contacts: [contacts(p1)[0]!] })]);
+    expect(merged).toEqual({
+      tag: "err",
+      error: [
+        "The place place-1 is in the root configuration and in the part directory.",
+        "The person person-2 is in the part directory and in the part people.",
+        "The contact of the person person-1 on the channel pushover is in the root configuration and in the part people.",
+      ],
+    });
+    const text = JSON.stringify(merged);
+    for (const value of ["Home", "PUSHOVER_USER_KEY", String(HOME_AT[0])]) expect(text).not.toContain(value);
+  });
+
+  it("leaves two entries with one id in one file to the load", () => {
+    const merged = mergeParts(root, [part("directory", { places: [PLACES[0]!, PLACES[0]!] })]);
+    expect(merged.tag).toBe("ok");
+    if (merged.tag === "ok") expect(loadConfig(merged.value, CHANNELS, store).problems).toContain("Two places have the id place-1.");
+  });
+
+  it("refuses a bad name by its index, and two parts with one name", () => {
+    for (const name of ["", "Directory", "1st", "a_b", "a/b", "a".repeat(41)]) {
+      expect(mergeParts(root, [part("good"), part(name)])).toEqual({ tag: "err", error: [expect.stringMatching(/^The name of part 1 is not /u)] });
+    }
+    expect(mergeParts(root, [part("a".repeat(40)), part("a-1")]).tag).toBe("ok");
+    expect(mergeParts(root, [part("same"), part("same")])).toEqual({ tag: "err", error: ["Two parts have the name same."] });
+  });
+
+  it("gives one merge and one hash for each order of the parts, over seeded splits of a configuration", () => {
+    for (const seed of SEEDS) {
+      const r = random(`config-parts:${seed}`);
+      const people = Array.from({ length: r.int(1, 6) }, (_, index) => `person-${index}` as PersonId);
+      const full = config({ people: people.map((id) => person(id, r.chance(0.5) ? [home] : [home, work])), contacts: people.flatMap(contacts) });
+      // Each entry goes to the root or to one of the parts, at random.
+      const names = ["directory", "household", "work"].slice(0, r.int(1, 3));
+      const fileOf = (): number => r.below(names.length + 1);
+      const split = (entries: readonly unknown[]): unknown[][] => {
+        const files: unknown[][] = Array.from({ length: names.length + 1 }, () => []);
+        for (const entry of entries) files[fileOf()]!.push(entry);
+        return files;
+      };
+      const places = split(full.places);
+      const persons = split(full.people);
+      const addresses = split(full.contacts);
+      const rootPart = config({ places: places[0] as PlaceConfig[], people: persons[0] as PersonConfig[], contacts: addresses[0] as ContactConfig[] });
+      const parts = names.map((name, index) => part(name, { places: places[index + 1] as PlaceConfig[], people: persons[index + 1] as PersonConfig[], contacts: addresses[index + 1] as ContactConfig[] }));
+      const first = mergeParts(rootPart, parts);
+      const second = mergeParts(rootPart, r.shuffle([...parts]));
+      expect(first.tag, `seed ${seed}`).toBe("ok");
+      if (first.tag !== "ok" || second.tag !== "ok") continue;
+      expect(second.value, `seed ${seed}`).toEqual(first.value);
+      expect(configHash(second.value)).toBe(configHash(first.value));
+      // The merge holds each entry of the full configuration once.
+      const sorted = (values: readonly unknown[]): string[] => values.map((value) => JSON.stringify(value)).sort();
+      expect(sorted(first.value.places)).toEqual(sorted(full.places));
+      expect(sorted(first.value.people)).toEqual(sorted(full.people));
+      expect(sorted(first.value.contacts)).toEqual(sorted(full.contacts));
+      expect(loadConfig(first.value, CHANNELS, store).problems, `seed ${seed}`).toEqual([]);
+    }
   });
 });

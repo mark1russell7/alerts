@@ -7,11 +7,12 @@
  * - Once in each day, the worker deploys again. A deploy with no change reads three lists. Thus a change on the side of Twilio heals in a day.
  * - A failed deploy goes again after a backoff. The worker runs beside the passes, so a slow build of Twilio holds no alert.
  */
-import type { Duration, Instant, ParsedConfig, SecretLookup, SpendConfig } from "@mark1russell7/alerts";
+import { sendCapUsd, type Duration, type Instant, type ParsedConfig, type SecretLookup, type SpendConfig } from "@mark1russell7/alerts";
 import {
   deployOutage,
   OUTAGE_MONTH_MAX,
   outageListOf,
+  OUTAGE_TEXT_MESSAGE,
   TWILIO_CALL_COST_USD,
   twilioCallDescriptor,
   type OutageList,
@@ -43,21 +44,29 @@ export interface OutageSetup {
   readonly token: string;
   /** The Twilio number that makes the calls. It is the number of the call channel. */
   readonly from: string;
+  /** The Twilio number that sends the texts, from the keys. Without it, the list has no text. */
+  readonly textFrom?: string;
 }
 
-/** The keys of Twilio that the outage call reads: the credentials and the number of the call channel. */
+/** The keys of Twilio that the outage call reads: the credentials, the number of the call channel and the number of the texts. */
 export interface OutageKeys {
   readonly credentials: TwilioCredentials;
   readonly from: string;
+  /** The number of the text channel. The function `twilioSetup` of the instance reads it from `secrets.env`, and checks its form. */
+  readonly textFrom?: string | undefined;
 }
 
 /**
  * This function gives the monthly cap of the outage call from the spend entry of Twilio. The cap is the whole calls of
  * one month in the cap of the entry, and its month starts in the time zone of the entry. The reserve is a part of the
- * cap, and the outage call can use it. A cap above `OUTAGE_MONTH_MAX` calls takes that count.
+ * cap, and the outage call can use it. A cap above `OUTAGE_MONTH_MAX` calls takes that count. A text costs no more
+ * than a call, and the cap counts it as one call. The fixed costs of the entry come off the cap first. When they use
+ * all of it, the cap is 0 calls.
  */
-export function outageMonthCapOf(spend: Pick<SpendConfig, "monthlyUsd" | "timeZone">): OutageMonthCap {
-  const cents = spendQuota({ name: "Twilio spend", monthlyUsd: spend.monthlyUsd, timeZone: spend.timeZone }).limit;
+export function outageMonthCapOf(spend: Pick<SpendConfig, "monthlyUsd" | "fixed" | "timeZone">): OutageMonthCap {
+  const { monthlyUsd, fixed, timeZone } = spend;
+  if (!(sendCapUsd(spend) > 0)) return { maxCalls: 0, timeZone };
+  const cents = spendQuota({ name: "Twilio spend", monthlyUsd, ...(fixed === undefined ? {} : { fixed }), timeZone }).limit;
   return { maxCalls: Math.min(OUTAGE_MONTH_MAX, Math.floor(cents / spendUnits(TWILIO_CALL_COST_USD))), timeZone: spend.timeZone };
 }
 
@@ -67,6 +76,8 @@ export function outageMonthCapOf(spend: Pick<SpendConfig, "monthlyUsd" | "timeZo
  * - With no field `outage` in the configuration, it gives `undefined`. The instance then deploys nothing.
  * - The outage call needs the keys of Twilio and the key `OUTAGE_TOKEN`. Without them, or with a bad list, it gives the problems.
  * - The outage call needs a spend entry for Twilio. The monthly cap of its Functions comes from it.
+ * - With the number of the texts in the keys, the list has the text `OUTAGE_TEXT_MESSAGE`, and the deploy gives the number to the Functions.
+ *   Only a person whose number is on the opt-in list gets the text.
  *
  * A problem names keys, fields and ids, and no value.
  */
@@ -83,10 +94,13 @@ export function outageSetup(parsed: ParsedConfig, secret: SecretLookup, keys: Ou
     problems.push("The configuration has an outage call, and no spend entry for the provider of the calls. The monthly cap of the Functions comes from it.");
     return err(problems);
   }
-  const list = outageListOf(outage, parsed.recipients, outageMonthCapOf(spend));
+  const textFrom = keys?.textFrom;
+  // The text goes only to a number with a record of the opt-in list. A STOP reply stops it at Twilio.
+  const optIn = (number: string): boolean => parsed.optIn.some((record) => record.number === number);
+  const list = outageListOf(outage, parsed.recipients, outageMonthCapOf(spend), textFrom === undefined ? {} : { textMessage: OUTAGE_TEXT_MESSAGE, optIn });
   problems.push(...list.problems);
   if (problems.length > 0 || keys === undefined) return err(problems);
-  return ok({ credentials: keys.credentials, from: keys.from, list: list.list, token });
+  return ok({ credentials: keys.credentials, from: keys.from, list: list.list, token, ...(textFrom === undefined ? {} : { textFrom }) });
 }
 
 /** The state of the deploy of the outage call. It holds no private value, so the status of the instance can show it. */
@@ -198,7 +212,7 @@ export interface OutageDeployPorts {
 
 /** This function gives the deploy of a setup: the bundles, the plan and the requests of `deployOutage`. */
 export function outageDeploy(setup: OutageSetup, ports: OutageDeployPorts): (signal: AbortSignal) => Promise<TwilioServerlessDeployResult> {
-  const { credentials, list, token, from } = setup;
+  const { credentials, list, token, from, textFrom } = setup;
   return (signal) =>
     deployOutage(
       {
@@ -209,6 +223,6 @@ export function outageDeploy(setup: OutageSetup, ports: OutageDeployPorts): (sig
         ...(ports.log === undefined ? {} : { log: ports.log }),
       },
       credentials,
-      { list, token, from },
+      { list, token, from, ...(textFrom === undefined ? {} : { textFrom }) },
     );
 }

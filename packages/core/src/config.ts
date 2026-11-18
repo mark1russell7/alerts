@@ -4,12 +4,15 @@
  * configuration. The functions are pure, and the caller gives the secrets.
  */
 import { localTime } from "@mark1russell7/algebra/clock";
+import { err, ok, type Result } from "@mark1russell7/optional";
 import { canonicalHash } from "@mark1russell7/rigor-generators";
+import { compareCodeUnits } from "@mark1russell7/text/order";
 import type { Address, AssessPolicy, ChannelDescriptor, ChannelId, Duration, EscalationPolicy, Instant, InterestGraph, NodeKey, PersonId, PersonWatch, PlaceId, Position, RegionCode, SourceId, WatchedPlace } from "./contracts.ts";
 import { assess, DEFAULT_ASSESS_POLICY, DRILL_KIND, matchSubjects, reachedAssessment } from "./assess.ts";
-import { recipientProblems, ruleSteps, type ChannelRule, type Recipient } from "./delivery.ts";
+import { policyFor, recipientProblems, ruleSteps, type ChannelRule, type Recipient } from "./delivery.ts";
 import { DRILL_PROBES, drillProblems, nextDrillAt, type DrillConfig } from "./drill.ts";
 import { incidents, normalize } from "./merge.ts";
+import { optInFields, resolveOptIn, type OptInConfig, type OptInRecord } from "./opt-in.ts";
 import { DRILL_SUBJECT, NO_SYSTEM_LINES, systemReports } from "./system-reports.ts";
 import type { TryChain } from "./chain.ts";
 import type { Expectation } from "./lateness.ts";
@@ -50,7 +53,10 @@ export interface PersonConfig {
   readonly watch: PersonWatch;
   /** The name of the person for the UI. */
   readonly label?: string;
-  /** The escalation policies of the person. When it is absent, the policies of the configuration apply. */
+  /**
+   * The escalation policies of the person. When it is absent, the policies of the configuration apply. A person with
+   * policies of their own gets no policy of the configuration, also no policy with a subject.
+   */
   readonly policies?: readonly EscalationPolicy[];
 }
 
@@ -71,12 +77,33 @@ export interface SpendConfig {
   readonly provider: string;
   /** The most that the channels of the account spend in one calendar month, in US dollars. */
   readonly monthlyUsd: number;
-  /** The last part of the monthly cap that only `life-safety` messages use, in US dollars. The default is 0. */
+  /**
+   * The fixed costs of the account in each month, for example the rent of each phone number. The sends of a month get
+   * the monthly cap less these costs (`sendCapUsd`). The default is no fixed cost.
+   */
+  readonly fixed?: readonly FixedCost[];
+  /** The last part of the cap of the sends that only `life-safety` messages use, in US dollars. The default is 0. */
   readonly reserveUsd?: number;
   /** Below this balance of the account, in the currency of the account, the system reports the line `low`. */
   readonly floor: number;
   /** The time zone of the start of the month, as an IANA name: for example `America/New_York`. */
   readonly timeZone: string;
+}
+
+/** One fixed cost of a provider account in each month, for example the rent of one phone number. */
+export interface FixedCost {
+  /** The name of the cost, for example `toll-free number`. */
+  readonly what: string;
+  /** The cost in each month, in US dollars. */
+  readonly usd: number;
+}
+
+/**
+ * This function gives the part of the monthly cap of a spend entry that the sends get, in US dollars. That part is the
+ * cap less the fixed costs. The value is 0 or less when the fixed costs use all of the cap.
+ */
+export function sendCapUsd(spend: Pick<SpendConfig, "monthlyUsd" | "fixed">): number {
+  return spend.monthlyUsd - (spend.fixed ?? []).reduce((sum, cost) => sum + cost.usd, 0);
 }
 
 /** One person of the outage call, with the chain of the tries of the person. */
@@ -135,6 +162,84 @@ export interface AlertConfig {
   readonly assess?: AssessPolicy;
   /** The drills of the live paths. Without them, the instance starts no drill. */
   readonly drills?: readonly DrillConfig[];
+  /**
+   * The private opt-in list of the texts. A channel with an address field of `optIn` sends only to a phone on this
+   * list, and a STOP reply removes the number. The list holds phone numbers: keep it out of each public text.
+   */
+  readonly optIn?: readonly OptInConfig[];
+}
+
+/** The name of the format of a part of the configuration. A change that breaks a part gets a new name. */
+export const CONFIG_PART_FORMAT = "alerts-config-part/1";
+
+/**
+ * A part of the configuration from one writer: places, people and contacts. Each writer keeps its own file, so
+ * two writers do not overwrite each other. The root configuration keeps the other fields: policies, drills and spend.
+ */
+export interface ConfigPart {
+  readonly format: typeof CONFIG_PART_FORMAT;
+  readonly places?: readonly PlaceConfig[];
+  readonly people?: readonly PersonConfig[];
+  readonly contacts?: readonly ContactConfig[];
+}
+
+/** A part with its name. The name of a part in a file is the name of the file with no `.json`. */
+export interface NamedPart {
+  readonly name: string;
+  readonly part: ConfigPart;
+}
+
+/** The name of a part has small letters, digits and hyphens. It starts with a letter and has 40 characters or fewer. */
+export const PART_NAME: RegExp = /^[a-z][a-z0-9-]{0,39}$/u;
+
+/** This function gives the name of a part at the start of a problem. A bad name can hold any text, thus the label gives the index of the part. */
+export function partLabel(name: string, index: number): string {
+  return PART_NAME.test(name) ? `The part ${name}` : `Part ${String(index)}`;
+}
+
+/**
+ * This function merges the parts into the root configuration. The entries of the root come first. The entries of
+ * the parts come after them, in the order of the names. Thus the order of the reads does not change the merge or its hash.
+ *
+ * The merge finds a bad name and two parts with one name. It also finds an entry in two files: a place, a person, or
+ * a contact of one person on one channel. Two entries with one id in one file are a problem of `loadConfig`. A problem
+ * names ids and parts, and holds no other value.
+ */
+export function mergeParts(root: AlertConfig, parts: readonly NamedPart[]): Result<AlertConfig, readonly string[]> {
+  const problems: string[] = [];
+  const names = new Set<string>();
+  const good: NamedPart[] = [];
+  parts.forEach((named, index) => {
+    if (!PART_NAME.test(named.name)) problems.push(`The name of part ${index} is not small letters, digits and hyphens with a letter first, up to 40 characters.`);
+    else if (names.has(named.name)) problems.push(`Two parts have the name ${named.name}.`);
+    else good.push(named);
+    names.add(named.name);
+  });
+  good.sort((a, b) => compareCodeUnits(a.name, b.name));
+
+  // The file of each key, the first time the merge sees it. A key twice in one file is a problem of the load.
+  const fileOf = new Map<string, string>();
+  const claim = (key: string, file: string, what: string): void => {
+    const first = fileOf.get(key);
+    if (first === undefined) fileOf.set(key, file);
+    else if (first !== file) problems.push(`${what} is in ${first} and in ${file}.`);
+  };
+  const files: readonly { readonly file: string; readonly part: Omit<ConfigPart, "format"> }[] = [
+    { file: "the root configuration", part: root },
+    ...good.map(({ name, part }) => ({ file: `the part ${name}`, part })),
+  ];
+  for (const { file, part } of files) {
+    for (const place of part.places ?? []) claim(`place\u0000${place.id}`, file, `The place ${place.id}`);
+    for (const { watch } of part.people ?? []) claim(`person\u0000${watch.person}`, file, `The person ${watch.person}`);
+    for (const { person, channel } of part.contacts ?? []) claim(`contact\u0000${person}\u0000${channel}`, file, `The contact of the person ${person} on the channel ${channel}`);
+  }
+  if (problems.length > 0) return err(problems);
+  return ok({
+    ...root,
+    places: files.flatMap(({ part }) => part.places ?? []),
+    people: files.flatMap(({ part }) => part.people ?? []),
+    contacts: files.flatMap(({ part }) => part.contacts ?? []),
+  });
 }
 
 /** The name of the format of the settings of one copy of the system. A change that breaks a file gets a new name. */
@@ -171,6 +276,11 @@ export interface CopySettings {
   readonly peers?: readonly CopyPeer[];
   /** The key of the secrets with the ping URL of the first check of this copy. The runtime gives a default key. */
   readonly pingKey?: string;
+  /**
+   * The number of the account of each source with an account, by the id of the source. The keys of account 2 end in
+   * `_2`. The default is account 1. Two copies do not share an account, because an account has one session.
+   */
+  readonly accounts?: Readonly<Record<string, number>>;
 }
 
 /** The settings of a runtime with no file `copy.json`: the only copy, with rank 0 and no exchange. */
@@ -249,6 +359,8 @@ export interface LoadedConfig {
    * no value of a secret, no label and no position. The runtime does not start with a problem.
    */
   readonly problems: readonly string[];
+  /** The opt-in list of the texts, with the value of each number. */
+  readonly optIn: readonly OptInRecord[];
 }
 
 /**
@@ -327,6 +439,19 @@ export function loadConfig(config: AlertConfig, channels: readonly ChannelDescri
     ofPerson.set(channel, Object.fromEntries(fields));
   }
 
+  // Each value of an opt-in field needs a record. A channel of texts then sends only to a person who agreed.
+  const { records: optIn, problems: optInFound } = resolveOptIn(config.optIn ?? [], secret);
+  problems.push(...optInFound);
+  const listed = new Set(optIn.map((record) => record.number));
+  for (const channel of channels) {
+    for (const field of optInFields(channel)) {
+      for (const [person, ofPerson] of addresses) {
+        const value = ofPerson.get(channel.id)?.[field.name];
+        if (value !== undefined && !listed.has(value)) problems.push(`The field ${field.name} of the contact of ${person} on ${channel.id} is not on the opt-in list. The channel sends nothing to it.`);
+      }
+    }
+  }
+
   const providers = new Set<string>();
   for (const spend of config.spend ?? []) {
     const { provider } = spend;
@@ -334,7 +459,10 @@ export function loadConfig(config: AlertConfig, channels: readonly ChannelDescri
     providers.add(provider);
     // A typo of a provider gives a cap that no send takes from.
     if (!channels.some((channel) => channel.dependsOn.includes(provider))) problems.push(`The spend entry of ${provider} names a provider that no channel depends on.`);
-    if (!((spend.reserveUsd ?? 0) < spend.monthlyUsd)) problems.push(`The reserve of the spend of ${provider} is not below its monthly cap.`);
+    // The fixed costs come first. Thus the reserve is a part of the cap of the sends, and the sends get more than 0.
+    const sends = sendCapUsd(spend);
+    if (!(sends > 0)) problems.push(`The fixed costs of the spend of ${provider} use all of its monthly cap. No send can go.`);
+    else if (!((spend.reserveUsd ?? 0) < sends)) problems.push(`The reserve of the spend of ${provider} is not below its monthly cap less its fixed costs.`);
     if (localTime(0, spend.timeZone) === undefined) problems.push(`The time zone of the spend of ${provider} is not an IANA name.`);
   }
 
@@ -396,7 +524,7 @@ export function loadConfig(config: AlertConfig, channels: readonly ChannelDescri
     const rules = rulesOf.get(recipient.watch.person);
     return rules === undefined ? recipient : { ...recipient, channelRules: [...(recipient.channelRules ?? []), ...rules] };
   });
-  return { recipients: ruled, problems };
+  return { recipients: ruled, problems, optIn };
 }
 
 /**
@@ -430,7 +558,7 @@ function drillPlanProblems(drill: DrillConfig, recipient: Recipient, policy: Ass
   for (const plan of plans) {
     for (const incident of incidents(normalize({ reports: plan.reports }), plan.at)) {
       const level = reachedAssessment(assess(incident, recipient.watch, [], policy, plan.at)).level;
-      const found = level === "none" ? undefined : recipient.policies.find((entry) => entry.level === level);
+      const found = level === "none" ? undefined : policyFor(recipient.policies, level, incident);
       if (found === undefined) {
         problems.push(`The ${plan.name} of the drill ${id} reaches the person ${person} at the level ${level}, and the person has no policy of it. It sends nothing.`);
         continue;
