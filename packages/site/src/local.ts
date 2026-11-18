@@ -12,7 +12,11 @@
  * A panel tells the dimensions of the indicators out of their normal level, in the world and near each place.
  * The indicators are of the present too.
  *
- * The last panel tells each pair where the table of the levels and the shadow score disagree. The score is of the present.
+ * The next panel tells each pair where the table of the levels and the shadow score disagree. The score is of the present.
+ *
+ * The last panel tells the interest graph of each person: each edge, its origin, its weight and its state. A default
+ * edge that an edge of the person replaces stays as a row. The graph changes only with the configuration. Thus the page
+ * reads it with the whole history.
  */
 
 import { NO_HISTORIES, type Histories, type MapPayload } from "@mark1russell7/alerts";
@@ -24,6 +28,8 @@ import { readHealth, type HealthRead } from "./health-read.ts";
 import { drawHealth, drawVerdicts, healthPanel, keepHealth, NO_HEALTH, type KeptHealth } from "./health-view.ts";
 import { readHistories, WHOLE_READ_EVERY_MS } from "./history-read.ts";
 import { drawIndicators, indicatorPanel } from "./indicators-view.ts";
+import { readInterests } from "./interests-read.ts";
+import { drawInterests, interestPanel } from "./interests-view.ts";
 import { readLine, readMap, READ_EVERY_MS } from "./map-read.ts";
 import { drawIncidentList, drawMapView, drawStatusLegend, drawUnshaped } from "./map-view.ts";
 import { differencePanel, drawDifferences } from "./score-view.ts";
@@ -54,6 +60,8 @@ const indicatorSum = byId("indicator-sum");
 const indicatorBox = byId("indicators");
 const scoreSum = byId("score-sum");
 const differenceBox = byId("differences");
+const interestSum = byId("interest-sum");
+const interestBox = byId("interests");
 
 /** The live map: the last good read of the runtime. */
 let payload: MapPayload | undefined;
@@ -79,6 +87,10 @@ let verdicts = "";
 let indicators = "";
 /** The data of the panel of the shadow score that the page shows. The page writes the panel again only when it changes. */
 let differences = "";
+/** The data of the panel of the interests that the page shows. The page writes the panel again only when it changes. */
+let interests = "";
+/** This value is true after one read of the interests with an answer. A failed read starts again at the next refresh. */
+let interestsKnown = false;
 
 const time = (at: number): string => new Date(at).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
 
@@ -187,6 +199,18 @@ function showDifferences(live: MapPayload): void {
   differenceBox.replaceChildren(...drawDifferences(panel));
 }
 
+/** This function writes the panel of the interests from one read of the runtime. */
+async function showInterests(get: (path: string) => Promise<Response>): Promise<void> {
+  const read = await readInterests(get);
+  interestsKnown = read.ok || read.absent;
+  const panel = interestPanel(read);
+  const key = JSON.stringify(panel);
+  if (key === interests) return;
+  interests = key;
+  interestSum.replaceChildren(...drawVerdicts([panel.verdict], "p"));
+  interestBox.replaceChildren(...drawInterests(panel));
+}
+
 /** This function sets the map of the picture from the live map and the time of the scrubber. */
 function setPicture(): void {
   const replay = scrubber?.replay();
@@ -253,6 +277,8 @@ async function refresh(): Promise<void> {
       const histories = await readHistories(get, kept, whole);
       kept = histories.kept;
       if (whole && histories.text === undefined) wholeAt = lastGood;
+      // The interests change only with the configuration. Thus the page reads them with the whole history.
+      if (whole || !interestsKnown) await showInterests(get);
       timeProblem.textContent = histories.text ?? "";
       timeProblem.hidden = histories.text === undefined;
       setRange(histories.absent);

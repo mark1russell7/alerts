@@ -6,7 +6,7 @@ import type { AddressInfo } from "node:net";
 import { embeddedProcess, lint, localDev } from "@mark1russell7/service";
 import type { Rule, Scenario } from "@mark1russell7/service";
 import { fakeWallClock, realClock, wallClock } from "@mark1russell7/algebra/clock";
-import { HEALTH_FORMAT, HISTORY_FORMAT, MAP_FORMAT, type HealthPayload, type HistoryPayload, type Instant, type MapPayload, type SourceId } from "@mark1russell7/alerts";
+import { HEALTH_FORMAT, HISTORY_FORMAT, INTERESTS_FORMAT, MAP_FORMAT, type HealthPayload, type HistoryPayload, type Instant, type InterestsPayload, type MapPayload, type SourceId } from "@mark1russell7/alerts";
 import { describe, expect, it } from "vitest";
 import { EXCHANGE_FORMAT } from "./exchange.ts";
 import { EXCHANGE_TOKEN_LENGTH, exchangeHost } from "./exchange-http.ts";
@@ -70,6 +70,7 @@ const loopOf = () => {
 
 // A map before the first pass: no incident, no place and no region.
 const EMPTY_MAP: MapPayload = { format: MAP_FORMAT, at: null, view: { incidents: [], places: [], unshaped: [] }, basemap: [] };
+const EMPTY_INTERESTS: InterestsPayload = { format: INTERESTS_FORMAT, people: [] };
 const EMPTY_HEALTH: HealthPayload = { format: HEALTH_FORMAT, at: null, now: 0, sources: [], lateness: [], coverage: [], copies: [], quotas: [], balances: [], reads: [] };
 const historyOf = (since: Instant | null): HistoryPayload => ({ format: HISTORY_FORMAT, at: null, since, next: null, incidents: [], regions: [] });
 
@@ -123,9 +124,9 @@ describe("the declaration of the service", () => {
     });
   }
 
-  it("declares the routes GET /map, GET /health and GET /history only with their functions", () => {
-    const routes = (map?: () => MapPayload, health?: () => HealthPayload, history?: (since: Instant | null) => HistoryPayload) =>
-      declare({ port: 0, probePort: 0, profile: localDev, loop: loopOf(), log: { close: () => undefined }, map, health, history })
+  it("declares the routes GET /map, GET /health, GET /history and GET /interests only with their functions", () => {
+    const routes = (map?: () => MapPayload, health?: () => HealthPayload, history?: (since: Instant | null) => HistoryPayload, interests?: () => InterestsPayload) =>
+      declare({ port: 0, probePort: 0, profile: localDev, loop: loopOf(), log: { close: () => undefined }, map, health, history, interests })
         .describe()
         .controllers.map((controller) => [controller.name, Object.keys(controller.routes)]);
     expect(routes()).toEqual([["api", ["GET /status"]]]);
@@ -133,6 +134,7 @@ describe("the declaration of the service", () => {
     expect(routes(undefined, () => EMPTY_HEALTH)).toEqual([["api", ["GET /status", "GET /health"]]]);
     expect(routes(() => EMPTY_MAP, () => EMPTY_HEALTH)).toEqual([["api", ["GET /status", "GET /map", "GET /health"]]]);
     expect(routes(undefined, undefined, historyOf)).toEqual([["api", ["GET /status", "GET /history"]]]);
+    expect(routes(undefined, undefined, undefined, () => EMPTY_INTERESTS)).toEqual([["api", ["GET /status", "GET /interests"]]]);
   });
 
   it("declares the worker of the deploy of the outage call beside the passes, and each rule still holds", () => {
@@ -212,7 +214,7 @@ describe("the lifecycle of the service", () => {
       asked.push(since);
       return historyOf(since);
     };
-    const life = await declare({ port, probePort, profile: localDev, loop, log, home, sources, map: () => EMPTY_MAP, health: () => EMPTY_HEALTH, history, page }).run({ process: embeddedProcess() });
+    const life = await declare({ port, probePort, profile: localDev, loop, log, home, sources, map: () => EMPTY_MAP, health: () => EMPTY_HEALTH, history, interests: () => EMPTY_INTERESTS, page }).run({ process: embeddedProcess() });
     try {
       // The probe answers after the start of each transport. The worker starts the first pass at the start of the service.
       await waitUntil(() => answers(`http://127.0.0.1:${probePort}/readiness`), "the readiness probe");
@@ -227,6 +229,9 @@ describe("the lifecycle of the service", () => {
       const health = await fetch(`http://127.0.0.1:${port}/health`);
       expect(health.status).toBe(200);
       expect(await health.json()).toEqual(EMPTY_HEALTH);
+      const interests = await fetch(`http://127.0.0.1:${port}/interests`);
+      expect(interests.status).toBe(200);
+      expect(await interests.json()).toEqual(EMPTY_INTERESTS);
       // The history route gives each incident with no query, and the changes at a time or later with the query since.
       expect(await (await fetch(`http://127.0.0.1:${port}/history`)).json()).toEqual(historyOf(null));
       const later = await fetch(`http://127.0.0.1:${port}/history?since=1800000000000`);

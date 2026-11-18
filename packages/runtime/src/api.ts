@@ -1,7 +1,7 @@
 import { stat } from "node:fs/promises";
 import { createServer } from "node:http";
 import { join } from "node:path";
-import type { HealthPayload, HistoryPayload, Instant, MapPayload, SourceId } from "@mark1russell7/alerts";
+import type { HealthPayload, HistoryPayload, Instant, InterestsPayload, MapPayload, SourceId } from "@mark1russell7/alerts";
 import { findFilesAsync } from "@mark1russell7/files";
 import type { ServiceBuilder } from "@mark1russell7/service";
 import { handle, httpTransport } from "@mark1russell7/service/http";
@@ -33,6 +33,11 @@ export interface ApiOptions {
    * watches of the people, thus only the loopback address serves it. Without the function, the API has no history route.
    */
   readonly history?: ((since: Instant | null) => HistoryPayload) | undefined;
+  /**
+   * This function gives the payload of the route `GET /interests`: the rows of the interest graph of each person. It
+   * holds the labels of the places, thus only the loopback address serves it. Without the function, the API has no such route.
+   */
+  readonly interests?: (() => InterestsPayload) | undefined;
   /**
    * The folder of the built local page (`pageFolder`). The path `/` gives its file `PAGE_INDEX`. The page and the route
    * `GET /map` have one origin. Thus the policy of the folder lets the page read the map. Without the folder, the API serves no page.
@@ -209,6 +214,11 @@ export const attachApi = (svc: ServiceBuilder, options: ApiOptions): ServiceBuil
     };
     http.mount(handle("api", "GET /history", work, { done: (value) => ("problem" in value ? { status: 400 } : {}) }));
     api.route("GET /history", { idempotent: true });
+  }
+  const interests = options.interests;
+  if (interests !== undefined) {
+    http.mount(handle("api", "GET /interests", () => interests()));
+    api.route("GET /interests", { idempotent: true });
   }
   // The files of the page come after the routes. A path of no file goes to the next handler, thus it gets 404.
   if (options.page !== undefined) http.mount(folderHandler(options.page, { index: PAGE_INDEX }));
