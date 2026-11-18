@@ -5,7 +5,8 @@
  * `readCap` gives the elements of a message as texts. `splitAlerts` splits a feed into its alerts, and
  * `splitFeed` also finds a cut feed.
  *
- * `readCapIndex` reads the index of a CAP feed, in RSS 2.0 or Atom 1.0: the link of each CAP message.
+ * `readFeed` reads a feed in RSS 2.0 or Atom 1.0: the id, the title, the link, the time and the text of each entry.
+ * `readCapIndex` reads the index of a CAP feed with it: the link of each CAP message.
  * `chooseInfo` chooses one info block. `capPolygon` and `capCircle` give the areas in the order of the
  * core. The package also has the readers of the CAP values. The check of XML signatures comes later.
  *
@@ -14,7 +15,8 @@
  */
 
 export { capCircle, capPolygon, capPosition } from "./geometry.ts";
-export { ATOM_NAMESPACE, CAP_MEDIA_TYPE, readCapIndex, type CapIndexEntry, type CapIndexRead } from "./feed-index.ts";
+export { ATOM_NAMESPACE, readFeed, type FeedEntry, type FeedRead } from "./feed.ts";
+export { CAP_MEDIA_TYPE, readCapIndex, type CapIndexEntry, type CapIndexRead } from "./feed-index.ts";
 export { chooseInfo, DEFAULT_LANGUAGES, type ChosenInfo } from "./info.ts";
 export { codedKind, meteoalarmTypeName, METEOALARM_KINDS, METEOALARM_TYPE, OET_KINDS, OET_VERSION, type CodedKind, type CodedKinds } from "./kinds.ts";
 export {

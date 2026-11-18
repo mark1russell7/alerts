@@ -224,7 +224,7 @@ A `NodeKey` is `person`, or `<system>:<id>`. The id is the text after the first 
 
 The system `place` holds the watched places of a person, by their ids in the configuration.
 
-An id of the system `provider-region` is the provider, a slash and the id of the region of the provider: `provider-region:gcp/europe-west1`. The ids of the regions come from the feed of the provider, not from its titles.
+An id of the system `provider-region` is the provider, a slash and the id of the region of the provider: `provider-region:gcp/europe-west1` or `provider-region:aws/eu-west-1`. The ids of the regions come from the feed of the provider, not from its titles.
 
 ## The gates
 

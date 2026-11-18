@@ -68,6 +68,7 @@ import { createNwwsSource, SOURCE_ID as NWWS_SOURCE, type NwwsAccount, type Open
 import { createGfzSource, GFZ_DESCRIPTOR } from "@mark1russell7/alerts-source-gfz";
 import { createEnergyChartsSource, ENERGY_CHARTS_DESCRIPTOR } from "@mark1russell7/alerts-source-energy-charts";
 import { createKevSource, KEV_DESCRIPTOR } from "@mark1russell7/alerts-source-cisa-kev";
+import { AWS_DOMAIN, AWS_KIND, createAwsSource } from "@mark1russell7/alerts-source-aws";
 import { createGcpSource, GCP_DOMAIN, GCP_KIND } from "@mark1russell7/alerts-source-gcp";
 import { createStatusPageSource, pagesFor, watchReads, type StatusPage, type StatusPageFetchOptions } from "@mark1russell7/alerts-source-statuspage";
 import { createSwpcSource, SWPC_DESCRIPTOR } from "@mark1russell7/alerts-source-swpc";
@@ -285,6 +286,15 @@ const statusPageFactory =
     createStatusPageSource({ ...options, page });
 
 /**
+ * The feeds of the cloud providers: Google Cloud and AWS. A report of such a feed has no area. Thus the instance reads a
+ * feed only when one of its persons can get its reports, with the rule of a status page (`watchReads`).
+ */
+const PROVIDER_FEEDS = [
+  { domain: GCP_DOMAIN, kind: GCP_KIND, create: createGcpSource },
+  { domain: AWS_DOMAIN, kind: AWS_KIND, create: createAwsSource },
+] as const;
+
+/**
  * The descriptors of the sources of the instance. The function `describe` of each source gives the same descriptor.
  * The USGS and EMSC give the earthquakes. Merge rule 3 (`linkRule` of the core) joins their reports of one event.
  * The two tsunami warning centers give the tsunami messages. The SWPC gives the space weather messages.
@@ -298,9 +308,9 @@ const statusPageFactory =
  * names their kind.
  *
  * The instance also reads the status pages that one of its persons can get (`pagesFor` of `source-statuspage`). They are
- * not in this list, because the persons choose them. The feed of Google Cloud Service Health (`source-gcp`) has the same
- * rule. Each page and the feed have a longer interval than the shortest interval of the list. Thus the times of the loop
- * stay the same.
+ * not in this list, because the persons choose them. The feeds of Google Cloud (`source-gcp`) and AWS (`source-aws`)
+ * have the same rule. Each page and each feed have a longer interval than the shortest interval of the list. Thus the
+ * times of the loop stay the same.
  */
 export const INSTANCE_SOURCES: readonly SourceDescriptor[] = [
   NWS_DESCRIPTOR,
@@ -645,9 +655,9 @@ export interface Instance {
  * - The sources are the NWS API, IPAWS, the USGS, EMSC, the two tsunami warning centers, the SWPC, GFZ,
  *   Energy-Charts and CISA KEV. The stream of NWWS-OI is a source when the secrets have the keys of the account of the
  *   copy (`nwwsSetup`). Each status page that one of the persons can get is a source (`pagesFor`). The feed of Google
- *   Cloud Service Health is a source when one of the persons can get its reports (`watchReads`).
+ *   Cloud or AWS is a source when one of the persons can get its reports (`watchReads`).
  * - Each source gets the codes of the places. It gets the position of a place only when the place shares it with that
- *   source. The USGS, EMSC, the centers, the SWPC, GFZ, Energy-Charts, CISA KEV, Google Cloud and the status pages ask
+ *   source. The USGS, EMSC, the centers, the SWPC, GFZ, Energy-Charts, CISA KEV, Google Cloud, AWS and the status pages ask
  *   for no place.
  * - The channels are Pushover, and the Twilio call channel when the secrets have its keys. Each time of the delivery comes
  *   from a fact of the channels.
@@ -661,8 +671,8 @@ export function openInstance(options: InstanceOptions): Instance {
   // A report of a status page has no area. Thus the instance reads only the pages that one of its persons can get.
   const watches = options.config.recipients.map((recipient) => recipient.watch);
   const pages = pagesFor(watches);
-  // The feed of Google Cloud has no area either. Its domain and its kind choose it with the same rule as a page.
-  const cloud = watches.some((watch) => watchReads(watch, { domain: GCP_DOMAIN, kind: GCP_KIND }));
+  // The feeds of the cloud providers have no area either. Their domains and their kinds choose them with the same rule.
+  const feeds = PROVIDER_FEEDS.filter((feed) => watches.some((watch) => watchReads(watch, feed)));
   const factories = [
     createNwsSource,
     createIpawsSource,
@@ -673,7 +683,7 @@ export function openInstance(options: InstanceOptions): Instance {
     createGfzSource,
     createEnergyChartsSource,
     createKevSource,
-    ...(cloud ? [createGcpSource] : []),
+    ...feeds.map((feed) => feed.create),
     ...pages.map((page) => statusPageFactory(page)),
   ];
   const pace = sourcePace(clock, wall, factories.length);
