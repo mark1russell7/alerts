@@ -1,7 +1,8 @@
 /**
  * The base rates of the alert system, from public data of the whole country. The package measures
  * the verified share of the NWS warnings (IEM Cow) and the deaths and injuries of each event type
- * (NCEI Storm Events). It also holds the CAP certainty bands of `format-cap` in its file.
+ * (NCEI Storm Events). It also measures the alerts of each kind and the harm under an active alert,
+ * from the IEM archive of the VTEC alerts and NCEI. It holds the CAP certainty bands of `format-cap` in its file.
  *
  * The functions are pure. The script `scripts/measure.ts` fetches the data, writes `data/rates.json`
  * and compares a new measure with the committed file. The function `priorsOf` gives the priors of the
@@ -34,7 +35,7 @@ export {
   type CowWarning,
   type CowWindow,
 } from "./cow.ts";
-export { checkRates, gatedValues, type GateBreak, type GateCheck, type Gated, type GateNoRead } from "./gate.ts";
+export { checkRates, GATE_FORMATS, gatedValues, type GateBreak, type GateCheck, type Gated, type GateFile, type GateNoRead } from "./gate.ts";
 export {
   DETAILS_COLUMNS,
   detailsFiles,
@@ -46,6 +47,8 @@ export {
   sumDetails,
   type DetailsFile,
   type Harm,
+  type HarmRow,
+  type NceiLocalTime,
   type YearHarm,
 } from "./ncei.ts";
 export {
@@ -70,5 +73,56 @@ export {
 } from "./rates.ts";
 export { committedPriors, PRIORS_URL } from "./committed.ts";
 export { priorsOf } from "./priors.ts";
-export { ratesSummary, TOP_TYPES, type GateResult } from "./summary.ts";
-export { COW_YEARS, eachYear, lastFullYear, measureYears, NCEI_YEARS, parseYears, type Years } from "./years.ts";
+export { ratesSummary, TOP_TYPES, TOP_UNDER, type GateResult } from "./summary.ts";
+export {
+  HarmJoin,
+  isPlaced,
+  NCEI_TERRITORIES,
+  NCEI_WATERS,
+  NCEI_ZONE_HOURS,
+  nceiKindOf,
+  nceiTime,
+  nceiTypesOf,
+  placeAll,
+  placeHarm,
+  UNDER_MARGIN_MS,
+  underSection,
+  zoneHours,
+  type ActiveRow,
+  type HarmCount,
+  type HarmEvent,
+  type JoinMatch,
+  type UnderInput,
+  type UnderKind,
+  type UnderRate,
+  type UnderSection,
+  type UnplacedHarm,
+  type UnplacedReason,
+} from "./under.ts";
+export {
+  ALERT_PHENOMENA,
+  ALERT_SIGNIFICANCES,
+  alertKey,
+  AlertTally,
+  alertWindows,
+  MARINE_PHENOMENA,
+  MARINE_REASON,
+  NATIONAL_NUMBERS,
+  nationalNumber,
+  NUMBERING_MIN_SHARED,
+  NUMBERING_TOGETHER_SHARE,
+  numberingDoubts,
+  readWatchwarn,
+  TOGETHER_MS,
+  WATCHWARN_COLUMNS,
+  WATCHWARN_PARAMS,
+  WATCHWARN_URL,
+  watchwarnQuery,
+  watchwarnTime,
+  type AlertCounts,
+  type AlertRow,
+  type AlertSignificance,
+  type NumberingCheck,
+  type WatchwarnRead,
+} from "./watchwarn.ts";
+export { ALERT_YEARS, COW_YEARS, eachYear, lastFullYear, measureYears, NCEI_YEARS, parseYears, type Years } from "./years.ts";

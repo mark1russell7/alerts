@@ -16,6 +16,9 @@ export const COW_YEARS = { count: 5, lagMonths: 2 } as const;
 /** The years of the NCEI measure: 10 years. NCEI completes the events of a year approximately 6 months after the year. */
 export const NCEI_YEARS = { count: 10, lagMonths: 6 } as const;
 
+/** The years of the measure of the harm under an alert: 5 years. The join needs the events of NCEI, so it has the lag of NCEI. */
+export const ALERT_YEARS = { count: 5, lagMonths: 6 } as const;
+
 /**
  * This function gives the last whole year of a source at the time `now`. It is the year before the
  * month that is `lagMonths` before `now`, in UTC.

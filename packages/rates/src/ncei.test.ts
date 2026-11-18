@@ -95,6 +95,11 @@ describe("the sums of a file of details", () => {
           Hail: { events: 12, deathsDirect: 0, deathsIndirect: 0, injuriesDirect: 0, injuriesIndirect: 0 },
           Tornado: { events: 2, deathsDirect: 2, deathsIndirect: 1, injuriesDirect: 3, injuriesIndirect: 1 },
         },
+        harmed: [
+          { id: "9001", type: "Tornado", stateFips: "20", czType: "C", czFips: "1", timeZone: "CST-6", begin: { yearMonth: "202505", day: "1", time: "1200" }, end: { yearMonth: "202505", day: "1", time: "1210" }, deaths: 2, injuries: 4 },
+          { id: "9002", type: "Tornado", stateFips: "20", czType: "C", czFips: "1", timeZone: "CST-6", begin: { yearMonth: "202506", day: "1", time: "1200" }, end: { yearMonth: "202506", day: "1", time: "1210" }, deaths: 1, injuries: 0 },
+          { id: "9003", type: "Flash Flood", stateFips: "20", czType: "C", czFips: "1", timeZone: "CST-6", begin: { yearMonth: "202507", day: "1", time: "1200" }, end: { yearMonth: "202507", day: "1", time: "1210" }, deaths: 1, injuries: 0 },
+        ],
       });
       expect(JSON.stringify(harm)).not.toMatch(/KANSAS|SYNTHETIC/);
     }
