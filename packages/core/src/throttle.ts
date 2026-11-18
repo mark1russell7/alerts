@@ -1,8 +1,8 @@
 /**
  * This module holds the rise-only throttle of each person and channel (AL-72 part 4). It is pure. In one window, a
- * channel sends a second message to a person only when the level is above each level that the channel already sent to
- * the person in the window. A send of the same level or of a lower level does not go. The log keeps it as a suppression
- * with its reason, and the digest tells its incident.
+ * channel sends a second message to a person only when the level rises. The new level must be above each level that
+ * the channel sent to the person in the window. A send of the same level or of a lower level does not go. The log keeps
+ * it as a suppression with its reason, and the digest tells its incident.
  */
 import { compareCodeUnits } from "@mark1russell7/text/order";
 import { LEVELS, type ChannelId, type Delivery, type Duration, type Instant, type Level, type PersonId, type ReportId } from "./contracts.ts";
@@ -39,9 +39,9 @@ export type ThrottleConfig = Partial<Throttle>;
  *
  * The window comes from a replay of the burst of 2026-11-18 (`fixtures/burst-2026-11-18.json`, with made-up ids). The
  * burst gave 171 messages to one person on one channel in 22 minutes, in two waves 9 minutes apart. With a window of 15
- * minutes or more, the replay gives 2 messages: the first notice, and the first urgent message. On 2026-11-16 and 2026-11-17, the shortest time
- * between two messages that did not come at the same time was 32 minutes. A window of 32 minutes or less stops none of
- * them. The default is 30 minutes, in this range.
+ * minutes or more, the replay gives 2 messages: the first notice, and the first urgent message. On 2026-11-16 and
+ * 2026-11-17, the shortest time between two messages that did not come at the same time was 32 minutes. A window of 32
+ * minutes or less stops none of them. The default is 30 minutes, in this range.
  */
 export const DEFAULT_THROTTLE: Throttle = { window: 1_800_000, key: "channel", exempt: ["life-safety"] };
 
@@ -133,8 +133,9 @@ const rankOf = (level: Level): number => LEVELS.indexOf(level);
  *   escalation of `life-safety` goes until the acknowledgment.
  * - A send with a suppression in the log does not go. The suppression does not end, thus the send does not go late.
  * - A started send (`started`) goes. The phone can already have its message.
- * - Each other send goes only when its level is above the bar of its window. The bar is the highest level of the
- *   deliveries of the ledger to the person on the channel in the window, and of the sends that go before it in this pass.
+ * - Each other send goes only when its level is above the bar of its window. The bar is the highest level of two
+ *   groups. The first group is the deliveries of the ledger to the person on the channel in the window. The second
+ *   group is the sends that go before it in this pass.
  *   With the key `incident`, only the deliveries and the sends of the same incident count. The deliveries of the other
  *   copies count, thus the throttle applies over all the copies.
  * - A send at or below the bar gets a suppression at `now`, with its reason.

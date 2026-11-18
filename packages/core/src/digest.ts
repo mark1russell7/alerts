@@ -105,9 +105,10 @@ export interface DigestPlan {
  * - A quiet message of `notice` or `urgent` in the quiet window puts its incident in the digest again. The message is after
  *   the digest time before, and at or before the digest time. The entry has the highest such level. A digest of this
  *   digest time that told the incident keeps it out.
- * - A hold of the send limit or a suppression of the throttle puts its incident in the digest when the person has no
- *   message of the incident. The hold is after the digest time before, and at or before the digest time. The entry has
- *   the highest level of such holds. A digest of this digest time that told the incident keeps it out.
+ * - A hold of the send limit or a suppression of the throttle puts its incident in the digest. This applies only when
+ *   the person has no message of the incident. The hold is after the digest time before, and at or before the digest
+ *   time. The entry has the highest level of such holds. A digest of this digest time that told the incident keeps it
+ *   out.
  * - A digest with no incident sends nothing.
  * - Each step of a person sends one digest for each digest time, across the copies. A digest delivery of the step at or
  *   after the digest time keeps the step quiet. Thus the entries that only this copy knows wait for the next digest.
