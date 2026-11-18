@@ -1110,6 +1110,18 @@ The level of the table of an alert comes from its CAP severity and urgency. The 
 - The NWS sends alerts each day. Thus a day of the window with no alert is a gap of the API. The measure gives a warning, and the file keeps the count of each day.
 - The replay of the table over the archive takes the CAP fields of each VTEC code from this file (step 4b of AL-31).
 
+The replay (`replayOf` of the package `rates`, format `alerts-replay/1`) puts the table and the score on the alerts of the archive:
+
+- A type is one kind of the taxonomy and one significance. Its keys are the CAP fields of its VTEC codes in `data/cap.json`.
+- Each key gets the level of the table at a place of the person, and the expected deaths of the shadow score.
+- The alerts of a type in one place in a year come from its areas. Its areas in counties go over the counties of that year, and its areas in zones over the zones.
+- At each risk value, the replay gives the sends at `life-safety` in one place in each year. A send at `life-safety` wakes a person at night.
+- The rule sends at `life-safety` when the table gives it, or when the expected deaths are at the risk value or higher. Thus the table stays the floor.
+- The replay also gives the sends of the score alone, the sends that the score adds, and the sends that the floor keeps.
+- A type with no read of the place or of the CAP fields is not in the curve. The replay names each such type.
+- The replay uses the CAP fields of the recent alerts for the alerts of all the years.
+- Each run of `cap.yml` writes the replay with the committed base rates and priors.
+
 The runtime reads the committed priors at its start (`committedPriors` of the package `rates`). A fault of the file stops only the score, and each alert goes on:
 
 - The map route gives the score of each incident that reaches a person (the field `shadow` of each incident of the view).
