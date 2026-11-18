@@ -22,6 +22,7 @@
     "@mark1russell7/alerts-source-azure": "workspace:*",
     "@mark1russell7/alerts-source-bom-sws": "workspace:*",
     "@mark1russell7/alerts-source-cisa-kev": "workspace:*",
+    "@mark1russell7/alerts-source-cloudflare-radar": "workspace:*",
     "@mark1russell7/alerts-source-emsc": "workspace:*",
     "@mark1russell7/alerts-source-energy-charts": "workspace:*",
     "@mark1russell7/alerts-source-gcp": "workspace:*",
