@@ -22,7 +22,7 @@
     "@mark1russell7/alerts-source-ipaws": "workspace:*",
     "@mark1russell7/alerts-source-nws-api": "workspace:*",
     "@mark1russell7/alerts-source-nwws": "workspace:*",
-    "@mark1russell7/algebra": "^0.9.5",
+    "@mark1russell7/algebra": "^0.9.7",
     "@mark1russell7/rigor-chaos": "^0.3.3",
     "@mark1russell7/rigor-generators": "^0.1.18",
     "@mark1russell7/rigor-proxy": "^0.3.2",

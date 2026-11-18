@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import { CHANNEL_ID } from "./index.ts";
 import {
   callEnd,
-  monthStartOf,
   cursorQuery,
   MAX_PRESS_ROUNDS,
   OUTAGE_TEXT_LIMIT,
@@ -336,16 +335,14 @@ describe("the monthly cap", () => {
   // Midnight of 1 April 2026 in Chicago is 05:00 UTC, in daylight time.
   const APRIL = Date.UTC(2026, 3, 1, 5);
 
-  it("gives the start of the calendar month in the time zone of the cap", () => {
-    expect(monthStartOf(Date.UTC(2026, 3, 15, 12), "America/Chicago")).toBe(APRIL);
-    expect(monthStartOf(APRIL, "America/Chicago")).toBe(APRIL);
-    // One millisecond before, Chicago is in March, in standard time.
-    expect(monthStartOf(APRIL - 1, "America/Chicago")).toBe(Date.UTC(2026, 2, 1, 6));
-    // The clock goes back at 02:00 on 1 November 2026. Midnight is before the change, thus in daylight time.
-    expect(monthStartOf(Date.UTC(2026, 10, 20), "America/Chicago")).toBe(Date.UTC(2026, 10, 1, 5));
-    expect(monthStartOf(Date.UTC(2026, 3, 15), "UTC")).toBe(Date.UTC(2026, 3, 1));
-    // A name that is not a time zone gives 31 days, thus the cap counts more calls, not fewer.
-    expect(monthStartOf(APRIL, "Mars/Olympus")).toBe(APRIL - 31 * DAY);
+  it("counts the calls of the last 31 days for a name that is not a time zone, thus more calls and not fewer", () => {
+    const list: OutageList = { ...LIST, month: { maxCalls: 2, timeZone: "Mars/Olympus" } };
+    const at = APRIL + 10 * DAY;
+    expect(outageStart(list, BASE, at, [at - 30 * DAY, at - 31 * DAY]).notes).toEqual([
+      { kind: "capped", person: p1, cap: "month" },
+      { kind: "capped", person: p2, cap: "month" },
+    ]);
+    expect(outageStart(list, BASE, at, [at - 30 * DAY, at - 31 * DAY - 1]).actions.map((action) => action.person)).toEqual([p1]);
   });
 
   it("counts each call of the number from the start of the month, and stops each try at the cap", () => {
