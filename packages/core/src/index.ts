@@ -20,6 +20,7 @@ export * from "./clock-step.ts";
 export * from "./delivery.ts";
 export * from "./digest.ts";
 export * from "./send-limit.ts";
+export * from "./observe.ts";
 export * from "./drill.ts";
 export * from "./why.ts";
 export * from "./config.ts";

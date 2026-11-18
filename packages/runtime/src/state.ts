@@ -138,6 +138,19 @@ export interface RuntimeState {
   readonly recoveries: readonly LogRecovery[];
   /** The last start of each drill of this copy, by the id of the drill (AL-43). A later step of the wall clock moves them. */
   readonly drills: Readonly<Record<string, Instant>>;
+  /**
+   * The mode of each source with a mode event (AL-73): the start of its observe mode, and the time that it went live. A
+   * source with no entry has no mode yet. The mode `live` stays: a later event `observe` does not change it.
+   */
+  readonly modes: Readonly<Record<string, SourceModeTrack>>;
+}
+
+/** The mode of one source (`ModeEvent`). */
+export interface SourceModeTrack {
+  /** The start of the observe mode. A source that went live with no observe mode has none. */
+  readonly since?: Instant;
+  /** The time that the source went live. */
+  readonly live?: Instant;
 }
 
 /**
@@ -193,6 +206,7 @@ export const EMPTY_RUNTIME: RuntimeState = {
   steps: [],
   recoveries: [],
   drills: {},
+  modes: {},
 };
 
 /** This function adds one event to the state. */
@@ -386,6 +400,13 @@ function foldRest(state: RuntimeState, event: RuntimeEvent, context: FoldContext
       return { ...base, exchanges: { ...state.exchanges, [event.peer]: { log: event.log, next: event.next } } };
     case "drill":
       return { ...base, drills: { ...state.drills, [event.drill]: Math.max(state.drills[event.drill] ?? event.time, event.time) } };
+    case "mode": {
+      const track = state.modes[event.source] ?? {};
+      // The first event of each mode sets its time. A source that went live does not observe again.
+      if (event.mode === "live" ? track.live !== undefined : track.since !== undefined || track.live !== undefined) return base;
+      const next: SourceModeTrack = event.mode === "live" ? { ...track, live: event.time } : { since: event.time };
+      return { ...base, modes: { ...state.modes, [event.source]: next } };
+    }
     default:
       return base;
   }
@@ -535,6 +556,12 @@ export function shiftState(state: RuntimeState, size: Duration): RuntimeState {
     steps: state.steps.map((step) => ({ ...step, at: step.at + size })),
     recoveries: state.recoveries.map((recovery) => ({ ...recovery, at: recovery.at + size })),
     drills: Object.fromEntries(Object.entries(state.drills).map(([drill, at]) => [drill, at + size])),
+    modes: Object.fromEntries(
+      Object.entries(state.modes).map(([source, track]) => [
+        source,
+        { ...(track.since === undefined ? {} : { since: track.since + size }), ...(track.live === undefined ? {} : { live: track.live + size }) },
+      ]),
+    ),
   };
 }
 

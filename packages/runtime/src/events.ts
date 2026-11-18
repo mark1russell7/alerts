@@ -234,6 +234,22 @@ export interface DrillEvent extends Envelope<"drill"> {
   readonly copy: string;
 }
 
+/**
+ * A source enters a mode (AL-73). A new source starts in the mode `observe`: its incidents start no escalation and no
+ * digest entry below `life-safety`. It enters the mode `live` when its verdict passes. The id of the event is
+ * `mode:<source>:<mode>`. Thus the log keeps one time for each mode, and a later event of the same mode changes nothing.
+ * The event stays in its copy: each copy judges its own sources.
+ */
+export interface ModeEvent extends Envelope<"mode"> {
+  readonly source: SourceId;
+  readonly mode: SourceMode;
+  /** The reason of the mode: `seed` for the modes of the first start with modes, or the reason of the verdict. */
+  readonly reason: string;
+}
+
+/** The mode of a source: `observe` holds its incidents below `life-safety`, and `live` sends them. */
+export type SourceMode = "observe" | "live";
+
 /** The reports of one fetch of another copy. It has no fetch record and no cursor: each copy has its own health and cursors. */
 export interface SharedFetchEvent extends Envelope<"fetch"> {
   readonly reports: readonly Report[];
@@ -294,7 +310,8 @@ export type RuntimeEvent =
   | ImportEvent
   | ExchangeEvent
   | RetiredEvent
-  | DrillEvent;
+  | DrillEvent
+  | ModeEvent;
 
 /** The types of the events. */
 export const EVENT_TYPES: readonly RuntimeEvent["type"][] = [
@@ -319,6 +336,7 @@ export const EVENT_TYPES: readonly RuntimeEvent["type"][] = [
   "exchange",
   "retired",
   "drill",
+  "mode",
 ];
 
 /**

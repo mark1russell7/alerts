@@ -5,7 +5,7 @@
  * that it gets.
  */
 import { isFrameClock, type WallClock } from "@mark1russell7/algebra/clock";
-import { channelDownPolicy, DEFAULT_LINK_POLICY, downChannels, indicatorBreadth, limitShare, linkRule, ONLY_COPY, type ChannelQuota, type ChannelSnapshot, type CopyWatch, type Duration, type EntryTimes, type Exhaustion, type FetchOutcome, type IndicatorBreadth, type Instant, type LatenessFolds, type ReportId, type SourceDescriptor, type SourceId, type SourceProcedures, type Watch, type ZoneRegions } from "@mark1russell7/alerts";
+import { channelDownPolicy, DEFAULT_LINK_POLICY, downChannels, indicatorBreadth, limitShare, linkRule, observeConditions, ONLY_COPY, type ChannelQuota, type ChannelSnapshot, type CopyWatch, type Duration, type EntryTimes, type Exhaustion, type FetchOutcome, type Incident, type IndicatorBreadth, type Instant, type LatenessFolds, type ObserveCondition, type ReportId, type SourceDescriptor, type SourceId, type SourceProcedures, type Watch, type ZoneRegions } from "@mark1russell7/alerts";
 import { errorMessage } from "@mark1russell7/text";
 import type { BalanceWatch } from "./balance.ts";
 import { channelWatch, lastFetchSuccess } from "./channel-watch.ts";
@@ -17,6 +17,7 @@ import { importPage, sharePage, type ExchangePage, type ReceivedPage } from "./e
 import { fetchStep } from "./fetch.ts";
 import { limited } from "./limit.ts";
 import type { RuntimeLog } from "./log.ts";
+import { cutIncidents, modeEvents, modeStatus, observeStep, type ModeStatus, type ObserveParts } from "./observe.ts";
 import { READING_RETENTION, type ReadingStore } from "./readings.ts";
 import { SNAPSHOT_MISSES, snapshotStep } from "./snapshot.ts";
 import { retention, retiredEvent, type RetentionOptions } from "./retention.ts";
@@ -150,6 +151,8 @@ export interface Pass {
    * runtime has a store of the readings and the read of the store passed. It gives counts and no decision.
    */
   readonly breadth?: IndicatorBreadth;
+  /** The mode of each source with a mode (AL-73), with the verdict of each source that observes. It has no person. */
+  readonly modes?: readonly ModeStatus[];
 }
 
 /** The result of `take`: the import of one page of another copy. */
@@ -264,6 +267,16 @@ export function openRuntime(options: RuntimeOptions): Runtime {
   const positions = new Map<string, ExchangeCursor>();
 
   const copies = options.copies;
+  // The parts of the observe mode of the new sources (AL-73). With no delivery, no person watches. Thus each verdict passes after its window.
+  const observeParts: ObserveParts = {
+    people: options.delivery?.recipients.map((recipient) => recipient.watch) ?? [],
+    places: config.places,
+    assess: options.delivery?.assess,
+    limits: options.delivery?.sendLimits,
+    ...(copies === undefined ? {} : { share: (at: Instant) => limitShare(copies.watches(), at) }),
+  };
+  // The life-safety incidents of observing sources only that the last cut sent, in memory only.
+  let lifeSafety: readonly Incident[] = [];
   const dispatcher = options.delivery === undefined ? undefined : createDispatcher(options.delivery, {
           clock,
           run: options.run,
@@ -274,12 +287,20 @@ export function openRuntime(options: RuntimeOptions): Runtime {
           wake: options.wake,
           // The share of the send limit (AL-72): a copy that does not read another copy takes a part of the limit.
           ...(copies === undefined ? {} : { share: (at: Instant) => limitShare(copies.watches(), at) }),
+          // The observe mode of the new sources (AL-73). The life-safety incidents that it sends go into the view of the next pass.
+          cut: (found: readonly Incident[], at: Instant) => {
+            const cut = cutIncidents(state, state.merge, found, observeParts, at);
+            lifeSafety = cut.lifeSafety;
+            return cut.sent;
+          },
         });
 
   // The folds of the lateness of the last view, in memory only. A pass folds only the new checks. A restart folds each check again, with the same result.
   let folds: LatenessFolds | undefined;
   // The exhausted escalations of the last delivery step, in memory only (AL-21). A restart keeps each open line until its first delivery step.
   let exhausted: readonly Exhaustion[] | undefined;
+  // The conditions of the observe mode of the last pass, in memory only (AL-73). A restart keeps each open line until its first pass.
+  let observing: readonly ObserveCondition[] | undefined;
   // The runs of failed calls of the channels of this copy, and the probes of its down channels, in memory only (AL-65).
   // A restart empties the runs, and each open line stays until a good call.
   const channels = options.delivery === undefined ? undefined : channelWatch({ copy: self, channels: options.delivery.channels, policy: channelDownPolicy(config.channelDown), clock, callLimit: options.delivery.callLimit });
@@ -424,11 +445,17 @@ export function openRuntime(options: RuntimeOptions): Runtime {
       const started = drillStarts(state, drills, self, at);
       if (started.length > 0) conflicts.push(...append(started));
       const drilled = drillStep(state, drills, self, at);
+      // Each source with no mode gets its mode before the view (AL-73). The first start seeds the modes, and a later new source observes.
+      const modes = modeEvents(state, config.sources, at);
+      if (modes.length > 0) conflicts.push(...append(modes));
       const quotas = readQuotas();
-      const view = systemView(state, config, at, { drills: drilled.snapshots, ...(quotas === undefined ? {} : { quotas }), balances: watches.flatMap((watch) => watch.balance() ?? []), ...(options.copies === undefined ? {} : { copies: options.copies.watches(), copy: self }), ...(folds === undefined ? {} : { folds }), ...(exhausted === undefined ? {} : { exhausted }), ...(channels === undefined ? {} : { channels: channels.snapshots() }) });
+      const view = systemView(state, config, at, { drills: drilled.snapshots, ...(quotas === undefined ? {} : { quotas }), balances: watches.flatMap((watch) => watch.balance() ?? []), ...(options.copies === undefined ? {} : { copies: options.copies.watches(), copy: self }), ...(folds === undefined ? {} : { folds }), ...(exhausted === undefined ? {} : { exhausted }), ...(channels === undefined ? {} : { channels: channels.snapshots() }), ...(observing === undefined ? {} : { observing }) });
       folds = view.folds;
       const event = systemEvent(view);
       if (event !== undefined) conflicts.push(...append([event]));
+      // The verdict of each source that observes. A source that passes goes live before the delivery step.
+      const observed = observeStep(state, view.incidents, observeParts, at);
+      if (observed.events.length > 0) conflicts.push(...append(observed.events));
 
       // The system reports of this pass are incidents too, thus the delivery comes after their write.
       const delivery = await dispatcher?.step(at);
@@ -439,6 +466,15 @@ export function openRuntime(options: RuntimeOptions): Runtime {
       if (delivery !== undefined) exhausted = delivery.exhausted;
       // A run that starts to open a line, or an accepted send on a down channel, changes a line in the view of the next pass.
       const down = delivery !== undefined && channels !== undefined && channels.step(delivery, clock.now(), downChannels(state.lines, self), lastFetchSuccess(state.health));
+      // The conditions of the observe mode go into the view of the next pass. A new condition brings that pass at once. A new
+      // reason with the same facts does not, because the system reports keep no reason as a fact.
+      const since = new Map(Object.entries(state.modes).flatMap(([source, track]) => (track.since === undefined ? [] : [[source as SourceId, track.since] as const])));
+      const conditions = observeConditions(observed.verdicts, delivery === undefined ? [] : lifeSafety, state.merge, since);
+      const factsOf = (list: readonly ObserveCondition[] | undefined): string => JSON.stringify((list ?? []).map((entry) => [entry.source, entry.state, entry.incidents]));
+      const observeChanged = factsOf(conditions) !== factsOf(observing);
+      observing = conditions;
+      // The end of the observed time of a source is a timer: its verdict can pass then.
+      const observeEnds = observed.verdicts.map((verdict) => verdict.since + verdict.window).filter((time) => time > at);
 
       // The retirement comes after the delivery, at most once in each interval. A retired incident is not live, thus no send needs it.
       if (searched === undefined || at - searched >= kept.every) {
@@ -458,7 +494,7 @@ export function openRuntime(options: RuntimeOptions): Runtime {
       // A source or a balance watch can come due after `start`, while the fetches of the pass run. A fetch that runs to its
       // limit of one interval also ends at its next fetch. Such work is due, not a fault: its wake is the first instant after the pass.
       const nextWork = earliest([...config.sources.map((descriptor) => nextFetch(state, descriptor)), ...scheduled.map((watch) => watch.nextReadAt())]);
-      const wakeAt = earliest([nextWork === undefined ? undefined : Math.max(nextWork, at + 1), view.wakeAt, delivery?.wakeAt, drilled.wakeAt, channels?.wakeAt(), changed || down ? at + 1 : undefined]);
+      const wakeAt = earliest([nextWork === undefined ? undefined : Math.max(nextWork, at + 1), view.wakeAt, delivery?.wakeAt, drilled.wakeAt, channels?.wakeAt(), ...observeEnds, changed || down || observeChanged ? at + 1 : undefined]);
       const pass: Pass = {
         at,
         fetched: due.map(({ descriptor }) => descriptor.id),
@@ -468,6 +504,7 @@ export function openRuntime(options: RuntimeOptions): Runtime {
         ...(delivery === undefined ? {} : { delivery }),
         ...(wakeAt === undefined ? {} : { wakeAt }),
         ...(breadth === undefined ? {} : { breadth }),
+        modes: modeStatus(state, observed.verdicts),
       };
       await options.onPass?.(pass);
       return pass;
