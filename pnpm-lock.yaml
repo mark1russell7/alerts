@@ -565,6 +565,9 @@ importers:
       '@mark1russell7/alerts-shapes-nws':
         specifier: workspace:*
         version: link:../shapes-nws
+      '@mark1russell7/alerts-source-cisa-kev':
+        specifier: workspace:*
+        version: link:../source-cisa-kev
       '@mark1russell7/alerts-source-emsc':
         specifier: workspace:*
         version: link:../source-emsc
