@@ -151,6 +151,16 @@ describe("limitRoutes", () => {
     }
   });
 
+  it("gives a place first to a route with a started send, and never holds it, also past the limit", () => {
+    const routes = Array.from({ length: 4 }, (_, index) => entry(index, { due: T0 + index }));
+    const started = new Set([messageKey({ incident: idOf(3), level: "notice", person, step: 0 })]);
+    // Route 3 has the latest due time, but its send is in flight. Thus route 2 gets the hold.
+    expect(heldOf(limitRoutes({ routes, deliveries: [], holds: [], limits: LIMITS, started, now: T0 + HOUR }).routes)).toEqual(["02:person-1:0"]);
+    // With the count full, the started send keeps its route, and each other new route gets a hold.
+    const deliveries = [10, 11, 12].map((index) => sent(idOf(index), "notice", T0));
+    expect(heldOf(limitRoutes({ routes, deliveries, holds: [], limits: LIMITS, started, now: T0 + MINUTE }).routes)).toEqual(["00:person-1:0", "01:person-1:0", "02:person-1:0"]);
+  });
+
   it("keeps the place of an admitted send with no delivery yet over the next passes", () => {
     // Pass 1 admits 0, 1 and 2. The send of 2 fails, thus it has no delivery. Pass 2 has a later incident 3.
     const first = limitRoutes({ routes: [entry(0), entry(1), entry(2)], deliveries: [], holds: [], limits: LIMITS, now: T0 });

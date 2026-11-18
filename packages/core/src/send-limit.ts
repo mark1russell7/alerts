@@ -6,6 +6,7 @@
 import { compareCodeUnits } from "@mark1russell7/text/order";
 import type { CopyWatch, Delivery, Duration, Instant, Level, PersonId } from "./contracts.ts";
 import type { EscalationHold, Route } from "./delivery.ts";
+import { messageKey } from "./ids.ts";
 import { copyStages } from "./system-reports.ts";
 
 /** The levels with a send limit. A `life-safety` escalation has no limit, and the level `digest` has no escalation. */
@@ -95,6 +96,11 @@ export interface LimitInput {
   readonly limits?: SendLimits | undefined;
   /** The share of the limit for this copy (`limitShare`), above 0 and at most 1. The default is 1. */
   readonly share?: number | undefined;
+  /**
+   * The delivery keys of the sends that this copy started and that have no end yet: a send in flight, or an open copy.
+   * A route with one of these sends keeps its place. The default is no key.
+   */
+  readonly started?: ReadonlySet<string> | undefined;
   readonly now: Instant;
 }
 
@@ -123,6 +129,8 @@ export interface LimitResult {
  *   route with no place gets a hold at `now`.
  * - A send in flight or a refused send has no delivery yet. Its route stays new, and it keeps its place, because its
  *   first due time is early. Thus the count of the admitted escalations does not pass the limit over many passes.
+ * - A route with a started send (`started`) gets a place before each other new route, and it does not get a hold. The
+ *   phone can already have its message. Thus a new route with an earlier due time cannot take its place.
  * - A held route has no send in its plan. Its cancels stay.
  */
 export function limitRoutes(input: LimitInput): LimitResult {
@@ -145,7 +153,7 @@ export function limitRoutes(input: LimitInput): LimitResult {
   }
 
   // The new routes of each person and level.
-  const fresh = new Map<string, { readonly index: number; readonly due: Instant }[]>();
+  const fresh = new Map<string, { readonly index: number; readonly due: Instant; readonly started: boolean }[]>();
   const held = new Map<number, EscalationHold>();
   input.routes.forEach((entry, index) => {
     const level = entry.policy.level;
@@ -158,18 +166,23 @@ export function limitRoutes(input: LimitInput): LimitResult {
     if (entry.deliveries.length > 0 || entry.plan.sends.length === 0) return;
     const group = groupOf(entry.person, level);
     const due = Math.min(...entry.plan.sends.map((send) => send.due));
-    fresh.set(group, [...(fresh.get(group) ?? []), { index, due }]);
+    const started = input.started !== undefined && entry.plan.sends.some((send) => input.started?.has(messageKey(send)) === true);
+    fresh.set(group, [...(fresh.get(group) ?? []), { index, due, started }]);
   });
   const added: { readonly index: number; readonly hold: EscalationHold }[] = [];
   for (const [group, entries] of fresh) {
     const level = group.slice(0, group.indexOf(" ")) as LimitedLevel;
     const places = Math.max(0, Math.max(1, Math.floor(limits[level] * share)) - (used.get(group) ?? 0));
-    const ordered = [...entries].sort((a, b) => {
-      const left = input.routes[a.index]!;
-      const right = input.routes[b.index]!;
-      return a.due - b.due || compareCodeUnits(left.start.incident, right.start.incident) || left.episode - right.episode;
-    });
-    for (const { index } of ordered.slice(places)) {
+    // The routes with a started send take their places first. They do not get a hold, also past the limit.
+    const begun = entries.filter((item) => item.started).length;
+    const ordered = entries
+      .filter((item) => !item.started)
+      .sort((a, b) => {
+        const left = input.routes[a.index]!;
+        const right = input.routes[b.index]!;
+        return a.due - b.due || compareCodeUnits(left.start.incident, right.start.incident) || left.episode - right.episode;
+      });
+    for (const { index } of ordered.slice(Math.max(0, places - begun))) {
       const entry = input.routes[index]!;
       const hold: EscalationHold = { incident: entry.start.incident, level, person: entry.person, episode: entry.episode, at: input.now };
       held.set(index, hold);

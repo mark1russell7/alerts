@@ -18,7 +18,9 @@
  * The gates of each arm:
  *
  * - `delivered`, `single` and `stopped`: the gates of case 4, from the ledger of the API and the log of the runtime.
- * - `recovered`: the first delivery comes in two retries and one tick after the end of the outage.
+ * - `recovered`: the first delivery comes in two retries and one tick after the end of the outage. In `limited`, each
+ *   try is a refusal, thus the waits double (`refusalWait`). The first delivery comes at the first try of that schedule
+ *   after the outage, plus one tick.
  * - `told`: a fail ping goes to the check during the outage. The control arm has no fail ping.
  * - `cleared`: the last ping of the arm is a success ping.
  * - `paced`: the requests in progress at one time are not more than the `maxInFlight` of the channel.
@@ -26,7 +28,7 @@
  */
 import { platformClock, wallClock } from "@mark1russell7/algebra/clock";
 import { createPushoverChannel } from "@mark1russell7/alerts-channel-pushover";
-import { DELIVERY_TIMES, HEARTBEAT_EVERY, heartbeat, heldOf, openRuntime, openRuntimeLog, PROBE_LIMIT, type Runtime } from "@mark1russell7/alerts-runtime";
+import { DELIVERY_TIMES, HEARTBEAT_EVERY, heartbeat, heldOf, openRuntime, openRuntimeLog, PROBE_LIMIT, refusalWait, type Runtime } from "@mark1russell7/alerts-runtime";
 import { type FaultPlan, type FaultWindow, faultPlanOf, type WindowFault } from "@mark1russell7/rigor-chaos";
 import { startFaultProxy } from "@mark1russell7/rigor-proxy";
 import { startScriptedServer } from "@mark1russell7/rigor-testkit/http";
@@ -81,11 +83,17 @@ export interface ChannelSettings {
 export const CASE_7_SETTINGS: ChannelSettings = { speed: 10, armMs: 14 * MINUTE, outageMs: 10 * MINUTE, tickMs: 5_000, receipts: 12 };
 
 /**
- * This function gives the longest time from the end of an outage to the first delivery: two retries and one tick. The
- * first send after the outage comes in one retry. The second retry is for a connection that the outage closed.
+ * This function gives the longest time from the end of an outage to the first delivery of an arm: two retries and one
+ * tick. The first send after the outage comes in one retry. The second retry is for a connection that the outage closed.
+ *
+ * - In `limited`, each try is a refusal. Thus the wait doubles after each try (`refusalWait`), from the first send at
+ *   the start of the arm. The limit is the time to the first try of that schedule after the outage, plus one tick.
  */
-export function recoverLimit(settings: ChannelSettings = CASE_7_SETTINGS): number {
-  return 2 * DELIVERY_TIMES.retry + settings.tickMs;
+export function recoverLimit(settings: ChannelSettings = CASE_7_SETTINGS, arm: ChannelArm = "reset"): number {
+  if (arm !== "limited") return 2 * DELIVERY_TIMES.retry + settings.tickMs;
+  let next = 0;
+  for (let streak = 0; next < settings.outageMs; streak += 1) next += refusalWait(streak, DELIVERY_TIMES.retry);
+  return next - settings.outageMs + settings.tickMs;
 }
 
 /** This function gives the outage window of an arm, or `undefined` for `control`. */
@@ -287,7 +295,7 @@ export function channelGatesOf(record: ChannelRecord, settings: ChannelSettings 
   const accept = acceptGatesOf(record);
   const problems = [...accept.problems];
   const { outage } = record;
-  const due = (outage?.to ?? 0) + recoverLimit(settings);
+  const due = (outage?.to ?? 0) + recoverLimit(settings, record.arm);
   const first = Math.min(...record.log.deliveries.map((delivery) => delivery.at));
   const recovered = first <= due;
   if (!recovered) problems.push(`${record.arm}: the first delivery is at ${Number.isFinite(first) ? `${String(first)} ms` : "no time"}, after the limit of ${String(due)} ms.`);
@@ -326,7 +334,7 @@ export function channelGatesOf(record: ChannelRecord, settings: ChannelSettings 
 export function channelSettingsProblems(settings: ChannelSettings): string[] {
   const problems: string[] = [];
   if (settings.outageMs < 2 * HEARTBEAT_EVERY) problems.push(`The outage (${String(settings.outageMs)} ms) is shorter than two times of the heartbeat.`);
-  const last = settings.outageMs + recoverLimit(settings) + DELIVERY_TIMES.pollEvery + 2 * settings.tickMs;
+  const last = settings.outageMs + Math.max(...CHANNEL_ARMS.map((arm) => recoverLimit(settings, arm))) + DELIVERY_TIMES.pollEvery + 2 * settings.tickMs;
   if (settings.armMs < last) problems.push(`The arm (${String(settings.armMs)} ms) ends before the poll of a delivery at the recovery limit (${String(last)} ms).`);
   // The runtime takes `PROBE_LIMIT` or the retry, the longer one. The gate `probed` uses `PROBE_LIMIT`.
   if (DELIVERY_TIMES.retry > PROBE_LIMIT) problems.push(`The retry (${String(DELIVERY_TIMES.retry)} ms) is longer than PROBE_LIMIT (${String(PROBE_LIMIT)} ms).`);
