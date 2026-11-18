@@ -3228,7 +3228,7 @@
     "references": [
       "FEMA Lifelines: Transportation > Mass Transit"
     ],
-    "gap": "The GTFS-RT spec page returned 403. Feeds are per agency.",
+    "gap": "One source gives these alerts: the GTFS Realtime feeds of the agencies (gtfs-rt-alerts). The catalog of the Mobility Database finds the feeds and gives no alert.",
     "round": 1
   }
 ]

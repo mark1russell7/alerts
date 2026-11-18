@@ -138,12 +138,6 @@
     "note": "The host of the feed of manifold-api."
   },
   {
-    "id": "api.mobilitydatabase.org",
-    "name": "api.mobilitydatabase.org",
-    "kind": "host",
-    "note": "The host of the feed of mobility-database."
-  },
-  {
     "id": "api.neso.energy",
     "name": "api.neso.energy",
     "kind": "host",
@@ -462,6 +456,12 @@
     "note": "The host of the feed of meteoalarm-feeds."
   },
   {
+    "id": "files.mobilitydatabase.org",
+    "name": "files.mobilitydatabase.org",
+    "kind": "host",
+    "note": "The host of the catalog file of mobility-database. On 2026-11-18 its answer had the server UploadServer and the headers of Google Cloud Storage."
+  },
+  {
     "id": "firms.modaps.eosdis.nasa.gov",
     "name": "firms.modaps.eosdis.nasa.gov",
     "kind": "host",
@@ -658,6 +658,12 @@
     "name": "promedmail.org",
     "kind": "host",
     "note": "The host of the feed of promed."
+  },
+  {
+    "id": "provider:api-data-gov",
+    "name": "api.data.gov of the GSA, the key gateway of api.eia.gov",
+    "kind": "provider",
+    "note": "On 2026-11-18 the DNS name api.eia.gov pointed to api-eia-gov.domains.api.data.gov, then to a host of cloud.gov. The gateway checks each key."
   },
   {
     "id": "provider:arcgis-online",

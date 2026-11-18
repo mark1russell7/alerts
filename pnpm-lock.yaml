@@ -224,12 +224,21 @@ importers:
       '@mark1russell7/alerts-source-aws':
         specifier: workspace:*
         version: link:../source-aws
+      '@mark1russell7/alerts-source-azure':
+        specifier: workspace:*
+        version: link:../source-azure
       '@mark1russell7/alerts-source-bom-sws':
         specifier: workspace:*
         version: link:../source-bom-sws
       '@mark1russell7/alerts-source-cisa-kev':
         specifier: workspace:*
         version: link:../source-cisa-kev
+      '@mark1russell7/alerts-source-cloudflare-radar':
+        specifier: workspace:*
+        version: link:../source-cloudflare-radar
+      '@mark1russell7/alerts-source-eia-930':
+        specifier: workspace:*
+        version: link:../source-eia-930
       '@mark1russell7/alerts-source-emsc':
         specifier: workspace:*
         version: link:../source-emsc

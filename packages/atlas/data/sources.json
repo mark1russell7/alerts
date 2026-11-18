@@ -700,7 +700,7 @@
     "cost": "free",
     "delay": "unknown",
     "history": "unknown",
-    "rateLimit": "unknown",
+    "rateLimit": "No published limit. The adapter asks once each 5 minutes.",
     "calibration": null,
     "coverage": "Widespread Azure incidents.",
     "origins": [
@@ -710,15 +710,18 @@
       "rssfeed.azure.status.microsoft",
       "cdn:akamai"
     ],
-    "subjectIds": null,
+    "subjectIds": [
+      "domain",
+      "provider-region"
+    ],
     "risks": [],
-    "decision": "plan",
-    "adapter": null,
-    "reason": "Official public feed of large Azure incidents.",
+    "decision": "adopt",
+    "adapter": "@mark1russell7/alerts-source-azure",
+    "reason": "The public feed of widespread Azure incidents. Each incident that has not ended is a report, with the domain of the service and each region as subjects.",
     "evidence": [
       "https://azure.status.microsoft/en-us/status"
     ],
-    "round": 1
+    "round": 14
   },
   {
     "id": "bay-area-511",
@@ -1642,12 +1645,12 @@
       "url": "https://developers.cloudflare.com/radar/",
       "automated": "allowed",
       "redistribution": "limited",
-      "note": "Token with Account:Radar permission; a free account works per the guide. Data license not stated. The data of the API is under CC BY-NC 4.0: no commercial use."
+      "note": "A token with the permission Account:Radar. A free account gives it, as the guide tells. The data of the API is under CC BY-NC 4.0: no commercial use."
     },
     "cost": "free-tier",
     "delay": "unknown",
     "history": "unknown",
-    "rateLimit": "unknown",
+    "rateLimit": "The header ratelimit-policy gave 1200 requests in each 300 seconds. The adapter asks for each of its two lists once each 10 minutes.",
     "calibration": null,
     "coverage": "World: BGP origin hijacks and route leaks with confidence scores; outage and attack data not verified in round 1.",
     "origins": [
@@ -1656,11 +1659,15 @@
     "path": [
       "api.cloudflare.com"
     ],
-    "subjectIds": null,
+    "subjectIds": [
+      "asn",
+      "iso3166",
+      "geonames"
+    ],
     "risks": [],
-    "decision": "plan",
-    "adapter": null,
-    "reason": "Broad internet view with an API; the outage center page was not opened.",
+    "decision": "adopt",
+    "adapter": "@mark1russell7/alerts-source-cloudflare-radar",
+    "reason": "Verified internet outages and traffic anomalies of networks, regions and countries, with a free token. The runtime reads it only when the secrets have the token.",
     "evidence": [
       "https://developers.cloudflare.com/radar/investigate/bgp-anomalies/",
       "https://developers.cloudflare.com/radar/",
@@ -1669,7 +1676,7 @@
       "https://blog.cloudflare.com/traffic-anomalies-notifications-radar/",
       "https://developers.cloudflare.com/radar/get-started/first-request/"
     ],
-    "round": 1
+    "round": 14
   },
   {
     "id": "coingecko-api",
@@ -2606,6 +2613,47 @@
     "round": 1
   },
   {
+    "id": "eia-930",
+    "name": "EIA-930 Hourly Electric Grid Monitor (EIA API v2)",
+    "classes": [],
+    "dimensions": [
+      "power-demand"
+    ],
+    "url": "https://www.eia.gov/electricity/gridmonitor/",
+    "access": "api",
+    "auth": "key",
+    "terms": {
+      "url": "https://www.eia.gov/opendata/register.php",
+      "automated": "allowed",
+      "redistribution": "allowed",
+      "note": "The terms of the API permit a service that searches, shows or analyzes the data. Programs must limit their rate. The reuse policy asks for a credit with the date of the data."
+    },
+    "cost": "free",
+    "delay": "hourly. On 2026-11-18 the newest hour of 19 of 65 balancing authorities was a placeholder equal to its forecast. The earlier hours had 0 to 4 placeholders.",
+    "history": "yes",
+    "rateLimit": "The FAQ gives under approximately 9,000 requests each hour and 5 each second. Past it, the key stops for seconds to minutes. The adapter sends at most 10 requests each 15 minutes.",
+    "calibration": null,
+    "coverage": "The hourly demand and the day-ahead demand forecast of each balancing authority of the United States (Form EIA-930), and the sums of the regions.",
+    "origins": [
+      "eia"
+    ],
+    "path": [
+      "api.eia.gov",
+      "provider:api-data-gov"
+    ],
+    "subjectIds": [],
+    "risks": [],
+    "decision": "adopt",
+    "adapter": "@mark1russell7/alerts-source-eia-930",
+    "reason": "Public-domain hourly power demand of each US balancing authority, with one free key. The day-ahead forecast is the expected value. A large residual tells of a lost load or a stressed grid.",
+    "evidence": [
+      "https://www.eia.gov/opendata/register.php",
+      "https://www.eia.gov/about/copyrights_reuse.php",
+      "https://www.eia.gov/electricity/930-content/about.html"
+    ],
+    "round": 14
+  },
+  {
     "id": "eia-api",
     "name": "EIA Open Data API v2",
     "classes": [
@@ -2614,7 +2662,6 @@
       "infra.fuel.shortage"
     ],
     "dimensions": [
-      "power-demand",
       "power-supply",
       "fuel-prices"
     ],
@@ -2622,22 +2669,23 @@
     "access": "api",
     "auth": "key",
     "terms": {
-      "url": "https://www.eia.gov/about/copyrights_reuse.php",
-      "automated": "unclear",
+      "url": "https://www.eia.gov/opendata/register.php",
+      "automated": "allowed",
       "redistribution": "allowed",
-      "note": "Reuse policy: US government publications are public domain; data may be used and distributed; an acknowledgment with the publication date is asked; third-party content can be protected. The separate API Terms of Service Agreement was not opened, so automated use is marked unclear."
+      "note": "The terms of the API permit a service that searches, shows or analyzes the data. Programs must limit their rate. The reuse policy asks for a credit with the date of the data."
     },
     "cost": "free",
     "delay": "as each series (weekly for retail fuel prices)",
     "history": "Full series history.",
-    "rateLimit": "unknown (none stated on the opened page)",
+    "rateLimit": "The FAQ gives under approximately 9,000 requests each hour and 5 each second. Past it, the key stops for seconds to minutes.",
     "calibration": "not applicable",
     "coverage": "Petroleum prices (/petroleum/pri): retail gasoline and diesel prices (daily, weekly, monthly, annual series) and spot and futures prices; natural gas prices (/natural-gas/pri).",
     "origins": [
       "eia"
     ],
     "path": [
-      "api.eia.gov"
+      "api.eia.gov",
+      "provider:api-data-gov"
     ],
     "subjectIds": null,
     "risks": [],
@@ -2650,7 +2698,7 @@
       "https://www.eia.gov/electricity/930-content/about.html",
       "https://docs.catalyst.coop/pudl/en/stable/data_sources/eia930.html"
     ],
-    "round": 1
+    "round": 14
   },
   {
     "id": "emsc-seismicportal-fdsn",
@@ -4653,19 +4701,22 @@
     "classes": [
       "transport.transit.service-alert"
     ],
+    "dimensions": [
+      "public-transit"
+    ],
     "url": "https://gtfs.org/documentation/realtime/feed-entities/service-alerts/",
     "access": "feed",
-    "auth": "unknown",
+    "auth": "none",
     "terms": {
       "url": null,
       "automated": "unclear",
       "redistribution": "unclear",
-      "note": "The spec page returned 403. Terms are per agency."
+      "note": "The terms are those of each agency. The catalog of the Mobility Database gives the license of a feed when the agency states it. The runtime reads only the feeds that need no key."
     },
-    "cost": "unknown",
-    "delay": "unknown",
+    "cost": "free",
+    "delay": "as each agency",
     "history": "unknown",
-    "rateLimit": "unknown",
+    "rateLimit": "as each agency. The adapter asks a feed once each 5 minutes, unless the feed sets another interval.",
     "calibration": null,
     "coverage": "Agencies that publish GTFS Realtime alerts.",
     "origins": [
@@ -4674,13 +4725,17 @@
     "path": [
       "transit-agency-hosts"
     ],
-    "subjectIds": null,
+    "subjectIds": [],
     "risks": [],
-    "decision": "later",
+    "decision": "plan",
     "adapter": null,
-    "reason": "One adapter covers many agencies through a standard format. The decision is later because the auth is unknown.",
-    "evidence": [],
-    "round": 1
+    "reason": "One adapter covers many agencies through a standard format. The package source-gtfs-alerts reads one feed, and the runtime reads each feed of the catalog copy whose box meets a place. Each feed is one source, so the descriptor test has no row, as for the status pages.",
+    "evidence": [
+      "https://files.mobilitydatabase.org/feeds_v2.csv",
+      "https://www.zditm.szczecin.pl/storage/gtfs/gtfs-rt-alerts.pb",
+      "https://api.entur.io/realtime/v1/gtfs-rt/alerts?datasource=RUT"
+    ],
+    "round": 14
   },
   {
     "id": "hhs-ocr-breach-portal",
@@ -5751,45 +5806,44 @@
   {
     "id": "mobility-database",
     "name": "Mobility Database",
-    "classes": [
-      "transport.transit.service-alert"
-    ],
+    "classes": [],
     "dimensions": [
       "public-transit"
     ],
     "url": "https://mobilitydatabase.org/",
-    "access": "api",
-    "auth": "account",
+    "access": "file",
+    "auth": "none",
     "terms": {
       "url": null,
       "automated": "unclear",
-      "redistribution": "unclear",
-      "note": "REST API with sign-up. Terms not opened."
+      "redistribution": "allowed",
+      "note": "The public file feeds_v2.csv needs no account. Its metadata is under CC0 1.0. Each feed keeps the terms of its agency. The REST API needs a sign-up."
     },
     "cost": "free",
     "delay": "not applicable (catalog)",
     "history": "unknown",
-    "rateLimit": "unknown",
+    "rateLimit": "No published limit. The runtime reads the file again when its copy is one day old, with a conditional GET.",
     "calibration": null,
     "coverage": "6,000+ GTFS, GTFS Realtime and GBFS feeds in 100+ countries.",
     "origins": [
       "mobilitydata"
     ],
     "path": [
-      "api.mobilitydatabase.org"
+      "files.mobilitydatabase.org"
     ],
     "subjectIds": null,
     "risks": [],
-    "decision": "plan",
+    "decision": "reject",
     "adapter": null,
-    "reason": "Finds the alert feed of each transit agency.",
+    "reason": "The catalog gives no signal, so it is not a second source of public transit. The runtime keeps a copy of its public file to find the feeds of gtfs-rt-alerts.",
     "evidence": [
       "https://mobilitydatabase.org/",
       "https://mobilitydatabase.org/about",
       "https://github.com/MobilityData/mobility-feed-api",
-      "https://ftp.fau.de/cran/web/packages/mobdb/vignettes/mobdb.html"
+      "https://ftp.fau.de/cran/web/packages/mobdb/vignettes/mobdb.html",
+      "https://files.mobilitydatabase.org/feeds_v2.csv"
     ],
-    "round": 1
+    "round": 14
   },
   {
     "id": "nager-date",
