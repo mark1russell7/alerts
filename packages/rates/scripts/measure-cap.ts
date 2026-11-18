@@ -9,12 +9,16 @@
  * of the workflow. A page that fails three times stops the script with no file, so the next run reads the same days again.
  * A run with no new whole day writes the base file with no change.
  *
- * Start: `node scripts/measure-cap.ts --out=<folder> [--committed=data/cap.json] [--last=<cap.json of the last run>]`
+ * With the committed base rates and priors, the script also writes the replay of the table and the score over the file
+ * (`replay.json` and `replay.md`).
+ *
+ * Start: `node scripts/measure-cap.ts --out=<folder> [--committed=data/cap.json] [--last=<cap.json of the last run>]
+ * [--rates=data/rates.json --priors=data/priors.json]`
  */
 
 import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { SourceId } from "@mark1russell7/alerts";
+import { DEFAULT_ASSESS_POLICY, scorePriorsSchema, type SourceId } from "@mark1russell7/alerts";
 import { createRequester } from "@mark1russell7/alerts-fetch";
 import { fetchTransport } from "polite-crawler/api";
 import { HostScheduler, realClock } from "polite-crawler/politeness";
@@ -30,8 +34,11 @@ import {
   nextPath,
   readCapFile,
   readCapPage,
+  replayOf,
+  replaySummary,
   type CapFile,
   type CapPage,
+  type UnderSection,
 } from "../src/index.ts";
 
 /** The User-Agent of each request. It names no person and no project. */
@@ -61,6 +68,35 @@ async function fileAt(path: string | undefined): Promise<CapFile | undefined> {
   }
 }
 
+/** This function adds a text to the summary of the step of the workflow, when the runner gives its file. */
+async function addToSummary(text: string): Promise<void> {
+  const stepSummary = process.env["GITHUB_STEP_SUMMARY"];
+  if (stepSummary !== undefined && stepSummary !== "") await appendFile(stepSummary, text);
+  console.log(text);
+}
+
+/**
+ * This function writes the replay of the table and the score over a file of the CAP fields. It uses the base rates and
+ * the priors of the options. It gives the summary of the replay. With no options, or with base rates that have no section
+ * `under`, it writes no replay.
+ */
+async function writeReplay(file: CapFile, folder: string): Promise<string | undefined> {
+  const ratesPath = option("rates");
+  const priorsPath = option("priors");
+  if (ratesPath === undefined || priorsPath === undefined) return undefined;
+  const rates = JSON.parse(await readFile(ratesPath, "utf8")) as { readonly under?: UnderSection };
+  if (rates.under === undefined) {
+    log(`the base rates ${ratesPath} have no section under: the script writes no replay`);
+    return undefined;
+  }
+  const priors = scorePriorsSchema.parse(JSON.parse(await readFile(priorsPath, "utf8")));
+  const replay = replayOf({ under: rates.under, months: file.months, priors, policy: DEFAULT_ASSESS_POLICY });
+  const summary = replaySummary(replay);
+  await writeFile(join(folder, "replay.json"), `${JSON.stringify(replay, null, 2)}\n`);
+  await writeFile(join(folder, "replay.md"), summary);
+  return summary;
+}
+
 const lastEnd = (file: CapFile | undefined): number => (file?.runs.length ? Date.parse(file.runs.at(-1)?.end ?? "") : Number.NEGATIVE_INFINITY);
 const committed = await fileAt(option("committed"));
 const last = await fileAt(option("last"));
@@ -77,7 +113,11 @@ if (window === undefined) {
   // The next run adds to the file of this run, so this run gives the base file again with no change.
   log("no whole day is new since the last run: the script writes the base file with no change");
   await mkdir(out, { recursive: true });
-  if (base !== undefined) await writeFile(join(out, "cap.json"), `${JSON.stringify(base, null, 2)}\n`);
+  if (base !== undefined) {
+    await writeFile(join(out, "cap.json"), `${JSON.stringify(base, null, 2)}\n`);
+    const replay = await writeReplay(base, out);
+    if (replay !== undefined) await addToSummary(replay);
+  }
 } else {
   const pace = { scheduler: new HostScheduler(realClock, 1), now: realClock.now };
   const api = createRequester({
@@ -120,9 +160,9 @@ if (window === undefined) {
   await mkdir(out, { recursive: true });
   await writeFile(join(out, "cap.json"), `${JSON.stringify(file, null, 2)}\n`);
   await writeFile(join(out, "cap-summary.md"), summary);
-  const stepSummary = process.env["GITHUB_STEP_SUMMARY"];
-  if (stepSummary !== undefined && stepSummary !== "") await appendFile(stepSummary, summary);
-  console.log(summary);
+  await addToSummary(summary);
+  const replay = await writeReplay(file, out);
+  if (replay !== undefined) await addToSummary(replay);
   // A day with no alert is a gap of the API, not a quiet day. It is a warning on the check line of the run.
   const gaps = capGaps(run);
   if (gaps.length > 0) console.log(`::warning title=Days with no alert::${command(`The NWS API gave no alert for ${gaps.join(", ")}.`)}`);

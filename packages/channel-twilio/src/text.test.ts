@@ -260,3 +260,14 @@ describe("the probe of the text channel", () => {
     expect(fake.calls[0]?.url).toMatch(/\/Balance\.json$/u);
   });
 });
+
+describe("the services of a contact", () => {
+  it("gives the SMS node of the region of the phone with the type of the sender of the channel, with no request", () => {
+    const fake = server();
+    // The numbers 800-555-0100 and 416-555-0123 are numbers for fiction.
+    const channel = channelOf(fake, { from: "+18005550100" });
+    expect(channel.services?.({ address: { to: "+14165550123" } })).toEqual(["provider-region:twilio/north-america/sms/toll-free"]);
+    expect(channelOf(fake).services?.({ address: ADDRESS })).toEqual([]);
+    expect(fake.calls).toEqual([]);
+  });
+});

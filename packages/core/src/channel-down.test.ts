@@ -44,7 +44,7 @@ function step(at: Instant, failures: readonly { channel?: ChannelId; call?: stri
 const ops = (reports: readonly Report[]) => reports.map((report) => report.op);
 
 describe("the runs of failed calls of the channels", () => {
-  it("counts the failed sends and status calls of the counted kinds, and a good call ends the run", () => {
+  it("counts the failed sends, status calls and probes of the counted kinds, and a good call ends the run", () => {
     let runs = channelRuns([], step(T0, [{ kind: "server" }, { kind: "consent" }, { kind: "quiet" }, { call: "cancel", kind: "server" }]));
     expect(runs).toEqual([{ channel: push, failures: 1, first: T0, last: T0, kind: "server", reached: true }]);
     runs = channelRuns(runs, step(T0 + 30 * SECOND, [{ call: "status", kind: "timeout" }, { kind: "rate-limited" }, { kind: "refused" }, { kind: "expired" }, { kind: "reserved" }]));
@@ -52,6 +52,12 @@ describe("the runs of failed calls of the channels", () => {
     // A good call in a step ends the run, and the failed calls of that step start no run.
     expect(channelRuns(runs, step(T0 + MINUTE, [{ kind: "server" }], [push]))).toEqual([]);
     expect(COUNTED_FAILURES).toEqual(["network", "timeout", "server", "auth"]);
+    // A failed probe of a quiet channel counts. Three probes over 60 s open a line with no message.
+    let quiet = channelRuns([], step(T0, [{ call: "probe", kind: "server" }]));
+    quiet = channelRuns(quiet, step(T0 + MINUTE, [{ call: "probe", kind: "server" }, { call: "probe", kind: "rate-limited" }]));
+    quiet = channelRuns(quiet, step(T0 + 3 * MINUTE, [{ call: "probe", kind: "server" }]));
+    expect(quiet).toEqual([{ channel: push, failures: 3, first: T0, last: T0 + 3 * MINUTE, kind: "server", reached: true }]);
+    expect(runOpens(quiet[0]!, DEFAULT_CHANNEL_DOWN)).toBe(true);
   });
 
   it("marks a run as reached only by an answer of the provider or a source success during the run", () => {
@@ -125,6 +131,9 @@ describe("the line of a down channel", () => {
       { system: "domain", id: "api.example.com" },
     ]);
     expect(report?.areas).toEqual([]);
+    // An endpoint key with no system or no id gives no subject. The schema refuses it, and a descriptor in code has no parse.
+    const odd = systemReports(NO_SYSTEM_LINES, { ...empty, channels: [entry({ api: ["api.example.com", ":id", "domain:", PUSH_API], run: run() })] }, T0 + MINUTE);
+    expect(odd.reports[0]?.about).toEqual(report?.about);
     expect(report?.headline).toBe("Push is down for the copy copy-a.");
     expect(report?.description).toBe("The calls of the copy copy-a to the provider of Push fail. 4 calls failed in 90 s, and the provider gave a server error at the last call.");
   });

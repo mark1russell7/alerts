@@ -38,8 +38,9 @@ import { eachYear, type Years } from "./years.ts";
  * The format of the file. A change of its structure gives a new number. Format 2 adds the no reads and the unverified
  * phenomena. Format 3 adds the section `under`: the alerts of each kind and the harm under an active alert. Format 4
  * gives the areas of the alerts and the harm in them, in counties and in zones, in each year (`UnderRate.byArea`).
+ * Format 5 adds the distinct counties and zones of the alerts of each year (`UnderSection.codes`).
  */
-export const RATES_FORMAT = "alerts-rates/4";
+export const RATES_FORMAT = "alerts-rates/5";
 
 /** The level of each interval. */
 export const LEVEL = 0.95;
@@ -158,7 +159,7 @@ export const METHODS: Readonly<Record<string, string>> = {
   cow: "One request for each month, with one day of margin before and after the month. A warning counts in the month of its start. The id of a warning counts one time.",
   ncei: "The rows of each file of details, by EVENT_TYPE. The deaths and injuries of a type are the sums of the direct and indirect counts.",
   under:
-    "For each alert kind and significance: the alerts of each year, and the NCEI events of the kind with harm under an active alert. An alert is one event number of one office in one VTEC year. A national number counts one time (national). An event is under an alert when an alert row of its county or zone is active from the begin of the event minus marginMs to its end. NCEI gives its own state codes to the territories and the waters, and the join reads them (NCEI_TERRITORIES, NCEI_WATERS). A water event meets only the rows of its marine zone. A county event meets only county rows, and a zone event meets only zone rows. The gate does not read this section.",
+    "For each alert kind and significance: the alerts of each year, and the NCEI events of the kind with harm under an active alert. An alert is one event number of one office in one VTEC year. A national number counts one time (national). An event is under an alert when an alert row of its county or zone is active from the begin of the event minus marginMs to its end. NCEI gives its own state codes to the territories and the waters, and the join reads them (NCEI_TERRITORIES, NCEI_WATERS). A water event meets only the rows of its marine zone. A county event meets only county rows, and a zone event meets only zone rows. The codes are the distinct UGC codes of the rows of each year. The gate does not read this section.",
   windows: "One request for each month, and one month before the first year. The service selects a row by its start, so two windows have no common row. An alert counts in the VTEC year of its number.",
 };
 

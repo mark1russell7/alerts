@@ -962,7 +962,7 @@ export type ChannelFailureKind = Extract<SendOutcome, { readonly ok: false }>["k
 
 /**
  * The outcome of a probe of a channel: a call to its provider that sends nothing and costs nothing. A success tells that
- * the provider takes the calls of the channel again. A failure has a kind of `ChannelFailureKind`.
+ * the provider takes the calls of the channel. A failure has a kind of `ChannelFailureKind`.
  */
 export type ProbeOutcome =
   | { readonly ok: true; readonly at: Instant }
@@ -988,9 +988,9 @@ export interface DeliveryStatus {
  * - `send`: it writes `network`. It is not idempotent, unless the channel drops a repeated key.
  * - `status`: it reads `network`.
  * - `cancel`: it writes `network`. It stops the repeats of a message. It is idempotent.
- * - `probe`: it reads `network`. It is an authenticated read that sends nothing and costs nothing. While the line of a
- *   down channel is open, the runtime calls it, and a success ends the line (AL-65). A channel with no probe keeps its line
- *   until an accepted send.
+ * - `probe`: it reads `network`. It is an authenticated read that sends nothing and costs nothing. The runtime calls it
+ *   15 minutes after the last good call, and sooner after a failed probe (AL-65). A failed probe counts in the run of the
+ *   channel, and a success ends the run and the line. A channel with no probe keeps its line until an accepted send.
  * - `services`: no effects. It reads only the address. The procedure is optional.
  */
 export interface ChannelProcedures {
