@@ -342,11 +342,14 @@ A balance report has no area. Its subjects are `{ system: "alerts.channel", id: 
 
 | Stage | Condition | Severity, urgency |
 | --- | --- | --- |
-| `low` | The last read is below the floor | `moderate`, `expected` |
+| `low` | The last read is below a floor. Each floor is its own line. | `moderate`, `expected` |
 | `empty` | The last read is 0 or less. The provider refuses each paid message. | `severe`, `immediate` |
 | `unread` | No read passed for the maximum age or longer (`balanceUnreadAt`) | `moderate`, `expected` |
 
-- The facts of a line are the provider and the stage. A new balance gives no update.
+- The facts of a line are the provider, the stage and the floor of a line `low`. A new balance gives no update.
+- A spend entry gives one floor or a list of floors, for example `[5, 2]`. One floor is a list of one floor (`balanceFloors`).
+- Each floor above the last read gives one line `low`: `balance/<provider>/low/<floor>`. Thus each floor gives one alert.
+- Money above a floor cancels the line of that floor. `balanceFloorsBelow` gives the floors above the read, from the highest.
 - `low` and `empty` come from the last read that passed, also when the read is old. A read that passes ends `unread`.
 - A snapshot with no balances keeps each open line of a balance.
 - The runtime gives `balanceWatch` for each account. Each pass checks each watch, and a watch reads once a day. A failed read tries again after one hour.
@@ -977,7 +980,7 @@ The function `openInstance` makes the instance of the owner from the private con
 - The optional key `TWILIO_TEXT_FROM` adds the text channel. It holds the registered sender of texts: a phone of a 10DLC campaign or a verified toll-free phone.
 - The instance never texts from `TWILIO_FROM`. Without `TWILIO_TEXT_FROM`, the text channel and the texts of the outage call are off.
 - A spend entry of a provider of a channel gives the cap of the channel. The count of the cap is in `quotas.sqlite`.
-- The spend entry of Twilio also gives the watch of the balance: one read each day, and its floor.
+- The spend entry of Twilio also gives the watch of the balance: one read each day, and its floors.
 - Each source gets the watch of `sourcePlaces`. Thus a source gets the region codes, and a position only when the place shares it with that source.
 - The User-Agent of each request names the project and its page. It names no person.
 - The times of the delivery come from facts of the channel. A call has a limit of 10 seconds. The poll goes at the pace of the emergency repeats, 30 seconds.
@@ -1213,7 +1216,7 @@ The core gives the format of the private configuration, `AlertConfig` (`alerts-c
 - `people`: the `PersonWatch` of each person, a label, and the escalation policies of the person.
 - `contacts`: the address of a person on a channel. A value of an address is a text, or a reference `{ secret: "NAME" }` to a key of the secret store.
 - `policies`: the escalation policies of each person with no policies of their own.
-- `spend`: the money rules of each paid provider account. An entry has the monthly cap and its reserve in US dollars, the floor of the balance and the time zone of the month.
+- `spend`: the money rules of each paid provider account. An entry has the monthly cap and its reserve in US dollars, the floors of the balance and the time zone of the month.
 - `link`: the policy of the link rule of the merge (rule 3). Without it, the instance uses `DEFAULT_LINK_POLICY`.
 - `outage`: the people of the outage call, each with a `TryChain`. Without it, an outage of the instance calls no person.
 - `assess`: the policy of the assessment, `AssessPolicy`. It replaces the full default policy of the core. With no field, the default policy applies.
@@ -1392,7 +1395,8 @@ The API also serves the built local page (`packages/site/dist`) on the same addr
 
 The route `GET /health` of the runtime gives the `HealthPayload` of `healthPayload`. The page reads it on its own origin, next to the map. `healthPayloadSchema` checks it.
 
-- `format`: `alerts-health/2` (`HEALTH_FORMAT`). A change that breaks a reader gets a new name. The second format added `reads`.
+- `format`: `alerts-health/3` (`HEALTH_FORMAT`). A change that breaks a reader gets a new name. The second format added `reads`.
+- The third format gives the list `floors` of each balance in place of one `floor` (AL-61).
 - `at`: the time of the last pass, or `null` before the first pass. The sources, the lateness and the coverage come from that pass.
 - `now`: the time of the read. The stages of the copies and of the balances are at this time.
 - `sources`: the health of each source. The last failure keeps its time and its kind, and not its message, because a message can hold the address of a fetch.

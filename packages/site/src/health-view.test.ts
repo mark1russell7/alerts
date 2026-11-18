@@ -40,7 +40,7 @@ const balance = (stages: HealthPayload["balances"][number]["stages"], amount: nu
     provider: "provider:voice-co",
     title,
     channels: channels as ChannelId[],
-    floor: 5,
+    floors: [5],
     maxAge: DAY,
     since: HEALTH_AT - 30 * DAY,
     ...(amount === undefined ? {} : { read: { balance: amount, currency: "USD", at: HEALTH_AT - 26 * HOUR } }),
@@ -246,6 +246,9 @@ describe("the facts of the delivery", () => {
 
   it("tells the worst stage of a balance, and that the runtime cannot read it", () => {
     expect(facts({ balances: [balance(["low"], 3.2)] })).toMatchObject([{ tone: "warn", word: "Low", text: "The balance is 3.20 USD, and the floor is 5.00 USD.", stopped: [] }]);
+    // With two floors, the text gives the lowest floor that the balance is below.
+    const two = balance(["low"], 1.5);
+    expect(facts({ balances: [{ ...two, balance: { ...two.balance, floors: [5, 2] } }] })).toMatchObject([{ word: "Low", text: "The balance is 1.50 USD, and the floor is 2.00 USD." }]);
     expect(facts({ balances: [balance(["low", "empty"], -1.5, ["voice", "text"])] })).toMatchObject([
       { tone: "bad", word: "Empty", text: "The balance is -1.50 USD. The provider refuses each paid message on the channels voice and text.", stopped: ["voice", "text"] },
     ]);

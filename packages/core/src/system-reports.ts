@@ -249,7 +249,7 @@ export function balanceStages(balance: ProviderBalance, at: Instant): BalanceSta
   const read = balance.read;
   const empty = read !== undefined && read.balance <= 0;
   const reached: Readonly<Record<BalanceStage, boolean>> = {
-    low: empty || (read !== undefined && read.balance < balance.floor),
+    low: balanceFloorsBelow(balance).length > 0,
     empty,
     unread: at >= balanceUnreadAt(balance),
   };
@@ -259,6 +259,16 @@ export function balanceStages(balance: ProviderBalance, at: Instant): BalanceSta
 /** This function gives the time when a balance reaches `unread`: the maximum age after the last read, or after the start with no read. */
 export function balanceUnreadAt(balance: ProviderBalance): Instant {
   return (balance.read?.at ?? balance.since) + balance.maxAge;
+}
+
+/**
+ * This function gives the floors that the last read of a balance is below, from the highest to the lowest, each one time.
+ * At 0 or less, the balance is below each floor. With no read, the list is empty.
+ */
+export function balanceFloorsBelow(balance: ProviderBalance): number[] {
+  const read = balance.read;
+  if (read === undefined) return [];
+  return [...new Set(balance.floors)].filter((floor) => read.balance <= 0 || read.balance < floor).sort((a, b) => b - a);
 }
 
 /**
@@ -345,7 +355,11 @@ export function systemReports(lines: SystemLines, snapshot: SystemSnapshot, at: 
     for (const stage of quotaStages(quota)) conditions.set(quotaName(quota.channel, stage), quotaCondition(quota, stage));
   }
   for (const balance of snapshot.balances ?? []) {
-    for (const stage of balanceStages(balance, at)) conditions.set(balanceName(balance.provider, stage), balanceCondition(balance, stage, at));
+    for (const stage of balanceStages(balance, at)) {
+      if (stage !== "low") conditions.set(balanceName(balance.provider, stage), balanceCondition(balance, stage, at));
+      // Each floor that the balance is below is its own line. Thus each floor gives its own alert.
+      else for (const floor of balanceFloorsBelow(balance)) conditions.set(balanceName(balance.provider, stage, floor), balanceCondition(balance, stage, at, floor));
+    }
   }
   for (const watch of snapshot.copies ?? []) {
     for (const stage of copyStages(watch, at)) conditions.set(copyName(watch.copy, stage), copyCondition(watch, stage, at));
@@ -459,8 +473,9 @@ function quotaName(channel: string, stage: QuotaStage): string {
 // The start of the name of each line of a balance.
 const BALANCE_LINE = "balance/";
 
-function balanceName(provider: string, stage: BalanceStage): string {
-  return `${BALANCE_LINE}${encodeURIComponent(provider)}/${stage}`;
+function balanceName(provider: string, stage: BalanceStage, floor?: number): string {
+  const name = `${BALANCE_LINE}${encodeURIComponent(provider)}/${stage}`;
+  return floor === undefined ? name : `${name}/${String(floor)}`;
 }
 
 // The start of the name of each line of another copy.
@@ -664,13 +679,14 @@ function quotaCondition(quota: ChannelQuota, stage: QuotaStage): Condition {
   };
 }
 
-function balanceCondition(balance: ProviderBalance, stage: BalanceStage, at: Instant): Condition {
-  const { provider, title, floor, read } = balance;
+// The condition of one stage of a balance. A line `low` has its floor. The other stages have no floor.
+function balanceCondition(balance: ProviderBalance, stage: BalanceStage, at: Instant, floor?: number): Condition {
+  const { provider, title, floors, read } = balance;
   const amount = read === undefined ? "" : `${read.balance.toFixed(2)} ${read.currency}`;
   const last = read === undefined ? `the start of the watch at ${new Date(balance.since).toISOString()}` : new Date(read.at).toISOString();
   const text: Readonly<Record<BalanceStage, { readonly headline: string; readonly description: string }>> = {
     low: {
-      headline: `${title}: the balance is ${amount}, below the floor of ${floor.toFixed(2)}.`,
+      headline: `${title}: the balance is ${amount}, below the floor of ${(floor ?? Math.max(...floors)).toFixed(2)}.`,
       description: "Add money to the account. At 0, the provider refuses each paid message, also a life-safety message.",
     },
     empty: {
@@ -684,8 +700,8 @@ function balanceCondition(balance: ProviderBalance, stage: BalanceStage, at: Ins
   };
   const code = `${BALANCE_KIND}.${stage}`;
   return {
-    // A new balance is not a fact. Thus each stage gives one alert, and no update.
-    facts: { provider, stage },
+    // A new balance is not a fact. Thus each stage, and each floor of `low`, gives one alert, and no update.
+    facts: { provider, stage, ...(floor === undefined ? {} : { floor }) },
     kind: { code, label: kindLabel(code) },
     severity: stage === "empty" ? "severe" : "moderate",
     urgency: stage === "empty" ? "immediate" : "expected",
@@ -695,7 +711,7 @@ function balanceCondition(balance: ProviderBalance, stage: BalanceStage, at: Ins
     ...text[stage],
     parameters: {
       stage: [stage],
-      floor: [String(floor)],
+      floor: floor === undefined ? floors.map(String) : [String(floor)],
       ...(read === undefined ? {} : { balance: [String(read.balance)], currency: [read.currency] }),
       age: [String(at - (read?.at ?? balance.since))],
     },
