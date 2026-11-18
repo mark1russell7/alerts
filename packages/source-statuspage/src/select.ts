@@ -3,9 +3,9 @@
  * graph or a subject watch can get it. A host reads only the pages that one of its persons can get.
  */
 
-import { hasKind, nodesOverlap, type PersonWatch } from "@mark1russell7/alerts";
+import { hasKind, nodesOverlap, subjectNode, type PersonWatch } from "@mark1russell7/alerts";
 
-import { nodeOf, pageSubjects, type StatusPage } from "./page.ts";
+import { pageSubjects, type StatusPage } from "./page.ts";
 import { STATUS_PAGES } from "./register.ts";
 
 const TOPIC = "topic:";
@@ -23,13 +23,13 @@ export type ReadTarget = Pick<StatusPage, "domain" | "kind" | "components">;
  */
 export function watchReads(watch: PersonWatch, page: ReadTarget): boolean {
   const subjects = pageSubjects(page);
-  const nodes = subjects.map(nodeOf);
+  const nodes = subjects.map(subjectNode);
   const reaches = (node: string): boolean => nodes.some((each) => nodesOverlap(each, node));
   const edges = (watch.interests?.edges ?? []).filter((edge) => edge.on);
   if (edges.some((edge) => reaches(edge.from) || reaches(edge.to))) return true;
   if (edges.some((edge) => edge.from.startsWith(TOPIC) && hasKind([edge.from.slice(TOPIC.length)], page.kind))) return true;
   return (watch.subjects ?? []).some((subject) =>
-    subject.id === undefined ? subjects.some((each) => each.system === subject.system) : reaches(nodeOf({ system: subject.system, id: subject.id })),
+    subject.id === undefined ? subjects.some((each) => each.system === subject.system) : reaches(subjectNode({ system: subject.system, id: subject.id })),
   );
 }
 

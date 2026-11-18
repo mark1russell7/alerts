@@ -1,6 +1,6 @@
 // The why line: why a message reaches a person, in the limit of each channel (AL-35, `docs/RELEVANCE.md`).
 
-import { SUBJECT_SYSTEMS, type Assessment, type InterestGraph, type NodeKey, type PlaceId, type SubjectKind, type WhyLimit, type WhyRecord } from "./contracts.ts";
+import { SUBJECT_SYSTEMS, type Assessment, type InterestGraph, type NodeKey, type PlaceId, type Subject, type SubjectKind, type WhyLimit, type WhyRecord } from "./contracts.ts";
 
 /**
  * The limit of the why line on each kind of channel. A channel descriptor gives the limit of its kind in its
@@ -51,6 +51,17 @@ export function plainLabel(labels: WhyLabels, node: NodeKey): string | undefined
   const label = labels(node)?.trim().replace(/\s+/g, " ");
   if (label === undefined || !PLAIN_LABEL.test(label) || !/[a-z]/.test(label) || /[A-Z]{2}/.test(label)) return undefined;
   return label;
+}
+
+/** The system and the id of a subject, with no label. */
+export type SubjectKey = Pick<Subject, "system" | "id">;
+
+/**
+ * This function gives the node of a subject in an interest graph: the system, a colon and the id, for example
+ * `domain:github.com`. Each node key of a subject comes from this function.
+ */
+export function subjectNode(subject: SubjectKey): NodeKey {
+  return `${subject.system}:${subject.id}`;
 }
 
 /** This function gives the kind of a node key from its system, or `undefined` for a key with no known system. */

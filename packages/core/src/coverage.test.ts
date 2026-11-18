@@ -175,6 +175,16 @@ describe("coverage", () => {
     expect(coverageShort(full!)).toBe(false);
   });
 
+  it("gives no gap for a kind that needs no source, also when the search stops at its budget", () => {
+    // Many transit feeds at one place can make the search stop. The policy needs no source, so it is not short.
+    const transit = { kinds: ["transport.transit"] };
+    const sources = [source("ab", { ...transit, dependsOn: ["a", "b"] }), source("bc", { ...transit, dependsOn: ["b", "c"] }), source("ac", { ...transit, dependsOn: ["a", "c"] })];
+    const health = sources.map((entry) => healthOf(entry.id, "healthy"));
+    const [budget] = coverage({ sources, health, places: [KANSAS], kinds: ["transport.transit"] }, { ...DEFAULT_COVERAGE_POLICY, maxSteps: 1 });
+    expect(budget).toMatchObject({ required: 0, proven: false });
+    expect(coverageShort(budget!)).toBe(false);
+  });
+
   it.each(SEEDS)("gives the smallest set of domains that stops each source (seed %i)", (seed) => {
     const r = random(seed);
     const pool = ["provider:a", "provider:b", "cdn:x", "cdn:y", "rf:z", "dns:w"];

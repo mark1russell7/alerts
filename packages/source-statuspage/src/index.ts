@@ -41,7 +41,6 @@ export {
   endpointKey,
   isDomain,
   isPageBase,
-  nodeOf,
   PAGE_FORMATS,
   pageProblems,
   pageSubjects,
@@ -53,7 +52,6 @@ export {
   type ComponentKey,
   type PageFormat,
   type StatusPage,
-  type SubjectKey,
 } from "./page.ts";
 export {
   COMPONENT_ITEM_FIELDS,

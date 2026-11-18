@@ -148,10 +148,11 @@ export function coverage(input: CoverageInput, policy: CoveragePolicy = DEFAULT_
 
 /**
  * This function tells if a coverage is below its policy. A coverage that the search did not prove
- * is also below, because its true count can be smaller.
+ * is also below, because its true count can be smaller. A policy that needs no source has no gap, also
+ * when the search of many sources stops at its budget.
  */
 export function coverageShort(entry: Coverage): boolean {
-  return !entry.proven || entry.independent < entry.required;
+  return entry.required > 0 && (!entry.proven || entry.independent < entry.required);
 }
 
 function coverageOf(place: Coverage["place"], kind: string, sources: readonly SourceDescriptor[], required: number, policy: CoveragePolicy): Coverage {

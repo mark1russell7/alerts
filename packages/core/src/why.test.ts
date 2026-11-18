@@ -2,7 +2,7 @@ import { random, seedsFrom, type Random } from "@mark1russell7/rigor-generators"
 import { describe, expect, it } from "vitest";
 import { SUBJECT_SYSTEMS, type EdgeOrigin, type NodeKey, type PlaceId, type WhyRecord } from "./contracts.ts";
 import { whyRecordSchema } from "./schemas.ts";
-import { assessmentWhy, fitsWhy, graphLabels, kindOfNode, NO_LABELS, nodeCovers, nodesOverlap, PATH_SYSTEMS, placeNode, placeOfNode, placeWhy, plainLabel, WHY_FULL_COVERAGE, WHY_LIMITS, whyLine, type WhyLabels } from "./why.ts";
+import { assessmentWhy, fitsWhy, graphLabels, kindOfNode, NO_LABELS, nodeCovers, nodesOverlap, PATH_SYSTEMS, placeNode, placeOfNode, placeWhy, plainLabel, subjectNode, WHY_FULL_COVERAGE, WHY_LIMITS, whyLine, type WhyLabels } from "./why.ts";
 
 const SEEDS = seedsFrom(process.env["SEED"], [1, 2, 3, 4, 5, 6, 7, 8]);
 
@@ -222,6 +222,15 @@ describe("assessmentWhy", () => {
     const reasons = [{ kind: "reach" }] as unknown as Parameters<typeof assessmentWhy>[0]["reasons"];
     expect(assessmentWhy({ reasons, places: ids("work", "home") })).toEqual(placeWhy(ids("home")));
     expect(assessmentWhy({ reasons: [], places: [] })).toBeUndefined();
+  });
+});
+
+describe("the node of a subject", () => {
+  it("is the system, a colon and the id, with no label", () => {
+    expect(subjectNode({ system: "domain", id: "github.com" })).toBe("domain:github.com");
+    expect(subjectNode({ system: "provider-region", id: "example/europe/sms" })).toBe("provider-region:example/europe/sms");
+    const labelled = { system: "cve", id: "CVE-2026-0001", label: "a label" };
+    expect(subjectNode(labelled)).toBe("cve:CVE-2026-0001");
   });
 });
 
