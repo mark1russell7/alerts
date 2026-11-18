@@ -32,6 +32,7 @@ import { memoryCache, type ShapeCache } from "@mark1russell7/alerts-shapes-nws";
 import { CANARY_PATH, createNwsSource } from "@mark1russell7/alerts-source-nws-api";
 import { fakeSessions, NWWS_DESCRIPTOR } from "@mark1russell7/alerts-source-nwws";
 import { SWPC_KINDS } from "@mark1russell7/alerts-source-swpc";
+import { ENERGY_CHARTS_MEASURES, SOURCE_ID as ENERGY_CHARTS_SOURCE, WINDOW_MINUTES } from "@mark1russell7/alerts-source-energy-charts";
 import { memoryQuotaStore, quotaGate, type Exchange, type Transport } from "polite-crawler/api";
 import { DEFAULT_POLICY } from "polite-crawler/politeness";
 import { afterEach, describe, expect, it } from "vitest";
@@ -43,6 +44,7 @@ import { overdueLimit } from "./delivery.ts";
 import type { ShapeOutcome } from "./shapes.ts";
 import { nextFetch } from "./view.ts";
 import { openRuntimeLog, type RuntimeLog } from "./log.ts";
+import { openReadingStore, READINGS_FILE } from "./readings.ts";
 
 // The Flood Warning was sent at 14:54 UTC on 2026-11-14, and it expires at 06:00 UTC on 2026-11-15.
 // The keepalive was sent at 22:44:55 UTC. Thus at T0 the warning is active, and the keepalive is recent.
@@ -112,6 +114,30 @@ function gfzAnswer(url: URL): string {
 }
 
 /**
+ * The answer of Energy-Charts to a query. It has the nominal frequency (50 Hz) for each second of the query, and the
+ * license of Energy-Charts. The recorded answers of the package `source-energy-charts` are of later days than the time of the tests.
+ */
+function energyChartsAnswer(url: URL): string {
+  const start = Number(url.searchParams.get("start")) * 1000;
+  const end = Number(url.searchParams.get("end")) * 1000;
+  const time = (at: number): string => new Date(at).toISOString().replace(".000Z", "+00:00");
+  const data: { timestamp: string; values: { frequency: number } }[] = [];
+  for (let at = start; at <= end; at += 1000) data.push({ timestamp: time(at), values: { frequency: 50 } });
+  return JSON.stringify({
+    schema_version: "2.0",
+    endpoint: "frequency",
+    timezone: "UTC",
+    unit: "Hz",
+    available_from: time(start),
+    available_until: time(end),
+    data,
+    attributes: { region: "DE-Freiburg" },
+    license: "CC BY 4.0 (creativecommons.org/licenses/by/4.0), attribution: energy-charts.info",
+    deprecated: false,
+  });
+}
+
+/**
  * A fake network with recorded answers. The NWS API gives the Flood Warning to the request of the
  * state, the keepalive to the canary, and no alert to the WEA request. The IPAWS feed has no alert.
  *
@@ -119,7 +145,8 @@ function gfzAnswer(url: URL): string {
  * Each tsunami warning center gives its recorded statement of 2026-11-13. Each statement expired before the time of the tests.
  * The SWPC gives its recorded list of 2026-11-16. Its caps are far from the place, and its other messages have no area.
  *
- * GFZ gives a quiet value of the index Kp for each interval of the window of the query (`gfzAnswer`).
+ * GFZ gives a quiet value of the index Kp for each interval of the window of the query (`gfzAnswer`). Energy-Charts gives
+ * the nominal frequency for each second of the query (`energyChartsAnswer`).
  *
  * Each exchange takes `delay` milliseconds of real time, as on a busy runner. With `Infinity`, no exchange ends.
  */
@@ -137,6 +164,7 @@ function network(delay = 0) {
     if (url.hostname === "www.seismicportal.eu") return { status: 200, statusText: "OK", headers: { "content-type": "application/json" }, body: fixture("alerts-source-emsc", "query-2.5_day-20261116T0528Z.json") };
     if (url.hostname === "services.swpc.noaa.gov") return { status: 200, statusText: "OK", headers: { "content-type": "application/json" }, body: fixture("alerts-source-swpc", "alerts-20261116T1553Z.json") };
     if (url.hostname === "kp.gfz.de") return { status: 200, statusText: "OK", headers: { "content-type": "application/json" }, body: gfzAnswer(url) };
+    if (url.hostname === "api.energy-charts.info") return { status: 200, statusText: "OK", headers: { "content-type": "application/json" }, body: energyChartsAnswer(url) };
     if (url.hostname === "www.tsunami.gov") {
       const name = url.pathname.endsWith("/PHEBCAP.xml") ? "PHEBCAP-20261116T1134Z.xml" : "PAAQCAP-20261116T1134Z.xml";
       return { status: 200, statusText: "OK", headers: { "content-type": "text/xml" }, body: fixture("alerts-source-tsunami", name) };
@@ -255,7 +283,7 @@ describe("openInstance", () => {
   it("sends a recorded NWS warning for a watched county to the person on Pushover", async () => {
     const { instance, clock, net, server } = await open();
     const pass = await finish(clock, instance.runtime.pass());
-    expect(pass.fetched).toEqual(["nws-api", "ipaws", "usgs", "emsc", "tsunami-ntwc", "tsunami-ptwc", "swpc", "gfz"]);
+    expect(pass.fetched).toEqual(["nws-api", "ipaws", "usgs", "emsc", "tsunami-ntwc", "tsunami-ptwc", "swpc", "gfz", "energy-charts"]);
     // A fetch that ran out of time names its cause here, before the checks of the send.
     expect(pass.view?.health.map((health) => [health.source, health.state])).toEqual([
       ["nws-api", "healthy"],
@@ -266,6 +294,7 @@ describe("openInstance", () => {
       ["tsunami-ptwc", "healthy"],
       ["swpc", "healthy"],
       ["gfz", "healthy"],
+      ["energy-charts", "healthy"],
     ]);
     expect(server.calls).toHaveLength(1);
     const [call] = server.calls;
@@ -355,7 +384,7 @@ describe("openInstance", () => {
     const outside = { ...CONFIG.places[0]!, at: [LONGITUDE, 28.46] as const };
     const { instance, clock, server } = open(store(SECRETS), { ...CONFIG, places: [outside] });
     const pass = await finish(clock, instance.runtime.pass());
-    expect(pass.fetched).toEqual(["nws-api", "ipaws", "usgs", "emsc", "tsunami-ntwc", "tsunami-ptwc", "swpc", "gfz"]);
+    expect(pass.fetched).toEqual(["nws-api", "ipaws", "usgs", "emsc", "tsunami-ntwc", "tsunami-ptwc", "swpc", "gfz", "energy-charts"]);
     expect(server.calls).toHaveLength(0);
     // The USGS and EMSC give earthquake incidents too, the tsunami centers give expired statements, and the SWPC gives
     // space weather. The order of the incidents is the order of their anchors.
@@ -382,6 +411,7 @@ describe("openInstance", () => {
       ["tsunami-ptwc", "healthy"],
       ["swpc", "healthy"],
       ["gfz", "healthy"],
+      ["energy-charts", "healthy"],
     ]);
     expect(server.calls.map((call) => call.fields["title"])).toEqual([expect.stringContaining("Flood Warning")]);
   });
@@ -398,14 +428,32 @@ describe("openInstance", () => {
       ["tsunami-ptwc", "The fetch took longer than 5000 ms."],
       ["swpc", "The fetch took longer than 5000 ms."],
       ["gfz", "The fetch took longer than 5000 ms."],
+      ["energy-charts", "The fetch took longer than 5000 ms."],
     ]);
+  });
+
+  it("keeps the grid frequency of Energy-Charts in the store of the readings, and gives the breadth of the signals", async () => {
+    const folder = mkdtempSync(join(tmpdir(), "alerts-readings-"));
+    const readings = openReadingStore(join(folder, READINGS_FILE));
+    try {
+      const { instance, clock } = open(store(SECRETS), CONFIG, 0, TEST_FETCH_LIMIT, { readings });
+      const pass = await finish(clock, instance.runtime.pass());
+      const refs = readings.refs().filter((ref) => ref.source === ENERGY_CHARTS_SOURCE);
+      expect(refs.map((ref) => ref.measure)).toEqual(ENERGY_CHARTS_MEASURES.map((measure) => measure.id).sort());
+      // The fake network gives 50 Hz for each second, thus the lowest and the highest value of each whole minute are 50 Hz.
+      for (const ref of refs) expect(readings.series(ref, 0).map((reading) => reading.value)).toEqual(Array.from({ length: WINDOW_MINUTES }, () => 50));
+      expect(pass.breadth).toBeDefined();
+    } finally {
+      readings.close();
+      rmSync(folder, { recursive: true, force: true });
+    }
   });
 
   it("gives no contact in the User-Agent without a contact in the configuration, and no request holds a position or an account", async () => {
     const { instance, clock, net } = await open();
     await finish(clock, instance.runtime.pass());
     const hosts = new Set(net.exchanges.map((exchange) => new URL(exchange.url).hostname));
-    expect(hosts).toEqual(new Set(["api.weather.gov", "apps.fema.gov", "earthquake.usgs.gov", "www.seismicportal.eu", "www.tsunami.gov", "services.swpc.noaa.gov", "kp.gfz.de"]));
+    expect(hosts).toEqual(new Set(["api.weather.gov", "apps.fema.gov", "earthquake.usgs.gov", "www.seismicportal.eu", "www.tsunami.gov", "services.swpc.noaa.gov", "kp.gfz.de", "api.energy-charts.info"]));
     for (const exchange of net.exchanges) {
       expect(exchange.headers["user-agent"]).toBe(USER_AGENT_NAME);
       const text = JSON.stringify(exchange);
@@ -429,7 +477,7 @@ describe("openInstance", () => {
     // The refresh starts after the pass, and it starts no request that can end after the next fetch of a source.
     const next = Math.min(...instance.runtime.config.sources.map((source) => nextFetch(instance.runtime.state(), source)));
     expect(clock.now()).toBeLessThanOrEqual(next);
-    expect(pass.fetched).toEqual(["nws-api", "ipaws", "usgs", "emsc", "tsunami-ntwc", "tsunami-ptwc", "swpc", "gfz"]);
+    expect(pass.fetched).toEqual(["nws-api", "ipaws", "usgs", "emsc", "tsunami-ntwc", "tsunami-ptwc", "swpc", "gfz", "energy-charts"]);
     expect(outcomes).toHaveLength(1);
     expect(outcomes[0]?.ok).toBe(true);
     await instance.shapes.close();
@@ -506,7 +554,7 @@ describe("openInstance", () => {
   it("gives the loop the times of the sources and of the channel", async () => {
     const { instance } = await open();
     const intervals = instance.runtime.config.sources.map((source) => source.interval);
-    expect(instance.runtime.config.sources.map((source) => source.id)).toEqual(["nws-api", "ipaws", "usgs", "emsc", "tsunami-ntwc", "tsunami-ptwc", "swpc", "gfz"].map((id) => id as SourceId));
+    expect(instance.runtime.config.sources.map((source) => source.id)).toEqual(["nws-api", "ipaws", "usgs", "emsc", "tsunami-ntwc", "tsunami-ptwc", "swpc", "gfz", "energy-charts"].map((id) => id as SourceId));
     // The limit of a fetch is its interval, up to the shortest interval. Thus the 10 minutes of GFZ do not make the pass long.
     expect(instance.runtime.config.sources.map(INSTANCE_FETCH_LIMIT)).toEqual(intervals.map(() => 60_000));
     expect(instance.loop.times).toEqual({

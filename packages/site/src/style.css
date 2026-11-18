@@ -713,6 +713,20 @@ summary:focus-visible,
   font-size: 0.875rem;
 }
 
+.incident-card .score {
+  margin: 0.25rem 0 0;
+  font-size: 0.875rem;
+}
+
+.incident-card .score summary {
+  cursor: pointer;
+}
+
+.incident-card .score p {
+  margin: 0.25rem 0 0;
+  color: var(--quiet);
+}
+
 .reports {
   margin: 0;
   padding: 0;
@@ -1194,7 +1208,8 @@ main.local {
 }
 
 .health-panel,
-.indicator-panel {
+.indicator-panel,
+.score-panel {
   grid-column: 1 / -1;
 }
 
