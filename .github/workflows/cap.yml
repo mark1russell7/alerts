@@ -9,7 +9,7 @@ name: CAP fields
 
 on:
   schedule:
-    - cron: "40 7 * * 1,4"
+    - cron: "29 7 * * 1,4"
   # A person starts a run with gh workflow run cap.yml.
   workflow_dispatch:
 
