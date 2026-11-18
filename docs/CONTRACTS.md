@@ -66,7 +66,9 @@ The rule comes from a policy, `LinkPolicy`. The function `linkRule` makes the ru
 - the centers of their circle areas are 100 km apart or less, on the great circle
 - the values of their parameter `magnitude` are 1.0 apart or less.
 
-Two reports of the family `geo.space-weather.geomagnetic-storm` link when two limits hold. Their onsets are 6 hours apart or less, and the centers of their circle areas are 100 km apart or less. Each source of the family gives the polar caps of `polarCaps`, so the centers are the geomagnetic poles. The onset of an alert of the SWPC is in the 3-hour interval of the index Kp of GFZ, so the window is two intervals. This window is a shortcut with no measure. A capture of one storm of the two sources replaces it (AL-14).
+Two reports of the family `geo.space-weather.geomagnetic-storm` link when two limits hold. Their onsets are 6 hours apart or less, and the centers of their circle areas are 100 km apart or less. Each source of the family gives the polar caps of `polarCaps`, so the centers are the geomagnetic poles.
+
+A replay of the years 2015 to 2025 measured the window with `scripts/measure-link.ts` of `source-gfz`. At 6 hours, 457 of the 460 runs of GFZ join the SWPC, and 447 at 3 hours. A larger window puts more runs of GFZ in one incident, through the chains of keys of the SWPC. The gate `link.test.ts` of `source-gfz` holds two real storms.
 
 The rule is on the safe side. A false join can hide a second event after an acknowledgment, but a false split gives only a second alert. Thus:
 
@@ -1489,7 +1491,6 @@ The file `schemas.ts` of the core has one zod 4 schema for each data type of the
 - Some units of the indicator sources are not in the grammar of `@mark1russell7/quantity`. They are `MW`, `MWh`, `µSv/h`, `µg`, `hPa`, `Bq`, `ppm` and each currency other than `USD`. A measure in such a unit fails its schema until the package adds the unit.
 - The procedure tools take the schema of each input and output from `schemas.ts`.
 - The link rule has two families, the earthquakes and the geomagnetic storms. Each other kind with two sources of different ids gets its family with its second source.
-- The window of 6 hours of the geomagnetic storms is a shortcut. A capture of one storm of GFZ and the SWPC gives the largest difference of their onsets (AL-14).
 - The calculation of the level from probabilities and costs (AL-31), with the base rates from the event log.
 - The count of misses that ends a report of a snapshot source is 2 (`SNAPSHOT_MISSES`). This value is a shortcut. A measure of the flap rate of the IEM list replaces it (AL-8).
 - The merge state grows with each report. A compaction of the incidents that ended before a horizon keeps it small. It must keep the three laws.
