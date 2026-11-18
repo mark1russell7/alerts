@@ -826,5 +826,58 @@
       "dimensions": 5,
       "cause": "Round 14 adopts three planned sources and one new source. Radar adds an adopted source to five classes. Azure and Firebase add two to the cloud outages. So the adopted and path totals go up by 7, and the origin total by 6, because Firebase has the origin of Google Cloud. The cover stays at 54. No Radar class has a second adopted source: IODA is planned, and DDoS and BGP have no second source."
     }
+  },
+  {
+    "round": 15,
+    "date": "2026-11-18",
+    "by": "One session and four research agents, for the cyber sources: a wide search in four groups, then a merge with a check of each record.",
+    "method": "Web searches and reads of the pages of each source, in four groups. The groups are the system vendors, the enterprise vendors, the databases and CERTs, and the exploit and threat feeds. One read of each list of a family counted its members. A DNS lookup of each host found the content networks.",
+    "lists": [
+      "CVE Program partners (CNAs and roots): https://raw.githubusercontent.com/CVEProject/cve-website/dev/src/assets/data/CNAsList.json",
+      "OSV.dev ecosystems: https://osv-vulnerabilities.storage.googleapis.com/ecosystems.txt",
+      "CSAF providers and publishers in the BSI CSAF lister: https://wid.cert-bund.de/.well-known/csaf-aggregator/aggregator.json",
+      "CSAF providers and publishers in the CERT@VDE aggregator: https://aggregator.certvde.com/.well-known/csaf-aggregator/aggregator.json",
+      "GCVE Numbering Authorities (GNAs): https://gcve.eu/dist/gcve.json",
+      "FIRST member teams: https://api.first.org/data/v1/teams",
+      "Trusted Introducer directory of security teams: https://tf-csirt.org/trusted-introducer/directory/downloads/json/teams/",
+      "EU CSIRTs Network members: https://csirtsnetwork.eu/",
+      "MISP default feed list: https://raw.githubusercontent.com/MISP/MISP/2.5/app/files/feed-metadata/defaults.json",
+      "EU and EEA data protection authorities: https://www.edpb.europa.eu/about-edpb/about-edpb/members_en"
+    ],
+    "queries": [],
+    "notes": [
+      "Round 15 adds 263 cyber sources: 111 planned, 142 later and 10 rejected. No source is adopted, because an adoption needs an adapter.",
+      "The atlas has families for the first time. A family is a public list of the organizations that publish one kind of signal, for example the CVE partners or the FIRST teams.",
+      "The count of a family comes from one read of its list on 2026-11-18. The atlas knows only some members of each family as sources. The function `familyCoverage` gives them.",
+      "A script matched the names and the hosts of the records with each list. Then the session checked each match.",
+      "The lists of FIRST and Trusted Introducer hold the emails and the phones of persons. The round kept only the names, the countries and the hosts of the teams.",
+      "The atlas reads the trackers of ransomware claims, not the leak sites. So the family of the leak sites is not in the atlas.",
+      "The state portals of breach notices have no common list, so they are not a family. The atlas has a source for each portal that the round read.",
+      "Seven content networks and providers are new parts of the paths. The DNS lookups found Cloudflare, Akamai and CloudFront most often.",
+      "The DNS lookups also gave paths to four older cyber sources: nvd-cve-api, osv-api, github-advisories-api and hibp-api. The Radar path keeps the decision of round 14.",
+      "Eleven new sources have an unknown origin. Most of them collect the records of many issuers, for example the CVE List and the vulnerability databases.",
+      "The gaps of five cyber classes close. Each of them has two or more planned sources with no risk."
+    ],
+    "studies": [],
+    "measures": {
+      "classes": 201,
+      "gaps": 104,
+      "cover": {
+        "adopted": 54,
+        "paths": 54,
+        "origins": 4
+      },
+      "total": {
+        "adopted": 146,
+        "paths": 146,
+        "origins": 67
+      },
+      "unknownOrigins": 15,
+      "unknownPaths": 33,
+      "dimensions": 5,
+      "families": 10,
+      "members": 1757,
+      "cause": "Round 15 adds planned sources to the cyber classes. The gaps go from 109 to 104, because five cyber classes get a second source. No source is adopted, so the cover and the totals do not change. The unknown origins go from 4 to 15, and the unknown paths from 30 to 33: three new sources have no host. The families and the members are new measures."
+    }
   }
 ]

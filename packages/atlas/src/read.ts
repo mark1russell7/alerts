@@ -1,12 +1,12 @@
 /**
- * The reader of the committed atlas. The data is in six files of the folder `data`: `classes.json`,
- * `sources.json`, `rounds.json`, `origins.json`, `paths.json` and `regions.json`. A data change is a change of these
- * files, not of the code.
+ * The reader of the committed atlas. The data is in seven files of the folder `data`: `classes.json`,
+ * `sources.json`, `rounds.json`, `origins.json`, `paths.json`, `regions.json` and `families.json`. A data change is
+ * a change of these files, not of the code.
  */
 
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 
-import type { Atlas, Origin, PathPart, Region, Round, SignalClass, Source } from "./atlas.ts";
+import type { Atlas, Family, Origin, PathPart, Region, Round, SignalClass, Source } from "./atlas.ts";
 
 /** The folder of the committed data of the atlas. */
 export const DATA_FOLDER: URL = new URL("../data/", import.meta.url);
@@ -24,7 +24,7 @@ export function workspacePackages(folder: URL = PACKAGES_FOLDER): Set<string> {
   return names;
 }
 
-/** This function reads the atlas from the six files of a folder. */
+/** This function reads the atlas from the seven files of a folder. */
 export function readAtlas(folder: URL = DATA_FOLDER): Atlas {
   const read = (name: string): unknown => JSON.parse(readFileSync(new URL(name, folder), "utf8"));
   return {
@@ -34,5 +34,6 @@ export function readAtlas(folder: URL = DATA_FOLDER): Atlas {
     origins: read("origins.json") as Origin[],
     paths: read("paths.json") as PathPart[],
     regions: read("regions.json") as Region[],
+    families: read("families.json") as Family[],
   };
 }

@@ -5,6 +5,7 @@ import {
   checkAtlas,
   coverage,
   dimensionCoverage,
+  familyCoverage,
   LAYERS,
   leafCodes,
   measures,
@@ -17,6 +18,7 @@ import {
   UNKNOWN,
   unreachedCodes,
   type Atlas,
+  type Family,
   type Layers,
   type PathKind,
   type Region,
@@ -90,6 +92,7 @@ const atlas = (classes: readonly SignalClass[], sources: readonly Source[], regi
     origins: named((source) => [...source.origins, ...(source.regionalOrigins ?? []).flatMap((entry) => entry.origins)]).map((id) => ({ id, name: id, issues: null, note: "a test" })),
     paths: named((source) => source.path).map((id) => ({ id, name: id, kind: hosts.has(id) ? "host" : (id.slice(0, id.indexOf(":")) as PathKind), note: "a test" })),
     regions,
+    families: [],
   };
 };
 
@@ -182,7 +185,7 @@ describe("the layers of the cover", () => {
     const risky = { ...source("c", ["infra.power"], "adopt"), risks: ["The provider can ask for an agreement."] };
     const sources = [source("a", ["infra.power.outage"], "adopt"), source("b", ["infra.power"], "adopt"), risky];
     // infra.power counts a and b: 2 paths with no shared part, and 1 origin. infra.power.outage counts a.
-    expect(measures(atlas(classes, sources))).toEqual({ classes: 3, gaps: 2, cover: layers(1, 1, 0), total: layers(3, 3, 2), unknownOrigins: 0, unknownPaths: 0, dimensions: 0 });
+    expect(measures(atlas(classes, sources))).toEqual({ classes: 3, gaps: 2, cover: layers(1, 1, 0), total: layers(3, 3, 2), unknownOrigins: 0, unknownPaths: 0, dimensions: 0, families: 0, members: 0 });
     expect(measures(atlas(classes, [...sources.slice(0, 1), source("b", ["infra.power"])]))).toEqual({
       classes: 3,
       gaps: 2,
@@ -191,6 +194,8 @@ describe("the layers of the cover", () => {
       unknownOrigins: 0,
       unknownPaths: 0,
       dimensions: 0,
+      families: 0,
+      members: 0,
     });
   });
 
@@ -499,6 +504,81 @@ describe("the dimensions of indicators", () => {
     expect(checkAtlas({ ...atlas(classes, sources.slice(0, 1)), rounds })).toEqual([{ at: "atlas", problem: "0 dimensions have 2 live sources, below the 1 of round 1" }]);
     const bad = [{ ...round, measures: { ...round.measures, dimensions: -1 } }];
     expect(checkAtlas({ ...atlas(classes, sources), rounds: bad }).map((item) => item.problem)).toEqual(["the measure -1 is not a count"]);
+  });
+});
+
+describe("the families of sources", () => {
+  const classes = [klass("cyber.vulnerability.published", "no source")];
+  const family = (id: string, count: number | null = 3): Family => ({
+    id,
+    name: id,
+    classes: ["cyber.vulnerability.published"],
+    memberRule: "A test member.",
+    list: { url: "https://example.org/members.json", format: "json" },
+    count,
+    countAt: count === null ? null : "2026-11-18",
+    formats: ["csaf"],
+    note: "a test",
+    evidence: ["https://example.org/members.json"],
+    round: 1,
+  });
+  const member = (id: string, families: readonly string[], decision: Source["decision"] = "plan"): Source => ({ ...source(id, ["cyber.vulnerability.published"], decision), families });
+
+  it("gives the members that the atlas knows, and measures the families and the sum of their counts", () => {
+    const risky = { ...member("c", ["cnas"]), risks: ["The terms can change."] };
+    const sources = [member("a", ["cnas", "csaf-providers"]), member("b", ["cnas"], "later"), risky];
+    const world = { ...atlas(classes, sources), families: [family("cnas"), family("csaf-providers", null)] };
+    expect(checkAtlas(world)).toEqual([]);
+    expect(familyCoverage(world)).toEqual([
+      { id: "cnas", count: 3, sources: ["a", "b", "c"], live: ["a"] },
+      { id: "csaf-providers", count: null, sources: ["a"], live: ["a"] },
+    ]);
+    expect(measures(world)).toMatchObject({ families: 2, members: 3 });
+  });
+
+  it("stops a bad family and a source that names a family that does not exist", () => {
+    const bad: Family[] = [
+      family("a"),
+      family("a"),
+      { ...family("B c"), name: "", classes: [] },
+      { ...family("d"), classes: ["met.flood"], list: { url: "ftp://example.org/list", format: "pdf" as Family["list"]["format"] } },
+      { ...family("e"), countAt: null },
+      { ...family("f", null), countAt: "2026-11-18", evidence: [] },
+      { ...family("g"), count: -1, evidence: ["not a url"], round: 9 },
+    ];
+    const sources = [member("s", [], "later"), member("t", ["a", "a"], "later"), member("u", ["z"], "later")];
+    const problems = checkAtlas({ ...atlas(classes, sources), families: bad }).map((item) => `${item.at}: ${item.problem}`);
+    expect(problems).toEqual([
+      "family a: the id is not unique",
+      "family B c: the id is not in lower case with hyphens",
+      "family B c: the family has no name, no rule of a member or no note",
+      "family B c: the family has no class",
+      "family d: the class met.flood is not a class of the atlas",
+      "family d: the url of the list is not an http or https URL",
+      "family d: the format pdf of the list is not known",
+      "family e: the count is not a count with a date YYYY-MM-DD, or a date has no count",
+      "family f: the count is not a count with a date YYYY-MM-DD, or a date has no count",
+      "family f: the family has no evidence",
+      "family g: the count is not a count with a date YYYY-MM-DD, or a date has no count",
+      "family g: the evidence not a url is not an http or https URL",
+      "family g: the round 9 has no record",
+      "source s: the field families has no id: give one or more, or no field",
+      "source t: the families have a duplicate",
+      "source u: the family z is not in families.json",
+    ]);
+  });
+
+  it("stops a fall of the families or of the members below the latest round, and a measure that is not a count", () => {
+    const world = { ...atlas(classes, []), families: [family("cnas", 5)] };
+    const rounds = [{ ...round, measures: { ...round.measures, families: 1, members: 5 } }];
+    expect(checkAtlas({ ...world, rounds })).toEqual([]);
+    expect(checkAtlas({ ...world, families: [family("cnas", 4)], rounds })).toEqual([{ at: "atlas", problem: "the members measure is 4, below the 5 of round 1" }]);
+    expect(checkAtlas({ ...world, families: [], rounds }).map((item) => item.problem)).toEqual([
+      "the families measure is 0, below the 1 of round 1",
+      "the members measure is 0, below the 5 of round 1",
+    ]);
+    const bad = [{ ...round, measures: { ...round.measures, members: 1.5 } }];
+    expect(checkAtlas({ ...world, rounds: bad }).map((item) => item.problem)).toEqual(["the measure 1.5 is not a count"]);
   });
 });
 
