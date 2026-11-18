@@ -1337,6 +1337,7 @@ export const assessReasonSchema: z.ZodType<AssessReason, AssessReason> = schemaO
         codes: z.array(regionCodeSchema).readonly(),
         distanceKm: z.number().min(0).exactOptional(),
         shapeRefused: z.literal(true).exactOptional(),
+        zoneFallback: z.literal(true).exactOptional(),
       }),
       z.strictObject({ kind: z.literal("subject"), subject: subjectWatchSchema }),
       z.strictObject({ kind: z.literal("place-table"), place: placeIdSchema, reports: z.array(reportIdSchema).min(1).readonly(), level: assessedLevelSchema }),

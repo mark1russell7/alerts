@@ -100,8 +100,9 @@ export type Position = readonly [lon: number, lat: number];
 
 /**
  * The code of a region in one system of codes: `state`, `same`, `ugc`, `fips`, `iso3166` and others. The
- * system `ugc` holds the NWS zones and counties (`KSZ083`, `KSC173`). The system `same` holds the
- * SAME county codes (`020173`).
+ * system `ugc` holds the NWS forecast zones and counties (`KSZ083`, `KSC173`). The system `ugc-fire` holds the NWS fire
+ * weather zones (`KSZ083` too). A fire zone and a forecast zone can have one code and different outlines. The system `same`
+ * holds the SAME county codes (`020173`).
  */
 export interface RegionCode {
   readonly system: string;
@@ -1432,7 +1433,8 @@ export type AssessReason =
    * `distanceKm` is the distance from the place to the nearest shape that decided, and it is 0 in a shape.
    * It is present when that distance is in the buffer of the place. For a match by a shape only, the codes
    * are empty. `shapeRefused` is true when the codes of a block decided because `@mark1russell7/geo`
-   * refuses each shape of that block.
+   * refuses each shape of that block. `zoneFallback` is true when a fire zone code of an area decided through the
+   * forecast zone code of the place with the same code. Then the place has no fire zone code of that state.
    */
   | {
       readonly kind: "place";
@@ -1440,6 +1442,7 @@ export type AssessReason =
       readonly codes: readonly RegionCode[];
       readonly distanceKm?: number;
       readonly shapeRefused?: true;
+      readonly zoneFallback?: true;
     }
   /** The person watches a subject of the incident. */
   | { readonly kind: "subject"; readonly subject: SubjectWatch }
@@ -1515,6 +1518,7 @@ export type SubjectSystem =
   | "point"
   | "polygon"
   | "ugc"
+  | "ugc-fire"
   | "same"
   | "fips"
   | "state"
@@ -1542,6 +1546,7 @@ export const SUBJECT_SYSTEMS: Readonly<Record<SubjectSystem, SubjectKind>> = {
   point: "place",
   polygon: "place",
   ugc: "place",
+  "ugc-fire": "place",
   same: "place",
   fips: "place",
   state: "place",

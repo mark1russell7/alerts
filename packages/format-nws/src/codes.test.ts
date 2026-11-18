@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import fc from "fast-check";
-import { countyUgcOfSame, isSameCode, isUgcCode, parseSameLocation, sameOfCountyUgc, STATE_FIPS, STATE_POSTAL, stateCode, stateOfCode, stateOfSame, stateOfUgc } from "./codes.ts";
+import { countyUgcOfSame, FIRE_ZONE_PHENOMENA, isSameCode, isUgcCode, parseSameLocation, sameOfCountyUgc, STATE_FIPS, STATE_POSTAL, stateCode, stateOfCode, stateOfSame, stateOfUgc, ugcRegionCodes } from "./codes.ts";
 
 describe("isUgcCode", () => {
   it.each(["KSZ001", "TXC123", "GMZ250", "PKZ414"])("accepts %s", (code) => {
@@ -104,9 +104,29 @@ describe("stateCode and stateOfCode", () => {
   it("gives the state of a region code at each level, and none for a marine zone or a country", () => {
     expect(stateOfCode({ system: "state", code: "ks" })).toBe("KS");
     expect(stateOfCode({ system: "ugc", code: "KSZ083" })).toBe("KS");
+    expect(stateOfCode({ system: "ugc-fire", code: "TXZ205" })).toBe("TX");
     expect(stateOfCode({ system: "same", code: "048029" })).toBe("TX");
     expect(stateOfCode({ system: "ugc", code: "GMZ250" })).toBeUndefined();
     expect(stateOfCode({ system: "iso3166", code: "US" })).toBeUndefined();
     expect(stateOfCode({ system: "state", code: "XX" })).toBeUndefined();
+  });
+});
+
+describe("ugcRegionCodes", () => {
+  it("gives a fire zone code for a zone of a Red Flag Warning or a Fire Weather Watch, and a forecast zone code for the others", () => {
+    expect([...FIRE_ZONE_PHENOMENA]).toEqual(["FW"]);
+    expect(ugcRegionCodes(" txz205 ", ["FW"])).toEqual([{ system: "ugc-fire", code: "TXZ205" }]);
+    expect(ugcRegionCodes("TXZ205", ["fw"])).toEqual([{ system: "ugc-fire", code: "TXZ205" }]);
+    expect(ugcRegionCodes("KSZ083", ["WI"])).toEqual([{ system: "ugc", code: "KSZ083" }]);
+    expect(ugcRegionCodes("KSZ083", [])).toEqual([{ system: "ugc", code: "KSZ083" }]);
+  });
+
+  it("gives the two codes for a mixed list, a county code for a county, and no code for a text that is not a UGC code", () => {
+    expect(ugcRegionCodes("TXZ205", ["FW", "WI"])).toEqual([
+      { system: "ugc", code: "TXZ205" },
+      { system: "ugc-fire", code: "TXZ205" },
+    ]);
+    expect(ugcRegionCodes("KSC173", ["FW"])).toEqual([{ system: "ugc", code: "KSC173" }]);
+    expect(ugcRegionCodes("KS083", ["FW"])).toEqual([]);
   });
 });

@@ -773,3 +773,37 @@ describe("the subject watches of a system of paths", () => {
     expect(matchSubjects(about("example/region-10/sms"), [watch])).toEqual([]);
   });
 });
+
+describe("the fire zones (AL-33)", () => {
+  // A fire zone and a forecast zone can have one code and different outlines. Each code is a code of Kansas or Texas.
+  const fire = (code: string) => ({ type: "code", system: "ugc-fire", code }) as const;
+  const forecast = { system: "ugc", code: "KSZ083" } as const;
+  const noFire: WatchedPlace = { id: home, codes: [forecast, { system: "state", code: "KS" }], bufferKm: 0 };
+  const withFire: WatchedPlace = { id: other, codes: [forecast, { system: "ugc-fire", code: "KSZ084" }, { system: "ugc", code: "TXZ205" }], bufferKm: 0 };
+
+  it("matches a place with no fire zone code of the state through its forecast zone code, and tells it", () => {
+    expect(matchPlaces({ areas: [fire("KSZ083")] }, [noFire])).toEqual([{ place: home, codes: [forecast], zoneFallback: true }]);
+    const result = assess(incident({ kind: "fire.weather", areas: [fire("KSZ083")] }), person([], [home]), [noFire]);
+    expect(result.reasons.find((one) => one.kind === "place")).toEqual({ kind: "place", place: home, codes: [forecast], zoneFallback: true });
+    expect(assessmentSchema.safeParse(result).success).toBe(true);
+  });
+
+  it("does not use the fallback for a place with a fire zone code of that state", () => {
+    expect(matchPlaces({ areas: [fire("KSZ083")] }, [withFire])).toEqual([]);
+    expect(matchPlaces({ areas: [fire("KSZ084")] }, [withFire])).toEqual([{ place: other, codes: [{ system: "ugc-fire", code: "KSZ084" }] }]);
+    // The place has no fire zone code of Texas, thus a Texas fire zone uses its forecast zone code.
+    expect(matchPlaces({ areas: [fire("TXZ205")] }, [withFire])).toEqual([{ place: other, codes: [{ system: "ugc", code: "TXZ205" }], zoneFallback: true }]);
+  });
+
+  it("does not tell the fallback when a forecast zone code of the areas also covers the code, and a forecast zone code does not cover a fire zone", () => {
+    expect(matchPlaces({ areas: [fire("KSZ083"), { type: "code", ...forecast }] }, [noFire])).toEqual([{ place: home, codes: [forecast] }]);
+    const onlyFire: WatchedPlace = { id: home, codes: [{ system: "ugc-fire", code: "KSZ083" }], bufferKm: 0 };
+    expect(matchPlaces({ areas: [{ type: "code", ...forecast }] }, [onlyFire])).toEqual([]);
+  });
+
+  it("refuses a reason with a flag that is not true", () => {
+    const result = assess(incident({ kind: "fire.weather", areas: [fire("KSZ083")] }), person([], [home]), [noFire]);
+    const reasons = result.reasons.map((one) => (one.kind === "place" ? { ...one, zoneFallback: false } : one));
+    expect(assessmentSchema.safeParse({ ...result, reasons }).success).toBe(false);
+  });
+});

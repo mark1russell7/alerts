@@ -318,6 +318,11 @@ export interface PlaceMatch {
    * that block. The view shows it, because the shape of that block did not decide.
    */
   readonly shapeRefused?: true;
+  /**
+   * True when a fire zone code of an area decided through the forecast zone code of the place with the same code
+   * (AL-33). The place has no fire zone code of that state. The view shows it, because the two outlines can differ.
+   */
+  readonly zoneFallback?: true;
 }
 
 /**
@@ -333,6 +338,9 @@ export interface PlaceMatch {
  *   safe side, and the match tells it with `shapeRefused`.
  * - The areas with no block key keep the union rule. Their codes are the floor of the match, and a shape
  *   adds a place in its buffer. A shape that geo refuses adds no place.
+ * - A fire zone code (`ugc-fire`) covers only a fire zone code of a place. A place with no fire zone code of
+ *   a state uses the forecast zone code (`ugc`) with the same code. This is on the safe side, and the match
+ *   tells it with `zoneFallback`.
  */
 export function matchPlaces(incident: Pick<Incident, "areas">, places: readonly WatchedPlace[]): PlaceMatch[] {
   const ids = new Set(incident.areas.flatMap((area) => (area.type === "place" ? [area.place] : [])));
@@ -347,21 +355,50 @@ export function matchPlaces(incident: Pick<Incident, "areas">, places: readonly 
     const covered = new Set<RegionCode>();
     let nearest = Number.POSITIVE_INFINITY;
     let shapeRefused = false;
+    // The codes that an area code covers, and the codes that only the fallback of the fire zones covers.
+    const direct = new Set<RegionCode>();
+    const fallback = new Set<RegionCode>();
+    const fireStates = new Set(place.codes.flatMap((code) => (code.system === "ugc-fire" ? [code.code.slice(0, 2)] : [])));
     for (const [block, areas] of groups) {
       const shapes = areas.filter(isShape);
       const distance = place.at === undefined || shapes.length === 0 ? undefined : nearestShape(shapes, place.at);
       if (distance !== undefined) nearest = Math.min(nearest, distance);
       // A block decides by its shapes when geo reads one of them. The areas with no block always give their codes.
       if (block !== undefined && distance !== undefined) continue;
-      const byBlock = place.codes.filter((code) => areas.some((area) => area.type === "code" && regionCovers(area, code)));
+      const codeAreas = areas.filter((area) => area.type === "code");
+      const byBlock: RegionCode[] = [];
+      for (const code of place.codes) {
+        if (codeAreas.some((area) => regionCovers(area, code))) {
+          direct.add(code);
+          byBlock.push(code);
+        } else if (!fireStates.has(code.code.slice(0, 2)) && codeAreas.some((area) => zoneFallbackCovers(area, code))) {
+          fallback.add(code);
+          byBlock.push(code);
+        }
+      }
       for (const code of byBlock) covered.add(code);
       if (byBlock.length > 0 && block !== undefined && place.at !== undefined && shapes.length > 0) shapeRefused = true;
     }
     const codes = place.codes.filter((code) => covered.has(code));
     const near = nearest <= place.bufferKm;
     if (codes.length === 0 && !near && !ids.has(place.id)) return [];
-    return [{ place: place.id, codes, ...(near ? { distanceKm: nearest } : {}), ...(shapeRefused ? { shapeRefused: true as const } : {}) }];
+    const zoneFallback = codes.some((code) => fallback.has(code) && !direct.has(code));
+    return [
+      {
+        place: place.id,
+        codes,
+        ...(near ? { distanceKm: nearest } : {}),
+        ...(shapeRefused ? { shapeRefused: true as const } : {}),
+        ...(zoneFallback ? { zoneFallback: true as const } : {}),
+      },
+    ];
   });
+}
+
+// The fallback of the fire zones: a fire zone code of an area covers the forecast zone code of a place with the same code.
+// The caller uses it only for a place with no fire zone code of the state of that code.
+function zoneFallbackCovers(area: RegionCode, place: RegionCode): boolean {
+  return area.system === "ugc-fire" && place.system === "ugc" && area.code === place.code;
 }
 
 // The distance to the nearest shape that geo reads, or `undefined` when geo refuses each shape.

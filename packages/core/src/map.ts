@@ -190,13 +190,15 @@ export function mapPayload(input: MapPayloadInput): MapPayload {
 export const SEVERITY_ORDER: readonly Severity[] = ["extreme", "severe", "moderate", "minor", "unknown"];
 
 /**
- * This function gives the rank of the size of a region code, from the smallest. An NWS zone (`KSZ083`)
- * is before an NWS county (`KSC173`), a county before a state, and a state before a country.
+ * This function gives the rank of the size of a region code, from the smallest. An NWS forecast zone or fire zone
+ * (`KSZ083`) is before an NWS county (`KSC173`), a county before a state, and a state before a country.
  */
 export function regionRank(code: RegionCode): number {
   switch (code.system) {
     case "ugc":
       return code.code[2] === "Z" ? 0 : 1;
+    case "ugc-fire":
+      return 0;
     case "same":
     case "fips":
       return 1;

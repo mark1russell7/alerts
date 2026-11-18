@@ -91,7 +91,9 @@ export function reasonText(reason: AssessReason, incident: Pick<Incident, "sever
         const codes = `The incident covers ${nameOf(reason.place)}: ${reason.codes.map((code) => code.code).join(", ")}.`;
         // The codes of a block decide when geo refuses each shape of that block. The match is then on the safe side.
         const refused = reason.shapeRefused === true ? " The shape of an area of the incident is not valid, so its region codes decided." : "";
-        return `${codes}${refused}${shape === undefined ? "" : ` ${shape}`}`;
+        // A fire zone code decides through the forecast zone with the same code when the place has no fire zone (AL-33).
+        const fallback = reason.zoneFallback === true ? " The place has no fire zone code, so a fire zone code decided through the forecast zone with the same code. The two outlines can differ." : "";
+        return `${codes}${refused}${fallback}${shape === undefined ? "" : ` ${shape}`}`;
       }
       // A system report names the place itself, so its match has no codes and no distance.
       return shape ?? `The area of the report is ${nameOf(reason.place)}.`;

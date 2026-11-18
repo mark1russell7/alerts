@@ -63,6 +63,7 @@ describe("regionRank", () => {
   it("puts a zone before a county, a county before a state, and a state before a country", () => {
     const codes: RegionCode[] = [{ system: "iso3166", code: "US" }, state, { system: "same", code: "020173" }, county, zone, { system: "other", code: "x" }];
     expect(codes.map(regionRank)).toEqual([3, 2, 1, 1, 0, 4]);
+    expect(regionRank({ system: "ugc-fire", code: "KSZ083" })).toBe(0);
   });
 });
 

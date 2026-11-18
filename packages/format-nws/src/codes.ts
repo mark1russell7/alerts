@@ -148,17 +148,47 @@ export function stateCode(state: string): string | undefined {
 
 /**
  * This function gives the postal code of the state of a region code, or `undefined`. A `state` code gives
- * its state. A UGC code and a SAME code give the state of their zone or county. A marine zone and a country give `undefined`.
+ * its state. A UGC code, a fire zone code and a SAME code give the state of their zone or county. A marine zone and a country
+ * give `undefined`.
  */
 export function stateOfCode(code: RegionCode): string | undefined {
   switch (code.system) {
     case "state":
       return stateCode(code.code);
     case "ugc":
+    case "ugc-fire":
       return stateOfUgc(code.code);
     case "same":
       return stateOfSame(code.code);
     default:
       return undefined;
   }
+}
+
+/**
+ * The VTEC phenomena of the products for the NWS fire weather zones: `FW`, the Fire Weather Watch (`FW.A`) and the Red
+ * Flag Warning (`FW.W`). The UGC zone codes of these products are fire zone codes (AL-33).
+ */
+export const FIRE_ZONE_PHENOMENA: ReadonlySet<string> = new Set(["FW"]);
+
+/**
+ * This function gives the region codes of a UGC code of an alert from the VTEC phenomena of the alert. A fire zone and a
+ * forecast zone can have one code and different outlines, thus the phenomena decide the system.
+ *
+ * - A county code gives `ugc`.
+ * - A zone code gives `ugc-fire` when a phenomenon is in `FIRE_ZONE_PHENOMENA`.
+ * - A zone code gives `ugc` when another phenomenon is in the list, or when the list is empty. Thus a mixed list gives the two codes.
+ * - A text that is not a UGC code gives an empty list.
+ */
+export function ugcRegionCodes(code: string, phenomena: Iterable<string>): RegionCode[] {
+  const text = code.trim().toUpperCase();
+  if (!isUgcCode(text)) return [];
+  if (text[2] === "C") return [{ system: "ugc", code: text }];
+  let fire = false;
+  let other = false;
+  for (const phenomenon of phenomena) {
+    if (FIRE_ZONE_PHENOMENA.has(phenomenon.trim().toUpperCase())) fire = true;
+    else other = true;
+  }
+  return [...(other || !fire ? [{ system: "ugc", code: text }] : []), ...(fire ? [{ system: "ugc-fire", code: text }] : [])];
 }
