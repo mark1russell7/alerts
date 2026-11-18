@@ -221,14 +221,23 @@ export interface NumberingCheck {
   readonly together: number;
 }
 
+/**
+ * The areas of the alerts of one pair in each year, in counties and in zones. An area is one alert in one county or
+ * zone. It counts one time, in the VTEC year of the alert, also when two rows give it.
+ */
+export interface AreaCounts {
+  readonly counties: Readonly<Record<string, number>>;
+  readonly zones: Readonly<Record<string, number>>;
+}
+
 /** The counts of the alerts of a measure. */
 export interface AlertCounts {
   /** The count of rows that the tally read, with the rows of the first window. */
   readonly rows: number;
   /** The alerts of each pair of a phenomenon and a significance (for example `RP.S`), in each year. Each year has a value. */
   readonly alerts: Readonly<Record<string, Readonly<Record<string, number>>>>;
-  /** The rows of each pair in counties (`C`) and in zones (`Z`), in the years. */
-  readonly areas: Readonly<Record<string, { readonly counties: number; readonly zones: number }>>;
+  /** The areas of each pair in counties (`C`) and in zones (`Z`), in each year. Each year has a value. */
+  readonly areas: Readonly<Record<string, AreaCounts>>;
   /** The check of the numbers of each pair. */
   readonly numbering: Readonly<Record<string, NumberingCheck>>;
   /** The rows with each fault (`readWatchwarn`). */
@@ -242,7 +251,8 @@ export interface AlertCounts {
 export class AlertTally {
   readonly #years: Years;
   readonly #keys = new Map<string, Map<number, Set<string>>>();
-  readonly #areas = new Map<string, { counties: number; zones: number }>();
+  // The areas of each pair in each year, as the key of the alert and the UGC code (`alertKey|ugc`).
+  readonly #areas = new Map<string, Map<number, Set<string>>>();
   readonly #numbers = new Map<string, Map<string, Map<string, number>>>();
   readonly #faults = new Map<string, number>();
   #rows = 0;
@@ -262,12 +272,14 @@ export class AlertTally {
       if (byYear === undefined) this.#keys.set(pair, (byYear = new Map()));
       let keys = byYear.get(row.year);
       if (keys === undefined) byYear.set(row.year, (keys = new Set()));
-      keys.add(alertKey(row));
+      const key = alertKey(row);
+      keys.add(key);
       if (row.ugc !== "") {
-        let areas = this.#areas.get(pair);
-        if (areas === undefined) this.#areas.set(pair, (areas = { counties: 0, zones: 0 }));
-        if (row.ugc[2] === "C") areas.counties += 1;
-        else areas.zones += 1;
+        let areasByYear = this.#areas.get(pair);
+        if (areasByYear === undefined) this.#areas.set(pair, (areasByYear = new Map()));
+        let areas = areasByYear.get(row.year);
+        if (areas === undefined) areasByYear.set(row.year, (areas = new Set()));
+        areas.add(`${key}|${row.ugc}`);
       }
       if (row.issue !== undefined) {
         let numbers = this.#numbers.get(pair);
@@ -287,7 +299,20 @@ export class AlertTally {
     const years: number[] = [];
     for (let year = this.#years.first; year <= this.#years.last; year += 1) years.push(year);
     const alerts = Object.fromEntries(pairs.map((pair) => [pair, Object.fromEntries(years.map((year) => [String(year), this.#keys.get(pair)?.get(year)?.size ?? 0]))]));
-    const areas = Object.fromEntries([...this.#areas.keys()].sort().map((pair) => [pair, { ...(this.#areas.get(pair) as { counties: number; zones: number }) }]));
+    const areas = Object.fromEntries(
+      [...this.#areas.keys()].sort().map((pair) => {
+        const byYear = this.#areas.get(pair) as Map<number, Set<string>>;
+        const counties: Record<string, number> = {};
+        const zones: Record<string, number> = {};
+        for (const year of years) {
+          let county = 0;
+          for (const area of byYear.get(year) ?? []) if (area[area.lastIndexOf("|") + 3] === "C") county += 1;
+          counties[String(year)] = county;
+          zones[String(year)] = (byYear.get(year)?.size ?? 0) - county;
+        }
+        return [pair, { counties, zones }];
+      }),
+    );
     const numbering = Object.fromEntries(
       [...this.#numbers.keys()].sort().map((pair) => {
         const numbers = this.#numbers.get(pair) as Map<string, Map<string, number>>;

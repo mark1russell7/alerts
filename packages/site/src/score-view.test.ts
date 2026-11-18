@@ -46,6 +46,18 @@ describe("the words of the shadow score", () => {
     expect(shadowText(scoreOf(tornado))).toMatch(/^The shadow score does not decide the level\. /);
     expect(shadowText(scoreOf(tornado, { ...PRIORS, kinds: {} }))).toMatch(/^The shadow score does not decide the level, and it has no value\. /);
   });
+
+  it("tells the harm under an alert, with its significance and its kind of area", () => {
+    const under: ScorePriors = {
+      ...PRIORS,
+      kinds: { "met.tornado": { under: { warning: { deaths: { value: 0.003, low: 0.002, high: 0.005 }, injuries: { value: 0.03, low: 0.02, high: 0.05 }, area: "county" } } } },
+    };
+    const score = shadowScore({ kind: { code: "met.tornado", significance: "warning", label: "Tornado Warning" }, certainty: "likely" }, under);
+    expect(shadowText(score)).toBe(
+      'The shadow score does not decide the level. One warning of "met.tornado" in one county gives 0.003 (0.002 to 0.005) deaths and 0.03 (0.02 to 0.05) injuries. The measure counts each event under an active alert. Thus it holds the probability of the event.',
+    );
+    expect(scoreLine(score)).toBe("Shadow score: 0.003 (0.002 to 0.005) expected deaths and 0.03 (0.02 to 0.05) expected injuries.");
+  });
 });
 
 describe("the panel of the shadow score", () => {

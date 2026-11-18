@@ -1,6 +1,6 @@
 import { knownKind, SUBJECT_SYSTEMS, type SourceId } from "@mark1russell7/alerts";
 import { describe, expect, it } from "vitest";
-import { isDomain, isPageBase, pageDomains, pageProblems, SUBJECT_SYSTEM, type StatusPage } from "./page.ts";
+import { isDomain, isPageBase, PAGE_FORMATS, pageDomains, pageProblems, SUBJECT_SYSTEM, type PageFormat, type StatusPage } from "./page.ts";
 import { ATLASSIAN_STATUSPAGE, registeredPage, STATUS_PAGES } from "./register.ts";
 
 const GOOD: StatusPage = { id: "statuspage-example" as SourceId, title: "Example", base: "https://status.example.test", origin: "example", domain: "example.test", kind: "infra.saas.outage", dependsOn: [ATLASSIAN_STATUSPAGE] };
@@ -17,6 +17,11 @@ describe("pageProblems", () => {
     expect(problems).toHaveLength(9);
     expect(problems.join(" ")).not.toContain("secret");
     expect(pageProblems({ ...GOOD, dependsOn: [] })).toEqual(["the list of failure domains is empty"]);
+  });
+
+  it("accepts each format of a page, and gives a problem for a format that it does not know", () => {
+    for (const format of PAGE_FORMATS) expect(pageProblems({ ...GOOD, format })).toEqual([]);
+    expect(pageProblems({ ...GOOD, format: "rss" as PageFormat })).toEqual(['the format "rss" is not a format of a page']);
   });
 
   it("accepts only a base with https, a host and nothing more", () => {

@@ -12,4 +12,12 @@
 - The real answer had 50 incidents. The fixture keeps the head of the page and 2 incidents with no change. The incident `269ytwp2jgqq` is on the path of an alert, and `smg76w4fhp05` is of a carrier in APAC.
 - Both incidents are in the state `resolved`. The answer had `Content-Type: application/json` and an `ETag`.
 - Cloudflare, OpenAI and Twilio own the texts of their incidents. The texts are short notices of the operation of a service.
-- The answers contain no personal data. The fixtures have an indent of 2 spaces.
+- The answers contain no personal data. The JSON fixtures have an indent of 2 spaces.
+
+## Pushover
+
+- `pushover-20261118.xml` is the real answer to `https://status.pushover.net/rss` on 2026-11-18, byte for byte. Site24x7 StatusIQ hosts the page.
+- The feed has 6 items, one for each component. Each component was `Operational`. The tests make an outage from this feed, and each such test tells it.
+- The answer had `Content-Type: application/rss+xml;charset=utf-8`, `Cache-Control: no-store` and no `ETag`. The host had no `robots.txt` file.
+- The `guid` of an item is the time of the item in base64. It is not unique. The id of a component is the end of its link.
+- Pushover owns the texts of the feed. The feed contains no personal data.

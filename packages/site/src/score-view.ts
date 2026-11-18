@@ -6,7 +6,7 @@
  * The data functions are pure. The draw functions make the elements of that data.
  */
 
-import { shadowDifferences, type AssessedLevel, type Estimate, type MapIncident, type MapView, type ScoreFactor, type ShadowScore } from "@mark1russell7/alerts";
+import { shadowDifferences, type AlertArea, type AssessedLevel, type Estimate, type MapIncident, type MapView, type ScoreFactor, type ShadowScore } from "@mark1russell7/alerts";
 import { h } from "@mark1russell7/site-pages/chrome";
 import { countOf } from "@mark1russell7/text/english";
 import { LEVEL_WORDS, levelChip } from "./draw.ts";
@@ -27,9 +27,22 @@ function probabilitySource(factor: ScoreFactor): string {
   return factor.from.table === "kinds" ? `the verified share of the warnings of "${factor.from.key}"` : `the certainty "${factor.from.key}"`;
 }
 
+// The words of one area of each kind.
+const AREA_WORDS: Readonly<Record<AlertArea, string>> = { county: "one county", zone: "one zone" };
+
+// The source of the harm under an alert.
+function underSource(factor: ScoreFactor): string {
+  const { from } = factor;
+  return from.table === "under" ? `One ${from.significance} of "${from.key}" in ${AREA_WORDS[from.area]}` : `One alert of "${from.key}"`;
+}
+
 /** This function gives the text of a shadow score. The score does not decide the level, and the text tells this first. */
 export function shadowText(score: ShadowScore): string {
   if (!score.read) return `The shadow score does not decide the level, and it has no value. The priors do not give these factors: ${score.missing.join(", ")}.`;
+  if (score.basis === "alert") {
+    const harm = `${underSource(score.deaths)} gives ${estimateText(score.expected.deaths)} deaths and ${estimateText(score.expected.injuries)} injuries.`;
+    return `The shadow score does not decide the level. ${harm} The measure counts each event under an active alert. Thus it holds the probability of the event.`;
+  }
   const { probability, deaths, injuries, expected } = score;
   const harm = `One event of this kind gives ${estimateText(deaths.estimate)} deaths and ${estimateText(injuries.estimate)} injuries.`;
   const keys =

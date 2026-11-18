@@ -37,7 +37,7 @@ import { AWS_DESCRIPTOR } from "@mark1russell7/alerts-source-aws";
 import { AZURE_DESCRIPTOR } from "@mark1russell7/alerts-source-azure";
 import { BOM_SWS_DESCRIPTOR, bomTimeText } from "@mark1russell7/alerts-source-bom-sws";
 import { FIREBASE_DESCRIPTOR, GCP_DESCRIPTOR } from "@mark1russell7/alerts-source-gcp";
-import { descriptorOf as statusPageDescriptor, STATUS_PAGES, type StatusPage } from "@mark1russell7/alerts-source-statuspage";
+import { descriptorOf as statusPageDescriptor, pagePath, STATUS_PAGES, type StatusPage } from "@mark1russell7/alerts-source-statuspage";
 import { ENERGY_CHARTS_MEASURES, SOURCE_ID as ENERGY_CHARTS_SOURCE, WINDOW_MINUTES } from "@mark1russell7/alerts-source-energy-charts";
 import { memoryQuotaStore, quotaGate, type Exchange, type Transport } from "polite-crawler/api";
 import { DEFAULT_POLICY } from "polite-crawler/politeness";
@@ -158,8 +158,19 @@ function kevAnswer(): string {
  * The answer of a status page to the request of its summary. It is the recorded summary of the page of OpenAI in the
  * package `source-statuspage`, with its times moved to the time of the tests. The page of GitHub gives its incident,
  * which the provider watches after a fix. Each other page gives no incident.
+ *
+ * A page of StatusIQ (Pushover) gives the recorded feed of Pushover. Its queue of outbound messages has a major outage
+ * since 10 minutes before the time of the tests. Each other component of the feed is operational.
  */
 function statusPageAnswer(page: StatusPage): string {
+  if (page.format === "statusiq") {
+    const feed = fixture("alerts-source-statuspage", "pushover-20261118.xml");
+    const title = "<title>Outbound Message Queue - Operational</title>";
+    if (feed.split(title).length !== 2) throw new Error("the feed of Pushover has no one item of its queue");
+    const [before, after] = feed.split(title) as [string, string];
+    const since = new Date(T0 - 10 * 60_000).toUTCString();
+    return `${before}<title>Outbound Message Queue - Major Outage</title>${after.replace(/<pubDate>[^<]*<\/pubDate>/, () => `<pubDate>${since}</pubDate>`)}`;
+  }
   const summary = JSON.parse(fixture("alerts-source-statuspage", "openai-20261118.json")) as { page: Record<string, unknown>; incidents: Record<string, unknown>[] } & Record<string, unknown>;
   const time = (minutes: number): string => new Date(T0 + minutes * 60_000).toISOString();
   const live = summary.incidents.map((incident) => ({
@@ -259,7 +270,7 @@ const STATUS_HOSTS: ReadonlyMap<string, StatusPage> = new Map(STATUS_PAGES.map((
  * the nominal frequency for each second of the query (`energyChartsAnswer`). CISA gives a catalog with one live entry (`kevAnswer`).
  * BoM gives one K index, and no alert and no warning (`bomAnswer`).
  *
- * Each status page gives its summary (`statusPageAnswer`). Google Cloud gives one live incident (`gcpAnswer`). Firebase
+ * Each status page gives its summary or its feed (`statusPageAnswer`). Google Cloud gives one live incident (`gcpAnswer`). Firebase
  * gives one live incident of Cloud Messaging (`firebaseAnswer`). AWS gives one live event (`awsAnswer`). Azure gives one
  * live incident (`azureAnswer`).
  *
@@ -280,7 +291,7 @@ function network(delay = 0) {
     if (url.hostname === "services.swpc.noaa.gov") return { status: 200, statusText: "OK", headers: { "content-type": "application/json" }, body: fixture("alerts-source-swpc", "alerts-20261116T1553Z.json") };
     if (url.hostname === "kp.gfz.de") return { status: 200, statusText: "OK", headers: { "content-type": "application/json" }, body: gfzAnswer(url) };
     const statusPage = STATUS_HOSTS.get(url.hostname);
-    if (statusPage !== undefined) return { status: 200, statusText: "OK", headers: { "content-type": "application/json; charset=utf-8" }, body: statusPageAnswer(statusPage) };
+    if (statusPage !== undefined) return { status: 200, statusText: "OK", headers: { "content-type": statusPage.format === "statusiq" ? "application/rss+xml;charset=utf-8" : "application/json; charset=utf-8" }, body: statusPageAnswer(statusPage) };
     if (url.hostname === "status.cloud.google.com") return { status: 200, statusText: "OK", headers: { "content-type": "application/json" }, body: gcpAnswer() };
     if (url.hostname === "status.firebase.google.com") return { status: 200, statusText: "OK", headers: { "content-type": "application/json" }, body: firebaseAnswer() };
     if (url.hostname === "status.aws.amazon.com") return { status: 200, statusText: "OK", headers: { "content-type": "application/rss+xml" }, body: awsAnswer() };
@@ -594,9 +605,20 @@ describe("openInstance", () => {
     for (const source of ["gcp-status", "firebase-status", "aws-health", "azure-status"]) expect(pass.view.health.find((health) => health.source === source)?.state, source).toBe("healthy");
     expect(pass.view.health.filter((health) => health.source.startsWith("statuspage-")).map((health) => [health.source, health.state])).toEqual(pages.map((page) => [page.id, "healthy"]));
     const asked = new Set(net.exchanges.map((exchange) => new URL(exchange.url)).filter((url) => STATUS_HOSTS.has(url.hostname)).map((url) => url.origin + url.pathname));
-    expect(asked).toEqual(new Set(pages.map((page) => `${page.base}/api/v2/summary.json`)));
-    const outages = pass.view.incidents.filter((incident) => incident.kind.code === "infra.saas.outage");
-    expect(outages.map((incident) => [incident.areas, incident.about])).toEqual([[[], [{ system: "domain", id: "github.com", label: "GitHub" }]]]);
+    expect(asked).toEqual(new Set(pages.map((page) => `${page.base}${pagePath(page)}`)));
+    expect(asked).toContain("https://status.pushover.net/rss");
+    const outages = pass.view.incidents.filter((incident) => incident.kind.code === "infra.saas.outage").sort((a, b) => a.about[0]!.id.localeCompare(b.about[0]!.id));
+    // The merge gives the subjects of an incident in the order of their canonical text.
+    expect(outages.map((incident) => [incident.areas, incident.about])).toEqual([
+      [
+        [],
+        [
+          { system: "domain", id: "api.pushover.net", label: "Pushover: Outbound Message Queue" },
+          { system: "domain", id: "pushover.net", label: "Pushover" },
+        ],
+      ],
+      [[], [{ system: "domain", id: "github.com", label: "GitHub" }]],
+    ]);
     const clouds = pass.view.incidents.filter((incident) => incident.kind.code === "infra.cloud.outage").sort((a, b) => a.about[0]!.id.localeCompare(b.about[0]!.id));
     expect(clouds.map((incident) => [incident.areas, incident.about])).toEqual([
       [
@@ -630,14 +652,33 @@ describe("openInstance", () => {
     ]);
   });
 
-  it("reads only the feed of Firebase for a person who names only the endpoint of its push messages", async () => {
+  it("reads only the feed of Firebase and the page of Pushover for a person who names only the endpoint of its push messages", async () => {
     const push: AlertConfig = { ...CONFIG, people: CONFIG.people.map((entry) => ({ ...entry, defaults: { services: ["domain:fcm.googleapis.com"] } })) };
     const { instance, clock } = open(store(SECRETS), push);
     const pass = await finish(clock, instance.runtime.pass());
-    expect(pass.fetched).toEqual(["nws-api", "ipaws", "usgs", "emsc", "tsunami-ntwc", "tsunami-ptwc", "swpc", "gfz", "energy-charts", "cisa-kev", "firebase-status"]);
+    // The layer delivery adds the API of Pushover, because the person has a contact on Pushover.
+    expect(pass.fetched).toEqual(["nws-api", "ipaws", "usgs", "emsc", "tsunami-ntwc", "tsunami-ptwc", "swpc", "gfz", "energy-charts", "cisa-kev", "firebase-status", "statuspage-pushover"]);
     const clouds = pass.view.incidents.filter((incident) => incident.kind.code === "infra.cloud.outage");
     // The merge gives the subjects of an incident in the order of their canonical text.
     expect(clouds.map((incident) => incident.about.map((subject) => subject.id))).toEqual([["fcm.googleapis.com", "firebase.google.com"]]);
+  });
+
+  it("reads the page of Pushover for a person with a contact on Pushover by the layer delivery, and names its API in an outage of its queue", async () => {
+    const delivery: AlertConfig = { ...CONFIG, people: CONFIG.people.map((entry) => ({ ...entry, defaults: {} })) };
+    const { instance, clock, net } = open(store(SECRETS), delivery);
+    const pass = await finish(clock, instance.runtime.pass());
+    expect(pass.fetched).toEqual(["nws-api", "ipaws", "usgs", "emsc", "tsunami-ntwc", "tsunami-ptwc", "swpc", "gfz", "energy-charts", "cisa-kev", "statuspage-pushover"]);
+    expect(net.exchanges.map((exchange) => exchange.url).filter((url) => STATUS_HOSTS.has(new URL(url).hostname))).toEqual(["https://status.pushover.net/rss"]);
+    expect(pass.view.health.find((health) => health.source === "statuspage-pushover")?.state).toBe("healthy");
+    const outages = pass.view.incidents.filter((incident) => incident.kind.code === "infra.saas.outage");
+    expect(outages.map((incident) => [incident.severity, incident.about.map((subject) => subject.id)])).toEqual([["severe", ["api.pushover.net", "pushover.net"]]]);
+  });
+
+  it("reads no page of a channel for a person who turns off the layer delivery", async () => {
+    const quiet: AlertConfig = { ...CONFIG, people: CONFIG.people.map((entry) => ({ ...entry, defaults: { delivery: false } })) };
+    const { instance, clock } = open(store(SECRETS), quiet);
+    const pass = await finish(clock, instance.runtime.pass());
+    expect(pass.fetched.filter((source) => source.startsWith("statuspage-"))).toEqual([]);
   });
 
   it("reads no status page and no feed of a cloud provider for persons with no work, no service and no subject watch", async () => {

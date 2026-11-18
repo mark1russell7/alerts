@@ -3,6 +3,9 @@
  * services, and each page gives the same JSON API. incident.io gives the same format. Each incident that is not
  * resolved gives one report of the kind of the page. Each page is a source of its own, with its config.
  *
+ * A page of Site24x7 StatusIQ has the format `statusiq`: an RSS feed with one item for each component. Each component
+ * with an outage gives one report (`statusiq.ts`).
+ *
  * The register of this package names well-known pages. The terms of each page are the terms of its owner.
  */
 
@@ -14,7 +17,7 @@ import { mapObservation } from "./map.ts";
 import { pageProblems } from "./page.ts";
 
 export { descriptorOf } from "./descriptor.ts";
-export { createStatusPageFetch, incidentBody, readSummary, STATUS_FIELDS, SUMMARY_PATH, SUMMARY_TIMEOUT_MS } from "./fetch.ts";
+export { createStatusPageFetch, incidentBody, pagePath, readSummary, STATUS_FIELDS, SUMMARY_PATH, SUMMARY_TIMEOUT_MS } from "./fetch.ts";
 export type { StatusPageFetchInput, StatusPageFetchOptions, Summary } from "./fetch.ts";
 export {
   COMPONENT_FIELDS,
@@ -32,9 +35,35 @@ export {
   updatesOf,
   URGENCY_OF_STATUS,
 } from "./map.ts";
-export { DEFAULT_INTERVAL, DEFAULT_SLOW_AFTER, isDomain, isPageBase, pageDomains, pageProblems, SUBJECT_SYSTEM, type ComponentKey, type StatusPage } from "./page.ts";
+export {
+  DEFAULT_INTERVAL,
+  DEFAULT_SLOW_AFTER,
+  isDomain,
+  isPageBase,
+  PAGE_FORMATS,
+  pageDomains,
+  pageProblems,
+  SUBJECT_SYSTEM,
+  subjectsOf,
+  type ComponentKey,
+  type PageFormat,
+  type StatusPage,
+} from "./page.ts";
+export {
+  COMPONENT_ITEM_FIELDS,
+  componentOf,
+  hasOutage,
+  isFeedHead,
+  mapComponent,
+  OPERATIONAL,
+  readComponents,
+  SEVERITY_OF_STATUSIQ,
+  STATUSIQ_PATH,
+  UNDER_MAINTENANCE,
+  type ComponentStatus,
+} from "./statusiq.ts";
 export { pagesFor, watchReads, type ReadTarget } from "./select.ts";
-export { ATLASSIAN_STATUSPAGE, CLOUDFLARE_CDN, INCIDENT_IO, registeredPage, STATUS_PAGES, TWILIO_KEYS } from "./register.ts";
+export { ATLASSIAN_STATUSPAGE, CLOUDFLARE_CDN, INCIDENT_IO, PUSHOVER_KEYS, registeredPage, STATUS_PAGES, STATUSIQ, TWILIO_KEYS } from "./register.ts";
 
 /**
  * This function makes the procedures of the source of one page: `describe`, `fetch` and `map`. It throws for a config

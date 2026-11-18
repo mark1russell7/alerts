@@ -51,6 +51,7 @@ describe("pagesFor", () => {
 
   it("gives the page of a service for the domain of an endpoint of one of its keys", () => {
     expect(idsOf([watchOf(servicesLayer(["domain:api.twilio.com"]))])).toEqual(["statuspage-twilio"]);
+    expect(idsOf([watchOf(servicesLayer(["domain:api.pushover.net"]))])).toEqual(["statuspage-pushover"]);
   });
 });
 
