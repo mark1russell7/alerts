@@ -9,6 +9,7 @@ import {
 } from "@mark1russell7/collections/graph";
 import { compareCodeUnits } from "@mark1russell7/text/order";
 import { hasKind } from "./kind-prefix.ts";
+import { nodeCovers } from "./why.ts";
 import type {
   AssessedLevel,
   Estimate,
@@ -84,11 +85,13 @@ function activeMutes(input: RelevanceInput, graph: InterestGraph): readonly Mute
     .filter((mute) => mute.kinds === undefined || hasKind(mute.kinds, input.kind));
 }
 
-// The nodes that the active mutes cut from the graph: their subjects. An incident of the mandatory class under the policy
-// `silent` has no cut, because a mute changes only its sound.
-function cutOf(input: RelevanceInput, graph: InterestGraph, policy: RelevancePolicy): ReadonlySet<NodeKey> {
-  if (input.mandatory && policy.mandatory === "silent") return new Set();
-  return new Set(activeMutes(input, graph).flatMap((mute) => mute.subjects ?? []));
+// The test of the nodes that the active mutes cut from the graph: each node that a subject of a mute covers
+// (`nodeCovers`). An incident of the mandatory class under the policy `silent` has no cut, because a mute changes
+// only its sound.
+function cutOf(input: RelevanceInput, graph: InterestGraph, policy: RelevancePolicy): (node: NodeKey) => boolean {
+  if (input.mandatory && policy.mandatory === "silent") return () => false;
+  const subjects = activeMutes(input, graph).flatMap((mute) => mute.subjects ?? []);
+  return (node) => subjects.some((subject) => nodeCovers(subject, node));
 }
 
 // The hit edges in the order of their nodes, then the edges of the graph that are on, in the order of their ids. Each
@@ -108,10 +111,10 @@ function partsOf(input: RelevanceInput, graph: InterestGraph, policy: RelevanceP
     if (ids.has(edge.id)) throw new RangeError(`The id ${edge.id} is on two edges of the graph.`);
     ids.add(edge.id);
     if (edge.from === PERSON) throw new RangeError(`The edge ${edge.id} starts at the person.`);
-    if (edge.on && !cut.has(edge.from) && !cut.has(edge.to)) edges.push(edge);
+    if (edge.on && !cut(edge.from) && !cut(edge.to)) edges.push(edge);
   }
   edges.sort((a, b) => compareCodeUnits(a.id, b.id));
-  const hits = [...entries.values()].filter((entry) => !cut.has(entry.node)).sort((a, b) => compareCodeUnits(a.node, b.node));
+  const hits = [...entries.values()].filter((entry) => !cut(entry.node)).sort((a, b) => compareCodeUnits(a.node, b.node));
   return [
     ...hits.map((entry): Part => ({ from: EVENT, to: entry.node, weight: entry.hit, entry })),
     ...edges.map((edge): Part => ({ from: edge.from, to: edge.to, weight: edge.weight, edge })),
@@ -150,14 +153,14 @@ export function reachOf<N>(
 
 /**
  * This function gives the mute of the graph that matches the incident, and its effect, or `undefined`. A mute has
- * effect when it has no end or its end is after `input.at`. A mute with subjects matches when one of its subjects is
- * an entry. Of two matched mutes, the mute with the first id wins. A mute with subjects that does not match cuts its
- * subjects from the graph (`reachOf`).
+ * effect when it has no end or its end is after `input.at`. A mute with subjects matches when one of its subjects
+ * covers an entry (`nodeCovers`). Of two matched mutes, the mute with the first id wins. A mute with subjects that
+ * does not match cuts the nodes that its subjects cover from the graph (`reachOf`).
  */
 export function muteOf(input: RelevanceInput, graph: InterestGraph, policy: RelevancePolicy): { readonly mute: string; readonly effect: MuteEffect } | undefined {
-  const nodes = new Set(input.entries.map((entry) => entry.node));
+  const nodes = input.entries.map((entry) => entry.node);
   const matched = activeMutes(input, graph)
-    .filter((mute) => mute.subjects === undefined || mute.subjects.some((node) => nodes.has(node)))
+    .filter((mute) => mute.subjects === undefined || mute.subjects.some((subject) => nodes.some((node) => nodeCovers(subject, node))))
     .sort((a, b) => compareCodeUnits(a.id, b.id));
   const first = matched[0];
   if (first === undefined) return undefined;
