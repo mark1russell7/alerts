@@ -29,7 +29,7 @@ const covered: Coverage = { place: "place:a" as PlaceId, kind: "met", sources: [
 const skewed: CopyWatch = { copy: "copy-b", skewLimit: 2_000, maxAge: 60_000, since: START, read: { at: NOW - 10_000, skew: 5_000, sameConfig: true } };
 const unread: CopyWatch = { copy: "copy-c", skewLimit: 2_000, maxAge: 60_000, since: START };
 const reserve: ChannelQuota = { channel: PUSH, limit: 100, reserve: 10, used: 95, resetAt: START + 86_400_000 };
-const low: ProviderBalance = { provider: "provider:call", title: "Calls", channels: [CALL], floor: 5, maxAge: 3_600_000, since: START, read: { balance: 3, currency: "USD", at: START + 1_000 } };
+const low: ProviderBalance = { provider: "provider:call", title: "Calls", channels: [CALL], floors: [5], maxAge: 3_600_000, since: START, read: { balance: 3, currency: "USD", at: START + 1_000 } };
 
 const input: HealthPayloadInput = {
   at: START + 110_000,
