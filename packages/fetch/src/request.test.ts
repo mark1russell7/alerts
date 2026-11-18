@@ -54,6 +54,16 @@ const requesterWith = (steps: readonly Step[], options: Partial<RequesterOptions
 };
 
 describe("createRequester", () => {
+  it("sends the option read to the transport, and gives the bytes of the answer", async () => {
+    const bytes = new Uint8Array([10, 3, 50, 46, 48]);
+    const { requester, sent } = requesterWith([{ ...reply(200, "", { "content-type": "application/x-protobuf" }), bytes }]);
+    const result = await requester.get({ path: "/alerts.pb", what: "the alerts", read: "bytes" });
+    expect(sent[0]?.read).toBe("bytes");
+    expect(result.ok && result.answer.reply.bytes).toEqual(bytes);
+    await requester.get({ path: "/alerts.json", what: "the alerts" });
+    expect(sent[1]).not.toHaveProperty("read");
+  });
+
   it("removes the slashes at the end of the base URL, and sends a GET with the headers", async () => {
     const { requester, sent } = requesterWith([reply(200, "{}")]);
     expect(requester.baseUrl).toBe("https://api.test/v1");

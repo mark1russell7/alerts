@@ -54,6 +54,11 @@ export interface RequestPath {
   readonly path: string;
   /** The words that tell what the request asks for, in a message of polite-crawler, for example `the recent alerts`. */
   readonly what: string;
+  /**
+   * The way the transport reads the body of the answer. The default `text` gives the body as text. With `bytes`, the
+   * reply has the body in `bytes`, for a binary body, for example a protobuf message.
+   */
+  readonly read?: "text" | "bytes";
 }
 
 /** A GET, with a store of validators or with no store. */
@@ -140,7 +145,7 @@ export function createRequester(options: RequesterOptions): Requester {
     ...(answer === undefined ? {} : { answer }),
   });
 
-  async function get({ path, what, body, conditions }: Request, signal?: FetchSignal): Promise<Requested> {
+  async function get({ path, what, body, conditions, read }: Request, signal?: FetchSignal): Promise<Requested> {
     const stop = abortSignalOf(signal);
     const url = `${baseUrl}${path}`;
     let timedOut = false;
@@ -156,7 +161,7 @@ export function createRequester(options: RequesterOptions): Requester {
         latency = now() - started;
       }
     };
-    const exchange = { method: body === undefined ? "GET" : "POST", url, headers, body: body ?? null };
+    const exchange = { method: body === undefined ? "GET" : "POST", url, headers, body: body ?? null, ...(read === undefined ? {} : { read }) };
     const input: Send = { source, host, minIntervalMs, what, exchange, ...(secrets.length === 0 ? {} : { secrets, redact: redactSecrets }) };
     let answer: Answer;
     try {

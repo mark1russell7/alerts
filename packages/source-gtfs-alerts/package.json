@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json.schemastore.org/package",
+  "name": "@mark1russell7/alerts-source-gtfs-alerts",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The source adapter of the alert system for the service alerts of a GTFS Realtime feed: one event for each alert, and the count of active alerts as indicator readings.",
+  "type": "module",
+  "main": "./src/index.ts",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.test.json"
+  },
+  "dependencies": {
+    "@mark1russell7/alerts": "workspace:*",
+    "@mark1russell7/alerts-fetch": "workspace:*",
+    "@mark1russell7/text": "^0.0.13",
+    "polite-crawler": "^0.7.10",
+    "protobufjs": "^8.8.1"
+  },
+  "devDependencies": {
+    "@mark1russell7/cue": "^2.0.0",
+    "@types/node": "^26.6.5",
+    "@vitest/coverage-v8": "^5.0.3",
+    "fast-check": "^4.10.2",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.3"
+  }
+}
