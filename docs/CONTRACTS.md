@@ -930,6 +930,11 @@ The runtime reads the results of its own calls, because the path of the alerts h
 - Else a source fetch with success after the first failed call and before a later one shows the network. A copy that is offline opens no line, and its outside check tells of it.
 - An open line ends at a good call at or after its onset: an accepted send or a probe success. A restart empties the runs, and an empty run does not end a line.
 - While a line is open, the runtime calls the probe of the channel on a backoff. A channel with no probe keeps its line until an accepted send.
+- The watch of the runtime (`channelWatch`) calls the first probe 1 minute after the first view of the line. The next waits are 2, 4 and 8 minutes, up to 30 minutes (`PROBE_BACKOFF`).
+- A probe past the call limit is a `timeout`. A failed probe does not count in a run, and its message goes into no report and no log.
+- The probes run with the fetches of a pass. Thus a probe success ends the line in the view of the same pass.
+- A run that starts to open a line, and an accepted send on a down channel, wake the next pass at once.
+- The probe of Pushover reads the limits of the application (`apps/limits.json`). The probe of Twilio reads the balance of the account (`Balance.json`). The two reads send nothing and cost nothing.
 - The facts of the line are the copy, the channel, the onset and the cause. A new count gives no update, and a new cause gives one.
 - The cause `key` comes from a last failure `auth`. Its headline tells that the provider refuses the key, and that it is not an outage. This fault does not end by itself.
 - `loadConfig` adds one channel rule for each channel of each person (`channelDownRules`). The report of a down channel goes on each other channel of the person.

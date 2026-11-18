@@ -2,6 +2,7 @@ import { fakeWallClock } from "@mark1russell7/algebra/clock";
 import {
   COPY_ID,
   ESCALATION_KIND,
+  ONLY_COPY,
   PERSON_SUBJECT,
   PRIORS_FORMAT,
   WHY_LIMITS,
@@ -21,6 +22,7 @@ import {
   type PersonId,
   type PlaceId,
   type Position,
+  type ProbeOutcome,
   type Receipt,
   type Recipient,
   type Report,
@@ -134,6 +136,8 @@ interface Script {
   stop?: (copy: string) => void | Promise<void>;
   /** The fields that replace the fields of the default descriptor. */
   describe?: Partial<ChannelDescriptor>;
+  /** The probe of the channel. Without it, the channel has no probe. */
+  probe?: () => ProbeOutcome;
 }
 
 // A channel of the test. Its default send accepts each message with a new receipt.
@@ -159,6 +163,7 @@ function channel(id: ChannelId, ack: ChannelDescriptor["ack"], now: () => number
       calls.cancel.push(target.receipt);
       await script.cancel?.(target.receipt);
     },
+    ...(script.probe === undefined ? {} : { probe: async () => script.probe!() }),
   };
   return { procedures, calls };
 }
@@ -1007,7 +1012,6 @@ describe("the delivery step of a pass", () => {
       fakeWallClock(T0),
       { recipients: [{ ...RECIPIENT, policies: [twice] }], overdueAfter: MINUTE },
     );
-    await runtime.pass();
     let last = await runtime.pass();
     while (clock.now() < T0 + 2 * MINUTE) {
       await clock.advance(15 * SECOND);
@@ -1344,6 +1348,78 @@ describe("the exhausted escalations in the passes of the runtime (AL-21)", () =>
     await runtime.pass();
     expect(exhaustedLines()).toEqual([]);
     expect(pushover.calls.cancel).toContainEqual({ receipt: "pushover-2" });
+    log.close();
+  });
+});
+
+describe("the down channels in the passes of the runtime (AL-65)", () => {
+  const channelLines = (runtime: ReturnType<typeof open>["runtime"]) => Object.keys(runtime.state().lines.open).filter((line) => line.startsWith("channel/"));
+  const down = (pass: { readonly view: { readonly step: { readonly reports: readonly Report[] } } }) =>
+    pass.view.step.reports.filter((report) => report.kind.code === "system.channel.down").map((report) => report.op);
+
+  it("opens the line after a run of failed sends, keeps it at a restart, and a probe pass ends it with no send", async () => {
+    const clock = fakeWallClock(T0);
+    let up = false;
+    const probes: number[] = [];
+    const failing: Script = {
+      send: () => ({ ok: false, kind: "server", message: "Pushover gave the status 503." }),
+      probe: () => {
+        probes.push(clock.now());
+        return up ? { ok: true, at: clock.now() } : { ok: false, kind: "server", message: "Pushover gave the status 503." };
+      },
+      describe: { services: ["domain:api.example.com"], api: ["domain:api.example.com"] },
+    };
+    const log = openRuntimeLog(":memory:");
+    const { runtime } = open({ pushover: failing }, log, clock);
+    // Failed sends at 0, 20, 40 and 60 s: the retry of the delivery is 15 s.
+    await runtime.pass();
+    let last = await runtime.pass();
+    for (let index = 0; index < 3; index += 1) {
+      await clock.advance(20 * SECOND);
+      last = await runtime.pass();
+    }
+    expect(channelLines(runtime)).toEqual([]);
+    // The fourth failure makes a run of 60 s, thus the next pass comes at once and opens the line.
+    expect(last.wakeAt).toBe(clock.now() + 1);
+    await clock.advance(1);
+    const opened = await runtime.pass();
+    expect(down(opened)).toEqual(["alert"]);
+    expect(channelLines(runtime)).toEqual([`channel/${ONLY_COPY.id}/pushover`]);
+    expect(opened.view.step.reports.find((report) => report.op === "alert")?.about).toEqual([
+      { system: "alerts.channel", id: PUSHOVER, label: PUSHOVER },
+      { system: "domain", id: "api.example.com" },
+    ]);
+
+    // A restart empties the run. The line stays, and the probes start again.
+    const again = open({ pushover: failing }, log, clock);
+    await clock.advance(20 * SECOND);
+    expect(down(await again.runtime.pass())).toEqual([]);
+    expect(channelLines(again.runtime)).toEqual([`channel/${ONLY_COPY.id}/pushover`]);
+    const first = clock.now() + MINUTE;
+    await clock.advance(MINUTE);
+    expect(down(await again.runtime.pass())).toEqual([]);
+    expect(probes).toEqual([first]);
+
+    // The provider takes calls again. The next probe passes, and the line ends with no accepted send.
+    up = true;
+    await clock.advance(2 * MINUTE);
+    const ended = await again.runtime.pass();
+    expect(probes).toEqual([first, first + 2 * MINUTE]);
+    expect(down(ended)).toEqual(["cancel"]);
+    expect(channelLines(again.runtime)).toEqual([]);
+    expect(again.runtime.state().merge.deliveries.filter((delivery) => delivery.channel === PUSHOVER)).toEqual([]);
+    log.close();
+  });
+
+  it("opens no line for a burst of failed sends in one pass", async () => {
+    const clock = fakeWallClock(T0);
+    const failing: Script = { send: () => ({ ok: false, kind: "server", message: "Pushover gave the status 503." }) };
+    const { runtime, log } = open({ pushover: failing }, openRuntimeLog(":memory:"), clock, { recipients: PEOPLE });
+    const pass = await runtime.pass();
+    expect(pass.delivery?.failures.filter((failure) => failure.channel === PUSHOVER).length).toBe(PEOPLE.length);
+    await clock.advance(1);
+    await runtime.pass();
+    expect(channelLines(runtime)).toEqual([]);
     log.close();
   });
 });

@@ -24,6 +24,7 @@ import {
   type TwilioText,
   type TwilioTextRead,
 } from "@procedures/notify/twilio";
+import { probeTwilioAccount } from "./probe.ts";
 import { TWILIO_TEXT_LIMIT, twilioTextDescriptor } from "./descriptor.ts";
 import { callFailureOf, messageTextOf, type Refusal } from "./map.ts";
 import { takeSpend, type TwilioSpendGates } from "./spend.ts";
@@ -166,5 +167,8 @@ export function createTwilioTextChannel(options: TwilioTextChannelOptions): Chan
 
     // A text does not repeat, and Twilio cannot cancel a text in its queue.
     cancel: async () => undefined,
+
+    // The read of the balance sends nothing and costs nothing (AL-65).
+    probe: () => probeTwilioAccount({ credentials: options.credentials, fetch: options.fetch, timeoutMs, now }),
   };
 }
