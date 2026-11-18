@@ -21,10 +21,12 @@ import {
   placeLabels,
   sourceCovers,
   sourcePlaces,
+  type Address,
   type ChannelDescriptor,
   type ChannelId,
   type ChannelProcedures,
   type ChannelQuota,
+  type ContactServices,
   type CopySettings,
   type Duration,
   type Expectation,
@@ -33,6 +35,7 @@ import {
   type InterestsPayload,
   type Instant,
   type MapPayload,
+  type NodeKey,
   type OptInRecord,
   type ParsedConfig,
   type ScorePriors,
@@ -53,8 +56,10 @@ import {
   TWILIO_CALL_TIMEOUT_MS,
   TWILIO_TEXT_COST_USD,
   twilioCallDescriptor,
+  twilioCallServices,
   twilioSetupProblems,
   twilioTextDescriptor,
+  twilioTextServices,
   type TextOptIn,
   type TwilioCredentials,
   type TwilioFetch,
@@ -513,9 +518,26 @@ export function instanceProblems(parsed: ParsedConfig, secret: SecretLookup, des
   ];
 }
 
-/** This function gives the check of a configuration file for the instance of a copy: its channels and the problems that stop its start. */
+/**
+ * This function gives the services of the contacts of the instance (`ContactServices`). A contact of the call channel or the
+ * text channel gets the carrier region of Twilio of its phone. The text channel adds the type of the number of
+ * `TWILIO_TEXT_FROM_KEY`. Each other channel gives no services. No log and no problem holds the result.
+ */
+export function instanceServices(secret: SecretLookup): ContactServices {
+  const textFrom = secret(TWILIO_TEXT_FROM_KEY);
+  const byChannel = new Map<ChannelId, (address: Address) => readonly NodeKey[]>([
+    [TWILIO_CHANNEL, twilioCallServices],
+    [TEXT_CHANNEL_ID, (address) => twilioTextServices(address, textFrom)],
+  ]);
+  return (channel, address) => byChannel.get(channel)?.(address) ?? [];
+}
+
+/**
+ * This function gives the check of a configuration file for the instance of a copy. The check has the channels, the
+ * services of the contacts and the problems that stop the start.
+ */
 export function instanceCheck(copy: CopySettings = ONLY_COPY): InstanceCheck {
-  return { channels: INSTANCE_CHANNELS, problems: (parsed, secret) => instanceProblems(parsed, secret, INSTANCE_SOURCES, wallClock().now(), copy) };
+  return { channels: INSTANCE_CHANNELS, services: instanceServices, problems: (parsed, secret) => instanceProblems(parsed, secret, INSTANCE_SOURCES, wallClock().now(), copy) };
 }
 
 /** The check of a configuration file for the instance of the only copy: `instanceCheck(ONLY_COPY)`. */
@@ -754,7 +776,7 @@ export function openInstance(options: InstanceOptions): Instance {
   if (problems.length > 0) throw new Error(`The instance does not start. The configuration has these problems:\n- ${problems.join("\n- ")}`);
   const token = options.secret(PUSHOVER_TOKEN) ?? "";
   // The configuration does not change in a process. Thus the rows of the interests are the same at each read.
-  const contactServices = instanceCheck(copy).services;
+  const contactServices = instanceCheck(copy).services?.(options.secret);
   const interests = interestsPayload(config, INSTANCE_CHANNELS, contactServices === undefined ? undefined : { secret: options.secret, services: contactServices });
 
   // The store of shapes shares the pace of the sources. Thus its requests to the NWS API keep the rests of that host.

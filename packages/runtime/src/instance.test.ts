@@ -43,7 +43,7 @@ import { ENERGY_CHARTS_MEASURES, SOURCE_ID as ENERGY_CHARTS_SOURCE, WINDOW_MINUT
 import { memoryQuotaStore, quotaGate, type Exchange, type Transport } from "polite-crawler/api";
 import { DEFAULT_POLICY } from "polite-crawler/politeness";
 import { afterEach, describe, expect, it } from "vitest";
-import { ACCOUNT_SOURCES, BOM_SWS_KEY, CHECKS_KEY, CLOUDFLARE_RADAR_KEY, checksKeys, DAEMON_CHECK, daemonCheck, DELIVERY_TIMES, INSTANCE_CHANNELS, INSTANCE_CHECK, INSTANCE_EXPECTATIONS, INSTANCE_FETCH_LIMIT, INSTANCE_SOURCES, INSTANCE_TIMES, instanceCheck, instanceProblems, LOUD_PING_URL_KEY, nwwsKeys, nwwsSetup, openInstance, PING_URL_KEY, pingKeyOf, pingTargets, RANK_DELAY, RANK_FLOOR, SOURCE_POLICY, sourcePace, twilioSetup, USER_AGENT_NAME, type Instance, type InstanceOptions } from "./instance.ts";
+import { ACCOUNT_SOURCES, BOM_SWS_KEY, CHECKS_KEY, CLOUDFLARE_RADAR_KEY, checksKeys, DAEMON_CHECK, daemonCheck, DELIVERY_TIMES, INSTANCE_CHANNELS, INSTANCE_CHECK, INSTANCE_EXPECTATIONS, INSTANCE_FETCH_LIMIT, INSTANCE_SOURCES, INSTANCE_TIMES, instanceCheck, instanceProblems, instanceServices, LOUD_PING_URL_KEY, nwwsKeys, nwwsSetup, openInstance, PING_URL_KEY, pingKeyOf, pingTargets, RANK_DELAY, RANK_FLOOR, SOURCE_POLICY, sourcePace, twilioSetup, USER_AGENT_NAME, type Instance, type InstanceOptions } from "./instance.ts";
 import { heartbeatGap } from "./heartbeat.ts";
 import { spendGates, spendQuota } from "./balance.ts";
 import { CLOCK_SKEW_LIMIT, COPY_TOKEN_KEY, EXCHANGE_EVERY, EXCHANGE_LIMIT } from "./copy.ts";
@@ -1423,5 +1423,33 @@ describe("sourcePace", () => {
     expect(stop).toBeDefined();
     expect((stop?.until ?? 0) - clock.now()).toBeGreaterThan(0);
     expect((stop?.until ?? Number.POSITIVE_INFINITY) - clock.now()).toBeLessThanOrEqual(SOURCE_POLICY.backoffCapMs);
+  });
+});
+
+describe("the services of the contacts of the instance", () => {
+  const call = "twilio-call" as ChannelId;
+  const text = "twilio-text" as ChannelId;
+  // The numbers 202-555-0143 and 800-555-0100 are numbers for fiction.
+  const US = "+12025550143";
+
+  it("gives the carrier region of the phone of a call or a text, with the type of the text sender, and nothing for another channel", () => {
+    const services = instanceServices((name) => (name === "TWILIO_TEXT_FROM" ? "+18005550100" : undefined));
+    expect(services(call, { to: US })).toEqual(["provider-region:twilio/north-america/voice"]);
+    expect(services(text, { to: US })).toEqual(["provider-region:twilio/north-america/sms/toll-free"]);
+    expect(services(pushover, { user: "u".repeat(30) })).toEqual([]);
+    expect(instanceServices(() => undefined)(text, { to: US })).toEqual(["provider-region:twilio/north-america/sms"]);
+    expect([INSTANCE_CHECK.services, DAEMON_CHECK.services]).toEqual([instanceServices, instanceServices]);
+  });
+
+  it("adds the voice node of the phone of a call contact to the rows of the interests", () => {
+    // The layer delivery needs the defaults of the person.
+    const people = CONFIG.people.map((entry) => ({ ...entry, defaults: {} }));
+    const config: AlertConfig = { ...CONFIG, people, contacts: [...CONFIG.contacts, { person, channel: call, address: { to: { secret: "PHONE" } } }] };
+    const { instance } = open(store({ ...SECRETS, PHONE: US }), config);
+    const rows = instance.interests().people[0]?.rows.map((row) => row.edge.id) ?? [];
+    expect(rows).toContain("delivery/provider-region:twilio/north-america/voice>person");
+    // A phone with no country gives no node.
+    const unknown = open(store({ ...SECRETS, PHONE: "+15555550123" }), config).instance.interests().people[0]?.rows ?? [];
+    expect(unknown.map((row) => row.edge.id).filter((id) => id.includes("provider-region:twilio"))).toEqual([]);
   });
 });
