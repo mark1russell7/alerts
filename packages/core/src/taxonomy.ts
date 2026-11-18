@@ -11,7 +11,7 @@
  * its plain name and its summary here, and in no other place. A new code comes here first, in its pull request.
  */
 import { compareCodeUnits } from "@mark1russell7/text/order";
-import { BALANCE_KIND, CLOCK_KIND, COPY_KIND, COVERAGE_KIND, DRILL_KIND, HEALTH_KIND, LOG_KIND, QUOTA_KIND } from "./assess.ts";
+import { BALANCE_KIND, CLOCK_KIND, COPY_KIND, COVERAGE_KIND, DRILL_KIND, ESCALATION_KIND, HEALTH_KIND, LOG_KIND, QUOTA_KIND } from "./assess.ts";
 import type { BalanceStage, Category, CopyStage, HealthState, QuotaStage } from "./contracts.ts";
 
 /** One code of the taxonomy: its plain name and one plain sentence about it. */
@@ -406,6 +406,8 @@ export const TAXONOMY: Readonly<Record<string, KindEntry>> = {
   [DRILL_KIND]: entry("Drill of a path", "A drill of the path of the life-safety warnings: the provider, the phone and the person."),
   [`${DRILL_KIND}.run`]: entry("Drill", "A drill message. It wakes the person, and an acknowledgment in its time passes the drill. It is not a warning."),
   [`${DRILL_KIND}.failed`]: entry("Failed drill", "No acknowledgment of a drill came in its time. A real warning on this path can also go without an answer."),
+  [ESCALATION_KIND]: entry("Escalation of a warning", "The steps that send a warning to a person again on more channels, until the person acknowledges it."),
+  [`${ESCALATION_KIND}.exhausted`]: entry("Exhausted escalation", "A person did not acknowledge a real warning in the time of the policy. The people who watch the person get this report."),
 };
 
 /**

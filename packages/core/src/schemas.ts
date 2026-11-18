@@ -782,8 +782,13 @@ export const channelDescriptorSchema: z.ZodType<ChannelDescriptor, ChannelDescri
       exclusive: z.boolean().exactOptional(),
       why: whyLimitSchema.exactOptional(),
       address: z.array(addressFieldSchema).readonly().exactOptional(),
+      ackLevels: z.array(levelSchema).readonly().exactOptional(),
     })
-    .readonly(),
+    .readonly()
+    .refine((channel) => channel.ack !== "none" || (channel.ackLevels ?? []).length === 0, {
+      error: "A channel with the ack none asks for no acknowledgment, thus it has no ackLevels.",
+      path: ["ackLevels"],
+    }),
 );
 
 /** This schema checks one message to one person on one channel. A `life-safety` message is not quiet (`contracts.ts`, line 516). */

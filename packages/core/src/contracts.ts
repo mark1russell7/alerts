@@ -770,6 +770,11 @@ export interface ChannelDescriptor {
    * does not agree with this list. With no list, each address passes. The function `addressProblems` tells the rules.
    */
   readonly address?: readonly AddressField[];
+  /**
+   * The levels at which a message of the channel asks the person for an acknowledgment. With no list, a channel with an
+   * `ack` other than `none` asks at each level. An exhausted escalation tells the watchers only after such a step (AL-21).
+   */
+  readonly ackLevels?: readonly Level[];
 }
 
 /** The limit of a why line: the most characters, the most words, or both. */

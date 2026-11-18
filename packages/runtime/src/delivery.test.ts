@@ -1,6 +1,8 @@
 import { fakeWallClock } from "@mark1russell7/algebra/clock";
 import {
   COPY_ID,
+  ESCALATION_KIND,
+  PERSON_SUBJECT,
   PRIORS_FORMAT,
   WHY_LIMITS,
   messageKey,
@@ -1293,6 +1295,55 @@ describe("the digest step of a pass", () => {
     expect(pushover.calls.send).toHaveLength(2);
     expect(pushover.calls.send[1]?.key).toBe(pushover.calls.send[0]?.key);
     expect(runtime.state().merge.deliveries.map((delivery) => delivery.level)).toEqual(["digest"]);
+    log.close();
+  });
+});
+
+describe("the exhausted escalations in the passes of the runtime (AL-21)", () => {
+  it("alerts the watcher of the person one pass after the exhaustion, and cancels the alert after a late acknowledgment", async () => {
+    const watcher: Recipient = { ...RECIPIENT, watch: { person: "person-2" as PersonId, places: [], rules: [], subjects: [{ system: PERSON_SUBJECT, id: PERSON }] } };
+    const clock = fakeWallClock(T0);
+    let acked: number | undefined;
+    // The push asks for an acknowledgment at life-safety. The first person acknowledges the first push only when the test says so.
+    const pushover = channel(PUSHOVER, "poll", () => clock.now(), {
+      describe: { ackLevels: ["life-safety"] },
+      status: (receipt) => (acked !== undefined && receipt["receipt"] === "pushover-1" ? { state: "acknowledged", at: acked } : { state: "delivered", at: clock.now() }),
+    });
+    const sms = channel(SMS, "none", () => clock.now());
+    const log = openRuntimeLog(":memory:");
+    const runtime = openRuntime({ log, clock, sources: [SOURCE], watch: () => ({ places: [KANSAS], kinds: ["met"] }), view: VIEW, run: RUN, delivery: { ...DELIVERY, recipients: [RECIPIENT, watcher], channels: [pushover.procedures, sms.procedures] } });
+    const exhaustedLines = () => Object.keys(runtime.state().lines.open).filter((line) => line.startsWith("exhausted/"));
+    const titles = (calls: Calls) => calls.send.map((message) => [message.person, message.title]);
+
+    await runtime.pass();
+    await clock.advance(5 * MINUTE);
+    await runtime.pass();
+    expect(titles(pushover.calls).map(([person]) => person)).toEqual([PERSON]);
+    // The policy ends 20 minutes after its last step. The pass of the exhaustion wakes the next pass at once.
+    await clock.advance(20 * MINUTE);
+    const exhausted = await runtime.pass();
+    expect(exhausted.delivery?.exhausted.map((entry) => [entry.person, entry.level])).toEqual([[PERSON, "life-safety"]]);
+    expect(exhausted.wakeAt).toBe(clock.now() + 1);
+    expect(exhaustedLines()).toEqual([]);
+    await clock.advance(1);
+    const next = await runtime.pass();
+    expect(next.view.step.reports.map((report) => [report.op, report.kind.code])).toEqual([["alert", `${ESCALATION_KIND}.exhausted`]]);
+    expect(exhaustedLines().length).toBe(1);
+    // Only the watcher gets the alert, and its title tells what the first person missed.
+    expect(titles(pushover.calls).slice(1)).toEqual([["person-2", "person-1 did not acknowledge Tornado Warning (life-safety): Tornado Warning issued April 1 at 1:00PM CDT by NWS Wichita KS"]]);
+
+    // The first person acknowledges late. The line ends, and the push of the watcher is cancelled.
+    acked = clock.now();
+    await clock.advance(30 * SECOND);
+    const late = await runtime.pass();
+    expect(late.delivery?.exhausted).toEqual([]);
+    expect(late.wakeAt).toBe(clock.now() + 1);
+    await clock.advance(1);
+    await runtime.pass();
+    await clock.advance(SECOND);
+    await runtime.pass();
+    expect(exhaustedLines()).toEqual([]);
+    expect(pushover.calls.cancel).toContainEqual({ receipt: "pushover-2" });
     log.close();
   });
 });

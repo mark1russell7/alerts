@@ -9,7 +9,7 @@
  */
 import { canonicalJson } from "@mark1russell7/rigor-generators";
 import { compareCodeUnits } from "@mark1russell7/text/order";
-import { BALANCE_KIND, CLOCK_KIND, COPY_KIND, COVERAGE_KIND, DRILL_KIND, hasKind, HEALTH_KIND, LOG_KIND, matchPlaces, QUOTA_KIND } from "./assess.ts";
+import { BALANCE_KIND, CLOCK_KIND, COPY_KIND, COVERAGE_KIND, DRILL_KIND, ESCALATION_KIND, hasKind, HEALTH_KIND, LOG_KIND, matchPlaces, PERSON_SUBJECT, QUOTA_KIND } from "./assess.ts";
 import type {
   Area,
   BalanceStage,
@@ -39,6 +39,7 @@ import type {
   WatchedPlace,
 } from "./contracts.ts";
 import { coverageShort } from "./coverage.ts";
+import type { Exhaustion } from "./delivery.ts";
 import { drillVerdict, type DrillConfig, type DrillRun } from "./drill.ts";
 import { observationId, reportId } from "./ids.ts";
 import type { Lateness } from "./lateness.ts";
@@ -64,6 +65,9 @@ export const COPY_SUBJECT = "alerts.copy";
 
 /** The system of the subjects of the drill reports. The id of a subject is the id of a drill. */
 export const DRILL_SUBJECT = "alerts.drill";
+
+/** The subject system of an incident. The id of a subject is a report of the incident: an exhausted escalation links its warning. */
+export const INCIDENT_SUBJECT = "alerts.incident";
 
 /** The stages of a quota, from the first to the last. */
 export const QUOTA_STAGES: readonly QuotaStage[] = ["low", "reserve", "spent"];
@@ -206,6 +210,11 @@ export interface SystemSnapshot {
    * With no drills, each open line of a drill stays open.
    */
   readonly drills?: readonly DrillSnapshot[];
+  /**
+   * The exhausted escalations of the real warnings (`exhaustions`, AL-21). Each one is a condition, for the people who
+   * watch the person. Only one copy reports them (`reportsShared`). With no list, each open line of an exhaustion stays open.
+   */
+  readonly exhausted?: readonly Exhaustion[];
 }
 
 /** The result of one step of the fold. */
@@ -364,6 +373,7 @@ export function gapGrade(entry: Coverage, threatened: boolean): { readonly sever
  * - The latest step of the wall clock in `CLOCK_STEP_WINDOW` before `at`.
  * - The latest recovery of the log in `LOG_RECOVERY_WINDOW` before `at`.
  * - Each run of a drill that waits for its acknowledgment, and each drill whose last run failed.
+ * - Each exhausted escalation of a real warning. Only one copy reports it (`reportsShared`).
  *
  * An open line with no condition in the snapshot ends with a cancel. Equal snapshots give no new report.
  */
@@ -410,6 +420,8 @@ export function systemReports(lines: SystemLines, snapshot: SystemSnapshot, at: 
     if (verdict.state === "pending") conditions.set(drillName(copy, drill.id), drillRunCondition(copy, drill, run));
     else if (verdict.state === "failed") conditions.set(`${drillName(copy, drill.id)}/failed`, drillFailedCondition(copy, drill, run, verdict.why));
   }
+  // The two copies see the same exhaustion in the shared log. Thus one copy reports it, as with a shared balance.
+  if (shared) for (const entry of snapshot.exhausted ?? []) conditions.set(exhaustionName(entry), exhaustionCondition(entry));
   const names = [...new Set([...Object.keys(lines.open), ...conditions.keys()])].sort(compareCodeUnits);
   let count = lines.count;
   const open = new Map(Object.entries(lines.open));
@@ -422,6 +434,7 @@ export function systemReports(lines: SystemLines, snapshot: SystemSnapshot, at: 
     if (condition === undefined && snapshot.balances === undefined && name.startsWith(BALANCE_LINE)) continue;
     if (condition === undefined && snapshot.copies === undefined && name.startsWith(COPY_LINE)) continue;
     if (condition === undefined && snapshot.drills === undefined && name.startsWith(DRILL_LINE)) continue;
+    if (condition === undefined && snapshot.exhausted === undefined && name.startsWith(EXHAUSTION_LINE)) continue;
     const draft = condition === undefined ? (line === undefined ? undefined : cancelOf(line)) : condition;
     if (draft === undefined) continue;
     const facts = canonicalJson(draft.facts, { form: "json" });
@@ -533,6 +546,45 @@ const LOG_LINE = "log";
 
 function coverageName(place: PlaceId, kind: string): string {
   return `coverage/${encodeURIComponent(place)}/${encodeURIComponent(kind)}`;
+}
+
+// The start of the name of each line of an exhausted escalation. The copy is not in the name: one copy reports it.
+const EXHAUSTION_LINE = "exhausted/";
+
+function exhaustionName(entry: Exhaustion): string {
+  return `${EXHAUSTION_LINE}${encodeURIComponent(entry.person)}/${encodeURIComponent(entry.incident)}/${String(entry.episode)}/${entry.level}`;
+}
+
+// The severity and the urgency of an exhaustion at each level. The table of the class `system-escalation` gives back the level.
+const EXHAUSTION_TERMS: Readonly<Record<Exhaustion["level"], { readonly severity: Severity; readonly urgency: Urgency }>> = {
+  "life-safety": { severity: "extreme", urgency: "immediate" },
+  urgent: { severity: "severe", urgency: "expected" },
+  notice: { severity: "moderate", urgency: "future" },
+  digest: { severity: "minor", urgency: "past" },
+};
+
+function exhaustionCondition(entry: Exhaustion): Condition {
+  const code = `${ESCALATION_KIND}.exhausted`;
+  return {
+    // The facts do not change while the escalation stays exhausted. Thus it gives one alert, and an acknowledgment or the end gives its cancel.
+    // The title is not a fact: a new text of the warning gives no new alert.
+    facts: { person: entry.person, incident: entry.incident, episode: entry.episode, level: entry.level, at: entry.at },
+    kind: { code, label: kindLabel(code) },
+    ...EXHAUSTION_TERMS[entry.level],
+    response: ["assess"],
+    onset: entry.at,
+    // The report has no area. Thus it reaches only the people who watch the person, and not the people at the place.
+    areas: [],
+    about: [
+      { system: PERSON_SUBJECT, id: entry.person, label: `Person ${entry.person}` },
+      { system: INCIDENT_SUBJECT, id: entry.incident, label: entry.title },
+    ],
+    // The headline tells what the person missed: the kind, the title and the level of the warning.
+    headline: `${entry.person} did not acknowledge ${entry.kind.label} (${entry.level})${entry.title === entry.kind.label ? "" : `: ${entry.title}`}`,
+    description: `The warning reached ${entry.person} at the level ${entry.level}. No acknowledgment came before ${new Date(entry.at).toISOString()}, the end of the escalation.`,
+    instruction: `Speak to ${entry.person}. An acknowledgment of the warning by ${entry.person} ends this alert.`,
+    parameters: { person: [entry.person], level: [entry.level], kind: [entry.kind.code], incident: [entry.incident] },
+  };
 }
 
 function drillRunCondition(copy: string, drill: DrillConfig, run: DrillRun): Condition {

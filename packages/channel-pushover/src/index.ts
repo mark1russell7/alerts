@@ -4,7 +4,7 @@
  * come from `@procedures/notify/pushover`.
  */
 
-import { COPY_ID, WHY_LIMITS, type AddressField, type ChannelDescriptor, type ChannelId, type ChannelProcedures, type Instant, type SendOutcome } from "@mark1russell7/alerts";
+import { COPY_ID, LEVELS, WHY_LIMITS, type AddressField, type ChannelDescriptor, type ChannelId, type ChannelProcedures, type Instant, type SendOutcome } from "@mark1russell7/alerts";
 import { isQuotaError, type Quota, type QuotaError, type QuotaGate, type QuotaReading, type QuotaState } from "polite-crawler/api";
 import {
   callPushover,
@@ -24,7 +24,7 @@ import {
   type PushoverSent,
   pushoverSendRequest,
 } from "@procedures/notify/pushover";
-import { type PushoverMapOptions, pushoverMessageOf, sendFailureOf, statusOf } from "./map.ts";
+import { type PushoverMapOptions, priorityOf, pushoverMessageOf, sendFailureOf, statusOf } from "./map.ts";
 
 export { priorityOf, pushoverMessageOf, sendFailureOf, statusOf } from "./map.ts";
 export type { PushoverMapOptions, Refusal } from "./map.ts";
@@ -143,6 +143,8 @@ export function pushoverDescriptor(platform?: "ios" | "android"): ChannelDescrip
     breaksThrough: true,
     repeats: true,
     ack: "poll",
+    // Only a message at priority 2 has a receipt, thus only its level asks for an acknowledgment.
+    ackLevels: LEVELS.filter((level) => priorityOf(level, false) === 2),
     maxTitle: PUSHOVER_LIMITS.title,
     maxBody: PUSHOVER_LIMITS.message,
     maxInFlight: PUSHOVER_MAX_IN_FLIGHT,
