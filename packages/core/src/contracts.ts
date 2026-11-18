@@ -1273,6 +1273,25 @@ export type ShadowScore =
     }
   | { readonly read: false; readonly missing: readonly ScoreGap[] };
 
+/** An incident with its level from the table and its shadow score, as the map gives it. */
+export interface ScoredIncident {
+  readonly anchor: ReportId;
+  readonly level: AssessedLevel;
+  /** The shadow score of the incident. An incident with no score is in no difference. */
+  readonly shadow?: ShadowScore;
+}
+
+/**
+ * A difference between the table and the shadow score. The table gives `above` a higher level than `below`.
+ * The score gives `below` more expected deaths and more expected injuries, and the intervals do not overlap.
+ */
+export interface ShadowDifference {
+  /** The incident with the higher level of the table. */
+  readonly above: ReportId;
+  /** The incident with the higher shadow score. */
+  readonly below: ReportId;
+}
+
 /** A reason of an assessment. The UI shows the reasons, so each level tells why. */
 export type AssessReason =
   /** Each line of the incident is cancelled or expired. */

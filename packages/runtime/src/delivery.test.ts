@@ -1,9 +1,11 @@
 import { fakeWallClock } from "@mark1russell7/algebra/clock";
 import {
   COPY_ID,
+  PRIORS_FORMAT,
   WHY_LIMITS,
   messageKey,
   reportId,
+  shadowScore,
   type ChannelDescriptor,
   type ChannelId,
   type ChannelProcedures,
@@ -20,6 +22,7 @@ import {
   type Receipt,
   type Recipient,
   type Report,
+  type ScorePriors,
   type SendOutcome,
   type SourceId,
   type SourceProcedures,
@@ -188,6 +191,28 @@ function open(scripts: { readonly pushover?: Script; readonly sms?: Script } = {
 const types = (log: RuntimeLog) => [...log.read()].map((event) => event.type).filter((type) => type !== "observation" && type !== "fetch" && type !== "system");
 
 describe("the delivery step of a pass", () => {
+  it("keeps the shadow score of the incident at the start of each escalation, and the score changes no send", async () => {
+    // Made-up values. They are not the public measures.
+    const priors: ScorePriors = {
+      format: PRIORS_FORMAT,
+      kinds: { "met.tornado": { deaths: { value: 0.04, low: 0.03, high: 0.06 }, injuries: { value: 0.6, low: 0.4, high: 0.9 } } },
+      certainty: { observed: { value: 1, low: 1, high: 1 } },
+    };
+    const starts = (log: RuntimeLog) => [...log.read()].flatMap((event) => (event.type === "escalation" ? [event] : []));
+    const scored = open({}, undefined, undefined, { priors });
+    await scored.runtime.pass();
+    const plain = open();
+    await plain.runtime.pass();
+    expect(starts(scored.log).map((event) => event.shadow)).toEqual([shadowScore({ kind: { code: "met.tornado", label: "Tornado Warning" }, certainty: "observed" }, priors)]);
+    expect(starts(plain.log).some((event) => "shadow" in event)).toBe(false);
+    expect(scored.pushover.send).toEqual(plain.pushover.send);
+    expect(types(scored.log)).toEqual(types(plain.log));
+    expect(scored.runtime.state()).toEqual(rebuild(scored.log.read(), scored.runtime.config));
+    expect(scored.runtime.state().merge.deliveries).toEqual(plain.runtime.state().merge.deliveries);
+    scored.log.close();
+    plain.log.close();
+  });
+
   it("puts the why line into each message of a channel with a why limit, with the label of the runtime and no label in the log", async () => {
     const labels = (node: string): string | undefined => (node === `place:${KANSAS.id}` ? "Lake cabin" : undefined);
     const named = open({ pushover: { describe: { why: WHY_LIMITS.push } } }, undefined, undefined, { labels });

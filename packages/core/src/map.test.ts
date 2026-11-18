@@ -1,8 +1,9 @@
 import { random, seedsFrom } from "@mark1russell7/rigor-generators";
 import { describe, expect, it } from "vitest";
 import { assess, DEFAULT_ASSESS_POLICY, reachedAssessment } from "./assess.ts";
-import type { Area, AssessedLevel, Assessment, Coverage, Incident, PersonId, PersonWatch, PlaceId, RegionCode, ReportId, Severity } from "./contracts.ts";
+import type { Area, AssessedLevel, Assessment, Coverage, Estimate, Incident, PersonId, PersonWatch, PlaceId, RegionCode, ReportId, ScorePriors, Severity } from "./contracts.ts";
 import { MAP_FORMAT, mapPayload, mapView, regionRank, type MapInput, type MapPayloadInput, type MapPlaceInput, type MapRegion, type MapShape, type ShapeLookup } from "./map.ts";
+import { PRIORS_FORMAT, shadowScore } from "./score.ts";
 
 const SEEDS = seedsFrom(process.env["SEED"], [1, 2, 3, 4, 5, 6, 7, 8]);
 const PERSON_A = "person:a" as PersonId;
@@ -221,6 +222,29 @@ describe("the payload of the map route", () => {
     );
     const payload = mapPayload(payloadInput({ incidents }));
     expect(payload.view).toEqual(mapView(input({ incidents, assessments: assessed(incidents) })));
+  });
+
+  it("gives the shadow score of each incident that reaches a person, and the score changes nothing else", () => {
+    // Made-up values. They are not the public measures.
+    const estimate = (value: number, low: number, high: number): Estimate => ({ value, low, high });
+    const priors: ScorePriors = {
+      format: PRIORS_FORMAT,
+      kinds: { "met.tornado": { deaths: estimate(0.04, 0.03, 0.06), injuries: estimate(0.6, 0.4, 0.9) } },
+      certainty: { observed: estimate(1, 1, 1) },
+    };
+    const near = incident("a");
+    const far = incident("b", { areas: [{ type: "code", system: "ugc", code: "OKZ001" }] });
+    const ended = incident("c", { live: false });
+    const payload = mapPayload(payloadInput({ incidents: [near, far, ended], priors }));
+    const byAnchor = new Map(payload.view.incidents.map((entry) => [entry.anchor, entry]));
+    expect(byAnchor.get(near.anchor)?.shadow).toEqual(shadowScore(near, priors));
+    expect(byAnchor.get(far.anchor)?.level).toBe("none");
+    expect(byAnchor.get(far.anchor)).not.toHaveProperty("shadow");
+    expect(byAnchor.has(ended.anchor)).toBe(false);
+    const plain = mapPayload(payloadInput({ incidents: [near, far, ended] }));
+    expect(plain.view.incidents.some((entry) => "shadow" in entry)).toBe(false);
+    // `toEqual` reads a field with the value `undefined` as a field that is not there.
+    expect({ ...payload, view: { ...payload.view, incidents: payload.view.incidents.map((entry) => ({ ...entry, shadow: undefined })) } }).toEqual(plain);
   });
 });
 
