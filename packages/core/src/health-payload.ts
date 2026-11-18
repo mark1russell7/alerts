@@ -1,6 +1,6 @@
 /**
  * The payload of the health route of the runtime. It tells the state of each part of the system. The parts are the
- * sources, the lateness, the coverage, the other copies, the quotas, the balances and the reads on a schedule.
+ * sources, the lateness, the coverage, the other copies, the quotas, the balances, the reads on a schedule and the channels.
  */
 
 import type {
@@ -16,11 +16,12 @@ import type {
   QuotaStage,
   SourceHealth,
 } from "./contracts.ts";
+import { DEFAULT_CHANNEL_DOWN, runOpens, type ChannelDownPolicy, type ChannelSnapshot } from "./channel-down.ts";
 import type { Lateness } from "./lateness.ts";
 import { balanceStages, copyStages, quotaStages } from "./system-reports.ts";
 
 /** The name of the format of the health payload. A change that breaks a reader gets a new name. */
-export const HEALTH_FORMAT = "alerts-health/3";
+export const HEALTH_FORMAT = "alerts-health/4";
 
 /**
  * The health of one source in the payload. It keeps the kind of the last failure, and not its message. A message can hold
@@ -58,6 +59,15 @@ export interface ReadHealth {
   readonly next: Instant | null;
 }
 
+/**
+ * The health of one channel of this copy (AL-65): its endpoints, its last good call and its run of failed calls. The run
+ * holds the kind of each failure, and not its message. Thus a passed probe shows as a new time in `good`.
+ */
+export interface ChannelHealth extends ChannelSnapshot {
+  /** This value is true when the run opens a line under the policy of the down channels (`runOpens`). */
+  readonly down: boolean;
+}
+
 /** The health of the balance of one provider account: the balance, and its stages at the time of the read. */
 export interface BalanceHealth {
   readonly balance: ProviderBalance;
@@ -82,6 +92,7 @@ export interface HealthPayload {
   readonly quotas: readonly QuotaHealth[];
   readonly balances: readonly BalanceHealth[];
   readonly reads: readonly ReadHealth[];
+  readonly channels: readonly ChannelHealth[];
 }
 
 /** These are the inputs of the payload of the health route. */
@@ -104,6 +115,10 @@ export interface HealthPayloadInput {
   readonly balances: readonly ProviderBalance[];
   /** The health of each read on a schedule, other than the balances, at the time of the read. */
   readonly reads: readonly ReadHealth[];
+  /** The channels of this copy at the time of the read (AL-65). The default is no channel. */
+  readonly channels?: readonly ChannelSnapshot[];
+  /** The policy of the down channels. The default is `DEFAULT_CHANNEL_DOWN`. */
+  readonly channelDown?: ChannelDownPolicy;
 }
 
 /** This function gives the health of a source without the message of its last failure. */
@@ -118,6 +133,7 @@ export function sourceHealthView(health: SourceHealth): SourceHealthView {
  */
 export function healthPayload(input: HealthPayloadInput): HealthPayload {
   const { at, now } = input;
+  const policy = input.channelDown ?? DEFAULT_CHANNEL_DOWN;
   return {
     format: HEALTH_FORMAT,
     at,
@@ -129,5 +145,6 @@ export function healthPayload(input: HealthPayloadInput): HealthPayload {
     quotas: input.quotas.map((quota) => ({ quota, stages: quotaStages(quota) })),
     balances: input.balances.map((balance) => ({ balance, stages: balanceStages(balance, now) })),
     reads: input.reads,
+    channels: (input.channels ?? []).map((snapshot) => ({ ...snapshot, down: snapshot.run !== undefined && runOpens(snapshot.run, policy) })),
   };
 }

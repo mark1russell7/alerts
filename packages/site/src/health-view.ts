@@ -4,7 +4,7 @@
  * The draw functions make the elements of the panel from that data.
  */
 
-import { DOWN_STATES, balanceFloorsBelow, kindLabel, type BalanceHealth, type CopyHealth, type HealthPayload, type HealthState, type QuotaHealth, type ReadHealth, type SourceHealthView } from "@mark1russell7/alerts";
+import { DOWN_STATES, balanceFloorsBelow, kindLabel, type BalanceHealth, type ChannelHealth, type CopyHealth, type HealthPayload, type HealthState, type QuotaHealth, type ReadHealth, type SourceHealthView } from "@mark1russell7/alerts";
 import { h } from "@mark1russell7/site-pages/chrome";
 import { countOf, listOf } from "@mark1russell7/text/english";
 import { compareCodeUnits } from "@mark1russell7/text/order";
@@ -141,10 +141,10 @@ export function sourcesVerdict(rows: readonly SourceRow[], passed: boolean): Ver
   return { tone: "good", text: one ? "The source reads well." : `Each of the ${String(total)} sources reads well.` };
 }
 
-/** One fact that stops or limits a message: a quota, a balance or another copy with a stage, or a failed read. */
+/** One fact that stops or limits a message: a quota, a balance or a copy with a stage, a failed read or a failed channel. */
 export interface DeliveryFact {
   /** The part of the delivery that the fact is about. */
-  readonly part: "quota" | "balance" | "copy" | "read";
+  readonly part: "quota" | "balance" | "copy" | "read" | "channel";
   /** The name of the part: the id of a channel or of a copy, the name of a provider, or the words of a read. */
   readonly name: string;
   readonly tone: Tone;
@@ -158,7 +158,7 @@ export interface DeliveryFact {
 }
 
 /** The label of each part of the delivery in the panel. */
-export const PART_WORDS: Readonly<Record<DeliveryFact["part"], string>> = { quota: "Quota of the channel", balance: "Balance of the provider", copy: "Other copy", read: "Read on a schedule" };
+export const PART_WORDS: Readonly<Record<DeliveryFact["part"], string>> = { quota: "Quota of the channel", balance: "Balance of the provider", copy: "Other copy", read: "Read on a schedule", channel: "Channel" };
 
 const groups = new Intl.NumberFormat("en-US");
 
@@ -227,14 +227,25 @@ function readFact({ what, at: passed, failed, next }: ReadHealth, at: number, cl
   return { part: "read", name: what, tone: "warn", word: "Read failed", text: `${last}${then}`, stopped: [], limited: [] };
 }
 
-const PARTS: readonly DeliveryFact["part"][] = ["quota", "balance", "copy", "read"];
+/**
+ * A channel with a run of failed calls gives a fact (AL-65). A down channel stops each message on it until a good call: an
+ * accepted send or a probe that passes. A run that does not open a line gives a warning.
+ */
+function channelFact({ channel, run, down }: ChannelHealth, at: number, clock: Clock): DeliveryFact | undefined {
+  if (run === undefined) return undefined;
+  const calls = `${countOf(run.failures, "call")} failed since ${clock(run.first, at)}. The last failure was at ${clock(run.last, at)}, of the kind ${run.kind}.`;
+  if (down) return { part: "channel", name: channel, tone: "bad", word: "Down", text: `${calls} The run opens the line of a down channel.`, stopped: [channel], limited: [] };
+  return { part: "channel", name: channel, tone: "warn", word: "Failed calls", text: calls, stopped: [], limited: [] };
+}
+
+const PARTS: readonly DeliveryFact["part"][] = ["quota", "balance", "copy", "read", "channel"];
 
 /**
  * This function gives the facts of the health that stop or limit a message. A quota, a balance or a copy with no
  * stage gives no fact, because a person does not need it. A fact that stops a message is first.
  */
 export function deliveryFacts(payload: HealthPayload, at: number, clock: Clock): DeliveryFact[] {
-  const facts = [...payload.quotas.map((one) => quotaFact(one, at, clock)), ...payload.balances.map((one) => balanceFact(one, at)), ...payload.copies.map((one) => copyFact(one, at)), ...payload.reads.map((one) => readFact(one, at, clock))].filter((fact) => fact !== undefined);
+  const facts = [...payload.quotas.map((one) => quotaFact(one, at, clock)), ...payload.balances.map((one) => balanceFact(one, at)), ...payload.copies.map((one) => copyFact(one, at)), ...payload.reads.map((one) => readFact(one, at, clock)), ...payload.channels.map((one) => channelFact(one, at, clock))].filter((fact) => fact !== undefined);
   const order = (fact: DeliveryFact): number => (fact.tone === "bad" ? 0 : 1);
   return facts.sort((a, b) => order(a) - order(b) || PARTS.indexOf(a.part) - PARTS.indexOf(b.part) || compareCodeUnits(a.name, b.name));
 }
@@ -357,7 +368,7 @@ export function drawHealth(panel: HealthPanel): HTMLElement[] {
   const parts: HTMLElement[] = [];
   if (panel.rows.length > 0) parts.push(h("ul", { class: "source-list", "aria-label": "The health of each source" }, ...panel.rows.map(drawRow)));
   if (panel.facts.length > 0) {
-    parts.push(h("h3", { class: "delivery-h" }, "Quotas, balances, copies and reads"));
+    parts.push(h("h3", { class: "delivery-h" }, "Quotas, balances, copies, reads and channels"));
     parts.push(h("ul", { class: "source-list", "aria-label": "The facts that stop or limit a message" }, ...panel.facts.map(drawFact)));
   }
   return parts;

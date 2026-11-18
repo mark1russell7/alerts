@@ -1429,6 +1429,11 @@ describe("the down channels in the passes of the runtime (AL-65)", () => {
     // The third failed probe over 3 minutes opens the line in the view of the same pass.
     expect(down(pass)).toEqual(["alert"]);
     expect(lines()).toEqual([`channel/${ONLY_COPY.id}/pushover`]);
+    // The health route reads the same runs: the kind of each failure, and no message.
+    expect(runtime.channels().map(({ channel, run, good }) => ({ channel, run, good }))).toEqual([
+      { channel: PUSHOVER, run: { channel: PUSHOVER, failures: 3, first: T0 + MINUTE, last: T0 + 4 * MINUTE, kind: "server", reached: true }, good: undefined },
+      { channel: SMS, run: undefined, good: undefined },
+    ]);
 
     up = true;
     await clock.advance(pass.wakeAt! - clock.now());
@@ -1437,6 +1442,8 @@ describe("the down channels in the passes of the runtime (AL-65)", () => {
     expect(down(ended)).toEqual(["cancel"]);
     expect(lines()).toEqual([]);
     expect(pushover.calls.send).toEqual([]);
+    // The passed probe shows as the last good call of the channel, with no run.
+    expect(runtime.channels()[0]).toEqual({ copy: ONLY_COPY.id, channel: PUSHOVER, title: expect.any(String), api: ["domain:api.example.com"], good: T0 + 8 * MINUTE });
     log.close();
   });
 

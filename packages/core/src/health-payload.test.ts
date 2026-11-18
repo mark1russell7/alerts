@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ChannelId, ChannelQuota, CopyWatch, Coverage, PlaceId, ProviderBalance, ReportId, SourceHealth, SourceId } from "./contracts.ts";
+import { DEFAULT_CHANNEL_DOWN, type ChannelSnapshot } from "./channel-down.ts";
 import { HEALTH_FORMAT, healthPayload, sourceHealthView, type HealthPayloadInput } from "./health-payload.ts";
 import type { Lateness } from "./lateness.ts";
 import { healthPayloadSchema, sourceHealthViewSchema } from "./schemas.ts";
@@ -11,6 +12,7 @@ const API = "api" as SourceId;
 const FEED = "feed" as SourceId;
 const CALL = "call" as ChannelId;
 const PUSH = "push" as ChannelId;
+const TEXT = "text" as ChannelId;
 // A made-up key in the message of a failure. The payload must not hold it.
 const KEY = "key-5f1c9a";
 
@@ -31,6 +33,13 @@ const unread: CopyWatch = { copy: "copy-c", skewLimit: 2_000, maxAge: 60_000, si
 const reserve: ChannelQuota = { channel: PUSH, limit: 100, reserve: 10, used: 95, resetAt: START + 86_400_000 };
 const low: ProviderBalance = { provider: "provider:call", title: "Calls", channels: [CALL], floors: [5], maxAge: 3_600_000, since: START, read: { balance: 3, currency: "USD", at: START + 1_000 } };
 
+// Three channels: one run that opens a line, one short run, and one channel with a good call and no run.
+const channels: ChannelSnapshot[] = [
+  { copy: "copy-a", channel: CALL, title: "Calls", api: ["domain:call.example.com"], run: { channel: CALL, failures: 3, first: START, last: START + 60_000, kind: "server", reached: true } },
+  { copy: "copy-a", channel: PUSH, title: "Push", run: { channel: PUSH, failures: 3, first: START, last: START + 30_000, kind: "timeout", reached: true }, good: START - 1_000 },
+  { copy: "copy-a", channel: TEXT, title: "Texts", good: START + 100_000 },
+];
+
 const input: HealthPayloadInput = {
   at: START + 110_000,
   now: NOW,
@@ -41,6 +50,7 @@ const input: HealthPayloadInput = {
   quotas: [reserve],
   balances: [low],
   reads: [{ what: "replies of the texts", at: START + 100_000, failed: true, next: NOW + 300_000 }],
+  channels,
 };
 
 describe("sourceHealthView", () => {
@@ -80,6 +90,14 @@ describe("healthPayload", () => {
     expect(payload.balances[0]?.stages).toEqual(["low"]);
   });
 
+  it("gives each channel with the down flag of its run under the policy", () => {
+    // The default policy opens a line after 3 failed calls over 60 s or more: the run of the push channel is too short.
+    expect(DEFAULT_CHANNEL_DOWN).toEqual({ failures: 3, span: 60_000 });
+    expect(payload.channels).toEqual(channels.map((channel, index) => ({ ...channel, down: index === 0 })));
+    expect(healthPayload({ ...input, channelDown: { failures: 3, span: 30_000 } }).channels.map((entry) => entry.down)).toEqual([true, true, false]);
+    expect(healthPayload({ ...input, channelDown: { failures: 4, span: 0 } }).channels.map((entry) => entry.down)).toEqual([false, false, false]);
+  });
+
   it("passes its schema after a JSON round trip, and holds no message of a failure", () => {
     const text = JSON.stringify(payload);
     expect(text).not.toContain(KEY);
@@ -87,8 +105,9 @@ describe("healthPayload", () => {
   });
 
   it("gives a payload before the first pass, with empty lists", () => {
+    // A runtime with no delivery gives no channel.
     const empty = healthPayload({ at: null, now: START, sources: [], lateness: [], coverage: [], copies: [], quotas: [], balances: [], reads: [] });
-    expect(empty).toEqual({ format: HEALTH_FORMAT, at: null, now: START, sources: [], lateness: [], coverage: [], copies: [], quotas: [], balances: [], reads: [] });
+    expect(empty).toEqual({ format: HEALTH_FORMAT, at: null, now: START, sources: [], lateness: [], coverage: [], copies: [], quotas: [], balances: [], reads: [], channels: [] });
     expect(healthPayloadSchema.safeParse(empty).success).toBe(true);
   });
 
@@ -97,5 +116,9 @@ describe("healthPayload", () => {
     expect(healthPayloadSchema.safeParse(withMessage).success).toBe(false);
     expect(healthPayloadSchema.safeParse({ ...payload, format: "alerts-health/0" }).success).toBe(false);
     expect(healthPayloadSchema.safeParse({ ...payload, extra: 1 }).success).toBe(false);
+    // A channel with a message of a failure, or with no down flag, does not pass.
+    const [call] = payload.channels;
+    expect(healthPayloadSchema.safeParse({ ...payload, channels: [{ ...call, run: { ...call?.run, message: KEY } }] }).success).toBe(false);
+    expect(healthPayloadSchema.safeParse({ ...payload, channels: [{ ...call, down: undefined }] }).success).toBe(false);
   });
 });

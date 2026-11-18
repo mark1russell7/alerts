@@ -5,7 +5,7 @@
  * that it gets.
  */
 import { isFrameClock, type WallClock } from "@mark1russell7/algebra/clock";
-import { channelDownPolicy, DEFAULT_LINK_POLICY, downChannels, indicatorBreadth, linkRule, ONLY_COPY, type ChannelQuota, type CopyWatch, type Duration, type EntryTimes, type Exhaustion, type FetchOutcome, type IndicatorBreadth, type Instant, type LatenessFolds, type ReportId, type SourceDescriptor, type SourceId, type SourceProcedures, type Watch, type ZoneRegions } from "@mark1russell7/alerts";
+import { channelDownPolicy, DEFAULT_LINK_POLICY, downChannels, indicatorBreadth, linkRule, ONLY_COPY, type ChannelQuota, type ChannelSnapshot, type CopyWatch, type Duration, type EntryTimes, type Exhaustion, type FetchOutcome, type IndicatorBreadth, type Instant, type LatenessFolds, type ReportId, type SourceDescriptor, type SourceId, type SourceProcedures, type Watch, type ZoneRegions } from "@mark1russell7/alerts";
 import { errorMessage } from "@mark1russell7/text";
 import type { BalanceWatch } from "./balance.ts";
 import { channelWatch, lastFetchSuccess } from "./channel-watch.ts";
@@ -201,6 +201,11 @@ export interface Runtime {
    * read that brought it, not the time of the other copy. The history route reads them.
    */
   entered(): EntryTimes;
+  /**
+   * This function gives the channels of this copy at the time of the call (AL-65). Each channel has its run of failed calls
+   * and its last good call. A runtime with no delivery has no channel. The health route reads them.
+   */
+  channels(): ChannelSnapshot[];
   /**
    * This function ends the resources of the sources: it starts `close` of each source that has one, one time. A second
    * call gives the same promise. It does not throw. A pass after the close throws.
@@ -466,6 +471,7 @@ export function openRuntime(options: RuntimeOptions): Runtime {
       return { imports: result.imports, next: result.position.next, problems: result.problems, conflicts };
     },
     entered: () => entries.times(state.own.merge),
+    channels: () => channels?.snapshots() ?? [],
     close,
   };
 }

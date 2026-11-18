@@ -30,7 +30,7 @@ const STATES: readonly HealthState[] = ["unknown", "healthy", "slow", "failing",
 
 const row = (state: HealthState, late = false, source = "one"): SourceRow => ({ source, state, late, read: "", readAt: undefined, why: [], covers: undefined });
 const rows = (...states: HealthState[]): SourceRow[] => states.map((state, index) => row(state, false, `source-${String(index)}`));
-const health = (parts: Partial<HealthPayload>): HealthPayload => ({ ...HEALTHY_FIXTURE, copies: [], quotas: [], balances: [], reads: [], ...parts });
+const health = (parts: Partial<HealthPayload>): HealthPayload => ({ ...HEALTHY_FIXTURE, copies: [], quotas: [], balances: [], reads: [], channels: [], ...parts });
 const quota = (used: number, stages: HealthPayload["quotas"][number]["stages"], more: object = {}): HealthPayload["quotas"][number] => ({
   quota: { channel: "text" as ChannelId, limit: 100, reserve: 10, used, ...more },
   stages,
@@ -226,7 +226,7 @@ describe("the facts of the delivery", () => {
       { part: "copy", name: "cabin-copy", tone: "warn", word: "Not read", text: "The last read of the copy was 3 hours ago. The two copies can both send an alert.", stopped: [], limited: [] },
       { part: "read", name: "replies of the texts", tone: "warn", word: "Read failed", text: "The last read of the replies of the texts failed. The last read that passed was 40 minutes ago. The next read is at 21:05.", stopped: [], limited: [] },
     ]);
-    expect(Object.keys(PART_WORDS)).toEqual(["quota", "balance", "copy", "read"]);
+    expect(Object.keys(PART_WORDS)).toEqual(["quota", "balance", "copy", "read", "channel"]);
   });
 
   it("tells the worst stage of a quota", () => {
@@ -268,6 +268,26 @@ describe("the facts of the delivery", () => {
       { part: "read", name: "replies of the texts", tone: "warn", word: "Read failed", text: "The last read of the replies of the texts failed. The last read that passed was 40 minutes ago. The next read is at 21:05.", stopped: [], limited: [] },
     ]);
     expect(facts({ reads: [read(null, true, null)] })).toMatchObject([{ text: "No read of the replies of the texts passed yet." }]);
+  });
+
+  it("tells a channel with failed calls, and stops each message on a down channel", () => {
+    const channel = (failures: number, down: boolean): HealthPayload["channels"][number] => ({
+      copy: "home-copy",
+      channel: "push" as ChannelId,
+      title: "Push Co",
+      run: { channel: "push" as ChannelId, failures, first: HEALTH_AT - 10 * MINUTE, last: HEALTH_AT - 2 * MINUTE, kind: "server", reached: true },
+      good: HEALTH_AT - HOUR,
+      down,
+    });
+    // A channel with no run gives no fact, also with no good call yet.
+    expect(facts({ channels: [{ copy: "home-copy", channel: "push" as ChannelId, title: "Push Co", down: false }] })).toEqual([]);
+    expect(facts({ channels: [channel(1, false)] })).toEqual([
+      { part: "channel", name: "push", tone: "warn", word: "Failed calls", text: "1 call failed since 20:50. The last failure was at 20:58, of the kind server.", stopped: [], limited: [] },
+    ]);
+    expect(facts({ channels: [channel(4, true)] })).toEqual([
+      { part: "channel", name: "push", tone: "bad", word: "Down", text: "4 calls failed since 20:50. The last failure was at 20:58, of the kind server. The run opens the line of a down channel.", stopped: ["push"], limited: [] },
+    ]);
+    expect(deliveryVerdict(health({ channels: [channel(4, true)] }), facts({ channels: [channel(4, true)] }))).toEqual({ tone: "bad", text: "The channel push cannot send a message." });
   });
 
   it("names a provider with no title by its id", () => {
