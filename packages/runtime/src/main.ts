@@ -213,7 +213,7 @@ async function runtime(): Promise<ServiceBuilder> {
     shapes,
     readings,
     // The kind of the error only: its message can quote a value of a reading.
-    onReadingsFault: (error, action) => console.error(`The store of readings refused a write (${action}): ${error instanceof Error ? error.name : typeof error}.`),
+    onReadingsFault: (error, action) => console.error(`The store of readings failed (${action}): ${error instanceof Error ? error.name : typeof error}.`),
     onShapes: (outcome) => {
       const report = shapeReport(outcome);
       if (report !== undefined) console.error(redactSecrets(report, values));

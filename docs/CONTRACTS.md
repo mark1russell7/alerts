@@ -249,6 +249,15 @@ A zone with no regions in the table, and a shape that `@mark1russell7/geo` refus
 
 The breadth gives counts and no decision. The threat level (AL-24) reads the counts.
 
+The runtime calculates the breadth at each pass, after the fetches and before the view. The field `breadth` of the pass holds it. `series-reads.ts` of the runtime keeps the read of each series of the store between the passes:
+
+- The read of a series changes only at three events. The series gets readings. The store deletes a reading of its window. The time passes the stale time of the latest reading, or the time of a later reading.
+- A pass reads from the store only the series of these events. A seeded test holds that the reads are the reads of each series at each time.
+- A time before the time of the last pass reads each series again, because the wall clock moved back.
+- A series of a measure that no descriptor declares has no read.
+- A fault of the store goes to the hook `onReadingsFault` with the action `read`. The pass then has no breadth, and it continues.
+- The option `zones` of the runtime gives the table of the regions of each zone. Without the table, each series with the area of a zone is in `unplaced`.
+
 ## Health and coverage
 
 The core calculates the health of each source from the records of its fetches, not the adapter. The runtime writes one `FetchRecord` when each fetch ends. The health is a state machine on `@mark1russell7/algebra`, and `HEALTH_MACHINE` is its document.
@@ -1425,7 +1434,7 @@ The file `schemas.ts` of the core has one zod 4 schema for each data type of the
 
 ## Open points
 
-- The threat level does not read the breadth of the signals yet. The runtime does not calculate the breadth at each pass yet.
+- The threat level does not read the breadth of the signals yet. No source gives the table of the zones yet.
 - The breadth gives counts and no chance. A base rate of the signals of each dimension, from the history of the reads, gives the chance of a breadth.
 - The atlas has no table of the regions of each zone yet. Until then, each series of a zone is in `unplaced`.
 - A fault of the store of the readings goes only to the output. The health payload does not show it yet.
