@@ -68,6 +68,7 @@ describe("the descriptor of the text channel", () => {
     const descriptor = twilioTextDescriptor();
     expect(descriptor).toMatchObject({ id: TEXT_CHANNEL_ID, breaksThrough: false, repeats: false, ack: "none", maxBody: TWILIO_TEXT_LIMIT, address: TWILIO_CALL_ADDRESS });
     expect(descriptor.dependsOn).toEqual(["provider:twilio", "provider:carrier"]);
+    expect(descriptor.services).toEqual(["domain:twilio.com"]);
     expect(TWILIO_TEXT_COST_USD).toBeLessThanOrEqual(TWILIO_CALL_COST_USD);
     // The text of the outage call and the text of the channel have one limit.
     expect(OUTAGE_TEXT_LIMIT).toBe(TWILIO_TEXT_LIMIT);
