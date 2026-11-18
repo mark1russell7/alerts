@@ -5,7 +5,7 @@
  * that it gets.
  */
 import { isFrameClock, type WallClock } from "@mark1russell7/algebra/clock";
-import { DEFAULT_LINK_POLICY, linkRule, ONLY_COPY, type ChannelQuota, type CopyWatch, type Duration, type EntryTimes, type FetchOutcome, type Instant, type LatenessFolds, type ReportId, type SourceDescriptor, type SourceId, type SourceProcedures, type Watch } from "@mark1russell7/alerts";
+import { DEFAULT_LINK_POLICY, indicatorBreadth, linkRule, ONLY_COPY, type ChannelQuota, type CopyWatch, type Duration, type EntryTimes, type FetchOutcome, type IndicatorBreadth, type Instant, type LatenessFolds, type ReportId, type SourceDescriptor, type SourceId, type SourceProcedures, type Watch, type ZoneRegions } from "@mark1russell7/alerts";
 import { errorMessage } from "@mark1russell7/text";
 import type { BalanceWatch } from "./balance.ts";
 import { createDispatcher, type DeliveryOptions, type DeliveryStep } from "./delivery.ts";
@@ -20,6 +20,7 @@ import { READING_RETENTION, type ReadingStore } from "./readings.ts";
 import { SNAPSHOT_MISSES, snapshotStep } from "./snapshot.ts";
 import { retention, retiredEvent, type RetentionOptions } from "./retention.ts";
 import type { ReadWatch } from "./schedule.ts";
+import { seriesReads } from "./series-reads.ts";
 import { fold, rebuild, type ExchangeCursor, type RuntimeState } from "./state.ts";
 import { earliest, nextFetch, systemEvent, systemView, type SystemView, type ViewConfig } from "./view.ts";
 
@@ -111,8 +112,16 @@ export interface RuntimeOptions {
    * The runtime gives each fault of the store of the readings to this hook. A fault does not stop the pass: the alerts do
    * not need the readings. The error can quote a value of a reading, thus the hook gives no value to an outside service.
    */
-  readonly onReadingsFault?: (error: unknown, action: "add" | "prune") => void;
+  readonly onReadingsFault?: (error: unknown, action: ReadingsAction) => void;
+  /**
+   * The regions of the zones of the indicator areas, from a table of the atlas. The breadth of a place reads them. Without
+   * the table, a series with the area of a zone is in the list `unplaced` of the breadth.
+   */
+  readonly zones?: readonly ZoneRegions[];
 }
+
+/** The action of the store of the readings that gave a fault: a write, a delete or a read of the series. */
+export type ReadingsAction = "add" | "prune" | "read";
 
 /** The result of one pass. */
 export interface Pass {
@@ -135,6 +144,11 @@ export interface Pass {
    * this size, as the runtime moves its own times.
    */
   readonly stepped?: Duration;
+  /**
+   * The breadth of the indicator signals at `at`, in the world and in each watched place (AL-59). It is present when the
+   * runtime has a store of the readings and the read of the store passed. It gives counts and no decision.
+   */
+  readonly breadth?: IndicatorBreadth;
 }
 
 /** The result of `take`: the import of one page of another copy. */
@@ -260,14 +274,18 @@ export function openRuntime(options: RuntimeOptions): Runtime {
   const keep = options.readingsKeep ?? READING_RETENTION;
   if (!Number.isFinite(keep) || keep <= 0) throw new Error(`The age of the oldest reading is ${keep}, not a finite number above 0.`);
   let pruned: Instant | undefined;
-  const guarded = (action: "add" | "prune", work: (store: ReadingStore) => void): void => {
-    if (store === undefined) return;
+  const guarded = <T>(action: ReadingsAction, work: (store: ReadingStore) => T): T | undefined => {
+    if (store === undefined) return undefined;
     try {
-      work(store);
+      return work(store);
     } catch (error) {
       options.onReadingsFault?.(error, action);
+      return undefined;
     }
   };
+  // The reads of the indicator series between the passes. A pass reads from the store only the changed series.
+  const indicatorReads = store === undefined ? undefined : seriesReads({ store, sources: config.sources });
+  const zones = options.zones ?? [];
 
   const limit = options.snapshotMisses ?? SNAPSHOT_MISSES;
   if (!Number.isInteger(limit) || limit < 1) throw new Error(`The count of snapshot misses is ${limit}, not an integer of 1 or more.`);
@@ -296,7 +314,10 @@ export function openRuntime(options: RuntimeOptions): Runtime {
     const fetched = fetchStep({ source: descriptor.id, descriptor, procedures: source, started, ended, outcome, known: (id) => log.has(id), frame: state.steps.length });
     // The readings go first. A failed write of the log leaves the observations new, thus the next fetch gives their readings
     // again, and the store keeps each key once.
-    if (fetched.readings.length > 0) guarded("add", (readings) => readings.add(fetched.readings));
+    if (fetched.readings.length > 0) {
+      guarded("add", (readings) => readings.add(fetched.readings));
+      indicatorReads?.note(fetched.readings);
+    }
     const conflicts = append(fetched.events);
     if (descriptor.listing !== "snapshot") return conflicts;
     // The step reads the merge state after the fetch, thus a new report of the fetch has no miss. It reads only the own
@@ -370,6 +391,9 @@ export function openRuntime(options: RuntimeOptions): Runtime {
       const conflicts = [...stepped.conflicts, ...settled.flatMap((result) => (result.status === "fulfilled" ? result.value : []))];
 
       const at = clock.now();
+      // The breadth of the indicator signals at the time of the view. A fault of the store gives no breadth, and the pass continues.
+      const signals = indicatorReads === undefined ? undefined : guarded("read", () => indicatorReads.signals(at));
+      const breadth = signals === undefined ? undefined : indicatorBreadth(signals, config.places, zones);
       // Each due drill starts before the view. Thus the system fold of the view gives its run, and the delivery step sends it.
       const drills = options.drills ?? [];
       const started = drillStarts(state, drills, self, at);
@@ -394,7 +418,10 @@ export function openRuntime(options: RuntimeOptions): Runtime {
       // The old readings go at most once in each interval of the retirements.
       if (store !== undefined && (pruned === undefined || at - pruned >= kept.every)) {
         pruned = at;
-        guarded("prune", (readings) => readings.prune(at - keep));
+        guarded("prune", (readings) => {
+          readings.prune(at - keep);
+          indicatorReads?.pruned(at - keep);
+        });
       }
 
       // A source or a balance watch can come due after `start`, while the fetches of the pass run. A fetch that runs to its
@@ -409,6 +436,7 @@ export function openRuntime(options: RuntimeOptions): Runtime {
         ...(stepped.size === 0 ? {} : { stepped: stepped.size }),
         ...(delivery === undefined ? {} : { delivery }),
         ...(wakeAt === undefined ? {} : { wakeAt }),
+        ...(breadth === undefined ? {} : { breadth }),
       };
       await options.onPass?.(pass);
       return pass;
