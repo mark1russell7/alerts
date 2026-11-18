@@ -3,11 +3,12 @@ import { scorePriorsSchema, shadowScore, type ScorePriors } from "@mark1russell7
 import { poissonInterval } from "@mark1russell7/rigor-statistics";
 import { describe, expect, it } from "vitest";
 
+import { committedPriors, PRIORS_URL } from "./committed.ts";
 import { priorsOf } from "./priors.ts";
 import { LEVEL, type RatesFile } from "./rates.ts";
 
 const RATES_TEXT = readFileSync(new URL("../data/rates.json", import.meta.url), "utf8");
-const PRIORS_TEXT = readFileSync(new URL("../data/priors.json", import.meta.url), "utf8");
+const PRIORS_TEXT = readFileSync(PRIORS_URL, "utf8");
 const RATES = JSON.parse(RATES_TEXT) as RatesFile;
 const PRIORS = priorsOf(RATES);
 
@@ -18,6 +19,10 @@ const text = (priors: ScorePriors): string => `${JSON.stringify(priors, null, 2)
 describe("the committed priors", () => {
   it("are the priors of the committed rates, to the byte", () => {
     expect(PRIORS_TEXT).toBe(text(PRIORS));
+  });
+
+  it("are the priors that the runtime reads", () => {
+    expect(committedPriors()).toEqual(PRIORS);
   });
 
   it("pass the schema of the core", () => {

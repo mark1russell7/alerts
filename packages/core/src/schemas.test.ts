@@ -464,6 +464,7 @@ const SCHEMA_NAMES = [
   "indicatorAreaKindSchema",
   "indicatorAreaSchema",
   "instantSchema",
+  "interestDefaultsConfigSchema",
   "interestEdgeSchema",
   "interestGraphSchema",
   "kindClassSchema",

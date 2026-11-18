@@ -227,6 +227,9 @@ importers:
       '@mark1russell7/alerts-source-emsc':
         specifier: workspace:*
         version: link:../source-emsc
+      '@mark1russell7/alerts-source-gfz':
+        specifier: workspace:*
+        version: link:../source-gfz
       '@mark1russell7/alerts-source-iem':
         specifier: workspace:*
         version: link:../source-iem
@@ -562,6 +565,9 @@ importers:
       '@mark1russell7/alerts-format-nws':
         specifier: workspace:*
         version: link:../format-nws
+      '@mark1russell7/alerts-rates':
+        specifier: workspace:*
+        version: link:../rates
       '@mark1russell7/alerts-shapes-nws':
         specifier: workspace:*
         version: link:../shapes-nws
