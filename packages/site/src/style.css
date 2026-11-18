@@ -1378,3 +1378,23 @@ main.local {
     transition: opacity 0.2s, background-color 0.2s, border-color 0.2s;
   }
 }
+
+/* The pages of the alert texts: the privacy policy, the terms and the opt-in. */
+main.texts li {
+  margin: 0.25rem 0;
+}
+
+main.texts .standard {
+  margin: 0.75rem 0;
+  padding: 0.25rem 1rem;
+  border-left: 0.25rem solid var(--line);
+  background: var(--panel);
+}
+
+main.texts .record {
+  overflow: auto;
+  padding: 0.75rem 1rem;
+  border-radius: 0.375rem;
+  background: var(--panel);
+  white-space: pre;
+}
