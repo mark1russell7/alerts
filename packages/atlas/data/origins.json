@@ -90,6 +90,12 @@
     "note": "The records of cbp-bwt name this issuer."
   },
   {
+    "id": "cbsa",
+    "name": "Canada Border Services Agency (CBSA)",
+    "issues": null,
+    "note": "The records of cbsa-bwt name this agency."
+  },
+  {
     "id": "cdc",
     "name": "US Centers for Disease Control and Prevention",
     "issues": null,
@@ -591,6 +597,12 @@
     "name": "RIPE NCC (the RIS route collectors)",
     "issues": null,
     "note": "The records of ripe-ris-live name this issuer."
+  },
+  {
+    "id": "rocketlaunch-live",
+    "name": "RocketLaunch.Live",
+    "issues": null,
+    "note": "The records of rocketlaunch-live name this issuer. Its team curates the launches from many sources."
   },
   {
     "id": "sec",

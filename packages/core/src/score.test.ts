@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { assess, LIFE_SAFETY_KINDS } from "./assess.ts";
 import type {
   Area,
+  AssessedLevel,
   Certainty,
   Estimate,
   Incident,
@@ -12,6 +13,7 @@ import type {
   PersonWatch,
   PlaceId,
   ReportId,
+  ScoredIncident,
   ScorePriors,
   Severity,
   Significance,
@@ -21,7 +23,7 @@ import type {
 } from "./contracts.ts";
 import { ASSESSED_LEVELS } from "./contracts.ts";
 import { assessmentSchema, scorePriorsSchema, shadowScoreSchema } from "./schemas.ts";
-import { assessWithShadow, expectedOf, PRIORS_FORMAT, shadowScore } from "./score.ts";
+import { assessWithShadow, expectedOf, PRIORS_FORMAT, shadowDifferences, shadowScore } from "./score.ts";
 
 const SEEDS = seedsFrom(process.env["SEED"], [1, 2, 3, 4, 5, 6, 7, 8]);
 
@@ -255,5 +257,62 @@ describe("the gate of the shadow score", () => {
     }
     // The draws reach the score: a gate that sees no score cannot hold the rule.
     expect(scored).toBeGreaterThan(50);
+  });
+});
+
+describe("shadowDifferences", () => {
+  // An incident with a level and an expected harm. Only the expected harm counts in a difference.
+  const scored = (anchor: string, level: AssessedLevel, deaths: readonly [number, number], injuries: readonly [number, number]): ScoredIncident => {
+    const of = ([low, high]: readonly [number, number]): Estimate => estimate((low + high) / 2, low, high);
+    const one = { estimate: estimate(1, 1, 1), from: { table: "certainty", key: "observed" } } as const;
+    const kind = { table: "kinds", key: "met" } as const;
+    return {
+      anchor: anchor.padEnd(64, "0") as ReportId,
+      level,
+      shadow: { read: true, probability: one, deaths: { estimate: of(deaths), from: kind }, injuries: { estimate: of(injuries), from: kind }, expected: { deaths: of(deaths), injuries: of(injuries) } },
+    };
+  };
+
+  it("names a pair where the table puts one incident higher and the score puts the other higher on each measure", () => {
+    const high = scored("a", "life-safety", [0.01, 0.02], [0.1, 0.2]);
+    const low = scored("b", "urgent", [0.03, 0.05], [0.3, 0.4]);
+    expect(shadowDifferences([high, low])).toEqual([{ above: high.anchor, below: low.anchor }]);
+    expect(shadowDifferences([low, high])).toEqual([{ above: high.anchor, below: low.anchor }]);
+  });
+
+  it("names no pair when an interval overlaps, the levels are equal, the order agrees, or a score has no read", () => {
+    const high = scored("a", "life-safety", [0.01, 0.02], [0.1, 0.2]);
+    expect(shadowDifferences([high, scored("b", "urgent", [0.015, 0.05], [0.3, 0.4])])).toEqual([]);
+    expect(shadowDifferences([high, scored("b", "urgent", [0.03, 0.05], [0.2, 0.4])])).toEqual([]);
+    expect(shadowDifferences([high, scored("b", "life-safety", [0.03, 0.05], [0.3, 0.4])])).toEqual([]);
+    expect(shadowDifferences([high, scored("b", "none", [0.03, 0.05], [0.3, 0.4])])).toEqual([]);
+    expect(shadowDifferences([high, scored("b", "notice", [0.001, 0.002], [0.01, 0.02])])).toEqual([]);
+    const unread: ScoredIncident = { anchor: "b".padEnd(64, "0") as ReportId, level: "urgent", shadow: { read: false, missing: ["deaths"] } };
+    const unscored: ScoredIncident = { anchor: "c".padEnd(64, "0") as ReportId, level: "urgent" };
+    expect(shadowDifferences([high, unread, unscored])).toEqual([]);
+  });
+
+  it.each(SEEDS)("gives each pair of the rule, in an order that the input order does not change (seed %i)", (seed) => {
+    const r = random(seed);
+    const span = (): readonly [number, number] => {
+      const low = r.range(0, 0.1);
+      return [low, low + r.range(0, 0.05)];
+    };
+    const incidents = Array.from({ length: 12 }, (_, index) => scored(index.toString(16), r.pick(ASSESSED_LEVELS), span(), span()));
+    const differences = shadowDifferences(incidents);
+    expect(shadowDifferences(r.shuffle(incidents))).toEqual(differences);
+    const rank = (level: AssessedLevel): number => ASSESSED_LEVELS.indexOf(level);
+    const harm = (incident: ScoredIncident) => (incident.shadow?.read === true ? incident.shadow.expected : undefined);
+    const expected = incidents.flatMap((above) =>
+      incidents.flatMap((below) => {
+        const [a, b] = [harm(above), harm(below)];
+        const differs =
+          above.level !== "none" && below.level !== "none" && rank(above.level) > rank(below.level) && a !== undefined && b !== undefined && b.deaths.low > a.deaths.high && b.injuries.low > a.injuries.high;
+        return differs ? [{ above: above.anchor, below: below.anchor }] : [];
+      }),
+    );
+    const key = (pair: { readonly above: ReportId; readonly below: ReportId }): string => `${pair.above} ${pair.below}`;
+    expect(new Set(differences.map(key))).toEqual(new Set(expected.map(key)));
+    expect(differences).toHaveLength(expected.length);
   });
 });

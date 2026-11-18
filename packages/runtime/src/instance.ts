@@ -33,6 +33,7 @@ import {
   type MapPayload,
   type OptInRecord,
   type ParsedConfig,
+  type ScorePriors,
   type SecretLookup,
   type SourceDescriptor,
   type SourceProcedures,
@@ -539,6 +540,11 @@ export interface InstanceOptions {
   /** The instance gives each fault of the store of the readings to this function. */
   readonly onReadingsFault?: RuntimeOptions["onReadingsFault"];
   /**
+   * The priors of the shadow score. With them, the map gives the score of each incident that reaches a person. The log
+   * keeps the score at the start of each escalation. The score does not change a level.
+   */
+  readonly priors?: ScorePriors;
+  /**
    * The instance starts this function one time, when new outlines change the codes of a place. The check is after a refresh
    * with requests, when no task is due. The entry of the profile `daemon` stops the runtime, and the supervisor starts it again.
    */
@@ -710,6 +716,7 @@ export function openInstance(options: InstanceOptions): Instance {
     channels,
     labels: placeLabels(placed),
     ...(config.assess === undefined ? {} : { assess: config.assess }),
+    ...(options.priors === undefined ? {} : { priors: options.priors }),
     ...DELIVERY_TIMES,
     rank: copy.rank,
     rankDelay: RANK_DELAY,
@@ -773,6 +780,7 @@ export function openInstance(options: InstanceOptions): Instance {
       people,
       places: placed.places,
       ...(delivery.assess === undefined ? {} : { policy: delivery.assess }),
+      ...(options.priors === undefined ? {} : { priors: options.priors }),
       shape: shapes.lookup,
       basemap: shapes.basemap(),
       // The breadth of the indicator signals of the last pass. A runtime with no store of the readings has none.

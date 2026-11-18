@@ -948,6 +948,12 @@ The priors come from the base rates of the package `rates` (`priorsOf`). The fil
 - A kind with no event in the years gives no prior of deaths and no prior of injuries. Thus the score has no read for that kind.
 - The probability of a CAP certainty is the middle of its band. Its interval is the band.
 
+The runtime reads the committed priors at its start (`committedPriors` of the package `rates`). A fault of the file stops only the score, and each alert goes on:
+
+- The map route gives the score of each incident that reaches a person (the field `shadow` of each incident of the view).
+- The log keeps the score at the start of each escalation (the field `shadow` of the event `escalation`). Thus a later study can compare each decision of the table with its score.
+- `shadowDifferences` gives each pair of incidents where the table and the score disagree. The table gives one incident the higher level. The score gives the other more expected deaths and more expected injuries, and the intervals do not overlap. Thus the rule needs no weight between a death and an injury.
+
 ## The service
 
 The runtime operates as one service of `@mark1russell7/service`. Its entry is `packages/runtime/src/main.ts`. Only that file uses `run()`, and only that file reads a real clock.
@@ -1370,7 +1376,7 @@ The route `GET /map` of the runtime gives the `MapPayload` of `mapPayload`:
 
 - `format`: `alerts-map/1` (`MAP_FORMAT`). A change that breaks a reader gets a new name.
 - `at`: the time of the last pass, or `null` before the first pass.
-- `view`: the view of the last pass. The payload assesses each live incident for each person, with the policy of the delivery.
+- `view`: the view of the last pass. The payload assesses each live incident for each person, with the policy of the delivery. With the priors, each incident that reaches a person has its shadow score (`shadow`). The score does not change the level.
 - `basemap`: the regions under the view, simplified for the view box of the page.
 - `breadth`: the breadth of the indicator signals of the last pass, in the world and at each place. A runtime with no store of the readings has no field. The field is optional, thus the format keeps its name.
 
