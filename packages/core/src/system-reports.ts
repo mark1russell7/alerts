@@ -45,6 +45,7 @@ import type { Exhaustion } from "./delivery.ts";
 import { drillVerdict, type DrillConfig, type DrillRun } from "./drill.ts";
 import { observationId, reportId } from "./ids.ts";
 import type { Lateness } from "./lateness.ts";
+import type { ObserveCondition } from "./observe.ts";
 import { kindLabel } from "./taxonomy.ts";
 
 /** The source of each report of the core. No adapter has this id. */
@@ -271,6 +272,11 @@ export interface SystemSnapshot {
   readonly channels?: readonly ChannelSnapshot[];
   /** The policy of a down channel. Each absent field has its value of `DEFAULT_CHANNEL_DOWN`. */
   readonly channelDown?: ChannelDownConfig;
+  /**
+   * The conditions of the observe mode of the new sources (`observeConditions`, AL-73). With no list, each open line
+   * of the observe mode stays open.
+   */
+  readonly observing?: readonly ObserveCondition[];
   /** The policy of the end of the line of a down source (AL-75). Each absent field has its value of `DEFAULT_SOURCE_CLEAR`. */
   readonly sourceClear?: SourceClearConfig;
 }
@@ -496,6 +502,7 @@ export function systemReports(lines: SystemLines, snapshot: SystemSnapshot, at: 
     const condition = channelCondition(entry, lines.open[name], policy);
     if (condition !== undefined) conditions.set(name, condition);
   }
+  for (const entry of snapshot.observing ?? []) conditions.set(observeName(entry), observeCondition(entry, titles.get(entry.source) ?? entry.source, context.has(entry.source)));
   const names = [...new Set([...Object.keys(lines.open), ...conditions.keys()])].sort(compareCodeUnits);
   let count = lines.count;
   const open = new Map(Object.entries(lines.open));
@@ -510,6 +517,7 @@ export function systemReports(lines: SystemLines, snapshot: SystemSnapshot, at: 
     if (condition === undefined && snapshot.drills === undefined && name.startsWith(DRILL_LINE)) continue;
     if (condition === undefined && snapshot.exhausted === undefined && name.startsWith(EXHAUSTION_LINE)) continue;
     if (condition === undefined && snapshot.channels === undefined && name.startsWith(CHANNEL_LINE)) continue;
+    if (condition === undefined && snapshot.observing === undefined && name.startsWith(OBSERVE_LINE)) continue;
     const draft = condition === undefined ? (line === undefined ? undefined : cancelOf(line)) : condition;
     if (draft === undefined) continue;
     const facts = canonicalJson(draft.facts, { form: "json" });
@@ -711,6 +719,50 @@ function entitySubject(key: string): Subject[] {
   const colon = key.indexOf(":");
   if (colon <= 0 || colon === key.length - 1) return [];
   return [{ system: key.slice(0, colon), id: key.slice(colon + 1) }];
+}
+
+// The start of the name of each line of the observe mode.
+const OBSERVE_LINE = "observe/";
+
+function observeName(entry: ObserveCondition): string {
+  return `${OBSERVE_LINE}${encodeURIComponent(entry.source)}/${entry.state}`;
+}
+
+function observeCondition(entry: ObserveCondition, title: string, context: boolean): Condition {
+  // As with the health, a condition of a source of context reaches the digest at most.
+  const terms = context ? ({ severity: "minor", urgency: "future" } as const) : ({ severity: "moderate", urgency: "expected" } as const);
+  const about = [{ system: SOURCE_SUBJECT, id: entry.source, label: title }];
+  if (entry.state === "held") {
+    return {
+      // The reason has counts, so it is not a fact: a new count gives no update.
+      facts: { source: entry.source, state: entry.state },
+      kind: { code: `${HEALTH_KIND}.observe`, label: "Source held in observe mode" },
+      ...terms,
+      response: ["assess"],
+      onset: entry.since,
+      areas: [],
+      about,
+      headline: `${title}: the source stays in the observe mode.`,
+      ...(entry.reason === "" ? {} : { description: entry.reason }),
+      instruction: "Examine the areas of the source. The source goes live after one day with no cap passed.",
+      parameters: { state: [entry.state] },
+    };
+  }
+  // Each new incident is a new fact, so it gives an update.
+  const count = entry.incidents.length;
+  return {
+    facts: { source: entry.source, state: entry.state, incidents: entry.incidents },
+    kind: { code: `${HEALTH_KIND}.observe-life-safety`, label: "Life-safety alert from a source in observe mode" },
+    ...terms,
+    response: ["assess"],
+    ...(Number.isFinite(entry.since) ? { onset: entry.since } : {}),
+    areas: [],
+    about,
+    headline: `${title}: a source in the observe mode gave ${String(count)} life-safety ${count === 1 ? "alert" : "alerts"}.`,
+    description: "The observe mode sent each life-safety alert, because a missed real warning is worse than a wrong one.",
+    instruction: "Examine the areas of the source and each alert. A wrong area makes alerts for a person away from the event.",
+    parameters: { state: [entry.state], incident: entry.incidents },
+  };
 }
 
 const EXHAUSTION_LINE = "exhausted/";

@@ -965,6 +965,26 @@ A refused send backs off. Its wait doubles after each refusal of its key in a ro
 - The log keeps the last refusal of a key until its retry time plus `REFUSAL_LIMIT`, or plus its wait when the wait is longer (`refusalKept`).
 - Thus a refusal of another key in a burst, or a restart, does not set the wait back to `retry`. A delivery of the key ends the count.
 
+## The observe mode of a new source
+
+A new source starts in the observe mode (AL-73). It sends nothing below `life-safety` until its rate passes a gate.
+
+- The mode of a source is an event `mode` of the log of the copy. Its id is `mode:<source>:<mode>`, so each mode keeps its first time.
+- A source that went live does not observe again. Each copy judges its own sources, so the event is not shared.
+- The first start with modes seeds each source of the configuration as `live`. A source of context only starts in the observe mode.
+- An incident is held when each of its reports comes from a source that observes. A source that this copy does not operate counts as live.
+- An incident with a delivery, an escalation start or a hold is not held. A send in flight has a start and no delivery.
+- A held incident starts no escalation and no digest entry. The cut comes before the routes and the digest of the delivery step.
+- An incident that reaches a person at `life-safety` goes out. The operator gets a note: the kind `system.health.observe-life-safety`.
+- The note stays open while the incident reaches a person at `life-safety`, also after its send.
+- The verdict (`observeVerdict`) replays the incidents of the source from the last 24 hours. Each person gets the level of each incident.
+- Each cap is the send limit of the person times `limitShare`, with 1 at least. The digest cap is 20 entries in one day.
+- The verdict passes when the source has 24 hours in the observe mode and no person passes a cap. Then the source goes live.
+- A verdict that fails after 24 hours opens the line `system.health.observe`. Its text is the reason.
+- The reason names each person by number, with no id: "person 1: 7 notices in 1 hour, limit 6".
+- The log holds the reports and the start of the mode. Thus a restart does not start the 24 hours again.
+- `GET /status` gives the mode of each source. A source that observes also has its hours, its rate in each hour, its highest share and its reason.
+
 ## The down channels
 
 The runtime reads the results of its own calls, because the path of the alerts has no second status source (AL-65).

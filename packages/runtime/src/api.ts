@@ -7,6 +7,7 @@ import type { ServiceBuilder } from "@mark1russell7/service";
 import { handle, httpTransport } from "@mark1russell7/service/http";
 import { folderHandler } from "@mark1russell7/service/http-folder";
 import type { RuntimeLoop } from "./loop.ts";
+import type { ModeStatus } from "./observe.ts";
 import type { OutageDeployState } from "./outage.ts";
 
 /** The address of each server of the service. Only this computer reaches the API and the probes. */
@@ -79,6 +80,8 @@ export interface Status {
   readonly outage?: OutageDeployState;
   /** The files of the start. A runtime with no start files, for example a test, has no field. */
   readonly start?: StartStatus;
+  /** The mode of each source of the last pass (AL-73): observe or live, with the rate and the share of each source that observes. */
+  readonly modes?: readonly ModeStatus[];
 }
 
 /** The answer of a route to a request with a bad query. The route gives it with the status 400. */
@@ -176,6 +179,7 @@ export function statusOf(loop: RuntimeLoop, outage?: { state(): OutageDeployStat
     stuck: loop.stuck() ?? null,
     ...(outage === undefined ? {} : { outage: outage.state() }),
     ...(start === undefined ? {} : { start }),
+    ...(last?.modes === undefined ? {} : { modes: last.modes }),
   };
 }
 

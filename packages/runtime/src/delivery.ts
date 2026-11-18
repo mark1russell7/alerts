@@ -35,6 +35,7 @@ import {
   type Duration,
   type EscalationEnd,
   type Exhaustion,
+  type Incident,
   type Instant,
   type LinkPolicy,
   type RankDelays,
@@ -210,6 +211,11 @@ export interface DeliveryContext {
    * the share is 1.
    */
   readonly share?: ((at: Instant) => number) | undefined;
+  /**
+   * This function cuts the incidents of a step before the route and the digest: the observe mode of the new sources
+   * (AL-73). Without it, each incident goes on.
+   */
+  readonly cut?: ((found: readonly Incident[], at: Instant) => readonly Incident[]) | undefined;
 }
 
 /** The dispatcher of the deliveries: one step for each pass. */
@@ -379,7 +385,8 @@ export function createDispatcher(options: DeliveryOptions, context: DeliveryCont
       }
       // A wait that is over keeps nothing. Thus the map holds only the waits of the last retry time.
       for (const [call, until] of waits) if (until <= at) waits.delete(call);
-      const found = incidents(context.state().merge, at, { link });
+      const merged = incidents(context.state().merge, at, { link });
+      const found = context.cut === undefined ? merged : context.cut(merged, at);
       // The routes at the time of the step, after the send limit of each person. The new holds go to the log in step 2.
       const routesNow = (): LimitResult => {
         const state = context.state();

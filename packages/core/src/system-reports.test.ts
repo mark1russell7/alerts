@@ -6,6 +6,7 @@ import { messageOf } from "./delivery.ts";
 import type { ChannelId, ChannelQuota, CopyRead, CopyWatch, Coverage, HealthState, Incident, Observation, PersonId, PersonWatch, PlaceId, ProviderBalance, Report, ReportId, SourceDescriptor, SourceHealth, SourceId, WatchedPlace } from "./contracts.ts";
 import type { DrillConfig, DrillRun } from "./drill.ts";
 import type { Lateness } from "./lateness.ts";
+import type { ObserveCondition } from "./observe.ts";
 import { incidents, normalize } from "./merge.ts";
 import {
   addSystemReports,
@@ -823,6 +824,56 @@ describe("the log reports", () => {
     expect(none.reports).toMatchObject([{ severity: "moderate", urgency: "expected" }]);
     expect(none.reports[0]!.description).toContain("It kept 0 events, and it could not read each part of the file. A lost event");
     expect(levels(none.reports, WATCHER, START)).toEqual(["notice"]);
+  });
+});
+
+describe("the observe reports (AL-73)", () => {
+  const START = Date.UTC(2026, 10, 18, 12);
+  const NEW: SourceDescriptor = { ...API, id: "gtfs-new" as SourceId, title: "The new feed" };
+  const CONTEXT: SourceDescriptor = { ...API, id: "gtfs-context" as SourceId, title: "The transit feed", kinds: ["transport.transit"] };
+  const held: ObserveCondition = { source: NEW.id, state: "held", since: START, reason: "person 1: 7 notices in 1 hour, limit 6", incidents: [] };
+  const lifeSafety: ObserveCondition = { source: NEW.id, state: "life-safety", since: START, reason: "", incidents: ["a".repeat(64) as ReportId] };
+  const observed = (observing?: readonly ObserveCondition[]) => snapshot({ sources: [API, NEW, CONTEXT], ...(observing === undefined ? {} : { observing }) });
+  const codes = (reports: readonly Report[]) => reports.map((report) => [report.op, report.kind.code]);
+
+  it("opens a held line with the reason as its text, keeps it with a new reason or with no list, and ends it with an empty list", () => {
+    const open = systemReports(NO_SYSTEM_LINES, observed([held]), START);
+    expect(open.reports).toMatchObject([{ op: "alert", kind: { code: "system.health.observe" }, severity: "moderate", urgency: "expected", about: [{ system: SOURCE_SUBJECT }] }]);
+    expect(open.reports[0]!.headline).toBe("The new feed: the source stays in the observe mode.");
+    expect(open.reports[0]!.description).toBe(held.reason);
+    expect(Object.keys(open.lines.open)).toEqual(["observe/gtfs-new/held"]);
+    expect(systemReports(open.lines, observed([{ ...held, reason: "person 1: 8 notices in 1 hour, limit 6" }]), START + 1).reports).toEqual([]);
+    expect(systemReports(open.lines, observed(), START + 2).reports).toEqual([]);
+    expect(codes(systemReports(open.lines, observed([]), START + 3).reports)).toEqual([["cancel", "system.health.observe"]]);
+  });
+
+  it("gives a life-safety line an update for each new incident, and the operator a notice", () => {
+    const open = systemReports(NO_SYSTEM_LINES, observed([lifeSafety]), START);
+    expect(codes(open.reports)).toEqual([["alert", "system.health.observe-life-safety"]]);
+    expect(levels(open.reports, OPERATOR, START)).toEqual(["notice"]);
+    expect(levels(open.reports, NEIGHBOR, START)).toEqual(["none"]);
+    const more = systemReports(open.lines, observed([{ ...lifeSafety, incidents: [...lifeSafety.incidents, "b".repeat(64) as ReportId] }]), START + 1);
+    expect(codes(more.reports)).toEqual([["update", "system.health.observe-life-safety"]]);
+  });
+
+  it("keeps the health line in its clear time and the held line of the same source open, because their names differ", () => {
+    const MINUTE = 60_000;
+    // The new source fails, then comes back at START. Its health line holds for its clear time of 15 minutes (AL-75).
+    const down = systemReports(NO_SYSTEM_LINES, snapshot({ sources: [API, NEW], health: [{ ...healthOf("failing", START - MINUTE), source: NEW.id }] }), START - MINUTE);
+    const both = (observing: readonly ObserveCondition[]) => snapshot({ sources: [API, NEW], health: [{ ...healthOf("healthy", START), source: NEW.id }], observing });
+    const open = systemReports(down.lines, both([held]), START);
+    expect(codes(open.reports)).toEqual([["alert", "system.health.observe"]]);
+    expect(Object.keys(open.lines.open).sort()).toEqual(["health/gtfs-new", "observe/gtfs-new/held"]);
+    // The clear time ends the health line only. The held line stays until its verdict passes.
+    const cleared = systemReports(open.lines, both([held]), START + 15 * MINUTE);
+    expect(codes(cleared.reports)).toEqual([["cancel", "system.health.failing"]]);
+    expect(Object.keys(cleared.lines.open)).toEqual(["observe/gtfs-new/held"]);
+  });
+
+  it("gives a source of context only the level digest", () => {
+    const open = systemReports(NO_SYSTEM_LINES, observed([{ ...held, source: CONTEXT.id }]), START);
+    expect(open.reports).toMatchObject([{ severity: "minor", urgency: "future" }]);
+    expect(levels(open.reports, OPERATOR, START)).toEqual(["digest"]);
   });
 });
 
