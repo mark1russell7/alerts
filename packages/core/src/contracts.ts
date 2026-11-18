@@ -735,7 +735,7 @@ export interface ChannelDescriptor {
    */
   readonly dependsOn: readonly string[];
   /**
-   * The online services that the channel needs, as the keys of entities, for example `domain:twilio.com`. Each person
+   * The online services that the channel needs, as the keys of entities, for example `domain:api.twilio.com`. Each person
    * with a contact on the channel gets each service in the layer `delivery` of the interest graph. Thus an outage of
    * the path of the alerts of a person reaches that person.
    */
