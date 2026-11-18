@@ -141,6 +141,31 @@ describe("the routing by the relevance (AL-35 step 5)", () => {
     expect(wind.level).toBe("urgent");
   });
 
+  it("reaches the person through a node above or below the subject in a system of paths, and not through a sibling", () => {
+    const carrier = graph([edge("e1", "provider-region:example/region-1/sms", "person", 0.5)]);
+    const about = (id: string) => incident({ kind: "infra.internet.outage", areas: [], about: [{ system: "provider-region", id }] });
+    // An outage of the whole region, and an outage of a part of the product, reach the product.
+    expect(run(about("example/region-1"), watcher(carrier)).level).toBe("urgent");
+    expect(run(about("example/region-1/sms/part"), watcher(carrier)).level).toBe("urgent");
+    // An outage of another product of the region, or of a region with a longer name, does not.
+    expect(run(about("example/region-1/voice"), watcher(carrier)).level).toBe("none");
+    expect(run(about("example/region-10"), watcher(carrier)).level).toBe("none");
+  });
+
+  it("mutes each node below the subject of a mute in a system of paths", () => {
+    const sms = "provider-region:example/region-1/sms";
+    const voice = "provider-region:example/region-1/voice";
+    const carrier = (mutes: readonly Mute[]) => graph([edge("e1", sms, "person", 0.5), edge("e2", voice, "person", 0.5)], mutes);
+    const about = (id: string) => incident({ kind: "infra.internet.outage", areas: [], about: [{ system: "provider-region", id }] });
+    const mute = (subject: string): Mute => ({ id: "m1", subjects: [subject], date });
+    // A mute of the region matches an outage of a product of the region.
+    expect(run(about("example/region-1/sms"), watcher(carrier([mute("provider-region:example/region-1")]))).muted).toEqual({ mute: "m1", effect: "absent" });
+    // A mute of one product does not match an outage of the other product, and the outage reaches the person.
+    const other = run(about("example/region-1/voice"), watcher(carrier([mute(sms)])));
+    expect(other.muted).toBeUndefined();
+    expect(other.level).toBe("urgent");
+  });
+
   it("reaches the person through a named entity with no place in the areas", () => {
     const found = run(outage, watcher(entity));
     expect(found.level).toBe("urgent");

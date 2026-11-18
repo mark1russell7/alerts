@@ -2,7 +2,7 @@
 // `docs/RELEVANCE.md`, the section "The join of the layers").
 
 import { compareCodeUnits } from "@mark1russell7/text/order";
-import { contactChannels, personInterests, placeLabels, type AlertConfig } from "./config.ts";
+import { contactChannels, personInterests, placeLabels, type AlertConfig, type ContactLookup } from "./config.ts";
 import type { ChannelDescriptor, Mute, NodeKey, PersonId } from "./contracts.ts";
 import type { InterestRow } from "./interest-defaults.ts";
 import { kindLabel } from "./taxonomy.ts";
@@ -38,15 +38,15 @@ const TOPIC = "topic:";
 
 /**
  * This function gives the payload of the route `GET /interests` from the configuration. The rows come from the same
- * join as the load (`personInterests`), with the same channels. The payload holds the labels of the places. Thus only
- * the loopback address serves the route.
+ * join as the load (`personInterests`), with the same channels and the same `lookup` of the services of the contacts.
+ * The payload holds the labels of the places. Thus only the loopback address serves the route.
  */
-export function interestsPayload(config: AlertConfig, channels: readonly ChannelDescriptor[] = []): InterestsPayload {
+export function interestsPayload(config: AlertConfig, channels: readonly ChannelDescriptor[] = [], lookup?: ContactLookup): InterestsPayload {
   const places = placeLabels(config);
   const people = config.people.map((entry): InterestsPerson => {
     const person = entry.watch.person;
     const own = entry.watch.interests;
-    const joined = personInterests(entry, contactChannels(config, person, channels));
+    const joined = personInterests(entry, contactChannels(config, person, channels, lookup));
     const graph = joined.watch.interests;
     const other = own !== undefined && own.person !== person ? own.person : undefined;
     const labelOf = graphLabels(places, graph);
