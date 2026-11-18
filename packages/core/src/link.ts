@@ -46,9 +46,13 @@ export interface LinkPolicy {
  *
  * Two reports of a geomagnetic storm link when their onsets are 6 hours apart or less. Each source of the family
  * gives the polar caps of one model of the poles. Thus the centers are 0 km apart. The limit of 100 km keeps a
- * different model. The onset of an alert of the SWPC is in the 3-hour interval of the index Kp of GFZ, so the
- * window is two intervals. This window is a shortcut with no measure. It ends when a capture of one storm of the
- * two sources gives the largest difference (AL-14).
+ * different model.
+ *
+ * A replay of the years 2015 to 2025 measured the window (`scripts/measure-link.ts` of the GFZ source). At 6 hours,
+ * 457 of the 460 runs of GFZ join the SWPC, and 447 join at 3 hours. Each of the 3 other runs has one interval, 6.3
+ * to 9 hours from a storm report of the SWPC. A larger window puts more runs of GFZ in one incident, through the
+ * chains of keys of the SWPC. There are 55 such pairs at 6 hours, and 24 at 5 hours. The gate `link.test.ts` of the
+ * GFZ source holds two of these storms.
  */
 export const DEFAULT_LINK_POLICY: LinkPolicy = {
   families: [
