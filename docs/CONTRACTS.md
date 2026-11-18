@@ -1139,6 +1139,18 @@ A problem names ids, fields and the names of secrets. It does not hold the value
 
 The function `parseConfig` reads the JSON text of the configuration. It checks the JSON, then the schema, then the references. Its result is a `Result` of `@mark1russell7/optional`: the configuration, the recipients and the opt-in list with the value of each number, or the problems. The runtime starts only with an `ok` result. A problem of the JSON does not quote the text, because the text can hold a private value.
 
+#### The parts of the configuration
+
+Two writers of one file overwrite each other. Thus each writer of places, people and contacts can keep its own part, `ConfigPart` (`alerts-config-part/1`). A part has only the fields `places`, `people` and `contacts`. The root configuration keeps the other fields.
+
+- The name of a part has small letters, digits and hyphens, with a letter first. It has 40 characters or fewer.
+- The function `mergeParts` puts the entries of the root first. The entries of the parts come after them, in the order of the names.
+- Thus the order of the reads does not change the merge or its hash. Each copy gets the same hash from the same files.
+- The merge finds a bad name and two parts with one name. It also finds an entry in two files: a place, a person, or a contact of a person on one channel.
+- A problem of a bad name gives the index of the part, not the name, because the name can hold any text.
+
+`parseConfig` takes the texts of the parts as its fourth argument. It checks the JSON and the schema of the root and of each part, and gives all their problems together. Then it merges the parts and checks the references of the merge with `loadConfig`. A problem of a part starts with the name of the part. With no parts, the result is the same as before.
+
 The runtime reads two private files in the folder `ALERTS_HOME`, or in `~/.alerts` with no variable: the configuration `config.json` and the keys `secrets.env`. A procedure that gives the configuration replaces the file later.
 
 The function `checkTexts` checks the texts of the two files, as the start does. It reads no file. The keys go through `parseEnvFile` of `@mark1russell7/service/host`, and `envSecrets` gives them as the secret store. The keys do not go into `process.env`, because each child process gets that environment. A read error gives only its code, because the path can hold a user name.
