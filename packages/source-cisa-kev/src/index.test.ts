@@ -23,7 +23,7 @@ describe("createKevSource", () => {
     expect(KEV_DESCRIPTOR).toMatchObject({
       id: SOURCE_ID,
       origins: [KEV_ORIGIN],
-      dependsOn: ["provider:cisa"],
+      dependsOn: ["provider:cisa", "cdn:akamai"],
       kinds: KEV_KINDS,
       coverage: "global",
       transport: "poll",

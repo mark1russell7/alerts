@@ -19,7 +19,7 @@ describe("createGcpSource", () => {
     expect(GCP_DESCRIPTOR).toEqual({
       id: "gcp-status",
       title: "Google Cloud Service Health: the incidents of the public cloud",
-      origins: ["google-cloud"],
+      origins: ["google"],
       dependsOn: ["provider:google-cloud"],
       uses: ["internet", "dns", "power"],
       kinds: ["infra.cloud.outage"],

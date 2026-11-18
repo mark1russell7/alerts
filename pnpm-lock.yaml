@@ -224,9 +224,24 @@ importers:
         specifier: ^0.0.13
         version: 0.0.13
     devDependencies:
+      '@mark1russell7/alerts-source-aws':
+        specifier: workspace:*
+        version: link:../source-aws
+      '@mark1russell7/alerts-source-bom-sws':
+        specifier: workspace:*
+        version: link:../source-bom-sws
+      '@mark1russell7/alerts-source-cisa-kev':
+        specifier: workspace:*
+        version: link:../source-cisa-kev
       '@mark1russell7/alerts-source-emsc':
         specifier: workspace:*
         version: link:../source-emsc
+      '@mark1russell7/alerts-source-energy-charts':
+        specifier: workspace:*
+        version: link:../source-energy-charts
+      '@mark1russell7/alerts-source-gcp':
+        specifier: workspace:*
+        version: link:../source-gcp
       '@mark1russell7/alerts-source-gfz':
         specifier: workspace:*
         version: link:../source-gfz

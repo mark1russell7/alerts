@@ -11,7 +11,7 @@ export const KEV_DESCRIPTOR: SourceDescriptor = {
   id: SOURCE_ID,
   title: "CISA KEV: the catalog of known exploited vulnerabilities, with a due date for each flaw",
   origins: [KEV_ORIGIN],
-  dependsOn: ["provider:cisa"],
+  dependsOn: ["provider:cisa", "cdn:akamai"],
   uses: ["internet", "dns", "power"],
   kinds: KEV_KINDS,
   coverage: "global",

@@ -10,7 +10,7 @@ import type { Duration, SourceId, SubjectSystem } from "@mark1russell7/alerts";
 export const GCP_SOURCE = "gcp-status" as SourceId;
 
 /** The origin of each report: the provider. */
-export const GCP_ORIGIN = "google-cloud";
+export const GCP_ORIGIN = "google";
 
 /** The base of the status page. */
 export const GCP_BASE = "https://status.cloud.google.com";

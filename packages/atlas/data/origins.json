@@ -66,10 +66,10 @@
     "note": "The records of bls-api, bls-release-calendar name this issuer."
   },
   {
-    "id": "bom-sws",
-    "name": "Australian Bureau of Meteorology, Space Weather Services",
+    "id": "bom",
+    "name": "Australian Bureau of Meteorology",
     "issues": null,
-    "note": "The records of bom-sws-api name this issuer."
+    "note": "The records of bom-sws-api name this issuer. Its Space Weather Services issue the space weather alerts."
   },
   {
     "id": "canada-government",
@@ -683,7 +683,7 @@
     "note": "The records of ukmto name this issuer."
   },
   {
-    "id": "us-alerting-authorities",
+    "id": "ipaws-authority",
     "name": "The state, local, tribal and territorial alerting authorities of IPAWS",
     "issues": [
       "geo.avalanche",
