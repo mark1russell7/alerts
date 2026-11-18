@@ -406,3 +406,31 @@ describe("cancel", () => {
     await expect(channel.cancel({ receipt: { receipt: RECEIPT } })).rejects.toThrow(/\(network\)/);
   });
 });
+
+describe("probe", () => {
+  const RESET = Date.UTC(2026, 11, 1, 6);
+  const limits = { status: 1, request: "req-9", limit: 10000, remaining: 7500, reset: RESET / 1000 };
+
+  it("reads the limits of the application, sends nothing, and gives the count to the gate", async () => {
+    const fake = server({ status: 200, body: limits });
+    const gate = quotaGate(PUSHOVER_QUOTA, { key: "pushover:app", now: () => AT });
+    const channel = createPushoverChannel({ token: TOKEN, fetch: fake.fetch, now: () => AT, quota: gate });
+    expect(await channel.probe?.()).toEqual({ ok: true, at: AT });
+    expect(fake.calls).toEqual([{ url: `https://api.pushover.net/1/apps/limits.json?token=${TOKEN}`, body: undefined }]);
+    expect(gate.state().used).toBe(2500);
+  });
+
+  it("gives a refused token, a server error and a network fault as failures, with no token in the message", async () => {
+    const fake = server({ status: 400, body: { status: 0, token: "invalid", errors: ["application token is invalid"] } }, { status: 503, body: "down" }, new TypeError("fetch failed"));
+    const channel = createPushoverChannel({ token: TOKEN, fetch: fake.fetch, now: () => AT });
+    const outcomes = [await channel.probe?.(), await channel.probe?.(), await channel.probe?.()];
+    expect(outcomes.map((outcome) => (outcome?.ok === false ? outcome.kind : "ok"))).toEqual(["auth", "server", "network"]);
+    for (const outcome of outcomes) expect(JSON.stringify(outcome)).not.toContain(TOKEN);
+  });
+
+  it("refuses a token that is not a key of Pushover with no call", async () => {
+    const fake = server();
+    expect(await createPushoverChannel({ token: "short", fetch: fake.fetch }).probe?.()).toMatchObject({ ok: false, kind: "auth" });
+    expect(fake.calls).toEqual([]);
+  });
+});

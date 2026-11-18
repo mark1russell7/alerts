@@ -22,6 +22,12 @@ Each subject of the incident that is a node of the graph gives one `SubjectEntry
 - For a place, the hit is the share of the area near the place that the incident covers.
 - For a topic or a named entity, the hit is 1.
 
+In a system of paths (`PATH_SYSTEMS`), an id is a path of parts with `/` between them. The system `provider-region` is one, for example `provider-region:twilio/europe/sms`.
+
+- A node covers itself and each node below it (`nodeCovers`). Two nodes overlap when one of them covers the other (`nodesOverlap`).
+- Each node of the graph that overlaps a subject of the incident is also an entry, with the hit 1.
+- Thus an outage of a whole region reaches a product of the region, and an outage of a product reaches the node of its region.
+
 The event is a virtual source node. It has one edge to each entry, and the chance of that edge is the hit.
 
 ### The reach
@@ -145,6 +151,7 @@ The field `defaults` of a person in the private configuration gives the inputs o
 
 - The load joins the layer `places`, the layers of the inputs, the layer `delivery` and `PersonWatch.interests`.
 - The layer `delivery` takes the field `services` of each `ChannelDescriptor` where the person has a contact. `contactChannels` finds these channels. The recipient gets the joined graph.
+- With the services of the contacts (`ContactServices`), the layer also takes the services of the address of the person on each channel. An example is the region of the carrier network of a phone number.
 - The layer `places` is always in the join. A graph of work topics alone stops the routing at the places.
 - A person with no field `defaults` keeps the watch. Thus the routing of a configuration without the field stays the same.
 - An unknown work, a service that is not an entity or a changed default is a problem of the load. Then the person keeps the watch.
@@ -157,8 +164,8 @@ A person has three kinds of opt-out. Each one has a scope.
 
 - Less: a lower weight on one edge. The reach goes down, and the alert can still come.
 - Off: `on: false` on one edge. The edge stays as a row, and the reach does not use it.
-- Mute: a `Mute` with kinds, subjects or both, and an optional end `until`. A mute with no subjects matches each incident of its kinds. A mute with subjects matches an incident when one of its subjects is an entry. A matched incident does not reach the person on any path.
-- Cut: a mute with subjects that does not match cuts its subjects from the graph. Each edge into or out of a muted subject is off, so no path goes through it. Thus a mute of a bank also stops an outage of its DNS provider that reaches the person through the bank.
+- Mute: a `Mute` with kinds, subjects or both, and an optional end `until`. A mute with no subjects matches each incident of its kinds. A mute with subjects matches an incident when one of its subjects covers an entry (`nodeCovers`). A matched incident does not reach the person on any path.
+- Cut: a mute with subjects that does not match cuts the nodes that its subjects cover from the graph. Each edge into or out of a muted subject is off, so no path goes through it. Thus a mute of a bank also stops an outage of its DNS provider that reaches the person through the bank.
 
 A mute with kinds and subjects has effect only on the incidents of its kinds. Thus a person can mute one kind of alert for one subject.
 
@@ -229,7 +236,7 @@ A `NodeKey` is `person`, or `<system>:<id>`. The id is the text after the first 
 
 The system `place` holds the watched places of a person, by their ids in the configuration.
 
-An id of the system `provider-region` is the provider, a slash and the id of the region of the provider: `provider-region:gcp/europe-west1` or `provider-region:aws/eu-west-1`. The ids of the regions come from the feed of the provider, not from its titles.
+An id of the system `provider-region` is the provider, a slash and the id of the region of the provider: `provider-region:gcp/europe-west1`, `provider-region:aws/eu-west-1` or `provider-region:azure/westeurope`. The ids of the regions come from the feed of the provider, not from its titles. The feed of Azure gives only the name of each region. Its id is the name in lower case with no spaces, as the names of the regions in the API of Azure.
 
 ## The gates
 

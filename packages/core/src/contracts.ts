@@ -991,6 +991,7 @@ export interface DeliveryStatus {
  * - `probe`: it reads `network`. It is an authenticated read that sends nothing and costs nothing. While the line of a
  *   down channel is open, the runtime calls it, and a success ends the line (AL-65). A channel with no probe keeps its line
  *   until an accepted send.
+ * - `services`: no effects. It reads only the address. The procedure is optional.
  */
 export interface ChannelProcedures {
   describe(): ChannelDescriptor;
@@ -998,7 +999,20 @@ export interface ChannelProcedures {
   status(input: { readonly receipt: Receipt }): Promise<DeliveryStatus>;
   cancel(input: CancelTarget): Promise<void>;
   probe?(): Promise<ProbeOutcome>;
+  /**
+   * The services that carry the messages of the channel to one address, as node keys of entities. An example is the
+   * region of the carrier network of a phone number. The procedure gives an empty list for an address that it cannot
+   * read. It does not throw.
+   */
+  services?(input: { readonly address: Address }): readonly NodeKey[];
 }
+
+/**
+ * The services of the contact of a person on one channel, as node keys of entities (`ChannelProcedures.services`).
+ * The load adds them to the services of the channel for that person only. A result can tell a private fact of the
+ * address, for example the region of a phone number. Thus no problem and no log holds it.
+ */
+export type ContactServices = (channel: ChannelId, address: Address) => readonly NodeKey[];
 
 /** The input of a send. */
 export interface SendInput {

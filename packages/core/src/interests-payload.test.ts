@@ -63,6 +63,10 @@ describe("the payload of the interests", () => {
     // The person ben has no contact on the channel, so ben has no row of it.
     expect(second!.rows.some((row) => row.edge.origin === "delivery")).toBe(false);
     expect(interestsPayloadSchema.safeParse(interestsPayload(config, [push])).success).toBe(true);
+    // With a lookup, the rows of ana also have the services of the contact of ana.
+    const lookup = { secret: () => undefined, services: () => ["provider-region:example/region-1/push"] };
+    const looked = interestsPayload(config, [push], lookup).people[0]!.rows.filter((row) => row.edge.origin === "delivery");
+    expect(looked.map((row) => row.edge.id)).toEqual(["delivery/domain:example.com>person", "delivery/provider-region:example/region-1/push>person"]);
     // With no channels, the payload has no row of the layer.
     expect(interestsPayload(config).people[0]!.rows.some((row) => row.edge.origin === "delivery")).toBe(false);
   });

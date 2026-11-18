@@ -43,6 +43,14 @@ describe("readFeed", () => {
     ]);
   });
 
+  it("reads the categories of an RSS item and the terms of the categories of an Atom entry, in the order of the document", () => {
+    const fromRss = entriesOf(readFeed(rss(`<item><guid>a</guid><category>Storage</category><category domain="x"> West Europe </category><category> </category></item><item><guid>b</guid></item>`)));
+    expect(fromRss).toEqual([{ id: "a", categories: ["Storage", "West Europe"] }, { id: "b" }]);
+    const fromAtom = entriesOf(readFeed(atom(`<entry><id>c</id><category term="Met" scheme="s"/><category label="no term"/><category term="Geo"/></entry>`)));
+    expect(fromAtom).toEqual([{ id: "c", categories: ["Met", "Geo"] }]);
+    expect(entriesOf(readFeed(NIUE)).map((entry) => entry.categories)).toEqual(Array.from({ length: 5 }, () => ["Met"]));
+  });
+
   it("reads the real feeds of Niue and the DWD", () => {
     const niue = entriesOf(readFeed(NIUE));
     expect(niue).toHaveLength(5);

@@ -69,6 +69,7 @@ import { createGfzSource, GFZ_DESCRIPTOR } from "@mark1russell7/alerts-source-gf
 import { createEnergyChartsSource, ENERGY_CHARTS_DESCRIPTOR } from "@mark1russell7/alerts-source-energy-charts";
 import { createKevSource, KEV_DESCRIPTOR } from "@mark1russell7/alerts-source-cisa-kev";
 import { AWS_DOMAIN, AWS_KIND, createAwsSource } from "@mark1russell7/alerts-source-aws";
+import { AZURE_DOMAIN, AZURE_KIND, createAzureSource } from "@mark1russell7/alerts-source-azure";
 import { createBomSwsSource, type BomSwsFetchOptions } from "@mark1russell7/alerts-source-bom-sws";
 import { createGcpSource, GCP_KIND, GOOGLE_DASHBOARDS, type GcpFetchOptions } from "@mark1russell7/alerts-source-gcp";
 import { createStatusPageSource, pagesFor, watchReads, type StatusPage, type StatusPageFetchOptions } from "@mark1russell7/alerts-source-statuspage";
@@ -299,9 +300,9 @@ const bomFactory =
     createBomSwsSource({ ...options, apiKey });
 
 /**
- * The feeds of the cloud providers: the dashboards of Google (Google Cloud and Firebase) and AWS. A report of such a feed
- * has no area. Thus the instance reads a feed only when one of its persons can get its reports, with the rule of a status
- * page (`watchReads`). The keys of the products of a dashboard are its keys of components.
+ * The feeds of the cloud providers: the dashboards of Google (Google Cloud and Firebase), AWS and Azure. A report of such
+ * a feed has no area. Thus the instance reads a feed only when one of its persons can get its reports, with the rule of a
+ * status page (`watchReads`). The keys of the products of a dashboard are its keys of components.
  */
 const PROVIDER_FEEDS = [
   ...GOOGLE_DASHBOARDS.map((dashboard) => ({
@@ -311,6 +312,7 @@ const PROVIDER_FEEDS = [
     create: (options: Omit<GcpFetchOptions, "dashboard">) => createGcpSource({ ...options, dashboard }),
   })),
   { domain: AWS_DOMAIN, kind: AWS_KIND, create: createAwsSource },
+  { domain: AZURE_DOMAIN, kind: AZURE_KIND, create: createAzureSource },
 ];
 
 /**
@@ -327,8 +329,8 @@ const PROVIDER_FEEDS = [
  * names their kind.
  *
  * The instance also reads the status pages that one of its persons can get (`pagesFor` of `source-statuspage`). They are
- * not in this list, because the persons choose them. The feeds of Google Cloud (`source-gcp`) and AWS (`source-aws`)
- * have the same rule.
+ * not in this list, because the persons choose them. The feeds of Google Cloud (`source-gcp`), AWS (`source-aws`)
+ * and Azure (`source-azure`) have the same rule.
  *
  * BoM (`source-bom-sws`) is a source only when the secrets have its key. Thus it is not in the list. Each page, each
  * feed and BoM have a longer interval than the shortest interval of the list. Thus the times of the loop stay the same.
@@ -515,7 +517,7 @@ export function daemonCheck(copy: CopySettings): InstanceCheck {
   // The copies share the loud check. A copy that pings it as its first check hides the stop of the other copies.
   if (pingKey !== LOUD_PING_URL_KEY) return check;
   const shared = `The file ${COPY_FILE}: pingKey is ${LOUD_PING_URL_KEY}, the key of the shared loud check. Each copy has its own first check.`;
-  return { channels: check.channels, problems: (parsed, secret) => [...check.problems(parsed, secret), shared] };
+  return { ...check, problems: (parsed, secret) => [...check.problems(parsed, secret), shared] };
 }
 
 /** The check of the live instance of the only copy: `daemonCheck(ONLY_COPY)`. */
@@ -676,10 +678,10 @@ export interface Instance {
  * - The sources are the NWS API, IPAWS, the USGS, EMSC, the two tsunami warning centers, the SWPC, GFZ,
  *   Energy-Charts and CISA KEV. The stream of NWWS-OI is a source when the secrets have the keys of the account of the
  *   copy (`nwwsSetup`). BoM is a source when the secrets have its key (`BOM_SWS_KEY`). Each status page that one of the
- *   persons can get is a source (`pagesFor`). The feed of Google Cloud or AWS is a source when one of the persons can
- *   get its reports (`watchReads`).
+ *   persons can get is a source (`pagesFor`). The feed of Google Cloud, AWS or Azure is a source when one of the persons
+ *   can get its reports (`watchReads`).
  * - Each source gets the codes of the places. It gets the position of a place only when the place shares it with that
- *   source. The USGS, EMSC, the centers, the SWPC, GFZ, BoM, Energy-Charts, CISA KEV, Google Cloud, AWS and the status pages ask
+ *   source. The USGS, EMSC, the centers, the SWPC, GFZ, BoM, Energy-Charts, CISA KEV, Google Cloud, AWS, Azure and the status pages ask
  *   for no place.
  * - The channels are Pushover, and the Twilio call channel when the secrets have its keys. Each time of the delivery comes
  *   from a fact of the channels.
@@ -732,7 +734,8 @@ export function openInstance(options: InstanceOptions): Instance {
   if (problems.length > 0) throw new Error(`The instance does not start. The configuration has these problems:\n- ${problems.join("\n- ")}`);
   const token = options.secret(PUSHOVER_TOKEN) ?? "";
   // The configuration does not change in a process. Thus the rows of the interests are the same at each read.
-  const interests = interestsPayload(config, INSTANCE_CHANNELS);
+  const contactServices = instanceCheck(copy).services;
+  const interests = interestsPayload(config, INSTANCE_CHANNELS, contactServices === undefined ? undefined : { secret: options.secret, services: contactServices });
 
   // The store of shapes shares the pace of the sources. Thus its requests to the NWS API keep the rests of that host.
   const store = options.shapes === undefined ? undefined : createShapeStore({ pace, transport: options.transport, userAgent: agent, cache: options.shapes });
@@ -821,6 +824,7 @@ export function openInstance(options: InstanceOptions): Instance {
       expectations: configuredExpectations(INSTANCE_EXPECTATIONS, config.expectations),
       delay: DELAY_LIMITS,
       ...(config.link === undefined ? {} : { link: config.link }),
+      ...(config.channelDown === undefined ? {} : { channelDown: config.channelDown }),
     },
     run: options.run,
     copy: copy.id,
