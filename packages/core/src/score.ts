@@ -5,21 +5,26 @@
  */
 
 import { interval } from "@mark1russell7/interval";
+import { compareCodeUnits } from "@mark1russell7/text/order";
 import { assess, DEFAULT_ASSESS_POLICY, hasKind } from "./assess.ts";
-import type {
-  AssessPolicy,
-  Assessment,
-  Certainty,
-  Estimate,
-  Incident,
-  Instant,
-  KindPrior,
-  PersonWatch,
-  ScoreFactor,
-  ScoreGap,
-  ScorePriors,
-  ShadowScore,
-  WatchedPlace,
+import {
+  LEVELS,
+  type AssessPolicy,
+  type Assessment,
+  type Certainty,
+  type Estimate,
+  type ExpectedHarm,
+  type Incident,
+  type Instant,
+  type KindPrior,
+  type PersonWatch,
+  type ScoredIncident,
+  type ScoreFactor,
+  type ScoreGap,
+  type ScorePriors,
+  type ShadowDifference,
+  type ShadowScore,
+  type WatchedPlace,
 } from "./contracts.ts";
 
 /** The format of a file of priors. */
@@ -98,4 +103,28 @@ export function assessWithShadow(
   const assessment = assess(incident, person, places, policy, at);
   if (!assessment.reasons.some((reason) => reason.kind === "table")) return assessment;
   return { ...assessment, reasons: [...assessment.reasons, { kind: "shadow", score: shadowScore(incident, priors) }] };
+}
+
+// True when each expected measure of `a` is above that of `b`, and the intervals do not overlap.
+function harmAbove(a: ExpectedHarm, b: ExpectedHarm): boolean {
+  return a.deaths.low > b.deaths.high && a.injuries.low > b.injuries.high;
+}
+
+/**
+ * This function gives each difference between the table and the shadow score. In a difference, the table gives
+ * `above` the higher level, and the score of `below` is higher on each measure with no overlap. Thus the function
+ * needs no weight between a death and an injury.
+ *
+ * - An incident with the level `none` or with a score with no read is in no difference.
+ * - The differences are in the code-point order of `above`, then of `below`. Thus the order of the input does not change them.
+ */
+export function shadowDifferences(incidents: readonly ScoredIncident[]): ShadowDifference[] {
+  const scored = incidents.flatMap((incident) =>
+    incident.level === "none" || incident.shadow?.read !== true ? [] : [{ anchor: incident.anchor, rank: LEVELS.indexOf(incident.level), expected: incident.shadow.expected }],
+  );
+  const differences: ShadowDifference[] = [];
+  for (const high of scored) {
+    for (const low of scored) if (high.rank > low.rank && harmAbove(low.expected, high.expected)) differences.push({ above: high.anchor, below: low.anchor });
+  }
+  return differences.sort((a, b) => compareCodeUnits(a.above, b.above) || compareCodeUnits(a.below, b.below));
 }
