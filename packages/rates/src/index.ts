@@ -4,6 +4,7 @@
  * (NCEI Storm Events). It also measures the alerts of each kind and the harm under an active alert,
  * from the IEM archive of the VTEC alerts and NCEI. It holds the CAP certainty bands of `format-cap` in its file.
  * It counts the CAP fields of the new NWS alerts of each VTEC code in `data/cap.json`, because the archive has no CAP fields.
+ * The replay (`replayOf`) puts the table and the score on the alerts of the archive.
  *
  * The functions are pure. The script `scripts/measure.ts` fetches the data, writes `data/rates.json`
  * and compares a new measure with the committed file. The function `priorsOf` gives the priors of the
@@ -105,6 +106,21 @@ export {
 export { committedPriors, PRIORS_URL } from "./committed.ts";
 export { areaTypeOf, priorsOf } from "./priors.ts";
 export { ratesSummary, TOP_TYPES, TOP_UNDER, type GateResult } from "./summary.ts";
+export {
+  placeRate,
+  readCapKey,
+  REPLAY_FORMAT,
+  replayOf,
+  replaySummary,
+  RISK_VALUES,
+  TOP_REPLAY,
+  type PlaceRate,
+  type ReplayFile,
+  type ReplayInput,
+  type ReplayKey,
+  type ReplayPoint,
+  type ReplayType,
+} from "./replay.ts";
 export {
   HarmJoin,
   isPlaced,
