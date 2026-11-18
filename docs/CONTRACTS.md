@@ -1365,6 +1365,7 @@ The route `GET /map` of the runtime gives the `MapPayload` of `mapPayload`:
 - `at`: the time of the last pass, or `null` before the first pass.
 - `view`: the view of the last pass. The payload assesses each live incident for each person, with the policy of the delivery.
 - `basemap`: the regions under the view, simplified for the view box of the page.
+- `breadth`: the breadth of the indicator signals of the last pass, in the world and at each place. A runtime with no store of the readings has no field. The field is optional, thus the format keeps its name.
 
 Thus the level on the map is the level that the delivery gives. A mute with the effect `absent` gives `none`, as in `route` (`reachedAssessment`).
 
@@ -1394,6 +1395,14 @@ The route `GET /health` of the runtime gives the `HealthPayload` of `healthPaylo
 The coverage holds the ids of the places. Thus only the loopback address gives the route, as for the map.
 
 The local page shows the payload in the panel "Sources" (`packages/site/src/health-read.ts`, `health-view.ts`).
+
+The panel "Indicators" of the local page shows the field `breadth` of the live map (`packages/site/src/indicators-view.ts`).
+
+- The first row is the world, and each other row is a watched place. Each row tells the dimensions out of their normal level and the dimensions with a read.
+- Each row has one line for each dimension with a series: the series out of the normal level, and the series with no read.
+- The panel tells the counts, and no decision. The threat level (AL-24) reads the same counts.
+- The panel is of the present, also when the map shows a past time. The history keeps no breadth.
+- A runtime with no store of the readings gives no field, and the panel tells it. A breadth with no series tells that no source gives indicator readings yet.
 
 - The page reads the route after each good read of the map. A runtime with no `health` option gives 404, and the panel tells that it has no health.
 - Two sentences sum the payload: the sources, and the quotas and balances that stop or limit a message. A link at the top of the page has the same sentences.
