@@ -23,7 +23,7 @@
     "@mark1russell7/algebra": "^0.9.5",
     "@mark1russell7/rigor-generators": "^0.1.18",
     "@mark1russell7/text": "^0.0.13",
-    "@procedures/notify": "^0.60.0",
+    "@procedures/notify": "^0.62.1",
     "esbuild": "^0.28.2",
     "polite-crawler": "^0.7.3",
     "zod": "^4.6.7"
