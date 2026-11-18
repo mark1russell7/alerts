@@ -225,6 +225,29 @@ The map of a source gives its readings in the field `readings` of `MapResult`. T
 - A broken file goes into quarantine, and the store starts empty. A source does not give its old readings again, thus each series has no read until its history fills.
 - Each copy keeps its own readings. The exchange of the copies does not send them.
 
+### The breadth of the signals
+
+One measure out of its normal level is a weak sign. Many dimensions out of their normal levels at one time in one area is a strong sign. The function `indicatorBreadth` of `breadth.ts` counts them. It takes the read of each series, the watched places and a table of the regions of each zone.
+
+- The breadth of a place is the count of the dimensions with a signal in a series near the place.
+- The breadth of the world holds each series, near a place or not. A dimension with signals in many series tells a change in many areas at one time, for example slow traffic in each city.
+- Each dimension also has the count of its series with a read and with no read. A breadth of 2 dimensions of 2 with a read is not a breadth of 2 dimensions of 30.
+- A key counts one time in each dimension. When a key has two reads, the higher read counts: a signal, then a read, then no read.
+- The order of the series and a duplicate do not change the result. A seeded test holds this. It also holds that a new signal does not lower a breadth.
+
+The function `areaMeetsPlace` matches the area of a series to a place:
+
+| Area | Meets a place when |
+| --- | --- |
+| `code` | It covers a code of the place, by the rule of `regionCovers`. |
+| `point`, `line`, `polygon` | The place has a position, and the area is at its buffer or nearer. |
+| `zone` | A region of the zone in the table covers a code of the place. |
+| `world` | It meets no place. Only the breadth of the world holds it. |
+
+A zone with no regions in the table, and a shape that `@mark1russell7/geo` refuses, meet no place. Their keys are in the list `unplaced`, so a gap of the table shows.
+
+The breadth gives counts and no decision. The threat level (AL-24) reads the counts.
+
 ## Health and coverage
 
 The core calculates the health of each source from the records of its fetches, not the adapter. The runtime writes one `FetchRecord` when each fetch ends. The health is a state machine on `@mark1russell7/algebra`, and `HEALTH_MACHINE` is its document.
@@ -1398,7 +1421,9 @@ The file `schemas.ts` of the core has one zod 4 schema for each data type of the
 
 ## Open points
 
-- The threat level does not read the indicators yet. The next change adds the breadth of the signals: the count of the dimensions with a signal in an area.
+- The threat level does not read the breadth of the signals yet. The runtime does not calculate the breadth at each pass yet.
+- The breadth gives counts and no chance. A base rate of the signals of each dimension, from the history of the reads, gives the chance of a breadth.
+- The atlas has no table of the regions of each zone yet. Until then, each series of a zone is in `unplaced`.
 - A fault of the store of the readings goes only to the output. The health payload does not show it yet.
 - The season of a baseline is in UTC. A change of the clock moves a local rush hour by 1 h in UTC. A season in the local time of the area, with the civil time of `@mark1russell7/algebra`, replaces it.
 - Some units of the indicator sources are not in the grammar of `@mark1russell7/quantity`. They are `MW`, `MWh`, `µSv/h`, `µg`, `hPa`, `Bq`, `ppm` and each currency other than `USD`. A measure in such a unit fails its schema until the package adds the unit.
