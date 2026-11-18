@@ -1174,6 +1174,9 @@ importers:
       '@mark1russell7/text':
         specifier: ^0.0.13
         version: 0.0.13
+      '@procedures/json':
+        specifier: ^0.62.0
+        version: 0.62.1
       polite-crawler:
         specifier: ^0.7.10
         version: 0.7.10(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
@@ -2157,6 +2160,15 @@ packages:
       express:
         optional: true
 
+  '@procedures/client@0.62.1':
+    resolution: {integrity: sha512-zwb5axo0R2Sh5g2mFb85AE0gHhImXKrzt1/Aq4brUTEtRAJcqXptzJz1zJlhektMM4wi5zlhr6JjXnyE+//neA==}
+    engines: {node: '>=22'}
+    peerDependencies:
+      express: ^4.0.0 || ^5.0.0
+    peerDependenciesMeta:
+      express:
+        optional: true
+
   '@procedures/client@0.63.0':
     resolution: {integrity: sha512-8DyVvcfE69z7eLHBdTAWBQStL89FawH4vZa0hctiqcjdUbbKx9zIvJAuFwCqHfV/Q0fTuW202j0NSzhUWOREEQ==}
     engines: {node: '>=22'}
@@ -2170,12 +2182,25 @@ packages:
     resolution: {integrity: sha512-awkSHJHUqBL/r1652rHfzWX5GtSayzQXLu4S6YgusHEC1v7HFuPloiKY/e1x+tmb+fCSVY0Ge16jXKPahaPwWg==}
     engines: {node: '>=22'}
 
+  '@procedures/compiler@0.62.1':
+    resolution: {integrity: sha512-ZesInmDQPfokGSg1xt7009QHTN+aDM5nqzHbTErmLE1qMkKdpZH7PfJzIrzY4vTyh8PGGBRXAOhQLWefJAzs1Q==}
+    engines: {node: '>=22'}
+    peerDependencies:
+      typescript-api: npm:typescript@^5.9.3
+    peerDependenciesMeta:
+      typescript-api:
+        optional: true
+
   '@procedures/fs@0.57.0':
     resolution: {integrity: sha512-zNuq6My3GdB72JNTCMu/oBQuuS2FrLDRZgfkrtzlLXDPkbSxItN6F+jJ0T2FvZZl6bKQUN3dHOl3uYKUEF1Wfg==}
     engines: {node: '>=22'}
 
   '@procedures/json@0.57.0':
     resolution: {integrity: sha512-s5ubrb4QhAB+zLJnSHZ4lLIB1Sm8KacOXPANqx5DEa3+o8OrKJlNAP1H3qDY8vayJ9oxXi2z10GEPO9vwDednQ==}
+    engines: {node: '>=22'}
+
+  '@procedures/json@0.62.1':
+    resolution: {integrity: sha512-kZ8T8nNGvKWazj7qcsA/jeKxDLc03uTa4YLNuyeGIDe62Y7Hx5Kb3P9Obgq5czHCYbALCHX+NPJ2rm7IO6sc5w==}
     engines: {node: '>=22'}
 
   '@procedures/notify@0.56.0':
@@ -3791,6 +3816,27 @@ snapshots:
       - pg
       - utf-8-validate
 
+  '@procedures/client@0.62.1':
+    dependencies:
+      '@mark1russell7/algebra': 0.8.10(zod@4.6.7)
+      '@mark1russell7/coeval': 0.34.0(zod@4.6.7)
+      '@mark1russell7/collections': 0.10.2(zod@4.6.7)
+      '@mark1russell7/quantity': 0.4.1(zod@4.6.7)
+      '@mark1russell7/rigor-generators': 0.2.0
+      '@mark1russell7/service': 0.9.3(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
+      '@opentelemetry/api': 1.10.0
+      '@types/ws': 8.18.2
+      ws: 8.23.0
+      zod: 4.6.7
+    transitivePeerDependencies:
+      - '@grpc/grpc-js'
+      - amqplib
+      - bufferutil
+      - ioredis
+      - mongodb
+      - pg
+      - utf-8-validate
+
   '@procedures/client@0.63.0':
     dependencies:
       '@mark1russell7/algebra': 0.8.10(zod@4.6.7)
@@ -3816,6 +3862,21 @@ snapshots:
     dependencies:
       '@mark1russell7/coeval': 0.34.0(zod@4.6.7)
       '@procedures/client': 0.57.0
+      zod: 4.6.7
+    transitivePeerDependencies:
+      - '@grpc/grpc-js'
+      - amqplib
+      - bufferutil
+      - express
+      - ioredis
+      - mongodb
+      - pg
+      - utf-8-validate
+
+  '@procedures/compiler@0.62.1':
+    dependencies:
+      '@mark1russell7/coeval': 0.34.0(zod@4.6.7)
+      '@procedures/client': 0.62.1
       zod: 4.6.7
     transitivePeerDependencies:
       - '@grpc/grpc-js'
@@ -3855,6 +3916,23 @@ snapshots:
       - ioredis
       - mongodb
       - pg
+      - utf-8-validate
+
+  '@procedures/json@0.62.1':
+    dependencies:
+      '@procedures/client': 0.62.1
+      '@procedures/compiler': 0.62.1
+      yaml: 2.9.1
+      zod: 4.6.7
+    transitivePeerDependencies:
+      - '@grpc/grpc-js'
+      - amqplib
+      - bufferutil
+      - express
+      - ioredis
+      - mongodb
+      - pg
+      - typescript-api
       - utf-8-validate
 
   '@procedures/notify@0.56.0':

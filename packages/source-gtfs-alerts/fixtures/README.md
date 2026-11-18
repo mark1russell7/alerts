@@ -18,7 +18,15 @@
 - The answer had `Content-Type: application/octet-stream`, and no `ETag` and no `Last-Modified` header.
 - The license is the Norwegian Licence for Open Government Data (NLOD) 2.0. The credit that the license asks for: "Contains data under the Norwegian licence for Open Government data (NLOD) distributed by Entur."
 
-## The two files
+## `mobility-database-20261117.csv`
+
+- This file holds 13 real rows of `https://files.mobilitydatabase.org/feeds_v2.csv`, the catalog of the Mobility Database of 2026-11-17, with its full header.
+- The rows show each case of the reader: feeds that it takes, feeds that it skips and rows that are not feeds of service alerts.
+- The column `feed_contact_email` is empty in each row. The reader does not read it.
+- The metadata of the catalog is under CC0 1.0. Each feed keeps the terms of its agency.
+- The catalog gives the country CZ to the Oslo feed `mdb-1799`. The reader does not use the country.
+
+## The two files of alerts
 
 - The alerts contain the names of lines, stops, streets and stations. They contain no personal data.
 - The tests give each feed a made-up URL on `transit.example.test`. The box of each network in the tests is an estimate, not a value of the feed.
