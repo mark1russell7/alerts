@@ -11,6 +11,7 @@ import type { Address, AssessPolicy, ChannelDescriptor, ChannelId, Duration, Esc
 import { assess, DEFAULT_ASSESS_POLICY, DRILL_KIND, matchSubjects, reachedAssessment } from "./assess.ts";
 import { policyFor, recipientProblems, ruleSteps, type ChannelRule, type Recipient } from "./delivery.ts";
 import { DRILL_PROBES, drillProblems, nextDrillAt, type DrillConfig } from "./drill.ts";
+import { composeInterests, placesLayer, servicesLayer, workLayer } from "./interest-defaults.ts";
 import { incidents, normalize } from "./merge.ts";
 import { optInFields, resolveOptIn, type OptInConfig, type OptInRecord } from "./opt-in.ts";
 import { DRILL_SUBJECT, NO_SYSTEM_LINES, systemReports } from "./system-reports.ts";
@@ -47,10 +48,26 @@ export interface PlaceConfig {
   readonly sharePosition?: readonly SourceId[];
 }
 
+/**
+ * The inputs of the default layers of the interest graph of a person (`interest-defaults.ts`). The load joins the
+ * layers with the graph of the person in `PersonWatch.interests`.
+ */
+export interface InterestDefaultsConfig {
+  /** The kinds of work of the person. Each one is a key of `WORK_DEFAULTS`, for example `software`. */
+  readonly works?: readonly string[];
+  /** The services that the person uses. Each one is the node key of an entity, for example `domain:example.com`. */
+  readonly services?: readonly NodeKey[];
+}
+
 /** A person of the configuration. */
 export interface PersonConfig {
   /** The places, the subjects, the rules and the quiet window of the person. */
   readonly watch: PersonWatch;
+  /**
+   * The inputs of the default layers of the interest graph. When it is present, the recipient gets the join of the
+   * layer `places`, the other layers and the graph of the person. When it is absent, the watch stays as it is.
+   */
+  readonly defaults?: InterestDefaultsConfig;
   /** The name of the person for the UI. */
   readonly label?: string;
   /**
@@ -79,13 +96,17 @@ export interface SpendConfig {
   readonly monthlyUsd: number;
   /**
    * The fixed costs of the account in each month, for example the rent of each phone number. The sends of a month get
-   * the monthly cap less these costs (`sendCapUsd`). The default is no fixed cost.
+   * the monthly cap less these costs (`sendCapUsd`). The default is no fixed cost. Then the whole cap is for the sends,
+   * and the rent is outside the cap. Give fixed costs only for a cap of the whole bill.
    */
   readonly fixed?: readonly FixedCost[];
   /** The last part of the cap of the sends that only `life-safety` messages use, in US dollars. The default is 0. */
   readonly reserveUsd?: number;
-  /** Below this balance of the account, in the currency of the account, the system reports the line `low`. */
-  readonly floor: number;
+  /**
+   * The floor of the balance of the account, in the currency of the account: one floor or a list of floors. Below each
+   * floor, the system reports one line `low`. Thus the list `[5, 2]` gives one alert at 5 and one more alert at 2.
+   */
+  readonly floor: number | readonly number[];
   /** The time zone of the start of the month, as an IANA name: for example `America/New_York`. */
   readonly timeZone: string;
 }
@@ -104,6 +125,14 @@ export interface FixedCost {
  */
 export function sendCapUsd(spend: Pick<SpendConfig, "monthlyUsd" | "fixed">): number {
   return spend.monthlyUsd - (spend.fixed ?? []).reduce((sum, cost) => sum + cost.usd, 0);
+}
+
+/**
+ * This function gives the floors of the balance of a spend entry, from the highest to the lowest, each one time. One
+ * floor gives a list of one floor.
+ */
+export function balanceFloors(floor: SpendConfig["floor"]): number[] {
+  return [...new Set(typeof floor === "number" ? [floor] : floor)].sort((a, b) => b - a);
 }
 
 /** One person of the outage call, with the chain of the tries of the person. */
@@ -399,7 +428,10 @@ export function loadConfig(config: AlertConfig, channels: readonly ChannelDescri
   }
 
   const people = new Set<string>();
-  for (const { watch } of config.people) {
+  // The watch of each recipient, in the order of the people: the join of the default layers, or the watch as it is.
+  const watches: PersonWatch[] = [];
+  for (const entry of config.people) {
+    const { watch } = entry;
     const person = watch.person;
     if (people.has(person)) problems.push(`Two people have the id ${person}.`);
     people.add(person);
@@ -410,7 +442,11 @@ export function loadConfig(config: AlertConfig, channels: readonly ChannelDescri
         if (!own.has(place)) problems.push(`Rule ${index} of the person ${person} names the place ${place}, and the person does not watch it. The rule matches no incident there.`);
       }
     });
-    problems.push(...relevanceProblems(watch, own));
+    const joined = joinedWatch(entry);
+    if (joined.tag === "err") problems.push(`The defaults of the person ${person}: ${joined.error}`);
+    const used = joined.tag === "ok" ? joined.value : watch;
+    watches.push(used);
+    problems.push(...relevanceProblems(used, own));
   }
 
   const expectations = new Set<string>();
@@ -491,9 +527,9 @@ export function loadConfig(config: AlertConfig, channels: readonly ChannelDescri
     }
   }
 
-  const recipients = config.people.map((entry): Recipient => {
+  const recipients = config.people.map((entry, index): Recipient => {
     const recipient: Recipient = {
-      watch: entry.watch,
+      watch: watches[index] ?? entry.watch,
       policies: entry.policies ?? config.policies,
       addresses: Object.fromEntries(addresses.get(entry.watch.person) ?? []),
     };
@@ -583,6 +619,24 @@ function drillPlanProblems(drill: DrillConfig, recipient: Recipient, policy: Ass
 function graphPlaces(graph: InterestGraph): PlaceId[] {
   const nodes = [...graph.edges.flatMap((edge) => [edge.from, edge.to]), ...graph.mutes.flatMap((mute) => mute.subjects ?? [])];
   return [...new Set(nodes.flatMap((node) => placeOfNode(node) ?? []))];
+}
+
+/**
+ * This function gives the watch of a recipient: the join of the default layers and the graph of the person. A person
+ * with no defaults keeps the watch. The layer `places` is always in the join. Without it, a graph of work topics
+ * alone stops the routing at the places. A graph of another person also stays as it is: `relevanceProblems`
+ * reports it, and the places decide. The function gives the text of a refusal of the join as an error.
+ */
+function joinedWatch(entry: PersonConfig): Result<PersonWatch, string> {
+  const { watch, defaults } = entry;
+  if (defaults === undefined || (watch.interests !== undefined && watch.interests.person !== watch.person)) return ok(watch);
+  try {
+    const layers = [placesLayer(watch.places), workLayer(defaults.works ?? []), servicesLayer(defaults.services ?? [])];
+    return ok({ ...watch, interests: composeInterests(watch.person, layers, watch.interests).graph });
+  } catch (error) {
+    if (error instanceof RangeError) return err(error.message);
+    throw error;
+  }
 }
 
 /**

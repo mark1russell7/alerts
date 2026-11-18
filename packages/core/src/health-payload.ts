@@ -20,7 +20,7 @@ import type { Lateness } from "./lateness.ts";
 import { balanceStages, copyStages, quotaStages } from "./system-reports.ts";
 
 /** The name of the format of the health payload. A change that breaks a reader gets a new name. */
-export const HEALTH_FORMAT = "alerts-health/2";
+export const HEALTH_FORMAT = "alerts-health/3";
 
 /**
  * The health of one source in the payload. It keeps the kind of the last failure, and not its message. A message can hold

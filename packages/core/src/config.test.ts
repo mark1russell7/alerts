@@ -1,11 +1,12 @@
 import { random, seedsFrom } from "@mark1russell7/rigor-generators";
 import { describe, expect, it } from "vitest";
-import { type AlertConfig, CONFIG_FORMAT, CONFIG_PART_FORMAT, configHash, configuredExpectations, type ContactConfig, drillRules, expectationProblems, loadConfig, localPlaces, mergeParts, type NamedPart, type PersonConfig, type PlaceConfig, placeLabels, type SecretLookup, sendCapUsd, sourcePlaces } from "./config.ts";
+import { type AlertConfig, balanceFloors, CONFIG_FORMAT, CONFIG_PART_FORMAT, configHash, configuredExpectations, type ContactConfig, drillRules, expectationProblems, loadConfig, localPlaces, mergeParts, type NamedPart, type PersonConfig, type PlaceConfig, placeLabels, type SecretLookup, sendCapUsd, sourcePlaces } from "./config.ts";
 import type { ChannelDescriptor, ChannelId, EscalationPolicy, InterestEdge, InterestGraph, NodeKey, PersonId, PlaceId, Position, SourceId } from "./contracts.ts";
 import { RANK_DELAY_LIMIT } from "./escalation.ts";
 import { DRILL_SUBJECT } from "./system-reports.ts";
 import type { Expectation } from "./lateness.ts";
-import { rankDelaysSchema } from "./schemas.ts";
+import { composeInterests, placesLayer, servicesLayer, workLayer } from "./interest-defaults.ts";
+import { personConfigSchema, rankDelaysSchema } from "./schemas.ts";
 
 const SEEDS = seedsFrom(process.env["SEED"], [1, 2, 3, 4, 5, 6, 7, 8]);
 const MINUTE = 60_000;
@@ -141,6 +142,54 @@ describe("loadConfig", () => {
     ]);
   });
 
+  it("joins the default layers with the graph of the person, and keeps the watch of a person with no defaults", () => {
+    const mine: InterestEdge = { id: "mine", from: "topic:infra.cloud", to: "person", kind: "interest", weight: { value: 1, low: 1, high: 1 }, origin: "person", on: false };
+    const own: InterestGraph = { format: "alerts-interest/1", person: p1, edges: [mine], mutes: [] };
+    const defaults = { works: ["software"], services: ["domain:example.com" as NodeKey] };
+    const joined = person(p1, [home], { defaults });
+    const graphed: PersonConfig = { ...joined, watch: { ...joined.watch, interests: own } };
+    const plain = person(p2, [home]);
+    const loaded = loadConfig(config({ people: [graphed, plain], contacts: [...contacts(p1), ...contacts(p2)] }), CHANNELS, store);
+    expect(loaded.problems).toEqual([]);
+    const graph = loaded.recipients[0]!.watch.interests!;
+    expect(graph).toEqual(composeInterests(p1, [placesLayer([home]), workLayer(defaults.works), servicesLayer(defaults.services)], own).graph);
+    const ids = graph.edges.map((edge) => edge.id);
+    expect(ids).toContain(`places/place:${home}>person`);
+    expect(ids).toContain("mine");
+    expect(ids).not.toContain("work/topic:infra.cloud>person");
+    expect(loaded.recipients[1]!.watch).toBe(plain.watch);
+  });
+
+  it("joins the layer places alone for empty defaults, so a mandatory rule has its graph", () => {
+    const ruled = person(p1, [home], { defaults: {} });
+    const watch = { ...ruled.watch, mandatory: [{ place: home, on: true, rangeKm: 5 }] };
+    const loaded = loadConfig(config({ people: [{ ...ruled, watch }] }), CHANNELS, store);
+    expect(loaded.problems).toEqual([]);
+    expect(loaded.recipients[0]!.watch.interests).toEqual(composeInterests(p1, [placesLayer([home])]).graph);
+  });
+
+  it("finds an unknown work, a service that is not an entity and a changed default, and keeps the watch", () => {
+    const work = person(p1, [home], { defaults: { works: ["astronomy"] } });
+    const service = person(p1, [home], { defaults: { services: [`place:${home}` as NodeKey] } });
+    // An edge of the person with the id of a default and another weight is a second edge with one id.
+    const copied: InterestEdge = { id: `places/place:${home}>person`, from: `place:${home}`, to: "person", kind: "interest", weight: { value: 0.5, low: 0.5, high: 0.5 }, origin: "person", on: true };
+    const changed = person(p1, [home], { defaults: {} });
+    const changedWatch = { ...changed.watch, interests: { format: "alerts-interest/1" as const, person: p1, edges: [copied], mutes: [] } };
+    const problemsOf = (entry: PersonConfig) => loadConfig(config({ people: [entry] }), CHANNELS, store);
+    expect(problemsOf(work).problems).toEqual([`The defaults of the person person-1: The table of the kinds of work does not have the work "astronomy".`]);
+    expect(problemsOf(work).recipients[0]!.watch).toBe(work.watch);
+    expect(problemsOf(service).problems).toEqual([`The defaults of the person person-1: The service "place:${home}" is not the key of an entity, for example domain:example.com.`]);
+    expect(problemsOf({ ...changed, watch: changedWatch }).problems).toEqual([`The defaults of the person person-1: Two different edges have the id "places/place:${home}>person".`]);
+  });
+
+  it("checks the form of the defaults, and leaves the table and the entities to the load", () => {
+    const watch = { person: p1, places: [home], rules: [] };
+    expect(personConfigSchema.safeParse({ watch, defaults: { works: ["astronomy"], services: [`place:${home}`] } }).success).toBe(true);
+    expect(personConfigSchema.safeParse({ watch, defaults: { works: [""] } }).success).toBe(false);
+    expect(personConfigSchema.safeParse({ watch, defaults: { services: ["no-system"] } }).success).toBe(false);
+    expect(personConfigSchema.safeParse({ watch, defaults: { places: [home] } }).success).toBe(false);
+  });
+
   it("finds a mandatory rule with no interest graph, and takes a graph of the person at its own places", () => {
     const watched = person(p1, [home]);
     const ruled: PersonConfig = { watch: { ...watched.watch, mandatory: [{ place: home, on: false, rangeKm: 5 }] } };
@@ -177,6 +226,10 @@ describe("loadConfig", () => {
     const spend = { provider: "provider:pushover", monthlyUsd: 15, fixed, reserveUsd: 3, floor: 5, timeZone: "America/Chicago" };
     expect(sendCapUsd(spend)).toBeCloseTo(11.7, 9);
     expect(sendCapUsd({ monthlyUsd: 15 })).toBe(15);
+    // One floor is a list of one floor. A list gives its floors from the highest to the lowest, each one time.
+    expect(balanceFloors(5)).toEqual([5]);
+    expect(balanceFloors([2, 5, 2])).toEqual([5, 2]);
+    expect(loadConfig(config({ spend: [{ ...spend, floor: [5, 2] }] }), paid, store).problems).toEqual([]);
     expect(loadConfig(config({ spend: [spend] }), paid, store).problems).toEqual([]);
     expect(loadConfig(config({ spend: [{ ...spend, reserveUsd: 12 }] }), paid, store).problems).toEqual([
       "The reserve of the spend of provider:pushover is not below its monthly cap less its fixed costs.",

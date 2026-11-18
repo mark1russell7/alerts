@@ -55,7 +55,7 @@ export const HEALTHY_FIXTURE: HealthPayload = {
   quotas: [{ quota: { channel: "text" as ChannelId, limit: 100, reserve: 10, used: 12, resetAt: HEALTH_AT + 3 * HOUR, unit: "messages" }, stages: [] }],
   balances: [
     {
-      balance: { provider: "provider:voice-co", title: "Voice Co", channels: ["voice" as ChannelId], floor: 5, maxAge: DAY, since: HEALTH_AT - 30 * DAY, read: { balance: 18.4, currency: "USD", at: HEALTH_AT - HOUR } },
+      balance: { provider: "provider:voice-co", title: "Voice Co", channels: ["voice" as ChannelId], floors: [5], maxAge: DAY, since: HEALTH_AT - 30 * DAY, read: { balance: 18.4, currency: "USD", at: HEALTH_AT - HOUR } },
       stages: [],
     },
   ],
@@ -112,7 +112,7 @@ export const HEALTH_FIXTURE: HealthPayload = {
   ],
   balances: [
     {
-      balance: { provider: "provider:voice-co", title: "Voice Co", channels: ["voice" as ChannelId], floor: 5, maxAge: DAY, since: HEALTH_AT - 30 * DAY, read: { balance: 0, currency: "USD", at: HEALTH_AT - HOUR } },
+      balance: { provider: "provider:voice-co", title: "Voice Co", channels: ["voice" as ChannelId], floors: [5], maxAge: DAY, since: HEALTH_AT - 30 * DAY, read: { balance: 0, currency: "USD", at: HEALTH_AT - HOUR } },
       stages: ["low", "empty"],
     },
   ],

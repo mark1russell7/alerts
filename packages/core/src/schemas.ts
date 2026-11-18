@@ -147,6 +147,7 @@ import {
   type OutageConfig,
   type OutagePersonConfig,
   type PersonConfig,
+  type InterestDefaultsConfig,
   type PlaceConfig,
   type SecretLookup,
   type SpendConfig,
@@ -1388,11 +1389,25 @@ export function isContactUrl(text: string): boolean {
   return CONTACT_CHARACTERS.test(text) && CONTACT_FORMS.some((form) => form.test(text));
 }
 
+/**
+ * This schema checks the inputs of the default layers of a person. The load checks each work against the table, and
+ * checks that each service is an entity.
+ */
+export const interestDefaultsConfigSchema: z.ZodType<InterestDefaultsConfig, InterestDefaultsConfig> = schemaOf<InterestDefaultsConfig>()(
+  z
+    .strictObject({
+      works: z.array(z.string().min(1)).readonly().exactOptional(),
+      services: z.array(nodeKeySchema).readonly().exactOptional(),
+    })
+    .readonly(),
+);
+
 /** This schema checks a person of the configuration: the watch, and the policies of the person when they are not the default. */
 export const personConfigSchema: z.ZodType<PersonConfig, PersonConfig> = schemaOf<PersonConfig>()(
   z
     .strictObject({
       watch: personWatchSchema,
+      defaults: interestDefaultsConfigSchema.exactOptional(),
       label: z.string().exactOptional(),
       policies: z.array(escalationPolicySchema).readonly().exactOptional(),
     })
@@ -1428,7 +1443,7 @@ export const spendConfigSchema: z.ZodType<SpendConfig, SpendConfig> = schemaOf<S
         .readonly()
         .exactOptional(),
       reserveUsd: z.number().nonnegative().exactOptional(),
-      floor: z.number(),
+      floor: z.union([z.number(), z.array(z.number()).min(1, "The list of floors has one floor or more.").readonly()]),
       timeZone: z.string().min(1),
     })
     .readonly(),
@@ -1653,7 +1668,7 @@ export const providerBalanceSchema: z.ZodType<ProviderBalance, ProviderBalance> 
       provider: z.string().min(1, "The provider is a non-empty string."),
       title: z.string(),
       channels: z.array(channelIdSchema).readonly(),
-      floor: z.number(),
+      floors: z.array(z.number()).min(1, "The list of floors has one floor or more.").readonly(),
       maxAge: durationSchema,
       since: instantSchema,
       read: balanceReadSchema.exactOptional(),

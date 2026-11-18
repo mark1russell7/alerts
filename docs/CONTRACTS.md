@@ -342,11 +342,14 @@ A balance report has no area. Its subjects are `{ system: "alerts.channel", id: 
 
 | Stage | Condition | Severity, urgency |
 | --- | --- | --- |
-| `low` | The last read is below the floor | `moderate`, `expected` |
+| `low` | The last read is below a floor. Each floor is its own line. | `moderate`, `expected` |
 | `empty` | The last read is 0 or less. The provider refuses each paid message. | `severe`, `immediate` |
 | `unread` | No read passed for the maximum age or longer (`balanceUnreadAt`) | `moderate`, `expected` |
 
-- The facts of a line are the provider and the stage. A new balance gives no update.
+- The facts of a line are the provider, the stage and the floor of a line `low`. A new balance gives no update.
+- A spend entry gives one floor or a list of floors, for example `[5, 2]`. One floor is a list of one floor (`balanceFloors`).
+- Each floor above the last read gives one line `low`: `balance/<provider>/low/<floor>`. Thus each floor gives one alert.
+- Money above a floor cancels the line of that floor. `balanceFloorsBelow` gives the floors above the read, from the highest.
 - `low` and `empty` come from the last read that passed, also when the read is old. A read that passes ends `unread`.
 - A snapshot with no balances keeps each open line of a balance.
 - The runtime gives `balanceWatch` for each account. Each pass checks each watch, and a watch reads once a day. A failed read tries again after one hour.
@@ -510,6 +513,7 @@ The watch of the replies (`replyWatch` of the runtime, AL-56) gives the opt-in o
 The cap of the spend of a Twilio channel is two gates of `polite-crawler/api`, with one store, one key and one quota name:
 
 - The limit of the gates is the monthly cap less the fixed costs of the spend entry (`fixed`). A fixed cost is, for example, the rent of a phone number.
+- Give fixed costs only for a cap of the whole bill. With no fixed cost, the whole cap is for the sends.
 - The reserve is a part of that limit. `loadConfig` refuses fixed costs that use all of the cap, and a reserve that is not below the rest.
 - The two gates count the same units. The gate of `life-safety` has no reserve. Thus only `life-safety` uses the last part of the cap.
 - A full cap gives `rate-limited`. A cap in its reserve gives `reserved` to a message below `life-safety`.
@@ -974,8 +978,9 @@ The function `openInstance` makes the instance of the owner from the private con
 - The sources are the NWS API and IPAWS. The channels are Pushover, and the Twilio call channel when `secrets.env` has its keys.
 - The keys of Twilio are `TWILIO_ACCOUNT_SID`, `TWILIO_API_KEY_SID`, `TWILIO_API_KEY_SECRET` and `TWILIO_FROM`. An API key signs each request.
 - The optional key `TWILIO_TEXT_FROM` adds the text channel. It holds the registered sender of texts: a phone of a 10DLC campaign or a verified toll-free phone.
+- The instance does not text from `TWILIO_FROM`. Without `TWILIO_TEXT_FROM`, the text channel and the texts of the outage call are off.
 - A spend entry of a provider of a channel gives the cap of the channel. The count of the cap is in `quotas.sqlite`.
-- The spend entry of Twilio also gives the watch of the balance: one read each day, and its floor.
+- The spend entry of Twilio also gives the watch of the balance: one read each day, and its floors.
 - Each source gets the watch of `sourcePlaces`. Thus a source gets the region codes, and a position only when the place shares it with that source.
 - The User-Agent of each request names the project and its page. It names no person.
 - The times of the delivery come from facts of the channel. A call has a limit of 10 seconds. The poll goes at the pace of the emergency repeats, 30 seconds.
@@ -1117,7 +1122,7 @@ The package `@mark1russell7/alerts-channel-twilio` operates the chain on the ser
 - The setup of the runtime refuses an outage call with no spend entry for Twilio. Each problem of the monthly cap names no count, because the spend cap is private.
 - The spend gate of the instance does not count the calls of the Functions as sends. The watch of the spend adds them (AL-57).
 - The gate also reads the usage records of Twilio for the local month, in whole UTC days. It uses the larger of that amount and its own count, by the rule of `@mark1russell7/stack-spend`.
-- `readTwilioSpend` gives the record `totalprice` less the record `phonenumbers`, from the GMT day of the start of the month. The rent of the numbers is in the fixed costs.
+- `readTwilioSpend` gives the record `totalprice` less the record `phonenumbers`, from the GMT day of the start of the month. Thus the read has no rent of a number. The cap holds the rent only when the spend entry lists it in `fixed`.
 - The first GMT day can hold some hours of the month before. The cap can then stop a send early, but not late.
 - `spendWatch` of the runtime reads the spend of the provider each hour, from the start of the month of the cap. It notes the spend in the count of the gates. The count does not become smaller, thus the gate keeps the larger amount.
 - A failed read is a note in the body of each ping of the heartbeat, and the watch reads again after 15 minutes. A read that ends in the next month does not change the count.
@@ -1196,8 +1201,8 @@ The system fold gives the drill lines (the section of the system reports). The m
 
 The next steps are these:
 
-- The map and the explanation of a route show the steps that the channel rules remove (`Route.ruled`).
-- Then comes a drill of the outage call.
+- A drill of the outage call.
+- Later: a view of the plan of each person on the page. No page shows a plan today. That view also shows the steps that the channel rules remove (`Route.ruled`).
 
 ## People and places
 
@@ -1208,10 +1213,10 @@ The contracts carry only ids: `PersonId` and `PlaceId`. The runtime gets people,
 The core gives the format of the private configuration, `AlertConfig` (`alerts-config/1`). The repository holds no configuration. Each copy of the system loads the same configuration.
 
 - `places`: the id, a label, a position, the region codes and the buffer of each place. The field `sharePosition` names the sources that get the position.
-- `people`: the `PersonWatch` of each person, a label, and the escalation policies of the person.
+- `people`: the `PersonWatch` of each person, a label, and the escalation policies of the person. The field `defaults` gives the inputs of the default layers of the interest graph (`docs/RELEVANCE.md`).
 - `contacts`: the address of a person on a channel. A value of an address is a text, or a reference `{ secret: "NAME" }` to a key of the secret store.
 - `policies`: the escalation policies of each person with no policies of their own.
-- `spend`: the money rules of each paid provider account. An entry has the monthly cap and its reserve in US dollars, the floor of the balance and the time zone of the month.
+- `spend`: the money rules of each paid provider account. An entry has the monthly cap and its reserve in US dollars, the floors of the balance and the time zone of the month.
 - `link`: the policy of the link rule of the merge (rule 3). Without it, the instance uses `DEFAULT_LINK_POLICY`.
 - `outage`: the people of the outage call, each with a `TryChain`. Without it, an outage of the instance calls no person.
 - `assess`: the policy of the assessment, `AssessPolicy`. It replaces the full default policy of the core. With no field, the default policy applies.
@@ -1390,7 +1395,8 @@ The API also serves the built local page (`packages/site/dist`) on the same addr
 
 The route `GET /health` of the runtime gives the `HealthPayload` of `healthPayload`. The page reads it on its own origin, next to the map. `healthPayloadSchema` checks it.
 
-- `format`: `alerts-health/2` (`HEALTH_FORMAT`). A change that breaks a reader gets a new name. The second format added `reads`.
+- `format`: `alerts-health/3` (`HEALTH_FORMAT`). A change that breaks a reader gets a new name. The second format added `reads`.
+- The third format gives the list `floors` of each balance in place of one `floor` (AL-61).
 - `at`: the time of the last pass, or `null` before the first pass. The sources, the lateness and the coverage come from that pass.
 - `now`: the time of the read. The stages of the copies and of the balances are at this time.
 - `sources`: the health of each source. The last failure keeps its time and its kind, and not its message, because a message can hold the address of a fetch.
