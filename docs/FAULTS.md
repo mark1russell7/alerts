@@ -11,7 +11,7 @@ A gate that cannot decide gives no read. A case with a failed gate or no read fa
 - A cut and a time limit are sensitive to time. Thus these cases start only in CI, where no other job shares the runner.
 - The workflow starts on each pull request, and on each push to `main` that changes a package of the suite. A person can also start it with `workflow_dispatch`.
 - Each case writes its records to `fault-records/case-<n>.json`. The job keeps the records as an artifact, and writes a table of the gates to its summary.
-- Cases 11, 12 and 15 use fake clocks, thus the time of the runner does not change their outcome. They are `vitest` tests of `packages/testkit`, and the checks of CI start them.
+- Cases 11, 12 and 15 use fake clocks, thus the time of the runner does not change their outcome. The workflow `Faults` also starts case 15, and keeps its record in `fault-records/case-15.json`. They are `vitest` tests of `packages/testkit`, and the checks of CI start them.
 
 ## The cases
 

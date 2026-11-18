@@ -124,9 +124,10 @@ describe("the gates of case 15", () => {
     expect(burstResultOf({ ...record, sends: [...record.sends, send(FLOODS[0]!, BURST + MINUTE, "notice", "cloud")] }).gates.oneSend).toBe(false);
   });
 
-  it("fails flapped with fewer than 2 flaps, and for a flap with no send and no hold", () => {
+  it("fails flapped with no flap incident, and for a flap with no send and no hold", () => {
     const [flapping] = goodRecords().filter((record) => record.arm === "flapping");
-    expect(burstResultOf({ ...flapping!, flaps: ["flap-1"] }).gates.flapped).toBe(false);
+    expect(burstResultOf({ ...flapping!, flaps: ["flap-1"] }).gates.flapped).toBe(true);
+    expect(burstResultOf({ ...flapping!, flaps: [] }).gates.flapped).toBe(false);
     expect(burstResultOf({ ...flapping!, flaps: ["flap-1", "flap-2", "flap-3"] }).gates.flapped).toBe(false);
   });
 });
@@ -164,7 +165,7 @@ describe("runSendBurst", () => {
 
   beforeAll(async () => {
     run = await runSendBurst();
-    // The record goes to the log of CI. The prediction alerts-al72-case15 reads it.
+    // The log shows the record when a gate fails. The workflow Faults keeps the full record in `fault-records/case-15.json`.
     const summary = run.records.map((record) => ({
       arm: record.arm,
       sends: record.sends.length,

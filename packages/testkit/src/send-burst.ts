@@ -30,7 +30,8 @@
  * - `settles`: in the last `quietMs` of the arm, no copy writes an escalation, a hold or an end, and no copy sends.
  * - `noThrow`: no pass throws, and each read of the exchange has no problem.
  * - `oneSend`, in the arms where the copies read each other at each step: no incident has a send of each copy.
- * - `flapped`, in `flapping`: the flaps gave 2 system incidents or more, and each one has a send or a hold.
+ * - `flapped`, in `flapping`: the flaps gave 1 system incident or more, and each one has a send or a hold. Before
+ *   AL-75, each flap opens a new incident. A flap window of the health line keeps one incident for each episode.
  */
 import { fakeWallClock, type WallClock } from "@mark1russell7/algebra/clock";
 import {
@@ -308,7 +309,7 @@ export function burstResultOf(record: BurstRecord, settings: BurstSettings = CAS
       }
       case "flapped": {
         const lost = record.flaps.filter((id) => !sentIds.has(id) && !heldIds.has(id));
-        gates.flapped = record.flaps.length >= 2 && lost.length === 0;
+        gates.flapped = record.flaps.length >= 1 && lost.length === 0;
         if (!gates.flapped) problems.push(`${record.arm}: ${String(record.flaps.length)} flap incidents, ${String(lost.length)} with no send and no hold.`);
         break;
       }
