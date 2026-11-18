@@ -15,6 +15,7 @@
     "@mark1russell7/alerts": "workspace:*",
     "@mark1russell7/alerts-fetch": "workspace:*",
     "@mark1russell7/alerts-source-aws": "workspace:*",
+    "@mark1russell7/alerts-source-azure": "workspace:*",
     "@mark1russell7/alerts-source-gcp": "workspace:*",
     "@mark1russell7/text": "^0.0.13",
     "polite-crawler": "^0.7.3"

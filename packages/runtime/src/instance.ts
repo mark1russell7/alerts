@@ -70,6 +70,7 @@ import { createEnergyChartsSource, ENERGY_CHARTS_DESCRIPTOR } from "@mark1russel
 import { createKevSource, KEV_DESCRIPTOR } from "@mark1russell7/alerts-source-cisa-kev";
 import { createRadarAnomaliesSource, createRadarOutagesSource, type RadarSourceOptions } from "@mark1russell7/alerts-source-cloudflare-radar";
 import { AWS_DOMAIN, AWS_KIND, createAwsSource } from "@mark1russell7/alerts-source-aws";
+import { AZURE_DOMAIN, AZURE_KIND, createAzureSource } from "@mark1russell7/alerts-source-azure";
 import { createBomSwsSource, type BomSwsFetchOptions } from "@mark1russell7/alerts-source-bom-sws";
 import { createGcpSource, GCP_KIND, GOOGLE_DASHBOARDS, type GcpFetchOptions } from "@mark1russell7/alerts-source-gcp";
 import { createStatusPageSource, pagesFor, watchReads, type StatusPage, type StatusPageFetchOptions } from "@mark1russell7/alerts-source-statuspage";
@@ -314,9 +315,9 @@ const radarFactories = (token: string) =>
   );
 
 /**
- * The feeds of the cloud providers: the dashboards of Google (Google Cloud and Firebase) and AWS. A report of such a feed
- * has no area. Thus the instance reads a feed only when one of its persons can get its reports, with the rule of a status
- * page (`watchReads`). The keys of the products of a dashboard are its keys of components.
+ * The feeds of the cloud providers: the dashboards of Google (Google Cloud and Firebase), AWS and Azure. A report of such
+ * a feed has no area. Thus the instance reads a feed only when one of its persons can get its reports, with the rule of a
+ * status page (`watchReads`). The keys of the products of a dashboard are its keys of components.
  */
 const PROVIDER_FEEDS = [
   ...GOOGLE_DASHBOARDS.map((dashboard) => ({
@@ -326,6 +327,7 @@ const PROVIDER_FEEDS = [
     create: (options: Omit<GcpFetchOptions, "dashboard">) => createGcpSource({ ...options, dashboard }),
   })),
   { domain: AWS_DOMAIN, kind: AWS_KIND, create: createAwsSource },
+  { domain: AZURE_DOMAIN, kind: AZURE_KIND, create: createAzureSource },
 ];
 
 /**
@@ -342,8 +344,8 @@ const PROVIDER_FEEDS = [
  * names their kind.
  *
  * The instance also reads the status pages that one of its persons can get (`pagesFor` of `source-statuspage`). They are
- * not in this list, because the persons choose them. The feeds of Google Cloud (`source-gcp`) and AWS (`source-aws`)
- * have the same rule.
+ * not in this list, because the persons choose them. The feeds of Google Cloud (`source-gcp`), AWS (`source-aws`)
+ * and Azure (`source-azure`) have the same rule.
  *
  * BoM (`source-bom-sws`) and the two sources of Cloudflare Radar (`source-cloudflare-radar`) are sources only when the
  * secrets have their keys. Thus they are not in the list. Each page, each feed, BoM and Radar have a longer interval
@@ -693,10 +695,10 @@ export interface Instance {
  *   Energy-Charts and CISA KEV. The stream of NWWS-OI is a source when the secrets have the keys of the account of the
  *   copy (`nwwsSetup`). BoM is a source when the secrets have its key (`BOM_SWS_KEY`). The outages and the traffic
  *   anomalies of Cloudflare Radar are sources when the secrets have its token (`CLOUDFLARE_RADAR_KEY`). Each status page that one of the
- *   persons can get is a source (`pagesFor`). The feed of Google Cloud or AWS is a source when one of the persons can
- *   get its reports (`watchReads`).
+ *   persons can get is a source (`pagesFor`). The feed of Google Cloud, AWS or Azure is a source when one of the persons
+ *   can get its reports (`watchReads`).
  * - Each source gets the codes of the places. It gets the position of a place only when the place shares it with that
- *   source. The USGS, EMSC, the centers, the SWPC, GFZ, BoM, Energy-Charts, CISA KEV, Radar, Google Cloud, AWS and the
+ *   source. The USGS, EMSC, the centers, the SWPC, GFZ, BoM, Energy-Charts, CISA KEV, Radar, Google Cloud, AWS, Azure and the
  *   status pages ask for no place.
  * - The channels are Pushover, and the Twilio call channel when the secrets have its keys. Each time of the delivery comes
  *   from a fact of the channels.

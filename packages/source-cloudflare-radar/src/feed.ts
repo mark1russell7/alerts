@@ -8,6 +8,7 @@
  */
 
 import { AWS_DOMAIN, REGION_PROVIDER as AWS_PROVIDER } from "@mark1russell7/alerts-source-aws";
+import { AZURE_DOMAIN, REGION_PROVIDER as AZURE_PROVIDER } from "@mark1russell7/alerts-source-azure";
 import { GCP_DOMAIN, REGION_PROVIDER as GCP_PROVIDER } from "@mark1russell7/alerts-source-gcp";
 import type { Duration, SourceId, SubjectSystem } from "@mark1russell7/alerts";
 
@@ -101,7 +102,7 @@ export interface CloudProvider {
 export const CLOUD_PROVIDERS: Readonly<Record<string, CloudProvider>> = {
   google: { region: GCP_PROVIDER, domain: GCP_DOMAIN, name: "Google Cloud" },
   amazon: { region: AWS_PROVIDER, domain: AWS_DOMAIN, name: "AWS" },
-  microsoft: { region: "azure", domain: "azure.microsoft.com", name: "Microsoft Azure" },
+  microsoft: { region: AZURE_PROVIDER, domain: AZURE_DOMAIN, name: "Microsoft Azure" },
   oracle: { region: "oci", name: "Oracle Cloud" },
 };
 
@@ -140,6 +141,6 @@ export function originRegion(origin: string): OriginRegion | undefined {
   const provider = CLOUD_PROVIDERS[origin.slice(0, dash)];
   if (provider === undefined || !Object.hasOwn(CLOUD_PROVIDERS, origin.slice(0, dash))) return undefined;
   const region = origin.slice(dash + 1);
-  const name = provider.region === "azure" && Object.hasOwn(AZURE_ALIASES, region) ? AZURE_ALIASES[region]! : region;
+  const name = provider.region === AZURE_PROVIDER && Object.hasOwn(AZURE_ALIASES, region) ? AZURE_ALIASES[region]! : region;
   return { provider, id: `${provider.region}/${name}` };
 }

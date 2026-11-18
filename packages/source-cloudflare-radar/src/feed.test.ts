@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { regionId as awsRegionId } from "@mark1russell7/alerts-source-aws";
+import { AZURE_REGIONS, regionId as azureRegionId } from "@mark1russell7/alerts-source-azure";
 import { regionId as gcpRegionId } from "@mark1russell7/alerts-source-gcp";
 import { describe, expect, it } from "vitest";
 import { AZURE_ALIASES, CLOUD_PROVIDERS, originRegion } from "./feed.ts";
@@ -29,9 +30,16 @@ describe("originRegion", () => {
     expect(aliased.sort()).toEqual(["brazilse", "centralfrance", "chilec", "germanyn", "germanywc", "norwaye", "norwayw", "southfrance", "switzerlandn", "switzerlandw"]);
   });
 
-  it("gives the ids of the regions that the source packages of Google Cloud and AWS give", () => {
+  it("gives the ids of the regions that the source packages of Google Cloud, AWS and Azure give", () => {
     expect(originRegion("google-europe-west2")?.id).toBe(gcpRegionId("europe-west2"));
     expect(originRegion("amazon-eu-west-1")?.id).toBe(awsRegionId("eu-west-1"));
+    expect(originRegion("microsoft-westeurope")?.id).toBe(azureRegionId("West Europe"));
+    expect(originRegion("microsoft-germanywc")?.id).toBe(azureRegionId("Germany West Central"));
     expect(CLOUD_PROVIDERS["oracle"]?.domain).toBeUndefined();
+  });
+
+  it("changes each alias to a region of the status page of Azure", () => {
+    const ids = new Set(Object.values(AZURE_REGIONS).flat().map((name) => azureRegionId(name)));
+    for (const [alias, region] of Object.entries(AZURE_ALIASES)) expect(ids.has(`azure/${region}`), alias).toBe(true);
   });
 });
