@@ -458,6 +458,8 @@ export function assess(
       reasons.push({ kind: "relevance-fault", message: error instanceof Error && error.message !== "" ? error.message : RELEVANCE_FAULT });
     }
   }
+  // The result keeps the mute also when nothing reaches the person, because a mute that removes each entry is the cause.
+  muted = plan?.relevance.muted;
   if (matches.length === 0 && subjects.length === 0 && (plan === undefined || plan.reached.length === 0)) {
     reasons.push({ kind: noMatch(incident, watched) });
     return result("none");
@@ -502,7 +504,6 @@ export function assess(
     reasons.push({ kind: "subject", subject });
     level = higherLevel(level, atMatch(undefined, table.level, kindOfNode(`${subject.system}:${subject.id ?? "*"}`) ?? "entity"));
   }
-  muted = plan?.relevance.muted;
   return result(level);
 }
 
