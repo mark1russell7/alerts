@@ -15,13 +15,13 @@ const demoCode = SOURCES.filter((name) => name !== LOCAL_ENTRY)
 describe("the home page", () => {
   it("names the package and gives the install command", () => {
     expect(page).toContain("<title>alerts</title>");
-    expect(page).toContain("git clone https://github.com/mark1russell7/alerts.git");
+    expect(page).toContain("git clone https://github.com/metrograph-labs/alerts.git");
   });
 
   it("links to the pages of site-pages and to the repository", () => {
     expect(page).toContain('href="./releases/"');
     expect(page).toContain('href="./status/"');
-    expect(page).toContain('href="https://github.com/mark1russell7/alerts"');
+    expect(page).toContain('href="https://github.com/metrograph-labs/alerts"');
   });
 
   it("has each part of the demo", () => {
