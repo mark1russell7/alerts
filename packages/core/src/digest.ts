@@ -7,6 +7,7 @@
  * - Each live incident of the level `digest` for the person that no earlier digest told, and that no louder message told.
  * - Each incident that a quiet message of the level `notice` or `urgent` told in the quiet window since the digest time before.
  *   Thus the morning digest tells again what came in the night.
+ * - Each incident that the send limit held since the digest time before, with no message to the person (AL-72).
  *
  * The record of a digest is one delivery for each incident in it (`digestDeliveries`). The merge state keeps each delivery, thus
  * a restart and each other copy of the system know which incidents a digest told. A send that failed makes no record, thus
@@ -31,7 +32,7 @@ import {
   type Report,
   type WatchedPlace,
 } from "./contracts.ts";
-import { incidentTitle, policyFor, type Recipient } from "./delivery.ts";
+import { incidentTitle, policyFor, type EscalationHold, type Recipient } from "./delivery.ts";
 import { dailyInstant, digestTimeOf, inQuietWindow, rankDelayOf, rankFloors, type RankDelays } from "./escalation.ts";
 import { digestEntryKey, digestKey } from "./ids.ts";
 
@@ -54,13 +55,15 @@ export interface DigestInput {
   readonly rankDelays?: RankDelays | undefined;
   /** The least wait of one rank before a send on an exclusive channel. */
   readonly rankFloor?: Duration | undefined;
+  /** The holds of the send limit (`limitRoutes`). The default is no hold. */
+  readonly holds?: readonly EscalationHold[] | undefined;
   readonly now: Instant;
 }
 
 /** One incident in a digest. */
 export interface DigestEntry {
   readonly incident: Incident;
-  /** `digest`, or the highest level of a quiet message of the incident to the person in the night. */
+  /** `digest`, or the highest level of a quiet message or a hold of the incident for the person since the digest before. */
   readonly level: Level;
 }
 
@@ -102,6 +105,9 @@ export interface DigestPlan {
  * - A quiet message of `notice` or `urgent` in the quiet window puts its incident in the digest again. The message is after
  *   the digest time before, and at or before the digest time. The entry has the highest such level. A digest of this
  *   digest time that told the incident keeps it out.
+ * - A hold of the send limit puts its incident in the digest when the person has no message of the incident. The hold
+ *   is after the digest time before, and at or before the digest time. The entry has the highest level of such holds. A
+ *   digest of this digest time that told the incident keeps it out.
  * - A digest with no incident sends nothing.
  * - Each step of a person sends one digest for each digest time, across the copies. A digest delivery of the step at or
  *   after the digest time keeps the step quiet. Thus the entries that only this copy knows wait for the next digest.
@@ -135,6 +141,7 @@ export function planDigests(input: DigestInput): DigestPlan {
     if (at === undefined) continue;
     const before = dailyInstant(daily, at - 1);
     const mine = state.deliveries.filter((delivery) => delivery.person === person);
+    const holds = (input.holds ?? []).filter((hold) => hold.person === person && hold.at <= at && (before === undefined || hold.at > before));
     digest.steps.forEach((step, index) => {
       // Another copy, or this copy before a restart, sent the digest of this time and step. Its record is in the shared ledger.
       if (mine.some((delivery) => delivery.level === "digest" && delivery.step === index && delivery.at >= at)) return;
@@ -149,6 +156,11 @@ export function planDigests(input: DigestInput): DigestPlan {
         );
         if (night.length > 0) {
           if (!told.some((delivery) => delivery.at >= at)) entries.push({ incident, level: highest(night.map((delivery) => delivery.level)) });
+          continue;
+        }
+        const held = louder.length === 0 ? holds.filter((hold) => reports.has(hold.incident)) : [];
+        if (held.length > 0) {
+          if (!told.some((delivery) => delivery.at >= at)) entries.push({ incident, level: highest(held.map((hold) => hold.level)) });
           continue;
         }
         if (louder.length > 0 || told.length > 0 || !incident.live || !(receiptOf(incident) <= at)) continue;

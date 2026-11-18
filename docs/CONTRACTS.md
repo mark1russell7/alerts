@@ -930,6 +930,28 @@ The core function `exhaustions(routes, channels, reports)` gives the exhausted e
 - The repeats of the first person continue after the exhaustion. An acknowledgment of the first person cancels the report and the sends of the watcher.
 - When the copy that reports the shared facts changes, the old copy cancels its line and the new copy opens one. The watcher can get a second push.
 
+## The send limit
+
+The core function `limitRoutes` applies the send limit of each person to the routes of a pass (AL-72). The limit keeps a burst of new incidents away from the phone.
+
+- Each level below `life-safety` has a count: the most new escalations of one person in one window. A `life-safety` escalation has no limit.
+- The defaults are 6 at `notice` and 12 at `urgent` in one hour (`DEFAULT_SEND_LIMITS`). The busiest hour of one person before the burst of 2026-11-18 had 4 and 8.
+- The field `sendLimit` of the configuration changes the window or a count. The window is one minute to one day, and each count is 1 or more.
+- The count of a person and a level is the incidents with a delivery of the level in the window. The deliveries of the other copies count, thus the limit applies over all the copies.
+- Each delivery in the window counts, not only the first delivery of the incident. Thus a new episode of an incident from before the window counts after its send.
+- The limit counts escalations, not messages. An escalation with a delivery in its episode sends its later steps with no limit.
+- A new escalation has a send and no delivery in its episode. It gets a place in the order of its first due time, then of its anchor.
+- A new episode is a new escalation. Thus an older copy that opens each episode again after the ends of a newer copy stays in the limit.
+- A send in flight or a refused send keeps its place, because its due time is early.
+- A new escalation with no place gets a hold. The hold is an event `hold` of the log of the copy. It is not shared.
+- A held escalation sends nothing in its episode. Its cancels go. It has no exhaustion and no overdue send. The next digest tells its incident.
+- A copy takes a share of each count for each other copy that it cannot read: 1 divided by 1 plus the count of such copies (`limitShare`).
+- A copy that it cannot read is in the stage `unread` (no read for 60 s), or it has no read from the start of its watch.
+- Thus two copies that do not see each other send the full count together, not two times the count. Each share has one place at least.
+- The overshoot is limited to the first 60 s of a split. Two copies that start in a split take a share at once.
+
+A refused send backs off. Its wait doubles after each refusal of its key in a row, up to 10 minutes (`REFUSAL_LIMIT`).
+
 ## The down channels
 
 The runtime reads the results of its own calls, because the path of the alerts has no second status source (AL-65).
@@ -971,12 +993,14 @@ The digest time of a pass is the last digest time at or before the time of the p
 
 - Each live incident at the level `digest` for the person. The system got it at or before the digest time. A later incident waits for the next digest.
 - Each incident that a quiet push of `notice` or `urgent` told in the quiet window, after the digest time before. Thus the morning digest tells again what came in the night.
+- Each incident that the send limit held after the digest time before, when the person has no message of the incident (AL-72).
 
 The rules of the entries:
 
 - Each incident is one entry, by its anchor. An incident of the night has the highest level of its quiet pushes.
 - An incident of the level `digest` goes in one digest of each step. A louder delivery to the person keeps it out, because the person already has its message.
 - A digest of the same digest time that told an incident of the night keeps it out.
+- A held incident has the highest level of its holds. A digest of the same digest time that told it keeps it out.
 - The entries go from the highest level to the lowest, then from the earliest receipt.
 - A digest with no entry sends nothing.
 - A runtime that was down at the digest time sends the digest when it comes back, until the next digest time.

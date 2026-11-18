@@ -30,6 +30,7 @@ import {
   type Duration,
   type EndMark,
   type EscalationEnd,
+  type EscalationHold,
   type EscalationStart,
   type HealthOptions,
   type HealthTrack,
@@ -114,6 +115,8 @@ export interface RuntimeState {
    * `own`, then the ends of `imported`.
    */
   readonly escalationEnds: readonly EscalationEnd[];
+  /** The holds of the send limit of this copy (AL-72), in the order of the log. Each copy keeps its own holds. */
+  readonly holds: readonly EscalationHold[];
   /**
    * The open copies, by copy id: each send on a channel that repeats with no delivery of its copy and no
    * `settled` event. The channel can repeat them. After a restart, the delivery step stops them.
@@ -183,6 +186,7 @@ export const EMPTY_RUNTIME: RuntimeState = {
   cancelTombstones: [],
   starts: [],
   escalationEnds: [],
+  holds: [],
   copies: {},
   refusals: {},
   delivered: {},
@@ -342,6 +346,8 @@ function foldRest(state: RuntimeState, event: RuntimeEvent, context: FoldContext
       return { ...base, lines: addSystemReports(state.lines, event.reports, event.observations) };
     case "escalation":
       return { ...base, starts: [...state.starts, event.start] };
+    case "hold":
+      return { ...base, holds: [...state.holds, event.hold] };
     case "escalation-end": {
       const own = { ...state.own, escalationEnds: [...state.own.escalationEnds, event.end] };
       return { ...base, own, escalationEnds: joinedEnds(own, state.imported) };
@@ -425,6 +431,7 @@ function foldRetired(state: RuntimeState, event: RetiredEvent): RuntimeState {
     imported,
     ...joined(own, imported),
     starts: state.starts.filter((start) => !gone.has(start.incident)),
+    holds: state.holds.filter((hold) => !gone.has(hold.incident)),
     cancelled: state.cancelled.filter((key) => !cancelled.has(key)),
     cancelledSince: withoutAll(state.cancelledSince, cancelled),
     cancelTombstones: retireKeys(state.cancelTombstones, event.cancelled, event.until, event.time),
@@ -524,6 +531,7 @@ export function shiftState(state: RuntimeState, size: Duration): RuntimeState {
     cancelledSince: Object.fromEntries(Object.entries(state.cancelledSince).map(([key, at]) => [key, at + size])),
     cancelTombstones: state.cancelTombstones.map((tombstone) => ({ ...tombstone, until: tombstone.until + size })),
     starts: state.starts.map((start) => shiftEscalationStart(start, size)),
+    holds: state.holds.map((hold) => ({ ...hold, at: hold.at + size })),
     steps: state.steps.map((step) => ({ ...step, at: step.at + size })),
     recoveries: state.recoveries.map((recovery) => ({ ...recovery, at: recovery.at + size })),
     drills: Object.fromEntries(Object.entries(state.drills).map(([drill, at]) => [drill, at + size])),
