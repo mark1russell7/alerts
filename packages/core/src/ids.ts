@@ -78,6 +78,28 @@ export function reportId(input: ReportIdInput): ReportId {
  */
 export const COPY_ID: RegExp = /^[A-Za-z0-9_-]+$/;
 
+/** The input of `digestKey`: one digest of one person at one time, on one step of the digest policy. */
+export interface DigestKeyInput {
+  readonly person: PersonId;
+  /** The time of the digest: the instant of the daily time. */
+  readonly at: Instant;
+  /** The index of the step in the digest policy, from 0. */
+  readonly step: number;
+}
+
+/** This function gives the key of a digest message. The same digest after a restart gets the same key. */
+export function digestKey(input: DigestKeyInput): string {
+  return digest(["digest", input.person, input.at, input.step]);
+}
+
+/**
+ * This function gives the key of the delivery of one incident in a digest message. Each incident of a digest has its
+ * own delivery, thus each copy of the system knows which incidents a digest told.
+ */
+export function digestEntryKey(key: string, incident: ReportId): string {
+  return digest(["digest-entry", key, incident]);
+}
+
 /**
  * This function gives the key of a message. A channel that can drop a repeated key does so. A
  * repeat of the same step gets the same key, and the next step gets a new key.

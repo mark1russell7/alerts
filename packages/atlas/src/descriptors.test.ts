@@ -1,5 +1,11 @@
 import type { SourceDescriptor } from "@mark1russell7/alerts";
+import { AWS_DESCRIPTOR } from "@mark1russell7/alerts-source-aws";
+import { BOM_SWS_DESCRIPTOR } from "@mark1russell7/alerts-source-bom-sws";
+import { KEV_DESCRIPTOR } from "@mark1russell7/alerts-source-cisa-kev";
 import { EMSC_DESCRIPTOR } from "@mark1russell7/alerts-source-emsc";
+import { ENERGY_CHARTS_DESCRIPTOR } from "@mark1russell7/alerts-source-energy-charts";
+import { GCP_DESCRIPTOR } from "@mark1russell7/alerts-source-gcp";
+import { GFZ_DESCRIPTOR } from "@mark1russell7/alerts-source-gfz";
 import { IEM_DESCRIPTOR } from "@mark1russell7/alerts-source-iem";
 import { IPAWS_DESCRIPTOR } from "@mark1russell7/alerts-source-ipaws";
 import { NWS_DESCRIPTOR } from "@mark1russell7/alerts-source-nws-api";
@@ -12,7 +18,13 @@ import { readAtlas } from "./read.ts";
 
 /** The descriptors of each adapter that the atlas adopts. A new adopted adapter needs a row here. */
 const DESCRIPTORS: Readonly<Record<string, readonly SourceDescriptor[]>> = {
+  "@mark1russell7/alerts-source-aws": [AWS_DESCRIPTOR],
+  "@mark1russell7/alerts-source-bom-sws": [BOM_SWS_DESCRIPTOR],
+  "@mark1russell7/alerts-source-cisa-kev": [KEV_DESCRIPTOR],
   "@mark1russell7/alerts-source-emsc": [EMSC_DESCRIPTOR],
+  "@mark1russell7/alerts-source-energy-charts": [ENERGY_CHARTS_DESCRIPTOR],
+  "@mark1russell7/alerts-source-gcp": [GCP_DESCRIPTOR],
+  "@mark1russell7/alerts-source-gfz": [GFZ_DESCRIPTOR],
   "@mark1russell7/alerts-source-iem": [IEM_DESCRIPTOR],
   "@mark1russell7/alerts-source-ipaws": [IPAWS_DESCRIPTOR],
   "@mark1russell7/alerts-source-nws-api": [NWS_DESCRIPTOR],
@@ -51,6 +63,18 @@ describe("the paths of the atlas and the descriptors of the adapters", () => {
         descriptor.dependsOn
           .filter((id) => SHARED_KINDS.includes(prefixOf(id) ?? "") && !source.path.includes(id))
           .map((id) => `the path of ${source.id} lacks ${id} of ${descriptor.id}`),
+      ),
+    );
+    expect(missing).toEqual([]);
+  });
+
+  // An origin of a descriptor that the atlas does not give the source makes two reports of one issuer look apart.
+  it("gives each origin of a descriptor in the origins of its adopted source", () => {
+    const missing = adopted.flatMap((source) =>
+      (DESCRIPTORS[source.adapter ?? ""] ?? []).flatMap((descriptor) =>
+        descriptor.origins
+          .filter((origin) => !source.origins.includes(origin) && !(source.regionalOrigins ?? []).some((entry) => entry.origins.includes(origin)))
+          .map((origin) => `the origins of ${source.id} lack ${origin} of ${descriptor.id}`),
       ),
     );
     expect(missing).toEqual([]);

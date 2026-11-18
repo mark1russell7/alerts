@@ -26,6 +26,7 @@ import type {
   RelevancePolicy,
   ReportId,
   SubjectEntry,
+  SubjectKind,
   SubjectSystem,
   SubjectWatch,
   WatchedPlace,
@@ -35,7 +36,7 @@ import { hasKind } from "./kind-prefix.ts";
 import type { MapShape } from "./map.ts";
 import { DEFAULT_ENTRY_MAX, DEFAULT_RELEVANCE_POLICY, canReach, relevance, topicEntry } from "./relevance.ts";
 import { isShape, shapeDistanceKm } from "./shapes.ts";
-import { placeNode } from "./why.ts";
+import { kindOfNode, nodesOverlap, placeNode } from "./why.ts";
 
 export { hasKind } from "./kind-prefix.ts";
 
@@ -144,7 +145,28 @@ export const COPY_KIND = "system.copy";
  */
 export const DRILL_KIND = "system.drill";
 
-/** The table of the system reports that can reach `life-safety`: the coverage of a life-safety kind, and a drill run. */
+/**
+ * The prefix of the kinds of the escalation reports of the core (AL-21). `system.escalation.exhausted` tells that a
+ * person did not acknowledge a real warning in the time of the policy. An adapter does not map a message to this prefix.
+ */
+export const ESCALATION_KIND = "system.escalation";
+
+/**
+ * The prefix of the kinds of the channel reports of the core (AL-65). `system.channel.down` tells that the calls of a
+ * channel of this copy fail. An adapter does not map a message to this prefix.
+ */
+export const CHANNEL_KIND = "system.channel";
+
+/**
+ * The subject system of a person. The id of a subject is the id of a person. A person who watches the subject of another
+ * person gets the escalation reports of that person. A subject of the person itself does not match the person.
+ */
+export const PERSON_SUBJECT = "alerts.person";
+
+/**
+ * The table of the system reports that can reach `life-safety`: the coverage of a life-safety kind, a drill run and an
+ * exhausted escalation. The severity and the urgency of an exhausted escalation give back its level.
+ */
 const LOUD_SYSTEM_TABLE: LevelTable = {
   severity: { extreme: "life-safety", severe: "urgent", moderate: "notice", minor: "digest", unknown: "urgent" },
   urgency: { immediate: "life-safety", expected: "urgent", future: "notice", past: "digest", unknown: "urgent" },
@@ -162,7 +184,7 @@ const SYSTEM_TABLE: LevelTable = {
  * be `immediate`, `expected` or `unknown`. A place of the person must be in its areas.
  *
  * The three system classes hold the reports of the core, and they admit only the status `system`. The
- * coverage of a life-safety kind and a drill run can reach `life-safety`. Each other report of the core reaches
+ * coverage of a life-safety kind, a drill run and an exhausted escalation can reach `life-safety`. Each other report of the core reaches
  * `notice` at most. The NWS kinds `system.test` and `system.admin` are not in these classes.
  *
  * The earthquake class has its own table. In one hour after the onset, its urgency `past` counts as
@@ -177,7 +199,9 @@ export const DEFAULT_ASSESS_POLICY: AssessPolicy = {
     { id: "system-coverage", kinds: LIFE_SAFETY_KINDS.map((kind) => `${COVERAGE_KIND}.${kind}`), statuses: ["system"], ...LOUD_SYSTEM_TABLE },
     // A drill run tests the path of the life-safety warnings, thus it reaches `life-safety`. A failed drill gets `notice` at most.
     { id: "system-drill", kinds: [`${DRILL_KIND}.run`], statuses: ["system"], ...LOUD_SYSTEM_TABLE },
-    { id: "system", kinds: [HEALTH_KIND, COVERAGE_KIND, QUOTA_KIND, BALANCE_KIND, CLOCK_KIND, LOG_KIND, COPY_KIND, DRILL_KIND], statuses: ["system"], ...SYSTEM_TABLE },
+    // An exhausted escalation of a person keeps its level for the people who watch that person (AL-21).
+    { id: "system-escalation", kinds: [ESCALATION_KIND], statuses: ["system"], ...LOUD_SYSTEM_TABLE },
+    { id: "system", kinds: [HEALTH_KIND, COVERAGE_KIND, QUOTA_KIND, BALANCE_KIND, CLOCK_KIND, LOG_KIND, COPY_KIND, DRILL_KIND, CHANNEL_KIND], statuses: ["system"], ...SYSTEM_TABLE },
   ],
   otherwise: OTHER_TABLE,
 };
@@ -335,11 +359,14 @@ function nearestShape(shapes: readonly MapShape[], at: Position): number | undef
 
 /**
  * This function gives the watches of a person that a subject of an incident matches, in the order
- * of the watches. A watch with no id matches each subject of its system.
+ * of the watches. A watch with no id matches each subject of its system. A watch with an id matches each subject
+ * whose node overlaps its node (`nodesOverlap`). Outside the systems of paths, that is the subject with the same id.
  */
 export function matchSubjects(incident: Pick<Incident, "about">, watches: readonly SubjectWatch[]): SubjectWatch[] {
   return watches.filter((watch) =>
-    incident.about.some((subject) => subject.system === watch.system && (watch.id === undefined || watch.id === subject.id)),
+    incident.about.some(
+      (subject) => subject.system === watch.system && (watch.id === undefined || nodesOverlap(`${watch.system}:${watch.id}`, `${subject.system}:${subject.id}`)),
+    ),
   );
 }
 
@@ -385,7 +412,10 @@ export function assess(
     else watched.push(place);
   }
   const matches = matchPlaces(incident, watched);
-  const subjects = matchSubjects(incident, person.subjects ?? []);
+  // The escalation reports of a person go to the people who watch that person, and not to the person. Thus the subject
+  // of the person itself matches no watch of the person, also a watch with no id.
+  const others = incident.about.filter((subject) => !(subject.system === PERSON_SUBJECT && subject.id === person.person));
+  const subjects = matchSubjects({ about: others }, person.subjects ?? []);
   let muted: Assessment["muted"];
   const result = (level: AssessedLevel): Assessment => ({
     incident: incident.anchor,
@@ -428,6 +458,8 @@ export function assess(
       reasons.push({ kind: "relevance-fault", message: error instanceof Error && error.message !== "" ? error.message : RELEVANCE_FAULT });
     }
   }
+  // The result keeps the mute also when nothing reaches the person, because a mute that removes each entry is the cause.
+  muted = plan?.relevance.muted;
   if (matches.length === 0 && subjects.length === 0 && (plan === undefined || plan.reached.length === 0)) {
     reasons.push({ kind: noMatch(incident, watched) });
     return result("none");
@@ -441,17 +473,18 @@ export function assess(
       reach,
       reached: plan.reached,
       mandatory: plan.mandatory,
-      ...(plan.others ? { entryLevel } : {}),
+      ...(plan.others.length > 0 ? { entryLevel } : {}),
       ...(why === undefined ? {} : { why }),
     });
   }
   let level: AssessedLevel = "none";
-  // The level at one match: the first rule that matches can lower the level of the table.
-  const atMatch = (place: PlaceId | undefined, base: AssessedLevel): AssessedLevel => {
+  // The level at one match through an entry of the kind `through`: the first rule that matches can lower the level of the table.
+  const atMatch = (place: PlaceId | undefined, base: AssessedLevel, through: SubjectKind): AssessedLevel => {
     const index = person.rules.findIndex(
       (rule) =>
         (rule.places === undefined || (place !== undefined && rule.places.includes(place))) &&
-        (rule.kinds === undefined || hasKind(rule.kinds, incident.kind.code)),
+        (rule.kinds === undefined || hasKind(rule.kinds, incident.kind.code)) &&
+        (rule.through === undefined || rule.through.includes(through)),
     );
     const rule = person.rules[index];
     if (rule === undefined || rank(rule.max) >= rank(base)) return base;
@@ -463,14 +496,14 @@ export function assess(
     if (plan !== undefined && !plan.places.has(match.place)) continue;
     const found = placeTable(match.place);
     if (found.reports.length > 0 && found.level !== table.level) reasons.push({ kind: "place-table", place: match.place, reports: found.reports, level: found.level });
-    level = higherLevel(level, atMatch(match.place, found.level));
+    level = higherLevel(level, atMatch(match.place, found.level, "place"));
   }
-  if (plan?.others === true) level = higherLevel(level, atMatch(undefined, entryLevel));
+  // Each kind of the other entries that count gets its own rule. Thus a rule through topics does not lower an entity.
+  for (const through of plan?.others ?? []) level = higherLevel(level, atMatch(undefined, entryLevel, through));
   for (const subject of subjects) {
     reasons.push({ kind: "subject", subject });
-    level = higherLevel(level, atMatch(undefined, table.level));
+    level = higherLevel(level, atMatch(undefined, table.level, kindOfNode(`${subject.system}:${subject.id ?? "*"}`) ?? "entity"));
   }
-  muted = plan?.relevance.muted;
   return result(level);
 }
 
@@ -484,14 +517,17 @@ interface PlaceTable {
 interface RelevancePlan {
   // The matched places that count: each place of the rule of the life-safety warnings, and each place that reaches the person alone.
   readonly places: ReadonlySet<PlaceId>;
-  // True when an entry that is not a matched place reaches the person alone.
-  readonly others: boolean;
+  // The kinds of the entries that are not matched places and that reach the person alone, in the order of SUBJECT_KINDS.
+  readonly others: readonly SubjectKind[];
   // The entries that count, in the order of the entries.
   readonly reached: readonly NodeKey[];
   // The matched places of the rule of the life-safety warnings, in the order of the matches.
   readonly mandatory: readonly PlaceId[];
   readonly relevance: Relevance;
 }
+
+// The kinds of the entries, in the order of the reasons and the rules.
+const SUBJECT_KINDS: readonly SubjectKind[] = ["place", "topic", "entity"];
 
 // The message of a fault with no text of its own.
 const RELEVANCE_FAULT = "The relevance failed with no message.";
@@ -536,7 +572,8 @@ function planOf(
   const counted = new Set(reached);
   const places = new Set(matches.filter((match) => counted.has(placeNode(match.place))).map((match) => match.place));
   const matched = new Set(matches.map((match) => placeNode(match.place)));
-  return { places, others: reached.some((node) => !matched.has(node)), reached, mandatory, relevance: found };
+  const otherKinds = new Set(entries.filter((entry) => counted.has(entry.node) && !matched.has(entry.node)).map((entry) => entry.kind));
+  return { places, others: SUBJECT_KINDS.filter((kind) => otherKinds.has(kind)), reached, mandatory, relevance: found };
 }
 
 // The entries of an incident for a graph, one for each node: the matched places, the areas, the subjects and the topic,
@@ -554,6 +591,12 @@ function entriesOf(incident: Incident, matches: readonly PlaceMatch[], graph: In
     else if (area.type === "place") add("place", area.place);
   }
   for (const subject of incident.about) add(subject.system, subject.id);
+  // A node of the graph that overlaps a subject in a system of paths is also an entry (`nodesOverlap`).
+  const subjects = [...found.keys()];
+  for (const node of new Set(graph.edges.flatMap((edge) => [edge.from, edge.to]))) {
+    const kind = kindOfNode(node);
+    if (kind !== undefined && !found.has(node) && subjects.some((subject) => nodesOverlap(subject, node))) found.set(node, { node, kind, hit: FULL_HIT });
+  }
   const topic = topicEntry(incident.kind.code, graph);
   if (topic !== undefined && !found.has(topic.node)) found.set(topic.node, topic);
   return [...found.values()];

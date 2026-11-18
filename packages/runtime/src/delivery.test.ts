@@ -1,9 +1,14 @@
 import { fakeWallClock } from "@mark1russell7/algebra/clock";
 import {
   COPY_ID,
+  ESCALATION_KIND,
+  ONLY_COPY,
+  PERSON_SUBJECT,
+  PRIORS_FORMAT,
   WHY_LIMITS,
   messageKey,
   reportId,
+  shadowScore,
   type ChannelDescriptor,
   type ChannelId,
   type ChannelProcedures,
@@ -17,9 +22,11 @@ import {
   type PersonId,
   type PlaceId,
   type Position,
+  type ProbeOutcome,
   type Receipt,
   type Recipient,
   type Report,
+  type ScorePriors,
   type SendOutcome,
   type SourceId,
   type SourceProcedures,
@@ -129,6 +136,8 @@ interface Script {
   stop?: (copy: string) => void | Promise<void>;
   /** The fields that replace the fields of the default descriptor. */
   describe?: Partial<ChannelDescriptor>;
+  /** The probe of the channel. Without it, the channel has no probe. */
+  probe?: () => ProbeOutcome;
 }
 
 // A channel of the test. Its default send accepts each message with a new receipt.
@@ -154,6 +163,7 @@ function channel(id: ChannelId, ack: ChannelDescriptor["ack"], now: () => number
       calls.cancel.push(target.receipt);
       await script.cancel?.(target.receipt);
     },
+    ...(script.probe === undefined ? {} : { probe: async () => script.probe!() }),
   };
   return { procedures, calls };
 }
@@ -188,6 +198,28 @@ function open(scripts: { readonly pushover?: Script; readonly sms?: Script } = {
 const types = (log: RuntimeLog) => [...log.read()].map((event) => event.type).filter((type) => type !== "observation" && type !== "fetch" && type !== "system");
 
 describe("the delivery step of a pass", () => {
+  it("keeps the shadow score of the incident at the start of each escalation, and the score changes no send", async () => {
+    // Made-up values. They are not the public measures.
+    const priors: ScorePriors = {
+      format: PRIORS_FORMAT,
+      kinds: { "met.tornado": { deaths: { value: 0.04, low: 0.03, high: 0.06 }, injuries: { value: 0.6, low: 0.4, high: 0.9 } } },
+      certainty: { observed: { value: 1, low: 1, high: 1 } },
+    };
+    const starts = (log: RuntimeLog) => [...log.read()].flatMap((event) => (event.type === "escalation" ? [event] : []));
+    const scored = open({}, undefined, undefined, { priors });
+    await scored.runtime.pass();
+    const plain = open();
+    await plain.runtime.pass();
+    expect(starts(scored.log).map((event) => event.shadow)).toEqual([shadowScore({ kind: { code: "met.tornado", label: "Tornado Warning" }, certainty: "observed" }, priors)]);
+    expect(starts(plain.log).some((event) => "shadow" in event)).toBe(false);
+    expect(scored.pushover.send).toEqual(plain.pushover.send);
+    expect(types(scored.log)).toEqual(types(plain.log));
+    expect(scored.runtime.state()).toEqual(rebuild(scored.log.read(), scored.runtime.config));
+    expect(scored.runtime.state().merge.deliveries).toEqual(plain.runtime.state().merge.deliveries);
+    scored.log.close();
+    plain.log.close();
+  });
+
   it("puts the why line into each message of a channel with a why limit, with the label of the runtime and no label in the log", async () => {
     const labels = (node: string): string | undefined => (node === `place:${KANSAS.id}` ? "Lake cabin" : undefined);
     const named = open({ pushover: { describe: { why: WHY_LIMITS.push } } }, undefined, undefined, { labels });
@@ -980,7 +1012,6 @@ describe("the delivery step of a pass", () => {
       fakeWallClock(T0),
       { recipients: [{ ...RECIPIENT, policies: [twice] }], overdueAfter: MINUTE },
     );
-    await runtime.pass();
     let last = await runtime.pass();
     while (clock.now() < T0 + 2 * MINUTE) {
       await clock.advance(15 * SECOND);
@@ -1169,5 +1200,226 @@ describe("the link rule of the merge in the delivery", () => {
     expect(second.view.incidents.map((incident) => incident.reports.length)).toEqual([1, 1]);
     expect(apart.pushover.send).toHaveLength(2);
     apart.log.close();
+  });
+});
+
+describe("the digest step of a pass", () => {
+  // The quiet window of the person ends at 07:00 in Kansas. T0 is 13:00 there, thus the next digest time is 2026-04-02 12:00 UTC.
+  const DIGEST_AT = Date.UTC(2026, 3, 2, 12);
+  const DIGEST_POLICY: EscalationPolicy = { level: "digest", steps: [{ channel: PUSHOVER, at: 0 }], exhaustedAfter: 0 };
+  const READER: Recipient = { ...RECIPIENT, watch: { ...RECIPIENT.watch, quiet: { zone: "America/Chicago", start: "22:00", end: "07:00" } }, policies: [LIFE_SAFETY, DIGEST_POLICY] };
+  // A flood advisory: the severity minor gives the level digest.
+  const ADVISORY: SourceProcedures = {
+    ...SOURCE,
+    map: ({ observation }) => ({
+      reports: [
+        {
+          ...warning(observation),
+          kind: { code: "met.flood", label: "Flood Advisory" },
+          severity: "minor",
+          urgency: "expected",
+          expires: T0 + 3 * 24 * 60 * MINUTE,
+          headline: "Flood Advisory issued April 1 at 1:00PM CDT by NWS Wichita KS",
+        },
+      ],
+      problems: [],
+    }),
+  };
+
+  function openDigest(log: RuntimeLog, clock: ReturnType<typeof fakeWallClock>) {
+    const pushover = channel(PUSHOVER, "none", () => clock.now());
+    const sms = channel(SMS, "none", () => clock.now());
+    const runtime = openRuntime({
+      log,
+      clock,
+      sources: [ADVISORY],
+      watch: () => ({ places: [KANSAS], kinds: ["met"] }),
+      view: VIEW,
+      run: `run-${clock.now()}`,
+      delivery: { ...DELIVERY, recipients: [READER], channels: [pushover.procedures, sms.procedures] },
+    });
+    return { runtime, pushover: pushover.calls };
+  }
+
+  it("sends no message for the level digest at once, then one digest at the digest time, one time, also after a restart", async () => {
+    const log = openRuntimeLog(":memory:");
+    const clock = fakeWallClock(T0);
+    const first = openDigest(log, clock);
+    await first.runtime.pass();
+    expect(first.pushover.send).toEqual([]);
+    expect(first.runtime.state().merge.deliveries).toEqual([]);
+
+    await clock.advance(DIGEST_AT - T0);
+    await first.runtime.pass();
+    expect(first.pushover.send).toHaveLength(1);
+    const [incident] = first.runtime.state().merge.reports.map((report) => report.id);
+    expect(first.pushover.send[0]).toMatchObject({
+      person: PERSON,
+      level: "digest",
+      title: "The digest: 1 alert",
+      body: "- Flood Advisory issued April 1 at 1:00PM CDT by NWS Wichita KS",
+      incident,
+      quiet: false,
+    });
+    const deliveries = first.runtime.state().merge.deliveries;
+    expect(deliveries).toEqual([expect.objectContaining({ incident, level: "digest", person: PERSON, channel: PUSHOVER, step: 0, at: DIGEST_AT })]);
+
+    // A later pass of the same day, a restart, and the next day send no second digest of the advisory.
+    await clock.advance(MINUTE);
+    await first.runtime.pass();
+    expect(first.pushover.send).toHaveLength(1);
+    const second = openDigest(log, clock);
+    await second.runtime.pass();
+    await clock.advance(24 * 60 * MINUTE);
+    await second.runtime.pass();
+    expect(second.pushover.send).toEqual([]);
+    expect(second.runtime.state()).toEqual(rebuild(log.read(), second.runtime.config));
+    log.close();
+  });
+
+  it("keeps the digest due after a failed send, and records it after the retry", async () => {
+    const log = openRuntimeLog(":memory:");
+    const clock = fakeWallClock(DIGEST_AT);
+    const pushover = channel(PUSHOVER, "none", () => clock.now(), { send: (_message, count) => (count === 1 ? { ok: false, kind: "server", message: "The test channel failed." } : undefined) });
+    const runtime = openRuntime({
+      log,
+      clock,
+      sources: [ADVISORY],
+      watch: () => ({ places: [KANSAS], kinds: ["met"] }),
+      view: VIEW,
+      run: `run-${clock.now()}`,
+      delivery: { ...DELIVERY, recipients: [READER], channels: [pushover.procedures] },
+    });
+    // The report came at T0, before the digest time. The first send fails and makes no record.
+    await runtime.pass();
+    expect(pushover.calls.send).toHaveLength(1);
+    expect(runtime.state().merge.deliveries).toEqual([]);
+    await clock.advance(DELIVERY.retry);
+    await runtime.pass();
+    expect(pushover.calls.send).toHaveLength(2);
+    expect(pushover.calls.send[1]?.key).toBe(pushover.calls.send[0]?.key);
+    expect(runtime.state().merge.deliveries.map((delivery) => delivery.level)).toEqual(["digest"]);
+    log.close();
+  });
+});
+
+describe("the exhausted escalations in the passes of the runtime (AL-21)", () => {
+  it("alerts the watcher of the person one pass after the exhaustion, and cancels the alert after a late acknowledgment", async () => {
+    const watcher: Recipient = { ...RECIPIENT, watch: { person: "person-2" as PersonId, places: [], rules: [], subjects: [{ system: PERSON_SUBJECT, id: PERSON }] } };
+    const clock = fakeWallClock(T0);
+    let acked: number | undefined;
+    // The push asks for an acknowledgment at life-safety. The first person acknowledges the first push only when the test says so.
+    const pushover = channel(PUSHOVER, "poll", () => clock.now(), {
+      describe: { ackLevels: ["life-safety"] },
+      status: (receipt) => (acked !== undefined && receipt["receipt"] === "pushover-1" ? { state: "acknowledged", at: acked } : { state: "delivered", at: clock.now() }),
+    });
+    const sms = channel(SMS, "none", () => clock.now());
+    const log = openRuntimeLog(":memory:");
+    const runtime = openRuntime({ log, clock, sources: [SOURCE], watch: () => ({ places: [KANSAS], kinds: ["met"] }), view: VIEW, run: RUN, delivery: { ...DELIVERY, recipients: [RECIPIENT, watcher], channels: [pushover.procedures, sms.procedures] } });
+    const exhaustedLines = () => Object.keys(runtime.state().lines.open).filter((line) => line.startsWith("exhausted/"));
+    const titles = (calls: Calls) => calls.send.map((message) => [message.person, message.title]);
+
+    await runtime.pass();
+    await clock.advance(5 * MINUTE);
+    await runtime.pass();
+    expect(titles(pushover.calls).map(([person]) => person)).toEqual([PERSON]);
+    // The policy ends 20 minutes after its last step. The pass of the exhaustion wakes the next pass at once.
+    await clock.advance(20 * MINUTE);
+    const exhausted = await runtime.pass();
+    expect(exhausted.delivery?.exhausted.map((entry) => [entry.person, entry.level])).toEqual([[PERSON, "life-safety"]]);
+    expect(exhausted.wakeAt).toBe(clock.now() + 1);
+    expect(exhaustedLines()).toEqual([]);
+    await clock.advance(1);
+    const next = await runtime.pass();
+    expect(next.view.step.reports.map((report) => [report.op, report.kind.code])).toEqual([["alert", `${ESCALATION_KIND}.exhausted`]]);
+    expect(exhaustedLines().length).toBe(1);
+    // Only the watcher gets the alert, and its title tells what the first person missed.
+    expect(titles(pushover.calls).slice(1)).toEqual([["person-2", "person-1 did not acknowledge Tornado Warning (life-safety): Tornado Warning issued April 1 at 1:00PM CDT by NWS Wichita KS"]]);
+
+    // The first person acknowledges late. The line ends, and the push of the watcher is cancelled.
+    acked = clock.now();
+    await clock.advance(30 * SECOND);
+    const late = await runtime.pass();
+    expect(late.delivery?.exhausted).toEqual([]);
+    expect(late.wakeAt).toBe(clock.now() + 1);
+    await clock.advance(1);
+    await runtime.pass();
+    await clock.advance(SECOND);
+    await runtime.pass();
+    expect(exhaustedLines()).toEqual([]);
+    expect(pushover.calls.cancel).toContainEqual({ receipt: "pushover-2" });
+    log.close();
+  });
+});
+
+describe("the down channels in the passes of the runtime (AL-65)", () => {
+  const channelLines = (runtime: ReturnType<typeof open>["runtime"]) => Object.keys(runtime.state().lines.open).filter((line) => line.startsWith("channel/"));
+  const down = (pass: { readonly view: { readonly step: { readonly reports: readonly Report[] } } }) =>
+    pass.view.step.reports.filter((report) => report.kind.code === "system.channel.down").map((report) => report.op);
+
+  it("opens the line after a run of failed sends, keeps it at a restart, and a probe pass ends it with no send", async () => {
+    const clock = fakeWallClock(T0);
+    let up = false;
+    const probes: number[] = [];
+    const failing: Script = {
+      send: () => ({ ok: false, kind: "server", message: "Pushover gave the status 503." }),
+      probe: () => {
+        probes.push(clock.now());
+        return up ? { ok: true, at: clock.now() } : { ok: false, kind: "server", message: "Pushover gave the status 503." };
+      },
+      describe: { services: ["domain:api.example.com"], api: ["domain:api.example.com"] },
+    };
+    const log = openRuntimeLog(":memory:");
+    const { runtime } = open({ pushover: failing }, log, clock);
+    // Failed sends at 0, 20, 40 and 60 s: the retry of the delivery is 15 s.
+    await runtime.pass();
+    let last = await runtime.pass();
+    for (let index = 0; index < 3; index += 1) {
+      await clock.advance(20 * SECOND);
+      last = await runtime.pass();
+    }
+    expect(channelLines(runtime)).toEqual([]);
+    // The fourth failure makes a run of 60 s, thus the next pass comes at once and opens the line.
+    expect(last.wakeAt).toBe(clock.now() + 1);
+    await clock.advance(1);
+    const opened = await runtime.pass();
+    expect(down(opened)).toEqual(["alert"]);
+    expect(channelLines(runtime)).toEqual([`channel/${ONLY_COPY.id}/pushover`]);
+    expect(opened.view.step.reports.find((report) => report.op === "alert")?.about).toEqual([
+      { system: "alerts.channel", id: PUSHOVER, label: PUSHOVER },
+      { system: "domain", id: "api.example.com" },
+    ]);
+
+    // A restart empties the run. The line stays, and the probes start again.
+    const again = open({ pushover: failing }, log, clock);
+    await clock.advance(20 * SECOND);
+    expect(down(await again.runtime.pass())).toEqual([]);
+    expect(channelLines(again.runtime)).toEqual([`channel/${ONLY_COPY.id}/pushover`]);
+    const first = clock.now() + MINUTE;
+    await clock.advance(MINUTE);
+    expect(down(await again.runtime.pass())).toEqual([]);
+    expect(probes).toEqual([first]);
+
+    // The provider takes calls again. The next probe passes, and the line ends with no accepted send.
+    up = true;
+    await clock.advance(2 * MINUTE);
+    const ended = await again.runtime.pass();
+    expect(probes).toEqual([first, first + 2 * MINUTE]);
+    expect(down(ended)).toEqual(["cancel"]);
+    expect(channelLines(again.runtime)).toEqual([]);
+    expect(again.runtime.state().merge.deliveries.filter((delivery) => delivery.channel === PUSHOVER)).toEqual([]);
+    log.close();
+  });
+
+  it("opens no line for a burst of failed sends in one pass", async () => {
+    const clock = fakeWallClock(T0);
+    const failing: Script = { send: () => ({ ok: false, kind: "server", message: "Pushover gave the status 503." }) };
+    const { runtime, log } = open({ pushover: failing }, openRuntimeLog(":memory:"), clock, { recipients: PEOPLE });
+    const pass = await runtime.pass();
+    expect(pass.delivery?.failures.filter((failure) => failure.channel === PUSHOVER).length).toBe(PEOPLE.length);
+    await clock.advance(1);
+    await runtime.pass();
+    expect(channelLines(runtime)).toEqual([]);
+    log.close();
   });
 });

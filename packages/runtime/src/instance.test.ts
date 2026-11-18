@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -32,10 +32,18 @@ import { memoryCache, type ShapeCache } from "@mark1russell7/alerts-shapes-nws";
 import { CANARY_PATH, createNwsSource } from "@mark1russell7/alerts-source-nws-api";
 import { fakeSessions, NWWS_DESCRIPTOR } from "@mark1russell7/alerts-source-nwws";
 import { SWPC_KINDS } from "@mark1russell7/alerts-source-swpc";
+import { KEV_KINDS } from "@mark1russell7/alerts-source-cisa-kev";
+import { AWS_DESCRIPTOR } from "@mark1russell7/alerts-source-aws";
+import { AZURE_DESCRIPTOR } from "@mark1russell7/alerts-source-azure";
+import { BOM_SWS_DESCRIPTOR, bomTimeText } from "@mark1russell7/alerts-source-bom-sws";
+import { ANOMALIES_DESCRIPTOR as RADAR_ANOMALIES, OUTAGES_DESCRIPTOR as RADAR_OUTAGES } from "@mark1russell7/alerts-source-cloudflare-radar";
+import { FIREBASE_DESCRIPTOR, GCP_DESCRIPTOR } from "@mark1russell7/alerts-source-gcp";
+import { descriptorOf as statusPageDescriptor, pagePath, STATUS_PAGES, type StatusPage } from "@mark1russell7/alerts-source-statuspage";
+import { ENERGY_CHARTS_MEASURES, SOURCE_ID as ENERGY_CHARTS_SOURCE, WINDOW_MINUTES } from "@mark1russell7/alerts-source-energy-charts";
 import { memoryQuotaStore, quotaGate, type Exchange, type Transport } from "polite-crawler/api";
 import { DEFAULT_POLICY } from "polite-crawler/politeness";
 import { afterEach, describe, expect, it } from "vitest";
-import { ACCOUNT_SOURCES, CHECKS_KEY, checksKeys, DAEMON_CHECK, daemonCheck, DELIVERY_TIMES, INSTANCE_CHANNELS, INSTANCE_CHECK, INSTANCE_EXPECTATIONS, INSTANCE_SOURCES, INSTANCE_TIMES, instanceCheck, instanceProblems, LOUD_PING_URL_KEY, nwwsKeys, nwwsSetup, openInstance, PING_URL_KEY, pingKeyOf, pingTargets, RANK_DELAY, RANK_FLOOR, SOURCE_POLICY, sourcePace, twilioSetup, USER_AGENT_NAME, type Instance, type InstanceOptions } from "./instance.ts";
+import { ACCOUNT_SOURCES, BOM_SWS_KEY, CHECKS_KEY, CLOUDFLARE_RADAR_KEY, checksKeys, DAEMON_CHECK, daemonCheck, DELIVERY_TIMES, INSTANCE_CHANNELS, INSTANCE_CHECK, INSTANCE_EXPECTATIONS, INSTANCE_FETCH_LIMIT, INSTANCE_SOURCES, INSTANCE_TIMES, instanceCheck, instanceProblems, LOUD_PING_URL_KEY, nwwsKeys, nwwsSetup, openInstance, PING_URL_KEY, pingKeyOf, pingTargets, RANK_DELAY, RANK_FLOOR, SOURCE_POLICY, sourcePace, twilioSetup, USER_AGENT_NAME, type Instance, type InstanceOptions } from "./instance.ts";
 import { heartbeatGap } from "./heartbeat.ts";
 import { spendGates, spendQuota } from "./balance.ts";
 import { CLOCK_SKEW_LIMIT, COPY_TOKEN_KEY, EXCHANGE_EVERY, EXCHANGE_LIMIT } from "./copy.ts";
@@ -43,6 +51,7 @@ import { overdueLimit } from "./delivery.ts";
 import type { ShapeOutcome } from "./shapes.ts";
 import { nextFetch } from "./view.ts";
 import { openRuntimeLog, type RuntimeLog } from "./log.ts";
+import { openReadingStore, READINGS_FILE } from "./readings.ts";
 
 // The Flood Warning was sent at 14:54 UTC on 2026-11-14, and it expires at 06:00 UTC on 2026-11-15.
 // The keepalive was sent at 22:44:55 UTC. Thus at T0 the warning is active, and the keepalive is recent.
@@ -100,12 +109,180 @@ function fixture(source: string, name: string): string {
 }
 
 /**
+ * The answer of GFZ to a query. It has a quiet value (Kp 1) for each 3-hour interval of the query, and the license of
+ * GFZ. The recorded answers of the package `source-gfz` are of later days than the time of the tests.
+ */
+function gfzAnswer(url: URL): string {
+  const start = Date.parse(url.searchParams.get("start") ?? "");
+  const end = Date.parse(url.searchParams.get("end") ?? "");
+  const datetime: string[] = [];
+  for (let at = start; at <= end; at += 3 * 3_600_000) datetime.push(new Date(at).toISOString().replace(".000Z", "Z"));
+  return JSON.stringify({ Kp: datetime.map(() => 1), datetime, meta: { license: "CC BY 4.0", source: "GFZ Potsdam" }, status: datetime.map(() => "pre") });
+}
+
+/**
+ * The answer of Energy-Charts to a query. It has the nominal frequency (50 Hz) for each second of the query, and the
+ * license of Energy-Charts. The recorded answers of the package `source-energy-charts` are of later days than the time of the tests.
+ */
+function energyChartsAnswer(url: URL): string {
+  const start = Number(url.searchParams.get("start")) * 1000;
+  const end = Number(url.searchParams.get("end")) * 1000;
+  const time = (at: number): string => new Date(at).toISOString().replace(".000Z", "+00:00");
+  const data: { timestamp: string; values: { frequency: number } }[] = [];
+  for (let at = start; at <= end; at += 1000) data.push({ timestamp: time(at), values: { frequency: 50 } });
+  return JSON.stringify({
+    schema_version: "2.0",
+    endpoint: "frequency",
+    timezone: "UTC",
+    unit: "Hz",
+    available_from: time(start),
+    available_until: time(end),
+    data,
+    attributes: { region: "DE-Freiburg" },
+    license: "CC BY 4.0 (creativecommons.org/licenses/by/4.0), attribution: energy-charts.info",
+    deprecated: false,
+  });
+}
+
+/**
+ * The answer of CISA to the request of the KEV catalog. It has one real entry of the recorded catalog of the package
+ * `source-cisa-kev`, with its dates moved to the day of the tests. The entry is due 14 days after the tests.
+ */
+function kevAnswer(): string {
+  const catalog = JSON.parse(fixture("alerts-source-cisa-kev", "kev-20261117.json")) as { vulnerabilities: Record<string, unknown>[] } & Record<string, unknown>;
+  const day = (offset: number): string => new Date(T0 + offset * 86_400_000).toISOString().slice(0, 10);
+  const entry = { ...catalog.vulnerabilities[0], dateAdded: day(0), dueDate: day(14) };
+  return JSON.stringify({ ...catalog, catalogVersion: day(0).replaceAll("-", "."), dateReleased: new Date(T0 - 3_600_000).toISOString(), count: 1, vulnerabilities: [entry] });
+}
+
+/**
+ * The answer of a status page to the request of its summary. It is the recorded summary of the page of OpenAI in the
+ * package `source-statuspage`, with its times moved to the time of the tests. The page of GitHub gives its incident,
+ * which the provider watches after a fix. Each other page gives no incident.
+ *
+ * A page of StatusIQ (Pushover) gives the recorded feed of Pushover. Its queue of outbound messages has a major outage
+ * since 10 minutes before the time of the tests. Each other component of the feed is operational.
+ */
+function statusPageAnswer(page: StatusPage): string {
+  if (page.format === "statusiq") {
+    const feed = fixture("alerts-source-statuspage", "pushover-20261118.xml");
+    const title = "<title>Outbound Message Queue - Operational</title>";
+    if (feed.split(title).length !== 2) throw new Error("the feed of Pushover has no one item of its queue");
+    const [before, after] = feed.split(title) as [string, string];
+    const since = new Date(T0 - 10 * 60_000).toUTCString();
+    return `${before}<title>Outbound Message Queue - Major Outage</title>${after.replace(/<pubDate>[^<]*<\/pubDate>/, () => `<pubDate>${since}</pubDate>`)}`;
+  }
+  const summary = JSON.parse(fixture("alerts-source-statuspage", "openai-20261118.json")) as { page: Record<string, unknown>; incidents: Record<string, unknown>[] } & Record<string, unknown>;
+  const time = (minutes: number): string => new Date(T0 + minutes * 60_000).toISOString();
+  const live = summary.incidents.map((incident) => ({
+    ...incident,
+    created_at: time(-60),
+    updated_at: time(-10),
+    monitoring_at: time(-10),
+    incident_updates: (incident["incident_updates"] as Record<string, unknown>[]).map((update, index) => ({ ...update, created_at: time(-10 - 20 * index), updated_at: time(-10 - 20 * index), display_at: time(-10 - 20 * index) })),
+  }));
+  return JSON.stringify({ ...summary, page: { ...summary.page, updated_at: time(-10) }, incidents: page.id === "statuspage-github" ? live : [] });
+}
+
+/**
+ * The answer of Google Cloud Service Health to the request of its history. It is the first recorded incident of the package
+ * `source-gcp` as it was after its first update. Its times move to the time of the tests. The incident has no end.
+ */
+function gcpAnswer(): string {
+  const [outage] = JSON.parse(fixture("alerts-source-gcp", "incidents-20261118.json")) as Record<string, unknown>[];
+  const { end: _end, ...live } = outage!;
+  const time = (minutes: number): string => new Date(T0 + minutes * 60_000).toISOString();
+  const region = [{ title: "Delhi (asia-south2)", id: "asia-south2" }];
+  const latest = { created: time(-10), modified: time(-10), when: time(-10), text: "We are investigating an issue in asia-south2.", status: "SERVICE_DISRUPTION", affected_locations: region };
+  return JSON.stringify([{ ...live, begin: time(-30), created: time(-20), modified: time(-10), most_recent_update: latest, updates: [latest], currently_affected_locations: region, previously_affected_locations: [] }]);
+}
+
+/**
+ * The answer of the Firebase Status Dashboard to the request of its history. It is the recorded incident of Cloud Messaging
+ * of the package `source-gcp` as it was after its first update. Its times move to the time of the tests. It has no end.
+ */
+function firebaseAnswer(): string {
+  const [messaging] = JSON.parse(fixture("alerts-source-gcp", "firebase-incidents-20261118.json")) as Record<string, unknown>[];
+  const { end: _end, ...live } = messaging!;
+  const time = (minutes: number): string => new Date(T0 + minutes * 60_000).toISOString();
+  const first = (live["updates"] as Record<string, unknown>[]).at(-1)!;
+  const latest = { ...first, created: time(-10), modified: time(-10), when: time(-10) };
+  return JSON.stringify([{ ...live, begin: time(-30), created: time(-10), modified: time(-10), most_recent_update: latest, updates: [latest] }]);
+}
+
+/**
+ * The answer of the AWS Health Dashboard to the request of its feed, in the shape of the recorded feed of the package
+ * `source-aws`. It has one update of one live event in the region `eu-west-1`, 10 minutes before the time of the tests.
+ */
+function awsAnswer(): string {
+  const seconds = Math.floor((T0 - 10 * MINUTE) / 1000);
+  const item = [
+    "<item>",
+    "<title><![CDATA[Service disruption: Increased Error Rates]]></title>",
+    "<link>https://status.aws.amazon.com/</link>",
+    `<pubDate>${new Date(seconds * 1000).toUTCString()}</pubDate>`,
+    `<guid isPermaLink="false">https://status.aws.amazon.com/#ec2-eu-west-1_${String(seconds)}</guid>`,
+    "<description><![CDATA[We are investigating increased error rates in the eu-west-1 Region.]]></description>",
+    "</item>",
+  ].join("");
+  return `<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"><channel><title><![CDATA[Amazon Web Services Service Status]]></title><link>https://status.aws.amazon.com/</link><ttl>5</ttl>${item}</channel></rss>`;
+}
+
+/**
+ * The answer of BoM to a POST of one method, made from the documented schema of the API. It holds no text of BoM. The
+ * K index has one value of the hour before the time of the tests. The alerts and the warnings are empty.
+ */
+function bomAnswer(url: URL): string {
+  if (!url.pathname.endsWith("/get-k-index")) return JSON.stringify({ data: [] });
+  return JSON.stringify({ data: [{ index: 2, valid_time: bomTimeText(T0 - 60 * MINUTE), analysis_time: bomTimeText(T0 - 50 * MINUTE) }] });
+}
+
+/**
+ * The answer of Cloudflare Radar to the request of one list. The outages are the real answer of 2026-11-18, with one
+ * outage of a platform that started before the time of the tests. The anomalies are an empty list in the form of the real answer.
+ */
+function radarAnswer(url: URL): string {
+  if (url.pathname.endsWith("/annotations/outages")) return fixture("alerts-source-cloudflare-radar", "outages-20261118.json");
+  return JSON.stringify({ success: true, errors: [], result: { trafficAnomalies: [] } });
+}
+
+/**
+ * The answer of Azure Status to the request of its feed, in the shape of the recorded feeds of the package `source-azure`.
+ * It has one live incident of virtual machines in the region West Europe, 10 minutes before the time of the tests.
+ */
+function azureAnswer(): string {
+  const published = new Date(T0 - 10 * MINUTE).toUTCString().replace(/GMT$/, "Z");
+  const item = [
+    "<item>",
+    '<guid isPermaLink="false">active-virtual-machines-west-europe</guid>',
+    "<link>https://status.azure.com/en-us/status/</link>",
+    "<category>Virtual Machines</category><category>West Europe</category><category>Public Non-Regional</category>",
+    "<title>Active - Virtual Machines in West Europe</title>",
+    "<description>&lt;p&gt;We are investigating an issue in West Europe.&lt;/p&gt;</description>",
+    `<pubDate>${published}</pubDate>`,
+    "</item>",
+  ].join("");
+  return `<?xml version="1.0" encoding="utf-8"?><rss version="2.0"><channel><title>Azure Status</title><link>https://status.azure.com/en-us/status/</link>${item}</channel></rss>`;
+}
+
+/** The status page of each host. */
+const STATUS_HOSTS: ReadonlyMap<string, StatusPage> = new Map(STATUS_PAGES.map((page) => [new URL(page.base).hostname, page]));
+
+/**
  * A fake network with recorded answers. The NWS API gives the Flood Warning to the request of the
  * state, the keepalive to the canary, and no alert to the WEA request. The IPAWS feed has no alert.
  *
  * The USGS and EMSC give their recorded earthquakes of 2026-11-16. No disc of these earthquakes reaches the place.
  * Each tsunami warning center gives its recorded statement of 2026-11-13. Each statement expired before the time of the tests.
  * The SWPC gives its recorded list of 2026-11-16. Its caps are far from the place, and its other messages have no area.
+ *
+ * GFZ gives a quiet value of the index Kp for each interval of the window of the query (`gfzAnswer`). Energy-Charts gives
+ * the nominal frequency for each second of the query (`energyChartsAnswer`). CISA gives a catalog with one live entry (`kevAnswer`).
+ * BoM gives one K index, and no alert and no warning (`bomAnswer`). Cloudflare Radar gives one outage and no anomaly (`radarAnswer`).
+ *
+ * Each status page gives its summary or its feed (`statusPageAnswer`). Google Cloud gives one live incident (`gcpAnswer`). Firebase
+ * gives one live incident of Cloud Messaging (`firebaseAnswer`). AWS gives one live event (`awsAnswer`). Azure gives one
+ * live incident (`azureAnswer`).
  *
  * Each exchange takes `delay` milliseconds of real time, as on a busy runner. With `Infinity`, no exchange ends.
  */
@@ -122,6 +299,17 @@ function network(delay = 0) {
     if (url.hostname === "earthquake.usgs.gov") return { status: 200, statusText: "OK", headers: { "content-type": "application/geo+json" }, body: fixture("alerts-source-usgs", "feed-2.5_day-20261116T0327Z.geojson") };
     if (url.hostname === "www.seismicportal.eu") return { status: 200, statusText: "OK", headers: { "content-type": "application/json" }, body: fixture("alerts-source-emsc", "query-2.5_day-20261116T0528Z.json") };
     if (url.hostname === "services.swpc.noaa.gov") return { status: 200, statusText: "OK", headers: { "content-type": "application/json" }, body: fixture("alerts-source-swpc", "alerts-20261116T1553Z.json") };
+    if (url.hostname === "kp.gfz.de") return { status: 200, statusText: "OK", headers: { "content-type": "application/json" }, body: gfzAnswer(url) };
+    const statusPage = STATUS_HOSTS.get(url.hostname);
+    if (statusPage !== undefined) return { status: 200, statusText: "OK", headers: { "content-type": statusPage.format === "statusiq" ? "application/rss+xml;charset=utf-8" : "application/json; charset=utf-8" }, body: statusPageAnswer(statusPage) };
+    if (url.hostname === "status.cloud.google.com") return { status: 200, statusText: "OK", headers: { "content-type": "application/json" }, body: gcpAnswer() };
+    if (url.hostname === "status.firebase.google.com") return { status: 200, statusText: "OK", headers: { "content-type": "application/json" }, body: firebaseAnswer() };
+    if (url.hostname === "status.aws.amazon.com") return { status: 200, statusText: "OK", headers: { "content-type": "application/rss+xml" }, body: awsAnswer() };
+    if (url.hostname === "sws-data.sws.bom.gov.au") return { status: 200, statusText: "OK", headers: { "content-type": "application/json" }, body: bomAnswer(url) };
+    if (url.hostname === "api.cloudflare.com") return { status: 200, statusText: "OK", headers: { "content-type": "application/json;charset=UTF-8" }, body: radarAnswer(url) };
+    if (url.hostname === "rssfeed.azure.status.microsoft") return { status: 200, statusText: "OK", headers: { "content-type": "text/xml; charset=utf-8" }, body: azureAnswer() };
+    if (url.hostname === "www.cisa.gov") return { status: 200, statusText: "OK", headers: { "content-type": "application/json" }, body: kevAnswer() };
+    if (url.hostname === "api.energy-charts.info") return { status: 200, statusText: "OK", headers: { "content-type": "application/json" }, body: energyChartsAnswer(url) };
     if (url.hostname === "www.tsunami.gov") {
       const name = url.pathname.endsWith("/PHEBCAP.xml") ? "PHEBCAP-20261116T1134Z.xml" : "PAAQCAP-20261116T1134Z.xml";
       return { status: 200, statusText: "OK", headers: { "content-type": "text/xml" }, body: fixture("alerts-source-tsunami", name) };
@@ -240,7 +428,7 @@ describe("openInstance", () => {
   it("sends a recorded NWS warning for a watched county to the person on Pushover", async () => {
     const { instance, clock, net, server } = await open();
     const pass = await finish(clock, instance.runtime.pass());
-    expect(pass.fetched).toEqual(["nws-api", "ipaws", "usgs", "emsc", "tsunami-ntwc", "tsunami-ptwc", "swpc"]);
+    expect(pass.fetched).toEqual(["nws-api", "ipaws", "usgs", "emsc", "tsunami-ntwc", "tsunami-ptwc", "swpc", "gfz", "energy-charts", "cisa-kev"]);
     // A fetch that ran out of time names its cause here, before the checks of the send.
     expect(pass.view?.health.map((health) => [health.source, health.state])).toEqual([
       ["nws-api", "healthy"],
@@ -250,6 +438,9 @@ describe("openInstance", () => {
       ["tsunami-ntwc", "healthy"],
       ["tsunami-ptwc", "healthy"],
       ["swpc", "healthy"],
+      ["gfz", "healthy"],
+      ["energy-charts", "healthy"],
+      ["cisa-kev", "healthy"],
     ]);
     expect(server.calls).toHaveLength(1);
     const [call] = server.calls;
@@ -339,11 +530,11 @@ describe("openInstance", () => {
     const outside = { ...CONFIG.places[0]!, at: [LONGITUDE, 28.46] as const };
     const { instance, clock, server } = open(store(SECRETS), { ...CONFIG, places: [outside] });
     const pass = await finish(clock, instance.runtime.pass());
-    expect(pass.fetched).toEqual(["nws-api", "ipaws", "usgs", "emsc", "tsunami-ntwc", "tsunami-ptwc", "swpc"]);
+    expect(pass.fetched).toEqual(["nws-api", "ipaws", "usgs", "emsc", "tsunami-ntwc", "tsunami-ptwc", "swpc", "gfz", "energy-charts", "cisa-kev"]);
     expect(server.calls).toHaveLength(0);
     // The USGS and EMSC give earthquake incidents too, the tsunami centers give expired statements, and the SWPC gives
     // space weather. The order of the incidents is the order of their anchors.
-    const incident = pass.view.incidents.find((one) => !["geo.earthquake", "geo.tsunami", ...SWPC_KINDS].includes(one.kind.code));
+    const incident = pass.view.incidents.find((one) => !["geo.earthquake", "geo.tsunami", ...SWPC_KINDS, ...KEV_KINDS].includes(one.kind.code));
     expect(incident?.areas.some((area) => area.type === "polygon")).toBe(true);
     expect(matchPlaces(incident!, [outside])).toEqual([]);
     // With a buffer of 10 km, the polygon is in the buffer of the place, and the distance decides the match.
@@ -365,6 +556,9 @@ describe("openInstance", () => {
       ["tsunami-ntwc", "healthy"],
       ["tsunami-ptwc", "healthy"],
       ["swpc", "healthy"],
+      ["gfz", "healthy"],
+      ["energy-charts", "healthy"],
+      ["cisa-kev", "healthy"],
     ]);
     expect(server.calls.map((call) => call.fields["title"])).toEqual([expect.stringContaining("Flood Warning")]);
   });
@@ -380,14 +574,184 @@ describe("openInstance", () => {
       ["tsunami-ntwc", "The fetch took longer than 5000 ms."],
       ["tsunami-ptwc", "The fetch took longer than 5000 ms."],
       ["swpc", "The fetch took longer than 5000 ms."],
+      ["gfz", "The fetch took longer than 5000 ms."],
+      ["energy-charts", "The fetch took longer than 5000 ms."],
+      ["cisa-kev", "The fetch took longer than 5000 ms."],
     ]);
+  });
+
+  it("keeps the grid frequency of Energy-Charts in the store of the readings, and gives the breadth of the signals", async () => {
+    const folder = mkdtempSync(join(tmpdir(), "alerts-readings-"));
+    const readings = openReadingStore(join(folder, READINGS_FILE));
+    try {
+      const { instance, clock } = open(store(SECRETS), CONFIG, 0, TEST_FETCH_LIMIT, { readings });
+      const pass = await finish(clock, instance.runtime.pass());
+      const refs = readings.refs().filter((ref) => ref.source === ENERGY_CHARTS_SOURCE);
+      expect(refs.map((ref) => ref.measure)).toEqual(ENERGY_CHARTS_MEASURES.map((measure) => measure.id).sort());
+      // The fake network gives 50 Hz for each second, thus the lowest and the highest value of each whole minute are 50 Hz.
+      for (const ref of refs) expect(readings.series(ref, 0).map((reading) => reading.value)).toEqual(Array.from({ length: WINDOW_MINUTES }, () => 50));
+      expect(pass.breadth).toBeDefined();
+    } finally {
+      readings.close();
+      rmSync(folder, { recursive: true, force: true });
+    }
+  });
+
+  it("gives an incident with no area for the live entry of the KEV catalog, and no call to a person with no work", async () => {
+    const { instance, clock, server } = open();
+    const pass = await finish(clock, instance.runtime.pass());
+    const flaws = pass.view.incidents.filter((incident) => KEV_KINDS.includes(incident.kind.code));
+    expect(flaws.map((incident) => [incident.areas, incident.about.map((subject) => subject.system)])).toEqual([[[], ["cve"]]]);
+    expect(flaws[0]?.expires).toBe(Date.parse(new Date(T0 + 15 * 86_400_000).toISOString().slice(0, 10)));
+    expect(server.calls.map((call) => call.fields["title"])).toEqual([expect.stringContaining("Flood Warning")]);
+  });
+
+  it("reads the status pages and the feeds of Google Cloud, Firebase, AWS and Azure that a person with the work software can get, with the services, the endpoints and the regions as subjects", async () => {
+    const software: AlertConfig = { ...CONFIG, people: CONFIG.people.map((entry) => ({ ...entry, defaults: { works: ["software"] } })) };
+    const { instance, clock, net } = open(store(SECRETS), software);
+    const pass = await finish(clock, instance.runtime.pass());
+    const pages = STATUS_PAGES.filter((page) => ["infra.saas.outage", "infra.cloud.outage", "infra.internet.dns-cdn"].includes(page.kind));
+    expect(pages.length).toBeGreaterThan(20);
+    expect(pass.fetched).toEqual(["nws-api", "ipaws", "usgs", "emsc", "tsunami-ntwc", "tsunami-ptwc", "swpc", "gfz", "energy-charts", "cisa-kev", "gcp-status", "firebase-status", "aws-health", "azure-status", ...pages.map((page) => page.id)]);
+    for (const source of ["gcp-status", "firebase-status", "aws-health", "azure-status"]) expect(pass.view.health.find((health) => health.source === source)?.state, source).toBe("healthy");
+    expect(pass.view.health.filter((health) => health.source.startsWith("statuspage-")).map((health) => [health.source, health.state])).toEqual(pages.map((page) => [page.id, "healthy"]));
+    const asked = new Set(net.exchanges.map((exchange) => new URL(exchange.url)).filter((url) => STATUS_HOSTS.has(url.hostname)).map((url) => url.origin + url.pathname));
+    expect(asked).toEqual(new Set(pages.map((page) => `${page.base}${pagePath(page)}`)));
+    expect(asked).toContain("https://status.pushover.net/rss");
+    const outages = pass.view.incidents.filter((incident) => incident.kind.code === "infra.saas.outage").sort((a, b) => a.about[0]!.id.localeCompare(b.about[0]!.id));
+    // The merge gives the subjects of an incident in the order of their canonical text.
+    expect(outages.map((incident) => [incident.areas, incident.about])).toEqual([
+      [
+        [],
+        [
+          { system: "domain", id: "api.pushover.net", label: "Pushover: Outbound Message Queue" },
+          { system: "domain", id: "pushover.net", label: "Pushover" },
+        ],
+      ],
+      [[], [{ system: "domain", id: "github.com", label: "GitHub" }]],
+    ]);
+    const clouds = pass.view.incidents.filter((incident) => incident.kind.code === "infra.cloud.outage").sort((a, b) => a.about[0]!.id.localeCompare(b.about[0]!.id));
+    expect(clouds.map((incident) => [incident.areas, incident.about])).toEqual([
+      [
+        [],
+        [
+          { system: "domain", id: "aws.amazon.com", label: "Amazon Web Services" },
+          { system: "provider-region", id: "aws/eu-west-1" },
+        ],
+      ],
+      [
+        [],
+        [
+          { system: "domain", id: "azure.microsoft.com", label: "Microsoft Azure" },
+          { system: "provider-region", id: "azure/westeurope", label: "West Europe" },
+        ],
+      ],
+      [
+        [],
+        [
+          { system: "domain", id: "cloud.google.com", label: "Google Cloud" },
+          { system: "provider-region", id: "gcp/asia-south2", label: "Delhi (asia-south2)" },
+        ],
+      ],
+      [
+        [],
+        [
+          { system: "domain", id: "fcm.googleapis.com", label: "Firebase: Cloud Messaging" },
+          { system: "domain", id: "firebase.google.com", label: "Firebase" },
+        ],
+      ],
+    ]);
+  });
+
+  it("reads only the feed of Firebase and the page of Pushover for a person who names only the endpoint of its push messages", async () => {
+    const push: AlertConfig = { ...CONFIG, people: CONFIG.people.map((entry) => ({ ...entry, defaults: { services: ["domain:fcm.googleapis.com"] } })) };
+    const { instance, clock } = open(store(SECRETS), push);
+    const pass = await finish(clock, instance.runtime.pass());
+    // The layer delivery adds the API of Pushover, because the person has a contact on Pushover.
+    expect(pass.fetched).toEqual(["nws-api", "ipaws", "usgs", "emsc", "tsunami-ntwc", "tsunami-ptwc", "swpc", "gfz", "energy-charts", "cisa-kev", "firebase-status", "statuspage-pushover"]);
+    const clouds = pass.view.incidents.filter((incident) => incident.kind.code === "infra.cloud.outage");
+    // The merge gives the subjects of an incident in the order of their canonical text.
+    expect(clouds.map((incident) => incident.about.map((subject) => subject.id))).toEqual([["fcm.googleapis.com", "firebase.google.com"]]);
+  });
+
+  it("reads the page of Pushover for a person with a contact on Pushover by the layer delivery, and names its API in an outage of its queue", async () => {
+    const delivery: AlertConfig = { ...CONFIG, people: CONFIG.people.map((entry) => ({ ...entry, defaults: {} })) };
+    const { instance, clock, net } = open(store(SECRETS), delivery);
+    const pass = await finish(clock, instance.runtime.pass());
+    expect(pass.fetched).toEqual(["nws-api", "ipaws", "usgs", "emsc", "tsunami-ntwc", "tsunami-ptwc", "swpc", "gfz", "energy-charts", "cisa-kev", "statuspage-pushover"]);
+    expect(net.exchanges.map((exchange) => exchange.url).filter((url) => STATUS_HOSTS.has(new URL(url).hostname))).toEqual(["https://status.pushover.net/rss"]);
+    expect(pass.view.health.find((health) => health.source === "statuspage-pushover")?.state).toBe("healthy");
+    const outages = pass.view.incidents.filter((incident) => incident.kind.code === "infra.saas.outage");
+    expect(outages.map((incident) => [incident.severity, incident.about.map((subject) => subject.id)])).toEqual([["severe", ["api.pushover.net", "pushover.net"]]]);
+  });
+
+  it("reads no page of a channel for a person who turns off the layer delivery", async () => {
+    const quiet: AlertConfig = { ...CONFIG, people: CONFIG.people.map((entry) => ({ ...entry, defaults: { delivery: false } })) };
+    const { instance, clock } = open(store(SECRETS), quiet);
+    const pass = await finish(clock, instance.runtime.pass());
+    expect(pass.fetched.filter((source) => source.startsWith("statuspage-"))).toEqual([]);
+  });
+
+  it("reads no status page and no feed of a cloud provider for persons with no work, no service and no subject watch", async () => {
+    const { instance, clock, net } = open();
+    await finish(clock, instance.runtime.pass());
+    expect(net.exchanges.filter((exchange) => STATUS_HOSTS.has(new URL(exchange.url).hostname) || ["status.cloud.google.com", "status.firebase.google.com", "status.aws.amazon.com", "rssfeed.azure.status.microsoft"].includes(new URL(exchange.url).hostname))).toEqual([]);
+    expect(instance.runtime.config.sources.some((source) => source.id.startsWith("statuspage-") || ["gcp-status", "firebase-status", "aws-health", "azure-status"].includes(source.id))).toBe(false);
+  });
+
+  it("reads BoM only when the secrets have its key, and the key goes only into the body of each POST to BoM", async () => {
+    const key = "bom-test-key-5d1f";
+    const { instance, clock, net } = open(store({ ...SECRETS, [BOM_SWS_KEY]: key }));
+    const pass = await finish(clock, instance.runtime.pass());
+    expect(pass.fetched).toEqual(["nws-api", "ipaws", "usgs", "emsc", "tsunami-ntwc", "tsunami-ptwc", "swpc", "gfz", "bom-sws", "energy-charts", "cisa-kev"]);
+    expect(instance.runtime.config.sources.map((source) => source.id)).toContain(BOM_SWS_DESCRIPTOR.id);
+    expect(pass.view.health.find((health) => health.source === BOM_SWS_DESCRIPTOR.id)?.state).toBe("healthy");
+    const bom = net.exchanges.filter((exchange) => new URL(exchange.url).hostname === "sws-data.sws.bom.gov.au");
+    expect(bom.map((exchange) => [exchange.method, new URL(exchange.url).pathname])).toEqual([
+      ["POST", "/api/v1/get-mag-alert"],
+      ["POST", "/api/v1/get-mag-warning"],
+      ["POST", "/api/v1/get-k-index"],
+    ]);
+    for (const exchange of bom) expect((JSON.parse(exchange.body ?? "{}") as { api_key?: unknown }).api_key).toBe(key);
+    for (const exchange of net.exchanges.filter((exchange) => !bom.includes(exchange))) expect(JSON.stringify(exchange)).not.toContain(key);
+    // The files of the runtime log hold no key: no observation, no failure and no record.
+    const folder = opened.at(-1)!.folder;
+    for (const name of readdirSync(folder)) expect(readFileSync(join(folder, name)).includes(key), name).toBe(false);
+  });
+
+  it("reads Cloudflare Radar only when the secrets have its token, and the token goes only into the header authorization", async () => {
+    const token = "radar-test-token-7c2e";
+    const { instance, clock, net } = open(store({ ...SECRETS, [CLOUDFLARE_RADAR_KEY]: token }));
+    const pass = await finish(clock, instance.runtime.pass());
+    expect(pass.fetched).toEqual(["nws-api", "ipaws", "usgs", "emsc", "tsunami-ntwc", "tsunami-ptwc", "swpc", "gfz", "energy-charts", "cisa-kev", RADAR_OUTAGES.id, RADAR_ANOMALIES.id]);
+    for (const descriptor of [RADAR_OUTAGES, RADAR_ANOMALIES]) expect(pass.view.health.find((health) => health.source === descriptor.id)?.state, descriptor.id).toBe("healthy");
+    const radar = net.exchanges.filter((exchange) => new URL(exchange.url).hostname === "api.cloudflare.com");
+    expect(radar.map((exchange) => new URL(exchange.url).pathname)).toEqual(["/client/v4/radar/annotations/outages", "/client/v4/radar/traffic_anomalies"]);
+    for (const exchange of radar) expect(exchange.headers["authorization"]).toBe(`Bearer ${token}`);
+    for (const exchange of radar) expect(exchange.url).not.toContain(token);
+    for (const exchange of net.exchanges.filter((exchange) => !radar.includes(exchange))) expect(JSON.stringify(exchange)).not.toContain(token);
+    // The files of the runtime log hold no token: no observation, no failure and no record.
+    const folder = opened.at(-1)!.folder;
+    for (const name of readdirSync(folder)) expect(readFileSync(join(folder, name)).includes(token), name).toBe(false);
+  });
+
+  it("keeps the times of the loop with each status page: each page has a longer interval than the shortest of the list", () => {
+    const shortest = Math.min(...INSTANCE_SOURCES.map((source) => source.interval));
+    for (const descriptor of [GCP_DESCRIPTOR, FIREBASE_DESCRIPTOR, AWS_DESCRIPTOR, AZURE_DESCRIPTOR, BOM_SWS_DESCRIPTOR, RADAR_OUTAGES, RADAR_ANOMALIES]) {
+      expect(descriptor.interval, descriptor.id).toBeGreaterThanOrEqual(shortest);
+      expect(INSTANCE_FETCH_LIMIT(descriptor), descriptor.id).toBe(shortest);
+    }
+    for (const page of STATUS_PAGES) {
+      expect(statusPageDescriptor(page).interval, page.id).toBeGreaterThanOrEqual(shortest);
+      expect(INSTANCE_FETCH_LIMIT(statusPageDescriptor(page)), page.id).toBe(shortest);
+    }
   });
 
   it("gives no contact in the User-Agent without a contact in the configuration, and no request holds a position or an account", async () => {
     const { instance, clock, net } = await open();
     await finish(clock, instance.runtime.pass());
     const hosts = new Set(net.exchanges.map((exchange) => new URL(exchange.url).hostname));
-    expect(hosts).toEqual(new Set(["api.weather.gov", "apps.fema.gov", "earthquake.usgs.gov", "www.seismicportal.eu", "www.tsunami.gov", "services.swpc.noaa.gov"]));
+    expect(hosts).toEqual(new Set(["api.weather.gov", "apps.fema.gov", "earthquake.usgs.gov", "www.seismicportal.eu", "www.tsunami.gov", "services.swpc.noaa.gov", "kp.gfz.de", "api.energy-charts.info", "www.cisa.gov"]));
     for (const exchange of net.exchanges) {
       expect(exchange.headers["user-agent"]).toBe(USER_AGENT_NAME);
       const text = JSON.stringify(exchange);
@@ -411,7 +775,7 @@ describe("openInstance", () => {
     // The refresh starts after the pass, and it starts no request that can end after the next fetch of a source.
     const next = Math.min(...instance.runtime.config.sources.map((source) => nextFetch(instance.runtime.state(), source)));
     expect(clock.now()).toBeLessThanOrEqual(next);
-    expect(pass.fetched).toEqual(["nws-api", "ipaws", "usgs", "emsc", "tsunami-ntwc", "tsunami-ptwc", "swpc"]);
+    expect(pass.fetched).toEqual(["nws-api", "ipaws", "usgs", "emsc", "tsunami-ntwc", "tsunami-ptwc", "swpc", "gfz", "energy-charts", "cisa-kev"]);
     expect(outcomes).toHaveLength(1);
     expect(outcomes[0]?.ok).toBe(true);
     await instance.shapes.close();
@@ -488,9 +852,11 @@ describe("openInstance", () => {
   it("gives the loop the times of the sources and of the channel", async () => {
     const { instance } = await open();
     const intervals = instance.runtime.config.sources.map((source) => source.interval);
-    expect(instance.runtime.config.sources.map((source) => source.id)).toEqual(["nws-api", "ipaws", "usgs", "emsc", "tsunami-ntwc", "tsunami-ptwc", "swpc"].map((id) => id as SourceId));
+    expect(instance.runtime.config.sources.map((source) => source.id)).toEqual(["nws-api", "ipaws", "usgs", "emsc", "tsunami-ntwc", "tsunami-ptwc", "swpc", "gfz", "energy-charts", "cisa-kev"].map((id) => id as SourceId));
+    // The limit of a fetch is its interval, up to the shortest interval. Thus the 10 minutes of GFZ do not make the pass long.
+    expect(instance.runtime.config.sources.map(INSTANCE_FETCH_LIMIT)).toEqual(intervals.map(() => 60_000));
     expect(instance.loop.times).toEqual({
-      passLimit: Math.max(...intervals) + 2 * PUSHOVER_TIMEOUT_MS,
+      passLimit: 60_000 + 2 * PUSHOVER_TIMEOUT_MS,
       retryBase: Math.min(PUSHOVER_TIMEOUT_MS, ...intervals),
       retryCap: Math.min(...intervals),
     });
@@ -509,7 +875,7 @@ describe("openInstance", () => {
 
   it("does not start when no regional source covers a place", () => {
     // The place has no code of the country. The coverage of each regional source is a list of countries.
-    // The SWPC covers the whole Earth, so it covers the place with no code. The check does not count it.
+    // The SWPC and GFZ cover the whole Earth, so they cover the place with no code. The check does not count them.
     const place = CONFIG.places[0]!;
     const config: AlertConfig = { ...CONFIG, places: [{ ...place, codes: place.codes.filter((code) => code.system !== "iso3166") }] };
     expect(messageOf(() => open(store(SECRETS), config))).toContain("No regional source covers the place place-1.");
@@ -897,7 +1263,7 @@ describe("the check of the instance", () => {
 
   it("does not count a global source as the cover of a place", () => {
     const global = INSTANCE_SOURCES.filter((descriptor) => descriptor.coverage === "global");
-    expect(global.map((descriptor) => descriptor.id)).toEqual(["swpc"]);
+    expect(global.map((descriptor) => descriptor.id)).toEqual(["swpc", "gfz", "cisa-kev"]);
     expect(instanceProblems(parse(CONFIG, store(SECRETS)), store(SECRETS), global, 0)).toEqual([expect.stringContaining("No regional source covers the place place-1.")]);
   });
 

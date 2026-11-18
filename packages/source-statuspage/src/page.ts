@@ -1,0 +1,133 @@
+/**
+ * The config of one status page: its base URL, its service, the kind of its reports and the facts of its source. The
+ * register of this package names well-known pages. The config of an instance can name other pages.
+ */
+
+import { knownKind, type Duration, type SourceId, type Subject, type SubjectSystem } from "@mark1russell7/alerts";
+
+/**
+ * The key of one component of a service: the domain of the endpoint that the component serves. A key names the endpoint,
+ * not the company. Thus an outage of the video of a service does not go to a person who watches only its calls.
+ */
+export interface ComponentKey {
+  /** The id of a component, or of a group of components, on the page. A key of a group applies to each component of the group. */
+  readonly id: string;
+  /** The name of the component or of the group, for a person who reads the config, for example `Programmable Messaging`. */
+  readonly name: string;
+  /** The domain of the endpoint, for example `api.twilio.com`. Each report of the component names it as a subject. */
+  readonly domain: string;
+}
+
+/**
+ * The formats of a page. `statuspage` is the summary API of Atlassian Statuspage, and incident.io gives the same format.
+ * `statusiq` is the RSS feed of the components of a page of Site24x7 StatusIQ.
+ */
+export const PAGE_FORMATS = ["statuspage", "statusiq"] as const;
+
+/** The format of a page: one of `PAGE_FORMATS`. */
+export type PageFormat = (typeof PAGE_FORMATS)[number];
+
+/** The config of one status page. */
+export interface StatusPage {
+  /** The id of the source of the page, for example `statuspage-github`. */
+  readonly id: SourceId;
+  /** The plain name of the service, for example `GitHub`. */
+  readonly title: string;
+  /** The base URL of the page: `https:`, a host and no path, for example `https://www.githubstatus.com`. */
+  readonly base: string;
+  /** The company of the service: the origin of each report, for example `github`. */
+  readonly origin: string;
+  /** The main domain of the service, for example `github.com`. Each report names it as its subject. */
+  readonly domain: string;
+  /** The taxonomy code of each report of the page, for example `infra.saas.outage`. */
+  readonly kind: string;
+  /** The failure domains outside the cell, with their prefixes, for example `provider:atlassian-statuspage`. */
+  readonly dependsOn: readonly string[];
+  /** The time between two fetches. The default is `DEFAULT_INTERVAL`. */
+  readonly interval?: Duration;
+  /** The longest normal time of one fetch. The default is `DEFAULT_SLOW_AFTER`. */
+  readonly slowAfter?: Duration;
+  /** The keys of the components that serve an endpoint. The default is no key: each report names only the domain of the service. */
+  readonly components?: readonly ComponentKey[];
+  /** The format of the page. The default is `statuspage`. */
+  readonly format?: PageFormat;
+}
+
+/** The default time between two fetches of a page: two minutes. The pages of Statuspage keep an answer in a cache for 10 seconds. */
+export const DEFAULT_INTERVAL: Duration = 120_000;
+
+/** The default longest normal time of one fetch. The summary of a large page is 230 KB. */
+export const DEFAULT_SLOW_AFTER: Duration = 15_000;
+
+/**
+ * The system of the subject of each report: `domain`, with the domain of the service as its id. The core gives the
+ * subject the node `domain:<id>` of an interest graph. Thus a person who names the service gets the report.
+ */
+export const SUBJECT_SYSTEM: SubjectSystem = "domain";
+
+/**
+ * This function tells if a URL is a base URL of a page. A base URL has `https:` and a host. It has no user, port, path,
+ * query or fragment.
+ */
+export function isPageBase(url: string): boolean {
+  if (!URL.canParse(url)) return false;
+  const parsed = new URL(url);
+  return parsed.protocol === "https:" && parsed.username === "" && parsed.password === "" && parsed.port === "" && parsed.origin === url;
+}
+
+/** This function tells if a text is a domain name in lower case, with two or more labels, for example `github.com`. */
+export function isDomain(text: string): boolean {
+  return /^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/.test(text);
+}
+
+/**
+ * This function gives the domains of a page: the domain of the service, then the domain of each key of a component. No
+ * domain is in the list twice. A person who watches one of these domains gets the reports of the page that name it.
+ */
+export function pageDomains(page: Pick<StatusPage, "domain" | "components">): readonly string[] {
+  return [...new Set([page.domain, ...(page.components ?? []).map((key) => key.domain)])];
+}
+
+/**
+ * This function gives the subjects of a report of a page. The first subject is the domain of the service. Then each
+ * other domain of the keys of the components of the report is one subject. The label of an endpoint names its components.
+ */
+export function subjectsOf(page: Pick<StatusPage, "title" | "domain">, keys: readonly ComponentKey[]): readonly Subject[] {
+  const endpoints = [...new Set(keys.map((each) => each.domain))].filter((domain) => domain !== page.domain);
+  return [
+    { system: SUBJECT_SYSTEM, id: page.domain, label: page.title },
+    ...endpoints.map((domain) => ({ system: SUBJECT_SYSTEM, id: domain, label: `${page.title}: ${keys.filter((each) => each.domain === domain).map((each) => each.name).join(", ")}` })),
+  ];
+}
+
+/** This function examines the config of a page. It gives one text for each problem, and an empty list for a good config. A text holds no URL. */
+export function pageProblems(page: StatusPage): readonly string[] {
+  const problems: string[] = [];
+  if (!/^[a-z0-9][a-z0-9-]*$/.test(page.id)) problems.push("the id is not lower-case letters, digits and hyphens");
+  if (page.title.trim() === "") problems.push("the title is empty");
+  // A problem text holds no URL of the config: a URL can hold a password.
+  if (!isPageBase(page.base)) problems.push("the base is not an https URL with only a host, for example https://status.example.com");
+  if (page.origin.trim() === "") problems.push("the origin is empty");
+  if (page.format !== undefined && !(PAGE_FORMATS as readonly string[]).includes(page.format)) problems.push(`the format ${JSON.stringify(page.format)} is not a format of a page`);
+  if (!isDomain(page.domain)) problems.push(`the domain ${JSON.stringify(page.domain)} is not a domain name in lower case`);
+  if (!knownKind(page.kind)) problems.push(`the kind ${JSON.stringify(page.kind)} is not a code of the taxonomy`);
+  if (page.dependsOn.length === 0) problems.push("the list of failure domains is empty");
+  for (const domain of page.dependsOn) if (!/^[a-z]+:[a-z0-9.-]+$/.test(domain)) problems.push(`the failure domain ${JSON.stringify(domain)} is not a kind, a colon and an id`);
+  const ids = new Set<string>();
+  for (const key of page.components ?? []) {
+    if (key.id.trim() === "") problems.push("a key of a component has no id");
+    else if (ids.has(key.id)) problems.push(`the component ${JSON.stringify(key.id)} has two keys`);
+    ids.add(key.id);
+    if (key.name.trim() === "") problems.push(`the key of the component ${JSON.stringify(key.id)} has no name`);
+    if (!isDomain(key.domain)) problems.push(`the domain ${JSON.stringify(key.domain)} of a component is not a domain name in lower case`);
+    // The domain of the service is the subject of each report already. A key with it changes nothing.
+    else if (key.domain === page.domain) problems.push(`the key of the component ${JSON.stringify(key.id)} gives the domain of the service`);
+  }
+  for (const [name, value] of [
+    ["interval", page.interval],
+    ["slowAfter", page.slowAfter],
+  ] as const) {
+    if (value !== undefined && (!Number.isInteger(value) || value < 1000)) problems.push(`the ${name} is not an integer of 1000 or more milliseconds: ${String(value)}`);
+  }
+  return problems;
+}

@@ -68,6 +68,7 @@ describe("the descriptor of the text channel", () => {
     const descriptor = twilioTextDescriptor();
     expect(descriptor).toMatchObject({ id: TEXT_CHANNEL_ID, breaksThrough: false, repeats: false, ack: "none", maxBody: TWILIO_TEXT_LIMIT, address: TWILIO_CALL_ADDRESS });
     expect(descriptor.dependsOn).toEqual(["provider:twilio", "provider:carrier"]);
+    expect(descriptor.services).toEqual(["domain:api.twilio.com"]);
     expect(TWILIO_TEXT_COST_USD).toBeLessThanOrEqual(TWILIO_CALL_COST_USD);
     // The text of the outage call and the text of the channel have one limit.
     expect(OUTAGE_TEXT_LIMIT).toBe(TWILIO_TEXT_LIMIT);
@@ -248,5 +249,14 @@ describe("the status of a text", () => {
     const fake = server();
     await channelOf(fake).cancel({ receipt: { text: SID } });
     expect(fake.calls).toEqual([]);
+  });
+});
+
+describe("the probe of the text channel", () => {
+  it("reads the balance of the account and sends no text", async () => {
+    const fake = server({ status: 200, body: { balance: "12.5", currency: "USD", account_sid: CREDENTIALS.accountSid } });
+    expect(await channelOf(fake).probe?.()).toEqual({ ok: true, at: AT });
+    expect(fake.calls.map((call) => call.method)).toEqual(["GET"]);
+    expect(fake.calls[0]?.url).toMatch(/\/Balance\.json$/u);
   });
 });

@@ -694,8 +694,8 @@ export interface IncidentLine {
  * The level of an alert.
  * - `life-safety`: it wakes the person, sounds through silent mode and escalates until acknowledged.
  * - `urgent`: a push at once, without the break through Do Not Disturb.
- * - `notice`: a push in the day, else the digest.
- * - `digest`: the next digest.
+ * - `notice`: a push in the day. In the quiet window of the person, a quiet push that the next digest tells again.
+ * - `digest`: the next digest: one message each day for each person (`planDigests`).
  */
 export type Level = "life-safety" | "urgent" | "notice" | "digest";
 
@@ -735,6 +735,19 @@ export interface ChannelDescriptor {
    */
   readonly dependsOn: readonly string[];
   /**
+   * The online services that the channel needs, as the keys of entities, for example `domain:api.twilio.com`. Each person
+   * with a contact on the channel gets each service in the layer `delivery` of the interest graph. Thus an outage of
+   * the path of the alerts of a person reaches that person.
+   */
+  readonly services?: readonly NodeKey[];
+  /**
+   * The endpoints that the procedures of the channel call, as the keys of entities, for example `domain:api.twilio.com`.
+   * Each one is also in `services`. A report of a down channel names them (AL-65). Thus the layer `delivery` of the
+   * interest graph takes the report to each person with a contact on the channel. A service that the calls do not reach,
+   * as the push service of a phone platform, is only in `services`.
+   */
+  readonly api?: readonly NodeKey[];
+  /**
    * The resources of the cell that the channel uses. A push or a text through an API uses
    * `internet`, `dns` and `power`. Thus a fault of the internet link stops each source and each such
    * channel together.
@@ -770,6 +783,11 @@ export interface ChannelDescriptor {
    * does not agree with this list. With no list, each address passes. The function `addressProblems` tells the rules.
    */
   readonly address?: readonly AddressField[];
+  /**
+   * The levels at which a message of the channel asks the person for an acknowledgment. With no list, a channel with an
+   * `ack` other than `none` asks at each level. An exhausted escalation tells the watchers only after such a step (AL-21).
+   */
+  readonly ackLevels?: readonly Level[];
 }
 
 /** The limit of a why line: the most characters, the most words, or both. */
@@ -939,6 +957,17 @@ export type SendOutcome =
       readonly retryAfter?: Duration;
     };
 
+/** The kind of a failed send. `SendOutcome` tells each kind. */
+export type ChannelFailureKind = Extract<SendOutcome, { readonly ok: false }>["kind"];
+
+/**
+ * The outcome of a probe of a channel: a call to its provider that sends nothing and costs nothing. A success tells that
+ * the provider takes the calls of the channel again. A failure has a kind of `ChannelFailureKind`.
+ */
+export type ProbeOutcome =
+  | { readonly ok: true; readonly at: Instant }
+  | { readonly ok: false; readonly kind: ChannelFailureKind; readonly message: string };
+
 /** The state of a sent message. */
 export type DeliveryState = "accepted" | "delivered" | "acknowledged" | "expired" | "failed";
 
@@ -959,13 +988,31 @@ export interface DeliveryStatus {
  * - `send`: it writes `network`. It is not idempotent, unless the channel drops a repeated key.
  * - `status`: it reads `network`.
  * - `cancel`: it writes `network`. It stops the repeats of a message. It is idempotent.
+ * - `probe`: it reads `network`. It is an authenticated read that sends nothing and costs nothing. While the line of a
+ *   down channel is open, the runtime calls it, and a success ends the line (AL-65). A channel with no probe keeps its line
+ *   until an accepted send.
+ * - `services`: no effects. It reads only the address. The procedure is optional.
  */
 export interface ChannelProcedures {
   describe(): ChannelDescriptor;
   send(input: SendInput): Promise<SendOutcome>;
   status(input: { readonly receipt: Receipt }): Promise<DeliveryStatus>;
   cancel(input: CancelTarget): Promise<void>;
+  probe?(): Promise<ProbeOutcome>;
+  /**
+   * The services that carry the messages of the channel to one address, as node keys of entities. An example is the
+   * region of the carrier network of a phone number. The procedure gives an empty list for an address that it cannot
+   * read. It does not throw.
+   */
+  services?(input: { readonly address: Address }): readonly NodeKey[];
 }
+
+/**
+ * The services of the contact of a person on one channel, as node keys of entities (`ChannelProcedures.services`).
+ * The load adds them to the services of the channel for that person only. A result can tell a private fact of the
+ * address, for example the region of a phone number. Thus no problem and no log holds it.
+ */
+export type ContactServices = (channel: ChannelId, address: Address) => readonly NodeKey[];
 
 /** The input of a send. */
 export interface SendInput {
@@ -998,11 +1045,24 @@ export interface EscalationStep {
  */
 export interface EscalationPolicy {
   readonly level: Level;
+  /**
+   * The daily time of the digest. Only a policy of the level `digest` has it. Without it, the digest goes at the
+   * end of the quiet window of the person.
+   */
+  readonly daily?: DailyTime;
   /** The subject of the policy, as a subject watch. A subject watch with no id matches each subject of its system. */
   readonly about?: SubjectWatch;
   readonly steps: readonly EscalationStep[];
   /** The time after the last step at which the escalation is exhausted. Exhausted is a system alert. */
   readonly exhaustedAfter: Duration;
+}
+
+/** A local time of each day in a time zone. The digest goes at this time. */
+export interface DailyTime {
+  /** The IANA name of the time zone, for example `Europe/Berlin`. */
+  readonly zone: string;
+  /** The local time `HH:MM`, from `00:00` to `23:59`. */
+  readonly time: string;
 }
 
 /**
@@ -1137,6 +1197,15 @@ export interface LevelRule {
   readonly places?: readonly PlaceId[];
   /** The prefixes of the taxonomy codes of the rule. When it is absent, the rule applies to each kind. */
   readonly kinds?: readonly string[];
+  /**
+   * The kinds of the entries of the rule. The rule matches an incident only through an entry of one of these kinds. A
+   * watched place is an entry of the kind `place`. A watched subject has the kind of its system, or `entity`. When it
+   * is absent, the rule matches through each entry.
+   *
+   * An example is a rule with `through: ["topic"]` for the outages of online services. It lowers an outage that
+   * reaches the person only through a topic of the work. An outage of a service that the person names keeps its level.
+   */
+  readonly through?: readonly SubjectKind[];
   readonly max: AssessedLevel;
 }
 
@@ -1224,30 +1293,58 @@ export interface KindPrior {
   readonly deaths?: Estimate;
   /** The injuries in one event of the kind. */
   readonly injuries?: Estimate;
+  /** The harm in one area under one active alert of the kind, for each significance with a measure. */
+  readonly under?: Readonly<Partial<Record<Significance, UnderPrior>>>;
+}
+
+/** The kinds of area of an alert: a county, or a forecast zone. */
+export type AlertArea = "county" | "zone";
+
+/**
+ * The harm in one area under one active alert of a kind and a significance. An area is one alert in one county or one
+ * zone. The measure counts each event under an active alert. Thus it holds the probability of the event.
+ */
+export interface UnderPrior {
+  /** The deaths in one area under one alert. */
+  readonly deaths: Estimate;
+  /** The injuries in one area under one alert. */
+  readonly injuries: Estimate;
+  /** The kind of area of the measure. The measure takes the kind of area that has most of the events of the kind. */
+  readonly area: AlertArea;
 }
 
 /**
  * The priors of the shadow score. Each factor comes from a public measure, not from a guess. The
- * format of the file is `alerts-priors/1`.
+ * format of the file is `alerts-priors/2`. Format 2 adds the harm under an active alert (`KindPrior.under`).
  */
 export interface ScorePriors {
-  readonly format: "alerts-priors/1";
+  readonly format: "alerts-priors/2";
   /** The priors of the kinds, by prefixes of the taxonomy codes. For each field, the longest prefix of a kind with that field decides. */
   readonly kinds: Readonly<Record<string, KindPrior>>;
   /** The probability of each CAP certainty value, from 0 to 1. */
   readonly certainty: Readonly<Partial<Record<Certainty, Estimate>>>;
 }
 
+/**
+ * The source of a factor of a shadow score in the priors.
+ *
+ * - The table `kinds` has a prefix of the kind as its key. The table `certainty` has a CAP certainty value.
+ * - The table `under` has a prefix of the kind, the significance and the kind of area of the measure.
+ */
+export type ScoreSource =
+  | { readonly table: "kinds" | "certainty"; readonly key: string }
+  | { readonly table: "under"; readonly key: string; readonly significance: Significance; readonly area: AlertArea };
+
 /** One factor of a shadow score, with the key of the priors that gave it. */
 export interface ScoreFactor {
   readonly estimate: Estimate;
-  /** The table of the priors and its key: a prefix of `kinds`, or a value of `certainty`. */
-  readonly from: { readonly table: "kinds" | "certainty"; readonly key: string };
+  /** The table of the priors and its key. */
+  readonly from: ScoreSource;
 }
 
 /**
- * The expected harm of an incident: the probability of the event times the deaths and the injuries of
- * one event. Each interval holds each product of a point of the two intervals.
+ * The expected harm of an incident in one area. The basis `event` gives the probability of the event times the
+ * deaths and the injuries of one event. Then each interval holds each product of a point of the two intervals.
  */
 export interface ExpectedHarm {
   readonly deaths: Estimate;
@@ -1258,13 +1355,21 @@ export interface ExpectedHarm {
 export type ScoreGap = "probability" | "deaths" | "injuries";
 
 /**
- * The shadow score of an incident: the probability of the event and the harm of one event. The score
- * does not decide a level at this time. The table decides, and the assessment shows the score next to it.
- * A score with a gap has no read, and it shows each factor that the priors do not give.
+ * The shadow score of an incident. The score does not decide a level at this time. The table decides, and the
+ * assessment shows the score next to it.
+ *
+ * - The basis `event` is the probability of the event times the harm of one event.
+ * - The basis `alert` is the harm in one area under one active alert of the kind and the significance.
+ * - A score with a gap has no read, and it shows each factor that the priors do not give.
  */
 export type ShadowScore =
   | {
       readonly read: true;
+      /**
+       * The basis of the score. A score of a log line from before the basis `alert` has no field `basis`. Its basis is
+       * `event`.
+       */
+      readonly basis?: "event";
       /** The probability that the event occurs. */
       readonly probability: ScoreFactor;
       /** The deaths in one event of the kind. */
@@ -1274,7 +1379,36 @@ export type ShadowScore =
       /** The probability times the deaths and the injuries of one event. */
       readonly expected: ExpectedHarm;
     }
+  | {
+      readonly read: true;
+      readonly basis: "alert";
+      /** The deaths in one area under one alert, from the table `under`. */
+      readonly deaths: ScoreFactor;
+      /** The injuries in one area under one alert, from the table `under`. */
+      readonly injuries: ScoreFactor;
+      /** The expected harm. It is the estimate of each factor, because the measure holds the probability of the event. */
+      readonly expected: ExpectedHarm;
+    }
   | { readonly read: false; readonly missing: readonly ScoreGap[] };
+
+/** An incident with its level from the table and its shadow score, as the map gives it. */
+export interface ScoredIncident {
+  readonly anchor: ReportId;
+  readonly level: AssessedLevel;
+  /** The shadow score of the incident. An incident with no score is in no difference. */
+  readonly shadow?: ShadowScore;
+}
+
+/**
+ * A difference between the table and the shadow score. The table gives `above` a higher level than `below`.
+ * The score gives `below` more expected deaths and more expected injuries, and the intervals do not overlap.
+ */
+export interface ShadowDifference {
+  /** The incident with the higher level of the table. */
+  readonly above: ReportId;
+  /** The incident with the higher shadow score. */
+  readonly below: ReportId;
+}
 
 /** A reason of an assessment. The UI shows the reasons, so each level tells why. */
 export type AssessReason =
@@ -1445,12 +1579,13 @@ export type EdgeKind = "physical" | "cyber" | "geographic" | "logical" | "intere
  * - `base`: the human base, the same for each person.
  * - `places`: the watched places of the person.
  * - `services`: the services that the person names.
+ * - `delivery`: the services of the channels of the person (`ChannelDescriptor.services`).
  * - `work`: the tools and the services of a kind of work.
  * - `data`: public data, for example the service area of a power utility.
  * - `measured`: a measure of the system, for example the DNS providers of a domain.
  * - `person`: the person set the value. No default replaces it.
  */
-export type EdgeOrigin = "base" | "places" | "services" | "work" | "data" | "measured" | "person";
+export type EdgeOrigin = "base" | "places" | "services" | "delivery" | "work" | "data" | "measured" | "person";
 
 /** One edge of an interest graph: the cause at `from` can impair the node at `to`, with a chance. */
 export interface InterestEdge {

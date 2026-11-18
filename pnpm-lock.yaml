@@ -224,9 +224,27 @@ importers:
         specifier: ^0.0.13
         version: 0.0.13
     devDependencies:
+      '@mark1russell7/alerts-source-aws':
+        specifier: workspace:*
+        version: link:../source-aws
+      '@mark1russell7/alerts-source-bom-sws':
+        specifier: workspace:*
+        version: link:../source-bom-sws
+      '@mark1russell7/alerts-source-cisa-kev':
+        specifier: workspace:*
+        version: link:../source-cisa-kev
       '@mark1russell7/alerts-source-emsc':
         specifier: workspace:*
         version: link:../source-emsc
+      '@mark1russell7/alerts-source-energy-charts':
+        specifier: workspace:*
+        version: link:../source-energy-charts
+      '@mark1russell7/alerts-source-gcp':
+        specifier: workspace:*
+        version: link:../source-gcp
+      '@mark1russell7/alerts-source-gfz':
+        specifier: workspace:*
+        version: link:../source-gfz
       '@mark1russell7/alerts-source-iem':
         specifier: workspace:*
         version: link:../source-iem
@@ -276,8 +294,8 @@ importers:
         specifier: ^0.56.0
         version: 0.56.0
       polite-crawler:
-        specifier: ^0.7.3
-        version: 0.7.4(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
+        specifier: ^0.7.10
+        version: 0.7.10(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
     devDependencies:
       '@mark1russell7/cue':
         specifier: ^2.0.0
@@ -316,8 +334,8 @@ importers:
         specifier: ^0.28.2
         version: 0.28.2
       polite-crawler:
-        specifier: ^0.7.3
-        version: 0.7.4(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
+        specifier: ^0.7.10
+        version: 0.7.10(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
       zod:
         specifier: ^4.6.7
         version: 4.6.7
@@ -399,8 +417,8 @@ importers:
         specifier: ^0.0.13
         version: 0.0.13
       polite-crawler:
-        specifier: ^0.7.3
-        version: 0.7.4(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
+        specifier: ^0.7.10
+        version: 0.7.10(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
     devDependencies:
       '@mark1russell7/cue':
         specifier: ^2.0.0
@@ -539,8 +557,8 @@ importers:
         specifier: ^5.0.3
         version: 5.1.0(vitest@5.1.0)
       polite-crawler:
-        specifier: ^0.7.3
-        version: 0.7.4(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
+        specifier: ^0.7.10
+        version: 0.7.10(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
       typescript:
         specifier: ^7.0.2
         version: 7.0.2
@@ -562,12 +580,39 @@ importers:
       '@mark1russell7/alerts-format-nws':
         specifier: workspace:*
         version: link:../format-nws
+      '@mark1russell7/alerts-rates':
+        specifier: workspace:*
+        version: link:../rates
       '@mark1russell7/alerts-shapes-nws':
         specifier: workspace:*
         version: link:../shapes-nws
+      '@mark1russell7/alerts-source-aws':
+        specifier: workspace:*
+        version: link:../source-aws
+      '@mark1russell7/alerts-source-azure':
+        specifier: workspace:*
+        version: link:../source-azure
+      '@mark1russell7/alerts-source-bom-sws':
+        specifier: workspace:*
+        version: link:../source-bom-sws
+      '@mark1russell7/alerts-source-cisa-kev':
+        specifier: workspace:*
+        version: link:../source-cisa-kev
+      '@mark1russell7/alerts-source-cloudflare-radar':
+        specifier: workspace:*
+        version: link:../source-cloudflare-radar
       '@mark1russell7/alerts-source-emsc':
         specifier: workspace:*
         version: link:../source-emsc
+      '@mark1russell7/alerts-source-energy-charts':
+        specifier: workspace:*
+        version: link:../source-energy-charts
+      '@mark1russell7/alerts-source-gcp':
+        specifier: workspace:*
+        version: link:../source-gcp
+      '@mark1russell7/alerts-source-gfz':
+        specifier: workspace:*
+        version: link:../source-gfz
       '@mark1russell7/alerts-source-ipaws':
         specifier: workspace:*
         version: link:../source-ipaws
@@ -577,6 +622,9 @@ importers:
       '@mark1russell7/alerts-source-nwws':
         specifier: workspace:*
         version: link:../source-nwws
+      '@mark1russell7/alerts-source-statuspage':
+        specifier: workspace:*
+        version: link:../source-statuspage
       '@mark1russell7/alerts-source-swpc':
         specifier: workspace:*
         version: link:../source-swpc
@@ -623,8 +671,8 @@ importers:
         specifier: ^0.60.0
         version: 0.60.0(@opentelemetry/api@1.10.0)(ws@8.23.0)
       polite-crawler:
-        specifier: ^0.7.3
-        version: 0.7.4(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
+        specifier: ^0.7.10
+        version: 0.7.10(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
       zod:
         specifier: ^4.6.7
         version: 4.6.7
@@ -669,8 +717,8 @@ importers:
         specifier: ^0.0.13
         version: 0.0.13
       polite-crawler:
-        specifier: ^0.7.3
-        version: 0.7.4(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
+        specifier: ^0.7.10
+        version: 0.7.10(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
     devDependencies:
       '@mark1russell7/cue':
         specifier: ^2.0.0
@@ -742,6 +790,77 @@ importers:
         specifier: ^5.0.3
         version: 5.1.0(@opentelemetry/api@1.10.0)(@types/node@26.6.6)(@vitest/coverage-v8@5.1.0)(vite@8.3.8(@types/node@26.6.6)(esbuild@0.28.2)(tsx@4.23.15)(yaml@2.9.1))
 
+  packages/source-aws:
+    dependencies:
+      '@mark1russell7/alerts':
+        specifier: workspace:*
+        version: link:../core
+      '@mark1russell7/alerts-fetch':
+        specifier: workspace:*
+        version: link:../fetch
+      '@mark1russell7/alerts-format-cap':
+        specifier: workspace:*
+        version: link:../format-cap
+      '@mark1russell7/text':
+        specifier: ^0.0.13
+        version: 0.0.13
+      polite-crawler:
+        specifier: ^0.7.10
+        version: 0.7.10(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
+    devDependencies:
+      '@mark1russell7/cue':
+        specifier: ^2.0.0
+        version: 2.1.4
+      '@types/node':
+        specifier: ^26.6.5
+        version: 26.6.6
+      '@vitest/coverage-v8':
+        specifier: ^5.0.3
+        version: 5.1.0(vitest@5.1.0)
+      fast-check:
+        specifier: ^4.10.2
+        version: 4.10.2
+      typescript:
+        specifier: ^7.0.2
+        version: 7.0.2
+      vitest:
+        specifier: ^5.0.3
+        version: 5.1.0(@opentelemetry/api@1.10.0)(@types/node@26.6.6)(@vitest/coverage-v8@5.1.0)(vite@8.3.8(@types/node@26.6.6)(esbuild@0.28.2)(tsx@4.23.15)(yaml@2.9.1))
+
+  packages/source-azure:
+    dependencies:
+      '@mark1russell7/alerts':
+        specifier: workspace:*
+        version: link:../core
+      '@mark1russell7/alerts-fetch':
+        specifier: workspace:*
+        version: link:../fetch
+      '@mark1russell7/alerts-format-cap':
+        specifier: workspace:*
+        version: link:../format-cap
+      '@mark1russell7/text':
+        specifier: ^0.0.16
+        version: 0.0.16
+      polite-crawler:
+        specifier: ^0.7.10
+        version: 0.7.10(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
+    devDependencies:
+      '@mark1russell7/cue':
+        specifier: ^2.0.0
+        version: 2.1.4
+      '@types/node':
+        specifier: ^26.6.5
+        version: 26.6.6
+      '@vitest/coverage-v8':
+        specifier: ^5.0.3
+        version: 5.1.0(vitest@5.1.0)
+      typescript:
+        specifier: ^7.0.2
+        version: 7.0.2
+      vitest:
+        specifier: ^5.0.3
+        version: 5.1.0(@opentelemetry/api@1.10.0)(@types/node@26.6.6)(@vitest/coverage-v8@5.1.0)(vite@8.3.8(@types/node@26.6.6)(esbuild@0.28.2)(tsx@4.23.15)(yaml@2.9.1))
+
   packages/source-bom-sws:
     dependencies:
       '@mark1russell7/alerts':
@@ -757,8 +876,8 @@ importers:
         specifier: ^0.0.13
         version: 0.0.13
       polite-crawler:
-        specifier: ^0.7.3
-        version: 0.7.4(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
+        specifier: ^0.7.10
+        version: 0.7.10(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
     devDependencies:
       '@mark1russell7/cue':
         specifier: ^2.0.0
@@ -794,8 +913,8 @@ importers:
         specifier: ^0.0.13
         version: 0.0.13
       polite-crawler:
-        specifier: ^0.7.3
-        version: 0.7.4(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
+        specifier: ^0.7.10
+        version: 0.7.10(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
     devDependencies:
       '@mark1russell7/cue':
         specifier: ^2.0.0
@@ -809,6 +928,80 @@ importers:
       fast-check:
         specifier: ^4.10.2
         version: 4.10.2
+      typescript:
+        specifier: ^7.0.2
+        version: 7.0.2
+      vitest:
+        specifier: ^5.0.3
+        version: 5.1.0(@opentelemetry/api@1.10.0)(@types/node@26.6.6)(@vitest/coverage-v8@5.1.0)(vite@8.3.8(@types/node@26.6.6)(esbuild@0.28.2)(tsx@4.23.15)(yaml@2.9.1))
+
+  packages/source-cisa-kev:
+    dependencies:
+      '@mark1russell7/alerts':
+        specifier: workspace:*
+        version: link:../core
+      '@mark1russell7/alerts-fetch':
+        specifier: workspace:*
+        version: link:../fetch
+      '@mark1russell7/text':
+        specifier: ^0.0.13
+        version: 0.0.13
+      polite-crawler:
+        specifier: ^0.7.10
+        version: 0.7.10(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
+    devDependencies:
+      '@mark1russell7/cue':
+        specifier: ^2.0.0
+        version: 2.1.4
+      '@types/node':
+        specifier: ^26.6.5
+        version: 26.6.6
+      '@vitest/coverage-v8':
+        specifier: ^5.0.3
+        version: 5.1.0(vitest@5.1.0)
+      fast-check:
+        specifier: ^4.10.2
+        version: 4.10.2
+      typescript:
+        specifier: ^7.0.2
+        version: 7.0.2
+      vitest:
+        specifier: ^5.0.3
+        version: 5.1.0(@opentelemetry/api@1.10.0)(@types/node@26.6.6)(@vitest/coverage-v8@5.1.0)(vite@8.3.8(@types/node@26.6.6)(esbuild@0.28.2)(tsx@4.23.15)(yaml@2.9.1))
+
+  packages/source-cloudflare-radar:
+    dependencies:
+      '@mark1russell7/alerts':
+        specifier: workspace:*
+        version: link:../core
+      '@mark1russell7/alerts-fetch':
+        specifier: workspace:*
+        version: link:../fetch
+      '@mark1russell7/alerts-source-aws':
+        specifier: workspace:*
+        version: link:../source-aws
+      '@mark1russell7/alerts-source-azure':
+        specifier: workspace:*
+        version: link:../source-azure
+      '@mark1russell7/alerts-source-gcp':
+        specifier: workspace:*
+        version: link:../source-gcp
+      '@mark1russell7/text':
+        specifier: ^0.0.13
+        version: 0.0.13
+      polite-crawler:
+        specifier: ^0.7.10
+        version: 0.7.10(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
+    devDependencies:
+      '@mark1russell7/cue':
+        specifier: ^2.0.0
+        version: 2.1.4
+      '@types/node':
+        specifier: ^26.6.5
+        version: 26.6.6
+      '@vitest/coverage-v8':
+        specifier: ^5.0.3
+        version: 5.1.0(vitest@5.1.0)
       typescript:
         specifier: ^7.0.2
         version: 7.0.2
@@ -831,8 +1024,8 @@ importers:
         specifier: ^0.0.13
         version: 0.0.13
       polite-crawler:
-        specifier: ^0.7.3
-        version: 0.7.4(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
+        specifier: ^0.7.10
+        version: 0.7.10(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
     devDependencies:
       '@mark1russell7/alerts-source-usgs':
         specifier: workspace:*
@@ -868,8 +1061,8 @@ importers:
         specifier: ^0.0.13
         version: 0.0.13
       polite-crawler:
-        specifier: ^0.7.3
-        version: 0.7.4(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
+        specifier: ^0.7.10
+        version: 0.7.10(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
     devDependencies:
       '@mark1russell7/cue':
         specifier: ^2.0.0
@@ -877,6 +1070,40 @@ importers:
       '@mark1russell7/quantity':
         specifier: ^0.4.1
         version: 0.4.1(zod@4.6.7)
+      '@types/node':
+        specifier: ^26.6.5
+        version: 26.6.6
+      '@vitest/coverage-v8':
+        specifier: ^5.0.3
+        version: 5.1.0(vitest@5.1.0)
+      fast-check:
+        specifier: ^4.10.2
+        version: 4.10.2
+      typescript:
+        specifier: ^7.0.2
+        version: 7.0.2
+      vitest:
+        specifier: ^5.0.3
+        version: 5.1.0(@opentelemetry/api@1.10.0)(@types/node@26.6.6)(@vitest/coverage-v8@5.1.0)(vite@8.3.8(@types/node@26.6.6)(esbuild@0.28.2)(tsx@4.23.15)(yaml@2.9.1))
+
+  packages/source-gcp:
+    dependencies:
+      '@mark1russell7/alerts':
+        specifier: workspace:*
+        version: link:../core
+      '@mark1russell7/alerts-fetch':
+        specifier: workspace:*
+        version: link:../fetch
+      '@mark1russell7/text':
+        specifier: ^0.0.13
+        version: 0.0.13
+      polite-crawler:
+        specifier: ^0.7.10
+        version: 0.7.10(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
+    devDependencies:
+      '@mark1russell7/cue':
+        specifier: ^2.0.0
+        version: 2.1.4
       '@types/node':
         specifier: ^26.6.5
         version: 26.6.6
@@ -908,9 +1135,12 @@ importers:
         specifier: ^0.0.13
         version: 0.0.13
       polite-crawler:
-        specifier: ^0.7.3
-        version: 0.7.4(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
+        specifier: ^0.7.10
+        version: 0.7.10(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
     devDependencies:
+      '@mark1russell7/alerts-source-swpc':
+        specifier: workspace:*
+        version: link:../source-swpc
       '@mark1russell7/cue':
         specifier: ^2.0.0
         version: 2.1.4
@@ -942,8 +1172,8 @@ importers:
         specifier: ^0.0.13
         version: 0.0.13
       polite-crawler:
-        specifier: ^0.7.3
-        version: 0.7.4(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
+        specifier: ^0.7.10
+        version: 0.7.10(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
       protobufjs:
         specifier: ^8.8.1
         version: 8.8.1
@@ -985,8 +1215,8 @@ importers:
         specifier: ^0.0.13
         version: 0.0.13
       polite-crawler:
-        specifier: ^0.7.3
-        version: 0.7.4(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
+        specifier: ^0.7.10
+        version: 0.7.10(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
     devDependencies:
       '@mark1russell7/alerts-runtime':
         specifier: workspace:*
@@ -1037,8 +1267,8 @@ importers:
         specifier: ^0.0.13
         version: 0.0.13
       polite-crawler:
-        specifier: ^0.7.3
-        version: 0.7.4(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
+        specifier: ^0.7.10
+        version: 0.7.10(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
     devDependencies:
       '@mark1russell7/alerts-source-nws-api':
         specifier: workspace:*
@@ -1080,8 +1310,8 @@ importers:
         specifier: ^0.0.13
         version: 0.0.13
       polite-crawler:
-        specifier: ^0.7.3
-        version: 0.7.4(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
+        specifier: ^0.7.10
+        version: 0.7.10(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
     devDependencies:
       '@mark1russell7/cue':
         specifier: ^2.0.0
@@ -1154,6 +1384,43 @@ importers:
         specifier: ^5.0.3
         version: 5.1.0(@opentelemetry/api@1.10.0)(@types/node@26.6.6)(@vitest/coverage-v8@5.1.0)(vite@8.3.8(@types/node@26.6.6)(esbuild@0.28.2)(tsx@4.23.15)(yaml@2.9.1))
 
+  packages/source-statuspage:
+    dependencies:
+      '@mark1russell7/alerts':
+        specifier: workspace:*
+        version: link:../core
+      '@mark1russell7/alerts-fetch':
+        specifier: workspace:*
+        version: link:../fetch
+      '@mark1russell7/alerts-format-cap':
+        specifier: workspace:*
+        version: link:../format-cap
+      '@mark1russell7/text':
+        specifier: ^0.0.13
+        version: 0.0.13
+      polite-crawler:
+        specifier: ^0.7.10
+        version: 0.7.10(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
+    devDependencies:
+      '@mark1russell7/cue':
+        specifier: ^2.0.0
+        version: 2.1.4
+      '@types/node':
+        specifier: ^26.6.5
+        version: 26.6.6
+      '@vitest/coverage-v8':
+        specifier: ^5.0.3
+        version: 5.1.0(vitest@5.1.0)
+      fast-check:
+        specifier: ^4.10.2
+        version: 4.10.2
+      typescript:
+        specifier: ^7.0.2
+        version: 7.0.2
+      vitest:
+        specifier: ^5.0.3
+        version: 5.1.0(@opentelemetry/api@1.10.0)(@types/node@26.6.6)(@vitest/coverage-v8@5.1.0)(vite@8.3.8(@types/node@26.6.6)(esbuild@0.28.2)(tsx@4.23.15)(yaml@2.9.1))
+
   packages/source-swpc:
     dependencies:
       '@mark1russell7/alerts':
@@ -1172,8 +1439,8 @@ importers:
         specifier: ^0.0.13
         version: 0.0.13
       polite-crawler:
-        specifier: ^0.7.3
-        version: 0.7.4(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
+        specifier: ^0.7.10
+        version: 0.7.10(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
     devDependencies:
       '@mark1russell7/cue':
         specifier: ^2.0.0
@@ -1212,8 +1479,8 @@ importers:
         specifier: ^0.0.13
         version: 0.0.13
       polite-crawler:
-        specifier: ^0.7.3
-        version: 0.7.4(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
+        specifier: ^0.7.10
+        version: 0.7.10(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
     devDependencies:
       '@mark1russell7/cue':
         specifier: ^2.0.0
@@ -1249,8 +1516,8 @@ importers:
         specifier: ^0.0.13
         version: 0.0.13
       polite-crawler:
-        specifier: ^0.7.3
-        version: 0.7.4(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
+        specifier: ^0.7.10
+        version: 0.7.10(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
     devDependencies:
       '@mark1russell7/cue':
         specifier: ^2.0.0
@@ -1359,8 +1626,8 @@ importers:
         specifier: ^3.1.2
         version: 3.1.2
       polite-crawler:
-        specifier: ^0.7.3
-        version: 0.7.4(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
+        specifier: ^0.7.10
+        version: 0.7.10(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
     devDependencies:
       '@mark1russell7/cue':
         specifier: ^2.0.0
@@ -1596,15 +1863,6 @@ packages:
       zod:
         optional: true
 
-  '@mark1russell7/algebra@0.8.9':
-    resolution: {integrity: sha512-Ol2CeOEjTlf6hzDItciPk2dLziK7mjrH1s/f2OraTMR7YypX597D3R9wCZgBpXZPt779lBpUon7f61EclYXZwg==}
-    engines: {node: '>=22.19'}
-    peerDependencies:
-      zod: ^4.1.0
-    peerDependenciesMeta:
-      zod:
-        optional: true
-
   '@mark1russell7/algebra@0.9.7':
     resolution: {integrity: sha512-Dwh9lJHAH4RzMhtwEIrec11RY3NeWsv8UUyCvlz8psVr6cwn0Xo34b+/X/tj8Kiu+bgfiUPRzsVSuR3GR46FFw==}
     engines: {node: '>=22.19'}
@@ -1825,6 +2083,10 @@ packages:
 
   '@mark1russell7/text@0.0.13':
     resolution: {integrity: sha512-8Tu7DTTpfmpXIy0F2JCyOW1RD91X7tm38c5xiqz3cLdmEkUQViH/06kTBLj+hrzuQPMBGVyxd7snqVG6EpNLdQ==}
+    engines: {node: '>=22.12'}
+
+  '@mark1russell7/text@0.0.16':
+    resolution: {integrity: sha512-hq2AWdtbKtXlibTTcVA/6GQAxgPj+6U3Hdmkh1I4sRMQZn/SiKh1k78UtcMgtcLJxwHHG9GVs2O2VNQxJP7R1Q==}
     engines: {node: '>=22.12'}
 
   '@mark1russell7/text@0.0.6':
@@ -2837,8 +3099,8 @@ packages:
     resolution: {integrity: sha512-qcJu88Q2IWqJsDD529JKMdwGm/dvInW4HvQnRwiH9JtihJvzGOscDtHE3x1pBKeUOTysQ8kVmLnJ2kJu7yhcGA==}
     engines: {node: '>=12'}
 
-  polite-crawler@0.7.4:
-    resolution: {integrity: sha512-zQCUAM3mm0+3A10RSD5chCVvRCFEDGEYChHtOgza6jIaSMWd4KpB8rruSMgNwbY97rpVEkyaqykNJS8kC2LxgQ==}
+  polite-crawler@0.7.10:
+    resolution: {integrity: sha512-oKftcpa+CiNyxs5nc+r1cdmJwIdavBPipBJfW2e/IgxzaOXfAfkKglKKlduNYoK72ocw/5YYx1A8tohmSHXuBg==}
     engines: {node: '>=22.19'}
     hasBin: true
     peerDependencies:
@@ -3271,12 +3533,6 @@ snapshots:
     optionalDependencies:
       zod: 4.6.7
 
-  '@mark1russell7/algebra@0.8.9(zod@4.6.7)':
-    dependencies:
-      '@mark1russell7/quantity': 0.4.1(zod@4.6.7)
-    optionalDependencies:
-      zod: 4.6.7
-
   '@mark1russell7/algebra@0.9.7(zod@4.6.7)':
     dependencies:
       '@mark1russell7/quantity': 0.4.1(zod@4.6.7)
@@ -3433,6 +3689,8 @@ snapshots:
       '@clack/prompts': 1.9.0
 
   '@mark1russell7/text@0.0.13': {}
+
+  '@mark1russell7/text@0.0.16': {}
 
   '@mark1russell7/text@0.0.6': {}
 
@@ -4420,9 +4678,8 @@ snapshots:
 
   picomatch@4.0.7: {}
 
-  polite-crawler@0.7.4(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7):
+  polite-crawler@0.7.10(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7):
     dependencies:
-      '@mark1russell7/algebra': 0.8.9(zod@4.6.7)
       '@mark1russell7/service': 0.9.3(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
       '@mark1russell7/sqlite': 0.3.9
       '@mozilla/readability': 0.6.0

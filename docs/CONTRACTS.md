@@ -66,7 +66,9 @@ The rule comes from a policy, `LinkPolicy`. The function `linkRule` makes the ru
 - the centers of their circle areas are 100 km apart or less, on the great circle
 - the values of their parameter `magnitude` are 1.0 apart or less.
 
-Two reports of the family `geo.space-weather.geomagnetic-storm` link when two limits hold. Their onsets are 6 hours apart or less, and the centers of their circle areas are 100 km apart or less. Each source of the family gives the polar caps of `polarCaps`, so the centers are the geomagnetic poles. The onset of an alert of the SWPC is in the 3-hour interval of the index Kp of GFZ, so the window is two intervals. This window is a shortcut with no measure. A capture of one storm of the two sources replaces it (AL-14).
+Two reports of the family `geo.space-weather.geomagnetic-storm` link when two limits hold. Their onsets are 6 hours apart or less, and the centers of their circle areas are 100 km apart or less. Each source of the family gives the polar caps of `polarCaps`, so the centers are the geomagnetic poles.
+
+A replay of the years 2015 to 2025 measured the window with `scripts/measure-link.ts` of `source-gfz`. At 6 hours, 457 of the 460 runs of GFZ join the SWPC, and 447 at 3 hours. A larger window puts more runs of GFZ in one incident, through the chains of keys of the SWPC. The gate `link.test.ts` of `source-gfz` holds two real storms.
 
 The rule is on the safe side. A false join can hide a second event after an acknowledgment, but a false split gives only a second alert. Thus:
 
@@ -347,11 +349,12 @@ A balance report has no area. Its subjects are `{ system: "alerts.channel", id: 
 | `unread` | No read passed for the maximum age or longer (`balanceUnreadAt`) | `moderate`, `expected` |
 
 - The facts of a line are the provider, the stage and the floor of a line `low`. A new balance gives no update.
-- A spend entry gives one floor or a list of floors, for example `[5, 2]`. One floor is a list of one floor (`balanceFloors`).
+- A spend entry gives one floor or a list of floors, for example `[10, 3]`. One floor is a list of one floor (`balanceFloors`).
 - Each floor above the last read gives one line `low`: `balance/<provider>/low/<floor>`. Thus each floor gives one alert.
 - Money above a floor cancels the line of that floor. `balanceFloorsBelow` gives the floors above the read, from the highest.
 - `low` and `empty` come from the last read that passed, also when the read is old. A read that passes ends `unread`.
 - A snapshot with no balances keeps each open line of a balance.
+- With two copies, only one copy reports `low` and `empty` (see "The facts of a shared account"). Each copy reports its own `unread`.
 - The runtime gives `balanceWatch` for each account. Each pass checks each watch, and a watch reads once a day. A failed read tries again after one hour.
 - The time of the next read and the time of `unread` are timers of the pass.
 
@@ -359,7 +362,7 @@ A clock report has no area. Its subject is `{ system: "alerts.clock", id: "wall"
 
 - The condition is the latest step of the wall clock in `CLOCK_STEP_WINDOW` (24 hours) before the time of the snapshot (`recentStep`).
 - The facts of the line are the time and the size of the step. A second step in the window gives an update.
-- The line stays open for the window, thus the digest of the day shows the step. At the end of the window, the line ends with a cancel.
+- The line stays open for the window, thus the next digest shows the step. At the end of the window, the line ends with a cancel.
 - The headline gives the direction and the size of the step, in whole hours, minutes or seconds (`stepSizeText`).
 
 A log report has no area. Its subject is `{ system: "alerts.log", id: "runtime" }`. Its kind is `system.log.recovered`:
@@ -401,10 +404,26 @@ A drill report has no area. Its subject is `{ system: "alerts.drill", id: <drill
 - A snapshot with `missed` opens the line `missed`, with the reason `missed` and the missed start as its onset. The next run ends it.
 - `missedDrillAt(drill, runs, at, quiet)` gives the missed start. A late start in the same window is not a miss, and before the first run nothing is missed.
 
+An exhaustion report has no area. Its subjects are the person (`alerts.person`, `PERSON_SUBJECT`) and the incident (`alerts.incident`, `INCIDENT_SUBJECT`). Only the copy that reports the shared facts makes these lines.
+
+| Line | Kind | Condition | Level |
+| --- | --- | --- | --- |
+| `exhausted/<person>/<incident>/<episode>/<level>` | `system.escalation.exhausted` | The escalation of the level is exhausted, with no acknowledgment | The level of the escalation |
+
+- The facts of the line are the person, the incident, the episode, the level and the time of the exhaustion. The title is not a fact.
+- The headline names the person, the kind and the title of the incident, and the level. The severity and the urgency give the level again.
+- An acknowledgment and the end of the incident cancel the line. A snapshot with no list of exhaustions keeps each open line.
+
+A down-channel report has no area. Its subjects are the channel (`alerts.channel`, `CHANNEL_SUBJECT`) and each endpoint of the channel (`ChannelDescriptor.api`). Each copy makes its own lines, because each copy has its own network path. The section on the down channels tells the rules.
+
+| Line | Kind | Condition | Level |
+| --- | --- | --- | --- |
+| `channel/<copy>/<channel>` | `system.channel.down` | A run of failed calls that opens a line, or an open line with no good call since its onset | `notice` at most |
+
 `latestIn(items, at, window)` gives the latest item in a window before a time. `recentStep` and `recentRecovery` use it.
 `threats(incidents, places)` gives the watches and the warnings. A threat is a live incident with the status `actual` at a watched place. Its stage is `watch`, `warning` or absent. A report of the core has the status `system`, so it is not a threat.
 
-The assessment policy holds three system classes, and each class admits only the status `system`. The class `system-drill` holds the drill runs, and it reaches `life-safety`. A class can name its statuses. Else the statuses of the policy apply. The NWS kinds `system.test` and `system.admin` are not in these classes, so the policy statuses apply to them.
+The assessment policy holds four system classes, and each class admits only the status `system`. The class `system-drill` holds the drill runs, and it reaches `life-safety`. The class `system-escalation` holds the exhausted escalations, and it also reaches `life-safety`. A class can name its statuses. Else the statuses of the policy apply. The NWS kinds `system.test` and `system.admin` are not in these classes, so the policy statuses apply to them.
 
 ### Lateness across sources
 
@@ -441,7 +460,7 @@ A copy that did not come is not a measure of the delay, because its delay is not
 
 ## The channel contract
 
-Each channel package registers four procedures under `alerts.channel.<id>`:
+Each channel package registers four procedures under `alerts.channel.<id>`, and it can register a fifth, `probe`:
 
 | Procedure | Effects | Rule |
 | --- | --- | --- |
@@ -449,6 +468,7 @@ Each channel package registers four procedures under `alerts.channel.<id>`:
 | `send` | writes `network` | It sends one `Message` to one `Address`, with the copy id of this send. When `message.quiet` is true, it uses its silent mode. A failure is `{ ok: false }`. It does not throw. |
 | `status` | reads `network` | It gives the state of a receipt: accepted, delivered, acknowledged, expired or failed. |
 | `cancel` | writes `network` | It stops the repeats of a message: each copy of a receipt, or one copy by its copy id. It is idempotent. |
+| `probe` | reads `network` | It is optional. It makes an authenticated read that sends nothing and costs nothing. A success ends the line of a down channel (AL-65). |
 
 A descriptor with `address` tells the fields of the address of a person on the channel. Each field has a name, a need and a form.
 
@@ -457,10 +477,25 @@ A descriptor with `address` tells the fields of the address of a person on the c
 - A problem names the field and its form, and not its value, because a value can be a secret.
 - The form is a regular expression of the whole value. Pushover takes the key form of `@procedures/notify`. The Twilio call takes a phone number in E.164 form.
 
+A descriptor with `services` names the online services that the channel needs, as the keys of entities. Pushover names `domain:api.pushover.net` and the push endpoint of the platform. The Twilio channels name `domain:api.twilio.com`.
+
+- A key names the endpoint that the channel uses, not the company. Thus an outage of another product of the company does not reach the path of the alerts.
+- `api` names the endpoints that the calls of the channel reach. Each one is also in `services`, and the schema refuses an empty list. Pushover names `domain:api.pushover.net` only: its calls never reach the push endpoint of the platform.
+- A status source gives each component that serves an endpoint the key of that endpoint. Then an outage of the component reaches the path.
+- Each person with a contact on the channel gets each service in the layer `delivery` of the interests. `docs/RELEVANCE.md` tells the layers.
+- Thus an outage of a service on the path of the alerts reaches the person as a named service does.
+
+A channel can also name the services of one address with the optional procedure `services`. An example is the region of the carrier network of a phone number.
+
+- The load gives the services of the first contact of a person on the channel to that person only (`ContactServices`, `contactChannels`).
+- Only the keys of entities count. A missing secret, a lookup that throws and a key of another kind give no service.
+- The services of an address can tell a private fact, for example the region of a number. Thus no problem and no log holds them.
+- The check of the instance gives the services to the load (`InstanceCheck.services`). The route `GET /interests` uses the same lookup.
+
 The channel does not escalate. The core does:
 
 - An `EscalationPolicy` gives the steps of a level: a channel and a time for each step. The first step of `life-safety` is Pushover at emergency priority. It repeats until acknowledged, and sounds through silent mode with iOS Critical Alerts.
-- The escalation is a state machine on the clock of algebra: sent, then acknowledged, or the next step at its time, or exhausted. Exhausted is a system alert to the next person in the policy.
+- The escalation is a state machine on the clock of algebra: sent, then acknowledged, or the next step at its time, or exhausted. An exhausted escalation of a real warning is a system report to each person who watches the person (AL-21). The section on the exhausted escalations tells the rules.
 - An acknowledgment comes from any channel or from the UI. It stops the escalation of that level of that incident, and the core cancels the repeats on the other channels.
 - Only an acknowledgment proves that the person got a message. The Pushover receipt field `last_delivered_at` is the time of a retry of the server, not a proof.
 - The core decides the silent mode. `escalate` sets `quiet` on each send, and `Message.quiet` takes it. Each channel maps it to its silent mode: Pushover priority `-1`, or a text and no call on Twilio. No channel keeps its own rule about the time of day.
@@ -619,6 +654,20 @@ The exchange also checks the copies. Each of these faults is a line of system re
 - another copy has a different hash of the configuration: then the copies can route an alert in two ways
 - the reads of another copy fail for 60 seconds: then the two copies can both send
 
+### The facts of a shared account
+
+The copies read the same provider accounts. Thus only one copy reports the stages `low` and `empty` of a balance (AL-62):
+
+- The copy with the smallest id of the copies that answer reports them (`reportsShared`). The ids are in the order of code units.
+- Another copy answers until `SHARED_HANDOVER` (15 minutes) after its last read that passed, or after the start of its watch.
+- 15 minutes is longer than a restart. Thus a restart does not move the reports to another copy.
+- The other copies cancel their open lines `low` and `empty`. A cancel of a system line sends no new message.
+- When the copy that reports stops, the next copy reports after the handover. Thus a failover can send the alert one more time.
+- The handover time (`sharedHandoverAt`) is a timer of the pass.
+- Each copy reports its own stage `unread`, because it tells that the reads of that copy fail.
+- Each copy reports its own lines of a quota, because each copy counts its own sends.
+- A snapshot with no id of its copy, or with no watches of other copies, reports each stage, as one copy does.
+
 The worker of the exchange (`exchangeWorker` of the runtime) does the reads:
 
 - A round reads each other copy at the same time. It reads the pages of a copy until the copy has no more entries, or for 20 pages.
@@ -738,6 +787,7 @@ The core function `route` gives the escalations at a time. Each escalation is on
 
 - The levels of an incident and a person are the levels of its starts and its deliveries, and the assessed level.
 - The assessed level counts only when it is higher than those levels and the person has a policy for it. So the level does not go down.
+- The level `digest` has no escalation, and a delivery of the level `digest` does not count. The digest tells it (see "The digest").
 - Only the highest level continues. A lower level ends at the start of a higher level, so its repeats stop.
 - An escalation continues until an acknowledgment, the end of the incident or the end of the person. An acknowledgment of a level also covers each lower level.
 - The end of an incident is its expiry, or the time when it stops being live.
@@ -832,6 +882,7 @@ A channel rule (`ChannelRule`) of a person keeps or removes the steps of a plan 
 A policy can have a subject (`EscalationPolicy.about`, AL-43). The function `policyFor` gives the policy of a level for an incident in `route` and in the check of a drill:
 
 - An incident with the status `system`, `test` or `exercise` gets the first policy of the level whose subject matches a subject of the incident. The match is `matchSubjects`, the match of the channel rules.
+- In a system of paths (`PATH_SYSTEMS`), a subject with an id matches each subject that overlaps it (`nodesOverlap`). An example is a region of a carrier and a product of the region.
 - Each other incident, and an incident with no such policy, gets the first policy of the level with no subject. Thus no policy with a subject changes the plan of a real warning.
 - When two policies of a level match one incident, the first one in the list applies. An example is a policy about `alerts.drill` and a policy about `alerts.drill` with an id.
 - The channel rules apply to the chosen policy. The why record does not change.
@@ -844,14 +895,86 @@ A recipient has no problem from `recipientProblems` before it gets alerts:
 - No two policies have the same level and the same subject.
 - No rule keeps a life-safety kind, or the coverage of one, below `life-safety`. A rule with no kinds applies to each kind.
 - Each rule names kinds of the taxonomy, and the quiet window has a good time zone and good local times.
+- Only a policy of the level `digest` has a daily time. The daily time has a good time zone and a good local time.
+- A policy of the level `digest` with no daily time needs a quiet window of the person. Else the person gets no digest.
 - Each channel rule has one or more kinds of the taxonomy, and each of its channels is a channel of the instance.
 
 The message of a send takes its text from one report of the incident. That report is the latest one with the severity and the urgency of the incident. The body has the instruction first, then the area and the description. The channel cuts the text to its limits.
 
-One part waits:
+## The exhausted escalations
 
-- The exhaustion alert to the next person waits for a second person (AL-21). Until then, the repeats continue after the exhaustion, and the routes of each pass show it.
-- When the exhaustion alert comes (AL-21), it skips a plan with no step, because a channel rule empties such a plan on purpose. A test of AL-21 holds this rule.
+The core function `exhaustions(routes, channels, reports)` gives the exhausted escalations at a time (AL-21). The runtime gives them to the system fold of the next pass.
+
+- Only an incident with the status `actual` has an exhaustion. A drill run, a test and an exercise have none.
+- A plan with no step has no exhaustion, because a channel rule empties such a plan on purpose.
+- A plan whose channels ask for no acknowledgment at its level has no exhaustion. `asksForAck(policy, channels)` gives this rule.
+- `ackLevels` of a channel descriptor gives the levels at which the channel asks for an acknowledgment. Pushover asks only at `life-safety`, its emergency priority.
+- A channel with the `ack` `none` has no `ackLevels`. The schema refuses this contradiction.
+- The person who watches the subject `alerts.person` with the id of a person gets the exhaustions of that person. A person never gets its own exhaustion.
+- The exhaustion report keeps the level of the escalation. Thus the quiet window of the watcher applies, and an `urgent` exhaustion is quiet at night.
+- An exhaustion report has the status `system`. Thus it has no exhaustion of its own, and the chain stops at one step.
+- The repeats of the first person continue after the exhaustion. An acknowledgment of the first person cancels the report and the sends of the watcher.
+- When the copy that reports the shared facts changes, the old copy cancels its line and the new copy opens one. The watcher can get a second push.
+
+## The down channels
+
+The runtime reads the results of its own calls, because the path of the alerts has no second status source (AL-65).
+
+- `channelRuns(runs, step)` adds the calls of one delivery step to the run of each channel. The runtime keeps the runs in memory.
+- Only the failed calls `send` and `status` of the kinds `network`, `timeout`, `server` and `auth` count (`COUNTED_FAILURES`).
+- The kinds `consent`, `quiet`, `expired`, `refused`, `reserved` and `rate-limited` do not count. They are facts of a person, a message or a quota.
+- An accepted send or a probe success in a step ends the run of its channel. The failed calls of that step start no run.
+- A run opens a line at `failures` failed calls over at least `span`. The field `channelDown` of the configuration gives them, and the defaults are 3 and 60 s.
+- Thus one pass with three people does not open a line: its failed sends come at one time.
+- A run opens a line only when the network of the copy works. A failure `server` or `auth` is an answer of the provider.
+- Else a source fetch with success after the first failed call and before a later one shows the network. A copy that is offline opens no line, and its outside check tells of it.
+- An open line ends at a good call at or after its onset: an accepted send or a probe success. A restart empties the runs, and an empty run does not end a line.
+- While a line is open, the runtime calls the probe of the channel on a backoff. A channel with no probe keeps its line until an accepted send.
+- The watch of the runtime (`channelWatch`) calls the first probe 1 minute after the first view of the line. The next waits are 2, 4 and 8 minutes, up to 30 minutes (`PROBE_BACKOFF`).
+- A probe past the call limit is a `timeout`. A failed probe does not count in a run, and its message goes into no report and no log.
+- The probes run with the fetches of a pass. Thus a probe success ends the line in the view of the same pass.
+- A run that starts to open a line, and an accepted send on a down channel, wake the next pass at once.
+- The probe of Pushover reads the limits of the application (`apps/limits.json`). The probe of Twilio reads the balance of the account (`Balance.json`). The two reads send nothing and cost nothing.
+- The facts of the line are the copy, the channel, the onset and the cause. A new count gives no update, and a new cause gives one.
+- The cause `key` comes from a last failure `auth`. Its headline tells that the provider refuses the key, and that it is not an outage. This fault does not end by itself.
+- `loadConfig` adds one channel rule for each channel of each person (`channelDownRules`). The report of a down channel goes on each other channel of the person.
+- The subjects of the report hold the endpoints of the channel. The layer `delivery` of the interests has an edge from each endpoint to each person with a contact on the channel. Thus only these people get the report.
+- A report of a status source with the same endpoint key is a separate incident. The link of the two is planned in the relevance work (AL-35).
+
+## The digest
+
+The core function `planDigests` gives the digests at a time (AL-64). A digest is one message each day for each person. The runtime sends it in the delivery step, after the escalations.
+
+- A person gets a digest when the person has a policy of the level `digest` with no subject.
+- The field `daily` of that policy gives the digest time: a time zone of the IANA database and a local time `HH:MM`.
+- A policy with no field `daily` uses the end of the quiet window of the person.
+- Each step of the policy sends one message on its channel. The field `at` of the step adds a wait after the digest time.
+- In a gap of the local time, the digest time is the end of the gap. When the local time goes back, the digest time is the first such instant.
+
+The digest time of a pass is the last digest time at or before the time of the pass. A digest tells two kinds of incidents:
+
+- Each live incident at the level `digest` for the person. The system got it at or before the digest time. A later incident waits for the next digest.
+- Each incident that a quiet push of `notice` or `urgent` told in the quiet window, after the digest time before. Thus the morning digest tells again what came in the night.
+
+The rules of the entries:
+
+- Each incident is one entry, by its anchor. An incident of the night has the highest level of its quiet pushes.
+- An incident of the level `digest` goes in one digest of each step. A louder delivery to the person keeps it out, because the person already has its message.
+- A digest of the same digest time that told an incident of the night keeps it out.
+- The entries go from the highest level to the lowest, then from the earliest receipt.
+- A digest with no entry sends nothing.
+- A runtime that was down at the digest time sends the digest when it comes back, until the next digest time.
+
+The record of a digest:
+
+- The key of the message comes from the person, the digest time and the step (`digestKey`). Thus a send after a failure has the same key.
+- An accepted digest writes one delivery of the level `digest` for each entry (`digestDeliveries`). Its key comes from `digestEntryKey`.
+- The merge state keeps each delivery. Thus a restart and each other copy know the incidents that a digest told.
+- A failed send writes nothing, and the digest stays due. The flight limit and the refusals apply as to each other send.
+- A copy of rank N waits N times the rank delay of the level `digest` before a send. On an exclusive channel, the rank floor applies.
+- Each step of a person sends one digest for each digest time, across the copies. A digest delivery of the step at or after the digest time keeps the step quiet.
+- Thus the entries that only one copy knows, for example its own system reports, wait for the next digest. A night entry of that kind gets no second message.
+- The title gives the count of the entries. The body has one line for each entry, after its level when that level is not `digest`.
 
 ## Levels and the first night rule
 
@@ -859,8 +982,8 @@ One part waits:
 | --- | --- |
 | `life-safety` | It wakes the person, sounds through silent mode and escalates until acknowledged. |
 | `urgent` | A push at once, without the break through Do Not Disturb. |
-| `notice` | A push in the day, else the digest. |
-| `digest` | The next digest. |
+| `notice` | A push in the day. In the quiet window of the person, a quiet push that the next digest tells again. |
+| `digest` | The next digest: one message each day for each person. |
 
 The first assessment is a table of data: `DEFAULT_ASSESS_POLICY`. The policy puts each kind in a class. Each class has two lookups: the highest level for the severity and the highest level for the urgency. The level of the table is the lower of the two.
 
@@ -927,10 +1050,13 @@ The table becomes the calculation of AL-31. The calculation multiplies the proba
 
 The shadow score (`shadowScore`) is the first step. It operates next to the table, and it does not decide a level:
 
-- The priors (`ScorePriors`, format `alerts-priors/1`) are data. For each prefix of a kind, they give the verified share of its warnings and the deaths and injuries of one event. For each CAP certainty value, they give a probability.
-- The probability of an observed event is that of the certainty `observed`. The probability of a warning is the verified share of its kind. The measure of the warnings decides over the certainty word of the sender. Each other incident gets the probability of its certainty.
+- The priors (`ScorePriors`, format `alerts-priors/2`) are data. For each prefix of a kind, they give the verified share of its warnings and the deaths and injuries of one event. For each CAP certainty value, they give a probability.
+- Format 2 adds the harm in one area under one active alert of a kind, for each significance (`KindPrior.under`). The measure counts each event under an alert, so it holds the probability of the event.
+- An incident with a significance and a measure of its alerts gets the basis `alert`. Its expected harm is that measure. The longest prefix of the kind with a measure of that significance decides.
+- An observed event gets the basis `event`. The measure under an alert also counts the alerts with no event, thus it is too low for an event that occurs.
+- On the basis `event`, the probability of an observed event is that of the certainty `observed`. The probability of a warning is the verified share of its kind. The measure of the warnings decides over the certainty word of the sender. Each other incident gets the probability of its certainty.
 - For each field, the longest prefix of the kind with that field decides. A prefix ends at a dot, as in `hasKind`.
-- Each value has its interval. The score keeps the key of the priors that gave each factor, so the UI tells the source.
+- Each value has its interval. The score keeps the key of the priors that gave each factor, so the UI tells the source. A factor of the table `under` also keeps the significance and the kind of area.
 - The expected harm (`expectedOf`) is the probability times the deaths, and the probability times the injuries. `mul` of `@mark1russell7/interval` rounds each interval outward. Thus the interval holds each exact product.
 - Each count of the priors is from 0 to `Number.MAX_SAFE_INTEGER`. Thus each product has a finite interval.
 - A factor that the priors do not give makes a score with no read. The score names each missing factor. It does not take 0 or a default value.
@@ -945,6 +1071,36 @@ The priors come from the base rates of the package `rates` (`priorsOf`). The fil
 - The percentile bootstrap over the years holds the change from year to year. Its seed comes from the kind and the field. It applies only when each year has an event. Otherwise a draw of the years can have no event.
 - A kind with no event in the years gives no prior of deaths and no prior of injuries. Thus the score has no read for that kind.
 - The probability of a CAP certainty is the middle of its band. Its interval is the band.
+- The harm under an alert of a kind and a significance comes from the section `under` of format 4. It is the harm in one kind of area over the areas of that kind (`areaTypeOf`). Its interval is that of the deaths of one event, with the areas as the units.
+- `areaTypeOf` takes the kind of area with more placed events of the kind. On a tie, the kind of area with more areas decides. On a tie of the areas too, the counties decide.
+- A kind with no NCEI kind gives no harm under an alert. NCEI does not measure its harm, and 0 is not a measure.
+
+The deaths of one NCEI event are too high for some kinds: NCEI enters many events of these kinds because a person was hurt. An example is rip currents. Thus format 3 of the base rates (`alerts-rates/3`) adds the section `under`, the harm under an active alert. Step 4 of AL-31 takes the priors of each alert from it (format 4). The gate does not read it at this time:
+
+- The alerts come from the archive of the VTEC alerts of IEM (`watchwarn.py`), one national request for each month. The requests do not ask for the marine phenomena (`MARINE_PHENOMENA`, with the reason).
+- An alert is one event number of one office, in one VTEC year, for one phenomenon and one significance. A watch of the Storm Prediction Center and a tropical alert have a national number. Their alerts count one time for all the offices (`NATIONAL_NUMBERS`, with the reason). The measure checks this list against the data (`numberingDoubts`). A doubt is a warning of the workflow.
+- A kind of the taxonomy adds the alerts of its phenomena. An example is `met.heat.extreme`, with the excessive heat and the extreme heat warnings.
+- The harm of a kind under an alert is the deaths and injuries of the NCEI events of the NCEI kind of the alert kind. The function `nceiKindOf` gives that NCEI kind, with the same prefix rule as the score. An event is under an alert when an alert row of the same county or zone (UGC) is active. The time of the event is from its begin minus one hour (`UNDER_MARGIN_MS`) to its end.
+- The section also has the NCEI harm of each kind in the years, so the share of the harm under an alert is a division. It also counts the events that the join cannot place, by reason: marine, area, time zone or time.
+- NCEI gives its own state codes to the territories and the waters. The join reads them (`NCEI_TERRITORIES`, `NCEI_WATERS`). A water event meets only the rows of its marine zone, for example a hurricane warning of `GMZ335`.
+- A county event meets only the county rows of an alert, and a zone event meets only its zone rows. Thus an alert of zones and the events of counties have no common harm.
+- Format 4 (`alerts-rates/4`) gives the areas of each kind and significance, and the harm in them, in counties and in zones, in each year (`byArea`). An area is one alert in one county or zone. It counts one time, in the VTEC year of the alert.
+- Format 4 also gives the placed events of the NCEI kind in counties and in zones (`placed`). The prior of an alert takes the kind of area with more events.
+
+The level of the table of an alert comes from its CAP severity and urgency. The archive of the VTEC alerts has no CAP fields. Thus the workflow `cap.yml` counts the CAP fields of the new NWS alerts in `data/cap.json` of the package `rates` (format `alerts-cap/1`):
+
+- The NWS API keeps the alerts of approximately 7 days. Two measures each week read the whole UTC days that no earlier measure read, at most 6 days.
+- One alert counts one time. It is an actual alert with one operational VTEC code of the action `NEW`. The measure counts the other alerts by reason.
+- The counts are in the UTC month of the time `sent` of each alert, for each VTEC code, as `severity/urgency/certainty`.
+- Each measure uploads the whole file, and the next measure adds to it. A person examines the file and commits it from the artifact.
+- The NWS sends alerts each day. Thus a day of the window with no alert is a gap of the API. The measure gives a warning, and the file keeps the count of each day.
+- The replay of the table over the archive takes the CAP fields of each VTEC code from this file (step 4b of AL-31).
+
+The runtime reads the committed priors at its start (`committedPriors` of the package `rates`). A fault of the file stops only the score, and each alert goes on:
+
+- The map route gives the score of each incident that reaches a person (the field `shadow` of each incident of the view).
+- The log keeps the score at the start of each escalation (the field `shadow` of the event `escalation`). Thus a later study can compare each decision of the table with its score. A score of a log line from before the basis `alert` has no field `basis`. Its basis is `event`.
+- `shadowDifferences` gives each pair of incidents where the table and the score disagree. The table gives one incident the higher level. The score gives the other more expected deaths and more expected injuries, and the intervals do not overlap. Thus the rule needs no weight between a death and an injury.
 
 ## The service
 
@@ -972,7 +1128,7 @@ The function `openInstance` makes the instance of the owner from the private con
 - The sources are the NWS API and IPAWS. The channels are Pushover, and the Twilio call channel when `secrets.env` has its keys.
 - The keys of Twilio are `TWILIO_ACCOUNT_SID`, `TWILIO_API_KEY_SID`, `TWILIO_API_KEY_SECRET` and `TWILIO_FROM`. An API key signs each request.
 - The optional key `TWILIO_TEXT_FROM` adds the text channel. It holds the registered sender of texts: a phone of a 10DLC campaign or a verified toll-free phone.
-- The instance never texts from `TWILIO_FROM`. Without `TWILIO_TEXT_FROM`, the text channel and the texts of the outage call are off.
+- The instance does not text from `TWILIO_FROM`. Without `TWILIO_TEXT_FROM`, the text channel and the texts of the outage call are off.
 - A spend entry of a provider of a channel gives the cap of the channel. The count of the cap is in `quotas.sqlite`.
 - The spend entry of Twilio also gives the watch of the balance: one read each day, and its floors.
 - Each source gets the watch of `sourcePlaces`. Thus a source gets the region codes, and a position only when the place shares it with that source.
@@ -1207,7 +1363,7 @@ The contracts carry only ids: `PersonId` and `PlaceId`. The runtime gets people,
 The core gives the format of the private configuration, `AlertConfig` (`alerts-config/1`). The repository holds no configuration. Each copy of the system loads the same configuration.
 
 - `places`: the id, a label, a position, the region codes and the buffer of each place. The field `sharePosition` names the sources that get the position.
-- `people`: the `PersonWatch` of each person, a label, and the escalation policies of the person.
+- `people`: the `PersonWatch` of each person, a label, and the escalation policies of the person. The field `defaults` gives the inputs of the default layers of the interest graph (`docs/RELEVANCE.md`).
 - `contacts`: the address of a person on a channel. A value of an address is a text, or a reference `{ secret: "NAME" }` to a key of the secret store.
 - `policies`: the escalation policies of each person with no policies of their own.
 - `spend`: the money rules of each paid provider account. An entry has the monthly cap and its reserve in US dollars, the floors of the balance and the time zone of the month.
@@ -1368,7 +1524,7 @@ The route `GET /map` of the runtime gives the `MapPayload` of `mapPayload`:
 
 - `format`: `alerts-map/1` (`MAP_FORMAT`). A change that breaks a reader gets a new name.
 - `at`: the time of the last pass, or `null` before the first pass.
-- `view`: the view of the last pass. The payload assesses each live incident for each person, with the policy of the delivery.
+- `view`: the view of the last pass. The payload assesses each live incident for each person, with the policy of the delivery. With the priors, each incident that reaches a person has its shadow score (`shadow`). The score does not change the level.
 - `basemap`: the regions under the view, simplified for the view box of the page.
 - `breadth`: the breadth of the indicator signals of the last pass, in the world and at each place. A runtime with no store of the readings has no field. The field is optional, thus the format keeps its name.
 
@@ -1469,6 +1625,24 @@ The reader has no rule of its own for an expiry, because a time edge gives a cha
 
 The work for an incident with no change and no time edge at `since` or later is only the read of its times. The levels come from the watches of the people, thus only the loopback address gives the route.
 
+### The interests
+
+The function `interestsPayload` gives the `InterestsPayload` of the route `GET /interests`. The panel Interests of the local page shows it. `interestsPayloadSchema` checks the payload. The runtime gives the route on the loopback address only.
+
+- `format`: `alerts-interests/1` (`INTERESTS_FORMAT`). A change that breaks a reader gets a new name.
+- `people`: one entry for each person of the configuration, in the order of the configuration.
+
+Each entry has these fields:
+
+- `person` and `label`: the id and the label of the person.
+- `routing`: `graph` when the interest graph decides, or `places` when the watched places decide. A graph of another person gives `places`.
+- `rows`: the rows of `composeInterests` for a person with the field `defaults`. Otherwise each edge of the graph of the person is one row.
+- `mutes`: the mutes of the graph.
+- `labels`: the label of each node of the rows, from the places, the labels of the graph and the taxonomy.
+- `problem`: the problem of the join, when the load refused the defaults. Then the rows are of the graph that the person keeps.
+
+The configuration does not change in a process. Thus the runtime makes the payload one time, at its start.
+
 ## Relevance
 
 The relevance of an incident for one person is a calculation over the interest graph of the person (AL-35). The types are in the section "Relevance" of `contracts.ts`.
@@ -1504,7 +1678,6 @@ The file `schemas.ts` of the core has one zod 4 schema for each data type of the
 - Some units of the indicator sources are not in the grammar of `@mark1russell7/quantity`. They are `MW`, `MWh`, `µSv/h`, `µg`, `hPa`, `Bq`, `ppm` and each currency other than `USD`. A measure in such a unit fails its schema until the package adds the unit.
 - The procedure tools take the schema of each input and output from `schemas.ts`.
 - The link rule has two families, the earthquakes and the geomagnetic storms. Each other kind with two sources of different ids gets its family with its second source.
-- The window of 6 hours of the geomagnetic storms is a shortcut. A capture of one storm of GFZ and the SWPC gives the largest difference of their onsets (AL-14).
 - The calculation of the level from probabilities and costs (AL-31), with the base rates from the event log.
 - The count of misses that ends a report of a snapshot source is 2 (`SNAPSHOT_MISSES`). This value is a shortcut. A measure of the flap rate of the IEM list replaces it (AL-8).
 - The merge state grows with each report. A compaction of the incidents that ended before a horizon keeps it small. It must keep the three laws.

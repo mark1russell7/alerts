@@ -5,6 +5,9 @@
  *
  * - An alert, a warning or a summary gives one report. Its key is the code and the serial number, for example
  *   `ALTK05/2062`. An extension, a continuation or a cancel references the key of the serial number that it names.
+ * - The SWPC uses a serial number again. In the archive of 2015 to 2025, 343 of the 10398 keys have two or more sent
+ *   times. 338 of their gaps are above 8 days. The runtime drops an incident 7 days after its last change, so it
+ *   keeps such uses apart. A replay of many years must give a new key to a key that comes back.
  * - A watch gives one report for each day that it names. A later watch states each of its days again, because the
  *   SWPC writes that it supersedes each earlier watch. The rule of the copies of the merge does this (`watchDayReport`).
  * - A geomagnetic message gives two circles: the polar caps of the geomagnetic latitude that the message names.

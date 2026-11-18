@@ -15,6 +15,15 @@
 import { COW_PHENOMENA } from "./cow.ts";
 import type { Range, RatesFile } from "./rates.ts";
 
+/**
+ * The formats of a committed file that the gate reads. The formats 3 and 4 change only the section `under`, and the gate
+ * reads only the sections `cow` and `ncei`. Thus a committed file of format 2 or 3 is still a base for the gate.
+ */
+export const GATE_FORMATS: readonly string[] = ["alerts-rates/2", "alerts-rates/3", "alerts-rates/4"];
+
+/** The sections of a file of the base rates that the gate reads. */
+export type GateFile = Pick<RatesFile, "cow" | "ncei">;
+
 /** One value of the gate: the value of a measure and its gate interval. */
 export interface Gated {
   readonly value: number;
@@ -51,7 +60,7 @@ export interface GateCheck {
 const ABSENT: Gated = { value: 0, gate: [0, 0] };
 
 /** This function gives each value of a file that the gate examines, by its name. */
-export function gatedValues(file: RatesFile): Map<string, Gated> {
+export function gatedValues(file: GateFile): Map<string, Gated> {
   const values = new Map<string, Gated>();
   for (const phenomenon of COW_PHENOMENA) {
     const rate = file.cow.phenomena[phenomenon];
@@ -73,7 +82,7 @@ export function gatedValues(file: RatesFile): Map<string, Gated> {
  * - A value with a reason of no read in the new file or in the committed file is a no read, not a break. The reason of
  *   the new file comes first.
  */
-export function checkRates(committed: RatesFile, fresh: RatesFile): GateCheck {
+export function checkRates(committed: GateFile, fresh: GateFile): GateCheck {
   const before = gatedValues(committed);
   const after = gatedValues(fresh);
   const breaks: GateBreak[] = [];

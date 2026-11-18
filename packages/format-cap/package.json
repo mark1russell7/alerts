@@ -3,7 +3,7 @@
   "name": "@mark1russell7/alerts-format-cap",
   "version": "0.1.0",
   "private": true,
-  "description": "The reader of CAP 1.2 messages (OASIS) for the alert system: the fields, the areas and the choice of a language.",
+  "description": "The reader of CAP 1.2 messages (OASIS) for the alert system: the fields, the areas and the choice of a language. It also reads RSS and Atom feeds.",
   "type": "module",
   "main": "./src/index.ts",
   "scripts": {

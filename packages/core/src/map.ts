@@ -20,11 +20,14 @@ import {
   type Position,
   type RegionCode,
   type ReportId,
+  type ScorePriors,
   type Severity,
+  type ShadowScore,
   type Instant,
   type Status,
 } from "./contracts.ts";
 import { coverageShort } from "./coverage.ts";
+import { shadowScore } from "./score.ts";
 import { areasWithoutBlocks, distinctShapes } from "./shapes.ts";
 
 /** A shape of the map in WGS 84: a polygon or a circle. A region code gets its shapes from the store. */
@@ -77,6 +80,11 @@ export interface MapIncident {
   readonly unshaped: readonly RegionCode[];
   /** The watched places in the areas, for each person. */
   readonly places: readonly PlaceId[];
+  /**
+   * The shadow score of the incident, when the payload has the priors and the incident reaches a person. The score
+   * does not change the level.
+   */
+  readonly shadow?: ShadowScore;
 }
 
 /** A watched place on the map. */
@@ -149,19 +157,33 @@ export interface MapPayloadInput extends Omit<MapInput, "assessments"> {
   readonly policy?: AssessPolicy;
   /** The regions under the view, from the store of shapes. */
   readonly basemap: readonly MapRegion[];
+  /** The priors of the shadow score. Without them, no incident of the payload has a score. */
+  readonly priors?: ScorePriors;
   /** The breadth of the indicator signals of the last pass. Without it, the payload has no field `breadth`. */
   readonly breadth?: IndicatorBreadth;
+}
+
+// The view with the shadow score of each incident that reaches a person. The score does not change the level.
+function withShadow(view: MapView, live: readonly Incident[], priors: ScorePriors): MapView {
+  const byAnchor = new Map(live.map((incident) => [incident.anchor, incident]));
+  const incidents = view.incidents.map((shown) => {
+    const incident = byAnchor.get(shown.anchor);
+    return shown.level === "none" || incident === undefined ? shown : { ...shown, shadow: shadowScore(incident, priors) };
+  });
+  return { ...view, incidents };
 }
 
 /**
  * This function gives the payload of the map route. It assesses each live incident for each person with the policy of the
  * delivery. Thus the level on the map is the level that reaches the person. A mute with the effect `absent` gives `none`.
+ * With the priors, each incident that reaches a person gets its shadow score.
  */
 export function mapPayload(input: MapPayloadInput): MapPayload {
-  const { at, people, policy, basemap, breadth, ...view } = input;
+  const { at, people, policy, basemap, priors, breadth, ...view } = input;
   const live = view.incidents.filter((incident) => incident.live);
   const assessments = live.flatMap((incident) => people.map((person) => reachedAssessment(assess(incident, person, view.places, policy, at ?? undefined))));
-  return { format: MAP_FORMAT, at, view: mapView({ ...view, assessments }), basemap, ...(breadth === undefined ? {} : { breadth }) };
+  const drawn = mapView({ ...view, assessments });
+  return { format: MAP_FORMAT, at, view: priors === undefined ? drawn : withShadow(drawn, live, priors), basemap, ...(breadth === undefined ? {} : { breadth }) };
 }
 
 /** The severities, from the highest. The map and the history sort by this order. */

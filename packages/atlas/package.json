@@ -16,7 +16,13 @@
     "@mark1russell7/text": "^0.0.13"
   },
   "devDependencies": {
+    "@mark1russell7/alerts-source-aws": "workspace:*",
+    "@mark1russell7/alerts-source-bom-sws": "workspace:*",
+    "@mark1russell7/alerts-source-cisa-kev": "workspace:*",
     "@mark1russell7/alerts-source-emsc": "workspace:*",
+    "@mark1russell7/alerts-source-energy-charts": "workspace:*",
+    "@mark1russell7/alerts-source-gcp": "workspace:*",
+    "@mark1russell7/alerts-source-gfz": "workspace:*",
     "@mark1russell7/alerts-source-iem": "workspace:*",
     "@mark1russell7/alerts-source-ipaws": "workspace:*",
     "@mark1russell7/alerts-source-nws-api": "workspace:*",

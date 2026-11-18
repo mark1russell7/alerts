@@ -2,7 +2,7 @@ import { random, seedsFrom, type Random } from "@mark1russell7/rigor-generators"
 import { describe, expect, it } from "vitest";
 import { SUBJECT_SYSTEMS, type EdgeOrigin, type NodeKey, type PlaceId, type WhyRecord } from "./contracts.ts";
 import { whyRecordSchema } from "./schemas.ts";
-import { assessmentWhy, fitsWhy, graphLabels, kindOfNode, NO_LABELS, placeNode, placeOfNode, placeWhy, plainLabel, WHY_FULL_COVERAGE, WHY_LIMITS, whyLine, type WhyLabels } from "./why.ts";
+import { assessmentWhy, fitsWhy, graphLabels, kindOfNode, NO_LABELS, nodeCovers, nodesOverlap, PATH_SYSTEMS, placeNode, placeOfNode, placeWhy, plainLabel, WHY_FULL_COVERAGE, WHY_LIMITS, whyLine, type WhyLabels } from "./why.ts";
 
 const SEEDS = seedsFrom(process.env["SEED"], [1, 2, 3, 4, 5, 6, 7, 8]);
 
@@ -10,7 +10,7 @@ const SEEDS = seedsFrom(process.env["SEED"], [1, 2, 3, 4, 5, 6, 7, 8]);
 const WHY_TEXT = /^[A-Za-z ,'&.:-]+$/;
 
 const SYSTEMS = Object.keys(SUBJECT_SYSTEMS);
-const ORIGINS: readonly EdgeOrigin[] = ["base", "places", "services", "work", "data", "measured", "person"];
+const ORIGINS: readonly EdgeOrigin[] = ["base", "places", "services", "delivery", "work", "data", "measured", "person"];
 const IDS = ["home", "KSZ083", "020173", "infra.power.outage", "example.com", "us-east-1", "pkg:npm/example", "Q42", "31.97,-99.90"];
 
 // Labels that a channel text can show.
@@ -222,5 +222,24 @@ describe("assessmentWhy", () => {
     const reasons = [{ kind: "reach" }] as unknown as Parameters<typeof assessmentWhy>[0]["reasons"];
     expect(assessmentWhy({ reasons, places: ids("work", "home") })).toEqual(placeWhy(ids("home")));
     expect(assessmentWhy({ reasons: [], places: [] })).toBeUndefined();
+  });
+});
+
+describe("the overlap of nodes", () => {
+  it("covers the nodes below a node of a system of paths, and nothing else", () => {
+    expect(PATH_SYSTEMS).toEqual(["provider-region"]);
+    const region = "provider-region:example/region-1";
+    expect(nodeCovers(region, region)).toBe(true);
+    expect(nodeCovers(region, `${region}/sms`)).toBe(true);
+    expect(nodeCovers(`${region}/sms`, region)).toBe(false);
+    expect(nodesOverlap(region, `${region}/sms`)).toBe(true);
+    expect(nodesOverlap(`${region}/sms`, region)).toBe(true);
+    // A sibling, and a region with a longer name, are not below the region.
+    expect(nodesOverlap(`${region}/sms`, `${region}/voice`)).toBe(false);
+    expect(nodesOverlap(region, "provider-region:example/region-10/sms")).toBe(false);
+    // In another system, only the same node overlaps. A node with an empty id covers only itself.
+    expect(nodesOverlap("domain:example.com", "domain:example.com/status")).toBe(false);
+    expect(nodesOverlap("domain:example.com", "domain:example.com")).toBe(true);
+    expect(nodeCovers("provider-region:", "provider-region:/a")).toBe(false);
   });
 });

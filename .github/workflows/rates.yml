@@ -1,5 +1,6 @@
 # The measure of the base rates (AL-31). Each run fetches public data of the whole country:
 # the verified share of the NWS warnings (IEM Cow) and the deaths and injuries of each event type (NCEI Storm Events).
+# It also counts the alerts of each kind (the IEM archive of the VTEC alerts) and the harm under an active alert.
 # The requests name no state and no office. The script compares each value with packages/rates/data/rates.json.
 # A value out of its gate interval stops the job. Then a person examines the change and commits the new files from the artifact:
 # rates.json and priors.json. A test holds priors.json equal to the priors of rates.json.

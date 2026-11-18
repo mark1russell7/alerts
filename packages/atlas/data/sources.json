@@ -406,7 +406,7 @@
     "calibration": null,
     "coverage": "US.",
     "origins": [
-      "us-alerting-authorities"
+      "ipaws-authority"
     ],
     "path": [
       "amberalert.ojp.gov"
@@ -660,24 +660,27 @@
     "cost": "free",
     "delay": "unknown",
     "history": "unknown",
-    "rateLimit": "unknown",
+    "rateLimit": "No published limit. The adapter asks once each 5 minutes.",
     "calibration": null,
     "coverage": "Public AWS events, not specific to an account.",
     "origins": [
       "aws"
     ],
     "path": [
-      "health.aws.amazon.com"
+      "status.aws.amazon.com"
     ],
-    "subjectIds": null,
+    "subjectIds": [
+      "domain",
+      "provider-region"
+    ],
     "risks": [],
-    "decision": "plan",
-    "adapter": null,
-    "reason": "The only public AWS signal; confirm feed URLs in round 2.",
+    "decision": "adopt",
+    "adapter": "@mark1russell7/alerts-source-aws",
+    "reason": "The only public AWS signal. The adapter reads the feed of all events each 5 minutes. Each event that has not ended is a report, with its region as a subject.",
     "evidence": [
       "https://status.aws.amazon.com/rss/all.rss"
     ],
-    "round": 1
+    "round": 13
   },
   {
     "id": "azure-status-rss",
@@ -704,7 +707,8 @@
       "microsoft"
     ],
     "path": [
-      "rssfeed.azure.status.microsoft"
+      "rssfeed.azure.status.microsoft",
+      "cdn:akamai"
     ],
     "subjectIds": null,
     "risks": [],
@@ -1075,32 +1079,34 @@
     "terms": {
       "url": "https://sws-data.sws.bom.gov.au/register",
       "automated": "allowed",
-      "redistribution": "unclear",
-      "note": "The registration page gives a key for the API, and the data is at no charge, though this remains subject to change. The copyright page of the Bureau was not opened."
+      "redistribution": "limited",
+      "note": "The registration page gives a key for the API, at no charge. On 2026-11-18 BoM permitted personal use with no commercial use, under CC BY 4.0 with its attribution."
     },
     "cost": "free",
     "delay": "unknown",
     "history": "unknown",
-    "rateLimit": "unknown",
+    "rateLimit": "No published limit. The adapter asks once each 10 minutes.",
     "calibration": null,
     "coverage": "The Australian region: the K and A indices of Australia, and the magnetic alerts and warnings of the region. A geomagnetic storm is a planetary event, so the alerts are a signal of the storm in the whole Earth.",
     "subjectIds": [],
     "origins": [
-      "bom-sws"
+      "bom"
     ],
     "path": [
       "sws-data.sws.bom.gov.au",
       "cdn:akamai"
     ],
-    "risks": [],
-    "decision": "plan",
-    "adapter": null,
-    "reason": "A third origin of the geomagnetic storm, with a free key. The key needs a registration with a name and an email address.",
+    "risks": [
+      "BoM permits personal use only, with no commercial use."
+    ],
+    "decision": "adopt",
+    "adapter": "@mark1russell7/alerts-source-bom-sws",
+    "reason": "A third origin of the geomagnetic storm, with a free key. The runtime reads it only when the secrets have the key. Each magnetic alert is a report of a current storm, and each storm day of a warning is a likely report.",
     "evidence": [
       "https://sws-data.sws.bom.gov.au/register",
       "https://sws-data.sws.bom.gov.au/api-docs"
     ],
-    "round": 9
+    "round": 13
   },
   {
     "id": "canada-recalls",
@@ -1228,35 +1234,79 @@
       "border-crossings"
     ],
     "url": "https://bwt.cbp.gov/",
-    "access": "page",
+    "access": "feed",
     "auth": "none",
     "terms": {
-      "url": null,
+      "url": "https://www.cbp.gov/site-policy-notices/copyright-notice",
       "automated": "unclear",
-      "redistribution": "unclear",
-      "note": "The page rendered only a title."
+      "redistribution": "allowed",
+      "note": "The copyright notice puts the information of the CBP site in the public domain, and it asks for the credit of the CBP. It tells nothing of automated reading."
     },
     "cost": "free",
-    "delay": "unknown",
+    "delay": "One read at 03:04 UTC on 2026-11-18 had the update time 11:00 pm EST of 2026-11-17 on each port, 4 minutes before the read.",
     "history": "unknown",
-    "rateLimit": "unknown",
+    "rateLimit": "No published limit. One XML file of 182 KB holds all ports.",
     "calibration": null,
-    "coverage": "US land borders (from the agency).",
+    "coverage": "85 ports of entry on the US land borders: 30 on the border with Canada and 55 on the border with Mexico. Each port gives the wait and the open lanes of cars, pedestrians and trucks.",
     "origins": [
       "cbp"
     ],
     "path": [
-      "bwt.cbp.gov"
+      "bwt.cbp.gov",
+      "cdn:akamai"
     ],
-    "subjectIds": null,
+    "subjectIds": [],
     "risks": [],
-    "decision": "later",
+    "decision": "plan",
     "adapter": null,
-    "reason": "Official waits; feed to be confirmed.",
+    "reason": "The official waits at the US land ports in one public XML file, with no key. A DNS lookup gave a name of Akamai in front of the host.",
     "evidence": [
-      "https://bwt.cbp.gov/api/bwtnew"
+      "https://bwt.cbp.gov/xml/bwt.xml",
+      "https://www.cbp.gov/site-policy-notices/copyright-notice"
     ],
-    "round": 1
+    "round": 12
+  },
+  {
+    "id": "cbsa-bwt",
+    "name": "CBSA current border wait times (CSV)",
+    "classes": [
+      "transport.road.border-wait"
+    ],
+    "dimensions": [
+      "border-crossings"
+    ],
+    "url": "https://open.canada.ca/data/en/dataset/d4a716f5-a2fc-4c3c-88ed-451fe05900e4",
+    "access": "file",
+    "auth": "none",
+    "terms": {
+      "url": "https://open.canada.ca/en/open-government-licence-canada",
+      "automated": "allowed",
+      "redistribution": "allowed",
+      "note": "The open data portal gives the dataset under the Open Government Licence - Canada, with the update frequency continual. The licence lets any lawful use, with the attribution of the source."
+    },
+    "cost": "free",
+    "delay": "One read at 03:04 UTC on 2026-11-18: the file had changed at 03:00 UTC, and the rows had times of 21:54 in the local zone of each office.",
+    "history": "The portal keeps monthly files of the past waits in other datasets.",
+    "rateLimit": "No published limit. One CSV file of 3 KB holds all offices.",
+    "calibration": null,
+    "coverage": "29 land border offices of Canada: the waits of commercial and traveller traffic into Canada and into the US.",
+    "origins": [
+      "cbsa"
+    ],
+    "path": [
+      "www.cbsa-asfc.gc.ca"
+    ],
+    "subjectIds": [],
+    "risks": [],
+    "decision": "plan",
+    "adapter": null,
+    "reason": "A second origin of the waits at the border of Canada and the US, from the other side of the border, with no key. The file uses two semicolons as the separator.",
+    "evidence": [
+      "https://open.canada.ca/data/api/action/package_search?q=border%20wait%20times&rows=5",
+      "https://www.cbsa-asfc.gc.ca/bwt-taf/bwt-eng.csv",
+      "https://open.canada.ca/en/open-government-licence-canada"
+    ],
+    "round": 12
   },
   {
     "id": "cdc-han",
@@ -1516,7 +1566,8 @@
       "cisa"
     ],
     "path": [
-      "www.cisa.gov"
+      "www.cisa.gov",
+      "cdn:akamai"
     ],
     "subjectIds": null,
     "risks": [],
@@ -1547,25 +1598,28 @@
     "cost": "free",
     "delay": "unknown",
     "history": "unknown",
-    "rateLimit": "unknown",
+    "rateLimit": "No published limit. The adapter asks once each 15 minutes.",
     "calibration": null,
     "coverage": "World software, CVEs that CISA confirms are exploited; CSV and JSON with a schema.",
     "origins": [
       "cisa"
     ],
     "path": [
-      "www.cisa.gov"
+      "www.cisa.gov",
+      "cdn:akamai"
     ],
-    "subjectIds": null,
+    "subjectIds": [
+      "cve"
+    ],
     "risks": [],
-    "decision": "plan",
-    "adapter": null,
-    "reason": "The standard list of exploited flaws, public domain, simple to poll.",
+    "decision": "adopt",
+    "adapter": "@mark1russell7/alerts-source-cisa-kev",
+    "reason": "The standard list of exploited flaws, CC0 1.0, simple to poll. Each entry that the catalog adds is a report, with its CVE as the subject.",
     "evidence": [
       "https://www.cisa.gov/known-exploited-vulnerabilities-catalog",
       "https://www.cisa.gov/sites/default/files/licenses/kev/license.txt"
     ],
-    "round": 1
+    "round": 13
   },
   {
     "id": "cloudflare-radar-api",
@@ -2174,7 +2228,7 @@
       "note": "CC BY 4.0 with the credit of Fintraffic. Send a Digitraffic-User header and use gzip. The limit is 60 requests per minute per IP."
     },
     "cost": "free",
-    "delay": "unknown",
+    "delay": "The traffic messages of one read at 03:04 UTC on 2026-11-18 had the update time 02:50:21 UTC. The answer has a max-age of 60 seconds.",
     "history": "unknown",
     "rateLimit": "60 requests per minute per IP. The MQTT limit is 5 per IP.",
     "calibration": null,
@@ -2183,18 +2237,20 @@
       "fintraffic"
     ],
     "path": [
-      "tie.digitraffic.fi"
+      "tie.digitraffic.fi",
+      "cdn:cloudfront"
     ],
     "subjectIds": null,
     "risks": [],
-    "decision": "later",
+    "decision": "plan",
     "adapter": null,
-    "reason": "Open counts, speeds and traffic messages for Finland under CC BY 4.0, with no key. The ranking of round 10 puts other sources first.",
+    "reason": "Open traffic messages, counts and speeds for Finland under CC BY 4.0, with no key. The traffic announcements give accidents, closures and other road events as GeoJSON.",
     "evidence": [
       "https://www.digitraffic.fi/en/support/instructions/",
-      "https://www.digitraffic.fi/en/terms-of-service/"
+      "https://www.digitraffic.fi/en/terms-of-service/",
+      "https://tie.digitraffic.fi/api/traffic-message/v1/messages?inactiveHours=0&includeAreaGeometry=false&situationType=TRAFFIC_ANNOUNCEMENT"
     ],
-    "round": 10
+    "round": 12
   },
   {
     "id": "downdetector",
@@ -2757,7 +2813,7 @@
     "cost": "free",
     "delay": "unknown",
     "history": "yes",
-    "rateLimit": "2 requests per minute by default (burst 4)",
+    "rateLimit": "2 requests per minute by default (burst 4). The adapter asks once each 2 minutes, for the past 10 minutes.",
     "calibration": null,
     "coverage": "Continental Europe",
     "origins": [
@@ -2766,15 +2822,15 @@
     "path": [
       "api.energy-charts.info"
     ],
-    "subjectIds": null,
+    "subjectIds": [],
     "risks": [],
-    "decision": "plan",
-    "adapter": null,
-    "reason": "Grid frequency of Continental Europe under CC BY 4.0, with no key. A large drop shows the loss of a big generator.",
+    "decision": "adopt",
+    "adapter": "@mark1russell7/alerts-source-energy-charts",
+    "reason": "Grid frequency of Continental Europe under CC BY 4.0, with no key. The adapter reads one meter each 2 minutes. Each minute gives two readings: its lowest and its highest value. A large drop shows the loss of a big generator.",
     "evidence": [
       "https://api.energy-charts.info/llms.txt"
     ],
-    "round": 10
+    "round": 13
   },
   {
     "id": "energy-charts-power",
@@ -4165,7 +4221,7 @@
     "cost": "free",
     "delay": "unknown",
     "history": "unknown",
-    "rateLimit": "unknown",
+    "rateLimit": "No published limit. The adapter asks once each 2 minutes.",
     "calibration": null,
     "coverage": "Public Google Cloud incidents with products, severity and affected locations.",
     "origins": [
@@ -4174,16 +4230,19 @@
     "path": [
       "status.cloud.google.com"
     ],
-    "subjectIds": null,
+    "subjectIds": [
+      "domain",
+      "provider-region"
+    ],
     "risks": [],
-    "decision": "plan",
-    "adapter": null,
-    "reason": "Structured JSON with locations and updates.",
+    "decision": "adopt",
+    "adapter": "@mark1russell7/alerts-source-gcp",
+    "reason": "Structured JSON with locations and updates. Each incident that has not ended is a report, with each affected region of Google Cloud as a subject.",
     "evidence": [
       "https://status.cloud.google.com/incidents.json",
       "https://docs.cloud.google.com/support/docs/dashboard"
     ],
-    "round": 1
+    "round": 13
   },
   {
     "id": "gdacs-rss",
@@ -4329,7 +4388,7 @@
     "cost": "free",
     "delay": "Hp30 each 30 minutes and Kp each 3 hours, as nowcast values with the status pre. One read at 01:22 UTC on 2026-11-17 had the Hp30 interval from 00:30 to 01:00 UTC as its last value.",
     "history": "Kp from 1932. The nowcast values change to definitive values later.",
-    "rateLimit": "No published limit. The data page tells users to use the HTTPS files for large amounts of data.",
+    "rateLimit": "No published limit. The data page tells users to use the HTTPS files for large amounts of data. The adapter asks once each 10 minutes, for the Kp values of the past 3 days.",
     "calibration": null,
     "coverage": "The whole Earth: one planetary index from 13 geomagnetic observatories. A Kp of 5 or more is a storm on the G scale of NOAA, from G1 at 5 to G5 at 9.",
     "subjectIds": [],
@@ -4340,16 +4399,16 @@
       "kp.gfz.de"
     ],
     "risks": [],
-    "decision": "plan",
-    "adapter": null,
-    "reason": "A second origin of the geomagnetic storm, apart from the SWPC, with no key. Hp30 gives a storm in 30 minutes, before the 3-hour Kp.",
+    "decision": "adopt",
+    "adapter": "@mark1russell7/alerts-source-gfz",
+    "reason": "A second origin of the geomagnetic storm, apart from the SWPC, with no key. The adapter reads Kp each 10 minutes. Each 3-hour interval of G1 or more is a report, and the intervals of one storm are one incident. Merge rule 3 joins that incident to the storms of the SWPC. Hp30 gives a storm in 30 minutes, and it is later.",
     "evidence": [
       "https://kp.gfz.de/en/",
       "https://kp.gfz.de/en/data",
       "https://kp.gfz.de/app/format/json.txt",
       "https://kp.gfz.de/app/json/"
     ],
-    "round": 9
+    "round": 11
   },
   {
     "id": "github-advisories-api",
@@ -5139,7 +5198,7 @@
     "coverage": "Each public alert that IPAWS gets: the WEA and EAS messages of the NWS and of the other alerting authorities of the US. The NWS WEA types: tsunami, tornado, destructive severe thunderstorm, considerable or catastrophic flash flood, hurricane, typhoon, storm surge, extreme wind, dust storm and snow squall.",
     "origins": [
       "nws",
-      "us-alerting-authorities"
+      "ipaws-authority"
     ],
     "path": [
       "apps.fema.gov",
@@ -5464,7 +5523,8 @@
       "the-space-devs"
     ],
     "path": [
-      "ll.thespacedevs.com"
+      "ll.thespacedevs.com",
+      "cdn:cloudflare"
     ],
     "subjectIds": null,
     "risks": [],
@@ -5472,9 +5532,10 @@
     "adapter": null,
     "reason": "One list of launches with times and pads.",
     "evidence": [
-      "https://thespacedevs.com/llapi"
+      "https://thespacedevs.com/llapi",
+      "https://ll.thespacedevs.com/2.3.0/launches/upcoming/?limit=1&mode=list"
     ],
-    "round": 1
+    "round": 12
   },
   {
     "id": "limitless-api",
@@ -5901,17 +5962,17 @@
     "access": "file",
     "auth": "none",
     "terms": {
-      "url": null,
-      "automated": "unclear",
-      "redistribution": "unclear",
-      "note": "A terms page exists, but its content was not read."
+      "url": "https://docs.ndw.nu/algemeen/data-gebruiksvoorwaarden/",
+      "automated": "allowed",
+      "redistribution": "allowed",
+      "note": "The open data of NDW is under CC0 1.0, unless a dataset states other terms. NDW asks no credit. The data come as is, with no guarantee."
     },
     "cost": "free",
-    "delay": "unknown",
+    "delay": "The file actueel_beeld.xml.gz of one read at 03:07 UTC on 2026-11-18 held records of 03:06 UTC.",
     "history": "yes (the archive Dexter)",
     "rateLimit": "unknown",
     "calibration": null,
-    "coverage": "Netherlands",
+    "coverage": "The roads of the Netherlands: closures, roadworks, broken-down vehicles, speed limits and diversions. One read gave 1209 situation records.",
     "origins": [
       "ndw"
     ],
@@ -5919,17 +5980,17 @@
       "opendata.ndw.nu"
     ],
     "subjectIds": null,
-    "risks": [
-      "The DATEX II v2.3 files end on 9 February 2027."
-    ],
-    "decision": "later",
+    "risks": [],
+    "decision": "plan",
     "adapter": null,
-    "reason": "Open speed, flow and closure files for the Netherlands, with no key. The terms page was not read, and the DATEX II v2.3 files end in 2027.",
+    "reason": "Open road situations for the Netherlands under CC0, with no key. The current file uses DATEX II version 3, so the end of the version 2.3 files in 2027 does not stop it.",
     "evidence": [
       "https://opendata.ndw.nu/",
-      "https://docs.ndw.nu/en/"
+      "https://docs.ndw.nu/en/",
+      "https://docs.ndw.nu/algemeen/data-gebruiksvoorwaarden/",
+      "https://opendata.ndw.nu/actueel_beeld.xml.gz"
     ],
-    "round": 10
+    "round": 12
   },
   {
     "id": "neso-data-portal",
@@ -6024,7 +6085,7 @@
       "url": null,
       "automated": "unclear",
       "redistribution": "unclear",
-      "note": "Both pages returned 503."
+      "note": "The portal and its API answered 503 at 03:04 UTC on 2026-11-18, so no terms were read."
     },
     "cost": "free",
     "delay": "unknown",
@@ -6036,15 +6097,19 @@
       "nga"
     ],
     "path": [
-      "msi.nga.mil"
+      "msi.nga.mil",
+      "cdn:akamai"
     ],
     "subjectIds": null,
     "risks": [],
     "decision": "later",
     "adapter": null,
-    "reason": "Official warnings to mariners; recheck in round 2.",
-    "evidence": [],
-    "round": 1
+    "reason": "Official warnings to mariners and the reports of attacks on ships. At 03:04 UTC on 2026-11-18, the API answered 503 with a page that tells of the maintenance of the portal.",
+    "evidence": [
+      "https://msi.nga.mil/api/publications/broadcast-warn?output=json&status=A",
+      "https://msi.nga.mil/api/publications/asam?output=json&sort=date&minOccurDate=2026-09-01"
+    ],
+    "round": 12
   },
   {
     "id": "nhc-rss",
@@ -6612,7 +6677,7 @@
     "coverage": "US states and territories, coastal and offshore waters. About 120 event types, weather and non-weather (civil, law enforcement, hazmat, 911 outage).",
     "origins": [
       "nws",
-      "us-alerting-authorities"
+      "ipaws-authority"
     ],
     "path": [
       "api.weather.gov",
@@ -6745,7 +6810,7 @@
     "coverage": "Each product of the NWS forecast offices and national centers: the US states and territories, and the coastal and offshore waters. The CAP messages are the CAP messages of the NWS API.",
     "origins": [
       "nws",
-      "us-alerting-authorities"
+      "ipaws-authority"
     ],
     "path": [
       "nwws-oi.weather.gov"
@@ -8059,6 +8124,45 @@
     "round": 9
   },
   {
+    "id": "rocketlaunch-live",
+    "name": "RocketLaunch.Live API (the next five launches)",
+    "classes": [
+      "transport.space.launch"
+    ],
+    "url": "https://www.rocketlaunch.live/api",
+    "access": "api",
+    "auth": "none",
+    "terms": {
+      "url": "https://www.rocketlaunch.live/api",
+      "automated": "limited",
+      "redistribution": "unclear",
+      "note": "The API page gives the next five launches free at one URL with no key. The full API is for paid members. The research found no page of terms."
+    },
+    "cost": "free-tier",
+    "delay": "One read at 03:04 UTC on 2026-11-18 had changed at 02:41 UTC. The answer has a max-age of 60 seconds.",
+    "history": "The free URL gives only the next five launches.",
+    "rateLimit": "No published limit for the free URL.",
+    "calibration": null,
+    "coverage": "The next five rocket launches of the world, with the provider, the vehicle, the pad, the window and a summary of the weather.",
+    "origins": [
+      "rocketlaunch-live"
+    ],
+    "path": [
+      "fdo.rocketlaunch.live",
+      "cdn:cloudflare"
+    ],
+    "subjectIds": [],
+    "risks": [],
+    "decision": "plan",
+    "adapter": null,
+    "reason": "A second list of launches, curated apart from Launch Library 2, with no key. Only the next five launches are free, which covers the next days.",
+    "evidence": [
+      "https://www.rocketlaunch.live/api",
+      "https://fdo.rocketlaunch.live/json/launches/next/5"
+    ],
+    "round": 12
+  },
+  {
     "id": "safecast",
     "name": "Safecast",
     "classes": [
@@ -9190,7 +9294,7 @@
       "url": null,
       "automated": "unclear",
       "redistribution": "unclear",
-      "note": "The page returned 403."
+      "note": "At 03:04 UTC on 2026-11-18, the page answered 403 with a bot check. The research does not go around a bot check."
     },
     "cost": "unknown",
     "delay": "unknown",
@@ -9208,9 +9312,9 @@
     "risks": [],
     "decision": "later",
     "adapter": null,
-    "reason": "Primary source on attacks to shipping; access not confirmed.",
+    "reason": "The primary source of the reports of attacks on ships near the Middle East. Its pages refuse automated reads with a bot check.",
     "evidence": [],
-    "round": 1
+    "round": 12
   },
   {
     "id": "uscg-navcen",

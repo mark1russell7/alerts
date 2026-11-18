@@ -12,6 +12,7 @@ import {
   expectationProblems,
   healthPayload,
   historyPayload,
+  interestsPayload,
   linkRule,
   localPlaces,
   mapPayload,
@@ -29,10 +30,12 @@ import {
   type Expectation,
   type HealthPayload,
   type HistoryPayload,
+  type InterestsPayload,
   type Instant,
   type MapPayload,
   type OptInRecord,
   type ParsedConfig,
+  type ScorePriors,
   type SecretLookup,
   type SourceDescriptor,
   type SourceProcedures,
@@ -62,6 +65,15 @@ import { createIpawsSource, IPAWS_DESCRIPTOR, WEA_EXPECTATION } from "@mark1russ
 import { createShapeStore, type ShapeCache, type ShapeStore } from "@mark1russell7/alerts-shapes-nws";
 import { createNwsSource, NWS_DESCRIPTOR } from "@mark1russell7/alerts-source-nws-api";
 import { createNwwsSource, SOURCE_ID as NWWS_SOURCE, type NwwsAccount, type OpenSession } from "@mark1russell7/alerts-source-nwws";
+import { createGfzSource, GFZ_DESCRIPTOR } from "@mark1russell7/alerts-source-gfz";
+import { createEnergyChartsSource, ENERGY_CHARTS_DESCRIPTOR } from "@mark1russell7/alerts-source-energy-charts";
+import { createKevSource, KEV_DESCRIPTOR } from "@mark1russell7/alerts-source-cisa-kev";
+import { createRadarAnomaliesSource, createRadarOutagesSource, type RadarSourceOptions } from "@mark1russell7/alerts-source-cloudflare-radar";
+import { AWS_DOMAIN, AWS_KIND, createAwsSource } from "@mark1russell7/alerts-source-aws";
+import { AZURE_DOMAIN, AZURE_KIND, createAzureSource } from "@mark1russell7/alerts-source-azure";
+import { createBomSwsSource, type BomSwsFetchOptions } from "@mark1russell7/alerts-source-bom-sws";
+import { createGcpSource, GCP_KIND, GOOGLE_DASHBOARDS, type GcpFetchOptions } from "@mark1russell7/alerts-source-gcp";
+import { createStatusPageSource, pagesFor, watchReads, type StatusPage, type StatusPageFetchOptions } from "@mark1russell7/alerts-source-statuspage";
 import { createSwpcSource, SWPC_DESCRIPTOR } from "@mark1russell7/alerts-source-swpc";
 import { createTsunamiSource, descriptorOf as tsunamiDescriptor, TSUNAMI_CENTERS, type TsunamiCenter, type TsunamiFetchOptions } from "@mark1russell7/alerts-source-tsunami";
 import { createUsgsSource, USGS_DESCRIPTOR } from "@mark1russell7/alerts-source-usgs";
@@ -76,7 +88,7 @@ import { CLOCK_SKEW_LIMIT, COPY_FILE, COPY_TOKEN_KEY, EXCHANGE_EVERY, EXCHANGE_L
 import { overdueLimit, type DeliveryOptions } from "./delivery.ts";
 import { copyDrills } from "./drills.ts";
 import type { RuntimeLog } from "./log.ts";
-import { createLoop, loopTimes, type LoopTimes, type RuntimeLoop } from "./loop.ts";
+import { createLoop, loopTimes, shortestFetchLimit, type LoopTimes, type RuntimeLoop } from "./loop.ts";
 import { outageDeploy, outageDeployWorker, outageSetup, type OutageDeployWorker } from "./outage.ts";
 import { exchangeLoop, exchangeWorker, type EntriesSource, type ExchangeCall, type ExchangeRound, type ExchangeWorker } from "./peers.ts";
 import { channelQuota } from "./quota.ts";
@@ -270,10 +282,74 @@ const tsunamiFactory =
   (options: Omit<TsunamiFetchOptions, "center">): SourceProcedures =>
     createTsunamiSource({ ...options, center });
 
+/** This function gives the factory of the source of one status page. */
+const statusPageFactory =
+  (page: StatusPage) =>
+  (options: Omit<StatusPageFetchOptions, "page">): SourceProcedures =>
+    createStatusPageSource({ ...options, page });
+
+/**
+ * The name of the key of `secrets.env` that holds the API key of the Space Weather Services of BoM. With the key, the
+ * instance reads BoM: a third origin of the geomagnetic storm, apart from the SWPC and GFZ.
+ */
+export const BOM_SWS_KEY = "BOM_SWS_API_KEY";
+
+/** This function gives the factory of the BoM source with the key of the secrets. The key goes only into the body of each POST. */
+const bomFactory =
+  (apiKey: string) =>
+  (options: Omit<BomSwsFetchOptions, "apiKey">): SourceProcedures =>
+    createBomSwsSource({ ...options, apiKey });
+
+/**
+ * The name of the key of `secrets.env` that holds the API token of Cloudflare Radar. With the token, the instance reads
+ * the confirmed internet outages and the traffic anomalies of Radar.
+ */
+export const CLOUDFLARE_RADAR_KEY = "CLOUDFLARE_RADAR_TOKEN";
+
+/** This function gives the factories of the two Radar sources with the token of the secrets. The token goes only into the header `authorization`. */
+const radarFactories = (token: string) =>
+  [createRadarOutagesSource, createRadarAnomaliesSource].map(
+    (create) =>
+      (options: Omit<RadarSourceOptions, "token">): SourceProcedures =>
+        create({ ...options, token }),
+  );
+
+/**
+ * The feeds of the cloud providers: the dashboards of Google (Google Cloud and Firebase), AWS and Azure. A report of such
+ * a feed has no area. Thus the instance reads a feed only when one of its persons can get its reports, with the rule of a
+ * status page (`watchReads`). The keys of the products of a dashboard are its keys of components.
+ */
+const PROVIDER_FEEDS = [
+  ...GOOGLE_DASHBOARDS.map((dashboard) => ({
+    domain: dashboard.domain,
+    kind: GCP_KIND,
+    components: dashboard.products,
+    create: (options: Omit<GcpFetchOptions, "dashboard">) => createGcpSource({ ...options, dashboard }),
+  })),
+  { domain: AWS_DOMAIN, kind: AWS_KIND, create: createAwsSource },
+  { domain: AZURE_DOMAIN, kind: AZURE_KIND, create: createAzureSource },
+];
+
 /**
  * The descriptors of the sources of the instance. The function `describe` of each source gives the same descriptor.
  * The USGS and EMSC give the earthquakes. Merge rule 3 (`linkRule` of the core) joins their reports of one event.
  * The two tsunami warning centers give the tsunami messages. The SWPC gives the space weather messages.
+ *
+ * GFZ gives the index Kp, a second origin of the geomagnetic storms. Merge rule 3 joins its storms to the storms of the SWPC.
+ *
+ * Energy-Charts gives the grid frequency of Continental Europe as indicator readings, and no event. The store of the
+ * readings keeps them.
+ *
+ * CISA KEV gives the known exploited flaws of software, with no area. The work `software` of `WORK_DEFAULTS` in the core
+ * names their kind.
+ *
+ * The instance also reads the status pages that one of its persons can get (`pagesFor` of `source-statuspage`). They are
+ * not in this list, because the persons choose them. The feeds of Google Cloud (`source-gcp`), AWS (`source-aws`)
+ * and Azure (`source-azure`) have the same rule.
+ *
+ * BoM (`source-bom-sws`) and the two sources of Cloudflare Radar (`source-cloudflare-radar`) are sources only when the
+ * secrets have their keys. Thus they are not in the list. Each page, each feed, BoM and Radar have a longer interval
+ * than the shortest interval of the list. Thus the times of the loop stay the same.
  */
 export const INSTANCE_SOURCES: readonly SourceDescriptor[] = [
   NWS_DESCRIPTOR,
@@ -282,6 +358,9 @@ export const INSTANCE_SOURCES: readonly SourceDescriptor[] = [
   EMSC_DESCRIPTOR,
   ...TSUNAMI.map((center) => tsunamiDescriptor(center)),
   SWPC_DESCRIPTOR,
+  GFZ_DESCRIPTOR,
+  ENERGY_CHARTS_DESCRIPTOR,
+  KEV_DESCRIPTOR,
 ];
 
 /** The expectations of the instance. The field `expectations` of the configuration sets their `since`. */
@@ -310,13 +389,19 @@ export function sourcePace(clock: Clock, wall: WallClock, sources: number): Pace
 const CALL_LIMIT = Math.max(PUSHOVER_TIMEOUT_MS, TWILIO_CALL_TIMEOUT_MS);
 
 /**
- * The times of the loop of the instance. They come from the intervals of the sources and the time
+ * The longest time of one fetch of a source of the instance: its interval, up to the shortest interval of the sources.
+ * Thus the fetch of GFZ, with an interval of 10 minutes, does not hold the messages of the NWS for 10 minutes.
+ */
+export const INSTANCE_FETCH_LIMIT: (source: SourceDescriptor) => Duration = shortestFetchLimit(INSTANCE_SOURCES);
+
+/**
+ * The times of the loop of the instance. They come from the fetch limits of the sources and the time
  * limit of the Pushover channel. The host reads them before a start: the stop grace holds one pass.
  *
  * The stream of NWWS-OI has a shorter interval. It makes only the cap of the retry of its instance shorter, thus these
  * times stay a bound of the times of each instance.
  */
-export const INSTANCE_TIMES: LoopTimes = loopTimes(INSTANCE_SOURCES, { delivery: { callLimit: CALL_LIMIT, retry: CALL_LIMIT } });
+export const INSTANCE_TIMES: LoopTimes = loopTimes(INSTANCE_SOURCES, { delivery: { callLimit: CALL_LIMIT, retry: CALL_LIMIT }, fetchLimit: INSTANCE_FETCH_LIMIT });
 
 /** The times of the delivery step of an instance. The fault cases of the channel use these times. */
 export const DELIVERY_TIMES: Pick<DeliveryOptions, "pollEvery" | "retry" | "callLimit" | "flightLimit"> & { readonly overdueAfter: Duration } = {
@@ -448,7 +533,7 @@ export function daemonCheck(copy: CopySettings): InstanceCheck {
   // The copies share the loud check. A copy that pings it as its first check hides the stop of the other copies.
   if (pingKey !== LOUD_PING_URL_KEY) return check;
   const shared = `The file ${COPY_FILE}: pingKey is ${LOUD_PING_URL_KEY}, the key of the shared loud check. Each copy has its own first check.`;
-  return { channels: check.channels, problems: (parsed, secret) => [...check.problems(parsed, secret), shared] };
+  return { ...check, problems: (parsed, secret) => [...check.problems(parsed, secret), shared] };
 }
 
 /** The check of the live instance of the only copy: `daemonCheck(ONLY_COPY)`. */
@@ -510,8 +595,8 @@ export interface InstanceOptions {
   /** The loop gives each failed pass to this function. */
   readonly onError?: (error: unknown, failures: number) => void;
   /**
-   * This function gives the longest time of one fetch of a source. The default is the interval of the
-   * source. A test with a fake clock gives a long limit, because a slow runner moves the fake clock during a fetch.
+   * This function gives the longest time of one fetch of a source. The default is `INSTANCE_FETCH_LIMIT`. A test with a
+   * fake clock gives a long limit, because a slow runner moves the fake clock during a fetch.
    */
   readonly fetchLimit?: RuntimeOptions["fetchLimit"];
   /**
@@ -528,6 +613,11 @@ export interface InstanceOptions {
   readonly readings?: RuntimeOptions["readings"];
   /** The instance gives each fault of the store of the readings to this function. */
   readonly onReadingsFault?: RuntimeOptions["onReadingsFault"];
+  /**
+   * The priors of the shadow score. With them, the map gives the score of each incident that reaches a person. The log
+   * keeps the score at the start of each escalation. The score does not change a level.
+   */
+  readonly priors?: ScorePriors;
   /**
    * The instance starts this function one time, when new outlines change the codes of a place. The check is after a refresh
    * with requests, when no task is due. The entry of the profile `daemon` stops the runtime, and the supervisor starts it again.
@@ -588,6 +678,8 @@ export interface Instance {
    * copy. The value `since` keeps only the incidents with a change at that time or later.
    */
   readonly history: (since: Instant | null) => HistoryPayload;
+  /** This function gives the rows of the interest graph of each person, from the configuration at the start. */
+  readonly interests: () => InterestsPayload;
   /** The worker of the deploy of the outage call, when the configuration has an outage call. The service declares it. */
   readonly outage?: OutageDeployWorker;
   /** The exchange with the other copies, when the options give it. */
@@ -599,10 +691,15 @@ export interface Instance {
  * problem. A problem is a missing token, a key with a bad form, or a place that no regional source covers.
  * The message names ids, fields and the names of secrets, and no value.
  *
- * - The sources are the NWS API, IPAWS, the USGS, EMSC, the two tsunami warning centers and the SWPC. The stream of
- *   NWWS-OI is a source when the secrets have the keys of the account of the copy (`nwwsSetup`). Each source gets the
- *   codes of the places. It gets the position of a place only when the place shares it with that source. The USGS,
- *   EMSC, the centers and the SWPC ask for no place.
+ * - The sources are the NWS API, IPAWS, the USGS, EMSC, the two tsunami warning centers, the SWPC, GFZ,
+ *   Energy-Charts and CISA KEV. The stream of NWWS-OI is a source when the secrets have the keys of the account of the
+ *   copy (`nwwsSetup`). BoM is a source when the secrets have its key (`BOM_SWS_KEY`). The outages and the traffic
+ *   anomalies of Cloudflare Radar are sources when the secrets have its token (`CLOUDFLARE_RADAR_KEY`). Each status page that one of the
+ *   persons can get is a source (`pagesFor`). The feed of Google Cloud, AWS or Azure is a source when one of the persons
+ *   can get its reports (`watchReads`).
+ * - Each source gets the codes of the places. It gets the position of a place only when the place shares it with that
+ *   source. The USGS, EMSC, the centers, the SWPC, GFZ, BoM, Energy-Charts, CISA KEV, Radar, Google Cloud, AWS, Azure and the
+ *   status pages ask for no place.
  * - The channels are Pushover, and the Twilio call channel when the secrets have its keys. Each time of the delivery comes
  *   from a fact of the channels.
  * - A spend entry of a channel gives its cap and the watch of the balance of its account.
@@ -612,7 +709,30 @@ export function openInstance(options: InstanceOptions): Instance {
   const { clock } = options;
   // A change of the wall clock of CLOCK_STEP_ABOVE or less is a drift. A larger change is a step of the clock.
   const wall = frameClock(options.wall, clock, { driftLimit: CLOCK_STEP_ABOVE });
-  const factories = [createNwsSource, createIpawsSource, createUsgsSource, createEmscSource, ...TSUNAMI.map((center) => tsunamiFactory(center)), createSwpcSource] as const;
+  // A report of a status page has no area. Thus the instance reads only the pages that one of its persons can get.
+  const watches = options.config.recipients.map((recipient) => recipient.watch);
+  const pages = pagesFor(watches);
+  // The feeds of the cloud providers have no area either. Their domains and their kinds choose them with the same rule.
+  const feeds = PROVIDER_FEEDS.filter((feed) => watches.some((watch) => watchReads(watch, feed)));
+  // BoM gives its data only with a key of an account. With no key, the instance does not read BoM.
+  const bomKey = options.secret(BOM_SWS_KEY) ?? "";
+  // Radar gives its data only with a token of an account. With no token, the instance does not read Radar.
+  const radarToken = options.secret(CLOUDFLARE_RADAR_KEY) ?? "";
+  const factories = [
+    createNwsSource,
+    createIpawsSource,
+    createUsgsSource,
+    createEmscSource,
+    ...TSUNAMI.map((center) => tsunamiFactory(center)),
+    createSwpcSource,
+    createGfzSource,
+    ...(bomKey === "" ? [] : [bomFactory(bomKey)]),
+    createEnergyChartsSource,
+    createKevSource,
+    ...(radarToken === "" ? [] : radarFactories(radarToken)),
+    ...feeds.map((feed) => feed.create),
+    ...pages.map((page) => statusPageFactory(page)),
+  ];
   const pace = sourcePace(clock, wall, factories.length);
   // One User-Agent for each request of the instance: the sources and the store of shapes.
   const agent = userAgent(options.config.config.contact);
@@ -633,6 +753,9 @@ export function openInstance(options: InstanceOptions): Instance {
   const problems = instanceProblems(options.config, options.secret, descriptors, wall.now(), copy);
   if (problems.length > 0) throw new Error(`The instance does not start. The configuration has these problems:\n- ${problems.join("\n- ")}`);
   const token = options.secret(PUSHOVER_TOKEN) ?? "";
+  // The configuration does not change in a process. Thus the rows of the interests are the same at each read.
+  const contactServices = instanceCheck(copy).services;
+  const interests = interestsPayload(config, INSTANCE_CHANNELS, contactServices === undefined ? undefined : { secret: options.secret, services: contactServices });
 
   // The store of shapes shares the pace of the sources. Thus its requests to the NWS API keep the rests of that host.
   const store = options.shapes === undefined ? undefined : createShapeStore({ pace, transport: options.transport, userAgent: agent, cache: options.shapes });
@@ -700,6 +823,7 @@ export function openInstance(options: InstanceOptions): Instance {
     channels,
     labels: placeLabels(placed),
     ...(config.assess === undefined ? {} : { assess: config.assess }),
+    ...(options.priors === undefined ? {} : { priors: options.priors }),
     ...DELIVERY_TIMES,
     rank: copy.rank,
     rankDelay: RANK_DELAY,
@@ -720,6 +844,7 @@ export function openInstance(options: InstanceOptions): Instance {
       expectations: configuredExpectations(INSTANCE_EXPECTATIONS, config.expectations),
       delay: DELAY_LIMITS,
       ...(config.link === undefined ? {} : { link: config.link }),
+      ...(config.channelDown === undefined ? {} : { channelDown: config.channelDown }),
     },
     run: options.run,
     copy: copy.id,
@@ -744,13 +869,13 @@ export function openInstance(options: InstanceOptions): Instance {
       shapes.afterPass(pass.view.incidents, earliest(runtime.config.sources.map((descriptor) => nextFetch(runtime.state(), descriptor))));
       await options.onPass?.(pass);
     },
-    ...(options.fetchLimit === undefined ? {} : { fetchLimit: options.fetchLimit }),
+    fetchLimit: options.fetchLimit ?? INSTANCE_FETCH_LIMIT,
   });
   const loop = createLoop({
     pass: (stop) => runtime.pass(stop),
     clock,
     wall,
-    times: loopTimes(runtime.config.sources, { delivery }),
+    times: loopTimes(runtime.config.sources, { delivery, fetchLimit: INSTANCE_FETCH_LIMIT }),
     ...(options.onError === undefined ? {} : { onError: options.onError }),
   });
   // The map assesses each live incident with the policy of the delivery. Thus the level on the map is the level of the person.
@@ -763,6 +888,7 @@ export function openInstance(options: InstanceOptions): Instance {
       people,
       places: placed.places,
       ...(delivery.assess === undefined ? {} : { policy: delivery.assess }),
+      ...(options.priors === undefined ? {} : { priors: options.priors }),
       shape: shapes.lookup,
       basemap: shapes.basemap(),
       // The breadth of the indicator signals of the last pass. A runtime with no store of the readings has none.
@@ -825,6 +951,7 @@ export function openInstance(options: InstanceOptions): Instance {
     map,
     health,
     history,
+    interests: () => interests,
     ...(outage === undefined ? {} : { outage }),
     ...(copies === undefined ? {} : { copies }),
   };

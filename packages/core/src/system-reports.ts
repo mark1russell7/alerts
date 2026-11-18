@@ -9,10 +9,11 @@
  */
 import { canonicalJson } from "@mark1russell7/rigor-generators";
 import { compareCodeUnits } from "@mark1russell7/text/order";
-import { BALANCE_KIND, CLOCK_KIND, COPY_KIND, COVERAGE_KIND, DRILL_KIND, hasKind, HEALTH_KIND, LOG_KIND, matchPlaces, QUOTA_KIND } from "./assess.ts";
+import { BALANCE_KIND, CHANNEL_KIND, CLOCK_KIND, COPY_KIND, COVERAGE_KIND, DRILL_KIND, ESCALATION_KIND, hasKind, HEALTH_KIND, LOG_KIND, matchPlaces, PERSON_SUBJECT, QUOTA_KIND } from "./assess.ts";
 import type {
   Area,
   BalanceStage,
+  ChannelId,
   ChannelQuota,
   CopyStage,
   CopyWatch,
@@ -38,7 +39,9 @@ import type {
   Urgency,
   WatchedPlace,
 } from "./contracts.ts";
+import { channelDownPolicy, runOpens, type ChannelDownConfig, type ChannelDownPolicy, type ChannelRun, type ChannelSnapshot } from "./channel-down.ts";
 import { coverageShort } from "./coverage.ts";
+import type { Exhaustion } from "./delivery.ts";
 import { drillVerdict, type DrillConfig, type DrillRun } from "./drill.ts";
 import { observationId, reportId } from "./ids.ts";
 import type { Lateness } from "./lateness.ts";
@@ -64,6 +67,9 @@ export const COPY_SUBJECT = "alerts.copy";
 
 /** The system of the subjects of the drill reports. The id of a subject is the id of a drill. */
 export const DRILL_SUBJECT = "alerts.drill";
+
+/** The subject system of an incident. The id of a subject is a report of the incident: an exhausted escalation links its warning. */
+export const INCIDENT_SUBJECT = "alerts.incident";
 
 /** The stages of a quota, from the first to the last. */
 export const QUOTA_STAGES: readonly QuotaStage[] = ["low", "reserve", "spent"];
@@ -187,9 +193,11 @@ export interface SystemSnapshot {
   readonly quotas?: readonly ChannelQuota[];
   /**
    * The balances of the provider accounts. Each stage that `balanceStages` gives is a condition. With no
-   * balances, each open line of a balance stays open.
+   * balances, each open line of a balance stays open. Only one copy reports the stages `low` and `empty` (`reportsShared`).
    */
   readonly balances?: readonly ProviderBalance[];
+  /** The id of this copy. With the watches of the other copies, it chooses the copy that reports the facts of a shared account. */
+  readonly copy?: string;
   /**
    * The watches of the other copies of the system. Each stage that `copyStages` gives is a condition. With no copies,
    * each open line of a copy stays open.
@@ -204,6 +212,19 @@ export interface SystemSnapshot {
    * With no drills, each open line of a drill stays open.
    */
   readonly drills?: readonly DrillSnapshot[];
+  /**
+   * The exhausted escalations of the real warnings (`exhaustions`, AL-21). Each one is a condition, for the people who
+   * watch the person. Only one copy reports them (`reportsShared`). With no list, each open line of an exhaustion stays open.
+   */
+  readonly exhausted?: readonly Exhaustion[];
+  /**
+   * The channels of this copy, with their runs of failed calls (AL-65). A run that `runOpens` under the policy is a
+   * condition. An open line stays a condition until a good call at or after its onset, also with no run. With no list,
+   * each open line of a channel stays open.
+   */
+  readonly channels?: readonly ChannelSnapshot[];
+  /** The policy of a down channel. Each absent field has its value of `DEFAULT_CHANNEL_DOWN`. */
+  readonly channelDown?: ChannelDownConfig;
 }
 
 /** The result of one step of the fold. */
@@ -292,6 +313,33 @@ export function copyUnreadAt(watch: CopyWatch): Instant {
   return (watch.read?.at ?? watch.since) + watch.maxAge;
 }
 
+/** The time with no read of another copy after which this copy also reports the facts of a shared account (AL-62). It is longer than a restart. */
+export const SHARED_HANDOVER: Duration = 15 * 60_000;
+
+/**
+ * This function tells if this copy reports the facts of a shared account at the time `at` (AL-62). Each copy reads the
+ * same account, thus each copy sees the same stages `low` and `empty` of a balance.
+ *
+ * - The copy with the smallest id of the copies that answer reports them. Thus the copies send one alert, not one alert each.
+ * - Another copy answers until `SHARED_HANDOVER` after its last read that passed, or after the start of its watch.
+ * - With no id of this copy, or with no watches of other copies, this copy reports them.
+ */
+export function reportsShared(copy: string | undefined, copies: readonly CopyWatch[] | undefined, at: Instant): boolean {
+  const from = sharedHandoverAt(copy, copies);
+  return from === undefined || from <= at;
+}
+
+/**
+ * This function gives the time from which this copy reports the facts of a shared account. A copy with a smaller id
+ * that answers before that time moves it. With no copy with a smaller id, it gives `undefined`.
+ */
+export function sharedHandoverAt(copy: string | undefined, copies: readonly CopyWatch[] | undefined): Instant | undefined {
+  if (copy === undefined || copies === undefined) return undefined;
+  const smaller = copies.filter((watch) => compareCodeUnits(watch.copy, copy) < 0);
+  if (smaller.length === 0) return undefined;
+  return Math.max(...smaller.map((watch) => (watch.read?.at ?? watch.since) + SHARED_HANDOVER));
+}
+
 /**
  * This function gives the latest item at `at` or before it, in `window` before `at`, or `undefined`. Of two items at
  * the same time, it gives the last in the list.
@@ -330,10 +378,13 @@ export function gapGrade(entry: Coverage, threatened: boolean): { readonly sever
  * This function adds one snapshot to the fold at the time `at`. Each of these is a condition:
  *
  * - Each source in `DOWN_STATES`, each late expectation and each coverage that is short.
- * - Each stage of a quota, each stage of a balance and each stage of another copy.
+ * - Each stage of a quota, each stage of a balance and each stage of another copy. Only one copy reports the stages
+ *   `low` and `empty` of a balance (`reportsShared`). The stage `unread` is a fact of each copy.
  * - The latest step of the wall clock in `CLOCK_STEP_WINDOW` before `at`.
  * - The latest recovery of the log in `LOG_RECOVERY_WINDOW` before `at`.
  * - Each run of a drill that waits for its acknowledgment, and each drill whose last run failed.
+ * - Each exhausted escalation of a real warning. Only one copy reports it (`reportsShared`).
+ * - Each down channel of the copy: a run that opens a line, or an open line with no good call since its onset.
  *
  * An open line with no condition in the snapshot ends with a cancel. Equal snapshots give no new report.
  */
@@ -354,8 +405,11 @@ export function systemReports(lines: SystemLines, snapshot: SystemSnapshot, at: 
   for (const quota of snapshot.quotas ?? []) {
     for (const stage of quotaStages(quota)) conditions.set(quotaName(quota.channel, stage), quotaCondition(quota, stage));
   }
+  // The stages low and empty are facts of the account, and one copy reports them. The stage unread is a fact of this copy.
+  const shared = reportsShared(snapshot.copy, snapshot.copies, at);
   for (const balance of snapshot.balances ?? []) {
     for (const stage of balanceStages(balance, at)) {
+      if (stage !== "unread" && !shared) continue;
       if (stage !== "low") conditions.set(balanceName(balance.provider, stage), balanceCondition(balance, stage, at));
       // Each floor that the balance is below is its own line. Thus each floor gives its own alert.
       else for (const floor of balanceFloorsBelow(balance)) conditions.set(balanceName(balance.provider, stage, floor), balanceCondition(balance, stage, at, floor));
@@ -377,6 +431,15 @@ export function systemReports(lines: SystemLines, snapshot: SystemSnapshot, at: 
     if (verdict.state === "pending") conditions.set(drillName(copy, drill.id), drillRunCondition(copy, drill, run));
     else if (verdict.state === "failed") conditions.set(`${drillName(copy, drill.id)}/failed`, drillFailedCondition(copy, drill, run, verdict.why));
   }
+  // The two copies see the same exhaustion in the shared log. Thus one copy reports it, as with a shared balance.
+  if (shared) for (const entry of snapshot.exhausted ?? []) conditions.set(exhaustionName(entry), exhaustionCondition(entry));
+  // Each copy reports its own down channels, because each copy has its own network path to the provider.
+  const policy = channelDownPolicy(snapshot.channelDown);
+  for (const entry of snapshot.channels ?? []) {
+    const name = channelName(entry.copy, entry.channel);
+    const condition = channelCondition(entry, lines.open[name], policy);
+    if (condition !== undefined) conditions.set(name, condition);
+  }
   const names = [...new Set([...Object.keys(lines.open), ...conditions.keys()])].sort(compareCodeUnits);
   let count = lines.count;
   const open = new Map(Object.entries(lines.open));
@@ -389,6 +452,8 @@ export function systemReports(lines: SystemLines, snapshot: SystemSnapshot, at: 
     if (condition === undefined && snapshot.balances === undefined && name.startsWith(BALANCE_LINE)) continue;
     if (condition === undefined && snapshot.copies === undefined && name.startsWith(COPY_LINE)) continue;
     if (condition === undefined && snapshot.drills === undefined && name.startsWith(DRILL_LINE)) continue;
+    if (condition === undefined && snapshot.exhausted === undefined && name.startsWith(EXHAUSTION_LINE)) continue;
+    if (condition === undefined && snapshot.channels === undefined && name.startsWith(CHANNEL_LINE)) continue;
     const draft = condition === undefined ? (line === undefined ? undefined : cancelOf(line)) : condition;
     if (draft === undefined) continue;
     const facts = canonicalJson(draft.facts, { form: "json" });
@@ -500,6 +565,132 @@ const LOG_LINE = "log";
 
 function coverageName(place: PlaceId, kind: string): string {
   return `coverage/${encodeURIComponent(place)}/${encodeURIComponent(kind)}`;
+}
+
+// The start of the name of each line of an exhausted escalation. The copy is not in the name: one copy reports it.
+const CHANNEL_LINE = "channel/";
+
+function channelName(copy: string, channel: string): string {
+  return `${CHANNEL_LINE}${copy}/${channel}`;
+}
+
+/** This function gives the channels of a copy with an open line of a down channel, in the order of their ids. The runtime probes them. */
+export function downChannels(lines: SystemLines, copy: string): ChannelId[] {
+  const prefix = channelName(copy, "");
+  return Object.keys(lines.open)
+    .filter((name) => name.startsWith(prefix))
+    .map((name) => name.slice(prefix.length) as ChannelId)
+    .sort(compareCodeUnits);
+}
+
+// The facts of the line of a down channel. A new count is not a fact, so the line gives one alert. A new cause gives an update.
+interface ChannelDownFacts {
+  readonly copy: string;
+  readonly channel: string;
+  readonly onset: Instant;
+  /** `key`: the provider refuses the key of the channel. `outage`: the calls get no answer, or a fault of the provider. */
+  readonly cause: "key" | "outage";
+}
+
+function causeOf(run: ChannelRun): ChannelDownFacts["cause"] {
+  return run.kind === "auth" ? "key" : "outage";
+}
+
+// The time of a run in a text: whole seconds under 2 min, else whole minutes.
+function spanText(span: number): string {
+  return stepSizeText(span < 120_000 ? Math.round(span / 1000) * 1000 : Math.round(span / 60_000) * 60_000);
+}
+
+const FAILURE_TEXT: Readonly<Record<string, string>> = {
+  network: "the network to the provider failed",
+  timeout: "the provider gave no answer in time",
+  server: "the provider gave a server error",
+  auth: "the provider refused the key",
+};
+
+// The condition of one channel of a copy. An open line stays until a good call at or after its onset. A restart
+// empties the run, and an empty run does not end the line. A closed line opens only for a run that `runOpens`.
+function channelCondition(entry: ChannelSnapshot, line: SystemLine | undefined, policy: ChannelDownPolicy): Condition | undefined {
+  const { copy, channel, title, run, good } = entry;
+  const open = line === undefined ? undefined : (JSON.parse(line.facts) as ChannelDownFacts);
+  let facts: ChannelDownFacts;
+  if (open !== undefined) {
+    if (good !== undefined && good >= open.onset) return undefined;
+    facts = run === undefined ? open : { ...open, cause: causeOf(run) };
+  } else {
+    if (run === undefined || !runOpens(run, policy) || (good !== undefined && good >= run.first)) return undefined;
+    facts = { copy, channel, onset: run.first, cause: causeOf(run) };
+  }
+  const code = `${CHANNEL_KIND}.down`;
+  const count = run === undefined ? "" : ` ${String(run.failures)} calls failed in ${spanText(run.last - run.first)}, and ${FAILURE_TEXT[run.kind] ?? run.kind} at the last call.`;
+  const text =
+    facts.cause === "key"
+      ? {
+          headline: `The provider of ${title} refuses the key of the channel. This is not an outage.`,
+          description: `The copy ${copy} cannot send on ${title}.${count} The fault does not end by itself.`,
+          instruction: "Replace the key of the channel in the secrets of the copy. Until then, the other channels carry the alerts.",
+        }
+      : {
+          headline: `${title} is down for the copy ${copy}.`,
+          description: `The calls of the copy ${copy} to the provider of ${title} fail.${count}`,
+          instruction: "The other channels carry the alerts. The line ends at the next call that passes.",
+        };
+  return {
+    facts: { ...facts },
+    kind: { code, label: kindLabel(code) },
+    severity: "severe",
+    urgency: "expected",
+    response: ["assess"],
+    onset: facts.onset,
+    areas: [],
+    about: [{ system: CHANNEL_SUBJECT, id: channel, label: title }, ...(entry.api ?? []).map(entitySubject)],
+    ...text,
+    parameters: { copy: [copy], channel: [channel], cause: [facts.cause], ...(run === undefined ? {} : { failures: [String(run.failures)], last: [run.kind] }) },
+  };
+}
+
+// The subject of the key of an entity, as `domain:api.twilio.com`. The id is the text after the first colon.
+function entitySubject(key: string): Subject {
+  const colon = key.indexOf(":");
+  return { system: key.slice(0, colon), id: key.slice(colon + 1) };
+}
+
+const EXHAUSTION_LINE = "exhausted/";
+
+function exhaustionName(entry: Exhaustion): string {
+  return `${EXHAUSTION_LINE}${encodeURIComponent(entry.person)}/${encodeURIComponent(entry.incident)}/${String(entry.episode)}/${entry.level}`;
+}
+
+// The severity and the urgency of an exhaustion at each level. The table of the class `system-escalation` gives back the level.
+const EXHAUSTION_TERMS: Readonly<Record<Exhaustion["level"], { readonly severity: Severity; readonly urgency: Urgency }>> = {
+  "life-safety": { severity: "extreme", urgency: "immediate" },
+  urgent: { severity: "severe", urgency: "expected" },
+  notice: { severity: "moderate", urgency: "future" },
+  digest: { severity: "minor", urgency: "past" },
+};
+
+function exhaustionCondition(entry: Exhaustion): Condition {
+  const code = `${ESCALATION_KIND}.exhausted`;
+  return {
+    // The facts do not change while the escalation stays exhausted. Thus it gives one alert, and an acknowledgment or the end gives its cancel.
+    // The title is not a fact: a new text of the warning gives no new alert.
+    facts: { person: entry.person, incident: entry.incident, episode: entry.episode, level: entry.level, at: entry.at },
+    kind: { code, label: kindLabel(code) },
+    ...EXHAUSTION_TERMS[entry.level],
+    response: ["assess"],
+    onset: entry.at,
+    // The report has no area. Thus it reaches only the people who watch the person, and not the people at the place.
+    areas: [],
+    about: [
+      { system: PERSON_SUBJECT, id: entry.person, label: `Person ${entry.person}` },
+      { system: INCIDENT_SUBJECT, id: entry.incident, label: entry.title },
+    ],
+    // The headline tells what the person missed: the kind, the title and the level of the warning.
+    headline: `${entry.person} did not acknowledge ${entry.kind.label} (${entry.level})${entry.title === entry.kind.label ? "" : `: ${entry.title}`}`,
+    description: `The warning reached ${entry.person} at the level ${entry.level}. No acknowledgment came before ${new Date(entry.at).toISOString()}, the end of the escalation.`,
+    instruction: `Speak to ${entry.person}. An acknowledgment of the warning by ${entry.person} ends this alert.`,
+    parameters: { person: [entry.person], level: [entry.level], kind: [entry.kind.code], incident: [entry.incident] },
+  };
 }
 
 function drillRunCondition(copy: string, drill: DrillConfig, run: DrillRun): Condition {

@@ -11,12 +11,13 @@
  */
 
 import type { Machine, Transition } from "@mark1russell7/algebra";
-import { inWindow, windowProblems } from "@mark1russell7/algebra/clock";
+import { firstInstantOf, inWindow, localTime, windowProblems } from "@mark1russell7/algebra/clock";
 import { compareCodeUnits } from "@mark1russell7/text/order";
 import { LEVELS } from "./contracts.ts";
 import type {
   Acknowledgment,
   ChannelDescriptor,
+  DailyTime,
   ChannelId,
   Delivery,
   Duration,
@@ -395,6 +396,48 @@ export function inQuietWindow(window: QuietWindow | undefined, at: Instant): boo
 /** This function gives the problems of a quiet window: a bad time zone or a bad local time. With a problem, `inQuietWindow` gives `false`. */
 export function quietWindowProblems(window: QuietWindow): string[] {
   return windowProblems(window);
+}
+
+/** The form of a local time of each day: `HH:MM`, from `00:00` to `23:59`. */
+const DAILY_FORM = /^([01][0-9]|2[0-3]):([0-5][0-9])$/u;
+
+/** One day of 24 hours on the wall clock, in milliseconds. */
+const WALL_DAY = 86_400_000;
+
+/** This function gives the problems of a daily time: a bad time zone or a bad local time. */
+export function dailyTimeProblems(daily: DailyTime): string[] {
+  const problems: string[] = [];
+  if (localTime(0, daily.zone) === undefined) problems.push(`The time zone ${daily.zone} is not an IANA time zone.`);
+  if (!DAILY_FORM.test(daily.time)) problems.push(`The time ${daily.time} is not a local time HH:MM from 00:00 to 23:59.`);
+  return problems;
+}
+
+/**
+ * This function gives the instant of a daily time near `at`. It is the last one at or before `at`. With `next`, it is
+ * the first one after `at`. A bad daily time or a bad `at` gives `undefined`, and `dailyTimeProblems` finds the bad time.
+ *
+ * - A local time in the gap of a change forward gives the end of the gap. Thus each day has its instant.
+ * - A local time in the hour of a change back occurs two times. Only the first instant counts.
+ */
+export function dailyInstant(daily: DailyTime, at: Instant, next = false): Instant | undefined {
+  const form = DAILY_FORM.exec(daily.time);
+  const local = form === null || !Number.isFinite(at) ? undefined : localTime(at, daily.zone);
+  if (form === null || local === undefined) return undefined;
+  const wall = Date.UTC(local.year, local.month - 1, local.day, Number(form[1]), Number(form[2]));
+  // The wall clock of today, then of the day before or after. A day of 23 or 25 hours moves the instant by one hour at most.
+  for (let days = 0; days <= 2; days += 1) {
+    const instant = firstInstantOf(wall + (next ? days : -days) * WALL_DAY, daily.zone);
+    if (instant !== undefined && (next ? instant > at : instant <= at)) return instant;
+  }
+  return undefined;
+}
+
+/**
+ * This function gives the daily time of the digest of a person. It is the time of the digest policy, or else the end
+ * of the quiet window of the person. With neither, it gives `undefined`, and the person gets no digest.
+ */
+export function digestTimeOf(policy: EscalationPolicy, quiet: QuietWindow | undefined): DailyTime | undefined {
+  return policy.daily ?? (quiet === undefined ? undefined : { zone: quiet.zone, time: quiet.end });
 }
 
 const nonNegative = (value: number | undefined): number => (value !== undefined && Number.isFinite(value) && value > 0 ? value : 0);

@@ -66,10 +66,10 @@
     "note": "The records of bls-api, bls-release-calendar name this issuer."
   },
   {
-    "id": "bom-sws",
-    "name": "Australian Bureau of Meteorology, Space Weather Services",
+    "id": "bom",
+    "name": "Australian Bureau of Meteorology",
     "issues": null,
-    "note": "The records of bom-sws-api name this issuer."
+    "note": "The records of bom-sws-api name this issuer. Its Space Weather Services issue the space weather alerts."
   },
   {
     "id": "canada-government",
@@ -88,6 +88,12 @@
     "name": "US Customs and Border Protection",
     "issues": null,
     "note": "The records of cbp-bwt name this issuer."
+  },
+  {
+    "id": "cbsa",
+    "name": "Canada Border Services Agency (CBSA)",
+    "issues": null,
+    "note": "The records of cbsa-bwt name this agency."
   },
   {
     "id": "cdc",
@@ -593,6 +599,12 @@
     "note": "The records of ripe-ris-live name this issuer."
   },
   {
+    "id": "rocketlaunch-live",
+    "name": "RocketLaunch.Live",
+    "issues": null,
+    "note": "The records of rocketlaunch-live name this issuer. Its team curates the launches from many sources."
+  },
+  {
     "id": "sec",
     "name": "US Securities and Exchange Commission",
     "issues": null,
@@ -671,7 +683,7 @@
     "note": "The records of ukmto name this issuer."
   },
   {
-    "id": "us-alerting-authorities",
+    "id": "ipaws-authority",
     "name": "The state, local, tribal and territorial alerting authorities of IPAWS",
     "issues": [
       "geo.avalanche",

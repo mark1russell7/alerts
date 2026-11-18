@@ -3,10 +3,27 @@
  * events and the configuration, and of nothing else. Thus a restart reads the log and gets the same
  * state as a run with no restart.
  */
-import type { Acknowledgment, ChannelId, Cursor, Delivery, Duration, EscalationEnd, EscalationStart, FetchRecord, Instant, MapProblem, Observation, Report, ReportId, SendOutcome, SourceId } from "@mark1russell7/alerts";
+import type {
+  Acknowledgment,
+  ChannelFailureKind,
+  ChannelId,
+  Cursor,
+  Delivery,
+  Duration,
+  EscalationEnd,
+  EscalationStart,
+  FetchRecord,
+  Instant,
+  MapProblem,
+  Observation,
+  Report,
+  ReportId,
+  ShadowScore,
+  SourceId,
+} from "@mark1russell7/alerts";
 
-/** The kind of a failed call of a channel. */
-export type ChannelFailureKind = Extract<SendOutcome, { readonly ok: false }>["kind"];
+// The kind of a failed call of a channel has its home in the core. The runtime gives it again, as before.
+export type { ChannelFailureKind };
 
 /** The kinds of a send that the channel refused. After such a send, the channel has no message. */
 export type RefusalKind = Exclude<ChannelFailureKind, "network" | "timeout" | "server">;
@@ -132,6 +149,11 @@ export interface CancelledEvent extends Envelope<"cancelled"> {
 /** An escalation started. Its start stays the same after a restart, thus each step comes at its time. */
 export interface EscalationEvent extends Envelope<"escalation"> {
   readonly start: EscalationStart;
+  /**
+   * The shadow score of the incident at the start, when the runtime has the priors. The table decided the level, and
+   * the score does not change it. Thus the log keeps the score next to each decision of the table.
+   */
+  readonly shadow?: ShadowScore;
 }
 
 /**

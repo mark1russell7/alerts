@@ -301,9 +301,9 @@
   },
   {
     "id": "cdn:akamai",
-    "name": "Akamai, the content network in front of api.weather.gov",
+    "name": "Akamai, a content network",
     "kind": "cdn",
-    "note": "A DNS lookup of api.weather.gov on 2026-11-15 gave the canonical name sancert.weather.gov.edgekey.net, a name of Akamai."
+    "note": "DNS lookups gave canonical names of Akamai (edgekey.net): api.weather.gov on 2026-11-15, sws-data.sws.bom.gov.au on 2026-11-16, and www.cisa.gov and rssfeed.azure.status.microsoft on 2026-11-18."
   },
   {
     "id": "cdn:cloudflare",
@@ -450,6 +450,12 @@
     "note": "The host of the data of glofas."
   },
   {
+    "id": "fdo.rocketlaunch.live",
+    "name": "fdo.rocketlaunch.live",
+    "kind": "host",
+    "note": "The host of the free URL of rocketlaunch-live."
+  },
+  {
     "id": "feeds.meteoalarm.org",
     "name": "feeds.meteoalarm.org",
     "kind": "host",
@@ -502,12 +508,6 @@
     "name": "haveibeenpwned.com",
     "kind": "host",
     "note": "The host of the feed of hibp-api."
-  },
-  {
-    "id": "health.aws.amazon.com",
-    "name": "health.aws.amazon.com",
-    "kind": "host",
-    "note": "The host of the feed of aws-health-rss."
   },
   {
     "id": "hubeau.eaufrance.fr",
@@ -750,6 +750,12 @@
     "note": "Each department of transportation publishes its own WZDx feed."
   },
   {
+    "id": "status.aws.amazon.com",
+    "name": "status.aws.amazon.com",
+    "kind": "host",
+    "note": "The host of the feed of aws-health-rss. A DNS lookup on 2026-11-18 gave canonical names of Amazon, and the answer had no header of a content network."
+  },
+  {
     "id": "status.cloud.google.com",
     "name": "status.cloud.google.com",
     "kind": "host",
@@ -886,6 +892,12 @@
     "name": "www.bls.gov",
     "kind": "host",
     "note": "The host of the feed of bls-release-calendar."
+  },
+  {
+    "id": "www.cbsa-asfc.gc.ca",
+    "name": "www.cbsa-asfc.gc.ca",
+    "kind": "host",
+    "note": "The host of the file of cbsa-bwt."
   },
   {
     "id": "www.cdc.gov",

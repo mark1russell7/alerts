@@ -1,4 +1,4 @@
-import type { Duration, HealthPayload, HistoryPayload, Instant, MapPayload } from "@mark1russell7/alerts";
+import type { Duration, HealthPayload, HistoryPayload, Instant, InterestsPayload, MapPayload } from "@mark1russell7/alerts";
 import { add, type Quantity } from "@mark1russell7/quantity";
 import { daemon, kubernetes, localDev, service } from "@mark1russell7/service";
 import type { Profile, ServiceBuilder, Timing, WorkerLoop } from "@mark1russell7/service";
@@ -9,6 +9,7 @@ import type { OutageDeployWorker } from "./outage.ts";
 
 export { LOOPBACK, PAGE_INDEX, attachApi, pageFolder, statusOf, type ApiOptions, type StartStatus, type Status } from "./api.ts";
 export * from "./balance.ts";
+export * from "./channel-watch.ts";
 export * from "./config.ts";
 export * from "./copy-store.ts";
 export { CLOCK_SKEW_LIMIT, COPY_MAX_AGE, EXCHANGE_EVERY, EXCHANGE_LIMIT } from "./copy.ts";
@@ -93,6 +94,8 @@ export interface Options {
   readonly health?: (() => HealthPayload) | undefined;
   /** This function gives the payload of the route `GET /history`. Without it, the API has no history route. */
   readonly history?: ((since: Instant | null) => HistoryPayload) | undefined;
+  /** This function gives the payload of the route `GET /interests` (`ApiOptions.interests`). */
+  readonly interests?: (() => InterestsPayload) | undefined;
   /** The folder of the built local page. The API serves its files after its routes (`ApiOptions.page`). */
   readonly page?: string | undefined;
   /** The worker of the deploy of the outage call. The service runs it as the worker `outage`, beside the passes. */
@@ -145,7 +148,7 @@ export const declare = (options: Options): ServiceBuilder => {
 // The parts of the service of each runtime: the API, the dependencies, the workers of the passes and of the outage call, the checks and the policies.
 const parts = (options: Options): ServiceBuilder =>
   withOutage(
-    attachApi(service("runtime"), { port: options.port, loop: options.loop, map: options.map, health: options.health, history: options.history, page: options.page, ...(options.outage === undefined ? {} : { outage: options.outage }), ...(options.start === undefined ? {} : { start: options.start }) })
+    attachApi(service("runtime"), { port: options.port, loop: options.loop, map: options.map, health: options.health, history: options.history, interests: options.interests, page: options.page, ...(options.outage === undefined ? {} : { outage: options.outage }), ...(options.start === undefined ? {} : { start: options.start }) })
       // The dependencies close in the reverse sequence of their connect. Thus the lock of the home folder goes after the log.
       .dependency("home", { system: null, knobs: {}, operations: {} }, { connect: () => undefined, close: () => options.home?.release() })
       .dependency("log", { system: null, knobs: {}, operations: {} }, { connect: () => undefined, close: () => options.log.close() })

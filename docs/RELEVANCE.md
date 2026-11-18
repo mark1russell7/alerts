@@ -22,6 +22,12 @@ Each subject of the incident that is a node of the graph gives one `SubjectEntry
 - For a place, the hit is the share of the area near the place that the incident covers.
 - For a topic or a named entity, the hit is 1.
 
+In a system of paths (`PATH_SYSTEMS`), an id is a path of parts with `/` between them. The system `provider-region` is one, for example `provider-region:twilio/europe/sms`.
+
+- A node covers itself and each node below it (`nodeCovers`). Two nodes overlap when one of them covers the other (`nodesOverlap`).
+- Each node of the graph that overlaps a subject of the incident is also an entry, with the hit 1.
+- Thus an outage of a whole region reaches a product of the region, and an outage of a product reaches the node of its region.
+
 The event is a virtual source node. It has one edge to each entry, and the chance of that edge is the hit.
 
 ### The reach
@@ -103,6 +109,7 @@ Each edge has an `origin`. Each origin except `person` is one layer of the defau
 | `base` | The human base. | The same for each person: the places where the person lives and is, and life safety. |
 | `places` | The watched places. | The configuration of the person. |
 | `services` | The services of the person. | The services that the person names. |
+| `delivery` | The path of the alerts. | The services of the channels where the person has a contact. |
 | `work` | The work of the person. | The tools and the services of a kind of work. |
 | `data` | Public data. | For example the service areas of the power utilities. |
 | `measured` | Measures. | For example the DNS providers of a domain. |
@@ -112,14 +119,53 @@ Each edge has an `origin`. Each origin except `person` is one layer of the defau
 - A new subject of a followed kind is in scope automatically. A new component of a service does not stay out because nobody added it.
 - A graph with only edges from a place to the person, each with the weight 1, gives the routing of the first releases. This is the compatibility gate.
 
+### The join of the layers
+
+`composeInterests(person, layers, own)` joins the default layers and the graph of the person into one graph. It also gives a row for each edge.
+
+- At each pair of nodes, the graph holds the edges of the strongest origin. The rank is `ORIGIN_RANK`: `person`, `measured`, `data`, `services`, `delivery`, `work`, `places`, `base`.
+- Each weaker edge at that pair stays as a row, with the id of the edge that replaced it. The person can see each default.
+- A person turns a default off with an edge of the origin `person` that is off. The row of the default stays.
+- Two edges of one origin at one pair are two routes.
+- An edge in a layer and in the graph of the person counts once. Thus a second join of a joined graph gives the same result.
+- The order of the layers and of their edges has no effect.
+- The mutes and the labels come from the graph of the person.
+
+A default edge has the id `<origin>/<from>><to>`, so it has the same id at each build. Four layers have a function:
+
+| Function | Layer | Edges |
+| --- | --- | --- |
+| `placesLayer(places)` | `places` | One edge from each watched place to the person, with the weight 1. |
+| `workLayer(works)` | `work` | One edge from each topic of each kind of work. The table `WORK_DEFAULTS` gives the topics. |
+| `servicesLayer(services)` | `services` | One edge from each entity that the person names, for example `domain:example.com`. |
+| `deliveryLayer(channels)` | `delivery` | One edge from each service of the channels, with the weight 1. The source names the channels, for example `channel:push`. |
+
+- The table of the kinds of work gives topics, not chances. Thus each edge of `work` and `services` has `UNKNOWN_WEIGHT`, the full interval.
+- A topic edge reaches the person from each place on the Earth. Thus the table names only the topics that touch the work wherever they occur.
+- Each alert of the person goes through each service of a channel of the person. Thus an edge of `delivery` has the weight 1, as a watched place has.
+- A named service outranks the path of the alerts. Thus the weight that the person gives a service replaces the weight 1.
+- The layer `base` has no function yet. Without a test of the size of an event, a topic edge of the base routes each event of the world. The shadow score of AL-31 and the indicators of AL-59 give that test.
+- The layers `data` and `measured` come from adapters, for example the service areas of the power utilities.
+
+The field `defaults` of a person in the private configuration gives the inputs of the layers: `works` (keys of `WORK_DEFAULTS`) and `services` (node keys of entities). The switch `delivery: false` turns the layer `delivery` off.
+
+- The load joins the layer `places`, the layers of the inputs, the layer `delivery` and `PersonWatch.interests`.
+- The layer `delivery` takes the field `services` of each `ChannelDescriptor` where the person has a contact. `contactChannels` finds these channels. The recipient gets the joined graph.
+- With the services of the contacts (`ContactServices`), the layer also takes the services of the address of the person on each channel. An example is the region of the carrier network of a phone number.
+- The layer `places` is always in the join. A graph of work topics alone stops the routing at the places.
+- A person with no field `defaults` keeps the watch. Thus the routing of a configuration without the field stays the same.
+- An unknown work, a service that is not an entity or a changed default is a problem of the load. Then the person keeps the watch.
+
+The route `GET /interests` of the runtime gives the rows of the join of each person. The panel Interests of the local page shows them. Each row has its origin, its weight and its state. A default that an edge of the person replaced stays visible.
+
 ## Less, off and mute
 
 A person has three kinds of opt-out. Each one has a scope.
 
 - Less: a lower weight on one edge. The reach goes down, and the alert can still come.
 - Off: `on: false` on one edge. The edge stays as a row, and the reach does not use it.
-- Mute: a `Mute` with kinds, subjects or both, and an optional end `until`. A mute with no subjects matches each incident of its kinds. A mute with subjects matches an incident when one of its subjects is an entry. A matched incident does not reach the person on any path.
-- Cut: a mute with subjects that does not match cuts its subjects from the graph. Each edge into or out of a muted subject is off, so no path goes through it. Thus a mute of a bank also stops an outage of its DNS provider that reaches the person through the bank.
+- Mute: a `Mute` with kinds, subjects or both, and an optional end `until`. A mute with no subjects matches each incident of its kinds. A mute with subjects matches an incident when one of its subjects covers an entry (`nodeCovers`). A matched incident does not reach the person on any path.
+- Cut: a mute with subjects that does not match cuts the nodes that its subjects cover from the graph. Each edge into or out of a muted subject is off, so no path goes through it. Thus a mute of a bank also stops an outage of its DNS provider that reaches the person through the bank.
 
 A mute with kinds and subjects has effect only on the incidents of its kinds. Thus a person can mute one kind of alert for one subject.
 
@@ -164,6 +210,7 @@ No text holds an address, a point or a region code.
 
 The file `relevance.ts` of the core holds the calculation. `relevance-gates.test.ts` holds the gates.
 
+- The file `interest-defaults.ts` holds the layers and their join. `interest-defaults.test.ts` holds their gates.
 - `relevance(input, graph, policy)` gives the `Relevance` of one incident. The input holds the kind, the entries, the time and the mandatory class.
 - `canReach(input, graph, policy)` tells if the reach at the high ends is more than 0. The routing uses it for each entry.
 - `DEFAULT_RELEVANCE_POLICY` gives the hop cap 4, the top 3 paths, the mandatory class `silent` and the level `urgent` for the other entries.
@@ -189,6 +236,8 @@ A `NodeKey` is `person`, or `<system>:<id>`. The id is the text after the first 
 
 The system `place` holds the watched places of a person, by their ids in the configuration.
 
+An id of the system `provider-region` is the provider, a slash and the id of the region of the provider: `provider-region:gcp/europe-west1`, `provider-region:aws/eu-west-1` or `provider-region:azure/westeurope`. The ids of the regions come from the feed of the provider, not from its titles. The feed of Azure gives only the name of each region. Its id is the name in lower case with no spaces, as the names of the regions in the API of Azure.
+
 ## The gates
 
 | Gate | Kind | Rule |
@@ -210,7 +259,17 @@ Step 5 routes the alerts by the relevance. `assess` uses the graph in `PersonWat
 - The entries are the matched places (`place:<id>`), the code areas, the place areas, the subjects of a known system and the topic of the kind. Each entry has a hit of 1.
 - A matched place counts only when its entry alone reaches the person: the reach at the high ends is more than 0. The cut of the mutes applies.
 - An entry that is not a watched place gives the level of the table, up to `entryMax` of the policy. The default is `urgent`, because `life-safety` needs a place of the person.
+- A rule of the person (`LevelRule`) with the field `through` matches only through entries of those kinds: `place`, `topic` or `entity`. Each kind of the other entries gets its own first rule, and the highest level wins.
 - The reason `reach` tells the reach, the entries that count, the places of the rule and the why.
+
+An example is the work `software`. Its topics reach the outages of each online service. These rules keep a service that the person names at `notice`, and send the other outages to the digest:
+
+```json
+[
+  { "kinds": ["infra"], "through": ["topic"], "max": "digest" },
+  { "kinds": ["infra"], "max": "notice" }
+]
+```
 - `Assessment.muted` holds the matched mute. The level stays the level before the mute, and the delivery uses the effect.
 - With no time, a mute with an end has no effect, so the alert is not lost.
 

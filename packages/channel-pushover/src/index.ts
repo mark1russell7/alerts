@@ -1,14 +1,15 @@
 /**
  * The Pushover channel of the alert system. It gives the procedures of the channel contract of
- * `@mark1russell7/alerts`: `describe`, `send`, `status` and `cancel`. The calls of the Pushover API
+ * `@mark1russell7/alerts`: `describe`, `send`, `status`, `cancel` and `probe`. The calls of the Pushover API
  * come from `@procedures/notify/pushover`.
  */
 
-import { COPY_ID, WHY_LIMITS, type AddressField, type ChannelDescriptor, type ChannelId, type ChannelProcedures, type Instant, type SendOutcome } from "@mark1russell7/alerts";
+import { COPY_ID, LEVELS, WHY_LIMITS, type AddressField, type ChannelDescriptor, type ChannelId, type ChannelProcedures, type Instant, type ProbeOutcome, type SendOutcome } from "@mark1russell7/alerts";
 import { isQuotaError, type Quota, type QuotaError, type QuotaGate, type QuotaReading, type QuotaState } from "polite-crawler/api";
 import {
   callPushover,
   extractPushoverCancelled,
+  extractPushoverLimits,
   extractPushoverReceipt,
   extractPushoverSent,
   PUSHOVER_KEY,
@@ -16,6 +17,7 @@ import {
   PUSHOVER_RETRY_MIN_MS,
   pushoverCancelByTagRequest,
   pushoverCancelRequest,
+  pushoverLimitsRequest,
   pushoverReceiptRequest,
   type PushoverFailure,
   type PushoverFetch,
@@ -24,7 +26,7 @@ import {
   type PushoverSent,
   pushoverSendRequest,
 } from "@procedures/notify/pushover";
-import { type PushoverMapOptions, pushoverMessageOf, sendFailureOf, statusOf } from "./map.ts";
+import { type PushoverMapOptions, priorityOf, pushoverMessageOf, sendFailureOf, statusOf } from "./map.ts";
 
 export { priorityOf, pushoverMessageOf, sendFailureOf, statusOf } from "./map.ts";
 export type { PushoverMapOptions, Refusal } from "./map.ts";
@@ -134,15 +136,22 @@ export const PUSHOVER_ADDRESS: readonly AddressField[] = [
 /** This function gives the descriptor of the channel for a platform. */
 export function pushoverDescriptor(platform?: "ios" | "android"): ChannelDescriptor {
   const push = platform === "ios" ? ["provider:apns"] : platform === "android" ? ["provider:fcm"] : [];
+  // The push endpoint of the platform carries each message to the phone: Apple for iOS, Firebase Cloud Messaging for Android.
+  const pushServices = platform === "ios" ? ["domain:api.push.apple.com"] : platform === "android" ? ["domain:fcm.googleapis.com"] : [];
   return {
     id: CHANNEL_ID,
     title: "Pushover",
     dependsOn: ["provider:pushover", ...push],
+    services: ["domain:api.pushover.net", ...pushServices],
+    // The calls of the channel reach only the API of Pushover. The push service of the phone platform is not an endpoint.
+    api: ["domain:api.pushover.net"],
     uses: ["internet", "dns", "power"],
     // A `life-safety` message at priority 2 sounds through silent mode with the Critical Alerts of the app.
     breaksThrough: true,
     repeats: true,
     ack: "poll",
+    // Only a message at priority 2 has a receipt, thus only its level asks for an acknowledgment.
+    ackLevels: LEVELS.filter((level) => priorityOf(level, false) === 2),
     maxTitle: PUSHOVER_LIMITS.title,
     maxBody: PUSHOVER_LIMITS.message,
     maxInFlight: PUSHOVER_MAX_IN_FLIGHT,
@@ -249,6 +258,22 @@ export function createPushoverChannel(options: PushoverChannelOptions): ChannelP
       const result = await call(request, extractPushoverCancelled);
       // A refusal tells that Pushover does not know the receipt: it is old, or it is not of this application. Nothing repeats under it.
       if (!result.ok && result.kind !== "refused") throw new Error(`Pushover did not stop the repeats (${result.kind}): ${result.errors.join(" ")}`);
+    },
+
+    // The read of the limits of the application sends nothing and costs nothing. A pass tells that Pushover takes the token (AL-65).
+    async probe(): Promise<ProbeOutcome> {
+      if (!isPushoverKey(options.token)) return { ok: false, kind: "auth", message: "The API token is not 30 letters and digits." };
+      const result = await call(pushoverLimitsRequest(options.token), extractPushoverLimits);
+      if (!result.ok) return { ok: false, kind: result.kind, message: result.errors.join(" ") };
+      // The read gives the count of the month, thus the gate gets it as a reading of an answer.
+      if (options.quota !== undefined) {
+        try {
+          options.quota.note({ remaining: result.limits.remaining, resetAt: result.limits.resetAt });
+        } catch {
+          // The count of the gate can be low until the next answer. The probe has its outcome.
+        }
+      }
+      return { ok: true, at: now() };
     },
   };
 }

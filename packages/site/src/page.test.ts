@@ -64,7 +64,7 @@ describe("the local page", () => {
   const entry = read(LOCAL_ENTRY);
 
   it("has each part of the page, and asks the search engines not to list it", () => {
-    const ids = ["theme", "read", "brief", "problem", "globe", "map", "time", "past", "past-text", "now", "time-problem", "globe-tools", "words", "whole", "incidents", "unshaped", "sources-h", "health-past", "health-sum", "health-problem", "health", "health-hint", "indicators-h", "indicator-sum", "indicators"];
+    const ids = ["theme", "read", "brief", "problem", "globe", "map", "time", "past", "past-text", "now", "time-problem", "globe-tools", "words", "whole", "incidents", "unshaped", "sources-h", "health-past", "health-sum", "health-problem", "health", "health-hint", "indicators-h", "indicator-sum", "indicators", "score-h", "score-sum", "differences", "interests-h", "interest-sum", "interests"];
     for (const id of ids) expect(local).toContain(`id="${id}"`);
     // The link at the top goes to the panel of the sources on the same page.
     expect(local).toContain('<a id="brief" href="#sources-h">');
@@ -79,7 +79,7 @@ describe("the local page", () => {
     expect(entry).toContain("readMap(get)");
     expect(entry).toContain("readHistories(get, ");
     expect(entry).toContain("readHealth(get)");
-    for (const text of [entry, read("map-read.ts"), read("history-read.ts"), read("health-read.ts"), read("health-view.ts"), read("health-look.ts"), read("indicators-view.ts"), read("scrub.ts"), read("map-view.ts"), read("globe-view.ts"), read("globe-stage.ts"), read("globe-load.ts"), local]) expect(text).not.toMatch(/https?:|\/\/[a-z0-9.-]+[.:]/i);
+    for (const text of [entry, read("map-read.ts"), read("history-read.ts"), read("health-read.ts"), read("health-view.ts"), read("health-look.ts"), read("indicators-view.ts"), read("score-view.ts"), read("scrub.ts"), read("map-view.ts"), read("globe-view.ts"), read("globe-stage.ts"), read("globe-load.ts"), local]) expect(text).not.toMatch(/https?:|\/\/[a-z0-9.-]+[.:]/i);
     for (const call of ["XMLHttpRequest", "WebSocket", "EventSource", "sendBeacon", "import("]) expect(entry).not.toContain(call);
   });
 

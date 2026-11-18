@@ -5,9 +5,10 @@
  * that it gets.
  */
 import { isFrameClock, type WallClock } from "@mark1russell7/algebra/clock";
-import { DEFAULT_LINK_POLICY, indicatorBreadth, linkRule, ONLY_COPY, type ChannelQuota, type CopyWatch, type Duration, type EntryTimes, type FetchOutcome, type IndicatorBreadth, type Instant, type LatenessFolds, type ReportId, type SourceDescriptor, type SourceId, type SourceProcedures, type Watch, type ZoneRegions } from "@mark1russell7/alerts";
+import { channelDownPolicy, DEFAULT_LINK_POLICY, downChannels, indicatorBreadth, linkRule, ONLY_COPY, type ChannelQuota, type CopyWatch, type Duration, type EntryTimes, type Exhaustion, type FetchOutcome, type IndicatorBreadth, type Instant, type LatenessFolds, type ReportId, type SourceDescriptor, type SourceId, type SourceProcedures, type Watch, type ZoneRegions } from "@mark1russell7/alerts";
 import { errorMessage } from "@mark1russell7/text";
 import type { BalanceWatch } from "./balance.ts";
+import { channelWatch, lastFetchSuccess } from "./channel-watch.ts";
 import { createDispatcher, type DeliveryOptions, type DeliveryStep } from "./delivery.ts";
 import { drillStarts, drillStep, type CopyDrill } from "./drills.ts";
 import { entryIndex } from "./entries.ts";
@@ -261,6 +262,11 @@ export function openRuntime(options: RuntimeOptions): Runtime {
 
   // The folds of the lateness of the last view, in memory only. A pass folds only the new checks. A restart folds each check again, with the same result.
   let folds: LatenessFolds | undefined;
+  // The exhausted escalations of the last delivery step, in memory only (AL-21). A restart keeps each open line until its first delivery step.
+  let exhausted: readonly Exhaustion[] | undefined;
+  // The runs of failed calls of the channels of this copy, and the probes of its down channels, in memory only (AL-65).
+  // A restart empties the runs, and each open line stays until a good call.
+  const channels = options.delivery === undefined ? undefined : channelWatch({ copy: self, channels: options.delivery.channels, policy: channelDownPolicy(config.channelDown), clock, callLimit: options.delivery.callLimit });
 
   // The misses of the reports of each snapshot source, in memory only. A restart starts them at 0.
   const misses = new Map<SourceId, ReadonlyMap<ReportId, number>>();
@@ -382,9 +388,12 @@ export function openRuntime(options: RuntimeOptions): Runtime {
       });
       // A watch reads only when it is due, and its check does not throw. It runs next to the fetches.
       const checks = Promise.all(scheduled.map((watch) => watch.check(clock, stop)));
+      // The probes of the down channels run next to the fetches. A probe does not throw, and it ends at the call limit.
+      const probes = channels?.probe(downChannels(state.lines, self), start);
       // Each fetch ends before the pass ends, also when one of them fails. Thus no fetch of a pass runs on in the next pass.
       const settled = await Promise.allSettled(due.map(({ source, descriptor }) => fetchOne(source, descriptor, stop)));
       await checks;
+      await probes;
       await options.copies?.ready();
       const failed = settled.find((result) => result.status === "rejected");
       if (failed !== undefined) throw failed.reason;
@@ -400,7 +409,7 @@ export function openRuntime(options: RuntimeOptions): Runtime {
       if (started.length > 0) conflicts.push(...append(started));
       const drilled = drillStep(state, drills, self, at);
       const quotas = readQuotas();
-      const view = systemView(state, config, at, { drills: drilled.snapshots, ...(quotas === undefined ? {} : { quotas }), balances: watches.flatMap((watch) => watch.balance() ?? []), ...(options.copies === undefined ? {} : { copies: options.copies.watches() }), ...(folds === undefined ? {} : { folds }) });
+      const view = systemView(state, config, at, { drills: drilled.snapshots, ...(quotas === undefined ? {} : { quotas }), balances: watches.flatMap((watch) => watch.balance() ?? []), ...(options.copies === undefined ? {} : { copies: options.copies.watches(), copy: self }), ...(folds === undefined ? {} : { folds }), ...(exhausted === undefined ? {} : { exhausted }), ...(channels === undefined ? {} : { channels: channels.snapshots() }) });
       folds = view.folds;
       const event = systemEvent(view);
       if (event !== undefined) conflicts.push(...append([event]));
@@ -408,6 +417,12 @@ export function openRuntime(options: RuntimeOptions): Runtime {
       // The system reports of this pass are incidents too, thus the delivery comes after their write.
       const delivery = await dispatcher?.step(at);
       if (delivery !== undefined) conflicts.push(...delivery.conflicts);
+      // A new or an ended exhaustion goes into the view of the next pass. Thus that pass comes at once, not at the next fetch.
+      // A missing list is an empty list. After a restart, the second pass gives the list, and it can end an open line.
+      const changed = delivery !== undefined && JSON.stringify(delivery.exhausted) !== JSON.stringify(exhausted ?? []);
+      if (delivery !== undefined) exhausted = delivery.exhausted;
+      // A run that starts to open a line, or an accepted send on a down channel, changes a line in the view of the next pass.
+      const down = delivery !== undefined && channels !== undefined && channels.step(delivery, clock.now(), downChannels(state.lines, self), lastFetchSuccess(state.health));
 
       // The retirement comes after the delivery, at most once in each interval. A retired incident is not live, thus no send needs it.
       if (searched === undefined || at - searched >= kept.every) {
@@ -427,7 +442,7 @@ export function openRuntime(options: RuntimeOptions): Runtime {
       // A source or a balance watch can come due after `start`, while the fetches of the pass run. A fetch that runs to its
       // limit of one interval also ends at its next fetch. Such work is due, not a fault: its wake is the first instant after the pass.
       const nextWork = earliest([...config.sources.map((descriptor) => nextFetch(state, descriptor)), ...scheduled.map((watch) => watch.nextReadAt())]);
-      const wakeAt = earliest([nextWork === undefined ? undefined : Math.max(nextWork, at + 1), view.wakeAt, delivery?.wakeAt, drilled.wakeAt]);
+      const wakeAt = earliest([nextWork === undefined ? undefined : Math.max(nextWork, at + 1), view.wakeAt, delivery?.wakeAt, drilled.wakeAt, channels?.wakeAt(), changed || down ? at + 1 : undefined]);
       const pass: Pass = {
         at,
         fetched: due.map(({ descriptor }) => descriptor.id),

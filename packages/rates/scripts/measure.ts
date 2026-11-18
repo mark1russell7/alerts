@@ -3,14 +3,17 @@
  * the whole country through polite-crawler, one request at a time for each host:
  *
  * - IEM Cow: the warnings of each month, with the verified ones.
- * - NCEI Storm Events: one file of details for each year, as a stream. The script keeps only the sums of each type.
+ * - NCEI Storm Events: one file of details for each year, as a stream. The script keeps the sums of each type, and
+ *   the rows with deaths or injuries for the join.
+ * - The IEM archive of the VTEC alerts: the alerts of each month, as CSV text. The script counts the alerts of each
+ *   kind, and it joins each alert row with the NCEI events of its county or zone. It keeps no alert row.
  *
  * The requests name no office and no state. The script examines robots.txt of each host first. It
  * writes `rates.json`, the priors of the shadow score (`priors.json`) and `summary.md` in the folder of `--out`. With `--check`, it compares each
  * value with the gate interval of the committed file. A value out of its interval gives the exit
  * code 1. A value that the gate cannot read gives a warning annotation of the workflow, and no failure.
  *
- * Start: `node scripts/measure.ts --out=<folder> [--check=data/rates.json] [--cow-years=2021-2025] [--ncei-years=2016-2025]`
+ * Start: `node scripts/measure.ts --out=<folder> [--check=data/rates.json] [--cow-years=2021-2025] [--ncei-years=2016-2025] [--alert-years=2021-2025]`
  */
 
 import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
@@ -21,6 +24,9 @@ import { fetchTransport, send, type FetchLike, type Transport } from "polite-cra
 import { HostScheduler, realClock } from "polite-crawler/politeness";
 import { decide, robotsFromResponse } from "polite-crawler/robots";
 import {
+  ALERT_YEARS,
+  AlertTally,
+  alertWindows,
   checkRates,
   COW_URL,
   COW_YEARS,
@@ -28,23 +34,32 @@ import {
   cowSettings,
   cowWindows,
   detailsFiles,
+  GATE_FORMATS,
+  HarmJoin,
   measureYears,
   NCEI_FOLDER_URL,
   NCEI_YEARS,
+  numberingDoubts,
   parseYears,
+  placeAll,
   priorsOf,
   RATES_FORMAT,
   ratesFile,
   ratesSummary,
   readCow,
+  readWatchwarn,
   splitWindow,
   sumDetails,
   tallyCow,
+  WATCHWARN_URL,
+  watchwarnQuery,
   type CowWarning,
   type CowWindow,
   type DetailsFile,
   type GateResult,
   type RatesFile,
+  type UnderInput,
+  type WatchwarnRead,
   type YearHarm,
   type Years,
 } from "../src/index.ts";
@@ -57,6 +72,8 @@ const MIN_INTERVAL_MS = 5000;
 const COW_TIMEOUT_MS = 300_000;
 /** The time limit of the download of one NCEI file. */
 const NCEI_TIMEOUT_MS = 600_000;
+/** The time limit of one request of the alerts. A request that ends at the limit goes again as two halves. */
+const WATCHWARN_TIMEOUT_MS = 300_000;
 /** The count of tries of one request before the script cuts its window or stops. */
 const TRIES = 3;
 
@@ -69,6 +86,10 @@ const pace = { scheduler: new HostScheduler(realClock, 1), now: realClock.now };
 const started = realClock.now();
 const cowYears: Years = option("cow-years") === undefined ? measureYears(started, COW_YEARS) : parseYears(option("cow-years") as string);
 const nceiYears: Years = option("ncei-years") === undefined ? measureYears(started, NCEI_YEARS) : parseYears(option("ncei-years") as string);
+const alertYears: Years = option("alert-years") === undefined ? measureYears(started, ALERT_YEARS) : parseYears(option("alert-years") as string);
+if (alertYears.first < nceiYears.first || alertYears.last > nceiYears.last) {
+  throw new Error(`The alert years ${String(alertYears.first)} to ${String(alertYears.last)} are not in the NCEI years ${String(nceiYears.first)} to ${String(nceiYears.last)}.`);
+}
 const log = (text: string): void => console.log(`${new Date(realClock.now()).toISOString()} ${text}`);
 
 /** This function makes a requester of one host, at the pace of its robots.txt. */
@@ -182,7 +203,52 @@ async function measureNcei(): Promise<{ files: DetailsFile[]; harms: YearHarm[] 
   return { files, harms };
 }
 
-/** This function reads the committed file. It gives undefined when there is no file. */
+/**
+ * The measure of the harm under an alert: the alerts of each month, counted, and each alert row joined with the NCEI
+ * events of its county or zone. A window that fails goes again, then as two halves. A text that the reader cannot read
+ * counts as a failed try.
+ */
+async function measureUnder(harms: readonly YearHarm[]): Promise<UnderInput> {
+  const placed = placeAll(harms, alertYears);
+  const join = new HarmJoin(placed.events);
+  const intervalMs = await allow(WATCHWARN_URL);
+  const service = requester("iem-watchwarn", WATCHWARN_URL, intervalMs, WATCHWARN_TIMEOUT_MS, fetchTransport({ userAgent: USER_AGENT, timeoutMs: WATCHWARN_TIMEOUT_MS }));
+  const tally = new AlertTally(alertYears);
+  const windows: CowWindow[] = [];
+  log(`the join has ${String(placed.events.length)} events with harm in ${String(join.ugcs.size)} areas, and ${String(placed.unplaced.length)} events that it cannot place`);
+  const take = async (window: CowWindow): Promise<void> => {
+    for (let attempt = 1; attempt <= TRIES; attempt += 1) {
+      const result = await service.get({ path: watchwarnQuery(window), what: `the alerts of ${windowText(window)}` });
+      if (result.ok) {
+        let read: WatchwarnRead;
+        try {
+          read = readWatchwarn(result.answer.reply.body);
+        } catch (error) {
+          log(`alerts ${windowText(window)}: try ${String(attempt)}: the text is not the CSV of the alerts: ${(error as Error).message}`);
+          continue;
+        }
+        tally.add(read);
+        for (const row of read.rows) {
+          if (row.ugc === "" || row.issue === undefined || row.expire === undefined) continue;
+          join.add({ ugc: row.ugc, issue: row.issue, expire: row.expire, phenomenon: row.phenomenon, significance: row.significance });
+        }
+        windows.push(window);
+        log(`alerts ${windowText(window)}: ${String(read.rows.length)} rows, ${String(Math.round(result.answer.reply.body.length / 1000))} kB, ${String(Math.round(result.latency / 1000))} s`);
+        return;
+      }
+      log(`alerts ${windowText(window)}: try ${String(attempt)} failed: ${result.failure.kind}: ${result.failure.message}`);
+      if (result.failure.kind === "timeout") break;
+    }
+    const halves = splitWindow(window);
+    if (halves === undefined) throw new Error(`The archive of the alerts gave no answer for ${windowText(window)}.`);
+    log(`alerts ${windowText(window)}: the script asks for two halves`);
+    for (const half of halves) await take(half);
+  };
+  for (const window of alertWindows(alertYears)) await take(window);
+  return { years: alertYears, windows, counts: tally.counts(), matches: join.matches(), unplaced: placed.unplaced };
+}
+
+/** This function reads the committed file. It gives undefined when there is no file. The gate reads each format of `GATE_FORMATS`. */
 async function committedFile(path: string): Promise<RatesFile | undefined> {
   let text: string;
   try {
@@ -192,17 +258,21 @@ async function committedFile(path: string): Promise<RatesFile | undefined> {
     throw error;
   }
   const file = JSON.parse(text) as RatesFile;
-  if (file.format !== RATES_FORMAT) throw new Error(`The committed file has the format ${JSON.stringify(file.format)}, not ${RATES_FORMAT}.`);
+  if (!GATE_FORMATS.includes(file.format)) throw new Error(`The committed file has the format ${JSON.stringify(file.format)}, not one of ${GATE_FORMATS.join(", ")}. The new format is ${RATES_FORMAT}.`);
   return file;
 }
 
-log(`the measure starts: Cow ${String(cowYears.first)} to ${String(cowYears.last)}, NCEI ${String(nceiYears.first)} to ${String(nceiYears.last)}`);
+log(
+  `the measure starts: Cow ${String(cowYears.first)} to ${String(cowYears.last)}, NCEI ${String(nceiYears.first)} to ${String(nceiYears.last)}, alerts ${String(alertYears.first)} to ${String(alertYears.last)}`,
+);
 const cow = await measureCow();
 const ncei = await measureNcei();
+const under = await measureUnder(ncei.harms);
 const file = ratesFile({
   fetched: started,
   cow: { years: cowYears, params: cow.params, queries: cow.queries, tally: tallyCow(cow.warnings) },
   ncei: { years: nceiYears, files: ncei.files, harms: ncei.harms },
+  under,
 });
 const committed = check === undefined ? undefined : await committedFile(check);
 const gate: GateResult = committed === undefined ? { committed: false } : { committed: true, ...checkRates(committed, file) };
@@ -218,6 +288,8 @@ console.log(summary);
 const command = (text: string): string => text.replaceAll("%", "%25").replaceAll("\r", "%0D").replaceAll("\n", "%0A");
 // A no read is a warning on the check line of the run, not only a line of the log. A no read is not a pass.
 if (gate.committed) for (const item of gate.noReads) console.log(`::warning title=No read of the gate::${command(`${item.path}: ${item.reason}`)}`);
+// A doubt of the national numbers is a warning: a person examines the list of the national numbers.
+for (const doubt of numberingDoubts(file.under.numbering)) console.log(`::warning title=Doubt of the national numbers::${command(doubt)}`);
 if (gate.committed && gate.breaks.length > 0) {
   for (const item of gate.breaks) console.error(`The value ${String(item.value)} of ${item.path} is out of its gate interval ${String(item.gate[0])} to ${String(item.gate[1])}.`);
   process.exitCode = 1;

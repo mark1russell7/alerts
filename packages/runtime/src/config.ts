@@ -10,7 +10,7 @@
 import { readdir, readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { parseConfig, partLabel, type ChannelDescriptor, type ParsedConfig, type PartText, type SecretLookup } from "@mark1russell7/alerts";
+import { parseConfig, partLabel, type ChannelDescriptor, type ContactServices, type ParsedConfig, type PartText, type SecretLookup } from "@mark1russell7/alerts";
 import { resolvePath } from "@mark1russell7/files";
 import { err, ok, tryCatchAsync, type Result } from "@mark1russell7/optional";
 import { parseEnvFile } from "@mark1russell7/service/host";
@@ -169,7 +169,7 @@ export function checkTexts(texts: PrivateTexts, check: InstanceCheck, name = "Th
   const parts = partTexts(texts.parts ?? NO_PARTS);
   if (parts.tag === "err") return parts;
   const secret = envSecrets(keys.value);
-  const parsed = parseConfig(texts.config.text, check.channels, secret, parts.value);
+  const parsed = parseConfig(texts.config.text, check.channels, secret, parts.value, check.services);
   if (parsed.tag === "err") return parsed;
   const problems = check.problems(parsed.value, secret);
   return problems.length > 0 ? err(problems) : ok({ parsed: parsed.value, keys: keys.value });
@@ -212,6 +212,8 @@ export async function checkConfig(source: ConfigSource, home: string, check: Ins
 export interface InstanceCheck {
   /** The channels of the instance. The loader checks each recipient against them. */
   readonly channels: readonly ChannelDescriptor[];
+  /** The services of the contacts, from the channels (`ContactServices`). The layer `delivery` of each person takes them. */
+  readonly services?: ContactServices;
   /** This function gives the problems of a parsed configuration that stop the start of the instance. */
   problems(parsed: ParsedConfig, secret: SecretLookup): readonly string[];
 }
@@ -219,7 +221,7 @@ export interface InstanceCheck {
 /** This function gives the check with one more problem when the file of keys has no value for `key`. The text `reason` ends the problem. */
 export function requireKey(check: InstanceCheck, key: string, reason: string): InstanceCheck {
   return {
-    channels: check.channels,
+    ...check,
     problems: (parsed, secret) => [...check.problems(parsed, secret), ...(secret(key) === undefined ? [`The file ${SECRETS_FILE} has no ${key}. ${reason}`] : [])],
   };
 }

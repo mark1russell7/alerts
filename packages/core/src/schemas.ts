@@ -64,6 +64,7 @@ import {
   type Instant,
   type Kind,
   type KindClass,
+  type AlertArea,
   type KindPrior,
   type Level,
   type MeasureDeclaration,
@@ -98,6 +99,7 @@ import {
   type Severity,
   type ShadowScore,
   type Significance,
+  type UnderPrior,
   type SourceDescriptor,
   type SourceHealth,
   type SourceId,
@@ -123,6 +125,7 @@ import {
   type WhyLimit,
   type WhyRecord,
   type WatchedPlace,
+  type ContactServices,
 } from "./contracts.ts";
 import { MEASURE_ID, SERIES_VERSION } from "./indicators.ts";
 import { err, ok, tryCatch, type Result } from "@mark1russell7/optional";
@@ -147,17 +150,21 @@ import {
   type OutageConfig,
   type OutagePersonConfig,
   type PersonConfig,
+  type InterestDefaultsConfig,
   type PlaceConfig,
   type SecretLookup,
   type SpendConfig,
   type SecretRef,
 } from "./config.ts";
 import type { TryChain } from "./chain.ts";
+import type { ChannelDownConfig } from "./channel-down.ts";
 import type { EscalationEnd, Recipient } from "./delivery.ts";
 import type { DrillConfig, DrillPath } from "./drill.ts";
 import { OPT_IN_WAYS, type OptInConfig, type OptInRecord } from "./opt-in.ts";
 import type { RankDelays } from "./escalation.ts";
 import { HEALTH_FORMAT, type BalanceHealth, type CopyHealth, type HealthPayload, type QuotaHealth, type ReadHealth, type SourceHealthView } from "./health-payload.ts";
+import type { InterestRow } from "./interest-defaults.ts";
+import { INTERESTS_FORMAT, type InterestsPayload, type InterestsPerson } from "./interests-payload.ts";
 import { HISTORY_FORMAT, type HistoryChange, type HistoryIncident, type HistoryPayload, type HistoryPlace, type HistoryRegion } from "./history.ts";
 import type { MapShape } from "./map.ts";
 import type { Lateness, LatenessLimit, LatenessState } from "./lateness.ts";
@@ -768,6 +775,9 @@ export const channelDescriptorSchema: z.ZodType<ChannelDescriptor, ChannelDescri
       id: channelIdSchema,
       title: z.string(),
       dependsOn: outsideDomains,
+      // A lazy schema: the schema of a node key comes later in this file.
+      services: z.array(z.lazy(() => nodeKeySchema)).readonly().exactOptional(),
+      api: z.array(z.lazy(() => nodeKeySchema)).min(1, "A list of endpoints is not empty.").readonly().exactOptional(),
       uses: cellUses,
       breaksThrough: z.boolean(),
       repeats: z.boolean(),
@@ -779,8 +789,18 @@ export const channelDescriptorSchema: z.ZodType<ChannelDescriptor, ChannelDescri
       exclusive: z.boolean().exactOptional(),
       why: whyLimitSchema.exactOptional(),
       address: z.array(addressFieldSchema).readonly().exactOptional(),
+      ackLevels: z.array(levelSchema).readonly().exactOptional(),
     })
-    .readonly(),
+    .readonly()
+    .refine((channel) => channel.ack !== "none" || (channel.ackLevels ?? []).length === 0, {
+      error: "A channel with the ack none asks for no acknowledgment, thus it has no ackLevels.",
+      path: ["ackLevels"],
+    })
+    // An endpoint is a service that the calls reach. Thus the delivery layer has an edge from it (AL-65).
+    .refine((channel) => (channel.api ?? []).every((key) => (channel.services ?? []).includes(key)), {
+      error: "Each endpoint in api is also in services.",
+      path: ["api"],
+    }),
 );
 
 /** This schema checks one message to one person on one channel. A `life-safety` message is not quiet (`contracts.ts`, line 516). */
@@ -948,12 +968,16 @@ export const assessPolicySchema: z.ZodType<AssessPolicy, AssessPolicy> = schemaO
     .readonly(),
 );
 
+/** This schema checks the kind of a subject. */
+export const subjectKindSchema: z.ZodType<SubjectKind, SubjectKind> = schemaOf<SubjectKind>()(z.enum(["place", "topic", "entity"]));
+
 /** This schema checks a rule of a person. */
 export const levelRuleSchema: z.ZodType<LevelRule, LevelRule> = schemaOf<LevelRule>()(
   z
     .strictObject({
       places: z.array(placeIdSchema).readonly().exactOptional(),
       kinds: z.array(kindCodeSchema).readonly().exactOptional(),
+      through: z.array(subjectKindSchema).readonly().exactOptional(),
       max: assessedLevelSchema,
     })
     .readonly(),
@@ -983,7 +1007,13 @@ export const subjectWatchSchema: z.ZodType<SubjectWatch, SubjectWatch> = schemaO
 /** This schema checks the escalation of one level, with its optional subject. */
 export const escalationPolicySchema: z.ZodType<EscalationPolicy, EscalationPolicy> = schemaOf<EscalationPolicy>()(
   z
-    .strictObject({ level: levelSchema, about: subjectWatchSchema.exactOptional(), steps: z.array(escalationStepSchema).readonly(), exhaustedAfter: durationSchema })
+    .strictObject({
+      level: levelSchema,
+      daily: z.strictObject({ zone: z.string(), time: z.string() }).readonly().exactOptional(),
+      about: subjectWatchSchema.exactOptional(),
+      steps: z.array(escalationStepSchema).readonly(),
+      exhaustedAfter: durationSchema,
+    })
     .readonly(),
 );
 
@@ -1034,6 +1064,14 @@ export const probabilitySchema: z.ZodType<Estimate, Estimate> = estimateIn(0, 1)
  */
 export const estimateSchema: z.ZodType<Estimate, Estimate> = estimateIn(0, Number.MAX_SAFE_INTEGER);
 
+/** This schema checks a kind of area of an alert. */
+export const alertAreaSchema: z.ZodType<AlertArea, AlertArea> = schemaOf<AlertArea>()(z.enum(["county", "zone"]));
+
+/** This schema checks the harm in one area under one active alert. */
+export const underPriorSchema: z.ZodType<UnderPrior, UnderPrior> = schemaOf<UnderPrior>()(
+  z.strictObject({ deaths: estimateSchema, injuries: estimateSchema, area: alertAreaSchema }).readonly(),
+);
+
 /** This schema checks the priors of one kind. */
 export const kindPriorSchema: z.ZodType<KindPrior, KindPrior> = schemaOf<KindPrior>()(
   z
@@ -1041,15 +1079,16 @@ export const kindPriorSchema: z.ZodType<KindPrior, KindPrior> = schemaOf<KindPri
       verified: probabilitySchema.exactOptional(),
       deaths: estimateSchema.exactOptional(),
       injuries: estimateSchema.exactOptional(),
+      under: z.partialRecord(significanceSchema, underPriorSchema).readonly().exactOptional(),
     })
     .readonly(),
 );
 
-/** This schema checks a file of priors, `alerts-priors/1`. */
+/** This schema checks a file of priors, `alerts-priors/2`. */
 export const scorePriorsSchema: z.ZodType<ScorePriors, ScorePriors> = schemaOf<ScorePriors>()(
   z
     .strictObject({
-      format: z.literal("alerts-priors/1"),
+      format: z.literal("alerts-priors/2"),
       kinds: z.record(kindCodeSchema, kindPriorSchema).readonly(),
       certainty: z
         .strictObject({
@@ -1064,30 +1103,49 @@ export const scorePriorsSchema: z.ZodType<ScorePriors, ScorePriors> = schemaOf<S
     .readonly(),
 );
 
+const priorKey = z.string().min(1, "A key of the priors is a non-empty string.");
+
 /** This schema checks one factor of a shadow score. */
 export const scoreFactorSchema: z.ZodType<ScoreFactor, ScoreFactor> = schemaOf<ScoreFactor>()(
   z
     .strictObject({
       estimate: estimateSchema,
-      from: z.strictObject({ table: z.enum(["kinds", "certainty"]), key: z.string().min(1, "A key of the priors is a non-empty string.") }).readonly(),
+      from: z.union([
+        z.strictObject({ table: z.enum(["kinds", "certainty"]), key: priorKey }).readonly(),
+        z.strictObject({ table: z.literal("under"), key: priorKey, significance: significanceSchema, area: alertAreaSchema }).readonly(),
+      ]),
     })
     .readonly(),
 );
+
+// A factor of the table `under`.
+const underFactorSchema = scoreFactorSchema.refine((factor) => factor.from.table === "under", "A factor of the basis alert comes from the table under.");
 
 /** This schema checks the expected harm of a shadow score. */
 export const expectedHarmSchema: z.ZodType<ExpectedHarm, ExpectedHarm> = schemaOf<ExpectedHarm>()(
   z.strictObject({ deaths: estimateSchema, injuries: estimateSchema }).readonly(),
 );
 
-/** This schema checks a shadow score. A score with no read names one or more factors that the priors do not give. */
+/**
+ * This schema checks a shadow score. A score with no read names one or more factors that the priors do not give. A score
+ * of the basis `alert` has its factors from the table `under`.
+ */
 export const shadowScoreSchema: z.ZodType<ShadowScore, ShadowScore> = schemaOf<ShadowScore>()(
   z
-    .discriminatedUnion("read", [
+    .union([
       z.strictObject({
         read: z.literal(true),
+        basis: z.literal("event").exactOptional(),
         probability: scoreFactorSchema,
         deaths: scoreFactorSchema,
         injuries: scoreFactorSchema,
+        expected: expectedHarmSchema,
+      }),
+      z.strictObject({
+        read: z.literal(true),
+        basis: z.literal("alert"),
+        deaths: underFactorSchema,
+        injuries: underFactorSchema,
         expected: expectedHarmSchema,
       }),
       z.strictObject({
@@ -1104,9 +1162,6 @@ export const shadowScoreSchema: z.ZodType<ShadowScore, ShadowScore> = schemaOf<S
 // =============================================================================
 // Relevance (AL-35, `docs/RELEVANCE.md`)
 // =============================================================================
-
-/** This schema checks the kind of a subject. */
-export const subjectKindSchema: z.ZodType<SubjectKind, SubjectKind> = schemaOf<SubjectKind>()(z.enum(["place", "topic", "entity"]));
 
 // The key `person`, or `<system>:<id>` with a system of SUBJECT_SYSTEMS and an id that is not empty.
 const NODE_KEY = new RegExp(`^(?:person|(?:${Object.keys(SUBJECT_SYSTEMS).join("|")}):.+)$`);
@@ -1130,7 +1185,7 @@ export const edgeKindSchema: z.ZodType<EdgeKind, EdgeKind> = schemaOf<EdgeKind>(
 
 /** This schema checks the origin of the weight of an edge. */
 export const edgeOriginSchema: z.ZodType<EdgeOrigin, EdgeOrigin> = schemaOf<EdgeOrigin>()(
-  z.enum(["base", "places", "services", "work", "data", "measured", "person"]),
+  z.enum(["base", "places", "services", "delivery", "work", "data", "measured", "person"]),
 );
 
 /**
@@ -1388,11 +1443,26 @@ export function isContactUrl(text: string): boolean {
   return CONTACT_CHARACTERS.test(text) && CONTACT_FORMS.some((form) => form.test(text));
 }
 
+/**
+ * This schema checks the inputs of the default layers of a person. The load checks each work against the table, and
+ * checks that each service is an entity.
+ */
+export const interestDefaultsConfigSchema: z.ZodType<InterestDefaultsConfig, InterestDefaultsConfig> = schemaOf<InterestDefaultsConfig>()(
+  z
+    .strictObject({
+      works: z.array(z.string().min(1)).readonly().exactOptional(),
+      services: z.array(nodeKeySchema).readonly().exactOptional(),
+      delivery: z.boolean().exactOptional(),
+    })
+    .readonly(),
+);
+
 /** This schema checks a person of the configuration: the watch, and the policies of the person when they are not the default. */
 export const personConfigSchema: z.ZodType<PersonConfig, PersonConfig> = schemaOf<PersonConfig>()(
   z
     .strictObject({
       watch: personWatchSchema,
+      defaults: interestDefaultsConfigSchema.exactOptional(),
       label: z.string().exactOptional(),
       policies: z.array(escalationPolicySchema).readonly().exactOptional(),
     })
@@ -1508,6 +1578,11 @@ export const rankDelaysSchema: z.ZodType<RankDelays, RankDelays> = schemaOf<Rank
   z.strictObject({ digest: durationSchema.exactOptional(), notice: durationSchema.exactOptional(), urgent: durationSchema.exactOptional(), "life-safety": durationSchema.exactOptional() }).readonly(),
 );
 
+/** This schema checks the policy of a down channel (AL-65). A run opens a line at 1 failed call or more. */
+export const channelDownConfigSchema: z.ZodType<ChannelDownConfig, ChannelDownConfig> = schemaOf<ChannelDownConfig>()(
+  z.strictObject({ failures: z.number().int().min(1).exactOptional(), span: durationSchema.exactOptional() }).readonly(),
+);
+
 /**
  * This schema checks the JSON of the private configuration at the load. It checks the form of each
  * value. Then `loadConfig` checks the references: the ids, the places of each person, the contacts,
@@ -1531,6 +1606,7 @@ export const alertConfigSchema: z.ZodType<AlertConfig, AlertConfig> = schemaOf<A
       assess: assessPolicySchema.exactOptional(),
       drills: z.array(drillConfigSchema).readonly().exactOptional(),
       optIn: z.array(optInConfigSchema).readonly().exactOptional(),
+      channelDown: channelDownConfigSchema.exactOptional(),
     })
     .readonly(),
 );
@@ -1755,6 +1831,31 @@ export const historyPayloadSchema: z.ZodType<HistoryPayload, HistoryPayload> = s
     .readonly(),
 );
 
+/** This schema checks one row of the interests of a person: an edge, and the id of the edge that replaced it. */
+export const interestRowSchema: z.ZodType<InterestRow, InterestRow> = schemaOf<InterestRow>()(
+  z.strictObject({ edge: interestEdgeSchema, replacedBy: z.string().min(1).exactOptional() }).readonly(),
+);
+
+/** This schema checks the interests of one person in the answer of the interests route of the runtime. */
+export const interestsPersonSchema: z.ZodType<InterestsPerson, InterestsPerson> = schemaOf<InterestsPerson>()(
+  z
+    .strictObject({
+      person: personIdSchema,
+      label: z.string().exactOptional(),
+      routing: z.enum(["graph", "places"]),
+      rows: z.array(interestRowSchema).readonly(),
+      mutes: z.array(muteSchema).readonly(),
+      labels: z.record(z.string(), z.string()).readonly(),
+      problem: z.string().exactOptional(),
+    })
+    .readonly(),
+);
+
+/** This schema checks the answer of the interests route of the runtime. */
+export const interestsPayloadSchema: z.ZodType<InterestsPayload, InterestsPayload> = schemaOf<InterestsPayload>()(
+  z.strictObject({ format: z.literal(INTERESTS_FORMAT), people: z.array(interestsPersonSchema).readonly() }).readonly(),
+);
+
 /**
  * This function reads the JSON text of the settings of one copy. It checks the JSON, then the schema, then
  * `copyProblems`. The problems hold no address and no URL.
@@ -1810,6 +1911,7 @@ export function parseConfig(
   channels: readonly ChannelDescriptor[],
   secret: SecretLookup,
   parts: readonly PartText[] = [],
+  services?: ContactServices,
 ): Result<ParsedConfig, readonly string[]> {
   const problems: string[] = [];
   // The message of the JSON parser can quote the text, so the problem does not use it.
@@ -1828,6 +1930,6 @@ export function parseConfig(
   if (checked.tag === "err" || problems.length > 0) return err(problems);
   const merged = mergeParts(checked.value, named);
   if (merged.tag === "err") return merged;
-  const loaded = loadConfig(merged.value, channels, secret);
+  const loaded = loadConfig(merged.value, channels, secret, services);
   return loaded.problems.length > 0 ? err(loaded.problems) : ok({ config: merged.value, recipients: loaded.recipients, optIn: loaded.optIn });
 }

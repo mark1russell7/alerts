@@ -7,18 +7,20 @@ import { localTime } from "@mark1russell7/algebra/clock";
 import { err, ok, type Result } from "@mark1russell7/optional";
 import { canonicalHash } from "@mark1russell7/rigor-generators";
 import { compareCodeUnits } from "@mark1russell7/text/order";
-import type { Address, AssessPolicy, ChannelDescriptor, ChannelId, Duration, EscalationPolicy, Instant, InterestGraph, NodeKey, PersonId, PersonWatch, PlaceId, Position, RegionCode, SourceId, WatchedPlace } from "./contracts.ts";
-import { assess, DEFAULT_ASSESS_POLICY, DRILL_KIND, matchSubjects, reachedAssessment } from "./assess.ts";
+import type { Address, AssessPolicy, ChannelDescriptor, ChannelId, ContactServices, Duration, EscalationPolicy, Instant, InterestGraph, NodeKey, PersonId, PersonWatch, PlaceId, Position, RegionCode, SourceId, WatchedPlace } from "./contracts.ts";
+import { assess, CHANNEL_KIND, DEFAULT_ASSESS_POLICY, DRILL_KIND, matchSubjects, reachedAssessment } from "./assess.ts";
+import type { ChannelDownConfig } from "./channel-down.ts";
 import { policyFor, recipientProblems, ruleSteps, type ChannelRule, type Recipient } from "./delivery.ts";
 import { DRILL_PROBES, drillProblems, nextDrillAt, type DrillConfig } from "./drill.ts";
+import { composeInterests, deliveryLayer, placesLayer, servicesLayer, workLayer, type InterestRow } from "./interest-defaults.ts";
 import { incidents, normalize } from "./merge.ts";
 import { optInFields, resolveOptIn, type OptInConfig, type OptInRecord } from "./opt-in.ts";
-import { DRILL_SUBJECT, NO_SYSTEM_LINES, systemReports } from "./system-reports.ts";
+import { CHANNEL_SUBJECT, DRILL_SUBJECT, NO_SYSTEM_LINES, systemReports } from "./system-reports.ts";
 import type { TryChain } from "./chain.ts";
 import type { Expectation } from "./lateness.ts";
 import { rankDelayProblems, rankFloorProblems, type RankDelays } from "./escalation.ts";
 import type { LinkPolicy } from "./link.ts";
-import { placeNode, placeOfNode, type WhyLabels } from "./why.ts";
+import { kindOfNode, placeNode, placeOfNode, type WhyLabels } from "./why.ts";
 
 /** The name of the format of a configuration. A change that breaks a configuration gets a new name. */
 export const CONFIG_FORMAT = "alerts-config/1";
@@ -47,10 +49,31 @@ export interface PlaceConfig {
   readonly sharePosition?: readonly SourceId[];
 }
 
+/**
+ * The inputs of the default layers of the interest graph of a person (`interest-defaults.ts`). The load joins the
+ * layers with the graph of the person in `PersonWatch.interests`.
+ */
+export interface InterestDefaultsConfig {
+  /** The kinds of work of the person. Each one is a key of `WORK_DEFAULTS`, for example `software`. */
+  readonly works?: readonly string[];
+  /** The services that the person uses. Each one is the node key of an entity, for example `domain:example.com`. */
+  readonly services?: readonly NodeKey[];
+  /**
+   * The switch of the layer `delivery`: the services of the channels of the contacts of the person
+   * (`ChannelDescriptor.services`). The layer is on when the field is absent. The value `false` turns it off.
+   */
+  readonly delivery?: boolean;
+}
+
 /** A person of the configuration. */
 export interface PersonConfig {
   /** The places, the subjects, the rules and the quiet window of the person. */
   readonly watch: PersonWatch;
+  /**
+   * The inputs of the default layers of the interest graph. When it is present, the recipient gets the join of the
+   * layer `places`, the other layers and the graph of the person. When it is absent, the watch stays as it is.
+   */
+  readonly defaults?: InterestDefaultsConfig;
   /** The name of the person for the UI. */
   readonly label?: string;
   /**
@@ -87,7 +110,7 @@ export interface SpendConfig {
   readonly reserveUsd?: number;
   /**
    * The floor of the balance of the account, in the currency of the account: one floor or a list of floors. Below each
-   * floor, the system reports one line `low`. Thus the list `[5, 2]` gives one alert at 5 and one more alert at 2.
+   * floor, the system reports one line `low`. Thus the list `[10, 3]` gives one alert at 10 and one more alert at 3.
    */
   readonly floor: number | readonly number[];
   /** The time zone of the start of the month, as an IANA name: for example `America/New_York`. */
@@ -179,6 +202,11 @@ export interface AlertConfig {
    * list, and a STOP reply removes the number. The list holds phone numbers: keep it out of each public text.
    */
   readonly optIn?: readonly OptInConfig[];
+  /**
+   * The policy of a down channel (AL-65): the run of failed calls that opens its line. Without it, 3 failed calls in at
+   * least 60 s open a line (`DEFAULT_CHANNEL_DOWN`).
+   */
+  readonly channelDown?: ChannelDownConfig;
 }
 
 /** The name of the format of a part of the configuration. A change that breaks a part gets a new name. */
@@ -399,8 +427,11 @@ export interface LoadedConfig {
  * - a run or a failure of a drill that sends nothing to its person: no policy of its level, or no step after the rules
  * - each problem of `drillProblems` for each drill
  * - each problem of `recipientProblems` for each person.
+ *
+ * With `services`, the layer `delivery` of each person also takes the services of each contact of the person
+ * (`contactChannels`). No problem holds them.
  */
-export function loadConfig(config: AlertConfig, channels: readonly ChannelDescriptor[], secret: SecretLookup): LoadedConfig {
+export function loadConfig(config: AlertConfig, channels: readonly ChannelDescriptor[], secret: SecretLookup, services?: ContactServices): LoadedConfig {
   const problems: string[] = [];
   const places = new Set<string>();
   for (const place of config.places) {
@@ -411,7 +442,10 @@ export function loadConfig(config: AlertConfig, channels: readonly ChannelDescri
   }
 
   const people = new Set<string>();
-  for (const { watch } of config.people) {
+  // The watch of each recipient, in the order of the people: the join of the default layers, or the watch as it is.
+  const watches: PersonWatch[] = [];
+  for (const entry of config.people) {
+    const { watch } = entry;
     const person = watch.person;
     if (people.has(person)) problems.push(`Two people have the id ${person}.`);
     people.add(person);
@@ -422,7 +456,10 @@ export function loadConfig(config: AlertConfig, channels: readonly ChannelDescri
         if (!own.has(place)) problems.push(`Rule ${index} of the person ${person} names the place ${place}, and the person does not watch it. The rule matches no incident there.`);
       }
     });
-    problems.push(...relevanceProblems(watch, own));
+    const joined = personInterests(entry, contactChannels(config, person, channels, services === undefined ? undefined : { secret, services }));
+    if (joined.problem !== undefined) problems.push(`The defaults of the person ${person}: ${joined.problem}`);
+    watches.push(joined.watch);
+    problems.push(...relevanceProblems(joined.watch, own));
   }
 
   const expectations = new Set<string>();
@@ -445,17 +482,9 @@ export function loadConfig(config: AlertConfig, channels: readonly ChannelDescri
       problems.push(`The person ${person} has two contacts on the channel ${channel}.`);
       continue;
     }
-    const fields: [string, string][] = [];
-    for (const [field, value] of Object.entries(contact.address)) {
-      if (typeof value === "string") {
-        fields.push([field, value]);
-        continue;
-      }
-      const found = secret(value.secret);
-      if (found === undefined || found === "") problems.push(`The field ${field} of the contact of ${person} on ${channel} names the secret ${value.secret}, and the secret store has no value for it.`);
-      else fields.push([field, found]);
-    }
-    ofPerson.set(channel, Object.fromEntries(fields));
+    const { address, missing } = resolveAddress(contact, secret);
+    for (const { field, name } of missing) problems.push(`The field ${field} of the contact of ${person} on ${channel} names the secret ${name}, and the secret store has no value for it.`);
+    ofPerson.set(channel, address);
   }
 
   // Each value of an opt-in field needs a record. A channel of texts then sends only to a person who agreed.
@@ -503,9 +532,9 @@ export function loadConfig(config: AlertConfig, channels: readonly ChannelDescri
     }
   }
 
-  const recipients = config.people.map((entry): Recipient => {
+  const recipients = config.people.map((entry, index): Recipient => {
     const recipient: Recipient = {
-      watch: entry.watch,
+      watch: watches[index] ?? entry.watch,
       policies: entry.policies ?? config.policies,
       addresses: Object.fromEntries(addresses.get(entry.watch.person) ?? []),
     };
@@ -539,11 +568,21 @@ export function loadConfig(config: AlertConfig, channels: readonly ChannelDescri
     }
     problems.push(...drillProblems(drill, channels, recipient?.watch.quiet));
   }
+  // The report of a down channel goes on each other channel of the person, because the down channel does not carry it.
   const ruled = recipients.map((recipient) => {
-    const rules = rulesOf.get(recipient.watch.person);
-    return rules === undefined ? recipient : { ...recipient, channelRules: [...(recipient.channelRules ?? []), ...rules] };
+    const own = [...(addresses.get(recipient.watch.person)?.keys() ?? [])].sort(compareCodeUnits) as ChannelId[];
+    const rules = [...(rulesOf.get(recipient.watch.person) ?? []), ...channelDownRules(own)];
+    return rules.length === 0 ? recipient : { ...recipient, channelRules: [...(recipient.channelRules ?? []), ...rules] };
   });
   return { recipients: ruled, problems, optIn };
+}
+
+/**
+ * This function gives the channel rules of the reports of down channels (AL-65), one for each channel. The report of a
+ * down channel goes on each channel of the person except that channel. `loadConfig` adds them to each person.
+ */
+export function channelDownRules(channels: readonly ChannelId[]): ChannelRule[] {
+  return channels.map((channel) => ({ kinds: [`${CHANNEL_KIND}.down`], about: { system: CHANNEL_SUBJECT, id: channel }, keep: "except", channels: [channel] }));
 }
 
 /**
@@ -595,6 +634,99 @@ function drillPlanProblems(drill: DrillConfig, recipient: Recipient, policy: Ass
 function graphPlaces(graph: InterestGraph): PlaceId[] {
   const nodes = [...graph.edges.flatMap((edge) => [edge.from, edge.to]), ...graph.mutes.flatMap((mute) => mute.subjects ?? [])];
   return [...new Set(nodes.flatMap((node) => placeOfNode(node) ?? []))];
+}
+
+/** The interests of one person after the load: the watch of the recipient, a row for each edge, and the problem of the join. */
+export interface PersonInterests {
+  readonly watch: PersonWatch;
+  /** The rows of the graph of the watch. A person with no graph has no row. */
+  readonly rows: readonly InterestRow[];
+  /** The text of the refusal of the join. Then the person keeps the watch of the configuration. */
+  readonly problem?: string;
+}
+
+/**
+ * This function gives the watch of a recipient: the join of the default layers and the graph of the person
+ * (`composeInterests`). A person with no defaults keeps the watch, and each edge of the graph is a row.
+ *
+ * The array `channels` holds the channels of the contacts of the person (`contactChannels`). The layer `delivery` takes
+ * their services, unless the field `delivery` of the defaults is `false`.
+ *
+ * The layer `places` is always in the join. Without it, a graph of work topics alone stops the routing at the places.
+ * A graph of another person also stays as it is: `relevanceProblems` reports it, and the places decide.
+ */
+export function personInterests(entry: PersonConfig, channels: readonly ChannelDescriptor[] = []): PersonInterests {
+  const { watch, defaults } = entry;
+  const own = watch.interests;
+  const kept = (problem?: string): PersonInterests => ({ watch, rows: own?.edges.map((edge) => ({ edge })) ?? [], ...(problem === undefined ? {} : { problem }) });
+  if (defaults === undefined || (own !== undefined && own.person !== watch.person)) return kept();
+  try {
+    const delivery = defaults.delivery === false ? [] : deliveryLayer(channels);
+    const layers = [placesLayer(watch.places), workLayer(defaults.works ?? []), servicesLayer(defaults.services ?? []), delivery];
+    const { graph, rows } = composeInterests(watch.person, layers, own);
+    return { watch: { ...watch, interests: graph }, rows };
+  } catch (error) {
+    if (error instanceof RangeError) return kept(error.message);
+    throw error;
+  }
+}
+
+/** The lookup of the services of each contact: the store of the secrets, and the services of an address. */
+export interface ContactLookup {
+  readonly secret: SecretLookup;
+  readonly services: ContactServices;
+}
+
+/**
+ * This function gives the channels of the contacts of a person, in the order of `channels`. Each such descriptor has a
+ * contact of the person in the configuration. The layer `delivery` takes the services of these channels.
+ *
+ * With a `lookup`, the descriptor of each channel also gets the services of the first contact of the person on it.
+ * Only the keys of entities count. A missing secret, a lookup that throws and a key of another kind give no service.
+ * The check of the contacts reports a missing secret. Thus no problem holds a value of an address or its services.
+ */
+export function contactChannels(
+  config: Pick<AlertConfig, "contacts">,
+  person: PersonId,
+  channels: readonly ChannelDescriptor[],
+  lookup?: ContactLookup,
+): readonly ChannelDescriptor[] {
+  const contacts = config.contacts.filter((contact) => contact.person === person);
+  const ids = new Set<string>(contacts.map((contact) => contact.channel));
+  const found = channels.filter((channel) => ids.has(channel.id));
+  if (lookup === undefined) return found;
+  return found.map((channel) => {
+    const contact = contacts.find((one) => one.channel === channel.id);
+    const resolved = contact === undefined ? undefined : resolveAddress(contact, lookup.secret);
+    const added = resolved === undefined || resolved.missing.length > 0 ? [] : contactNodes(lookup.services, channel.id, resolved.address);
+    return added.length === 0 ? channel : { ...channel, services: [...new Set([...(channel.services ?? []), ...added])] };
+  });
+}
+
+// The address of a contact with the value of each secret, and each field whose secret the store does not have.
+function resolveAddress(contact: ContactConfig, secret: SecretLookup): { readonly address: Address; readonly missing: readonly { readonly field: string; readonly name: string }[] } {
+  const fields: [string, string][] = [];
+  const missing: { field: string; name: string }[] = [];
+  for (const [field, value] of Object.entries(contact.address)) {
+    if (typeof value === "string") {
+      fields.push([field, value]);
+      continue;
+    }
+    const found = secret(value.secret);
+    if (found === undefined || found === "") missing.push({ field, name: value.secret });
+    else fields.push([field, found]);
+  }
+  return { address: Object.fromEntries(fields), missing };
+}
+
+// The services of an address that are entities. A lookup that throws gives none. By its contract it does not throw, and
+// a problem with its error could hold a private fact of the address.
+function contactNodes(services: ContactServices, channel: ChannelId, address: Address): readonly NodeKey[] {
+  try {
+    return services(channel, address).filter((node) => kindOfNode(node) === "entity");
+  } catch {
+    return [];
+  }
 }
 
 /**

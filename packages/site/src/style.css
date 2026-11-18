@@ -713,6 +713,20 @@ summary:focus-visible,
   font-size: 0.875rem;
 }
 
+.incident-card .score {
+  margin: 0.25rem 0 0;
+  font-size: 0.875rem;
+}
+
+.incident-card .score summary {
+  cursor: pointer;
+}
+
+.incident-card .score p {
+  margin: 0.25rem 0 0;
+  color: var(--quiet);
+}
+
 .reports {
   margin: 0;
   padding: 0;
@@ -1194,7 +1208,8 @@ main.local {
 }
 
 .health-panel,
-.indicator-panel {
+.indicator-panel,
+.score-panel {
   grid-column: 1 / -1;
 }
 
@@ -1256,6 +1271,43 @@ main.local {
 
 .source-more p {
   margin: 0;
+}
+
+/* The rows of the interest graph of one person: the edge, its origin, its weight and its state. They take the whole width under the person. */
+.interest-panel .source-more {
+  grid-column: 1 / -1;
+}
+
+.interest-more summary {
+  cursor: pointer;
+  color: var(--quiet);
+}
+
+.interest-rows {
+  margin: 0.25rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.interest-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 0.75rem;
+  padding: 0.25rem 0;
+  border-top: 1px dashed var(--line);
+}
+
+.interest-edge {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.interest-origin,
+.interest-weight,
+.interest-state,
+.interest-row:is([data-state="off"], [data-state="replaced"]) .interest-edge {
+  color: var(--quiet);
+  font-weight: 400;
 }
 
 .panel .delivery-h {

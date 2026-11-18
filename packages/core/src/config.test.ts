@@ -1,11 +1,12 @@
 import { random, seedsFrom } from "@mark1russell7/rigor-generators";
 import { describe, expect, it } from "vitest";
-import { type AlertConfig, balanceFloors, CONFIG_FORMAT, CONFIG_PART_FORMAT, configHash, configuredExpectations, type ContactConfig, drillRules, expectationProblems, loadConfig, localPlaces, mergeParts, type NamedPart, type PersonConfig, type PlaceConfig, placeLabels, type SecretLookup, sendCapUsd, sourcePlaces } from "./config.ts";
-import type { ChannelDescriptor, ChannelId, EscalationPolicy, InterestEdge, InterestGraph, NodeKey, PersonId, PlaceId, Position, SourceId } from "./contracts.ts";
+import { type AlertConfig, balanceFloors, CONFIG_FORMAT, CONFIG_PART_FORMAT, configHash, configuredExpectations, channelDownRules, type ContactConfig, contactChannels, drillRules, expectationProblems, loadConfig, localPlaces, mergeParts, type NamedPart, type PersonConfig, type PlaceConfig, placeLabels, type SecretLookup, sendCapUsd, sourcePlaces } from "./config.ts";
+import type { ChannelDescriptor, ChannelId, ContactServices, EscalationPolicy, InterestEdge, InterestGraph, NodeKey, PersonId, PlaceId, Position, SourceId } from "./contracts.ts";
 import { RANK_DELAY_LIMIT } from "./escalation.ts";
 import { DRILL_SUBJECT } from "./system-reports.ts";
 import type { Expectation } from "./lateness.ts";
-import { rankDelaysSchema } from "./schemas.ts";
+import { composeInterests, placesLayer, servicesLayer, workLayer } from "./interest-defaults.ts";
+import { personConfigSchema, rankDelaysSchema } from "./schemas.ts";
 
 const SEEDS = seedsFrom(process.env["SEED"], [1, 2, 3, 4, 5, 6, 7, 8]);
 const MINUTE = 60_000;
@@ -75,6 +76,8 @@ describe("loadConfig", () => {
         watch: { person: p1, places: [home], rules: [] },
         policies: [LIFE_SAFETY, URGENT],
         addresses: { pushover: { user: "fake-user-value" }, sms: { to: "fake-number-value" } },
+        // The report of a down channel goes on each other channel of the person (AL-65).
+        channelRules: channelDownRules([pushover, sms]),
       },
     ]);
   });
@@ -139,6 +142,111 @@ describe("loadConfig", () => {
       "The interest graph of the person person-1 names the place place-2, and the person does not watch it.",
       "The rule of the life-safety warnings of the person person-1 names the place place-2, and the person does not watch it.",
     ]);
+  });
+
+  it("joins the default layers with the graph of the person, and keeps the watch of a person with no defaults", () => {
+    const mine: InterestEdge = { id: "mine", from: "topic:infra.cloud", to: "person", kind: "interest", weight: { value: 1, low: 1, high: 1 }, origin: "person", on: false };
+    const own: InterestGraph = { format: "alerts-interest/1", person: p1, edges: [mine], mutes: [] };
+    const defaults = { works: ["software"], services: ["domain:example.com" as NodeKey] };
+    const joined = person(p1, [home], { defaults });
+    const graphed: PersonConfig = { ...joined, watch: { ...joined.watch, interests: own } };
+    const plain = person(p2, [home]);
+    const loaded = loadConfig(config({ people: [graphed, plain], contacts: [...contacts(p1), ...contacts(p2)] }), CHANNELS, store);
+    expect(loaded.problems).toEqual([]);
+    const graph = loaded.recipients[0]!.watch.interests!;
+    expect(graph).toEqual(composeInterests(p1, [placesLayer([home]), workLayer(defaults.works), servicesLayer(defaults.services)], own).graph);
+    const ids = graph.edges.map((edge) => edge.id);
+    expect(ids).toContain(`places/place:${home}>person`);
+    expect(ids).toContain("mine");
+    expect(ids).not.toContain("work/topic:infra.cloud>person");
+    expect(loaded.recipients[1]!.watch).toBe(plain.watch);
+  });
+
+  it("joins the layer places alone for empty defaults, so a mandatory rule has its graph", () => {
+    const ruled = person(p1, [home], { defaults: {} });
+    const watch = { ...ruled.watch, mandatory: [{ place: home, on: true, rangeKm: 5 }] };
+    const loaded = loadConfig(config({ people: [{ ...ruled, watch }] }), CHANNELS, store);
+    expect(loaded.problems).toEqual([]);
+    expect(loaded.recipients[0]!.watch.interests).toEqual(composeInterests(p1, [placesLayer([home])]).graph);
+  });
+
+  it("joins the services of the channels of the contacts of the person, unless the switch delivery is false", () => {
+    const served = [
+      { ...channel(pushover), services: ["domain:example.com" as NodeKey] },
+      { ...channel(sms), services: ["domain:example.net" as NodeKey, "domain:example.com" as NodeKey] },
+    ];
+    const edgesOf = (defaults: NonNullable<PersonConfig["defaults"]>) => {
+      const loaded = loadConfig(config({ people: [person(p1, [home], { defaults })] }), served, store);
+      expect(loaded.problems).toEqual([]);
+      return loaded.recipients[0]!.watch.interests!.edges;
+    };
+    const on = edgesOf({});
+    expect(on.filter((edge) => edge.origin === "delivery").map((edge) => [edge.id, edge.source])).toEqual([
+      ["delivery/domain:example.com>person", `channel:${pushover},${sms}`],
+      ["delivery/domain:example.net>person", `channel:${sms}`],
+    ]);
+    expect(edgesOf({ delivery: false }).some((edge) => edge.origin === "delivery")).toBe(false);
+    // A person with no defaults keeps the watch, with no layer.
+    const plain = loadConfig(config(), served, store);
+    expect(plain.recipients[0]!.watch.interests).toBeUndefined();
+  });
+
+  it("joins the services of the contact of the person on each channel, and keeps them out of each problem", () => {
+    const served = [channel(pushover), { ...channel(sms), services: ["domain:example.net" as NodeKey] }];
+    // A made-up lookup: a region node for the made-up number, and a node that is not an entity.
+    const services: ContactServices = (id, address) => (id === sms && address["to"] === SECRETS["SMS_NUMBER"] ? ["provider-region:example/region-1/sms", `place:${home}`] : []);
+    const graphed = config({ people: [person(p1, [home], { defaults: {} })] });
+    const deliveryOf = (loaded: ReturnType<typeof loadConfig>) => loaded.recipients[0]!.watch.interests!.edges.filter((edge) => edge.origin === "delivery").map((edge) => [edge.id, edge.source]);
+    const plain = [["delivery/domain:example.net>person", `channel:${sms}`]];
+    const loaded = loadConfig(graphed, served, store, services);
+    expect(loaded.problems).toEqual([]);
+    expect(deliveryOf(loaded)).toEqual([...plain, ["delivery/provider-region:example/region-1/sms>person", `channel:${sms}`]]);
+    // The load gives the services to the person only. The descriptor of the channel stays the same.
+    expect(served[1]!.services).toEqual(["domain:example.net"]);
+    // A lookup that throws gives no service and no problem.
+    const throwing: ContactServices = () => {
+      throw new Error("made-up failure");
+    };
+    const thrown = loadConfig(graphed, served, store, throwing);
+    expect(thrown.problems).toEqual([]);
+    expect(deliveryOf(thrown)).toEqual(plain);
+    // A contact with a missing secret gives no service. The problem names the secret, and not the region.
+    const unstored = loadConfig(graphed, served, (name) => (name === "SMS_NUMBER" ? undefined : store(name)), services);
+    expect(unstored.problems).toContain(`The field to of the contact of ${p1} on ${sms} names the secret SMS_NUMBER, and the secret store has no value for it.`);
+    expect(unstored.problems.join(" ")).not.toContain("region-1");
+    expect(deliveryOf(unstored)).toEqual(plain);
+    // The switch delivery false turns off the services of the contacts too.
+    const off = loadConfig(config({ people: [person(p1, [home], { defaults: { delivery: false } })] }), served, store, services);
+    expect(off.recipients[0]!.watch.interests!.edges.some((edge) => edge.origin === "delivery")).toBe(false);
+  });
+
+  it("gives the channels where the person has a contact, in the order of the channels", () => {
+    const only = { contacts: [contacts(p1)[1]!, ...contacts(p2)] };
+    expect(contactChannels(only, p1, CHANNELS).map((one) => one.id)).toEqual([sms]);
+    expect(contactChannels(only, p2, CHANNELS).map((one) => one.id)).toEqual([pushover, sms]);
+    expect(contactChannels(only, "person-3" as PersonId, CHANNELS)).toEqual([]);
+  });
+
+  it("finds an unknown work, a service that is not an entity and a changed default, and keeps the watch", () => {
+    const work = person(p1, [home], { defaults: { works: ["astronomy"] } });
+    const service = person(p1, [home], { defaults: { services: [`place:${home}` as NodeKey] } });
+    // An edge of the person with the id of a default and another weight is a second edge with one id.
+    const copied: InterestEdge = { id: `places/place:${home}>person`, from: `place:${home}`, to: "person", kind: "interest", weight: { value: 0.5, low: 0.5, high: 0.5 }, origin: "person", on: true };
+    const changed = person(p1, [home], { defaults: {} });
+    const changedWatch = { ...changed.watch, interests: { format: "alerts-interest/1" as const, person: p1, edges: [copied], mutes: [] } };
+    const problemsOf = (entry: PersonConfig) => loadConfig(config({ people: [entry] }), CHANNELS, store);
+    expect(problemsOf(work).problems).toEqual([`The defaults of the person person-1: The table of the kinds of work does not have the work "astronomy".`]);
+    expect(problemsOf(work).recipients[0]!.watch).toBe(work.watch);
+    expect(problemsOf(service).problems).toEqual([`The defaults of the person person-1: The service "place:${home}" is not the key of an entity, for example domain:example.com.`]);
+    expect(problemsOf({ ...changed, watch: changedWatch }).problems).toEqual([`The defaults of the person person-1: Two different edges have the id "places/place:${home}>person".`]);
+  });
+
+  it("checks the form of the defaults, and leaves the table and the entities to the load", () => {
+    const watch = { person: p1, places: [home], rules: [] };
+    expect(personConfigSchema.safeParse({ watch, defaults: { works: ["astronomy"], services: [`place:${home}`] } }).success).toBe(true);
+    expect(personConfigSchema.safeParse({ watch, defaults: { works: [""] } }).success).toBe(false);
+    expect(personConfigSchema.safeParse({ watch, defaults: { services: ["no-system"] } }).success).toBe(false);
+    expect(personConfigSchema.safeParse({ watch, defaults: { places: [home] } }).success).toBe(false);
   });
 
   it("finds a mandatory rule with no interest graph, and takes a graph of the person at its own places", () => {
@@ -317,11 +425,12 @@ describe("loadConfig", () => {
     expect(loaded.problems).toEqual([]);
     const rules = new Map(loaded.recipients.map((recipient) => [recipient.watch.person, recipient.channelRules]));
     const about = { system: DRILL_SUBJECT, id: "push-weekly" };
-    expect(rules.get(p1)).toEqual(drillRules(drill));
-    expect(rules.get(p2)).toEqual([{ kinds: ["system.drill.run"], about, keep: "only", channels: [] }]);
-    // A person who does not watch the drill gets no rule.
+    const down = channelDownRules([pushover, sms]);
+    expect(rules.get(p1)).toEqual([...drillRules(drill), ...down]);
+    expect(rules.get(p2)).toEqual([{ kinds: ["system.drill.run"], about, keep: "only", channels: [] }, ...down]);
+    // A person who does not watch the drill gets no rule of the drill, only the rules of the down channels.
     const apart = loadConfig(config({ people: [person(p1, [home], { watch: watch(p1) }), person(p2)], contacts: [...contacts(p1), ...contacts(p2)], drills: [drill] }), polled, store);
-    expect(apart.recipients.find((recipient) => recipient.watch.person === p2)?.channelRules).toBeUndefined();
+    expect(apart.recipients.find((recipient) => recipient.watch.person === p2)?.channelRules).toEqual(down);
   });
 
   it("checks the outage call: a known person, one time each, a chain with steps, and a contact on each channel of a step", () => {

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { assess, LIFE_SAFETY_KINDS } from "./assess.ts";
 import type {
   Area,
+  AssessedLevel,
   Certainty,
   Estimate,
   Incident,
@@ -12,7 +13,10 @@ import type {
   PersonWatch,
   PlaceId,
   ReportId,
+  ScoredIncident,
+  ScoreFactor,
   ScorePriors,
+  ShadowScore,
   Severity,
   Significance,
   Status,
@@ -21,7 +25,7 @@ import type {
 } from "./contracts.ts";
 import { ASSESSED_LEVELS } from "./contracts.ts";
 import { assessmentSchema, scorePriorsSchema, shadowScoreSchema } from "./schemas.ts";
-import { assessWithShadow, expectedOf, PRIORS_FORMAT, shadowScore } from "./score.ts";
+import { assessWithShadow, expectedOf, PRIORS_FORMAT, shadowDifferences, shadowScore } from "./score.ts";
 
 const SEEDS = seedsFrom(process.env["SEED"], [1, 2, 3, 4, 5, 6, 7, 8]);
 
@@ -40,6 +44,22 @@ const PRIORS: ScorePriors = {
     possible: estimate(0.25, 0, 0.5),
   },
 };
+
+// The priors of the tests with the harm under an alert. Made-up values.
+const UNDER: ScorePriors = {
+  ...PRIORS,
+  kinds: {
+    ...PRIORS.kinds,
+    met: { ...PRIORS.kinds["met"], under: { watch: { deaths: estimate(0.0001, 0.00005, 0.0002), injuries: estimate(0.001, 0.0005, 0.002), area: "zone" } } },
+    "met.tornado": { ...PRIORS.kinds["met.tornado"], under: { warning: { deaths: estimate(0.003, 0.002, 0.005), injuries: estimate(0.03, 0.02, 0.05), area: "county" } } },
+  },
+};
+
+// The score of the basis event, or a failed test.
+function eventOf(score: ShadowScore): Extract<ShadowScore, { readonly probability: ScoreFactor }> {
+  if (!score.read || score.basis === "alert") throw new Error(`The score is not of the basis event: ${JSON.stringify(score)}.`);
+  return score;
+}
 
 const home = "place:home" as PlaceId;
 const places: readonly WatchedPlace[] = [{ id: home, codes: [{ system: "ugc", code: "KSC173" }], bufferKm: 0 }];
@@ -72,6 +92,7 @@ describe("shadowScore", () => {
     const score = shadowScore(incident("met.tornado", {}, "warning"), PRIORS);
     expect(score).toMatchObject({
       read: true,
+      basis: "event",
       probability: { estimate: estimate(0.3, 0.28, 0.33), from: { table: "kinds", key: "met.tornado" } },
       deaths: { estimate: estimate(0.04, 0.03, 0.06), from: { table: "kinds", key: "met.tornado" } },
       injuries: { estimate: estimate(0.6, 0.4, 0.9), from: { table: "kinds", key: "met.tornado" } },
@@ -81,22 +102,23 @@ describe("shadowScore", () => {
 
   it("gives an observed event the probability of the certainty observed", () => {
     const score = shadowScore(incident("met.tornado", { certainty: "observed" }, "warning"), PRIORS);
-    expect(score.read && score.probability).toEqual({ estimate: estimate(1, 1, 1), from: { table: "certainty", key: "observed" } });
+    expect(eventOf(score).probability).toEqual({ estimate: estimate(1, 1, 1), from: { table: "certainty", key: "observed" } });
   });
 
   it("gives the certainty to a watch, and to a warning of a kind with no verified share", () => {
     const watch = shadowScore(incident("met.tornado", { certainty: "possible" }, "watch"), PRIORS);
-    expect(watch.read && watch.probability.from).toEqual({ table: "certainty", key: "possible" });
+    expect(eventOf(watch).probability.from).toEqual({ table: "certainty", key: "possible" });
     const flood = shadowScore(incident("met.flood.flash", {}, "warning"), PRIORS);
-    expect(flood.read && flood.probability.from).toEqual({ table: "certainty", key: "likely" });
+    expect(eventOf(flood).probability.from).toEqual({ table: "certainty", key: "likely" });
     expect(flood.read && flood.deaths.from).toEqual({ table: "kinds", key: "met.flood.flash" });
   });
 
   it("takes each field from the longest prefix of the kind with that field", () => {
     const wind = shadowScore(incident("met.wind.high", {}, "warning"), PRIORS);
-    expect(wind.read && [wind.probability.from.key, wind.deaths.from.key, wind.injuries.from.key]).toEqual(["likely", "met", "met"]);
+    const event = eventOf(wind);
+    expect([event.probability.from.key, event.deaths.from.key, event.injuries.from.key]).toEqual(["likely", "met", "met"]);
     const tornado = shadowScore(incident("met.tornado.waterspout", {}, "warning"), PRIORS);
-    expect(tornado.read && tornado.probability.from.key).toBe("met.tornado");
+    expect(eventOf(tornado).probability.from.key).toBe("met.tornado");
   });
 
   it("multiplies the probability and each count, and an exact product gives exact bounds", () => {
@@ -133,6 +155,33 @@ describe("shadowScore", () => {
     expect(Number.isFinite(expectedOf(estimate(0.7, 0.6, 1), largest).high)).toBe(true);
   });
 
+  it("gives an alert the harm under the alerts of its kind and significance", () => {
+    const score = shadowScore(incident("met.tornado", {}, "warning"), UNDER);
+    const from = { table: "under", key: "met.tornado", significance: "warning", area: "county" } as const;
+    expect(score).toEqual({
+      read: true,
+      basis: "alert",
+      deaths: { estimate: estimate(0.003, 0.002, 0.005), from },
+      injuries: { estimate: estimate(0.03, 0.02, 0.05), from },
+      expected: { deaths: estimate(0.003, 0.002, 0.005), injuries: estimate(0.03, 0.02, 0.05) },
+    });
+    expect(shadowScoreSchema.safeParse(score).success).toBe(true);
+  });
+
+  it("takes the harm under an alert from the longest prefix of the kind with a measure of the significance", () => {
+    const spout = shadowScore(incident("met.tornado.waterspout", {}, "warning"), UNDER);
+    expect(spout.read && spout.deaths.from).toEqual({ table: "under", key: "met.tornado", significance: "warning", area: "county" });
+    // The kind `met.tornado` has no measure of its watches. Thus the measure of `met` decides.
+    const watch = shadowScore(incident("met.tornado", { certainty: "possible" }, "watch"), UNDER);
+    expect(watch.read && watch.deaths.from).toEqual({ table: "under", key: "met", significance: "watch", area: "zone" });
+  });
+
+  it("gives the basis event to an observed event, to an incident with no significance and to a significance with no measure", () => {
+    expect(eventOf(shadowScore(incident("met.tornado", { certainty: "observed" }, "warning"), UNDER)).probability.from).toEqual({ table: "certainty", key: "observed" });
+    expect(eventOf(shadowScore(incident("met.tornado"), UNDER)).probability.from).toEqual({ table: "certainty", key: "likely" });
+    expect(eventOf(shadowScore(incident("met.tornado", {}, "advisory"), UNDER)).probability.from).toEqual({ table: "certainty", key: "likely" });
+  });
+
   it("has no read when the priors do not give a factor, and names each missing factor", () => {
     expect(shadowScore(incident("geo.earthquake", { certainty: "unknown" }), PRIORS)).toEqual({ read: false, missing: ["probability", "deaths", "injuries"] });
     expect(shadowScore(incident("geo.earthquake"), PRIORS)).toEqual({ read: false, missing: ["deaths", "injuries"] });
@@ -161,7 +210,33 @@ describe("scorePriorsSchema", () => {
     expect(scorePriorsSchema.safeParse(withKind({ deaths: estimate(-1, -1, 0) })).success).toBe(false);
     expect(scorePriorsSchema.safeParse(withKind({ deaths: estimate(1, 0, Number.MAX_SAFE_INTEGER + 1) })).success).toBe(false);
     expect(scorePriorsSchema.safeParse({ ...PRIORS, certainty: { sure: estimate(1, 1, 1) } }).success).toBe(false);
-    expect(scorePriorsSchema.safeParse({ ...PRIORS, format: "alerts-priors/2" }).success).toBe(false);
+    expect(scorePriorsSchema.safeParse({ ...PRIORS, format: "alerts-priors/1" }).success).toBe(false);
+  });
+
+  it("accepts the harm under an alert, and refuses a measure with no kind of area or an unknown significance", () => {
+    expect(scorePriorsSchema.safeParse(UNDER).success).toBe(true);
+    const harm = { deaths: estimate(0.003, 0.002, 0.005), injuries: estimate(0.03, 0.02, 0.05) };
+    const withUnder = (under: unknown): unknown => ({ ...PRIORS, kinds: { met: { under } } });
+    expect(scorePriorsSchema.safeParse(withUnder({ warning: harm })).success).toBe(false);
+    expect(scorePriorsSchema.safeParse(withUnder({ warnings: { ...harm, area: "county" } })).success).toBe(false);
+    expect(scorePriorsSchema.safeParse(withUnder({ warning: { ...harm, area: "state" } })).success).toBe(false);
+  });
+});
+
+describe("shadowScoreSchema", () => {
+  it("refuses a score of the basis alert with a factor of another table, or with a probability", () => {
+    const score = shadowScore(incident("met.tornado", {}, "warning"), UNDER);
+    if (!score.read || score.basis !== "alert") throw new Error("The score is not of the basis alert.");
+    const kinds = { ...score.deaths, from: { table: "kinds", key: "met.tornado" } };
+    expect(shadowScoreSchema.safeParse({ ...score, deaths: kinds }).success).toBe(false);
+    expect(shadowScoreSchema.safeParse({ ...score, probability: score.deaths }).success).toBe(false);
+    expect(shadowScoreSchema.safeParse({ ...score, basis: "event" }).success).toBe(false);
+  });
+
+  it("accepts a score of the basis event with no field basis, as a log line from before the basis alert has it", () => {
+    const { basis, ...old } = eventOf(shadowScore(incident("met.tornado", {}, "warning"), PRIORS));
+    expect(basis).toBe("event");
+    expect(shadowScoreSchema.safeParse(old).success).toBe(true);
   });
 });
 
@@ -200,10 +275,15 @@ describe("the gate of the shadow score", () => {
     const kinds: Record<string, KindPrior> = {};
     for (const key of ["met", "met.tornado", "met.flood", "geo", "safety.civil-danger"]) {
       if (r.chance(0.3)) continue;
+      const under: Partial<Record<Significance, { deaths: Estimate; injuries: Estimate; area: "county" | "zone" }>> = {};
+      for (const significance of ["warning", "watch", "advisory"] as const) {
+        if (r.chance(0.25)) under[significance] = { deaths: draw(r, 0.01), injuries: draw(r, 0.1), area: r.chance(0.5) ? "county" : "zone" };
+      }
       kinds[key] = {
         ...(r.chance(0.6) ? { verified: draw(r, 1) } : {}),
         ...(r.chance(0.7) ? { deaths: draw(r, 5) } : {}),
         ...(r.chance(0.7) ? { injuries: draw(r, 50) } : {}),
+        ...(Object.keys(under).length > 0 ? { under } : {}),
       };
     }
     const certainty: Partial<Record<Certainty, Estimate>> = {};
@@ -216,6 +296,7 @@ describe("the gate of the shadow score", () => {
   it.each(SEEDS)("keeps the level and the reasons of the table for each score (seed %i)", (seed) => {
     const r = random(seed);
     let scored = 0;
+    const bases = new Set<string>();
     for (let n = 0; n < 200; n++) {
       const draft = incident(
         pick(r, KINDS),
@@ -241,6 +322,12 @@ describe("the gate of the shadow score", () => {
       if (shadow.reasons.length > plain.reasons.length) scored++;
       for (const reason of shadow.reasons) {
         if (reason.kind !== "shadow" || !reason.score.read) continue;
+        bases.add(reason.score.basis ?? "none");
+        if (reason.score.basis === "alert") {
+          // The measure under an alert holds the probability. Thus the expected harm is each factor.
+          expect(reason.score.expected).toEqual({ deaths: reason.score.deaths.estimate, injuries: reason.score.injuries.estimate });
+          continue;
+        }
         // The interval of each expected count holds the float products of the bounds.
         const { probability, deaths, injuries, expected } = reason.score;
         for (const [count, harm] of [
@@ -253,7 +340,65 @@ describe("the gate of the shadow score", () => {
         }
       }
     }
-    // The draws reach the score: a gate that sees no score cannot hold the rule.
+    // The draws reach the score and each basis: a gate that sees no score cannot hold the rule.
     expect(scored).toBeGreaterThan(50);
+    expect([...bases].sort()).toEqual(["alert", "event"]);
+  });
+});
+
+describe("shadowDifferences", () => {
+  // An incident with a level and an expected harm. Only the expected harm counts in a difference.
+  const scored = (anchor: string, level: AssessedLevel, deaths: readonly [number, number], injuries: readonly [number, number]): ScoredIncident => {
+    const of = ([low, high]: readonly [number, number]): Estimate => estimate((low + high) / 2, low, high);
+    const one = { estimate: estimate(1, 1, 1), from: { table: "certainty", key: "observed" } } as const;
+    const kind = { table: "kinds", key: "met" } as const;
+    return {
+      anchor: anchor.padEnd(64, "0") as ReportId,
+      level,
+      shadow: { read: true, probability: one, deaths: { estimate: of(deaths), from: kind }, injuries: { estimate: of(injuries), from: kind }, expected: { deaths: of(deaths), injuries: of(injuries) } },
+    };
+  };
+
+  it("names a pair where the table puts one incident higher and the score puts the other higher on each measure", () => {
+    const high = scored("a", "life-safety", [0.01, 0.02], [0.1, 0.2]);
+    const low = scored("b", "urgent", [0.03, 0.05], [0.3, 0.4]);
+    expect(shadowDifferences([high, low])).toEqual([{ above: high.anchor, below: low.anchor }]);
+    expect(shadowDifferences([low, high])).toEqual([{ above: high.anchor, below: low.anchor }]);
+  });
+
+  it("names no pair when an interval overlaps, the levels are equal, the order agrees, or a score has no read", () => {
+    const high = scored("a", "life-safety", [0.01, 0.02], [0.1, 0.2]);
+    expect(shadowDifferences([high, scored("b", "urgent", [0.015, 0.05], [0.3, 0.4])])).toEqual([]);
+    expect(shadowDifferences([high, scored("b", "urgent", [0.03, 0.05], [0.2, 0.4])])).toEqual([]);
+    expect(shadowDifferences([high, scored("b", "life-safety", [0.03, 0.05], [0.3, 0.4])])).toEqual([]);
+    expect(shadowDifferences([high, scored("b", "none", [0.03, 0.05], [0.3, 0.4])])).toEqual([]);
+    expect(shadowDifferences([high, scored("b", "notice", [0.001, 0.002], [0.01, 0.02])])).toEqual([]);
+    const unread: ScoredIncident = { anchor: "b".padEnd(64, "0") as ReportId, level: "urgent", shadow: { read: false, missing: ["deaths"] } };
+    const unscored: ScoredIncident = { anchor: "c".padEnd(64, "0") as ReportId, level: "urgent" };
+    expect(shadowDifferences([high, unread, unscored])).toEqual([]);
+  });
+
+  it.each(SEEDS)("gives each pair of the rule, in an order that the input order does not change (seed %i)", (seed) => {
+    const r = random(seed);
+    const span = (): readonly [number, number] => {
+      const low = r.range(0, 0.1);
+      return [low, low + r.range(0, 0.05)];
+    };
+    const incidents = Array.from({ length: 12 }, (_, index) => scored(index.toString(16), r.pick(ASSESSED_LEVELS), span(), span()));
+    const differences = shadowDifferences(incidents);
+    expect(shadowDifferences(r.shuffle(incidents))).toEqual(differences);
+    const rank = (level: AssessedLevel): number => ASSESSED_LEVELS.indexOf(level);
+    const harm = (incident: ScoredIncident) => (incident.shadow?.read === true ? incident.shadow.expected : undefined);
+    const expected = incidents.flatMap((above) =>
+      incidents.flatMap((below) => {
+        const [a, b] = [harm(above), harm(below)];
+        const differs =
+          above.level !== "none" && below.level !== "none" && rank(above.level) > rank(below.level) && a !== undefined && b !== undefined && b.deaths.low > a.deaths.high && b.injuries.low > a.injuries.high;
+        return differs ? [{ above: above.anchor, below: below.anchor }] : [];
+      }),
+    );
+    const key = (pair: { readonly above: ReportId; readonly below: ReportId }): string => `${pair.above} ${pair.below}`;
+    expect(new Set(differences.map(key))).toEqual(new Set(expected.map(key)));
+    expect(differences).toHaveLength(expected.length);
   });
 });
