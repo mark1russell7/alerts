@@ -4,7 +4,7 @@
  * the runtime does each call of a channel.
  */
 import { compareCodeUnits } from "@mark1russell7/text/order";
-import { assess, COVERAGE_KIND, DEFAULT_ASSESS_POLICY, hasKind, LIFE_SAFETY_KINDS, matchSubjects, QUOTA_KIND, reachedAssessment } from "./assess.ts";
+import { assess, COVERAGE_KIND, DEFAULT_ASSESS_POLICY, hasKind, LIFE_SAFETY_KINDS, matchSubjects, PERSON_SUBJECT, QUOTA_KIND, reachedAssessment } from "./assess.ts";
 import {
   LEVELS,
   type Acknowledgment,
@@ -376,6 +376,59 @@ export function route(input: RouteInput): Route[] {
   );
 }
 
+/**
+ * An exhausted escalation of a real warning (AL-21). The person did not acknowledge the warning in the time of the
+ * policy. The function `systemReports` makes a report of it for the people who watch the person.
+ */
+export interface Exhaustion {
+  /** The report of the start of the escalation. It stays the same after a merge of the incident. */
+  readonly incident: ReportId;
+  readonly person: PersonId;
+  readonly level: Level;
+  readonly episode: number;
+  /** The time of the exhaustion. */
+  readonly at: Instant;
+  /** The kind of the warning. */
+  readonly kind: Incident["kind"];
+  /** The title of the warning (`incidentTitle`). Thus the people who watch the person know what the person missed. */
+  readonly title: string;
+}
+
+/**
+ * This function tells if a step of the policy asks the person for an acknowledgment. Such a step is on a channel with
+ * an `ack` other than `none`, at a level of its `ackLevels`. A channel with no `ackLevels` asks at each level.
+ */
+export function asksForAck(policy: EscalationPolicy, channels: readonly ChannelDescriptor[]): boolean {
+  const known = new Map(channels.map((channel) => [channel.id, channel]));
+  return policy.steps.some((step) => {
+    const channel = known.get(step.channel);
+    return channel !== undefined && channel.ack !== "none" && (channel.ackLevels === undefined || channel.ackLevels.includes(policy.level));
+  });
+}
+
+/**
+ * This function gives the exhausted escalations of the routes (AL-21). A route gives an exhaustion when all of these
+ * are true:
+ *
+ * - The status of its incident is `actual`. Thus a drill, a test and a report of the system give none, and an
+ *   exhaustion does not give another exhaustion.
+ * - The state of its plan is `exhausted`. An acknowledgment or the end of the incident ends the exhaustion.
+ * - Its policy has a step after the channel rules. A plan that a channel rule empties sent nothing to the person.
+ * - A step of its policy asks for an acknowledgment (`asksForAck`). Without such a step, no acknowledgment can come.
+ *
+ * The reports give the title of each warning (`incidentTitle`).
+ */
+export function exhaustions(routes: readonly Route[], channels: readonly ChannelDescriptor[], reports: readonly Report[]): Exhaustion[] {
+  const found: Exhaustion[] = [];
+  for (const entry of routes) {
+    const { incident, plan, policy } = entry;
+    if (incident.status !== "actual" || plan.state !== "exhausted" || plan.exhaustedAt === undefined) continue;
+    if (policy.steps.length === 0 || !asksForAck(policy, channels)) continue;
+    found.push({ incident: entry.start.incident, person: entry.person, level: policy.level, episode: entry.episode, at: plan.exhaustedAt, kind: incident.kind, title: incidentTitle(incident, reports) });
+  }
+  return found;
+}
+
 /** The codes that can reach `life-safety`: the life-safety kinds, and the coverage of each of them. */
 const LIFE_SAFETY_CODES: readonly string[] = [...LIFE_SAFETY_KINDS, ...LIFE_SAFETY_KINDS.map((kind) => `${COVERAGE_KIND}.${kind}`)];
 
@@ -452,6 +505,10 @@ export function recipientProblems(recipient: Recipient, channels: readonly Chann
   // A policy with a subject does not apply to a real warning. Thus only a policy with no subject covers life-safety.
   const watches = recipient.watch.places.length > 0 || (recipient.watch.subjects ?? []).length > 0;
   if (watches && !seen.has("life-safety")) problems.push("The person watches a place or a subject, and has no policy of the level life-safety. A life-safety alert sends nothing to the person.");
+  // The exhausted escalations of a person go to the other people who watch the person (AL-21), never to the person.
+  if ((recipient.watch.subjects ?? []).some((subject) => subject.system === PERSON_SUBJECT && subject.id === recipient.watch.person)) {
+    problems.push(`The person watches the subject ${PERSON_SUBJECT} of the person itself. The exhausted escalations of a person never reach that person.`);
+  }
   recipient.watch.rules.forEach((rule, index) => {
     for (const code of unknownKinds(rule.kinds ?? [])) problems.push(`Rule ${index} names the kind ${code}, and the taxonomy has no such code. The rule matches no alert of it.`);
     // A rule only at places that the person does not watch matches no alert. A rule with an empty list of kinds also matches none.

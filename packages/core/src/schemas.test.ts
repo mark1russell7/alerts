@@ -609,6 +609,11 @@ describe("the round trip of real values", () => {
     fails(channelDescriptorSchema, { ...CHANNEL, maxInFlight: 1.5 });
     holds(channelDescriptorSchema, { ...CHANNEL, why: { chars: 80 } });
     fails(channelDescriptorSchema, { ...CHANNEL, why: { chars: 0 } });
+    // The levels of an acknowledgment need a channel that tells of one (AL-21).
+    holds(channelDescriptorSchema, { ...CHANNEL, ack: "poll", ackLevels: ["life-safety"] });
+    holds(channelDescriptorSchema, { ...CHANNEL, ack: "none", ackLevels: [] });
+    fails(channelDescriptorSchema, { ...CHANNEL, ack: "none", ackLevels: ["life-safety"] });
+    fails(channelDescriptorSchema, { ...CHANNEL, ack: "poll", ackLevels: ["loud"] });
     const user = { name: "user", required: true, pattern: "[A-Za-z0-9]{30}", form: "30 letters and digits" };
     holds(channelDescriptorSchema, { ...CHANNEL, address: [user, { ...user, name: "device", required: false }] });
     holds(channelDescriptorSchema, { ...CHANNEL, address: [] });

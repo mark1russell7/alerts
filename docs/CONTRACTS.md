@@ -404,10 +404,20 @@ A drill report has no area. Its subject is `{ system: "alerts.drill", id: <drill
 - A snapshot with `missed` opens the line `missed`, with the reason `missed` and the missed start as its onset. The next run ends it.
 - `missedDrillAt(drill, runs, at, quiet)` gives the missed start. A late start in the same window is not a miss, and before the first run nothing is missed.
 
+An exhaustion report has no area. Its subjects are the person (`alerts.person`, `PERSON_SUBJECT`) and the incident (`alerts.incident`, `INCIDENT_SUBJECT`). Only the copy that reports the shared facts makes these lines.
+
+| Line | Kind | Condition | Level |
+| --- | --- | --- | --- |
+| `exhausted/<person>/<incident>/<episode>/<level>` | `system.escalation.exhausted` | The escalation of the level is exhausted, with no acknowledgment | The level of the escalation |
+
+- The facts of the line are the person, the incident, the episode, the level and the time of the exhaustion. The title is not a fact.
+- The headline names the person, the kind and the title of the incident, and the level. The severity and the urgency give the level again.
+- An acknowledgment and the end of the incident cancel the line. A snapshot with no list of exhaustions keeps each open line.
+
 `latestIn(items, at, window)` gives the latest item in a window before a time. `recentStep` and `recentRecovery` use it.
 `threats(incidents, places)` gives the watches and the warnings. A threat is a live incident with the status `actual` at a watched place. Its stage is `watch`, `warning` or absent. A report of the core has the status `system`, so it is not a threat.
 
-The assessment policy holds three system classes, and each class admits only the status `system`. The class `system-drill` holds the drill runs, and it reaches `life-safety`. A class can name its statuses. Else the statuses of the policy apply. The NWS kinds `system.test` and `system.admin` are not in these classes, so the policy statuses apply to them.
+The assessment policy holds four system classes, and each class admits only the status `system`. The class `system-drill` holds the drill runs, and it reaches `life-safety`. The class `system-escalation` holds the exhausted escalations, and it also reaches `life-safety`. A class can name its statuses. Else the statuses of the policy apply. The NWS kinds `system.test` and `system.admin` are not in these classes, so the policy statuses apply to them.
 
 ### Lateness across sources
 
@@ -470,7 +480,7 @@ A descriptor with `services` names the online services that the channel needs, a
 The channel does not escalate. The core does:
 
 - An `EscalationPolicy` gives the steps of a level: a channel and a time for each step. The first step of `life-safety` is Pushover at emergency priority. It repeats until acknowledged, and sounds through silent mode with iOS Critical Alerts.
-- The escalation is a state machine on the clock of algebra: sent, then acknowledged, or the next step at its time, or exhausted. Exhausted is a system alert to the next person in the policy.
+- The escalation is a state machine on the clock of algebra: sent, then acknowledged, or the next step at its time, or exhausted. An exhausted escalation of a real warning is a system report to each person who watches the person (AL-21). The section on the exhausted escalations tells the rules.
 - An acknowledgment comes from any channel or from the UI. It stops the escalation of that level of that incident, and the core cancels the repeats on the other channels.
 - Only an acknowledgment proves that the person got a message. The Pushover receipt field `last_delivered_at` is the time of a retry of the server, not a proof.
 - The core decides the silent mode. `escalate` sets `quiet` on each send, and `Message.quiet` takes it. Each channel maps it to its silent mode: Pushover priority `-1`, or a text and no call on Twilio. No channel keeps its own rule about the time of day.
@@ -875,10 +885,20 @@ A recipient has no problem from `recipientProblems` before it gets alerts:
 
 The message of a send takes its text from one report of the incident. That report is the latest one with the severity and the urgency of the incident. The body has the instruction first, then the area and the description. The channel cuts the text to its limits.
 
-One part waits:
+## The exhausted escalations
 
-- The exhaustion alert to the next person waits for a second person (AL-21). Until then, the repeats continue after the exhaustion, and the routes of each pass show it.
-- When the exhaustion alert comes (AL-21), it skips a plan with no step, because a channel rule empties such a plan on purpose. A test of AL-21 holds this rule.
+The core function `exhaustions(routes, channels, reports)` gives the exhausted escalations at a time (AL-21). The runtime gives them to the system fold of the next pass.
+
+- Only an incident with the status `actual` has an exhaustion. A drill run, a test and an exercise have none.
+- A plan with no step has no exhaustion, because a channel rule empties such a plan on purpose.
+- A plan whose channels ask for no acknowledgment at its level has no exhaustion. `asksForAck(policy, channels)` gives this rule.
+- `ackLevels` of a channel descriptor gives the levels at which the channel asks for an acknowledgment. Pushover asks only at `life-safety`, its emergency priority.
+- A channel with the `ack` `none` has no `ackLevels`. The schema refuses this contradiction.
+- The person who watches the subject `alerts.person` with the id of a person gets the exhaustions of that person. A person never gets its own exhaustion.
+- The exhaustion report keeps the level of the escalation. Thus the quiet window of the watcher applies, and an `urgent` exhaustion is quiet at night.
+- An exhaustion report has the status `system`. Thus it has no exhaustion of its own, and the chain stops at one step.
+- The repeats of the first person continue after the exhaustion. An acknowledgment of the first person cancels the report and the sends of the watcher.
+- When the copy that reports the shared facts changes, the old copy cancels its line and the new copy opens one. The watcher can get a second push.
 
 ## The digest
 

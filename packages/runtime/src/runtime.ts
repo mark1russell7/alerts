@@ -5,7 +5,7 @@
  * that it gets.
  */
 import { isFrameClock, type WallClock } from "@mark1russell7/algebra/clock";
-import { DEFAULT_LINK_POLICY, indicatorBreadth, linkRule, ONLY_COPY, type ChannelQuota, type CopyWatch, type Duration, type EntryTimes, type FetchOutcome, type IndicatorBreadth, type Instant, type LatenessFolds, type ReportId, type SourceDescriptor, type SourceId, type SourceProcedures, type Watch, type ZoneRegions } from "@mark1russell7/alerts";
+import { DEFAULT_LINK_POLICY, indicatorBreadth, linkRule, ONLY_COPY, type ChannelQuota, type CopyWatch, type Duration, type EntryTimes, type Exhaustion, type FetchOutcome, type IndicatorBreadth, type Instant, type LatenessFolds, type ReportId, type SourceDescriptor, type SourceId, type SourceProcedures, type Watch, type ZoneRegions } from "@mark1russell7/alerts";
 import { errorMessage } from "@mark1russell7/text";
 import type { BalanceWatch } from "./balance.ts";
 import { createDispatcher, type DeliveryOptions, type DeliveryStep } from "./delivery.ts";
@@ -261,6 +261,8 @@ export function openRuntime(options: RuntimeOptions): Runtime {
 
   // The folds of the lateness of the last view, in memory only. A pass folds only the new checks. A restart folds each check again, with the same result.
   let folds: LatenessFolds | undefined;
+  // The exhausted escalations of the last delivery step, in memory only (AL-21). A restart keeps each open line until its first delivery step.
+  let exhausted: readonly Exhaustion[] | undefined;
 
   // The misses of the reports of each snapshot source, in memory only. A restart starts them at 0.
   const misses = new Map<SourceId, ReadonlyMap<ReportId, number>>();
@@ -400,7 +402,7 @@ export function openRuntime(options: RuntimeOptions): Runtime {
       if (started.length > 0) conflicts.push(...append(started));
       const drilled = drillStep(state, drills, self, at);
       const quotas = readQuotas();
-      const view = systemView(state, config, at, { drills: drilled.snapshots, ...(quotas === undefined ? {} : { quotas }), balances: watches.flatMap((watch) => watch.balance() ?? []), ...(options.copies === undefined ? {} : { copies: options.copies.watches(), copy: self }), ...(folds === undefined ? {} : { folds }) });
+      const view = systemView(state, config, at, { drills: drilled.snapshots, ...(quotas === undefined ? {} : { quotas }), balances: watches.flatMap((watch) => watch.balance() ?? []), ...(options.copies === undefined ? {} : { copies: options.copies.watches(), copy: self }), ...(folds === undefined ? {} : { folds }), ...(exhausted === undefined ? {} : { exhausted }) });
       folds = view.folds;
       const event = systemEvent(view);
       if (event !== undefined) conflicts.push(...append([event]));
@@ -408,6 +410,10 @@ export function openRuntime(options: RuntimeOptions): Runtime {
       // The system reports of this pass are incidents too, thus the delivery comes after their write.
       const delivery = await dispatcher?.step(at);
       if (delivery !== undefined) conflicts.push(...delivery.conflicts);
+      // A new or an ended exhaustion goes into the view of the next pass. Thus that pass comes at once, not at the next fetch.
+      // A missing list is an empty list. After a restart, the second pass gives the list, and it can end an open line.
+      const changed = delivery !== undefined && JSON.stringify(delivery.exhausted) !== JSON.stringify(exhausted ?? []);
+      if (delivery !== undefined) exhausted = delivery.exhausted;
 
       // The retirement comes after the delivery, at most once in each interval. A retired incident is not live, thus no send needs it.
       if (searched === undefined || at - searched >= kept.every) {
@@ -427,7 +433,7 @@ export function openRuntime(options: RuntimeOptions): Runtime {
       // A source or a balance watch can come due after `start`, while the fetches of the pass run. A fetch that runs to its
       // limit of one interval also ends at its next fetch. Such work is due, not a fault: its wake is the first instant after the pass.
       const nextWork = earliest([...config.sources.map((descriptor) => nextFetch(state, descriptor)), ...scheduled.map((watch) => watch.nextReadAt())]);
-      const wakeAt = earliest([nextWork === undefined ? undefined : Math.max(nextWork, at + 1), view.wakeAt, delivery?.wakeAt, drilled.wakeAt]);
+      const wakeAt = earliest([nextWork === undefined ? undefined : Math.max(nextWork, at + 1), view.wakeAt, delivery?.wakeAt, drilled.wakeAt, changed ? at + 1 : undefined]);
       const pass: Pass = {
         at,
         fetched: due.map(({ descriptor }) => descriptor.id),

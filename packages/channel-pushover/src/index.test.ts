@@ -1,4 +1,4 @@
-import { addressProblems, WHY_LIMITS, type Level, type Message, type PersonId, type ReportId } from "@mark1russell7/alerts";
+import { addressProblems, channelDescriptorSchema, WHY_LIMITS, type Level, type Message, type PersonId, type ReportId } from "@mark1russell7/alerts";
 import type { PushoverFetch } from "@procedures/notify/pushover";
 import { quotaGate, type QuotaGate } from "polite-crawler/api";
 import { describe, expect, it } from "vitest";
@@ -145,6 +145,9 @@ describe("the descriptor", () => {
     expect(pushoverDescriptor().exclusive).toBeUndefined();
     // A push takes the why line of the push limit.
     expect(pushoverDescriptor().why).toEqual(WHY_LIMITS.push);
+    // Only a message at priority 2 has a receipt, thus only life-safety asks for an acknowledgment (AL-21).
+    expect(pushoverDescriptor().ackLevels).toEqual(["life-safety"]);
+    expect(channelDescriptorSchema.parse(pushoverDescriptor("ios"))).toEqual(pushoverDescriptor("ios"));
     const fake = server();
     expect(createPushoverChannel({ token: TOKEN, fetch: fake.fetch, platform: "ios" }).describe().dependsOn).toContain("provider:apns");
   });
