@@ -183,10 +183,11 @@ describe("the count of the alerts", () => {
   it("tells a doubt of the list of the national numbers only with enough shared numbers", () => {
     const doubts = numberingDoubts({
       "TO.A": { national: true, numbers: 50, shared: 40, together: 10 },
-      "TO.W": { national: false, numbers: 900, shared: 300, together: 200 },
-      "SV.W": { national: false, numbers: 900, shared: 300, together: 3 },
+      "SV.A": { national: true, numbers: 50, shared: 40, together: 28 },
+      "TO.W": { national: false, numbers: 900, shared: 300, together: 210 },
+      "SV.W": { national: false, numbers: 900, shared: 300, together: 174 },
       "HU.W": { national: true, numbers: 5, shared: 5, together: 0 },
     });
-    expect(doubts).toEqual(["TO.A has a national number, but only 10 of 40 shared numbers start together.", "TO.W has a number of each office, but 200 of 300 shared numbers start together."]);
+    expect(doubts).toEqual(["TO.A has a national number, but only 10 of 40 shared numbers start together.", "TO.W has a number of each office, but 210 of 300 shared numbers start together."]);
   });
 });

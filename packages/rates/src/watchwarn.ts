@@ -197,6 +197,13 @@ export const TOGETHER_MS = 3_600_000;
 export const NUMBERING_MIN_SHARED = 20;
 
 /**
+ * The share of the shared numbers that start together, above which a pair has a national number. The measure of 2021
+ * to 2025 gave 0.82 or more for each national pair and 0.58 or less for each pair of the offices. Weather starts many
+ * offices at one time, for example the first freeze of a season. Thus a pair of the offices can come near 0.5.
+ */
+export const NUMBERING_TOGETHER_SHARE = 0.7;
+
+/**
  * The check of the numbers of one pair of a phenomenon and a significance. A number here has no office: the
  * phenomenon, the significance, the event number and the year.
  *
@@ -305,8 +312,8 @@ export class AlertTally {
  * This function gives each pair whose data do not agree with `NATIONAL_NUMBERS`, with the reason. A pair needs
  * `NUMBERING_MIN_SHARED` or more shared numbers for a doubt.
  *
- * - A national pair with fewer than half of its shared numbers together is a doubt: its offices start at different times.
- * - A pair of the offices with half or more of its shared numbers together is a doubt: its offices start at the same time.
+ * - A national pair with a share below `NUMBERING_TOGETHER_SHARE` is a doubt: its offices start at different times.
+ * - A pair of the offices with that share or more is a doubt: its offices start at the same time.
  */
 export function numberingDoubts(numbering: Readonly<Record<string, NumberingCheck>>): string[] {
   const doubts: string[] = [];
@@ -314,8 +321,8 @@ export function numberingDoubts(numbering: Readonly<Record<string, NumberingChec
     if (check.shared < NUMBERING_MIN_SHARED) continue;
     const share = check.together / check.shared;
     const counts = `${String(check.together)} of ${String(check.shared)} shared numbers start together`;
-    if (check.national && share < 0.5) doubts.push(`${pair} has a national number, but only ${counts}.`);
-    if (!check.national && share >= 0.5) doubts.push(`${pair} has a number of each office, but ${counts}.`);
+    if (check.national && share < NUMBERING_TOGETHER_SHARE) doubts.push(`${pair} has a national number, but only ${counts}.`);
+    if (!check.national && share >= NUMBERING_TOGETHER_SHARE) doubts.push(`${pair} has a number of each office, but ${counts}.`);
   }
   return doubts;
 }

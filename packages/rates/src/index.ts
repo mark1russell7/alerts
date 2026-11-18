@@ -77,6 +77,8 @@ export { ratesSummary, TOP_TYPES, TOP_UNDER, type GateResult } from "./summary.t
 export {
   HarmJoin,
   isPlaced,
+  NCEI_TERRITORIES,
+  NCEI_WATERS,
   NCEI_ZONE_HOURS,
   nceiKindOf,
   nceiTime,
@@ -108,6 +110,7 @@ export {
   NATIONAL_NUMBERS,
   nationalNumber,
   NUMBERING_MIN_SHARED,
+  NUMBERING_TOGETHER_SHARE,
   numberingDoubts,
   readWatchwarn,
   TOGETHER_MS,

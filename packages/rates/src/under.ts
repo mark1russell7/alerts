@@ -64,6 +64,39 @@ export function nceiTime(time: NceiLocalTime, hours: number): number | undefined
   return local - hours * 3_600_000;
 }
 
+/**
+ * The state codes of NCEI for the territories, with their postal codes. These codes are not FIPS codes. The names come
+ * from the column `STATE` of the files of 2021 and 2024.
+ */
+export const NCEI_TERRITORIES: Readonly<Record<string, string>> = {
+  "96": "VI", // VIRGIN ISLANDS
+  "97": "AS", // AMERICAN SAMOA
+  "98": "GU", // GUAM
+  "99": "PR", // PUERTO RICO
+};
+
+/**
+ * The state codes of NCEI for the waters, with the first two letters of the UGC codes of their marine zones. The names
+ * come from the column `STATE` of the files of 2021 and 2024. The area number of a water row is the number of its
+ * marine zone, for example 335 in `GMZ335`.
+ */
+export const NCEI_WATERS: Readonly<Record<string, string>> = {
+  "81": "LC", // LAKE ST CLAIR
+  "83": "PM", // GUAM WATERS
+  "84": "PH", // HAWAII WATERS
+  "85": "GM", // GULF OF MEXICO
+  "86": "PZ", // E PACIFIC
+  "87": "AM", // ATLANTIC SOUTH
+  "88": "AN", // ATLANTIC NORTH
+  "89": "PK", // GULF OF ALASKA
+  "90": "LH", // LAKE HURON
+  "91": "LM", // LAKE MICHIGAN
+  "92": "LS", // LAKE SUPERIOR
+  "93": "SL", // ST LAWRENCE R
+  "94": "LO", // LAKE ONTARIO
+  "95": "LE", // LAKE ERIE
+};
+
 /** The reasons that the join cannot place a row with harm. */
 export type UnplacedReason = "marine" | "area" | "time zone" | "time";
 
@@ -94,22 +127,27 @@ export interface UnplacedHarm {
  * This function places one row with harm: the UGC code of its county or zone, and its begin and end in UTC. A UGC
  * code is the postal code of the state, C or Z, and the three digits of the county or zone.
  *
- * - A marine row (M) has no UGC of a state. Its reason is `marine`.
- * - A row with another type of area, a state that `STATE_POSTAL` does not have or a bad number has the reason `area`.
+ * - A row of a territory (`NCEI_TERRITORIES`) has the UGC code of the territory, for example `PRZ008`.
+ * - A row of the waters (`NCEI_WATERS`) with the type Z or M has the UGC code of its marine zone.
+ * - Another marine row (M) has no UGC code. Its reason is `marine`.
+ * - A row with another type of area, a state code that the tables do not have or a bad number has the reason `area`.
  * - A row with a time zone that `zoneHours` does not know has the reason `time zone`.
  * - A row with a bad time, or an end before its begin, has the reason `time`.
  */
 export function placeHarm(row: HarmRow, year: number): HarmEvent | UnplacedHarm {
   const base = { id: row.id, year, type: row.type, deaths: row.deaths, injuries: row.injuries };
-  if (row.czType === "M") return { ...base, reason: "marine" };
-  const state = /^\d{1,2}$/.test(row.stateFips) ? STATE_POSTAL[row.stateFips.padStart(2, "0")] : undefined;
-  if ((row.czType !== "C" && row.czType !== "Z") || state === undefined || !/^\d{1,3}$/.test(row.czFips)) return { ...base, reason: "area" };
+  const code = /^\d{1,2}$/.test(row.stateFips) ? row.stateFips.padStart(2, "0") : "";
+  const water = NCEI_WATERS[code];
+  if (row.czType === "M" && water === undefined) return { ...base, reason: "marine" };
+  const state = water ?? STATE_POSTAL[code] ?? NCEI_TERRITORIES[code];
+  const type = water === undefined ? row.czType : row.czType === "Z" || row.czType === "M" ? "Z" : "";
+  if ((type !== "C" && type !== "Z") || state === undefined || !/^\d{1,3}$/.test(row.czFips)) return { ...base, reason: "area" };
   const hours = zoneHours(row.timeZone);
   if (hours === undefined) return { ...base, reason: "time zone" };
   const begin = nceiTime(row.begin, hours);
   const end = nceiTime(row.end, hours);
   if (begin === undefined || end === undefined || end < begin) return { ...base, reason: "time" };
-  return { ...base, ugc: `${state}${row.czType}${row.czFips.padStart(3, "0")}`, begin, end };
+  return { ...base, ugc: `${state}${type}${row.czFips.padStart(3, "0")}`, begin, end };
 }
 
 /** This function tells if a placed or unplaced event has no reason, so the join can use it. */

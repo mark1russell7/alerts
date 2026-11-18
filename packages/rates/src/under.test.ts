@@ -1,7 +1,8 @@
+import { STATE_POSTAL } from "@mark1russell7/alerts-format-nws";
 import { describe, expect, it } from "vitest";
 
 import type { HarmRow, YearHarm } from "./ncei.ts";
-import { HarmJoin, nceiKindOf, nceiTime, nceiTypesOf, placeAll, placeHarm, UNDER_MARGIN_MS, underSection, zoneHours, type ActiveRow, type HarmEvent } from "./under.ts";
+import { HarmJoin, NCEI_TERRITORIES, NCEI_WATERS, nceiKindOf, nceiTime, nceiTypesOf, placeAll, placeHarm, UNDER_MARGIN_MS, underSection, zoneHours, type ActiveRow, type HarmEvent } from "./under.ts";
 import { AlertTally, MARINE_PHENOMENA, NATIONAL_NUMBERS, WATCHWARN_PARAMS, type AlertRow } from "./watchwarn.ts";
 
 const HOUR = 3_600_000;
@@ -80,9 +81,24 @@ describe("the place of an event with harm", () => {
     expect(placeHarm(harmRow({ czFips: "1" }), 2024)).toMatchObject({ ugc: "KSC001" });
   });
 
+  it("gives the UGC code of a territory and of a marine zone, with the state codes of NCEI", () => {
+    expect(placeHarm(harmRow({ stateFips: "99", czType: "Z", czFips: "8", timeZone: "AST-4" }), 2024)).toMatchObject({ ugc: "PRZ008", begin: Date.UTC(2024, 4, 6, 16) });
+    expect(placeHarm(harmRow({ stateFips: "98", czFips: "1", timeZone: "GST10" }), 2024)).toMatchObject({ ugc: "GUC001" });
+    expect(placeHarm(harmRow({ stateFips: "85", czType: "Z", czFips: "335", type: "Marine Thunderstorm Wind" }), 2024)).toMatchObject({ ugc: "GMZ335" });
+    expect(placeHarm(harmRow({ stateFips: "95", czType: "M", czFips: "147" }), 2024)).toMatchObject({ ugc: "LEZ147" });
+    expect(placeHarm(harmRow({ stateFips: "85", czType: "C", czFips: "335" }), 2024)).toMatchObject({ reason: "area" });
+  });
+
+  it("keeps the state codes of NCEI apart from the FIPS codes and from each other", () => {
+    for (const code of [...Object.keys(NCEI_TERRITORIES), ...Object.keys(NCEI_WATERS)]) expect(STATE_POSTAL[code], code).toBeUndefined();
+    for (const code of Object.keys(NCEI_TERRITORIES)) expect(NCEI_WATERS[code], code).toBeUndefined();
+    for (const prefix of [...Object.values(NCEI_TERRITORIES), ...Object.values(NCEI_WATERS)]) expect(prefix).toMatch(/^[A-Z]{2}$/);
+  });
+
   it("gives the reason when it cannot place a row", () => {
-    expect(placeHarm(harmRow({ czType: "M", stateFips: "87" }), 2024)).toEqual({ id: "1", year: 2024, type: "Tornado", reason: "marine", deaths: 2, injuries: 5 });
-    expect(placeHarm(harmRow({ stateFips: "99" }), 2024)).toMatchObject({ reason: "area" });
+    expect(placeHarm(harmRow({ czType: "M" }), 2024)).toEqual({ id: "1", year: 2024, type: "Tornado", reason: "marine", deaths: 2, injuries: 5 });
+    expect(placeHarm(harmRow({ stateFips: "82" }), 2024)).toMatchObject({ reason: "area" });
+    expect(placeHarm(harmRow({ stateFips: "X" }), 2024)).toMatchObject({ reason: "area" });
     expect(placeHarm(harmRow({ czType: "X" }), 2024)).toMatchObject({ reason: "area" });
     expect(placeHarm(harmRow({ czFips: "1234" }), 2024)).toMatchObject({ reason: "area" });
     expect(placeHarm(harmRow({ timeZone: "UNK" }), 2024)).toMatchObject({ reason: "time zone" });
