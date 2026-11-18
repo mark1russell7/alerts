@@ -28,7 +28,7 @@ describe("the pages of the alert texts", () => {
   it("links each page to the two other pages and to the support page", () => {
     for (const [name, page] of pages) {
       for (const other of NAMES.filter((entry) => entry !== name)) expect(page, name).toContain(`href="../${other}/"`);
-      expect(page, name).toContain('href="https://github.com/mark1russell7/alerts/issues"');
+      expect(page, name).toContain('href="https://github.com/metrograph-labs/alerts/issues"');
     }
   });
 
