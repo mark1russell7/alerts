@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>alerts: how a person agrees to the alert texts</title>
+<meta name="description" content="The opt-in of the text messages of the alerts program: the consent words, how the program records a yes, and a sample record.">
+<link rel="stylesheet" href="../../src/style.css">
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="../../">alerts</a>
+  <nav aria-label="Site">
+    <a href="../privacy/">Privacy</a>
+    <a href="../terms/">Terms</a>
+    <a href="https://github.com/mark1russell7/alerts">GitHub</a>
+    <button id="theme" class="theme" type="button" aria-label="Change the theme"><span aria-hidden="true">◐</span></button>
+  </nav>
+</header>
+
+<main class="texts">
+  <h1>How a person agrees to the alert texts</h1>
+  <p class="lead">The alerts program sends text messages (SMS) only to a person who agreed to get them. The program has no public sign-up form. The operator of the program adds each person after a clear yes.</p>
+
+  <h2 id="steps">The steps of an agreement</h2>
+  <ol>
+    <li>The operator gives the person the consent words below, in writing or in speech.</li>
+    <li>The person answers yes, in writing or in speech.</li>
+    <li>The operator records the yes on the private opt-in list of the program: the phone number, the date and the time, the way of the yes and the version of the consent words.</li>
+    <li>The program sends texts only to a number on the list. For each other number, the program sends nothing and records an error.</li>
+    <li>A STOP reply removes the number from the list at once. A START reply puts it back.</li>
+  </ol>
+
+  <h2 id="words">The consent words</h2>
+  <p class="note">Version <code>texts-consent/1</code></p>
+  <blockquote class="standard">
+    <p>Yes, send me alert texts from the alerts program at this number. The texts tell of severe weather, power outages, other hazards near the places that I watch, and tests of the alert path. Message frequency varies. Message and data rates may apply. Reply STOP to cancel and HELP for help. Consent is not a condition of any purchase.</p>
+  </blockquote>
+
+  <h2 id="record">A sample record</h2>
+  <p>Each yes is one record on the private opt-in list. The list is not in the public repository. This sample has made-up data: its phone number is not a real number.</p>
+<pre class="record"><code>{
+  "number": "+15550100123",
+  "at": "2026-11-17T21:30:00Z",
+  "way": "written",
+  "words": "texts-consent/1"
+}</code></pre>
+  <ul>
+    <li><code>number</code>: the mobile phone number, in the international form.</li>
+    <li><code>at</code>: the date and the time of the yes, in UTC.</li>
+    <li><code>way</code>: <code>written</code> for a yes in writing, or <code>spoken</code> for a yes in speech.</li>
+    <li><code>words</code>: the version of the consent words that the person agreed to.</li>
+  </ul>
+
+  <h2 id="more">More</h2>
+  <ul>
+    <li>The <a href="../terms/">terms of the texts</a> tell what the program sends, how often, and STOP and HELP.</li>
+    <li>The <a href="../privacy/">privacy policy</a> tells the data that the program keeps, and what it never shares.</li>
+    <li>The support page is the <a href="https://github.com/mark1russell7/alerts/issues">issues page of the repository</a>. The issues are public. Do not write a phone number in an issue.</li>
+  </ul>
+</main>
+<script type="module" src="../../src/texts.ts"></script>
+</body>
+</html>
