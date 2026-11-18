@@ -46,6 +46,9 @@ export const TWILIO_CALL_ADDRESS: readonly AddressField[] = [
   { name: "to", required: true, pattern: TWILIO_PHONE_PATTERN, form: "a phone number in E.164 form: a plus sign, the country code and the number" },
 ];
 
+/** The address of a text: the phone number of a call, with the opt-in. A text goes only to a phone on the opt-in list. */
+export const TWILIO_TEXT_ADDRESS: readonly AddressField[] = TWILIO_CALL_ADDRESS.map((field) => ({ ...field, optIn: true }));
+
 /**
  * This function gives the descriptor of the channel.
  *
@@ -78,6 +81,7 @@ export function twilioCallDescriptor(): ChannelDescriptor {
  * - A text plays the tone of the phone. It rings through silent mode only when its contact has Emergency Bypass on.
  * - The channel has no acknowledgment of its own (`ack` is `none`). An acknowledgment in another channel stops the next steps.
  * - A text needs a registered sender in the United States: the phone of a 10DLC campaign or a verified toll-free phone.
+ * - A text goes only to a phone on the opt-in list (`TWILIO_TEXT_ADDRESS`).
  */
 export function twilioTextDescriptor(): ChannelDescriptor {
   return {
@@ -92,6 +96,6 @@ export function twilioTextDescriptor(): ChannelDescriptor {
     maxBody: TWILIO_TEXT_LIMIT,
     costUsd: TWILIO_TEXT_COST_USD,
     why: WHY_LIMITS.text,
-    address: TWILIO_CALL_ADDRESS,
+    address: TWILIO_TEXT_ADDRESS,
   };
 }

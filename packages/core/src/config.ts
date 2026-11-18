@@ -7,9 +7,10 @@ import { localTime } from "@mark1russell7/algebra/clock";
 import { canonicalHash } from "@mark1russell7/rigor-generators";
 import type { Address, AssessPolicy, ChannelDescriptor, ChannelId, Duration, EscalationPolicy, Instant, InterestGraph, NodeKey, PersonId, PersonWatch, PlaceId, Position, RegionCode, SourceId, WatchedPlace } from "./contracts.ts";
 import { assess, DEFAULT_ASSESS_POLICY, DRILL_KIND, matchSubjects, reachedAssessment } from "./assess.ts";
-import { recipientProblems, ruleSteps, type ChannelRule, type Recipient } from "./delivery.ts";
+import { policyFor, recipientProblems, ruleSteps, type ChannelRule, type Recipient } from "./delivery.ts";
 import { DRILL_PROBES, drillProblems, nextDrillAt, type DrillConfig } from "./drill.ts";
 import { incidents, normalize } from "./merge.ts";
+import { optInFields, resolveOptIn, type OptInConfig, type OptInRecord } from "./opt-in.ts";
 import { DRILL_SUBJECT, NO_SYSTEM_LINES, systemReports } from "./system-reports.ts";
 import type { TryChain } from "./chain.ts";
 import type { Expectation } from "./lateness.ts";
@@ -50,7 +51,10 @@ export interface PersonConfig {
   readonly watch: PersonWatch;
   /** The name of the person for the UI. */
   readonly label?: string;
-  /** The escalation policies of the person. When it is absent, the policies of the configuration apply. */
+  /**
+   * The escalation policies of the person. When it is absent, the policies of the configuration apply. A person with
+   * policies of their own gets no policy of the configuration, also no policy with a subject.
+   */
   readonly policies?: readonly EscalationPolicy[];
 }
 
@@ -71,12 +75,33 @@ export interface SpendConfig {
   readonly provider: string;
   /** The most that the channels of the account spend in one calendar month, in US dollars. */
   readonly monthlyUsd: number;
-  /** The last part of the monthly cap that only `life-safety` messages use, in US dollars. The default is 0. */
+  /**
+   * The fixed costs of the account in each month, for example the rent of each phone number. The sends of a month get
+   * the monthly cap less these costs (`sendCapUsd`). The default is no fixed cost.
+   */
+  readonly fixed?: readonly FixedCost[];
+  /** The last part of the cap of the sends that only `life-safety` messages use, in US dollars. The default is 0. */
   readonly reserveUsd?: number;
   /** Below this balance of the account, in the currency of the account, the system reports the line `low`. */
   readonly floor: number;
   /** The time zone of the start of the month, as an IANA name: for example `America/New_York`. */
   readonly timeZone: string;
+}
+
+/** One fixed cost of a provider account in each month, for example the rent of one phone number. */
+export interface FixedCost {
+  /** The name of the cost, for example `toll-free number`. */
+  readonly what: string;
+  /** The cost in each month, in US dollars. */
+  readonly usd: number;
+}
+
+/**
+ * This function gives the part of the monthly cap of a spend entry that the sends get, in US dollars. That part is the
+ * cap less the fixed costs. The value is 0 or less when the fixed costs use all of the cap.
+ */
+export function sendCapUsd(spend: Pick<SpendConfig, "monthlyUsd" | "fixed">): number {
+  return spend.monthlyUsd - (spend.fixed ?? []).reduce((sum, cost) => sum + cost.usd, 0);
 }
 
 /** One person of the outage call, with the chain of the tries of the person. */
@@ -135,6 +160,11 @@ export interface AlertConfig {
   readonly assess?: AssessPolicy;
   /** The drills of the live paths. Without them, the instance starts no drill. */
   readonly drills?: readonly DrillConfig[];
+  /**
+   * The private opt-in list of the texts. A channel with an address field of `optIn` sends only to a phone on this
+   * list, and a STOP reply removes the number. The list holds phone numbers: keep it out of each public text.
+   */
+  readonly optIn?: readonly OptInConfig[];
 }
 
 /** The name of the format of the settings of one copy of the system. A change that breaks a file gets a new name. */
@@ -249,6 +279,8 @@ export interface LoadedConfig {
    * no value of a secret, no label and no position. The runtime does not start with a problem.
    */
   readonly problems: readonly string[];
+  /** The opt-in list of the texts, with the value of each number. */
+  readonly optIn: readonly OptInRecord[];
 }
 
 /**
@@ -327,6 +359,19 @@ export function loadConfig(config: AlertConfig, channels: readonly ChannelDescri
     ofPerson.set(channel, Object.fromEntries(fields));
   }
 
+  // Each value of an opt-in field needs a record. A channel of texts then sends only to a person who agreed.
+  const { records: optIn, problems: optInFound } = resolveOptIn(config.optIn ?? [], secret);
+  problems.push(...optInFound);
+  const listed = new Set(optIn.map((record) => record.number));
+  for (const channel of channels) {
+    for (const field of optInFields(channel)) {
+      for (const [person, ofPerson] of addresses) {
+        const value = ofPerson.get(channel.id)?.[field.name];
+        if (value !== undefined && !listed.has(value)) problems.push(`The field ${field.name} of the contact of ${person} on ${channel.id} is not on the opt-in list. The channel sends nothing to it.`);
+      }
+    }
+  }
+
   const providers = new Set<string>();
   for (const spend of config.spend ?? []) {
     const { provider } = spend;
@@ -334,7 +379,10 @@ export function loadConfig(config: AlertConfig, channels: readonly ChannelDescri
     providers.add(provider);
     // A typo of a provider gives a cap that no send takes from.
     if (!channels.some((channel) => channel.dependsOn.includes(provider))) problems.push(`The spend entry of ${provider} names a provider that no channel depends on.`);
-    if (!((spend.reserveUsd ?? 0) < spend.monthlyUsd)) problems.push(`The reserve of the spend of ${provider} is not below its monthly cap.`);
+    // The fixed costs come first. Thus the reserve is a part of the cap of the sends, and the sends get more than 0.
+    const sends = sendCapUsd(spend);
+    if (!(sends > 0)) problems.push(`The fixed costs of the spend of ${provider} use all of its monthly cap. No send can go.`);
+    else if (!((spend.reserveUsd ?? 0) < sends)) problems.push(`The reserve of the spend of ${provider} is not below its monthly cap less its fixed costs.`);
     if (localTime(0, spend.timeZone) === undefined) problems.push(`The time zone of the spend of ${provider} is not an IANA name.`);
   }
 
@@ -396,7 +444,7 @@ export function loadConfig(config: AlertConfig, channels: readonly ChannelDescri
     const rules = rulesOf.get(recipient.watch.person);
     return rules === undefined ? recipient : { ...recipient, channelRules: [...(recipient.channelRules ?? []), ...rules] };
   });
-  return { recipients: ruled, problems };
+  return { recipients: ruled, problems, optIn };
 }
 
 /**
@@ -430,7 +478,7 @@ function drillPlanProblems(drill: DrillConfig, recipient: Recipient, policy: Ass
   for (const plan of plans) {
     for (const incident of incidents(normalize({ reports: plan.reports }), plan.at)) {
       const level = reachedAssessment(assess(incident, recipient.watch, [], policy, plan.at)).level;
-      const found = level === "none" ? undefined : recipient.policies.find((entry) => entry.level === level);
+      const found = level === "none" ? undefined : policyFor(recipient.policies, level, incident);
       if (found === undefined) {
         problems.push(`The ${plan.name} of the drill ${id} reaches the person ${person} at the level ${level}, and the person has no policy of it. It sends nothing.`);
         continue;

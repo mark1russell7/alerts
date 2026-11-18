@@ -10,11 +10,16 @@
  * - The rules of the values that a type cannot hold are refinements. Each rule tells the line of the
  *   contract that states it.
  */
+import { tryParseUnit } from "@mark1russell7/quantity";
 import { z } from "zod";
 import {
   ASSESSED_LEVELS,
   CELL_RESOURCES,
+  DIMENSION_IDS,
+  INDICATOR_AREA_KINDS,
   LEVELS,
+  MOVES,
+  OWN_BASELINES,
   type Acknowledgment,
   type Address,
   type AddressField,
@@ -38,6 +43,7 @@ import {
   type Coverage,
   type Cursor,
   type Delivery,
+  type DimensionId,
   type DeliveryState,
   type DeliveryStatus,
   type EndMark,
@@ -52,12 +58,16 @@ import {
   type HealthState,
   type Id,
   type Incident,
+  type IndicatorArea,
+  type IndicatorAreaKind,
   type IncidentLine,
   type Instant,
   type Kind,
   type KindClass,
   type KindPrior,
   type Level,
+  type MeasureDeclaration,
+  type Move,
   type LevelRule,
   type LevelTable,
   type LocateOutcome,
@@ -71,7 +81,9 @@ import {
   type PersonId,
   type PersonWatch,
   type PlaceId,
+  type OwnBaseline,
   type Position,
+  type Reading,
   type ProviderBalance,
   type QuietWindow,
   type QuotaStage,
@@ -112,6 +124,7 @@ import {
   type WhyRecord,
   type WatchedPlace,
 } from "./contracts.ts";
+import { MEASURE_ID, SERIES_VERSION } from "./indicators.ts";
 import { err, ok, tryCatch, type Result } from "@mark1russell7/optional";
 import { compareCodeUnits } from "@mark1russell7/text/order";
 import {
@@ -137,6 +150,7 @@ import {
 import type { TryChain } from "./chain.ts";
 import type { EscalationEnd, Recipient } from "./delivery.ts";
 import type { DrillConfig, DrillPath } from "./drill.ts";
+import { OPT_IN_WAYS, type OptInConfig, type OptInRecord } from "./opt-in.ts";
 import type { RankDelays } from "./escalation.ts";
 import { HEALTH_FORMAT, type BalanceHealth, type CopyHealth, type HealthPayload, type QuotaHealth, type SourceHealthView } from "./health-payload.ts";
 import { HISTORY_FORMAT, type HistoryChange, type HistoryIncident, type HistoryPayload, type HistoryPlace, type HistoryRegion } from "./history.ts";
@@ -392,6 +406,82 @@ export const reportSchema: z.ZodType<Report, Report> = schemaOf<Report>()(
 );
 
 // =============================================================================
+// The indicator contract
+// =============================================================================
+
+/** This schema checks the id of a dimension. The values come from `DIMENSION_IDS`. */
+export const dimensionIdSchema: z.ZodType<DimensionId, DimensionId> = schemaOf<DimensionId>()(z.enum(DIMENSION_IDS));
+
+/** This schema checks the kind of the area of a measure. The values come from `INDICATOR_AREA_KINDS`. */
+export const indicatorAreaKindSchema: z.ZodType<IndicatorAreaKind, IndicatorAreaKind> = schemaOf<IndicatorAreaKind>()(z.enum(INDICATOR_AREA_KINDS));
+
+/** This schema checks the direction of a change that is a signal. The values come from `MOVES`. */
+export const moveSchema: z.ZodType<Move, Move> = schemaOf<Move>()(z.enum(MOVES));
+
+/** This schema checks the baseline that a source gives. The values come from `OWN_BASELINES`. */
+export const ownBaselineSchema: z.ZodType<OwnBaseline, OwnBaseline> = schemaOf<OwnBaseline>()(z.enum(OWN_BASELINES));
+
+/** This schema checks the area of one reading. A line has two positions or more. */
+export const indicatorAreaSchema: z.ZodType<IndicatorArea, IndicatorArea> = schemaOf<IndicatorArea>()(
+  z
+    .discriminatedUnion("type", [
+      z.strictObject({ type: z.literal("code"), system: z.string(), code: z.string() }),
+      z.strictObject({ type: z.literal("point"), at: positionSchema }),
+      z.strictObject({ type: z.literal("line"), path: z.array(positionSchema).min(2, "A line has two positions or more.").readonly() }),
+      z.strictObject({ type: z.literal("polygon"), rings: z.array(z.array(positionSchema).readonly()).readonly() }),
+      z.strictObject({ type: z.literal("zone"), system: z.string(), code: z.string() }),
+      z.strictObject({ type: z.literal("world") }),
+    ])
+    .readonly(),
+);
+
+// A time that is more than 0. A cadence of 0 is not a cadence, and a backfill of 0 is no backfill.
+const positiveDuration = z.number().positive("The time is more than 0.");
+
+/** This schema checks one measure of a source. Its unit is in the grammar of `@mark1russell7/quantity`. */
+export const measureDeclarationSchema: z.ZodType<MeasureDeclaration, MeasureDeclaration> = schemaOf<MeasureDeclaration>()(
+  z
+    .strictObject({
+      id: z.string().regex(MEASURE_ID, "The id of a measure is small letters, digits and hyphens, with a letter first, up to 40 characters."),
+      dimension: dimensionIdSchema,
+      title: z.string(),
+      unit: z.string().refine((unit) => tryParseUnit(unit) !== undefined, "The unit is not in the grammar of @mark1russell7/quantity."),
+      area: indicatorAreaKindSchema,
+      moves: moveSchema,
+      baseline: ownBaselineSchema,
+      cadence: positiveDuration.exactOptional(),
+      delay: durationSchema.exactOptional(),
+      backfill: positiveDuration.exactOptional(),
+    })
+    .readonly(),
+);
+
+// The measures of a source. Two measures of one source do not have one id, because a reading names its measure by the id.
+const sourceMeasures = z
+  .array(measureDeclarationSchema)
+  .readonly()
+  .refine((measures) => new Set(measures.map((measure) => measure.id)).size === measures.length, "Two measures of the source have one id.");
+
+/** This schema checks one value of one series of a measure. The values are finite numbers. */
+export const readingSchema: z.ZodType<Reading, Reading> = schemaOf<Reading>()(
+  z
+    .strictObject({
+      source: sourceIdSchema,
+      measure: z.string(),
+      series: z.string().min(1, "The id of a series is not empty."),
+      version: z.string().regex(SERIES_VERSION, "The version of a series is letters, digits, dots and hyphens, up to 40 characters.").exactOptional(),
+      at: instantSchema,
+      value: z.number(),
+      area: indicatorAreaSchema,
+      cadence: positiveDuration.exactOptional(),
+      expected: z.number().exactOptional(),
+      flagged: z.boolean().exactOptional(),
+      observation: observationIdSchema,
+    })
+    .readonly(),
+);
+
+// =============================================================================
 // The source contract
 // =============================================================================
 
@@ -430,6 +520,7 @@ export const sourceDescriptorSchema: z.ZodType<SourceDescriptor, SourceDescripto
       auth: z.enum(["none", "key", "oauth"]),
       listing: z.literal("snapshot").exactOptional(),
       canary: z.string().exactOptional(),
+      measures: sourceMeasures.exactOptional(),
     })
     .readonly(),
 );
@@ -655,6 +746,7 @@ export const addressFieldSchema: z.ZodType<AddressField, AddressField> = schemaO
       required: z.boolean(),
       pattern: z.string().refine(isPattern, "The pattern of an address field is a regular expression with the flag u."),
       form: z.string().min(1, "The form of an address field is a non-empty text."),
+      optIn: z.boolean().exactOptional(),
     })
     .readonly(),
 );
@@ -716,7 +808,7 @@ export const sendOutcomeSchema: z.ZodType<SendOutcome, SendOutcome> = schemaOf<S
       z.strictObject({ ok: z.literal(true), receipt: receiptSchema, accepted: instantSchema }),
       z.strictObject({
         ok: z.literal(false),
-        kind: z.enum(["network", "timeout", "server", "rate-limited", "reserved", "auth", "refused"]),
+        kind: z.enum(["network", "timeout", "server", "rate-limited", "reserved", "auth", "refused", "consent"]),
         message: z.string(),
         retryAfter: durationSchema.exactOptional(),
       }),
@@ -744,11 +836,6 @@ export const deliveryStatusSchema: z.ZodType<DeliveryStatus, DeliveryStatus> = s
 /** This schema checks one step of an escalation. */
 export const escalationStepSchema: z.ZodType<EscalationStep, EscalationStep> = schemaOf<EscalationStep>()(
   z.strictObject({ channel: channelIdSchema, at: durationSchema }).readonly(),
-);
-
-/** This schema checks the escalation of one level. */
-export const escalationPolicySchema: z.ZodType<EscalationPolicy, EscalationPolicy> = schemaOf<EscalationPolicy>()(
-  z.strictObject({ level: levelSchema, steps: z.array(escalationStepSchema).readonly(), exhaustedAfter: durationSchema }).readonly(),
 );
 
 /** This schema checks one accepted send. The step is an index from 0 (`contracts.ts`, line 593). */
@@ -879,6 +966,13 @@ export const subjectWatchSchema: z.ZodType<SubjectWatch, SubjectWatch> = schemaO
     .strictObject({ system: z.string(), id: z.string().exactOptional() })
     .overwrite((subject) => (subject.system === "topic" && subject.id !== undefined ? { ...subject, id: canonicalKind(subject.id) } : subject))
     .refine((subject) => subject.system !== "topic" || subject.id === undefined || knownKind(subject.id), TOPIC_PROBLEM)
+    .readonly(),
+);
+
+/** This schema checks the escalation of one level, with its optional subject. */
+export const escalationPolicySchema: z.ZodType<EscalationPolicy, EscalationPolicy> = schemaOf<EscalationPolicy>()(
+  z
+    .strictObject({ level: levelSchema, about: subjectWatchSchema.exactOptional(), steps: z.array(escalationStepSchema).readonly(), exhaustedAfter: durationSchema })
     .readonly(),
 );
 
@@ -1304,12 +1398,24 @@ export const contactConfigSchema: z.ZodType<ContactConfig, ContactConfig> = sche
   z.strictObject({ person: personIdSchema, channel: channelIdSchema, address: z.record(z.string(), addressValueSchema).readonly() }).readonly(),
 );
 
-/** This schema checks the money rules of one paid provider account. `loadConfig` checks the provider, the reserve and the time zone. */
+/** This schema checks the form of one record of the opt-in list. `loadConfig` checks the number, the time and the words. */
+export const optInConfigSchema: z.ZodType<OptInConfig, OptInConfig> = schemaOf<OptInConfig>()(
+  z.strictObject({ number: addressValueSchema, at: z.string().min(1), way: z.enum(OPT_IN_WAYS), words: z.string().min(1) }).readonly(),
+);
+
+/**
+ * This schema checks the money rules of one paid provider account, with its fixed costs. `loadConfig` checks the
+ * provider, the fixed costs against the cap, the reserve and the time zone.
+ */
 export const spendConfigSchema: z.ZodType<SpendConfig, SpendConfig> = schemaOf<SpendConfig>()(
   z
     .strictObject({
       provider: z.string().min(1),
       monthlyUsd: z.number().positive(),
+      fixed: z
+        .array(z.strictObject({ what: z.string().min(1), usd: z.number().nonnegative() }).readonly())
+        .readonly()
+        .exactOptional(),
       reserveUsd: z.number().nonnegative().exactOptional(),
       floor: z.number(),
       timeZone: z.string().min(1),
@@ -1413,6 +1519,7 @@ export const alertConfigSchema: z.ZodType<AlertConfig, AlertConfig> = schemaOf<A
       rankFloor: durationSchema.exactOptional(),
       assess: assessPolicySchema.exactOptional(),
       drills: z.array(drillConfigSchema).readonly().exactOptional(),
+      optIn: z.array(optInConfigSchema).readonly().exactOptional(),
     })
     .readonly(),
 );
@@ -1642,6 +1749,8 @@ function pathText(path: readonly PropertyKey[]): string {
 export interface ParsedConfig {
   readonly config: AlertConfig;
   readonly recipients: readonly Recipient[];
+  /** The opt-in list of the texts, with the value of each number. */
+  readonly optIn: readonly OptInRecord[];
 }
 
 /**
@@ -1656,5 +1765,5 @@ export function parseConfig(text: string, channels: readonly ChannelDescriptor[]
   const checked = checkWith(alertConfigSchema, json.value);
   if (checked.tag === "err") return checked;
   const loaded = loadConfig(checked.value, channels, secret);
-  return loaded.problems.length > 0 ? err(loaded.problems) : ok({ config: checked.value, recipients: loaded.recipients });
+  return loaded.problems.length > 0 ? err(loaded.problems) : ok({ config: checked.value, recipients: loaded.recipients, optIn: loaded.optIn });
 }

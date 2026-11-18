@@ -19,7 +19,8 @@
  * The optional key `HEALTHCHECKS_LOUD_PING_URL` gives a second check. The heartbeat sends each ping to it too.
  *
  * The API also serves the built local page of `packages/site/dist` at the path `/`. Build it before the start:
- * `pnpm --filter ./packages/site build`. Without the build, the path `/` gives 404, and the routes still answer.
+ * `pnpm --filter ./packages/site build`. Without the build, the path `/` gives 404, and the routes still answer. The
+ * start line tells if the page is not built, or older than the source files of the checkout.
  *
  * The optional file `copy.json` gives the settings of this copy of the system (`copy.ts`): its rank and the key of its
  * first check. Without the file, the runtime is the only copy.
@@ -36,7 +37,7 @@
  * check stops the runtime. The supervisor starts it again.
  */
 import { randomUUID } from "node:crypto";
-import { access, rm } from "node:fs/promises";
+import { rm } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { configHash } from "@mark1russell7/alerts";
@@ -51,7 +52,7 @@ import { SqliteHostStateStore } from "polite-crawler";
 import { fetchTransport, quotaGate } from "polite-crawler/api";
 import { writeFileAtomic } from "@procedures/fs/files";
 import { alertsHome, ConfigRefused, configPath, envSecrets } from "./config.ts";
-import { PAGE_INDEX, pageFolder } from "./api.ts";
+import { pageFolder, pageWarning, readPageState } from "./api.ts";
 import { COPY_TOKEN_KEY } from "./copy.ts";
 import { EXCHANGE_TOKEN_LENGTH, exchangeCall, exchangeHost } from "./exchange-http.ts";
 import { heartbeat, heldOf, type PassSummary } from "./heartbeat.ts";
@@ -233,13 +234,10 @@ async function runtime(): Promise<ServiceBuilder> {
   const host = copies === undefined || copy.listen === undefined || token === undefined ? undefined : exchangeHost({ source: copies.source, token, listen: copy.listen });
   const exchange = { ...(copies?.loop === undefined ? {} : { loop: copies.loop }), ...(host === undefined ? {} : { host }) };
 
-  // The built local page. The line tells if the page is built, and it holds no path.
-  const page = pageFolder(fileURLToPath(new URL("..", import.meta.url)));
-  const built = await access(join(page, PAGE_INDEX)).then(
-    () => true,
-    () => false,
-  );
-  console.log(built ? "The API serves the local page at the path /." : "The local page is not built, thus the path / gives 404. Build it: pnpm --filter ./packages/site build");
+  // The built local page. The line tells the state of the page, and it holds no path.
+  const runtimeRoot = fileURLToPath(new URL("..", import.meta.url));
+  const page = pageFolder(runtimeRoot);
+  console.log(pageWarning(await readPageState(runtimeRoot)) ?? "The API serves the local page at the path /.");
 
   // The service closes the log and the store of shapes in its shutdown.
   const service = declare({

@@ -426,6 +426,12 @@
     "note": "The host of the feed of insight-prediction-site."
   },
   {
+    "id": "kp.gfz.de",
+    "name": "kp.gfz.de",
+    "kind": "host",
+    "note": "The host of gfz-kp-hpo. A DNS lookup on 2026-11-16 gave the canonical name rz-vm229.gfz.de, a server of GFZ with no content network."
+  },
+  {
     "id": "ll.thespacedevs.com",
     "name": "ll.thespacedevs.com",
     "kind": "host",
@@ -472,6 +478,12 @@
     "name": "nrc.uscg.mil",
     "kind": "host",
     "note": "The host of the feed of nrc-uscg-reports."
+  },
+  {
+    "id": "nwws-oi.weather.gov",
+    "name": "nwws-oi.weather.gov",
+    "kind": "host",
+    "note": "The XMPP server of nws-nwws-oi. A DNS lookup on 2026-11-16 gave the canonical name nwws-oi-bldr.weather.gov, a name of the NWS and not of a content network."
   },
   {
     "id": "ocrportal.hhs.gov",
@@ -622,6 +634,12 @@
     "name": "striketracker.ilr.cornell.edu",
     "kind": "host",
     "note": "The host of the feed of cornell-labor-action-tracker."
+  },
+  {
+    "id": "sws-data.sws.bom.gov.au",
+    "name": "sws-data.sws.bom.gov.au",
+    "kind": "host",
+    "note": "The host of bom-sws-api. A DNS lookup on 2026-11-16 gave the canonical name prd.bom.sws.edgekey.net, a name of Akamai."
   },
   {
     "id": "tracker.gasbuddy.com",
