@@ -9,7 +9,7 @@
 
 import type { SourceId } from "@mark1russell7/alerts";
 
-import type { ComponentKey, StatusPage } from "./page.ts";
+import { endpointKey, regionKey, type ComponentKey, type StatusPage } from "./page.ts";
 
 /** The failure domain of each page that Atlassian Statuspage hosts. */
 export const ATLASSIAN_STATUSPAGE = "provider:atlassian-statuspage";
@@ -49,17 +49,35 @@ const page = (name: string, title: string, host: string, domain: string, kind: s
  * outage call starts Functions on the server of Twilio. The API of these services is `api.twilio.com`. Each id is a
  * component of the page on 2026-11-18.
  *
- * An incident of a carrier names only `twilio.com`. A key of a carrier needs the region of the phone of a person, and
- * the delivery layer gives no region yet. An outage of Twilio Video or SendGrid also names only `twilio.com`.
+ * Each component of the group CARRIER NETWORK for messages or voice names the path of its region and its product, for
+ * example `provider-region:twilio/europe/sms`. In North America, the kind of number is a part below the product, for
+ * example `twilio/north-america/sms/short-code`. Thus a channel of the SMS of North America gets an outage of each kind of
+ * number. An outage of Twilio Video or SendGrid names only `twilio.com`.
  */
 export const TWILIO_KEYS: readonly ComponentKey[] = [
-  { id: "yvvy3vlp4djf", name: "SMS", domain: "api.twilio.com" },
-  { id: "x3z86l06nvl7", name: "Programmable Messaging API", domain: "api.twilio.com" },
-  { id: "mwcz6hw53t7c", name: "Voice REST API US1", domain: "api.twilio.com" },
-  { id: "g2dt752kwqs0", name: "PSTN US1", domain: "api.twilio.com" },
-  { id: "xnzrm2zg4qbv", name: "TwiML US1", domain: "api.twilio.com" },
-  { id: "dv0j99s68yxn", name: "Text-to-Speech US1", domain: "api.twilio.com" },
-  { id: "b3tl520cz8tc", name: "Functions", domain: "api.twilio.com" },
+  endpointKey("yvvy3vlp4djf", "SMS", "api.twilio.com"),
+  endpointKey("x3z86l06nvl7", "Programmable Messaging API", "api.twilio.com"),
+  endpointKey("mwcz6hw53t7c", "Voice REST API US1", "api.twilio.com"),
+  endpointKey("g2dt752kwqs0", "PSTN US1", "api.twilio.com"),
+  endpointKey("xnzrm2zg4qbv", "TwiML US1", "api.twilio.com"),
+  endpointKey("dv0j99s68yxn", "Text-to-Speech US1", "api.twilio.com"),
+  endpointKey("b3tl520cz8tc", "Functions", "api.twilio.com"),
+  regionKey("7d8w22hqrh6s", "SMS Long Code, North America", "twilio/north-america/sms/long-code"),
+  regionKey("8vdlvw3dsq8h", "MMS Long Code, North America", "twilio/north-america/mms/long-code"),
+  regionKey("39mb8cmw8y2v", "SMS Short Code, North America", "twilio/north-america/sms/short-code"),
+  regionKey("h0fl7prwfhvm", "MMS Short Code, North America", "twilio/north-america/mms/short-code"),
+  regionKey("32f2bm54nkvv", "SMS Toll-Free, North America", "twilio/north-america/sms/toll-free"),
+  regionKey("tvjwfvczkf46", "MMS Toll-Free, North America", "twilio/north-america/mms/toll-free"),
+  regionKey("2v3v92mz2m4h", "Voice, North America", "twilio/north-america/voice"),
+  regionKey("fbtv2g9t3z25", "Voice, Latin America", "twilio/latin-america/voice"),
+  regionKey("42zx9w2kmtvf", "SMS, Latin America", "twilio/latin-america/sms"),
+  regionKey("50pr269zqrwj", "Voice, APAC", "twilio/apac/voice"),
+  regionKey("8qjql0kqnd33", "SMS, APAC", "twilio/apac/sms"),
+  regionKey("2nd0jdj36wpq", "MMS, APAC", "twilio/apac/mms"),
+  regionKey("bnzggd37p61w", "Voice, Europe", "twilio/europe/voice"),
+  regionKey("llgdln3dcs6p", "SMS, Europe", "twilio/europe/sms"),
+  regionKey("6ns22g89f6g9", "Voice, Middle East & Africa", "twilio/middle-east-africa/voice"),
+  regionKey("9z5gsqyjs4rl", "SMS, Middle East & Africa", "twilio/middle-east-africa/sms"),
 ];
 
 /**
@@ -68,11 +86,11 @@ export const TWILIO_KEYS: readonly ComponentKey[] = [
  * of the dashboard names only `pushover.net`.
  */
 export const PUSHOVER_KEYS: readonly ComponentKey[] = [
-  { id: "Xt5Xa7RUGZkb8L55acKKAdKJSFNX3IWXJvaVT3vKiIeFeuT8A-avC5Z0nJZirwB6", name: "Outbound Message Queue", domain: "api.pushover.net" },
-  { id: "Xt5Xa7RUGZkb8L55acKKAdKJSFNX3IWXJvaVT3vKiIcnWztijJIDzxTWBujQEd3M", name: "US Central (F)", domain: "api.pushover.net" },
-  { id: "Xt5Xa7RUGZkb8L55acKKAdKJSFNX3IWXJvaVT3vKiIeiu-9ysiEgekUK3gEuk9hO", name: "US Central (T)", domain: "api.pushover.net" },
-  { id: "Xt5Xa7RUGZkb8L55acKKAdKJSFNX3IWXJvaVT3vKiIfTbKS2mFwt4hT84B6JuyjD", name: "US West (A)", domain: "api.pushover.net" },
-  { id: "Xt5Xa7RUGZkb8L55acKKAdKJSFNX3IWXJvaVT3vKiIcrDRsdTbAIJSMnDRKdrfEZ", name: "US West (H)", domain: "api.pushover.net" },
+  endpointKey("Xt5Xa7RUGZkb8L55acKKAdKJSFNX3IWXJvaVT3vKiIeFeuT8A-avC5Z0nJZirwB6", "Outbound Message Queue", "api.pushover.net"),
+  endpointKey("Xt5Xa7RUGZkb8L55acKKAdKJSFNX3IWXJvaVT3vKiIcnWztijJIDzxTWBujQEd3M", "US Central (F)", "api.pushover.net"),
+  endpointKey("Xt5Xa7RUGZkb8L55acKKAdKJSFNX3IWXJvaVT3vKiIeiu-9ysiEgekUK3gEuk9hO", "US Central (T)", "api.pushover.net"),
+  endpointKey("Xt5Xa7RUGZkb8L55acKKAdKJSFNX3IWXJvaVT3vKiIfTbKS2mFwt4hT84B6JuyjD", "US West (A)", "api.pushover.net"),
+  endpointKey("Xt5Xa7RUGZkb8L55acKKAdKJSFNX3IWXJvaVT3vKiIcrDRsdTbAIJSMnDRKdrfEZ", "US West (H)", "api.pushover.net"),
 ];
 
 /** The well-known status pages, in the order of their ids. */
