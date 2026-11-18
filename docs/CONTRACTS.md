@@ -932,6 +932,16 @@ The shadow score (`shadowScore`) is the first step. It operates next to the tabl
 - A factor that the priors do not give makes a score with no read. The score names each missing factor. It does not take 0 or a default value.
 - `assessWithShadow` adds the score as the last reason of an assessment with a reason of the table. The level and the other reasons stay those of `assess`. A seeded gate test holds this.
 
+The priors come from the base rates of the package `rates` (`priorsOf`). The file `packages/rates/data/priors.json` holds them. A test holds it equal to the priors of `data/rates.json`:
+
+- The verified share of a kind is the own share of IEM Cow. It is the share of the warnings that a storm report of the same hazard verified. Its interval is the gate interval of the share.
+- A share with a reason of no read gives no prior. A phenomenon that Cow does not verify gives no prior.
+- The deaths of one event of a kind are its deaths over its events. Each sum adds the NCEI types of the kind. The injuries are the same.
+- The interval of the deaths and of the injuries is the hull of two intervals and the value. The exact Poisson interval of the count over the events (`poissonInterval` of `@mark1russell7/rigor-statistics`) holds a small count. Thus a count of 0 gets a wide interval, not a point at 0.
+- The percentile bootstrap over the years holds the change from year to year. Its seed comes from the kind and the field. It applies only when each year has an event. Otherwise a draw of the years can have no event.
+- A kind with no event in the years gives no prior of deaths and no prior of injuries. Thus the score has no read for that kind.
+- The probability of a CAP certainty is the middle of its band. Its interval is the band.
+
 ## The service
 
 The runtime operates as one service of `@mark1russell7/service`. Its entry is `packages/runtime/src/main.ts`. Only that file uses `run()`, and only that file reads a real clock.
@@ -1355,6 +1365,7 @@ The route `GET /map` of the runtime gives the `MapPayload` of `mapPayload`:
 - `at`: the time of the last pass, or `null` before the first pass.
 - `view`: the view of the last pass. The payload assesses each live incident for each person, with the policy of the delivery.
 - `basemap`: the regions under the view, simplified for the view box of the page.
+- `breadth`: the breadth of the indicator signals of the last pass, in the world and at each place. A runtime with no store of the readings has no field. The field is optional, thus the format keeps its name.
 
 Thus the level on the map is the level that the delivery gives. A mute with the effect `absent` gives `none`, as in `route` (`reachedAssessment`).
 
@@ -1384,6 +1395,14 @@ The route `GET /health` of the runtime gives the `HealthPayload` of `healthPaylo
 The coverage holds the ids of the places. Thus only the loopback address gives the route, as for the map.
 
 The local page shows the payload in the panel "Sources" (`packages/site/src/health-read.ts`, `health-view.ts`).
+
+The panel "Indicators" of the local page shows the field `breadth` of the live map (`packages/site/src/indicators-view.ts`).
+
+- The first row is the world, and each other row is a watched place. Each row tells the dimensions out of their normal level and the dimensions with a read.
+- Each row has one line for each dimension with a series: the series out of the normal level, and the series with no read.
+- The panel tells the counts, and no decision. The threat level (AL-24) reads the same counts.
+- The panel is of the present, also when the map shows a past time. The history keeps no breadth.
+- A runtime with no store of the readings gives no field, and the panel tells it. A breadth with no series tells that no source gives indicator readings yet.
 
 - The page reads the route after each good read of the map. A runtime with no `health` option gives 404, and the panel tells that it has no health.
 - Two sentences sum the payload: the sources, and the quotas and balances that stop or limit a message. A link at the top of the page has the same sentences.

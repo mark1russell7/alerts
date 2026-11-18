@@ -507,6 +507,9 @@ importers:
 
   packages/rates:
     dependencies:
+      '@mark1russell7/alerts':
+        specifier: workspace:*
+        version: link:../core
       '@mark1russell7/alerts-format-cap':
         specifier: workspace:*
         version: link:../format-cap
@@ -514,8 +517,8 @@ importers:
         specifier: workspace:*
         version: link:../format-nws
       '@mark1russell7/rigor-statistics':
-        specifier: ^0.2.1
-        version: 0.2.4
+        specifier: ^0.2.8
+        version: 0.2.8
       '@mark1russell7/text':
         specifier: ^0.0.13
         version: 0.0.13
@@ -523,9 +526,6 @@ importers:
         specifier: ^0.57.0
         version: 0.57.0
     devDependencies:
-      '@mark1russell7/alerts':
-        specifier: workspace:*
-        version: link:../core
       '@mark1russell7/alerts-fetch':
         specifier: workspace:*
         version: link:../fetch
@@ -1617,10 +1617,6 @@ packages:
 
   '@mark1russell7/rigor-statistics@0.2.1':
     resolution: {integrity: sha512-4m8yw4giLH/y1HcsroBQSHAWByC5fK/iJb4dNGCPT6Eelr26bxvBz7kMC7UMFSzGcR+W8GTrAwlAQmmFnQDMuA==}
-    engines: {node: '>=22'}
-
-  '@mark1russell7/rigor-statistics@0.2.4':
-    resolution: {integrity: sha512-0L075rT+toD6edxEwDdZHiFzHP4+dJrI64Pw5gh9V33VwCfNRUMQY90AooDpMgVcC9cuxHNXegDLSOYU9ZMIlA==}
     engines: {node: '>=22'}
 
   '@mark1russell7/rigor-statistics@0.2.8':
@@ -3269,10 +3265,6 @@ snapshots:
       '@mark1russell7/rigor-generators': 0.1.19
 
   '@mark1russell7/rigor-statistics@0.2.1':
-    dependencies:
-      '@mark1russell7/rigor-generators': 0.1.19
-
-  '@mark1russell7/rigor-statistics@0.2.4':
     dependencies:
       '@mark1russell7/rigor-generators': 0.1.19
 
