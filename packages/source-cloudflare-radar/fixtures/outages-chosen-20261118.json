@@ -1,0 +1,286 @@
+{
+  "success": true,
+  "errors": [],
+  "result": {
+    "annotations": [
+      {
+        "id": "1747",
+        "dataSource": "ALL",
+        "description": "A network fault caused a near-total loss of Internet traffic from Claro Dominicana (AS6400), affecting fixed and mobile services.",
+        "tags": [],
+        "scope": null,
+        "startDate": "2026-11-06T16:45:00Z",
+        "endDate": "2026-11-06T18:45:00Z",
+        "locations": [
+          "DO"
+        ],
+        "asns": [
+          6400
+        ],
+        "geoIds": [],
+        "origins": [],
+        "entities": [
+          {
+            "entityType": "LOCATION",
+            "entityValue": "DO",
+            "entityName": "Dominican Republic",
+            "entityLocation": null
+          },
+          {
+            "entityType": "AS",
+            "entityValue": "6400",
+            "entityName": "Claro Dominicana",
+            "entityLocation": "DO"
+          }
+        ],
+        "eventType": "OUTAGE",
+        "linkedUrl": "https://x.com/CloudflareRadar/status/2119021204161826981",
+        "asnsDetails": [
+          {
+            "asn": "6400",
+            "name": "Claro Dominicana",
+            "location": {
+              "code": "DO",
+              "name": "Dominican Republic"
+            }
+          }
+        ],
+        "locationsDetails": [
+          {
+            "name": "Dominican Republic",
+            "code": "DO"
+          }
+        ],
+        "originsDetails": [],
+        "outage": {
+          "outageCause": "TECHNICAL_PROBLEM",
+          "outageType": "NETWORK"
+        }
+      },
+      {
+        "id": "1744",
+        "dataSource": "ALL",
+        "description": "Damage to energy facilities cut power in Zhytomyr and disrupted Internet connectivity",
+        "tags": [],
+        "scope": null,
+        "startDate": "2026-11-03T17:30:00Z",
+        "endDate": "2026-11-04T07:00:00Z",
+        "locations": [],
+        "asns": [],
+        "geoIds": [
+          "686966"
+        ],
+        "origins": [],
+        "entities": [
+          {
+            "entityType": "GEOLOCATION",
+            "entityValue": "686966",
+            "entityName": "Zhytomyr Oblast, Ukraine",
+            "entityLocation": "UA"
+          }
+        ],
+        "eventType": "OUTAGE",
+        "linkedUrl": "https://x.com/CloudflareRadar/status/2117729988929573291",
+        "asnsDetails": [],
+        "locationsDetails": [],
+        "originsDetails": [],
+        "outage": {
+          "outageCause": "POWER_OUTAGE",
+          "outageType": "REGIONAL"
+        }
+      },
+      {
+        "id": "1687",
+        "dataSource": "ALL",
+        "description": "Exam shutdown",
+        "tags": [],
+        "scope": null,
+        "startDate": "2026-10-10T02:45:00Z",
+        "endDate": "2026-10-10T03:45:00Z",
+        "locations": [
+          "IQ"
+        ],
+        "asns": [
+          199739,
+          203214,
+          51684,
+          58322,
+          59588
+        ],
+        "geoIds": [],
+        "origins": [],
+        "entities": [
+          {
+            "entityType": "LOCATION",
+            "entityValue": "IQ",
+            "entityName": "Iraq",
+            "entityLocation": null
+          },
+          {
+            "entityType": "AS",
+            "entityValue": "199739",
+            "entityName": "Earthlink-DMCC-IQ",
+            "entityLocation": "AE"
+          },
+          {
+            "entityType": "AS",
+            "entityValue": "203214",
+            "entityName": "HulumTele",
+            "entityLocation": "IQ"
+          },
+          {
+            "entityType": "AS",
+            "entityValue": "51684",
+            "entityName": "ASIACELL",
+            "entityLocation": "IQ"
+          },
+          {
+            "entityType": "AS",
+            "entityValue": "58322",
+            "entityName": "halasat",
+            "entityLocation": "IQ"
+          },
+          {
+            "entityType": "AS",
+            "entityValue": "59588",
+            "entityName": "ZAINAS-IQ",
+            "entityLocation": "IQ"
+          }
+        ],
+        "eventType": "OUTAGE",
+        "linkedUrl": null,
+        "asnsDetails": [
+          {
+            "asn": "199739",
+            "name": "Earthlink-DMCC-IQ",
+            "location": {
+              "code": "AE",
+              "name": "United Arab Emirates"
+            }
+          },
+          {
+            "asn": "203214",
+            "name": "HulumTele",
+            "location": {
+              "code": "IQ",
+              "name": "Iraq"
+            }
+          },
+          {
+            "asn": "51684",
+            "name": "ASIACELL",
+            "location": {
+              "code": "IQ",
+              "name": "Iraq"
+            }
+          },
+          {
+            "asn": "58322",
+            "name": "halasat",
+            "location": {
+              "code": "IQ",
+              "name": "Iraq"
+            }
+          },
+          {
+            "asn": "59588",
+            "name": "ZAINAS-IQ",
+            "location": {
+              "code": "IQ",
+              "name": "Iraq"
+            }
+          }
+        ],
+        "locationsDetails": [
+          {
+            "name": "Iraq",
+            "code": "IQ"
+          }
+        ],
+        "originsDetails": [],
+        "outage": {
+          "outageCause": "GOVERNMENT_DIRECTED",
+          "outageType": "REGIONAL"
+        }
+      },
+      {
+        "id": "1727",
+        "dataSource": "ALL",
+        "description": "A technical problem at Google Cloud caused elevated errors and network failures for multiple services in its europe-west2 (London) region",
+        "tags": [],
+        "scope": null,
+        "startDate": "2026-10-20T05:45:00Z",
+        "endDate": "2026-10-20T14:00:00Z",
+        "locations": [],
+        "asns": [],
+        "geoIds": [],
+        "origins": [
+          "google-europe-west2"
+        ],
+        "entities": [
+          {
+            "entityType": "ORIGIN",
+            "entityValue": "google-europe-west2",
+            "entityName": "Google Cloud europe-west2",
+            "entityLocation": null
+          }
+        ],
+        "eventType": "OUTAGE",
+        "linkedUrl": "https://x.com/CloudflareRadar/status/2112486747032457726",
+        "asnsDetails": [],
+        "locationsDetails": [],
+        "originsDetails": [
+          {
+            "name": "Google Cloud europe-west2",
+            "origin": "google-europe-west2"
+          }
+        ],
+        "outage": {
+          "outageCause": "TECHNICAL_PROBLEM",
+          "outageType": "PLATFORM"
+        }
+      },
+      {
+        "id": "1730",
+        "dataSource": "ALL",
+        "description": null,
+        "tags": [],
+        "scope": null,
+        "startDate": "2026-10-20T20:00:00Z",
+        "endDate": "2026-10-21T04:45:00Z",
+        "locations": [],
+        "asns": [
+          41039
+        ],
+        "geoIds": [],
+        "origins": [],
+        "entities": [
+          {
+            "entityType": "AS",
+            "entityValue": "41039",
+            "entityName": "DON-FTTH",
+            "entityLocation": "RU"
+          }
+        ],
+        "eventType": "OUTAGE",
+        "linkedUrl": null,
+        "asnsDetails": [
+          {
+            "asn": "41039",
+            "name": "DON-FTTH",
+            "location": {
+              "code": "RU",
+              "name": "Russian Federation"
+            }
+          }
+        ],
+        "locationsDetails": [],
+        "originsDetails": [],
+        "outage": {
+          "outageCause": "MILITARY_ACTION",
+          "outageType": "NETWORK"
+        }
+      }
+    ]
+  }
+}

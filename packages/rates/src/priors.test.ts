@@ -47,8 +47,9 @@ describe("the verified share", () => {
   it("is absent when the gate cannot read the share", () => {
     const rates = copy();
     rates.cow.phenomena.TO.ownShare.noRead = "too few verified or unverified warnings in a year (2021: 3 verified of 9)";
-    expect(priorsOf(rates).kinds["met.tornado"]?.verified).toBeUndefined();
-    expect(priorsOf(rates).kinds["met.tornado"]?.deaths).toEqual(PRIORS.kinds["met.tornado"]?.deaths);
+    const tornado = priorsOf(rates).kinds["met.tornado"];
+    expect(tornado?.verified).toBeUndefined();
+    expect(tornado?.deaths).toEqual(PRIORS.kinds["met.tornado"]?.deaths);
   });
 
   it("does not come from the phenomena that Cow does not verify", () => {
@@ -102,10 +103,11 @@ describe("the deaths and injuries of one event", () => {
     if (tornado === undefined) throw new Error("The rates have no Tornado type.");
     for (const counts of Object.values(tornado.byYear)) counts.deaths = 0;
     const events = Object.values(tornado.byYear).reduce((sum, year) => sum + year.events, 0);
-    const deaths = priorsOf(rates).kinds["met.tornado"]?.deaths;
+    const prior = priorsOf(rates).kinds["met.tornado"];
+    const deaths = prior?.deaths;
     expect(deaths).toEqual({ value: 0, low: 0, high: poissonInterval(0, events, LEVEL).high });
     expect(deaths?.high).toBeGreaterThan(0);
-    expect(priorsOf(rates).kinds["met.tornado"]?.injuries).toEqual(PRIORS.kinds["met.tornado"]?.injuries);
+    expect(prior?.injuries).toEqual(PRIORS.kinds["met.tornado"]?.injuries);
   });
 
   it("use only the exact interval when a year has no event, so no draw of the years divides by 0", () => {
@@ -126,9 +128,10 @@ describe("the deaths and injuries of one event", () => {
     const tornado = rates.ncei.types["Tornado"];
     if (tornado === undefined) throw new Error("The rates have no Tornado type.");
     for (const year of Object.keys(tornado.byYear)) tornado.byYear[year] = { events: 0, deaths: 0, injuries: 0 };
-    expect(priorsOf(rates).kinds["met.tornado"]?.deaths).toBeUndefined();
-    expect(priorsOf(rates).kinds["met.tornado"]?.injuries).toBeUndefined();
-    expect(priorsOf(rates).kinds["met.tornado"]?.verified).toEqual(PRIORS.kinds["met.tornado"]?.verified);
+    const prior = priorsOf(rates).kinds["met.tornado"];
+    expect(prior?.deaths).toBeUndefined();
+    expect(prior?.injuries).toBeUndefined();
+    expect(prior?.verified).toEqual(PRIORS.kinds["met.tornado"]?.verified);
   });
 
   it("are absent for a type with no kind", () => {
@@ -202,8 +205,9 @@ describe("the harm under an alert", () => {
     const kind = rates.under.kinds["met.tornado"];
     if (kind === undefined) throw new Error("The rates have no tornado alerts.");
     kind.nceiKind = null;
-    expect(priorsOf(rates).kinds["met.tornado"]?.under).toBeUndefined();
-    expect(priorsOf(rates).kinds["met.tornado"]?.deaths).toEqual(PRIORS.kinds["met.tornado"]?.deaths);
+    const prior = priorsOf(rates).kinds["met.tornado"];
+    expect(prior?.under).toBeUndefined();
+    expect(prior?.deaths).toEqual(PRIORS.kinds["met.tornado"]?.deaths);
   });
 
   it("is absent for a significance with no area in the years", () => {

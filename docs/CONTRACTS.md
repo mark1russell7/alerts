@@ -1087,6 +1087,15 @@ The deaths of one NCEI event are too high for some kinds: NCEI enters many event
 - Format 4 (`alerts-rates/4`) gives the areas of each kind and significance, and the harm in them, in counties and in zones, in each year (`byArea`). An area is one alert in one county or zone. It counts one time, in the VTEC year of the alert.
 - Format 4 also gives the placed events of the NCEI kind in counties and in zones (`placed`). The prior of an alert takes the kind of area with more events.
 
+The level of the table of an alert comes from its CAP severity and urgency. The archive of the VTEC alerts has no CAP fields. Thus the workflow `cap.yml` counts the CAP fields of the new NWS alerts in `data/cap.json` of the package `rates` (format `alerts-cap/1`):
+
+- The NWS API keeps the alerts of approximately 7 days. Two measures each week read the whole UTC days that no earlier measure read, at most 6 days.
+- One alert counts one time. It is an actual alert with one operational VTEC code of the action `NEW`. The measure counts the other alerts by reason.
+- The counts are in the UTC month of the time `sent` of each alert, for each VTEC code, as `severity/urgency/certainty`.
+- Each measure uploads the whole file, and the next measure adds to it. A person examines the file and commits it from the artifact.
+- The NWS sends alerts each day. Thus a day of the window with no alert is a gap of the API. The measure gives a warning, and the file keeps the count of each day.
+- The replay of the table over the archive takes the CAP fields of each VTEC code from this file (step 4b of AL-31).
+
 The runtime reads the committed priors at its start (`committedPriors` of the package `rates`). A fault of the file stops only the score, and each alert goes on:
 
 - The map route gives the score of each incident that reaches a person (the field `shadow` of each incident of the view).

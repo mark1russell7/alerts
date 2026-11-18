@@ -36,13 +36,14 @@ import { KEV_KINDS } from "@mark1russell7/alerts-source-cisa-kev";
 import { AWS_DESCRIPTOR } from "@mark1russell7/alerts-source-aws";
 import { AZURE_DESCRIPTOR } from "@mark1russell7/alerts-source-azure";
 import { BOM_SWS_DESCRIPTOR, bomTimeText } from "@mark1russell7/alerts-source-bom-sws";
+import { ANOMALIES_DESCRIPTOR as RADAR_ANOMALIES, OUTAGES_DESCRIPTOR as RADAR_OUTAGES } from "@mark1russell7/alerts-source-cloudflare-radar";
 import { FIREBASE_DESCRIPTOR, GCP_DESCRIPTOR } from "@mark1russell7/alerts-source-gcp";
 import { descriptorOf as statusPageDescriptor, pagePath, STATUS_PAGES, type StatusPage } from "@mark1russell7/alerts-source-statuspage";
 import { ENERGY_CHARTS_MEASURES, SOURCE_ID as ENERGY_CHARTS_SOURCE, WINDOW_MINUTES } from "@mark1russell7/alerts-source-energy-charts";
 import { memoryQuotaStore, quotaGate, type Exchange, type Transport } from "polite-crawler/api";
 import { DEFAULT_POLICY } from "polite-crawler/politeness";
 import { afterEach, describe, expect, it } from "vitest";
-import { ACCOUNT_SOURCES, BOM_SWS_KEY, CHECKS_KEY, checksKeys, DAEMON_CHECK, daemonCheck, DELIVERY_TIMES, INSTANCE_CHANNELS, INSTANCE_CHECK, INSTANCE_EXPECTATIONS, INSTANCE_FETCH_LIMIT, INSTANCE_SOURCES, INSTANCE_TIMES, instanceCheck, instanceProblems, LOUD_PING_URL_KEY, nwwsKeys, nwwsSetup, openInstance, PING_URL_KEY, pingKeyOf, pingTargets, RANK_DELAY, RANK_FLOOR, SOURCE_POLICY, sourcePace, twilioSetup, USER_AGENT_NAME, type Instance, type InstanceOptions } from "./instance.ts";
+import { ACCOUNT_SOURCES, BOM_SWS_KEY, CHECKS_KEY, CLOUDFLARE_RADAR_KEY, checksKeys, DAEMON_CHECK, daemonCheck, DELIVERY_TIMES, INSTANCE_CHANNELS, INSTANCE_CHECK, INSTANCE_EXPECTATIONS, INSTANCE_FETCH_LIMIT, INSTANCE_SOURCES, INSTANCE_TIMES, instanceCheck, instanceProblems, LOUD_PING_URL_KEY, nwwsKeys, nwwsSetup, openInstance, PING_URL_KEY, pingKeyOf, pingTargets, RANK_DELAY, RANK_FLOOR, SOURCE_POLICY, sourcePace, twilioSetup, USER_AGENT_NAME, type Instance, type InstanceOptions } from "./instance.ts";
 import { heartbeatGap } from "./heartbeat.ts";
 import { spendGates, spendQuota } from "./balance.ts";
 import { CLOCK_SKEW_LIMIT, COPY_TOKEN_KEY, EXCHANGE_EVERY, EXCHANGE_LIMIT } from "./copy.ts";
@@ -237,6 +238,15 @@ function bomAnswer(url: URL): string {
 }
 
 /**
+ * The answer of Cloudflare Radar to the request of one list. The outages are the real answer of 2026-11-18, with one
+ * outage of a platform that started before the time of the tests. The anomalies are an empty list in the form of the real answer.
+ */
+function radarAnswer(url: URL): string {
+  if (url.pathname.endsWith("/annotations/outages")) return fixture("alerts-source-cloudflare-radar", "outages-20261118.json");
+  return JSON.stringify({ success: true, errors: [], result: { trafficAnomalies: [] } });
+}
+
+/**
  * The answer of Azure Status to the request of its feed, in the shape of the recorded feeds of the package `source-azure`.
  * It has one live incident of virtual machines in the region West Europe, 10 minutes before the time of the tests.
  */
@@ -268,7 +278,7 @@ const STATUS_HOSTS: ReadonlyMap<string, StatusPage> = new Map(STATUS_PAGES.map((
  *
  * GFZ gives a quiet value of the index Kp for each interval of the window of the query (`gfzAnswer`). Energy-Charts gives
  * the nominal frequency for each second of the query (`energyChartsAnswer`). CISA gives a catalog with one live entry (`kevAnswer`).
- * BoM gives one K index, and no alert and no warning (`bomAnswer`).
+ * BoM gives one K index, and no alert and no warning (`bomAnswer`). Cloudflare Radar gives one outage and no anomaly (`radarAnswer`).
  *
  * Each status page gives its summary or its feed (`statusPageAnswer`). Google Cloud gives one live incident (`gcpAnswer`). Firebase
  * gives one live incident of Cloud Messaging (`firebaseAnswer`). AWS gives one live event (`awsAnswer`). Azure gives one
@@ -296,6 +306,7 @@ function network(delay = 0) {
     if (url.hostname === "status.firebase.google.com") return { status: 200, statusText: "OK", headers: { "content-type": "application/json" }, body: firebaseAnswer() };
     if (url.hostname === "status.aws.amazon.com") return { status: 200, statusText: "OK", headers: { "content-type": "application/rss+xml" }, body: awsAnswer() };
     if (url.hostname === "sws-data.sws.bom.gov.au") return { status: 200, statusText: "OK", headers: { "content-type": "application/json" }, body: bomAnswer(url) };
+    if (url.hostname === "api.cloudflare.com") return { status: 200, statusText: "OK", headers: { "content-type": "application/json;charset=UTF-8" }, body: radarAnswer(url) };
     if (url.hostname === "rssfeed.azure.status.microsoft") return { status: 200, statusText: "OK", headers: { "content-type": "text/xml; charset=utf-8" }, body: azureAnswer() };
     if (url.hostname === "www.cisa.gov") return { status: 200, statusText: "OK", headers: { "content-type": "application/json" }, body: kevAnswer() };
     if (url.hostname === "api.energy-charts.info") return { status: 200, statusText: "OK", headers: { "content-type": "application/json" }, body: energyChartsAnswer(url) };
@@ -708,9 +719,25 @@ describe("openInstance", () => {
     for (const name of readdirSync(folder)) expect(readFileSync(join(folder, name)).includes(key), name).toBe(false);
   });
 
+  it("reads Cloudflare Radar only when the secrets have its token, and the token goes only into the header authorization", async () => {
+    const token = "radar-test-token-7c2e";
+    const { instance, clock, net } = open(store({ ...SECRETS, [CLOUDFLARE_RADAR_KEY]: token }));
+    const pass = await finish(clock, instance.runtime.pass());
+    expect(pass.fetched).toEqual(["nws-api", "ipaws", "usgs", "emsc", "tsunami-ntwc", "tsunami-ptwc", "swpc", "gfz", "energy-charts", "cisa-kev", RADAR_OUTAGES.id, RADAR_ANOMALIES.id]);
+    for (const descriptor of [RADAR_OUTAGES, RADAR_ANOMALIES]) expect(pass.view.health.find((health) => health.source === descriptor.id)?.state, descriptor.id).toBe("healthy");
+    const radar = net.exchanges.filter((exchange) => new URL(exchange.url).hostname === "api.cloudflare.com");
+    expect(radar.map((exchange) => new URL(exchange.url).pathname)).toEqual(["/client/v4/radar/annotations/outages", "/client/v4/radar/traffic_anomalies"]);
+    for (const exchange of radar) expect(exchange.headers["authorization"]).toBe(`Bearer ${token}`);
+    for (const exchange of radar) expect(exchange.url).not.toContain(token);
+    for (const exchange of net.exchanges.filter((exchange) => !radar.includes(exchange))) expect(JSON.stringify(exchange)).not.toContain(token);
+    // The files of the runtime log hold no token: no observation, no failure and no record.
+    const folder = opened.at(-1)!.folder;
+    for (const name of readdirSync(folder)) expect(readFileSync(join(folder, name)).includes(token), name).toBe(false);
+  });
+
   it("keeps the times of the loop with each status page: each page has a longer interval than the shortest of the list", () => {
     const shortest = Math.min(...INSTANCE_SOURCES.map((source) => source.interval));
-    for (const descriptor of [GCP_DESCRIPTOR, FIREBASE_DESCRIPTOR, AWS_DESCRIPTOR, AZURE_DESCRIPTOR, BOM_SWS_DESCRIPTOR]) {
+    for (const descriptor of [GCP_DESCRIPTOR, FIREBASE_DESCRIPTOR, AWS_DESCRIPTOR, AZURE_DESCRIPTOR, BOM_SWS_DESCRIPTOR, RADAR_OUTAGES, RADAR_ANOMALIES]) {
       expect(descriptor.interval, descriptor.id).toBeGreaterThanOrEqual(shortest);
       expect(INSTANCE_FETCH_LIMIT(descriptor), descriptor.id).toBe(shortest);
     }
