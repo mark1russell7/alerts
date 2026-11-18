@@ -1714,7 +1714,7 @@ The file `schemas.ts` of the core has one zod 4 schema for each data type of the
 - The atlas has no table of the regions of each zone yet. Until then, each series of a zone is in `unplaced`.
 - A fault of the store of the readings goes only to the output. The health payload does not show it yet.
 - The season of a baseline is in UTC. A change of the clock moves a local rush hour by 1 h in UTC. A season in the local time of the area, with the civil time of `@mark1russell7/algebra`, replaces it.
-- Some units of the indicator sources are not in the grammar of `@mark1russell7/quantity`. They are `MW`, `MWh`, `µSv/h`, `µg`, `hPa`, `Bq`, `ppm` and each currency other than `USD`. A measure in such a unit fails its schema until the package adds the unit.
+- Some currencies are not in the grammar of `@mark1russell7/quantity` 0.4.2, for example `AUD`. A measure in such a unit fails its schema until the package adds the unit.
 - The procedure tools take the schema of each input and output from `schemas.ts`.
 - The link rule has two families, the earthquakes and the geomagnetic storms. Each other kind with two sources of different ids gets its family with its second source.
 - The calculation of the level from probabilities and costs (AL-31), with the base rates from the event log.
