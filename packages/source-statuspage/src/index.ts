@@ -32,6 +32,7 @@ export {
   URGENCY_OF_STATUS,
 } from "./map.ts";
 export { DEFAULT_INTERVAL, DEFAULT_SLOW_AFTER, isDomain, isPageBase, pageProblems, SUBJECT_SYSTEM, type StatusPage } from "./page.ts";
+export { pagesFor, watchReads } from "./select.ts";
 export { ATLASSIAN_STATUSPAGE, CLOUDFLARE_CDN, INCIDENT_IO, registeredPage, STATUS_PAGES } from "./register.ts";
 
 /**
