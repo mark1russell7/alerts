@@ -315,6 +315,14 @@ describe("the words of the page", () => {
     );
   });
 
+  it("tells when a fire zone code decided through the forecast zone with the same code", () => {
+    const [incident] = frames[1]!.incidents;
+    const place = "home-a" as PlaceId;
+    expect(reasonText({ kind: "place", place, codes: [{ system: "ugc", code: "KSZ083" }], zoneFallback: true }, incident!)).toBe(
+      "The incident covers the home of A, in the Valley: KSZ083. The place has no fire zone code, so a fire zone code decided through the forecast zone with the same code. The two outlines can differ.",
+    );
+  });
+
   it("counts the steps from 1 in the labels, and the last label names the count of the steps", () => {
     expect(stepLabel(0, frames.length)).toBe(`Step 1 of ${String(frames.length)}`);
     expect(stepLabel(4, frames.length)).toBe("Step 5 of 10");

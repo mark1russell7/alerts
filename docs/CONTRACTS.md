@@ -1520,10 +1520,19 @@ The core matches the area of a report to a place with one rule for each source. 
 - A block with no shape decides by its codes. A place matches when the codes of the block cover one of its codes.
 - A place with no position matches by the codes of each block.
 - `@mark1russell7/geo` can refuse a shape, for example a ring with fewer than 4 positions. When it refuses each shape of a block, the codes of that block decide. This error is on the safe side. The match has `shapeRefused: true`, and the view tells it.
+- A fire zone code (`ugc-fire`) covers only a fire zone code of a place. A place with no fire zone code of a state uses its forecast zone code (`ugc`) with the same code. This is on the safe side. The match has `zoneFallback: true`, and the view tells it.
 - One block that matches is enough.
 - The areas with no block key keep the union rule. Their codes are the floor of the match, and a shape adds a place in its buffer. A shape that geo refuses adds no place.
 - A position in a shape has the distance 0. The reason `place` of the assessment has `distanceKm` when the distance is in the buffer. A match by a shape only has no codes.
 - `@mark1russell7/geo` gives the distances. An edge of a polygon is a straight line in longitude and latitude, as in GeoJSON (RFC 7946).
+
+### The fire zones of the NWS (AL-33)
+
+The NWS has three kinds of UGC zones in a state: the counties (`KSC173`), the forecast zones and the fire weather zones. A forecast zone and a fire zone can have one code (`KSZ083`) and different outlines. Thus the two kinds have two region systems: `ugc` for the counties and the forecast zones, and `ugc-fire` for the fire zones.
+
+- The products of the fire zones are the Fire Weather Watch (`FW.A`) and the Red Flag Warning (`FW.W`). The function `ugcRegionCodes` of format-nws gives `ugc-fire` for a zone code of an alert with the phenomenon `FW`.
+- The NWS API names the kind of each zone in `affectedZones`, for example `/zones/fire/<code>`. The NWS API adapter reads it first.
+- A place gets its fire zone codes from the fire zone outlines in memory, as it gets its forecast zones. No request names its position.
 
 The keys of the sources:
 
