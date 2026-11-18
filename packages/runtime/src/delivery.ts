@@ -13,6 +13,7 @@ import {
   acknowledgmentOf,
   digestDeliveries,
   digestMessageOf,
+  exhaustions,
   graphLabels,
   incidents,
   linkRule,
@@ -31,6 +32,7 @@ import {
   type DeliveryStatus,
   type Duration,
   type EscalationEnd,
+  type Exhaustion,
   type Instant,
   type LinkPolicy,
   type RankDelays,
@@ -167,6 +169,11 @@ export interface DeliveryStep {
    * that the reserve of a quota holds (`reserved`) is not overdue, because the reserve holds it on purpose.
    */
   readonly overdue: readonly OverdueSends[];
+  /**
+   * The exhausted escalations of the real warnings after the step (`exhaustions`, AL-21). The view of the next pass
+   * makes a report of each one for the people who watch the person.
+   */
+  readonly exhausted: readonly Exhaustion[];
   /** The next time of a step of an escalation, of a poll or of a call that goes again. */
   readonly wakeAt?: Instant;
 }
@@ -834,7 +841,8 @@ export function createDispatcher(options: DeliveryOptions, context: DeliveryCont
       const polls = open.map((delivery) => (polled.get(delivery.key) ?? at) + options.pollEvery);
       const wakeAt = earliest([...after.map((entry) => entry.plan.wakeAt), digests.wakeAt, ...polls, ...failures.map((failure) => failure.retryAt), ...waiting]);
       const overdue = overdueSends(after, context.state().refusals, at, options.overdueAfter);
-      return { routes: after, sent, duplicates, stopped, acknowledged, cancelled, failures, conflicts, overdue, ...(wakeAt === undefined ? {} : { wakeAt }) };
+      const exhausted = exhaustions(after, descriptors, context.state().merge.reports);
+      return { routes: after, sent, duplicates, stopped, acknowledged, cancelled, failures, conflicts, overdue, exhausted, ...(wakeAt === undefined ? {} : { wakeAt }) };
     },
   };
 
