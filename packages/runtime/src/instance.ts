@@ -42,6 +42,7 @@ import {
   createTwilioCallChannel,
   createTwilioTextChannel,
   readTwilioBalance,
+  readTwilioReplies,
   TEXT_CHANNEL_ID,
   TWILIO_CALL_COST_USD,
   TWILIO_CALL_TIMEOUT_MS,
@@ -67,6 +68,7 @@ import type { WorkerLoop } from "@mark1russell7/service";
 import type { Pace, QuotaStore, Transport } from "polite-crawler/api";
 import { DEFAULT_POLICY, HostScheduler, type PolitenessPolicy } from "polite-crawler/politeness";
 import { balanceWatch, SPEND_UNIT, spendEntryOf, spendGates, spendQuota, spendUnits, type BalanceWatch, type SpendGates } from "./balance.ts";
+import { replyWatch, type ReplyWatch } from "./replies.ts";
 import { parseSecrets, requireKey, SECRETS_FILE, type FileText, type InstanceCheck } from "./config.ts";
 import { CLOCK_SKEW_LIMIT, COPY_FILE, COPY_TOKEN_KEY, EXCHANGE_EVERY, EXCHANGE_LIMIT } from "./copy.ts";
 import { overdueLimit, type DeliveryOptions } from "./delivery.ts";
@@ -565,6 +567,8 @@ export interface Instance {
   readonly quotas: () => readonly ChannelQuota[];
   /** The watches of the balances of the paid provider accounts. */
   readonly balances: readonly BalanceWatch[];
+  /** The watch of the STOP and START replies of the texts, when the instance has the text channel and an opt-in list. */
+  readonly replies?: ReplyWatch;
   /**
    * This function gives the map payload of the last pass: the live incidents with the level of each person, the places and
    * the basemap. The first read after a change of the store simplifies the basemap of the watched states.
@@ -681,6 +685,7 @@ export function openInstance(options: InstanceOptions): Instance {
     ...(twilio?.gates === undefined ? [] : [channelQuota(TWILIO_CHANNEL, twilio.gates.gate, SPEND_UNIT)]),
   ];
   const balances = twilio?.watch === undefined ? [] : [twilio.watch];
+  const replies = twilio?.replies;
   // The text channel takes its units from the gates of the call channel. Thus the quota of the call channel counts the texts too.
   const channels = twilio === undefined ? [pushover] : [pushover, twilio.channel, ...(twilio.text === undefined ? [] : [twilio.text])];
   // The labels of the places go only into the why line of each message. The policy of the configuration replaces the default policy of the core.
@@ -720,6 +725,8 @@ export function openInstance(options: InstanceOptions): Instance {
     // Each stage of a quota is a line of system reports, and so is each stage of a balance.
     quotas,
     balances,
+    // Each pass reads the replies of the texts when the read is due.
+    ...(replies === undefined ? {} : { reads: [replies] }),
     // Each pass waits for the first round of the exchange, and its view has a line for each fault of another copy.
     ...(worker === undefined ? {} : { copies: worker }),
     // The readings of each fetch go to their store, not to the log.
@@ -804,6 +811,7 @@ export function openInstance(options: InstanceOptions): Instance {
     ...(start === undefined ? {} : { zones: start.counts }),
     quotas,
     balances,
+    ...(replies === undefined ? {} : { replies }),
     map,
     health,
     history,
@@ -833,13 +841,14 @@ function outageWorker(options: InstanceOptions, limit: Duration): OutageDeployWo
   });
 }
 
-/** The Twilio call channel of an instance, its text channel, the gates of the spend and the watch of the balance. */
+/** The Twilio channels of an instance: the call channel and the text channel. Also the gates of the spend, the watch of the balance and the watch of the replies. */
 interface TwilioParts {
   readonly channel: ChannelProcedures;
   /** The text channel, when the secrets have the number of the texts. */
   readonly text?: ChannelProcedures;
   readonly gates?: SpendGates;
   readonly watch?: BalanceWatch;
+  readonly replies?: ReplyWatch;
 }
 
 /**
@@ -854,16 +863,20 @@ function twilioChannel(options: InstanceOptions, spend: readonly SpendConfig[] |
   if (fetch === undefined) throw new Error("The secret store has the keys of Twilio, and the instance has no fetch for the call channel.");
   const now = (): number => options.wall.now();
   const entry = spendEntryOf(twilioCallDescriptor(), spend);
-  // The text channel sends only to a number of the opt-in list. Twilio keeps the state of the STOP and START replies, and
-  // refuses a text to a number that replied STOP. The runtime keeps no STOP until it reads the START replies too (the read
-  // of the replies, AL-56). Thus a START reply works at once, and each text to a number that replied STOP gives `consent`.
-  const optIn: TextOptIn = { has: (number, at) => optedIn(records, [], number, at), stopped: () => undefined };
+  // The text channel sends only to a number of the opt-in list. The watch of the replies gives the STOP and START replies,
+  // and the STOP blocks of Twilio until its next read. With no opt-in list, the channel sends no text.
+  const replies =
+    textFrom === undefined || records.length === 0
+      ? undefined
+      : replyWatch({ records, read: (since, signal) => readTwilioReplies({ credentials, fetch, to: textFrom, since }, signal) });
+  const optIn: TextOptIn = replies?.optIn ?? { has: (number, at) => optedIn(records, [], number, at), stopped: () => undefined };
+  const watched = replies === undefined ? {} : { replies };
   // The text channel takes the gates of the call channel, with the units of one text.
   const text = (gates?: SpendGates): { readonly text?: ChannelProcedures } =>
     textFrom === undefined
       ? {}
       : { text: createTwilioTextChannel({ credentials, from: textFrom, fetch, now, optIn, ...(gates === undefined ? {} : { spend: { ...gates, units: spendUnits(TWILIO_TEXT_COST_USD) } }) }) };
-  if (entry === undefined) return { channel: createTwilioCallChannel({ credentials, from, fetch, now }), ...text() };
+  if (entry === undefined) return { channel: createTwilioCallChannel({ credentials, from, fetch, now }), ...text(), ...watched };
   const store = options.spendStore;
   if (store === undefined) throw new Error(`The configuration has a spend entry for ${entry.provider}, and the instance has no store for its count.`);
   // The key names the provider, not the account SID.
@@ -876,5 +889,5 @@ function twilioChannel(options: InstanceOptions, spend: readonly SpendConfig[] |
     read: (signal) => readTwilioBalance({ credentials, fetch }, signal),
   });
   const channel = createTwilioCallChannel({ credentials, from, fetch, now, spend: { ...gates, units: spendUnits(TWILIO_CALL_COST_USD) } });
-  return { channel, gates, watch, ...text(gates) };
+  return { channel, gates, watch, ...text(gates), ...watched };
 }

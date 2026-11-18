@@ -954,6 +954,8 @@ describe("the private configuration", () => {
     holds(copySettingsSchema, home);
     holds(copySettingsSchema, ONLY_COPY);
     holds(copySettingsSchema, { ...home, accounts: { nwws: 2 } });
+    holds(copySettingsSchema, { ...home, configFrom: "cloud" });
+    for (const configFrom of ["Cloud", "", 2]) fails(copySettingsSchema, { ...home, configFrom });
     for (const accounts of [{ nwws: 0 }, { nwws: 1.5 }, { nwws: "2" }, { "": 2 }, []]) fails(copySettingsSchema, { ...home, accounts });
     holds(copyListenSchema, { host: "home.example.ts.net", port: 65535 });
     holds(copyPeerSchema, { id: "c-2", url: "https://[fd7a:115c::1]:4751/exchange" });
@@ -968,6 +970,10 @@ describe("the private configuration", () => {
     const base: CopySettings = { format: COPY_FORMAT, id: "home", rank: 1, listen, peers: [{ id: "cloud", url }] };
     expect(copyProblems(base)).toEqual([]);
     expect(copyProblems(ONLY_COPY)).toEqual([]);
+    // The copy configFrom is a copy of peers, not this copy and not an unknown copy.
+    expect(copyProblems({ ...base, configFrom: "cloud" })).toEqual([]);
+    expect(copyProblems({ ...base, configFrom: "home" })).toEqual(["configFrom: the id is not the id of a copy in peers."]);
+    expect(copyProblems({ ...base, configFrom: "other" })).toHaveLength(1);
     // A rank is lower than the count of the copies.
     expect(copyProblems({ ...base, rank: 2 })).toHaveLength(1);
     expect(copyProblems({ format: COPY_FORMAT, id: "home", rank: 1 })).toHaveLength(1);
