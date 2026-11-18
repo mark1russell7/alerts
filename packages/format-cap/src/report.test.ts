@@ -144,3 +144,22 @@ describe("the reports of one CAP message", () => {
     expect(reports.flatMap((report) => report.areas.map((area) => (area.type === "place" ? "" : area.block ?? "none")))).toEqual(["none", "none", "none"]);
   });
 });
+
+describe("the fire zones of a CAP message (AL-33)", () => {
+  // A made-up Red Flag Warning for public zones of a Kansas office.
+  const noVtec = (ugc: string): Block => ({ event: "Red Flag Warning", severity: "Severe", area: "Zone A", ugc });
+  const redFlag = (ugc: string): Block => ({ ...noVtec(ugc), vtec: "/O.NEW.KICT.FW.W.0004.261118T1800Z-261119T0300Z/" });
+
+  it("gives a fire zone code for a zone code of an alert with the VTEC phenomenon FW", () => {
+    const { reports } = mapText(messageText("TEST-FW-1", [redFlag("KSZ083")]));
+    expect(reports.map(codesOf)).toEqual([["ugc-fire:KSZ083"]]);
+  });
+
+  it("keeps a county code, a value of an unknown form and the codes of another phenomenon in the system ugc", () => {
+    const codes = (block: Block): string[] => mapText(messageText("TEST-FW-2", [block])).reports.flatMap(codesOf);
+    expect(codes(redFlag("KSC173"))).toEqual(["ugc:KSC173"]);
+    expect(codes(redFlag("KS-Z-083"))).toEqual(["ugc:KS-Z-083"]);
+    expect(codes(noVtec("KSZ083"))).toEqual(["ugc:KSZ083"]);
+    expect(codes({ ...redFlag("KSZ083"), event: "Wind Advisory", vtec: "/O.NEW.KICT.WI.Y.0004.261118T1800Z-261119T0300Z/" })).toEqual(["ugc:KSZ083"]);
+  });
+});

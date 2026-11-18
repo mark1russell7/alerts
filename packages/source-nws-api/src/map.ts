@@ -12,6 +12,7 @@ import type {
   Observation,
   Operation,
   Position,
+  RegionCode,
   Report,
   ResponseType,
   Severity,
@@ -34,7 +35,7 @@ import {
   capTime,
   capValue,
 } from "@mark1russell7/alerts-format-cap";
-import { hasVtec, isSameCode, isUgcCode, NWS_API_SOURCE, NWS_ORIGIN, parseVtec, resolveKind, vtecKey, type Vtec } from "@mark1russell7/alerts-format-nws";
+import { hasVtec, isSameCode, isUgcCode, NWS_API_SOURCE, NWS_ORIGIN, parseVtec, resolveKind, ugcRegionCodes, vtecKey, type Vtec } from "@mark1russell7/alerts-format-nws";
 
 /** The id of this source. */
 export const SOURCE_ID: SourceId = NWS_API_SOURCE;
@@ -160,8 +161,12 @@ const BLOCK = "feature";
  * This function reads the areas of an alert: its geometry and its region codes. A code of an unknown form
  * is a problem, and the function drops it, because it matches no watch. The alert is one area block with
  * the key `feature`: the geometry is the warned area, and the codes name the regions that it touches.
+ *
+ * A UGC zone code is a forecast zone (`ugc`) or a fire zone (`ugc-fire`). The list `affectedZones` names the kind of each
+ * zone, for example `/zones/fire/TXZ205`, and decides first. For a code that the list does not name, the VTEC phenomena
+ * decide (`ugcRegionCodes`, AL-33).
  */
-function areasOf(feature: JsonObject, properties: JsonObject, problems: Problems): Area[] {
+function areasOf(feature: JsonObject, properties: JsonObject, phenomena: readonly string[], problems: Problems): Area[] {
   const areas: Area[] = [];
   const geometry = feature["geometry"];
   if (isObject(geometry)) {
@@ -188,6 +193,7 @@ function areasOf(feature: JsonObject, properties: JsonObject, problems: Problems
   for (const field of Object.keys(geocode)) {
     if (!(field in REGION_CODES)) problems.add(`properties.geocode.${field}`, "the map function does not know this field", "note");
   }
+  const kinds = zoneKindsOf(properties, problems);
   for (const [field, { system, normal, valid }] of Object.entries(REGION_CODES)) {
     const value = geocode[field];
     const items: readonly Json[] | undefined = typeof value === "string" ? [value] : Array.isArray(value) ? value : undefined;
@@ -197,11 +203,42 @@ function areasOf(feature: JsonObject, properties: JsonObject, problems: Problems
     }
     items.forEach((item, index) => {
       const code = typeof item === "string" ? normal(item) : undefined;
-      if (code !== undefined && valid(code)) areas.push({ type: "code", system, code, block: BLOCK });
-      else problems.add(`properties.geocode.${field}[${index}]`, `the value ${JSON.stringify(item)} is not a ${field} code`);
+      if (code === undefined || !valid(code)) problems.add(`properties.geocode.${field}[${index}]`, `the value ${JSON.stringify(item)} is not a ${field} code`);
+      else for (const one of system === "ugc" ? ugcCodesOf(code, kinds, phenomena) : [{ system, code }]) areas.push({ type: "code", ...one, block: BLOCK });
     });
   }
   return areas;
+}
+
+// The URL of a zone in `affectedZones`: `https://api.weather.gov/zones/<kind>/<code>`.
+const ZONE_URL = /\/zones\/([a-z]+)\/([A-Za-z]{2}[CZcz]\d{3})$/;
+
+/**
+ * This function gives the kinds of the zones of the list `affectedZones`, by their UGC codes. The kind is `forecast`,
+ * `fire`, `county` or another kind of the NWS API. A URL of another form names no kind.
+ */
+function zoneKindsOf(properties: JsonObject, problems: Problems): ReadonlyMap<string, ReadonlySet<string>> {
+  const kinds = new Map<string, Set<string>>();
+  for (const url of textsAt(properties["affectedZones"], "properties.affectedZones", problems)) {
+    const match = ZONE_URL.exec(url.trim());
+    if (match === null) continue;
+    const [, kind = "", code = ""] = match;
+    const key = code.toUpperCase();
+    kinds.set(key, (kinds.get(key) ?? new Set()).add(kind));
+  }
+  return kinds;
+}
+
+/**
+ * This function gives the region codes of a UGC code of an alert. The kinds of `affectedZones` decide first: `fire` gives
+ * `ugc-fire`, and each other kind gives `ugc`. A code that the list does not name uses the VTEC phenomena.
+ */
+function ugcCodesOf(code: string, kinds: ReadonlyMap<string, ReadonlySet<string>>, phenomena: readonly string[]): RegionCode[] {
+  const named = kinds.get(code);
+  if (named === undefined) return ugcRegionCodes(code, phenomena);
+  const fire = named.has("fire");
+  const other = [...named].some((kind) => kind !== "fire");
+  return [...(other ? [{ system: "ugc", code }] : []), ...(fire ? [{ system: "ugc-fire", code }] : [])];
 }
 
 /** The region code lists of the geocode of an NWS alert, with the system, the normal form and the check of each code. */
@@ -369,7 +406,7 @@ function mapFeature(feature: unknown, observation: Observation, problems: Proble
   if (properties["expires"] === undefined || properties["expires"] === null) problems.add("properties.expires", "the alert has no expiry time");
   // Each NWS alert has region codes. Only a code matches a watch until the core can match shapes, so an
   // alert with no valid code reaches nobody. A changed format gives this case, and health must show it.
-  const areas = areasOf(feature, properties, problems);
+  const areas = areasOf(feature, properties, vtec.map((one) => one.phenomenon), problems);
   if (!areas.some((area) => area.type === "code")) {
     problems.add("properties.geocode", "the alert has no valid region code: no watch can match it", "fatal");
     return undefined;

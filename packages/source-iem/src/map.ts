@@ -10,7 +10,7 @@
 
 import { categoryOf, Problems, reportId, UNKNOWN_KIND, type Area, type Kind, type MapResult, type Observation, type Report, type SourceId } from "@mark1russell7/alerts";
 import { capTime } from "@mark1russell7/alerts-format-cap";
-import { fromPhenomenon, NWS_ORIGIN, sameOfCountyUgc, vtecEventKey, vtecOffice, vtecYear } from "@mark1russell7/alerts-format-nws";
+import { fromPhenomenon, NWS_ORIGIN, sameOfCountyUgc, ugcRegionCodes, vtecEventKey, vtecOffice, vtecYear } from "@mark1russell7/alerts-format-nws";
 import { errorMessage } from "@mark1russell7/text";
 
 /** The id of this source. */
@@ -68,7 +68,9 @@ function mapRow(row: Row, observation: Observation, problems: Problems): Report 
         ? { code: found.code, label: found.label }
         : { code: found.code, significance: found.significance, label: found.label };
   const same = sameOfCountyUgc(ugc);
-  const areas: Area[] = [{ type: "code", system: "ugc", code: ugc }, ...(same === undefined ? [] : [{ type: "code" as const, system: "same", code: same }])];
+  // A zone of a fire weather event (the phenomenon FW) is a fire zone (AL-33).
+  const zones = ugcRegionCodes(ugc, [phenomenon]).map((code): Area => ({ type: "code", ...code }));
+  const areas: Area[] = [...zones, ...(same === undefined ? [] : [{ type: "code" as const, system: "same", code: same }])];
   const key = `${correlation.id}.${ugc}@${observation.id}`;
   const number = String(eventNumber).padStart(4, "0");
   return {
