@@ -1,1 +1,245 @@
-[]
+[
+  {
+    "id": "cve-cnas",
+    "name": "CVE Program partners (CNAs and roots)",
+    "classes": [
+      "cyber.vulnerability.published"
+    ],
+    "memberRule": "An organization in the partner list of the CVE Program, as the cve.org website data file lists it.",
+    "list": {
+      "url": "https://raw.githubusercontent.com/CVEProject/cve-website/dev/src/assets/data/CNAsList.json",
+      "format": "json"
+    },
+    "count": 571,
+    "countAt": "2026-11-18",
+    "formats": [
+      "cve-json-5",
+      "csaf",
+      "rss",
+      "html"
+    ],
+    "note": "Each partner publishes its CVE records in the CVE List, so the record of cvelistV5 reads them all. Many partners also publish their own advisories.",
+    "evidence": [
+      "https://raw.githubusercontent.com/CVEProject/cve-website/dev/src/assets/data/CNAsList.json",
+      "https://www.cve.org/PartnerInformation/ListofPartners"
+    ],
+    "round": 15
+  },
+  {
+    "id": "osv-ecosystems",
+    "name": "OSV.dev ecosystems",
+    "classes": [
+      "cyber.vulnerability.published",
+      "cyber.supply-chain.malicious-package"
+    ],
+    "memberRule": "An ecosystem name in the ecosystems.txt file of the OSV.dev data bucket.",
+    "list": {
+      "url": "https://osv-vulnerabilities.storage.googleapis.com/ecosystems.txt",
+      "format": "csv"
+    },
+    "count": 47,
+    "countAt": "2026-11-18",
+    "formats": [
+      "osv"
+    ],
+    "note": "Each ecosystem is one package registry or one distribution. The data bucket of OSV.dev holds the records of each ecosystem as JSON files.",
+    "evidence": [
+      "https://osv-vulnerabilities.storage.googleapis.com/ecosystems.txt"
+    ],
+    "round": 15
+  },
+  {
+    "id": "bsi-csaf-lister",
+    "name": "CSAF providers and publishers in the BSI CSAF lister",
+    "classes": [
+      "cyber.vulnerability.published",
+      "cyber.advisory.ics"
+    ],
+    "memberRule": "A CSAF provider or publisher in the aggregator.json of the BSI CSAF lister.",
+    "list": {
+      "url": "https://wid.cert-bund.de/.well-known/csaf-aggregator/aggregator.json",
+      "format": "json"
+    },
+    "count": 15,
+    "countAt": "2026-11-18",
+    "formats": [
+      "csaf"
+    ],
+    "note": "A CSAF provider publishes its advisories as CSAF 2.0 JSON at a known path. The lister of BSI names the providers and the publishers that it knows.",
+    "evidence": [
+      "https://wid.cert-bund.de/.well-known/csaf-aggregator/aggregator.json"
+    ],
+    "round": 15
+  },
+  {
+    "id": "certvde-csaf-aggregator",
+    "name": "CSAF providers and publishers in the CERT@VDE aggregator",
+    "classes": [
+      "cyber.advisory.ics",
+      "cyber.vulnerability.published"
+    ],
+    "memberRule": "A CSAF provider or a mirrored CSAF publisher that the CERT@VDE aggregator.json lists.",
+    "list": {
+      "url": "https://aggregator.certvde.com/.well-known/csaf-aggregator/aggregator.json",
+      "format": "json"
+    },
+    "count": 41,
+    "countAt": "2026-11-18",
+    "formats": [
+      "csaf",
+      "rss"
+    ],
+    "note": "CERT@VDE mirrors the CSAF advisories of the makers of industrial products. Many of these makers have no other feed.",
+    "evidence": [
+      "https://aggregator.certvde.com/.well-known/csaf-aggregator/aggregator.json",
+      "https://certvde.com/en/service/rss-feeds/"
+    ],
+    "round": 15
+  },
+  {
+    "id": "gcve-gnas",
+    "name": "GCVE Numbering Authorities (GNAs)",
+    "classes": [
+      "cyber.vulnerability.published"
+    ],
+    "memberRule": "An organization that the GCVE directory lists as a numbering authority that assigns GCVE ids.",
+    "list": {
+      "url": "https://gcve.eu/dist/gcve.json",
+      "format": "json"
+    },
+    "count": 47,
+    "countAt": "2026-11-18",
+    "formats": [
+      "json"
+    ],
+    "note": "GCVE is a European numbering of vulnerabilities. Each authority assigns its own ids. The lookup of CIRCL reads the records of the authorities.",
+    "evidence": [
+      "https://gcve.eu/dist/gcve.json",
+      "https://gcve.eu/"
+    ],
+    "round": 15
+  },
+  {
+    "id": "first-teams",
+    "name": "FIRST member teams",
+    "classes": [
+      "cyber.vulnerability.published",
+      "cyber.campaign"
+    ],
+    "memberRule": "An incident response or security team that is a member of FIRST. National CSIRTs are a subset.",
+    "list": {
+      "url": "https://api.first.org/data/v1/teams",
+      "format": "json"
+    },
+    "count": 898,
+    "countAt": "2026-11-18",
+    "formats": [
+      "rss",
+      "html"
+    ],
+    "note": "The count is the number of rows of the teams API of FIRST. Not each team publishes a public feed, so the count is a top limit of the feeds.",
+    "evidence": [
+      "https://api.first.org/data/v1/teams",
+      "https://www.first.org/members/teams/"
+    ],
+    "round": 15
+  },
+  {
+    "id": "trusted-introducer-teams",
+    "name": "Trusted Introducer directory of security teams",
+    "classes": [
+      "cyber.vulnerability.published",
+      "cyber.campaign"
+    ],
+    "memberRule": "A team that the Trusted Introducer directory lists, accredits or certifies.",
+    "list": {
+      "url": "https://tf-csirt.org/trusted-introducer/directory/downloads/json/teams/",
+      "format": "json"
+    },
+    "count": null,
+    "countAt": null,
+    "formats": [
+      "rss",
+      "html"
+    ],
+    "note": "The directory of the security teams of Europe. The count is not known, because the JSON download gave no total.",
+    "evidence": [
+      "https://tf-csirt.org/trusted-introducer/directory/",
+      "https://tf-csirt.org/trusted-introducer/directory/downloads/json/teams/"
+    ],
+    "round": 15
+  },
+  {
+    "id": "eu-csirts-network",
+    "name": "EU CSIRTs Network members",
+    "classes": [
+      "cyber.vulnerability.published",
+      "cyber.campaign"
+    ],
+    "memberRule": "A CSIRT that an EU Member State appoints, plus CERT-EU.",
+    "list": {
+      "url": "https://csirtsnetwork.eu/",
+      "format": "html"
+    },
+    "count": null,
+    "countAt": null,
+    "formats": [
+      "rss",
+      "csaf",
+      "html"
+    ],
+    "note": "The teams that the member states of the EU appoint, and CERT-EU. The page has no list in a file, so the count is not known.",
+    "evidence": [
+      "https://csirtsnetwork.eu/",
+      "https://csirtsnetwork.eu/homepage",
+      "https://www.enisa.europa.eu/topics/eu-incident-response-and-cyber-crisis-management/csirts-network"
+    ],
+    "round": 15
+  },
+  {
+    "id": "misp-default-feeds",
+    "name": "MISP default feed list",
+    "classes": [
+      "cyber.campaign"
+    ],
+    "memberRule": "A feed entry in defaults.json, the default feed list that MISP ships.",
+    "list": {
+      "url": "https://raw.githubusercontent.com/MISP/MISP/2.5/app/files/feed-metadata/defaults.json",
+      "format": "json"
+    },
+    "count": 108,
+    "countAt": "2026-11-18",
+    "formats": [
+      "csv",
+      "other: freetext",
+      "other: MISP JSON"
+    ],
+    "note": "Each entry is a feed of indicators that MISP reads: lists of bad hosts, addresses and files. The feeds come from many teams.",
+    "evidence": [
+      "https://raw.githubusercontent.com/MISP/MISP/2.5/app/files/feed-metadata/defaults.json"
+    ],
+    "round": 15
+  },
+  {
+    "id": "eea-data-protection-authorities",
+    "name": "EU and EEA data protection authorities",
+    "classes": [
+      "cyber.data-breach"
+    ],
+    "memberRule": "A national supervisory authority of an EU or EEA state that sits on the European Data Protection Board.",
+    "list": {
+      "url": "https://www.edpb.europa.eu/about-edpb/about-edpb/members_en",
+      "format": "html"
+    },
+    "count": 30,
+    "countAt": "2026-11-18",
+    "formats": [
+      "html"
+    ],
+    "note": "Each authority publishes news and decisions about breaches of personal data. Few of them publish a feed of the breaches that they get.",
+    "evidence": [
+      "https://www.edpb.europa.eu/about-edpb/about-edpb/members_en"
+    ],
+    "round": 15
+  }
+]

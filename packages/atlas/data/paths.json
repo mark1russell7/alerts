@@ -6,16 +6,64 @@
     "note": "The host of the feed of usps-service-alerts."
   },
   {
+    "id": "access.redhat.com",
+    "name": "access.redhat.com",
+    "kind": "host",
+    "note": "The host of the feed of redhat-security-data-api."
+  },
+  {
     "id": "acleddata.com",
     "name": "acleddata.com",
     "kind": "host",
     "note": "The host of the feed of acled-api."
   },
   {
+    "id": "advisories.checkpoint.com",
+    "name": "advisories.checkpoint.com",
+    "kind": "host",
+    "note": "The host of the feed of checkpoint-advisories."
+  },
+  {
+    "id": "advisories.ncsc.nl",
+    "name": "advisories.ncsc.nl",
+    "kind": "host",
+    "note": "The host of the feed of ncsc-nl-csaf."
+  },
+  {
+    "id": "aggregator.cert-bund.de",
+    "name": "aggregator.cert-bund.de",
+    "kind": "host",
+    "note": "The host of the feed of hitachi-energy-csaf."
+  },
+  {
+    "id": "aggregator.certvde.com",
+    "name": "aggregator.certvde.com",
+    "kind": "host",
+    "note": "The host of the feed of certvde-csaf-aggregator."
+  },
+  {
+    "id": "ago.vermont.gov",
+    "name": "ago.vermont.gov",
+    "kind": "host",
+    "note": "The host of the feed of vermont-ag-breach-notices."
+  },
+  {
+    "id": "alas.aws.amazon.com",
+    "name": "alas.aws.amazon.com",
+    "kind": "host",
+    "note": "The host of the feed of amazon-linux-2-alas, amazon-linux-2023-alas."
+  },
+  {
     "id": "amberalert.ojp.gov",
     "name": "amberalert.ojp.gov",
     "kind": "host",
     "note": "The host of the feed of amber-alert-ojp."
+  },
+  {
+    "id": "api.abuseipdb.com",
+    "name": "api.abuseipdb.com",
+    "kind": "host",
+    "note": "The host of the feed of abuseipdb-blacklist."
   },
   {
     "id": "api.adsb.lol",
@@ -28,6 +76,18 @@
     "name": "api.alerts.in.ua",
     "kind": "host",
     "note": "The host of the feed of alerts-in-ua."
+  },
+  {
+    "id": "api.atlassian.com",
+    "name": "api.atlassian.com",
+    "kind": "host",
+    "note": "The host of the feed of atlassian-security-vulnerability-api."
+  },
+  {
+    "id": "api.attackerkb.com",
+    "name": "api.attackerkb.com",
+    "kind": "host",
+    "note": "The host of the feed of attackerkb-api."
   },
   {
     "id": "api.avalanche.org",
@@ -120,6 +180,12 @@
     "note": "The host of the feed of github-advisories-api."
   },
   {
+    "id": "api.greynoise.io",
+    "name": "api.greynoise.io",
+    "kind": "host",
+    "note": "The host of the feed of greynoise-community-api."
+  },
+  {
     "id": "api.ioda.inetintel.cc.gatech.edu",
     "name": "api.ioda.inetintel.cc.gatech.edu",
     "kind": "host",
@@ -136,6 +202,12 @@
     "name": "api.manifold.markets",
     "kind": "host",
     "note": "The host of the feed of manifold-api."
+  },
+  {
+    "id": "api.msrc.microsoft.com",
+    "name": "api.msrc.microsoft.com",
+    "kind": "host",
+    "note": "The host of the feed of msrc-cvrf-api, msrc-sug-rss."
   },
   {
     "id": "api.neso.energy",
@@ -162,10 +234,22 @@
     "note": "The host of the feed of osv-api."
   },
   {
+    "id": "api.phishstats.info",
+    "name": "api.phishstats.info",
+    "kind": "host",
+    "note": "The host of the feed of phishstats-api."
+  },
+  {
     "id": "api.ransomware.live",
     "name": "api.ransomware.live",
     "kind": "host",
     "note": "The host of the feed of ransomware-live-api."
+  },
+  {
+    "id": "api.ransomwhe.re",
+    "name": "api.ransomwhe.re",
+    "kind": "host",
+    "note": "The host of the feed of ransomwhere."
   },
   {
     "id": "api.safecast.org",
@@ -174,10 +258,22 @@
     "note": "The host of the data of safecast."
   },
   {
+    "id": "api.safedep.io",
+    "name": "api.safedep.io",
+    "kind": "host",
+    "note": "The host of the feed of safedep-threat-intel."
+  },
+  {
     "id": "api.smarkets.com",
     "name": "api.smarkets.com",
     "kind": "host",
     "note": "The host of the feed of smarkets-api."
+  },
+  {
+    "id": "api.socket.dev",
+    "name": "api.socket.dev",
+    "kind": "host",
+    "note": "The host of the feed of socket-threat-feed."
   },
   {
     "id": "api.stlouisfed.org",
@@ -196,6 +292,12 @@
     "name": "api.trafikinfo.trafikverket.se",
     "kind": "host",
     "note": "The host of the data of trafikverket-open-api."
+  },
+  {
+    "id": "api.vulncheck.com",
+    "name": "api.vulncheck.com",
+    "kind": "host",
+    "note": "The host of the feed of vulncheck-kev, vulncheck-nvd-plus-plus."
   },
   {
     "id": "api.water.noaa.gov",
@@ -222,10 +324,28 @@
     "note": "The host of the feed of nws-alerts-api."
   },
   {
+    "id": "apix.cisco.com",
+    "name": "apix.cisco.com",
+    "kind": "host",
+    "note": "The host of the feed of cisco-openvuln-api."
+  },
+  {
+    "id": "apollo.build.resf.org",
+    "name": "apollo.build.resf.org",
+    "kind": "host",
+    "note": "The host of the feed of rocky-apollo-api."
+  },
+  {
     "id": "app.frbservices.org",
     "name": "app.frbservices.org",
     "kind": "host",
     "note": "The host of the feed of frbservices-status."
+  },
+  {
+    "id": "app.opencve.io",
+    "name": "app.opencve.io",
+    "kind": "host",
+    "note": "The host of the feed of opencve-api."
   },
   {
     "id": "app.ticketmaster.com",
@@ -246,6 +366,12 @@
     "note": "The host of the data of ripe-atlas."
   },
   {
+    "id": "attorneygeneral.delaware.gov",
+    "name": "attorneygeneral.delaware.gov",
+    "kind": "host",
+    "note": "The host of the feed of delaware-ag-breach-db."
+  },
+  {
     "id": "aviation-safety.net",
     "name": "aviation-safety.net",
     "kind": "host",
@@ -256,6 +382,18 @@
     "name": "aviationweather.gov",
     "kind": "host",
     "note": "The host of the feed of aviationweather-api."
+  },
+  {
+    "id": "bdu.fstec.ru",
+    "name": "bdu.fstec.ru",
+    "kind": "host",
+    "note": "The host of the feed of fstec-bdu."
+  },
+  {
+    "id": "bodhi.fedoraproject.org",
+    "name": "bodhi.fedoraproject.org",
+    "kind": "host",
+    "note": "The host of the feed of fedora-bodhi-security."
   },
   {
     "id": "bwt.cbp.gov",
@@ -288,28 +426,118 @@
     "note": "The CLOB API and the market websocket give the data of one order book."
   },
   {
+    "id": "ccb.belgium.be",
+    "name": "ccb.belgium.be",
+    "kind": "host",
+    "note": "The host of the feed of ccb-belgium-advisories."
+  },
+  {
     "id": "cdn-api.cboe.com",
     "name": "cdn-api.cboe.com",
     "kind": "host",
     "note": "The host of the feed of cboe-vix-history."
   },
   {
+    "id": "cdn.mikrotik.com",
+    "name": "cdn.mikrotik.com",
+    "kind": "host",
+    "note": "The host of the feed of mikrotik-security-rss."
+  },
+  {
     "id": "cdn:akamai",
     "name": "Akamai, a content network",
     "kind": "cdn",
-    "note": "DNS lookups gave canonical names of Akamai (edgekey.net): api.weather.gov on 2026-11-15, sws-data.sws.bom.gov.au on 2026-11-16, and www.cisa.gov and rssfeed.azure.status.microsoft on 2026-11-18."
+    "note": "DNS lookups gave canonical names of Akamai (edgekey.net): api.weather.gov on 2026-11-15, sws-data.sws.bom.gov.au on 2026-11-16, and www.cisa.gov and rssfeed.azure.status.microsoft on 2026-11-18. On 2026-11-18 the DNS lookups of round 15 gave canonical names of Akamai for 23 hosts of cyber sources."
+  },
+  {
+    "id": "cdn:azure-front-door",
+    "name": "Azure Front Door, the content network of Microsoft",
+    "kind": "cdn",
+    "note": "On 2026-11-18 DNS lookups gave canonical names in azurefd.net for msrc.microsoft.com, api.msrc.microsoft.com, advisories.ncsc.nl, psirt.abb.com and www.moxa.com."
   },
   {
     "id": "cdn:cloudflare",
-    "name": "Cloudflare, the content network in front of apps.fema.gov",
+    "name": "Cloudflare, a content network and proxy",
     "kind": "cdn",
-    "note": "The answers of the IPAWS feed on 2026-11-16 had the header Server: cloudflare and a CF-RAY header."
+    "note": "The answers of the IPAWS feed on 2026-11-16 had the header Server: cloudflare and a CF-RAY header. On 2026-11-18 the DNS lookups of round 15 found Cloudflare in front of 30 hosts of cyber sources, also services.nvd.nist.gov and haveibeenpwned.com."
   },
   {
     "id": "cdn:cloudfront",
-    "name": "Amazon CloudFront, the content network in front of earthquake.usgs.gov and services.swpc.noaa.gov",
+    "name": "Amazon CloudFront, a content network",
     "kind": "cdn",
-    "note": "The answers of the USGS feed on 2026-11-16 had the header x-cache: Hit from cloudfront. The answers of the SWPC list on 2026-11-16 had the same header and a Via header of CloudFront."
+    "note": "The answers of the USGS feed on 2026-11-16 had the header x-cache: Hit from cloudfront. The answers of the SWPC list on 2026-11-16 had the same header and a Via header of CloudFront. On 2026-11-18 the DNS lookups of round 15 gave canonical names in cloudfront.net for 11 hosts of cyber sources."
+  },
+  {
+    "id": "cdn:fastly",
+    "name": "Fastly, a content network",
+    "kind": "cdn",
+    "note": "On 2026-11-18 DNS lookups gave canonical names of Fastly for the abuse.ch feeds, security-tracker.debian.org, www.drupal.org, www.jenkins.io, www.netbsd.org and www.veeam.com."
+  },
+  {
+    "id": "cdn:imperva",
+    "name": "Imperva, a content network and firewall",
+    "kind": "cdn",
+    "note": "On 2026-11-18 DNS lookups gave canonical names of Imperva (incapdns.net, impervadns.net) for www.imperva.com, www.ncsc.govt.nz and www.thaicert.or.th."
+  },
+  {
+    "id": "cert-portal.siemens.com",
+    "name": "cert-portal.siemens.com",
+    "kind": "host",
+    "note": "The host of the feed of siemens-productcert-csaf."
+  },
+  {
+    "id": "cert.br",
+    "name": "cert.br",
+    "kind": "host",
+    "note": "The host of the feed of cert-br-rss."
+  },
+  {
+    "id": "cert.cyber.gouv.fr",
+    "name": "cert.cyber.gouv.fr",
+    "kind": "host",
+    "note": "The host of the feed of cert-fr-api, cert-fr-cti-rss."
+  },
+  {
+    "id": "cert.europa.eu",
+    "name": "cert.europa.eu",
+    "kind": "host",
+    "note": "The host of the feed of cert-eu-advisories-rss."
+  },
+  {
+    "id": "cert.gov.az",
+    "name": "cert.gov.az",
+    "kind": "host",
+    "note": "The host of the feed of cert-az-rss."
+  },
+  {
+    "id": "cert.gov.ua",
+    "name": "cert.gov.ua",
+    "kind": "host",
+    "note": "The host of the feed of cert-ua-rss."
+  },
+  {
+    "id": "cert.lv",
+    "name": "cert.lv",
+    "kind": "host",
+    "note": "The host of the feed of cert-lv-json-feed."
+  },
+  {
+    "id": "cert.pl",
+    "name": "cert.pl",
+    "kind": "host",
+    "note": "The host of the feed of cert-pl-rss."
+  },
+  {
+    "id": "certvde.com",
+    "name": "certvde.com",
+    "kind": "host",
+    "note": "The host of the feed of certvde-advisories-rss."
+  },
+  {
+    "id": "chromereleases.googleblog.com",
+    "name": "chromereleases.googleblog.com",
+    "kind": "host",
+    "note": "The host of the feed of chrome-releases-feed."
   },
   {
     "id": "clob.polymarket.com",
@@ -318,10 +546,22 @@
     "note": "The host of the feed of polymarket-clob-api."
   },
   {
+    "id": "cna.erlef.org",
+    "name": "cna.erlef.org",
+    "kind": "host",
+    "note": "The host of the feed of eef-cna-osv."
+  },
+  {
     "id": "coastalscience.noaa.gov",
     "name": "coastalscience.noaa.gov",
     "kind": "host",
     "note": "The host of the feed of noaa-hab-forecasts."
+  },
+  {
+    "id": "community.ui.com",
+    "name": "community.ui.com",
+    "kind": "host",
+    "note": "The host of the feed of ubiquiti-security-rss."
   },
   {
     "id": "consumer.ftc.gov",
@@ -334,6 +574,36 @@
     "name": "creativecommons.tankerkoenig.de",
     "kind": "host",
     "note": "The host of the data of tankerkoenig."
+  },
+  {
+    "id": "csaf.arubanetworking.hpe.com",
+    "name": "csaf.arubanetworking.hpe.com",
+    "kind": "host",
+    "note": "The host of the feed of hpe-aruba-networking-csaf."
+  },
+  {
+    "id": "csirt.gov.pl",
+    "name": "csirt.gov.pl",
+    "kind": "host",
+    "note": "The host of the feed of csirt-gov-pl."
+  },
+  {
+    "id": "cti.api.crowdsec.net",
+    "name": "cti.api.crowdsec.net",
+    "kind": "host",
+    "note": "The host of the feed of crowdsec-cti-api."
+  },
+  {
+    "id": "cveawg.mitre.org",
+    "name": "cveawg.mitre.org",
+    "kind": "host",
+    "note": "The host of the feed of cve-services-api."
+  },
+  {
+    "id": "dashboard.shadowserver.org",
+    "name": "dashboard.shadowserver.org",
+    "kind": "host",
+    "note": "The host of the feed of shadowserver-dashboard."
   },
   {
     "id": "data-nifc.opendata.arcgis.com",
@@ -366,10 +636,34 @@
     "note": "The host of the data of wfp-food-prices."
   },
   {
+    "id": "data.phishtank.com",
+    "name": "data.phishtank.com",
+    "kind": "host",
+    "note": "The host of the feed of phishtank."
+  },
+  {
     "id": "data.sensor.community",
     "name": "data.sensor.community",
     "kind": "host",
     "note": "The host of the data of sensor-community."
+  },
+  {
+    "id": "data.wa.gov",
+    "name": "data.wa.gov",
+    "kind": "host",
+    "note": "The host of the feed of washington-ag-breach-data."
+  },
+  {
+    "id": "databreaches.net",
+    "name": "databreaches.net",
+    "kind": "host",
+    "note": "The host of the feed of databreaches-net-rss."
+  },
+  {
+    "id": "datcp.wi.gov",
+    "name": "datcp.wi.gov",
+    "kind": "host",
+    "note": "The host of the feed of wisconsin-datcp-breaches."
   },
   {
     "id": "date.nager.at",
@@ -378,10 +672,22 @@
     "note": "The host of the feed of nager-date."
   },
   {
+    "id": "db.gcve.eu",
+    "name": "db.gcve.eu",
+    "kind": "host",
+    "note": "The host of the feed of gcve-db."
+  },
+  {
     "id": "dd.weather.gc.ca",
     "name": "dd.weather.gc.ca",
     "kind": "host",
     "note": "The host of the feed of eccc-alerts-datamart."
+  },
+  {
+    "id": "developer.joomla.org",
+    "name": "developer.joomla.org",
+    "kind": "host",
+    "note": "The host of the feed of joomla-security-centre-rss."
   },
   {
     "id": "developer.nps.gov",
@@ -394,6 +700,36 @@
     "name": "developer.sepush.co.za",
     "kind": "host",
     "note": "The host of the feed of eskomsepush-api."
+  },
+  {
+    "id": "dnsc.ro",
+    "name": "dnsc.ro",
+    "kind": "host",
+    "note": "The host of the feed of dnsc-romania."
+  },
+  {
+    "id": "docs.gitlab.com",
+    "name": "docs.gitlab.com",
+    "kind": "host",
+    "note": "The host of the feed of gitlab-patch-releases-atom."
+  },
+  {
+    "id": "docs.google.com",
+    "name": "docs.google.com",
+    "kind": "host",
+    "note": "The host of the feed of project-zero-0day-itw."
+  },
+  {
+    "id": "docs.qualcomm.com",
+    "name": "docs.qualcomm.com",
+    "kind": "host",
+    "note": "The host of the feed of qualcomm-security-bulletins."
+  },
+  {
+    "id": "documentation.open-xchange.com",
+    "name": "documentation.open-xchange.com",
+    "kind": "host",
+    "note": "The host of the feed of open-xchange-csaf."
   },
   {
     "id": "downdetector.com",
@@ -420,6 +756,18 @@
     "note": "The host of the feed of eu-safety-gate."
   },
   {
+    "id": "ecrime.ch",
+    "name": "ecrime.ch",
+    "kind": "host",
+    "note": "The host of the feed of ecrime-ch."
+  },
+  {
+    "id": "efts.sec.gov",
+    "name": "efts.sec.gov",
+    "kind": "host",
+    "note": "The host of the feed of sec-edgar-8k-item-105."
+  },
+  {
     "id": "endoflife.date",
     "name": "endoflife.date",
     "kind": "host",
@@ -436,6 +784,18 @@
     "name": "environment.data.gov.uk",
     "kind": "host",
     "note": "The host of the data of ea-flood-monitoring."
+  },
+  {
+    "id": "errata.almalinux.org",
+    "name": "errata.almalinux.org",
+    "kind": "host",
+    "note": "The host of the feed of almalinux-errata."
+  },
+  {
+    "id": "euvdservices.enisa.europa.eu",
+    "name": "euvdservices.enisa.europa.eu",
+    "kind": "host",
+    "note": "The host of the feed of enisa-euvd-api."
   },
   {
     "id": "ewds.climate.copernicus.eu",
@@ -456,16 +816,40 @@
     "note": "The host of the feed of meteoalarm-feeds."
   },
   {
+    "id": "feeds.ransomfeed.it",
+    "name": "feeds.ransomfeed.it",
+    "kind": "host",
+    "note": "The host of the feed of ransomfeed-rss."
+  },
+  {
+    "id": "feodotracker.abuse.ch",
+    "name": "feodotracker.abuse.ch",
+    "kind": "host",
+    "note": "The host of the feed of abusech-feodo-tracker."
+  },
+  {
     "id": "files.mobilitydatabase.org",
     "name": "files.mobilitydatabase.org",
     "kind": "host",
     "note": "The host of the catalog file of mobility-database. On 2026-11-18 its answer had the server UploadServer and the headers of Google Cloud Storage."
   },
   {
+    "id": "filestore.fortinet.com",
+    "name": "filestore.fortinet.com",
+    "kind": "host",
+    "note": "The host of the feed of fortiguard-outbreak-alerts-rss, fortinet-psirt-rss."
+  },
+  {
     "id": "firms.modaps.eosdis.nasa.gov",
     "name": "firms.modaps.eosdis.nasa.gov",
     "kind": "host",
     "note": "The host of the feed of nasa-firms-api."
+  },
+  {
+    "id": "ftp.suse.com",
+    "name": "ftp.suse.com",
+    "kind": "host",
+    "note": "The host of the feed of suse-csaf-advisories, suse-csaf-vex."
   },
   {
     "id": "gamma-api.polymarket.com",
@@ -492,10 +876,22 @@
     "note": "The host of the feed of fema-open-shelters."
   },
   {
+    "id": "git.kernel.org",
+    "name": "git.kernel.org",
+    "kind": "host",
+    "note": "The host of the feed of linux-kernel-vulns-git."
+  },
+  {
     "id": "github.com",
     "name": "github.com",
     "kind": "host",
     "note": "The host of the repository of the files of ecdc-erviss."
+  },
+  {
+    "id": "gitlab.com",
+    "name": "gitlab.com",
+    "kind": "host",
+    "note": "The host of the feed of exploitdb-git."
   },
   {
     "id": "gpsjam.org",
@@ -504,16 +900,40 @@
     "note": "The host of the data of gpsjam."
   },
   {
+    "id": "graph.microsoft.com",
+    "name": "graph.microsoft.com",
+    "kind": "host",
+    "note": "The host of the feed of windows-release-health-graph."
+  },
+  {
     "id": "haveibeenpwned.com",
     "name": "haveibeenpwned.com",
     "kind": "host",
     "note": "The host of the feed of hibp-api."
   },
   {
+    "id": "hole.cert.pl",
+    "name": "hole.cert.pl",
+    "kind": "host",
+    "note": "The host of the feed of cert-polska-warning-list."
+  },
+  {
+    "id": "horizon.netscout.com",
+    "name": "horizon.netscout.com",
+    "kind": "host",
+    "note": "The host of the feed of netscout-horizon."
+  },
+  {
     "id": "hubeau.eaufrance.fr",
     "name": "hubeau.eaufrance.fr",
     "kind": "host",
     "note": "The host of the data of hubeau-hydrometrie."
+  },
+  {
+    "id": "ico.org.uk",
+    "name": "ico.org.uk",
+    "kind": "host",
+    "note": "The host of the feed of uk-ico-incident-trends."
   },
   {
     "id": "incidentnews.noaa.gov",
@@ -534,10 +954,46 @@
     "note": "The host of the feed of insight-prediction-site."
   },
   {
+    "id": "intel.aikido.dev",
+    "name": "intel.aikido.dev",
+    "kind": "host",
+    "note": "The host of the feed of aikido-intel."
+  },
+  {
+    "id": "inthewild.io",
+    "name": "inthewild.io",
+    "kind": "host",
+    "note": "The host of the feed of inthewild-io."
+  },
+  {
+    "id": "isc.sans.edu",
+    "name": "isc.sans.edu",
+    "kind": "host",
+    "note": "The host of the feed of sans-isc-diary-rss, sans-isc-infocon-api."
+  },
+  {
     "id": "jetstream.us-east.bsky.network",
     "name": "jetstream.us-east.bsky.network",
     "kind": "host",
     "note": "The host of the data of bluesky-jetstream."
+  },
+  {
+    "id": "jvn.jp",
+    "name": "jvn.jp",
+    "kind": "host",
+    "note": "The host of the feed of jvn-rss-en."
+  },
+  {
+    "id": "jvndb.jvn.jp",
+    "name": "jvndb.jvn.jp",
+    "kind": "host",
+    "note": "The host of the feed of jvn-ipedia-myjvn-api."
+  },
+  {
+    "id": "knvd.krcert.or.kr",
+    "name": "knvd.krcert.or.kr",
+    "kind": "host",
+    "note": "The host of the feed of krcert-knvd."
   },
   {
     "id": "kp.gfz.de",
@@ -546,16 +1002,52 @@
     "note": "The host of gfz-kp-hpo. A DNS lookup on 2026-11-16 gave the canonical name rz-vm229.gfz.de, a server of GFZ with no content network."
   },
   {
+    "id": "kubernetes.io",
+    "name": "kubernetes.io",
+    "kind": "host",
+    "note": "The host of the feed of kubernetes-official-cve-feed."
+  },
+  {
     "id": "ladsweb.modaps.eosdis.nasa.gov",
     "name": "ladsweb.modaps.eosdis.nasa.gov",
     "kind": "host",
     "note": "The host of the data of black-marble."
   },
   {
+    "id": "linux.oracle.com",
+    "name": "linux.oracle.com",
+    "kind": "host",
+    "note": "The host of the feed of oracle-linux-oval."
+  },
+  {
+    "id": "lists.blocklist.de",
+    "name": "lists.blocklist.de",
+    "kind": "host",
+    "note": "The host of the feed of blocklist-de."
+  },
+  {
+    "id": "livethreatmap.radware.com",
+    "name": "livethreatmap.radware.com",
+    "kind": "host",
+    "note": "The host of the feed of radware-live-threat-map."
+  },
+  {
     "id": "ll.thespacedevs.com",
     "name": "ll.thespacedevs.com",
     "kind": "host",
     "note": "The host of the feed of launch-library-2."
+  },
+  {
+    "id": "lore.kernel.org",
+    "name": "lore.kernel.org",
+    "kind": "host",
+    "note": "The host of the feed of linux-cve-announce."
+  },
+  {
+    "id": "mb-api.abuse.ch",
+    "name": "mb-api.abuse.ch",
+    "kind": "host",
+    "note": "The host of the feed of abusech-malwarebazaar."
   },
   {
     "id": "mesonet.agron.iastate.edu",
@@ -568,6 +1060,18 @@
     "name": "msi.nga.mil",
     "kind": "host",
     "note": "The host of the feed of nga-msi."
+  },
+  {
+    "id": "msrc.microsoft.com",
+    "name": "msrc.microsoft.com",
+    "kind": "host",
+    "note": "The host of the feed of msrc-csaf."
+  },
+  {
+    "id": "my.f5.com",
+    "name": "my.f5.com",
+    "kind": "host",
+    "note": "The host of the feed of f5-security-advisories."
   },
   {
     "id": "my.ntsb.gov",
@@ -594,16 +1098,46 @@
     "note": "NOAA publishes the GLM files in its open data buckets in the cloud."
   },
   {
+    "id": "nodejs.org",
+    "name": "nodejs.org",
+    "kind": "host",
+    "note": "The host of the feed of nodejs-vulnerability-rss."
+  },
+  {
+    "id": "notified.idtheftcenter.org",
+    "name": "notified.idtheftcenter.org",
+    "kind": "host",
+    "note": "The host of the feed of itrc-notified."
+  },
+  {
     "id": "nrc.uscg.mil",
     "name": "nrc.uscg.mil",
     "kind": "host",
     "note": "The host of the feed of nrc-uscg-reports."
   },
   {
+    "id": "nsm.no",
+    "name": "nsm.no",
+    "kind": "host",
+    "note": "The host of the feed of nsm-ncsc-norway-warnings."
+  },
+  {
     "id": "nwws-oi.weather.gov",
     "name": "nwws-oi.weather.gov",
     "kind": "host",
     "note": "The XMPP server of nws-nwws-oi. A DNS lookup on 2026-11-16 gave the canonical name nwws-oi-bldr.weather.gov, a name of the NWS and not of a content network."
+  },
+  {
+    "id": "oag.ca.gov",
+    "name": "oag.ca.gov",
+    "kind": "host",
+    "note": "The host of the feed of california-ag-breach-list."
+  },
+  {
+    "id": "oag.my.site.com",
+    "name": "oag.my.site.com",
+    "kind": "host",
+    "note": "The host of the feed of texas-ag-breach-reports."
   },
   {
     "id": "ocrportal.hhs.gov",
@@ -630,6 +1164,54 @@
     "note": "The host of the data of ndw-open-data."
   },
   {
+    "id": "ossindex.sonatype.org",
+    "name": "ossindex.sonatype.org",
+    "kind": "host",
+    "note": "The host of the feed of sonatype-oss-index."
+  },
+  {
+    "id": "otx.alienvault.com",
+    "name": "otx.alienvault.com",
+    "kind": "host",
+    "note": "The host of the feed of alienvault-otx."
+  },
+  {
+    "id": "packages.broadcom.com",
+    "name": "packages.broadcom.com",
+    "kind": "host",
+    "note": "The host of the feed of photon-cve-metadata."
+  },
+  {
+    "id": "packages.wolfi.dev",
+    "name": "packages.wolfi.dev",
+    "kind": "host",
+    "note": "The host of the feed of wolfi-secdb."
+  },
+  {
+    "id": "packagist.org",
+    "name": "packagist.org",
+    "kind": "host",
+    "note": "The host of the feed of packagist-security-advisories-api."
+  },
+  {
+    "id": "packetstorm.news",
+    "name": "packetstorm.news",
+    "kind": "host",
+    "note": "The host of the feed of packet-storm-api."
+  },
+  {
+    "id": "phish.co.za",
+    "name": "phish.co.za",
+    "kind": "host",
+    "note": "The host of the feed of phishing-database."
+  },
+  {
+    "id": "phoenixcontact.csaf-tp.certvde.com",
+    "name": "phoenixcontact.csaf-tp.certvde.com",
+    "kind": "host",
+    "note": "The host of the feed of phoenix-contact-csaf."
+  },
+  {
     "id": "pollen.googleapis.com",
     "name": "pollen.googleapis.com",
     "kind": "host",
@@ -652,6 +1234,12 @@
     "name": "poweroutage.us",
     "kind": "host",
     "note": "The host of the feed of poweroutage-us."
+  },
+  {
+    "id": "privacyrights.org",
+    "name": "privacyrights.org",
+    "kind": "host",
+    "note": "The host of the feed of privacy-rights-clearinghouse-chronology."
   },
   {
     "id": "promedmail.org",
@@ -678,10 +1266,76 @@
     "note": "These status pages run on Atlassian Statuspage, the provider of the public JSON API."
   },
   {
+    "id": "provider:aws",
+    "name": "Amazon Web Services",
+    "kind": "provider",
+    "note": "On 2026-11-18 DNS lookups gave canonical names of Elastic Load Balancing (elb.amazonaws.com) for cveawg.mitre.org, support.citrix.com, docs.qualcomm.com and packages.broadcom.com."
+  },
+  {
+    "id": "provider:azure",
+    "name": "Microsoft Azure",
+    "kind": "provider",
+    "note": "On 2026-11-18 the DNS name graph.microsoft.com pointed to a name of Azure Traffic Manager (trafficmanager.net)."
+  },
+  {
+    "id": "provider:github",
+    "name": "GitHub, the host of Git repositories and GitHub Pages",
+    "kind": "provider",
+    "note": "Many advisory databases are Git repositories on github.com. raw.githubusercontent.com gives their files. On 2026-11-18 security.nozominetworks.com pointed to a GitHub Pages site."
+  },
+  {
+    "id": "provider:google-cloud",
+    "name": "Google Cloud and the front end of Google",
+    "kind": "provider",
+    "note": "On 2026-11-18 DNS lookups gave canonical names of Google (googleusercontent.com, ghs.google.com, l.google.com) for chromereleases.googleblog.com, source.android.com and www.digitalattackmap.com."
+  },
+  {
+    "id": "psirt.abb.com",
+    "name": "psirt.abb.com",
+    "kind": "host",
+    "note": "The host of the feed of abb-psirt-csaf."
+  },
+  {
+    "id": "psirt.bosch.com",
+    "name": "psirt.bosch.com",
+    "kind": "host",
+    "note": "The host of the feed of bosch-psirt-atom."
+  },
+  {
+    "id": "psirt.global.sonicwall.com",
+    "name": "psirt.global.sonicwall.com",
+    "kind": "host",
+    "note": "The host of the feed of sonicwall-psirt."
+  },
+  {
+    "id": "psirt.watchguard.com",
+    "name": "psirt.watchguard.com",
+    "kind": "host",
+    "note": "The host of the feed of watchguard-psirt-rss."
+  },
+  {
+    "id": "pypi.org",
+    "name": "pypi.org",
+    "kind": "host",
+    "note": "The host of the feed of pypi-malware-reports."
+  },
+  {
+    "id": "qrator.net",
+    "name": "qrator.net",
+    "kind": "host",
+    "note": "The host of the feed of qrator-ddos-reports."
+  },
+  {
     "id": "rapidmapping.emergency.copernicus.eu",
     "name": "rapidmapping.emergency.copernicus.eu",
     "kind": "host",
     "note": "The host of the data of copernicus-ems-rapid-mapping."
+  },
+  {
+    "id": "raw.githubusercontent.com",
+    "name": "raw.githubusercontent.com",
+    "kind": "host",
+    "note": "The host of the feed of cisa-csaf-github, cisa-vulnrichment, datadog-malicious-packages, metasploit-modules-metadata, nuclei-templates-cves."
   },
   {
     "id": "recalls-rappels.canada.ca",
@@ -702,6 +1356,12 @@
     "note": "The host of the feed of eurdep."
   },
   {
+    "id": "repo.openeuler.org",
+    "name": "repo.openeuler.org",
+    "kind": "host",
+    "note": "The host of the feed of openeuler-csaf."
+  },
+  {
     "id": "ris-live.ripe.net",
     "name": "ris-live.ripe.net",
     "kind": "host",
@@ -714,10 +1374,94 @@
     "note": "The host of the feed of azure-status-rss."
   },
   {
+    "id": "rules.emergingthreats.net",
+    "name": "rules.emergingthreats.net",
+    "kind": "host",
+    "note": "The host of the feed of emerging-threats-compromised-ips."
+  },
+  {
     "id": "safetydata.fra.dot.gov",
     "name": "safetydata.fra.dot.gov",
     "kind": "host",
     "note": "The host of the feed of fra-safety-data."
+  },
+  {
+    "id": "samsik.dk",
+    "name": "samsik.dk",
+    "kind": "host",
+    "note": "The host of the feed of samsik-dk-cyber-news."
+  },
+  {
+    "id": "sec.cloudapps.cisco.com",
+    "name": "sec.cloudapps.cisco.com",
+    "kind": "host",
+    "note": "The host of the feed of cisco-psirt-rss."
+  },
+  {
+    "id": "secdb.alpinelinux.org",
+    "name": "secdb.alpinelinux.org",
+    "kind": "host",
+    "note": "The host of the feed of alpine-secdb."
+  },
+  {
+    "id": "security-tracker.debian.org",
+    "name": "security-tracker.debian.org",
+    "kind": "host",
+    "note": "The host of the feed of debian-security-tracker-json."
+  },
+  {
+    "id": "security.access.redhat.com",
+    "name": "security.access.redhat.com",
+    "kind": "host",
+    "note": "The host of the feed of redhat-csaf-advisories, redhat-csaf-vex."
+  },
+  {
+    "id": "security.apache.org",
+    "name": "security.apache.org",
+    "kind": "host",
+    "note": "The host of the feed of apache-security-projects."
+  },
+  {
+    "id": "security.archlinux.org",
+    "name": "security.archlinux.org",
+    "kind": "host",
+    "note": "The host of the feed of arch-asa-atom, arch-security-tracker-json."
+  },
+  {
+    "id": "security.gentoo.org",
+    "name": "security.gentoo.org",
+    "kind": "host",
+    "note": "The host of the feed of gentoo-glsa-rss."
+  },
+  {
+    "id": "security.nozominetworks.com",
+    "name": "security.nozominetworks.com",
+    "kind": "host",
+    "note": "The host of the feed of nozomi-networks-csaf."
+  },
+  {
+    "id": "security.paloaltonetworks.com",
+    "name": "security.paloaltonetworks.com",
+    "kind": "host",
+    "note": "The host of the feed of paloalto-security-advisories-json."
+  },
+  {
+    "id": "security.salesforce.com",
+    "name": "security.salesforce.com",
+    "kind": "host",
+    "note": "The host of the feed of salesforce-security-advisories-rss."
+  },
+  {
+    "id": "security.samsungmobile.com",
+    "name": "security.samsungmobile.com",
+    "kind": "host",
+    "note": "The host of the feed of samsung-mobile-security-updates."
+  },
+  {
+    "id": "securitybulletin.huawei.com",
+    "name": "securitybulletin.huawei.com",
+    "kind": "host",
+    "note": "The host of the feed of huawei-psirt-csaf."
   },
   {
     "id": "services.nvd.nist.gov",
@@ -732,10 +1476,22 @@
     "note": "The host of the list of the space weather messages of the SWPC: swpc-products-json."
   },
   {
+    "id": "source.android.com",
+    "name": "source.android.com",
+    "kind": "host",
+    "note": "The host of the feed of android-security-bulletins, pixel-update-bulletins."
+  },
+  {
     "id": "ssd-api.jpl.nasa.gov",
     "name": "ssd-api.jpl.nasa.gov",
     "kind": "host",
     "note": "The host of the feed of jpl-fireball-api, jpl-sentry-api."
+  },
+  {
+    "id": "sslbl.abuse.ch",
+    "name": "sslbl.abuse.ch",
+    "kind": "host",
+    "note": "The host of the feed of abusech-sslbl."
   },
   {
     "id": "stablecoins.llama.fi",
@@ -792,10 +1548,58 @@
     "note": "The host of the feed of cornell-labor-action-tracker."
   },
   {
+    "id": "support.arm.com",
+    "name": "support.arm.com",
+    "kind": "host",
+    "note": "The host of the feed of arm-product-security-center."
+  },
+  {
+    "id": "support.broadcom.com",
+    "name": "support.broadcom.com",
+    "kind": "host",
+    "note": "The host of the feed of broadcom-vmware-security-advisories."
+  },
+  {
+    "id": "support.citrix.com",
+    "name": "support.citrix.com",
+    "kind": "host",
+    "note": "The host of the feed of citrix-security-bulletins."
+  },
+  {
+    "id": "support.hp.com",
+    "name": "support.hp.com",
+    "kind": "host",
+    "note": "The host of the feed of hp-security-bulletins."
+  },
+  {
+    "id": "support.lenovo.com",
+    "name": "support.lenovo.com",
+    "kind": "host",
+    "note": "The host of the feed of lenovo-product-security."
+  },
+  {
+    "id": "support.sap.com",
+    "name": "support.sap.com",
+    "kind": "host",
+    "note": "The host of the feed of sap-security-patch-day."
+  },
+  {
+    "id": "supportportal.juniper.net",
+    "name": "supportportal.juniper.net",
+    "kind": "host",
+    "note": "The host of the feed of juniper-security-advisories-rss."
+  },
+  {
     "id": "sws-data.sws.bom.gov.au",
     "name": "sws-data.sws.bom.gov.au",
     "kind": "host",
     "note": "The host of bom-sws-api. A DNS lookup on 2026-11-16 gave the canonical name prd.bom.sws.edgekey.net, a name of Akamai."
+  },
+  {
+    "id": "threatfox-api.abuse.ch",
+    "name": "threatfox-api.abuse.ch",
+    "kind": "host",
+    "note": "The host of the feed of abusech-threatfox."
   },
   {
     "id": "tie.digitraffic.fi",
@@ -822,10 +1626,28 @@
     "note": "The host of the feed of state-dept-advisories."
   },
   {
+    "id": "trust.okta.com",
+    "name": "trust.okta.com",
+    "kind": "host",
+    "note": "The host of the feed of okta-security-advisories-rss."
+  },
+  {
+    "id": "ubuntu.com",
+    "name": "ubuntu.com",
+    "kind": "host",
+    "note": "The host of the feed of ubuntu-cve-api, ubuntu-usn-api."
+  },
+  {
     "id": "ucdp.uu.se",
     "name": "ucdp.uu.se",
     "kind": "host",
     "note": "The host of the feed of ucdp-api."
+  },
+  {
+    "id": "urlhaus.abuse.ch",
+    "name": "urlhaus.abuse.ch",
+    "kind": "host",
+    "note": "The host of the feed of abusech-urlhaus."
   },
   {
     "id": "utility-outage-maps",
@@ -852,10 +1674,58 @@
     "note": "The host of the feed of usgs-hans-api."
   },
   {
+    "id": "vuldb.com",
+    "name": "vuldb.com",
+    "kind": "host",
+    "note": "The host of the feed of vuldb-api."
+  },
+  {
+    "id": "vuln.go.dev",
+    "name": "vuln.go.dev",
+    "kind": "host",
+    "note": "The host of the feed of go-vulndb."
+  },
+  {
+    "id": "vulnerability.circl.lu",
+    "name": "vulnerability.circl.lu",
+    "kind": "host",
+    "note": "The host of the feed of circl-vulnerability-lookup-api, circl-vulnerability-lookup-dumps, circl-vulnerability-lookup-feeds."
+  },
+  {
+    "id": "vulners.com",
+    "name": "vulners.com",
+    "kind": "host",
+    "note": "The host of the feed of vulners-api."
+  },
+  {
+    "id": "vuxml.freebsd.org",
+    "name": "vuxml.freebsd.org",
+    "kind": "host",
+    "note": "The host of the feed of freebsd-vuxml."
+  },
+  {
     "id": "webtris.nationalhighways.co.uk",
     "name": "webtris.nationalhighways.co.uk",
     "kind": "host",
     "note": "The host of the data of webtris."
+  },
+  {
+    "id": "wid.cert-bund.de",
+    "name": "wid.cert-bund.de",
+    "kind": "host",
+    "note": "The host of the feed of bsi-csaf-aggregator, bsi-wid-csaf."
+  },
+  {
+    "id": "wordpress.org",
+    "name": "wordpress.org",
+    "kind": "host",
+    "note": "The host of the feed of wordpress-security-news-rss."
+  },
+  {
+    "id": "wpscan.com",
+    "name": "wpscan.com",
+    "kind": "host",
+    "note": "The host of the feed of wpscan-api."
   },
   {
     "id": "ws-subscriptions-clob.polymarket.com",
@@ -870,10 +1740,34 @@
     "note": "The host of the feed of accessnow-keepiton."
   },
   {
+    "id": "www.acn.gov.it",
+    "name": "www.acn.gov.it",
+    "kind": "host",
+    "note": "The host of the feed of acn-csirt-italia-rss."
+  },
+  {
+    "id": "www.adobe.com",
+    "name": "www.adobe.com",
+    "kind": "host",
+    "note": "The host of the feed of adobe-security-bulletins."
+  },
+  {
     "id": "www.airnowapi.org",
     "name": "www.airnowapi.org",
     "kind": "host",
     "note": "The host of the feed of airnow-api."
+  },
+  {
+    "id": "www.akamai.com",
+    "name": "www.akamai.com",
+    "kind": "host",
+    "note": "The host of the feed of akamai-soti-ddos."
+  },
+  {
+    "id": "www.amd.com",
+    "name": "www.amd.com",
+    "kind": "host",
+    "note": "The host of the feed of amd-product-security."
   },
   {
     "id": "www.aphis.usda.gov",
@@ -886,6 +1780,12 @@
     "name": "www.ashp.org",
     "kind": "host",
     "note": "The host of the feed of ashp-drug-shortages."
+  },
+  {
+    "id": "www.bacs.admin.ch",
+    "name": "www.bacs.admin.ch",
+    "kind": "host",
+    "note": "The host of the feed of bacs-ch-hot-topics."
   },
   {
     "id": "www.bea.gov",
@@ -906,10 +1806,28 @@
     "note": "The host of the feed of bls-release-calendar."
   },
   {
+    "id": "www.boho.or.kr",
+    "name": "www.boho.or.kr",
+    "kind": "host",
+    "note": "The host of the feed of kisa-krcert-security-notices."
+  },
+  {
+    "id": "www.caida.org",
+    "name": "www.caida.org",
+    "kind": "host",
+    "note": "The host of the feed of caida-rsdos."
+  },
+  {
     "id": "www.cbsa-asfc.gc.ca",
     "name": "www.cbsa-asfc.gc.ca",
     "kind": "host",
     "note": "The host of the file of cbsa-bwt."
+  },
+  {
+    "id": "www.ccn-cert.cni.es",
+    "name": "www.ccn-cert.cni.es",
+    "kind": "host",
+    "note": "The host of the feed of ccn-cert-avisos-rss."
   },
   {
     "id": "www.cdc.gov",
@@ -924,6 +1842,30 @@
     "note": "The host of the feed of census-econ-calendar."
   },
   {
+    "id": "www.cert-in.org.in",
+    "name": "www.cert-in.org.in",
+    "kind": "host",
+    "note": "The host of the feed of cert-in-advisories."
+  },
+  {
+    "id": "www.cert.at",
+    "name": "www.cert.at",
+    "kind": "host",
+    "note": "The host of the feed of cert-at-warnings-rss."
+  },
+  {
+    "id": "www.cert.se",
+    "name": "www.cert.se",
+    "kind": "host",
+    "note": "The host of the feed of cert-se-rss."
+  },
+  {
+    "id": "www.cert.si",
+    "name": "www.cert.si",
+    "kind": "host",
+    "note": "The host of the feed of si-cert-warnings."
+  },
+  {
     "id": "www.cfsre.org",
     "name": "www.cfsre.org",
     "kind": "host",
@@ -934,6 +1876,30 @@
     "name": "www.cisa.gov",
     "kind": "host",
     "note": "The host of the feed of cisa-advisories-rss, cisa-kev."
+  },
+  {
+    "id": "www.cisco.com",
+    "name": "www.cisco.com",
+    "kind": "host",
+    "note": "The host of the feed of cisco-csaf."
+  },
+  {
+    "id": "www.cnnvd.org.cn",
+    "name": "www.cnnvd.org.cn",
+    "kind": "host",
+    "note": "The host of the feed of cnnvd."
+  },
+  {
+    "id": "www.cnvd.org.cn",
+    "name": "www.cnvd.org.cn",
+    "kind": "host",
+    "note": "The host of the feed of cnvd."
+  },
+  {
+    "id": "www.connectwise.com",
+    "name": "www.connectwise.com",
+    "kind": "host",
+    "note": "The host of the feed of connectwise-security-bulletins-rss."
   },
   {
     "id": "www.courtlistener.com",
@@ -948,10 +1914,58 @@
     "note": "The host of the feed of cpuc-psps."
   },
   {
+    "id": "www.csa.gov.sg",
+    "name": "www.csa.gov.sg",
+    "kind": "host",
+    "note": "The host of the feed of csa-singapore-alerts."
+  },
+  {
+    "id": "www.cyber.gc.ca",
+    "name": "www.cyber.gc.ca",
+    "kind": "host",
+    "note": "The host of the feed of cccs-alerts-advisories-atom."
+  },
+  {
+    "id": "www.cyber.gov.au",
+    "name": "www.cyber.gov.au",
+    "kind": "host",
+    "note": "The host of the feed of acsc-rss."
+  },
+  {
+    "id": "www.cybersecurityhub.gov.za",
+    "name": "www.cybersecurityhub.gov.za",
+    "kind": "host",
+    "note": "The host of the feed of za-cybersecurity-hub."
+  },
+  {
+    "id": "www.debian.org",
+    "name": "www.debian.org",
+    "kind": "host",
+    "note": "The host of the feed of debian-dla-rss, debian-dsa-rss."
+  },
+  {
+    "id": "www.dell.com",
+    "name": "www.dell.com",
+    "kind": "host",
+    "note": "The host of the feed of dell-security-advisories."
+  },
+  {
     "id": "www.dhs.gov",
     "name": "www.dhs.gov",
     "kind": "host",
     "note": "The host of the feed of dhs-ntas."
+  },
+  {
+    "id": "www.digitalattackmap.com",
+    "name": "www.digitalattackmap.com",
+    "kind": "host",
+    "note": "The host of the feed of digital-attack-map."
+  },
+  {
+    "id": "www.drupal.org",
+    "name": "www.drupal.org",
+    "kind": "host",
+    "note": "The host of the feed of drupal-security-advisories-api."
   },
   {
     "id": "www.easa.europa.eu",
@@ -1038,6 +2052,12 @@
     "note": "The host of the feed of freddie-mac-pmms."
   },
   {
+    "id": "www.freebsd.org",
+    "name": "www.freebsd.org",
+    "kind": "host",
+    "note": "The host of the feed of freebsd-security-rss."
+  },
+  {
     "id": "www.fsis.usda.gov",
     "name": "www.fsis.usda.gov",
     "kind": "host",
@@ -1056,10 +2076,34 @@
     "note": "The host of the feed of gjopen-site."
   },
   {
+    "id": "www.gov.br",
+    "name": "www.gov.br",
+    "kind": "host",
+    "note": "The host of the feed of ctir-gov-br-alerts."
+  },
+  {
+    "id": "www.gov.il",
+    "name": "www.gov.il",
+    "kind": "host",
+    "note": "The host of the feed of incd-israel-cve-advisories."
+  },
+  {
     "id": "www.gov.uk",
     "name": "www.gov.uk",
     "kind": "host",
     "note": "The host of the feed of fcdo-travel-advice-api."
+  },
+  {
+    "id": "www.hkcert.org",
+    "name": "www.hkcert.org",
+    "kind": "host",
+    "note": "The host of the feed of hkcert-security-bulletin-rss."
+  },
+  {
+    "id": "www.honeywell.com",
+    "name": "www.honeywell.com",
+    "kind": "host",
+    "note": "The host of the feed of honeywell-product-security."
   },
   {
     "id": "www.iana.org",
@@ -1068,10 +2112,34 @@
     "note": "The host of the feed of iana-tz."
   },
   {
+    "id": "www.ibm.com",
+    "name": "www.ibm.com",
+    "kind": "host",
+    "note": "The host of the feed of ibm-security-bulletins."
+  },
+  {
     "id": "www.imis.bfs.de",
     "name": "www.imis.bfs.de",
     "kind": "host",
     "note": "The host of the data of bfs-odl."
+  },
+  {
+    "id": "www.imperva.com",
+    "name": "www.imperva.com",
+    "kind": "host",
+    "note": "The host of the feed of imperva-attack-map."
+  },
+  {
+    "id": "www.in.gov",
+    "name": "www.in.gov",
+    "kind": "host",
+    "note": "The host of the feed of indiana-ag-breach-reports."
+  },
+  {
+    "id": "www.incibe.es",
+    "name": "www.incibe.es",
+    "kind": "host",
+    "note": "The host of the feed of incibe-cert-avisos-rss."
   },
   {
     "id": "www.ioc-sealevelmonitoring.org",
@@ -1080,16 +2148,82 @@
     "note": "The host of the data of ioc-slsmf."
   },
   {
+    "id": "www.iowaattorneygeneral.gov",
+    "name": "www.iowaattorneygeneral.gov",
+    "kind": "host",
+    "note": "The host of the feed of iowa-ag-breach-notices."
+  },
+  {
+    "id": "www.ipa.go.jp",
+    "name": "www.ipa.go.jp",
+    "kind": "host",
+    "note": "The host of the feed of ipa-security-alerts-rss."
+  },
+  {
     "id": "www.irs.gov",
     "name": "www.irs.gov",
     "kind": "host",
     "note": "The host of the feed of irs-disaster-relief."
   },
   {
+    "id": "www.ivanti.com",
+    "name": "www.ivanti.com",
+    "kind": "host",
+    "note": "The host of the feed of ivanti-security-advisory-rss."
+  },
+  {
+    "id": "www.jenkins.io",
+    "name": "www.jenkins.io",
+    "kind": "host",
+    "note": "The host of the feed of jenkins-security-advisories-rss."
+  },
+  {
+    "id": "www.jpcert.or.jp",
+    "name": "www.jpcert.or.jp",
+    "kind": "host",
+    "note": "The host of the feed of jpcert-rss-en, jpcert-rss-ja."
+  },
+  {
+    "id": "www.kb.cert.org",
+    "name": "www.kb.cert.org",
+    "kind": "host",
+    "note": "The host of the feed of certcc-vulnerability-notes-atom."
+  },
+  {
+    "id": "www.kyberturvallisuuskeskus.fi",
+    "name": "www.kyberturvallisuuskeskus.fi",
+    "kind": "host",
+    "note": "The host of the feed of ncsc-fi-daily-vulnerability-digest, ncsc-fi-vulnerabilities-rss."
+  },
+  {
+    "id": "www.maine.gov",
+    "name": "www.maine.gov",
+    "kind": "host",
+    "note": "The host of the feed of maine-ag-breach-list."
+  },
+  {
     "id": "www.metaculus.com",
     "name": "www.metaculus.com",
     "kind": "host",
     "note": "The host of the feed of metaculus-api."
+  },
+  {
+    "id": "www.mitsubishielectric.com",
+    "name": "www.mitsubishielectric.com",
+    "kind": "host",
+    "note": "The host of the feed of mitsubishi-electric-psirt-rss."
+  },
+  {
+    "id": "www.moxa.com",
+    "name": "www.moxa.com",
+    "kind": "host",
+    "note": "The host of the feed of moxa-security-advisory-rss."
+  },
+  {
+    "id": "www.mycert.org.my",
+    "name": "www.mycert.org.my",
+    "kind": "host",
+    "note": "The host of the feed of mycert-malaysia-advisories."
   },
   {
     "id": "www.nasdaqtrader.com",
@@ -1102,6 +2236,36 @@
     "name": "www.navcen.uscg.gov",
     "kind": "host",
     "note": "The host of the feed of uscg-navcen."
+  },
+  {
+    "id": "www.ncsc.gov.ie",
+    "name": "www.ncsc.gov.ie",
+    "kind": "host",
+    "note": "The host of the feed of ncsc-ie-alerts-rss."
+  },
+  {
+    "id": "www.ncsc.gov.uk",
+    "name": "www.ncsc.gov.uk",
+    "kind": "host",
+    "note": "The host of the feed of ncsc-uk-rss."
+  },
+  {
+    "id": "www.ncsc.govt.nz",
+    "name": "www.ncsc.govt.nz",
+    "kind": "host",
+    "note": "The host of the feed of ncsc-nz-alerts."
+  },
+  {
+    "id": "www.netbsd.org",
+    "name": "www.netbsd.org",
+    "kind": "host",
+    "note": "The host of the feed of netbsd-security-rss."
+  },
+  {
+    "id": "www.netgear.com",
+    "name": "www.netgear.com",
+    "kind": "host",
+    "note": "The host of the feed of netgear-security-advisories."
   },
   {
     "id": "www.nhc.noaa.gov",
@@ -1122,10 +2286,28 @@
     "note": "The host of the feed of nyse-halts-csv, nyse-holidays-page, nyse-market-status."
   },
   {
+    "id": "www.oaic.gov.au",
+    "name": "www.oaic.gov.au",
+    "kind": "host",
+    "note": "The host of the feed of oaic-ndb-statistics."
+  },
+  {
+    "id": "www.openbsd.org",
+    "name": "www.openbsd.org",
+    "kind": "host",
+    "note": "The host of the feed of openbsd-errata."
+  },
+  {
     "id": "www.opm.gov",
     "name": "www.opm.gov",
     "kind": "host",
     "note": "The host of the feed of opm-status."
+  },
+  {
+    "id": "www.oracle.com",
+    "name": "www.oracle.com",
+    "kind": "host",
+    "note": "The host of the feed of oracle-security-alerts."
   },
   {
     "id": "www.oref.org.il",
@@ -1170,10 +2352,40 @@
     "note": "The host of the feed of pulsepoint."
   },
   {
+    "id": "www.qnap.com",
+    "name": "www.qnap.com",
+    "kind": "host",
+    "note": "The host of the feed of qnap-security-rss."
+  },
+  {
+    "id": "www.ransomlook.io",
+    "name": "www.ransomlook.io",
+    "kind": "host",
+    "note": "The host of the feed of ransomlook-api."
+  },
+  {
+    "id": "www.ria.ee",
+    "name": "www.ria.ee",
+    "kind": "host",
+    "note": "The host of the feed of ria-cert-ee-rss."
+  },
+  {
+    "id": "www.rockwellautomation.com",
+    "name": "www.rockwellautomation.com",
+    "kind": "host",
+    "note": "The host of the feed of rockwell-automation-advisories."
+  },
+  {
     "id": "www.saferproducts.gov",
     "name": "www.saferproducts.gov",
     "kind": "host",
     "note": "The host of the feed of cpsc-recalls-api."
+  },
+  {
+    "id": "www.se.com",
+    "name": "www.se.com",
+    "kind": "host",
+    "note": "The host of the feed of schneider-electric-csaf."
   },
   {
     "id": "www.sec.gov",
@@ -1188,6 +2400,24 @@
     "note": "The host of the event service and the stream of EMSC: emsc-seismicportal-fdsn and emsc-seismicportal-ws."
   },
   {
+    "id": "www.sick.com",
+    "name": "www.sick.com",
+    "kind": "host",
+    "note": "The host of the feed of sick-psirt-csaf."
+  },
+  {
+    "id": "www.solarwinds.com",
+    "name": "www.solarwinds.com",
+    "kind": "host",
+    "note": "The host of the feed of solarwinds-security-advisories-rss."
+  },
+  {
+    "id": "www.sophos.com",
+    "name": "www.sophos.com",
+    "kind": "host",
+    "note": "The host of the feed of sophos-security-advisories-rss."
+  },
+  {
     "id": "www.space-track.org",
     "name": "www.space-track.org",
     "kind": "host",
@@ -1200,10 +2430,34 @@
     "note": "The host of the feed of swpc-email."
   },
   {
+    "id": "www.spamhaus.org",
+    "name": "www.spamhaus.org",
+    "kind": "host",
+    "note": "The host of the feed of spamhaus-drop."
+  },
+  {
+    "id": "www.synology.com",
+    "name": "www.synology.com",
+    "kind": "host",
+    "note": "The host of the feed of synology-security-rss."
+  },
+  {
+    "id": "www.thaicert.or.th",
+    "name": "www.thaicert.or.th",
+    "kind": "host",
+    "note": "The host of the feed of thaicert-threat-updates."
+  },
+  {
     "id": "www.thousandeyes.com",
     "name": "www.thousandeyes.com",
     "kind": "host",
     "note": "The host of the feed of thousandeyes-outages."
+  },
+  {
+    "id": "www.tp-link.com",
+    "name": "www.tp-link.com",
+    "kind": "host",
+    "note": "The host of the feed of tp-link-security-advisories."
   },
   {
     "id": "www.tsa.gov",
@@ -1218,6 +2472,12 @@
     "note": "The host of the CAP files of the two tsunami warning centers of the NWS: tsunami-gov-feeds."
   },
   {
+    "id": "www.twcert.org.tw",
+    "name": "www.twcert.org.tw",
+    "kind": "host",
+    "note": "The host of the feed of twcert-tvn-rss."
+  },
+  {
     "id": "www.ukmto.org",
     "name": "www.ukmto.org",
     "kind": "host",
@@ -1228,6 +2488,12 @@
     "name": "www.usgs.gov",
     "kind": "host",
     "note": "The host of the feed of usgs-landslide-program, usgs-vns."
+  },
+  {
+    "id": "www.veeam.com",
+    "name": "www.veeam.com",
+    "kind": "host",
+    "note": "The host of the feed of veeam-kb-atom."
   },
   {
     "id": "www.wastewaterscan.org",
@@ -1248,15 +2514,45 @@
     "note": "The host of the feed of woah-wahis."
   },
   {
+    "id": "www.wordfence.com",
+    "name": "www.wordfence.com",
+    "kind": "host",
+    "note": "The host of the feed of wordfence-intelligence-api."
+  },
+  {
     "id": "www.wpc.ncep.noaa.gov",
     "name": "www.wpc.ncep.noaa.gov",
     "kind": "host",
     "note": "The host of the feed of nws-heatrisk."
   },
   {
+    "id": "www.zerodayinitiative.com",
+    "name": "www.zerodayinitiative.com",
+    "kind": "host",
+    "note": "The host of the feed of zdi-published-rss, zdi-upcoming-rss."
+  },
+  {
+    "id": "www.zoom.com",
+    "name": "www.zoom.com",
+    "kind": "host",
+    "note": "The host of the feed of zoom-security-bulletins."
+  },
+  {
+    "id": "www.zyxel.com",
+    "name": "www.zyxel.com",
+    "kind": "host",
+    "note": "The host of the feed of zyxel-security-advisories."
+  },
+  {
     "id": "wwwnc.cdc.gov",
     "name": "wwwnc.cdc.gov",
     "kind": "host",
     "note": "The host of the feed of cdc-travel-notices."
+  },
+  {
+    "id": "xenbits.xen.org",
+    "name": "xenbits.xen.org",
+    "kind": "host",
+    "note": "The host of the feed of xen-xsa-json."
   }
 ]

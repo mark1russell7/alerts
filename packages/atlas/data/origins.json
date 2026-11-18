@@ -6,6 +6,18 @@
     "note": "The records of aaa-gas-prices name this issuer."
   },
   {
+    "id": "abb",
+    "name": "ABB",
+    "issues": null,
+    "note": "The record of abb-psirt-csaf names this issuer."
+  },
+  {
+    "id": "abuse-ch",
+    "name": "abuse.ch",
+    "issues": null,
+    "note": "The records of abusech-feodo-tracker, abusech-malwarebazaar, abusech-sslbl, abusech-threatfox, abusech-urlhaus name this issuer."
+  },
+  {
     "id": "accessnow",
     "name": "Access Now",
     "issues": null,
@@ -18,22 +30,94 @@
     "note": "The records of acled-api name this issuer."
   },
   {
+    "id": "acn",
+    "name": "ACN (the National Cybersecurity Agency of Italy)",
+    "issues": null,
+    "note": "The record of acn-csirt-italia-rss names this issuer."
+  },
+  {
+    "id": "acsc",
+    "name": "ACSC (the Australian Cyber Security Centre)",
+    "issues": null,
+    "note": "The record of acsc-rss names this issuer."
+  },
+  {
+    "id": "adobe",
+    "name": "Adobe",
+    "issues": null,
+    "note": "The record of adobe-security-bulletins names this issuer."
+  },
+  {
+    "id": "aikido",
+    "name": "Aikido Security",
+    "issues": null,
+    "note": "The record of aikido-intel names this issuer."
+  },
+  {
     "id": "air-quality-agencies",
     "name": "The air monitors other than the EPA that OpenAQ collects",
     "issues": null,
     "note": "OpenAQ collects the data of government and research monitors. Its US data comes from EPA AirNow, so the EPA is a separate origin. The record does not name each other agency."
   },
   {
+    "id": "akamai",
+    "name": "Akamai",
+    "issues": null,
+    "note": "The record of akamai-soti-ddos names this issuer."
+  },
+  {
+    "id": "almalinux",
+    "name": "The AlmaLinux OS Foundation",
+    "issues": null,
+    "note": "The record of almalinux-errata names this issuer."
+  },
+  {
+    "id": "alpine",
+    "name": "Alpine Linux",
+    "issues": null,
+    "note": "The record of alpine-secdb names this issuer."
+  },
+  {
+    "id": "amd",
+    "name": "AMD (Advanced Micro Devices)",
+    "issues": null,
+    "note": "The record of amd-product-security names this issuer."
+  },
+  {
+    "id": "apache-software-foundation",
+    "name": "The Apache Software Foundation",
+    "issues": null,
+    "note": "The record of apache-security-projects names this issuer."
+  },
+  {
     "id": "apple",
     "name": "Apple",
     "issues": null,
-    "note": "The records of apple-system-status name this issuer."
+    "note": "The records of apple-security-releases, apple-system-status name this issuer."
+  },
+  {
+    "id": "archlinux",
+    "name": "Arch Linux",
+    "issues": null,
+    "note": "The records of arch-asa-atom, arch-security-tracker-json name this issuer."
+  },
+  {
+    "id": "arm",
+    "name": "Arm",
+    "issues": null,
+    "note": "The record of arm-product-security-center names this issuer."
   },
   {
     "id": "ashp",
     "name": "ASHP (the American Society of Health-System Pharmacists)",
     "issues": null,
     "note": "The records of ashp-drug-shortages name this issuer."
+  },
+  {
+    "id": "atlassian",
+    "name": "Atlassian",
+    "issues": null,
+    "note": "The record of atlassian-security-vulnerability-api names this issuer."
   },
   {
     "id": "aviation-safety-network",
@@ -45,7 +129,13 @@
     "id": "aws",
     "name": "Amazon Web Services",
     "issues": null,
-    "note": "The records of aws-health-rss name this issuer."
+    "note": "The records of amazon-linux-2-alas, amazon-linux-2023-alas, aws-health-rss name this issuer."
+  },
+  {
+    "id": "bacs",
+    "name": "BACS (the Swiss Federal Office for Cybersecurity)",
+    "issues": null,
+    "note": "The record of bacs-ch-hot-topics names this issuer."
   },
   {
     "id": "bea",
@@ -66,6 +156,12 @@
     "note": "The records of blitzortung name this issuer."
   },
   {
+    "id": "blocklist-de",
+    "name": "blocklist.de",
+    "issues": null,
+    "note": "The record of blocklist-de names this issuer."
+  },
+  {
     "id": "bls",
     "name": "US Bureau of Labor Statistics",
     "issues": null,
@@ -78,10 +174,46 @@
     "note": "The records of bom-sws-api name this issuer. Its Space Weather Services issue the space weather alerts."
   },
   {
+    "id": "bosch",
+    "name": "Bosch (its PSIRT)",
+    "issues": null,
+    "note": "The record of bosch-psirt-atom names this issuer."
+  },
+  {
+    "id": "broadcom",
+    "name": "Broadcom (VMware)",
+    "issues": null,
+    "note": "The records of broadcom-vmware-security-advisories, photon-cve-metadata name this issuer."
+  },
+  {
+    "id": "bsi",
+    "name": "BSI (the German Federal Office for Information Security)",
+    "issues": null,
+    "note": "The records of bsi-wid-csaf, bsi-wid-rss name this issuer."
+  },
+  {
+    "id": "caida",
+    "name": "CAIDA (UC San Diego)",
+    "issues": null,
+    "note": "The record of caida-rsdos names this issuer."
+  },
+  {
+    "id": "california-oag",
+    "name": "The California Attorney General",
+    "issues": null,
+    "note": "The record of california-ag-breach-list names this issuer."
+  },
+  {
     "id": "canada-government",
     "name": "The departments of the Government of Canada (Health Canada, CFIA, Transport Canada)",
     "issues": null,
     "note": "The records of canada-recalls name this issuer."
+  },
+  {
+    "id": "canonical",
+    "name": "Canonical (Ubuntu)",
+    "issues": null,
+    "note": "The records of ubuntu-cve-api, ubuntu-security-notices-git, ubuntu-usn-api name this issuer."
   },
   {
     "id": "cboe",
@@ -102,6 +234,24 @@
     "note": "The records of cbsa-bwt name this agency."
   },
   {
+    "id": "ccb-belgium",
+    "name": "CCB Belgium (the Centre for Cybersecurity Belgium)",
+    "issues": null,
+    "note": "The record of ccb-belgium-advisories names this issuer."
+  },
+  {
+    "id": "cccs",
+    "name": "The Canadian Centre for Cyber Security",
+    "issues": null,
+    "note": "The record of cccs-alerts-advisories-atom names this issuer."
+  },
+  {
+    "id": "ccn-cert",
+    "name": "CCN-CERT (Spain)",
+    "issues": null,
+    "note": "The record of ccn-cert-avisos-rss names this issuer."
+  },
+  {
     "id": "cdc",
     "name": "US Centers for Disease Control and Prevention",
     "issues": null,
@@ -114,16 +264,124 @@
     "note": "The records of census-econ-calendar name this issuer."
   },
   {
+    "id": "cert-at",
+    "name": "CERT.at (Austria)",
+    "issues": null,
+    "note": "The record of cert-at-warnings-rss names this issuer."
+  },
+  {
+    "id": "cert-az",
+    "name": "CERT.AZ (Azerbaijan)",
+    "issues": null,
+    "note": "The record of cert-az-rss names this issuer."
+  },
+  {
+    "id": "cert-br",
+    "name": "CERT.br (Brazil)",
+    "issues": null,
+    "note": "The record of cert-br-rss names this issuer."
+  },
+  {
+    "id": "cert-cc",
+    "name": "CERT/CC (Carnegie Mellon University)",
+    "issues": null,
+    "note": "The record of certcc-vulnerability-notes-atom names this issuer."
+  },
+  {
+    "id": "cert-eu",
+    "name": "CERT-EU",
+    "issues": null,
+    "note": "The record of cert-eu-advisories-rss names this issuer."
+  },
+  {
+    "id": "cert-fr",
+    "name": "CERT-FR (ANSSI)",
+    "issues": null,
+    "note": "The records of cert-fr-api, cert-fr-cti-rss name this issuer."
+  },
+  {
+    "id": "cert-in",
+    "name": "CERT-In (India)",
+    "issues": null,
+    "note": "The record of cert-in-advisories names this issuer."
+  },
+  {
+    "id": "cert-lv",
+    "name": "CERT.LV (Latvia)",
+    "issues": null,
+    "note": "The record of cert-lv-json-feed names this issuer."
+  },
+  {
+    "id": "cert-pl",
+    "name": "CERT Polska (NASK)",
+    "issues": null,
+    "note": "The records of cert-pl-rss, cert-polska-warning-list name this issuer."
+  },
+  {
+    "id": "cert-se",
+    "name": "CERT-SE (Sweden)",
+    "issues": null,
+    "note": "The record of cert-se-rss names this issuer."
+  },
+  {
+    "id": "cert-ua",
+    "name": "CERT-UA (Ukraine)",
+    "issues": null,
+    "note": "The record of cert-ua-rss names this issuer."
+  },
+  {
+    "id": "cert-vde",
+    "name": "CERT@VDE",
+    "issues": null,
+    "note": "The record of certvde-advisories-rss names this issuer."
+  },
+  {
     "id": "cfsre",
     "name": "CFSRE (the Center for Forensic Science Research and Education)",
     "issues": null,
     "note": "The records of cfsre-nps-discovery name this issuer."
   },
   {
+    "id": "chainguard",
+    "name": "Chainguard (Wolfi)",
+    "issues": null,
+    "note": "The record of wolfi-secdb names this issuer."
+  },
+  {
+    "id": "check-point",
+    "name": "Check Point Software Technologies",
+    "issues": null,
+    "note": "The record of checkpoint-advisories names this issuer."
+  },
+  {
+    "id": "checkmarx",
+    "name": "Checkmarx",
+    "issues": null,
+    "note": "The record of checkmarx-mpiapi names this issuer."
+  },
+  {
+    "id": "circl",
+    "name": "CIRCL (the Computer Incident Response Center Luxembourg)",
+    "issues": null,
+    "note": "The records of circl-vulnerability-lookup-api, circl-vulnerability-lookup-feeds name this issuer."
+  },
+  {
     "id": "cisa",
     "name": "US Cybersecurity and Infrastructure Security Agency",
     "issues": null,
-    "note": "The records of cisa-advisories-rss, cisa-kev name this issuer."
+    "note": "The records of cisa-advisories-rss, cisa-csaf-github, cisa-kev, cisa-vulnrichment, cisa-vulnrichment-git name this issuer."
+  },
+  {
+    "id": "cisco",
+    "name": "Cisco",
+    "issues": null,
+    "note": "The records of cisco-csaf, cisco-openvuln-api, cisco-psirt-rss name this issuer."
+  },
+  {
+    "id": "citrix",
+    "name": "Citrix (Cloud Software Group)",
+    "issues": null,
+    "note": "The record of citrix-security-bulletins names this issuer."
   },
   {
     "id": "cloudflare",
@@ -132,10 +390,28 @@
     "note": "The records of cloudflare-radar-api name this issuer."
   },
   {
+    "id": "cncert",
+    "name": "CNCERT/CC (China)",
+    "issues": null,
+    "note": "The record of cnvd names this issuer."
+  },
+  {
+    "id": "cnnvd",
+    "name": "CNNVD (the China National Vulnerability Database of Information Security)",
+    "issues": null,
+    "note": "The record of cnnvd names this issuer."
+  },
+  {
     "id": "coingecko",
     "name": "CoinGecko",
     "issues": null,
     "note": "The records of coingecko-api name this issuer."
+  },
+  {
+    "id": "connectwise",
+    "name": "ConnectWise",
+    "issues": null,
+    "note": "The record of connectwise-security-bulletins-rss names this issuer."
   },
   {
     "id": "cornell-ilr",
@@ -150,10 +426,52 @@
     "note": "The records of cpsc-recalls-api name this issuer."
   },
   {
+    "id": "crowdsec",
+    "name": "CrowdSec",
+    "issues": null,
+    "note": "The records of crowdsec-cti-api, crowdsec-live-exploit-tracker name this issuer."
+  },
+  {
+    "id": "csa-singapore",
+    "name": "CSA Singapore (the Cyber Security Agency)",
+    "issues": null,
+    "note": "The record of csa-singapore-alerts names this issuer."
+  },
+  {
+    "id": "csirt-gov-pl",
+    "name": "CSIRT GOV (Poland)",
+    "issues": null,
+    "note": "The record of csirt-gov-pl names this issuer."
+  },
+  {
+    "id": "ctir-gov",
+    "name": "CTIR Gov (Brazil)",
+    "issues": null,
+    "note": "The record of ctir-gov-br-alerts names this issuer."
+  },
+  {
     "id": "cve-program",
     "name": "The CVE Program and its numbering authorities",
     "issues": null,
     "note": "The NVD, the GitHub advisories and OSV publish the CVE records of the CVE Program."
+  },
+  {
+    "id": "databreaches-net",
+    "name": "DataBreaches.net",
+    "issues": null,
+    "note": "The record of databreaches-net-rss names this issuer."
+  },
+  {
+    "id": "datadog",
+    "name": "Datadog",
+    "issues": null,
+    "note": "The record of datadog-malicious-packages names this issuer."
+  },
+  {
+    "id": "debian",
+    "name": "The Debian Project",
+    "issues": null,
+    "note": "The records of debian-dla-rss, debian-dsa-rss, debian-security-tracker-json name this issuer."
   },
   {
     "id": "defillama",
@@ -162,16 +480,40 @@
     "note": "The records of defillama-hacks, defillama-stablecoins name this issuer."
   },
   {
+    "id": "delaware-ag",
+    "name": "The Delaware Attorney General",
+    "issues": null,
+    "note": "The record of delaware-ag-breach-db names this issuer."
+  },
+  {
+    "id": "dell",
+    "name": "Dell Technologies",
+    "issues": null,
+    "note": "The record of dell-security-advisories names this issuer."
+  },
+  {
     "id": "dhs",
     "name": "US Department of Homeland Security",
     "issues": null,
     "note": "The records of dhs-ntas name this issuer."
   },
   {
+    "id": "dnsc",
+    "name": "DNSC (the Romanian National Cyber Security Directorate)",
+    "issues": null,
+    "note": "The record of dnsc-romania names this issuer."
+  },
+  {
     "id": "downdetector",
     "name": "Downdetector (Ookla), from the reports of users",
     "issues": null,
     "note": "The records of downdetector name this issuer."
+  },
+  {
+    "id": "drupal-security-team",
+    "name": "The Drupal Security Team",
+    "issues": null,
+    "note": "The record of drupal-security-advisories-api names this issuer."
   },
   {
     "id": "easa",
@@ -198,6 +540,18 @@
     "note": "The records of ecdc-threats name this issuer."
   },
   {
+    "id": "ecrime-ch",
+    "name": "ecrime.ch",
+    "issues": null,
+    "note": "The record of ecrime-ch names this issuer."
+  },
+  {
+    "id": "eef",
+    "name": "The Erlang Ecosystem Foundation",
+    "issues": null,
+    "note": "The record of eef-cna-osv names this issuer."
+  },
+  {
     "id": "eia",
     "name": "US Energy Information Administration",
     "issues": null,
@@ -214,6 +568,12 @@
     "name": "The community of endoflife.date",
     "issues": null,
     "note": "The records of endoflife-date-api name this issuer."
+  },
+  {
+    "id": "enisa",
+    "name": "ENISA (the EU Agency for Cybersecurity)",
+    "issues": null,
+    "note": "The record of enisa-euvd-api names this issuer."
   },
   {
     "id": "epa",
@@ -258,6 +618,18 @@
     "note": "The records of meteoalarm-feeds name this issuer."
   },
   {
+    "id": "exploit-db",
+    "name": "Exploit-DB (OffSec)",
+    "issues": null,
+    "note": "The record of exploitdb-git names this issuer."
+  },
+  {
+    "id": "f5",
+    "name": "F5",
+    "issues": null,
+    "note": "The record of f5-security-advisories names this issuer."
+  },
+  {
     "id": "faa",
     "name": "US Federal Aviation Administration",
     "issues": null,
@@ -294,6 +666,12 @@
     "note": "The records of frbservices-status name this issuer."
   },
   {
+    "id": "fedora",
+    "name": "The Fedora Project",
+    "issues": null,
+    "note": "The record of fedora-bodhi-security names this issuer."
+  },
+  {
     "id": "fema",
     "name": "US Federal Emergency Management Agency",
     "issues": null,
@@ -306,6 +684,12 @@
     "note": "The records of first-epss-api name this issuer."
   },
   {
+    "id": "fortinet",
+    "name": "Fortinet",
+    "issues": null,
+    "note": "The records of fortiguard-outbreak-alerts-rss, fortinet-psirt-rss name this issuer."
+  },
+  {
     "id": "fra",
     "name": "US Federal Railroad Administration",
     "issues": null,
@@ -316,6 +700,24 @@
     "name": "Freddie Mac",
     "issues": null,
     "note": "The records of freddie-mac-pmms name this issuer."
+  },
+  {
+    "id": "freebsd",
+    "name": "The FreeBSD Project",
+    "issues": null,
+    "note": "The records of freebsd-security-rss, freebsd-vuxml name this issuer."
+  },
+  {
+    "id": "friendsofphp",
+    "name": "FriendsOfPHP",
+    "issues": null,
+    "note": "The records of friendsofphp-security-advisories, packagist-security-advisories-api name this issuer."
+  },
+  {
+    "id": "fstec",
+    "name": "FSTEC of Russia",
+    "issues": null,
+    "note": "The record of fstec-bdu names this issuer."
   },
   {
     "id": "ftc",
@@ -342,6 +744,12 @@
     "note": "The records of gemini-prediction-api name this issuer."
   },
   {
+    "id": "gentoo",
+    "name": "Gentoo Linux",
+    "issues": null,
+    "note": "The record of gentoo-glsa-rss names this issuer."
+  },
+  {
     "id": "gfz",
     "name": "GFZ German Research Centre for Geosciences (the Kp index)",
     "issues": null,
@@ -351,7 +759,13 @@
     "id": "github",
     "name": "GitHub, and its curators of advisories",
     "issues": null,
-    "note": "The records of github-advisories-api, osv-api name this issuer."
+    "note": "The records of github-advisories-api, npm-audit-bulk, nuget-vulnerability-info, osv-api, packagist-security-advisories-api, pub-dev-advisories-api name this issuer."
+  },
+  {
+    "id": "gitlab",
+    "name": "GitLab",
+    "issues": null,
+    "note": "The record of gitlab-patch-releases-atom names this issuer."
   },
   {
     "id": "good-judgment",
@@ -363,7 +777,19 @@
     "id": "google",
     "name": "Google",
     "issues": null,
-    "note": "The records of firebase-status, gcp-status-json, google-pollen-api name this issuer."
+    "note": "The records of android-security-bulletins, chrome-releases-feed, firebase-status, gcp-status-json, go-vulndb, google-pollen-api, google-trends, pixel-update-bulletins, project-zero-0day-itw name this issuer."
+  },
+  {
+    "id": "greynoise",
+    "name": "GreyNoise Intelligence",
+    "issues": null,
+    "note": "The record of greynoise-community-api names this issuer."
+  },
+  {
+    "id": "haskell",
+    "name": "The Haskell Security Response Team",
+    "issues": null,
+    "note": "The record of haskell-security-advisories names this issuer."
   },
   {
     "id": "hhs-ocr",
@@ -378,10 +804,52 @@
     "note": "The records of hibp-api name this issuer."
   },
   {
+    "id": "hitachi-energy",
+    "name": "Hitachi Energy",
+    "issues": null,
+    "note": "The record of hitachi-energy-csaf names this issuer."
+  },
+  {
+    "id": "hkcert",
+    "name": "HKCERT (Hong Kong)",
+    "issues": null,
+    "note": "The record of hkcert-security-bulletin-rss names this issuer."
+  },
+  {
+    "id": "honeywell",
+    "name": "Honeywell",
+    "issues": null,
+    "note": "The record of honeywell-product-security names this issuer."
+  },
+  {
+    "id": "hp-inc",
+    "name": "HP Inc.",
+    "issues": null,
+    "note": "The record of hp-security-bulletins names this issuer."
+  },
+  {
+    "id": "hpe-aruba-networking",
+    "name": "HPE Aruba Networking",
+    "issues": null,
+    "note": "The record of hpe-aruba-networking-csaf names this issuer."
+  },
+  {
+    "id": "huawei",
+    "name": "Huawei",
+    "issues": null,
+    "note": "The record of huawei-psirt-csaf names this issuer."
+  },
+  {
     "id": "iana",
     "name": "IANA (the Internet Assigned Numbers Authority)",
     "issues": null,
     "note": "The records of iana-tz name this issuer."
+  },
+  {
+    "id": "ibm",
+    "name": "IBM",
+    "issues": null,
+    "note": "The record of ibm-security-bulletins names this issuer."
   },
   {
     "id": "imf",
@@ -390,16 +858,64 @@
     "note": "The records of imf-portwatch name this issuer."
   },
   {
+    "id": "imperva",
+    "name": "Imperva (Thales)",
+    "issues": null,
+    "note": "The record of imperva-attack-map names this issuer."
+  },
+  {
+    "id": "incd",
+    "name": "INCD (the Israel National Cyber Directorate)",
+    "issues": null,
+    "note": "The record of incd-israel-cve-advisories names this issuer."
+  },
+  {
+    "id": "incibe",
+    "name": "INCIBE-CERT (Spain)",
+    "issues": null,
+    "note": "The record of incibe-cert-avisos-rss names this issuer."
+  },
+  {
+    "id": "indiana-ag",
+    "name": "The Indiana Attorney General",
+    "issues": null,
+    "note": "The record of indiana-ag-breach-reports names this issuer."
+  },
+  {
     "id": "insight-prediction",
     "name": "Insight Prediction",
     "issues": null,
     "note": "The records of insight-prediction-site name this issuer."
   },
   {
+    "id": "intel",
+    "name": "Intel",
+    "issues": null,
+    "note": "The record of intel-security-center-csaf names this issuer."
+  },
+  {
+    "id": "inthewild",
+    "name": "inthewild.io",
+    "issues": null,
+    "note": "The record of inthewild-io names this issuer."
+  },
+  {
     "id": "ioda",
     "name": "IODA (Georgia Tech)",
     "issues": null,
     "note": "The records of ioda-api name this issuer."
+  },
+  {
+    "id": "iowa-ag",
+    "name": "The Iowa Attorney General",
+    "issues": null,
+    "note": "The record of iowa-ag-breach-notices names this issuer."
+  },
+  {
+    "id": "ipa",
+    "name": "IPA (the Information-technology Promotion Agency, Japan)",
+    "issues": null,
+    "note": "The records of ipa-security-alerts-rss, jvn-ipedia-myjvn-api, jvn-rss-en name this issuer."
   },
   {
     "id": "irs",
@@ -420,16 +936,88 @@
     "note": "The records of oref-alerts name this issuer."
   },
   {
+    "id": "itrc",
+    "name": "The Identity Theft Resource Center",
+    "issues": null,
+    "note": "The record of itrc-notified names this issuer."
+  },
+  {
+    "id": "ivanti",
+    "name": "Ivanti",
+    "issues": null,
+    "note": "The record of ivanti-security-advisory-rss names this issuer."
+  },
+  {
+    "id": "jenkins",
+    "name": "The Jenkins project",
+    "issues": null,
+    "note": "The record of jenkins-security-advisories-rss names this issuer."
+  },
+  {
+    "id": "joomla",
+    "name": "The Joomla Project",
+    "issues": null,
+    "note": "The record of joomla-security-centre-rss names this issuer."
+  },
+  {
+    "id": "jpcert-cc",
+    "name": "JPCERT/CC (Japan)",
+    "issues": null,
+    "note": "The records of jpcert-rss-en, jpcert-rss-ja, jvn-rss-en name this issuer."
+  },
+  {
+    "id": "julia",
+    "name": "JuliaLang",
+    "issues": null,
+    "note": "The record of julia-security-advisories names this issuer."
+  },
+  {
+    "id": "juniper-networks",
+    "name": "Juniper Networks",
+    "issues": null,
+    "note": "The record of juniper-security-advisories-rss names this issuer."
+  },
+  {
     "id": "kalshi",
     "name": "Kalshi",
     "issues": null,
     "note": "The records of kalshi-api, kalshi-ws name this issuer."
   },
   {
+    "id": "kisa",
+    "name": "KISA (the Korea Internet and Security Agency)",
+    "issues": null,
+    "note": "The records of kisa-krcert-security-notices, krcert-knvd name this issuer."
+  },
+  {
+    "id": "kubernetes",
+    "name": "Kubernetes (its Security Response Committee)",
+    "issues": null,
+    "note": "The record of kubernetes-official-cve-feed names this issuer."
+  },
+  {
+    "id": "lenovo",
+    "name": "Lenovo",
+    "issues": null,
+    "note": "The record of lenovo-product-security names this issuer."
+  },
+  {
     "id": "limitless",
     "name": "Limitless Exchange",
     "issues": null,
     "note": "The records of limitless-api name this issuer."
+  },
+  {
+    "id": "linux-kernel",
+    "name": "The Linux kernel CNA",
+    "issues": null,
+    "note": "The records of linux-cve-announce, linux-kernel-vulns-git name this issuer."
+  },
+  {
+    "id": "maine-ag",
+    "name": "The Maine Attorney General",
+    "issues": null,
+    "note": "The record of maine-ag-breach-list names this issuer."
   },
   {
     "id": "manifold",
@@ -447,13 +1035,43 @@
     "id": "microsoft",
     "name": "Microsoft (Azure)",
     "issues": null,
-    "note": "The records of azure-status-rss name this issuer."
+    "note": "The records of azure-linux-oval, azure-status-rss, dotnet-announcements-security, msrc-csaf, msrc-cvrf-api, msrc-sug-rss, windows-release-health-graph name this issuer."
+  },
+  {
+    "id": "mikrotik",
+    "name": "MikroTik",
+    "issues": null,
+    "note": "The record of mikrotik-security-rss names this issuer."
+  },
+  {
+    "id": "mitsubishi-electric",
+    "name": "Mitsubishi Electric",
+    "issues": null,
+    "note": "The record of mitsubishi-electric-psirt-rss names this issuer."
   },
   {
     "id": "mobilitydata",
     "name": "MobilityData, the publisher of the Mobility Database",
     "issues": null,
     "note": "The records of mobility-database name this issuer."
+  },
+  {
+    "id": "moxa",
+    "name": "Moxa",
+    "issues": null,
+    "note": "The record of moxa-security-advisory-rss names this issuer."
+  },
+  {
+    "id": "mozilla",
+    "name": "Mozilla",
+    "issues": null,
+    "note": "The record of mozilla-mfsa-git names this issuer."
+  },
+  {
+    "id": "mycert",
+    "name": "MyCERT (Malaysia)",
+    "issues": null,
+    "note": "The record of mycert-malaysia-advisories names this issuer."
   },
   {
     "id": "nager-date",
@@ -480,6 +1098,54 @@
     "note": "The records of nasdaq-halts-rss, nasdaq-system-status name this issuer."
   },
   {
+    "id": "ncsc-fi",
+    "name": "NCSC-FI (Traficom, Finland)",
+    "issues": null,
+    "note": "The record of ncsc-fi-vulnerabilities-rss names this issuer."
+  },
+  {
+    "id": "ncsc-ie",
+    "name": "NCSC Ireland",
+    "issues": null,
+    "note": "The record of ncsc-ie-alerts-rss names this issuer."
+  },
+  {
+    "id": "ncsc-nl",
+    "name": "NCSC-NL (the National Cyber Security Centre of the Netherlands)",
+    "issues": null,
+    "note": "The records of ncsc-nl-csaf, ncsc-nl-rss name this issuer."
+  },
+  {
+    "id": "ncsc-nz",
+    "name": "NCSC New Zealand",
+    "issues": null,
+    "note": "The record of ncsc-nz-alerts names this issuer."
+  },
+  {
+    "id": "ncsc-uk",
+    "name": "NCSC UK (the National Cyber Security Centre)",
+    "issues": null,
+    "note": "The record of ncsc-uk-rss names this issuer."
+  },
+  {
+    "id": "netbsd",
+    "name": "The NetBSD Foundation",
+    "issues": null,
+    "note": "The record of netbsd-security-rss names this issuer."
+  },
+  {
+    "id": "netgear",
+    "name": "NETGEAR",
+    "issues": null,
+    "note": "The record of netgear-security-advisories names this issuer."
+  },
+  {
+    "id": "netscout",
+    "name": "NETSCOUT",
+    "issues": null,
+    "note": "The records of digital-attack-map, netscout-horizon name this issuer."
+  },
+  {
     "id": "news-media",
     "name": "The news media that GDELT reads",
     "issues": null,
@@ -501,7 +1167,7 @@
     "id": "nist",
     "name": "NIST (the National Vulnerability Database)",
     "issues": null,
-    "note": "The records of nvd-cve-api name this issuer."
+    "note": "The records of fkie-nvd-json-data-feeds, nvd-cve-api name this issuer."
   },
   {
     "id": "noaa-nesdis",
@@ -516,16 +1182,46 @@
     "note": "The records of coops-api, noaa-hab-forecasts, noaa-incidentnews name this issuer."
   },
   {
+    "id": "nodejs",
+    "name": "Node.js (the OpenJS Foundation)",
+    "issues": null,
+    "note": "The record of nodejs-vulnerability-rss names this issuer."
+  },
+  {
+    "id": "nomi-sec",
+    "name": "nomi-sec (PoC-in-GitHub)",
+    "issues": null,
+    "note": "The record of poc-in-github names this issuer."
+  },
+  {
+    "id": "nozomi-networks",
+    "name": "Nozomi Networks",
+    "issues": null,
+    "note": "The record of nozomi-networks-csaf names this issuer."
+  },
+  {
     "id": "nps",
     "name": "US National Park Service",
     "issues": null,
     "note": "The records of nps-alerts-api name this issuer."
   },
   {
+    "id": "nsm",
+    "name": "NSM (the Norwegian National Security Authority)",
+    "issues": null,
+    "note": "The record of nsm-ncsc-norway-warnings names this issuer."
+  },
+  {
     "id": "ntsb",
     "name": "US National Transportation Safety Board",
     "issues": null,
     "note": "The records of ntsb-carol name this issuer."
+  },
+  {
+    "id": "nvidia",
+    "name": "NVIDIA",
+    "issues": null,
+    "note": "The record of nvidia-product-security-github names this issuer."
   },
   {
     "id": "nws",
@@ -551,10 +1247,28 @@
     "note": "The records of nyse-halts-csv, nyse-holidays-page, nyse-market-status name this issuer."
   },
   {
+    "id": "oaic",
+    "name": "OAIC (the Office of the Australian Information Commissioner)",
+    "issues": null,
+    "note": "The record of oaic-ndb-statistics names this issuer."
+  },
+  {
+    "id": "ocaml",
+    "name": "The OCaml Software Foundation",
+    "issues": null,
+    "note": "The record of ocaml-security-advisories names this issuer."
+  },
+  {
     "id": "ofac",
     "name": "OFAC (the Office of Foreign Assets Control, US Treasury)",
     "issues": null,
     "note": "The records of ofac-recent-actions, ofac-sanctions-list-service name this issuer."
+  },
+  {
+    "id": "okta",
+    "name": "Okta",
+    "issues": null,
+    "note": "The record of okta-security-advisories-rss names this issuer."
   },
   {
     "id": "open-source-vulnerability-databases",
@@ -563,16 +1277,94 @@
     "note": "The records of osv-api name this issuer."
   },
   {
+    "id": "open-xchange",
+    "name": "Open-Xchange",
+    "issues": null,
+    "note": "The record of open-xchange-csaf names this issuer."
+  },
+  {
+    "id": "openbsd",
+    "name": "The OpenBSD Project",
+    "issues": null,
+    "note": "The record of openbsd-errata names this issuer."
+  },
+  {
+    "id": "openeuler",
+    "name": "openEuler",
+    "issues": null,
+    "note": "The record of openeuler-csaf names this issuer."
+  },
+  {
+    "id": "openphish",
+    "name": "OpenPhish",
+    "issues": null,
+    "note": "The record of openphish-community names this issuer."
+  },
+  {
+    "id": "opensourcemalware",
+    "name": "OpenSourceMalware",
+    "issues": null,
+    "note": "The record of opensourcemalware names this issuer."
+  },
+  {
     "id": "opm",
     "name": "US Office of Personnel Management",
     "issues": null,
     "note": "The records of opm-status name this issuer."
   },
   {
+    "id": "oracle",
+    "name": "Oracle",
+    "issues": null,
+    "note": "The records of oracle-linux-oval, oracle-security-alerts name this issuer."
+  },
+  {
+    "id": "ossf",
+    "name": "The Open Source Security Foundation (OpenSSF)",
+    "issues": null,
+    "note": "The record of ossf-malicious-packages names this issuer."
+  },
+  {
+    "id": "packet-storm",
+    "name": "Packet Storm",
+    "issues": null,
+    "note": "The record of packet-storm-api names this issuer."
+  },
+  {
+    "id": "palo-alto-networks",
+    "name": "Palo Alto Networks",
+    "issues": null,
+    "note": "The record of paloalto-security-advisories-json names this issuer."
+  },
+  {
+    "id": "phishing-database",
+    "name": "The Phishing Database project",
+    "issues": null,
+    "note": "The record of phishing-database names this issuer."
+  },
+  {
+    "id": "phishstats",
+    "name": "PhishStats",
+    "issues": null,
+    "note": "The record of phishstats-api names this issuer."
+  },
+  {
+    "id": "phishtank",
+    "name": "PhishTank (Cisco Talos)",
+    "issues": null,
+    "note": "The record of phishtank names this issuer."
+  },
+  {
     "id": "phmsa",
     "name": "US Pipeline and Hazardous Materials Safety Administration",
     "issues": null,
     "note": "The records of phmsa-incidents name this issuer."
+  },
+  {
+    "id": "phoenix-contact",
+    "name": "Phoenix Contact",
+    "issues": null,
+    "note": "The record of phoenix-contact-csaf names this issuer."
   },
   {
     "id": "polymarket",
@@ -587,16 +1379,106 @@
     "note": "The records of predictit-api name this issuer."
   },
   {
+    "id": "privacy-rights-clearinghouse",
+    "name": "Privacy Rights Clearinghouse",
+    "issues": null,
+    "note": "The record of privacy-rights-clearinghouse-chronology names this issuer."
+  },
+  {
+    "id": "projectdiscovery",
+    "name": "ProjectDiscovery",
+    "issues": null,
+    "note": "The record of nuclei-templates-cves names this issuer."
+  },
+  {
+    "id": "proofpoint",
+    "name": "Proofpoint (Emerging Threats)",
+    "issues": null,
+    "note": "The record of emerging-threats-compromised-ips names this issuer."
+  },
+  {
+    "id": "psf",
+    "name": "The Python Software Foundation",
+    "issues": null,
+    "note": "The records of psf-advisory-database, pypi-malware-reports name this issuer."
+  },
+  {
     "id": "public-safety-agencies",
     "name": "The fire and medical dispatch agencies that publish to PulsePoint",
     "issues": null,
     "note": "The records of pulsepoint name this issuer."
   },
   {
+    "id": "pypa",
+    "name": "The Python Packaging Authority",
+    "issues": null,
+    "note": "The record of pypa-advisory-database names this issuer."
+  },
+  {
+    "id": "qnap",
+    "name": "QNAP Systems",
+    "issues": null,
+    "note": "The record of qnap-security-rss names this issuer."
+  },
+  {
+    "id": "qrator",
+    "name": "Qrator Labs",
+    "issues": null,
+    "note": "The record of qrator-ddos-reports names this issuer."
+  },
+  {
+    "id": "qualcomm",
+    "name": "Qualcomm",
+    "issues": null,
+    "note": "The record of qualcomm-security-bulletins names this issuer."
+  },
+  {
+    "id": "radware",
+    "name": "Radware",
+    "issues": null,
+    "note": "The record of radware-live-threat-map names this issuer."
+  },
+  {
+    "id": "ransomfeed",
+    "name": "Ransomfeed",
+    "issues": null,
+    "note": "The record of ransomfeed-rss names this issuer."
+  },
+  {
+    "id": "ransomlook",
+    "name": "RansomLook",
+    "issues": null,
+    "note": "The record of ransomlook-api names this issuer."
+  },
+  {
     "id": "ransomware-groups",
     "name": "The ransomware groups, on their leak sites",
     "issues": null,
     "note": "ransomware.live collects the claims of the leak sites. The groups issue the claims."
+  },
+  {
+    "id": "ransomwhere",
+    "name": "Ransomwhere",
+    "issues": null,
+    "note": "The record of ransomwhere names this issuer."
+  },
+  {
+    "id": "rapid7",
+    "name": "Rapid7",
+    "issues": null,
+    "note": "The records of attackerkb-api, metasploit-modules-metadata name this issuer."
+  },
+  {
+    "id": "redhat",
+    "name": "Red Hat",
+    "issues": null,
+    "note": "The records of redhat-csaf-advisories, redhat-csaf-vex, redhat-security-data-api name this issuer."
+  },
+  {
+    "id": "ria",
+    "name": "RIA (the Estonian Information System Authority)",
+    "issues": null,
+    "note": "The record of ria-cert-ee-rss names this issuer."
   },
   {
     "id": "ripe-ncc",
@@ -611,10 +1493,76 @@
     "note": "The records of rocketlaunch-live name this issuer. Its team curates the launches from many sources."
   },
   {
+    "id": "rockwell-automation",
+    "name": "Rockwell Automation",
+    "issues": null,
+    "note": "The record of rockwell-automation-advisories names this issuer."
+  },
+  {
+    "id": "rocky-linux",
+    "name": "Rocky Linux (the Rocky Enterprise Software Foundation)",
+    "issues": null,
+    "note": "The record of rocky-apollo-api names this issuer."
+  },
+  {
+    "id": "rubysec",
+    "name": "RubySec",
+    "issues": null,
+    "note": "The record of rubysec-advisory-db names this issuer."
+  },
+  {
+    "id": "rustsec",
+    "name": "RustSec (the Rust Secure Code working group)",
+    "issues": null,
+    "note": "The record of rustsec-advisory-db names this issuer."
+  },
+  {
+    "id": "safedep",
+    "name": "SafeDep",
+    "issues": null,
+    "note": "The record of safedep-threat-intel names this issuer."
+  },
+  {
+    "id": "salesforce",
+    "name": "Salesforce",
+    "issues": null,
+    "note": "The record of salesforce-security-advisories-rss names this issuer."
+  },
+  {
+    "id": "samsik",
+    "name": "SAMSIK (Denmark)",
+    "issues": null,
+    "note": "The record of samsik-dk-cyber-news names this issuer."
+  },
+  {
+    "id": "samsung",
+    "name": "Samsung (its mobile security team)",
+    "issues": null,
+    "note": "The record of samsung-mobile-security-updates names this issuer."
+  },
+  {
+    "id": "sans-isc",
+    "name": "The SANS Internet Storm Center",
+    "issues": null,
+    "note": "The records of sans-isc-diary-rss, sans-isc-infocon-api name this issuer."
+  },
+  {
+    "id": "sap",
+    "name": "SAP",
+    "issues": null,
+    "note": "The record of sap-security-patch-day names this issuer."
+  },
+  {
+    "id": "schneider-electric",
+    "name": "Schneider Electric",
+    "issues": null,
+    "note": "The record of schneider-electric-csaf names this issuer."
+  },
+  {
     "id": "sec",
     "name": "US Securities and Exchange Commission",
     "issues": null,
-    "note": "The records of sec-enforcement-rss, sec-trading-suspensions-rss name this issuer."
+    "note": "The records of sec-edgar-8k-item-105, sec-enforcement-rss, sec-trading-suspensions-rss name this issuer."
   },
   {
     "id": "service-vendors",
@@ -623,10 +1571,34 @@
     "note": "Each vendor writes its own status page. StatusGator and the Statuspage API read these pages."
   },
   {
+    "id": "shadowserver",
+    "name": "The Shadowserver Foundation",
+    "issues": null,
+    "note": "The record of shadowserver-dashboard names this issuer."
+  },
+  {
+    "id": "si-cert",
+    "name": "SI-CERT (Slovenia)",
+    "issues": null,
+    "note": "The record of si-cert-warnings names this issuer."
+  },
+  {
+    "id": "sick",
+    "name": "SICK AG",
+    "issues": null,
+    "note": "The record of sick-psirt-csaf names this issuer."
+  },
+  {
     "id": "sidc",
     "name": "SIDC, the Solar Influences Data Analysis Center (RWC-Belgium)",
     "issues": null,
     "note": "The records of sidc-alerts-email name this issuer."
+  },
+  {
+    "id": "siemens",
+    "name": "Siemens (ProductCERT)",
+    "issues": null,
+    "note": "The record of siemens-productcert-csaf names this issuer."
   },
   {
     "id": "smarkets",
@@ -635,10 +1607,76 @@
     "note": "The records of smarkets-api name this issuer."
   },
   {
+    "id": "socket",
+    "name": "Socket",
+    "issues": null,
+    "note": "The record of socket-threat-feed names this issuer."
+  },
+  {
+    "id": "solarwinds",
+    "name": "SolarWinds",
+    "issues": null,
+    "note": "The record of solarwinds-security-advisories-rss names this issuer."
+  },
+  {
+    "id": "sonatype",
+    "name": "Sonatype",
+    "issues": null,
+    "note": "The record of sonatype-oss-index names this issuer."
+  },
+  {
+    "id": "sonicwall",
+    "name": "SonicWall",
+    "issues": null,
+    "note": "The record of sonicwall-psirt names this issuer."
+  },
+  {
+    "id": "sophos",
+    "name": "Sophos",
+    "issues": null,
+    "note": "The record of sophos-security-advisories-rss names this issuer."
+  },
+  {
+    "id": "spamhaus",
+    "name": "The Spamhaus Project",
+    "issues": null,
+    "note": "The record of spamhaus-drop names this issuer."
+  },
+  {
     "id": "state-dots",
     "name": "The departments of transportation of the states",
     "issues": null,
     "note": "The records of state-511, wzdx-feeds name this issuer."
+  },
+  {
+    "id": "suse",
+    "name": "SUSE",
+    "issues": null,
+    "note": "The records of suse-csaf-advisories, suse-csaf-vex, suse-oval name this issuer."
+  },
+  {
+    "id": "swift",
+    "name": "The Swift project",
+    "issues": null,
+    "note": "The record of swift-security-advisories names this issuer."
+  },
+  {
+    "id": "synology",
+    "name": "Synology",
+    "issues": null,
+    "note": "The record of synology-security-rss names this issuer."
+  },
+  {
+    "id": "texas-oag",
+    "name": "The Texas Attorney General",
+    "issues": null,
+    "note": "The record of texas-ag-breach-reports names this issuer."
+  },
+  {
+    "id": "thaicert",
+    "name": "ThaiCERT (Thailand)",
+    "issues": null,
+    "note": "The record of thaicert-threat-updates names this issuer."
   },
   {
     "id": "the-space-devs",
@@ -659,16 +1697,40 @@
     "note": "The records of ticketmaster-discovery-api name this issuer."
   },
   {
+    "id": "tp-link",
+    "name": "TP-Link",
+    "issues": null,
+    "note": "The record of tp-link-security-advisories names this issuer."
+  },
+  {
     "id": "transit-agencies",
     "name": "The transit agencies, in their GTFS Realtime feeds",
     "issues": null,
     "note": "The records of gtfs-rt-alerts name this issuer."
   },
   {
+    "id": "trickest",
+    "name": "Trickest",
+    "issues": null,
+    "note": "The record of trickest-cve names this issuer."
+  },
+  {
+    "id": "twcert-cc",
+    "name": "TWCERT/CC (Taiwan)",
+    "issues": null,
+    "note": "The record of twcert-tvn-rss names this issuer."
+  },
+  {
     "id": "ua",
     "name": "The civil defense of Ukraine: the air raid alerts of the regional administrations",
     "issues": null,
     "note": "alerts.in.ua publishes the official air raid alerts again."
+  },
+  {
+    "id": "ubiquiti",
+    "name": "Ubiquiti",
+    "issues": null,
+    "note": "The record of ubiquiti-security-rss names this issuer."
   },
   {
     "id": "ucdp",
@@ -681,6 +1743,12 @@
     "name": "The Foreign, Commonwealth and Development Office of the United Kingdom",
     "issues": null,
     "note": "The records of fcdo-travel-advice-api name this issuer."
+  },
+  {
+    "id": "uk-ico",
+    "name": "The UK Information Commissioner (ICO)",
+    "issues": null,
+    "note": "The record of uk-ico-incident-trends names this issuer."
   },
   {
     "id": "ukmto",
@@ -818,16 +1886,58 @@
     "note": "The records of usps-service-alerts name this issuer."
   },
   {
+    "id": "veeam",
+    "name": "Veeam Software",
+    "issues": null,
+    "note": "The record of veeam-kb-atom names this issuer."
+  },
+  {
+    "id": "vermont-ag",
+    "name": "The Vermont Attorney General",
+    "issues": null,
+    "note": "The record of vermont-ag-breach-notices names this issuer."
+  },
+  {
+    "id": "vuldb",
+    "name": "VulDB",
+    "issues": null,
+    "note": "The record of vuldb-api names this issuer."
+  },
+  {
+    "id": "vulncheck",
+    "name": "VulnCheck",
+    "issues": null,
+    "note": "The records of vulncheck-kev, vulncheck-nvd-plus-plus name this issuer."
+  },
+  {
+    "id": "washington-ag",
+    "name": "The Washington Attorney General",
+    "issues": null,
+    "note": "The record of washington-ag-breach-data names this issuer."
+  },
+  {
     "id": "wastewaterscan",
     "name": "WastewaterSCAN (Stanford, Emory and Verily)",
     "issues": null,
     "note": "The records of wastewaterscan name this issuer."
   },
   {
+    "id": "watchguard",
+    "name": "WatchGuard Technologies",
+    "issues": null,
+    "note": "The record of watchguard-psirt-rss names this issuer."
+  },
+  {
     "id": "who",
     "name": "The World Health Organization",
     "issues": null,
     "note": "The records of who-don-api name this issuer."
+  },
+  {
+    "id": "wisconsin-datcp",
+    "name": "The Wisconsin Department of Agriculture, Trade and Consumer Protection",
+    "issues": null,
+    "note": "The record of wisconsin-datcp-breaches names this issuer."
   },
   {
     "id": "woah",
@@ -1112,9 +2222,57 @@
     "note": "The records of wikimedia-pageviews and wikimedia-eventstreams name this body."
   },
   {
+    "id": "wordfence",
+    "name": "Wordfence (Defiant)",
+    "issues": null,
+    "note": "The record of wordfence-intelligence-api names this issuer."
+  },
+  {
+    "id": "wordpress",
+    "name": "WordPress.org",
+    "issues": null,
+    "note": "The record of wordpress-security-news-rss names this issuer."
+  },
+  {
+    "id": "wpscan",
+    "name": "WPScan (Automattic)",
+    "issues": null,
+    "note": "The record of wpscan-api names this issuer."
+  },
+  {
     "id": "wsv",
     "name": "WSV, the Federal Waterways and Shipping Administration of Germany",
     "issues": null,
     "note": "The record of pegelonline names this body."
+  },
+  {
+    "id": "xen",
+    "name": "The Xen Project",
+    "issues": null,
+    "note": "The record of xen-xsa-json names this issuer."
+  },
+  {
+    "id": "za-cybersecurity-hub",
+    "name": "The Cybersecurity Hub of South Africa",
+    "issues": null,
+    "note": "The record of za-cybersecurity-hub names this issuer."
+  },
+  {
+    "id": "zdi",
+    "name": "The Zero Day Initiative (Trend Micro)",
+    "issues": null,
+    "note": "The records of zdi-published-rss, zdi-upcoming-rss name this issuer."
+  },
+  {
+    "id": "zoom",
+    "name": "Zoom Communications",
+    "issues": null,
+    "note": "The record of zoom-security-bulletins names this issuer."
+  },
+  {
+    "id": "zyxel",
+    "name": "Zyxel",
+    "issues": null,
+    "note": "The record of zyxel-security-advisories names this issuer."
   }
 ]

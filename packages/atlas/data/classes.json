@@ -321,7 +321,7 @@
     "references": [
       "CISA sectors: Critical Manufacturing, Energy, Water and Wastewater, Healthcare and Public Health"
     ],
-    "gap": "One source opened (CISA ICS and ICS medical RSS). Vendor PSIRT feeds (for example Siemens ProductCERT) were not opened in round 1.",
+    "gap": null,
     "round": 1
   },
   {
@@ -337,7 +337,7 @@
       "UNDRR-ISC HIPs 2025: TL Advanced Persistent Threat",
       "CISA sectors: Information Technology"
     ],
-    "gap": "One source opened. The UK NCSC feed page returned 404. Other national CERT feeds are for round 2.",
+    "gap": null,
     "round": 1
   },
   {
@@ -352,7 +352,7 @@
     "references": [
       "UNDRR-ISC HIPs 2025: TL Data Breach"
     ],
-    "gap": "Round 1 found 1 adopted or planned source with no risk: hibp-api. hhs-ocr-breach-portal is later: see the reason of each.",
+    "gap": null,
     "round": 1
   },
   {
@@ -367,7 +367,7 @@
     "references": [
       "UNDRR-ISC HIPs 2025: TL Denial of Service"
     ],
-    "gap": "Only Cloudflare Radar is a candidate, and its attack endpoints were not opened in round 1.",
+    "gap": "Round 15 found 8 more candidates: attack maps and reports. None has an open API with clear terms. Cloudflare Radar is the one adopted source.",
     "round": 1
   },
   {
@@ -382,7 +382,7 @@
       "UNDRR-ISC HIPs 2025: TL Malware",
       "Dataminr: cyber risk"
     ],
-    "gap": "One source opened. Leak-site claims are unverified. Victim statements and state notices are for round 2.",
+    "gap": null,
     "round": 1
   },
   {
@@ -396,7 +396,7 @@
     "references": [
       "No reference list names this class. Found by the search for missing classes."
     ],
-    "gap": "One source (489 products). Vendor lifecycle pages are the primary sources but have no common format.",
+    "gap": "One planned source (endoflife.date). The Windows release health API is later. Vendor lifecycle pages are the primary sources but have no common format.",
     "round": 1
   },
   {
@@ -410,7 +410,7 @@
     "references": [
       "UNDRR-ISC HIPs 2025: TL Supply Chain Attack"
     ],
-    "gap": "GitHub lists type=malware advisories (seen). The OSV home page did not name its MAL- records, so OSV coverage of malware is not confirmed.",
+    "gap": null,
     "round": 1
   },
   {
