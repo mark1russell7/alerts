@@ -8,5 +8,8 @@
 - `openai-20261118.json` comes from the real answer to `https://status.openai.com/api/v2/summary.json`. The site sent it at 2026-11-18 04:53:17 UTC.
 - The fixture keeps 4 components and the one incident, with no change. The incident has no `shortlink`, no `started_at` and no components.
 - The answer had `Content-Type: application/json` and no `ETag`. incident.io hosts the page.
-- Cloudflare and OpenAI own the texts of their incidents. The texts are short notices of the operation of a service.
+- `twilio-incidents-20261118.json` comes from the real answer to `https://status.twilio.com/api/v2/incidents.json`. The site sent it at 2026-11-18 14:24:25 UTC.
+- The real answer had 50 incidents. The fixture keeps the head of the page and 2 incidents with no change. The incident `269ytwp2jgqq` is on the path of an alert, and `smg76w4fhp05` is of a carrier in APAC.
+- Both incidents are in the state `resolved`. The answer had `Content-Type: application/json` and an `ETag`.
+- Cloudflare, OpenAI and Twilio own the texts of their incidents. The texts are short notices of the operation of a service.
 - The answers contain no personal data. The fixtures have an indent of 2 spaces.

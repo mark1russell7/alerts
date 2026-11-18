@@ -1,5 +1,5 @@
 /**
- * The fetch function of the feed of Google Cloud Service Health. It reads the history of the incidents
+ * The fetch function of the dashboards of Google. It reads the history of the incidents of one dashboard
  * (`/incidents.json`) through polite-crawler. The request holds no place and no query.
  *
  * The source is a snapshot. The file holds each incident of some months, and an incident that has ended has the field
@@ -11,7 +11,7 @@ import { observationId, type FetchOutcome, type FetchSignal, type Instant, type 
 import { createRequester } from "@mark1russell7/alerts-fetch";
 import type { Condition, Pace, Transport } from "polite-crawler/api";
 
-import { GCP_BASE, GCP_SOURCE, INCIDENTS_PATH } from "./feed.ts";
+import { GCP_DASHBOARD, INCIDENTS_PATH, type GoogleDashboard } from "./feed.ts";
 import { HISTORY_FIELDS, INCIDENT_FIELDS, isIncident, ITEM_FIELDS, timeOf, UPDATE_FIELDS } from "./map.ts";
 
 /** The longest time of one request when the source gives none, in milliseconds. */
@@ -29,6 +29,8 @@ export interface GcpFetchOptions {
   readonly minIntervalMs?: number;
   /** The longest time of one request, in milliseconds. The default is `INCIDENTS_TIMEOUT_MS`. */
   readonly timeoutMs?: number;
+  /** The dashboard. The default is the dashboard of Google Cloud (`GCP_DASHBOARD`). */
+  readonly dashboard?: GoogleDashboard;
 }
 
 /** The input of the fetch function, as the contract gives it. */
@@ -116,11 +118,12 @@ export function readIncidents(body: string, now: Instant): Incidents | undefined
  * whose end time passes leaves the list. The time of the data is the `Last-Modified` date of the last full answer.
  */
 export function createGcpFetch(options: GcpFetchOptions): (input: GcpFetchInput, signal?: FetchSignal) => Promise<FetchOutcome> {
+  const dashboard = options.dashboard ?? GCP_DASHBOARD;
   const requester = createRequester({
-    source: GCP_SOURCE,
+    source: dashboard.id,
     pace: options.pace,
     transport: options.transport,
-    baseUrl: GCP_BASE,
+    baseUrl: dashboard.base,
     headers: { accept: "application/json", "user-agent": options.userAgent },
     timeoutMs: options.timeoutMs ?? INCIDENTS_TIMEOUT_MS,
     ...(options.minIntervalMs === undefined ? {} : { minIntervalMs: options.minIntervalMs }),
@@ -134,8 +137,8 @@ export function createGcpFetch(options: GcpFetchOptions): (input: GcpFetchInput,
     const incidents = readIncidents(full.body, fetched)!;
     const transport = { url, status, latency };
     const observations: Observation[] = incidents.bodies.map((body) => ({
-      id: observationId({ source: GCP_SOURCE, contentType: full.contentType, url: `${requester.baseUrl}${INCIDENTS_PATH}`, body }),
-      source: GCP_SOURCE,
+      id: observationId({ source: dashboard.id, contentType: full.contentType, url: `${requester.baseUrl}${INCIDENTS_PATH}`, body }),
+      source: dashboard.id,
       fetched,
       contentType: full.contentType,
       body,
@@ -145,7 +148,7 @@ export function createGcpFetch(options: GcpFetchOptions): (input: GcpFetchInput,
   };
 
   return async (_input, signal) => {
-    const requested = await requester.get({ path: INCIDENTS_PATH, what: "the incidents of Google Cloud Service Health", conditions }, signal);
+    const requested = await requester.get({ path: INCIDENTS_PATH, what: `the incidents of ${dashboard.sender}`, conditions }, signal);
     if (!requested.ok) return { ok: false, failure: requested.failure };
     const { url, answer, latency } = requested;
     if (answer.classified.outcome === "not-modified") {

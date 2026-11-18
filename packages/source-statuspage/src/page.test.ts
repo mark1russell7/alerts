@@ -1,6 +1,6 @@
 import { knownKind, SUBJECT_SYSTEMS, type SourceId } from "@mark1russell7/alerts";
 import { describe, expect, it } from "vitest";
-import { isDomain, isPageBase, pageProblems, SUBJECT_SYSTEM, type StatusPage } from "./page.ts";
+import { isDomain, isPageBase, pageDomains, pageProblems, SUBJECT_SYSTEM, type StatusPage } from "./page.ts";
 import { ATLASSIAN_STATUSPAGE, registeredPage, STATUS_PAGES } from "./register.ts";
 
 const GOOD: StatusPage = { id: "statuspage-example" as SourceId, title: "Example", base: "https://status.example.test", origin: "example", domain: "example.test", kind: "infra.saas.outage", dependsOn: [ATLASSIAN_STATUSPAGE] };
@@ -27,6 +27,36 @@ describe("pageProblems", () => {
   it("accepts only a domain name in lower case with two or more labels", () => {
     for (const domain of ["github.com", "bitbucket.org", "a-b.example.co"]) expect(isDomain(domain), domain).toBe(true);
     for (const domain of ["GitHub.com", "localhost", "github.com/", "-a.com", "a..com", ""]) expect(isDomain(domain), domain).toBe(false);
+  });
+});
+
+describe("the keys of the components", () => {
+  it("gives one problem for each bad key of a component", () => {
+    const problems = pageProblems({
+      ...GOOD,
+      components: [
+        { id: "", name: "A", domain: "a.example.test" },
+        { id: "c1", name: " ", domain: "API.example.test" },
+        { id: "c1", name: "B", domain: "example.test" },
+      ],
+    });
+    expect(problems).toEqual([
+      "a key of a component has no id",
+      'the key of the component "c1" has no name',
+      'the domain "API.example.test" of a component is not a domain name in lower case',
+      'the component "c1" has two keys',
+      'the key of the component "c1" gives the domain of the service',
+    ]);
+  });
+
+  it("gives the domain of the service, then each domain of a key, with no domain twice", () => {
+    expect(pageDomains(GOOD)).toEqual(["example.test"]);
+    const keys = [
+      { id: "a", name: "A", domain: "api.example.test" },
+      { id: "b", name: "B", domain: "api.example.test" },
+      { id: "c", name: "C", domain: "push.example.test" },
+    ];
+    expect(pageDomains({ ...GOOD, components: keys })).toEqual(["example.test", "api.example.test", "push.example.test"]);
   });
 });
 

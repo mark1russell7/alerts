@@ -2,15 +2,18 @@ import { readFileSync } from "node:fs";
 import { categoryOf, knownKind, SUBJECT_SYSTEMS, type Observation, type ObservationId, type SubjectSystem } from "@mark1russell7/alerts";
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
-import { GCP_SOURCE, REGION_SYSTEM } from "./feed.ts";
+import { FIREBASE_DASHBOARD, FIREBASE_KEYS, GCP_DASHBOARD, GCP_SOURCE, REGION_SYSTEM } from "./feed.ts";
 import { incidentBody } from "./fetch.ts";
-import { itemsOf, locationsOf, mapObservation, SEVERITY_OF_INCIDENT, URGENCY_OF_STATUS } from "./map.ts";
+import { itemsOf, keysOf, locationsOf, mapObservation, SEVERITY_OF_INCIDENT, URGENCY_OF_STATUS } from "./map.ts";
 
 type Incident = Record<string, unknown> & { updates: Record<string, unknown>[] };
 
 /** Two real disruptions of the feed (`fixtures/README.md`). Both have ended. The second has more than one region. */
 const [NETWORK, CLUSTERS] = JSON.parse(readFileSync(new URL("../fixtures/incidents-20261118.json", import.meta.url), "utf8")) as [Incident, Incident];
 const FETCHED = Date.parse("2026-11-18T05:24:17Z");
+
+/** Two real incidents of the Firebase Status Dashboard (`fixtures/README.md`): one of Cloud Messaging, one of Hosting. */
+const [MESSAGING, HOSTING] = JSON.parse(readFileSync(new URL("../fixtures/firebase-incidents-20261118.json", import.meta.url), "utf8")) as [Incident, Incident];
 
 /**
  * This function gives an incident as it was after its first `count` updates: live, with the locations of its newest
@@ -92,6 +95,40 @@ describe("mapObservation", () => {
     expect(mapIncident(asOfUpdate(CLUSTERS, 1, "SERVICE_INFORMATION")).reports[0]).toMatchObject({ urgency: "future", op: "alert", parameters: { status: ["SERVICE_INFORMATION"] } });
   });
 
+  it("maps an incident of the Firebase dashboard: the domain of Firebase, then the endpoint of the key of each product", () => {
+    const { reports, problems } = mapObservation(observationOf(incidentBody(MESSAGING)), FIREBASE_DASHBOARD);
+    expect(problems).toEqual([]);
+    expect(reports[0]).toMatchObject({
+      source: "firebase-status",
+      origin: "google",
+      key: "efSHTx8oFZ4CH8XsqZuy",
+      kind: { code: "infra.cloud.outage" },
+      urgency: "past",
+      areas: [],
+      sender: "Firebase Status Dashboard",
+      web: "https://status.firebase.google.com/incidents/efSHTx8oFZ4CH8XsqZuy",
+    });
+    expect(reports[0]?.headline).toMatch(/^Firebase: RESOLVED: Firebase Cloud Messaging /);
+    expect(reports[0]?.about).toEqual([
+      { system: "domain", id: "firebase.google.com", label: "Firebase" },
+      { system: "domain", id: "fcm.googleapis.com", label: "Firebase: Cloud Messaging" },
+    ]);
+    expect(mapObservation(observationOf(incidentBody(HOSTING)), FIREBASE_DASHBOARD).reports[0]?.about).toEqual([{ system: "domain", id: "firebase.google.com", label: "Firebase" }]);
+  });
+
+  it("gives one subject for each domain of the keys, with the names of its products, and no subject twice for the domain of the service", () => {
+    const products = [
+      { id: "K2T198LhzrR5kLU8hmkk", name: "Cloud Messaging", domain: "push.example.test" },
+      { id: "hhAxKbKdeaqncSsxMwEx", name: "Hosting", domain: "push.example.test" },
+      { id: "x-1", name: "Other", domain: "firebase.google.com" },
+    ];
+    const both = { ...MESSAGING, affected_products: [...(MESSAGING["affected_products"] as unknown[]), ...(HOSTING["affected_products"] as unknown[]), { id: "x-1", title: "Other" }] };
+    expect(mapObservation(observationOf(incidentBody(both)), { ...FIREBASE_DASHBOARD, products }).reports[0]?.about).toEqual([
+      { system: "domain", id: "firebase.google.com", label: "Firebase" },
+      { system: "domain", id: "push.example.test", label: "Firebase: Cloud Messaging, Hosting" },
+    ]);
+  });
+
   it("gives subjects that the core routes: each system is an entity system of the core", () => {
     for (const subject of mapIncident(CLUSTERS).reports[0]!.about) expect(SUBJECT_SYSTEMS[subject.system as SubjectSystem], subject.id).toBe("entity");
     expect(knownKind("infra.cloud.outage")).toBe(true);
@@ -139,6 +176,14 @@ describe("mapObservation", () => {
         expect(Array.isArray(mapObservation(observationOf(body)).reports)).toBe(true);
       }),
     );
+  });
+});
+
+describe("keysOf", () => {
+  it("gives the keys of the affected products in the order of the dashboard, and no key for a dashboard with no keys", () => {
+    expect(keysOf(MESSAGING, FIREBASE_DASHBOARD)).toEqual(FIREBASE_KEYS);
+    expect(keysOf(HOSTING, FIREBASE_DASHBOARD)).toEqual([]);
+    expect(keysOf(MESSAGING, GCP_DASHBOARD)).toEqual([]);
   });
 });
 

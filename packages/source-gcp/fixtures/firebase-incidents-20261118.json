@@ -1,0 +1,88 @@
+[
+  {
+    "id": "efSHTx8oFZ4CH8XsqZuy",
+    "number": "16634224601443219845",
+    "begin": "2026-09-01T08:40:00+00:00",
+    "created": "2026-09-01T10:29:14+00:00",
+    "end": "2026-09-01T12:31:00+00:00",
+    "modified": "2026-09-01T12:53:07+00:00",
+    "external_desc": "RESOLVED: Firebase Cloud Messaging - low availability in North America",
+    "updates": [
+      {
+        "created": "2026-09-01T12:53:07+00:00",
+        "modified": "2026-09-01T12:53:08+00:00",
+        "when": "2026-09-01T12:53:07+00:00",
+        "text": "The problem has been resolved. All services in scope are back to normal.",
+        "status": "AVAILABLE"
+      },
+      {
+        "created": "2026-09-01T11:43:31+00:00",
+        "modified": "2026-09-01T12:53:07+00:00",
+        "when": "2026-09-01T11:43:31+00:00",
+        "text": "Services are recovering. Next update at 05:30",
+        "status": "SERVICE_DISRUPTION"
+      },
+      {
+        "created": "2026-09-01T10:29:14+00:00",
+        "modified": "2026-09-01T11:43:31+00:00",
+        "when": "2026-09-01T10:29:14+00:00",
+        "text": "We're aware of a problem with Firebase Cloud Messaging affecting its availability and latency in North America. We will provide an update by 04:30AM detailing when we expect to resolve the problem. Please note that this resolution time is an estimate and may change.",
+        "status": "SERVICE_DISRUPTION"
+      }
+    ],
+    "most_recent_update": {
+      "created": "2026-09-01T12:53:07+00:00",
+      "modified": "2026-09-01T12:53:08+00:00",
+      "when": "2026-09-01T12:53:07+00:00",
+      "text": "The problem has been resolved. All services in scope are back to normal.",
+      "status": "AVAILABLE"
+    },
+    "status_impact": "SERVICE_DISRUPTION",
+    "severity": "medium",
+    "service_key": "K2T198LhzrR5kLU8hmkk",
+    "service_name": "Cloud Messaging",
+    "affected_products": [
+      {
+        "title": "Cloud Messaging",
+        "id": "K2T198LhzrR5kLU8hmkk"
+      }
+    ],
+    "uri": "incidents/efSHTx8oFZ4CH8XsqZuy"
+  },
+  {
+    "id": "uezk4rTzcNKjWtEkFj7k",
+    "number": "3794254006056466186",
+    "begin": "2026-11-11T19:25:00+00:00",
+    "created": "2026-11-12T16:43:18+00:00",
+    "end": "2026-11-12T18:06:00+00:00",
+    "modified": "2026-11-12T18:46:54+00:00",
+    "external_desc": "Firebase Hosting is experiencing slightly elevated 502 errors on requests for dynamic content",
+    "updates": [
+      {
+        "created": "2026-11-12T16:43:18+00:00",
+        "modified": "2026-11-12T18:46:54+00:00",
+        "when": "2026-11-12T16:43:18+00:00",
+        "text": "Requests for dynamic content from Firebase Hosting (rewrites to Cloud Run & Functions, POST requests to Firebase Auth) are experiencing slightly elevated rates of 502 errors.",
+        "status": "AVAILABLE"
+      }
+    ],
+    "most_recent_update": {
+      "created": "2026-11-12T16:43:18+00:00",
+      "modified": "2026-11-12T18:46:54+00:00",
+      "when": "2026-11-12T16:43:18+00:00",
+      "text": "Requests for dynamic content from Firebase Hosting (rewrites to Cloud Run & Functions, POST requests to Firebase Auth) are experiencing slightly elevated rates of 502 errors.",
+      "status": "AVAILABLE"
+    },
+    "status_impact": "SERVICE_DISRUPTION",
+    "severity": "medium",
+    "service_key": "hhAxKbKdeaqncSsxMwEx",
+    "service_name": "Hosting",
+    "affected_products": [
+      {
+        "title": "Hosting",
+        "id": "hhAxKbKdeaqncSsxMwEx"
+      }
+    ],
+    "uri": "incidents/uezk4rTzcNKjWtEkFj7k"
+  }
+]

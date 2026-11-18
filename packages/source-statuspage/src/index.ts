@@ -23,6 +23,7 @@ export {
   INCIDENT_FIELDS,
   isHead,
   isIncident,
+  keysOf,
   mapObservation,
   PAGE_FIELDS,
   sentOf,
@@ -31,9 +32,9 @@ export {
   updatesOf,
   URGENCY_OF_STATUS,
 } from "./map.ts";
-export { DEFAULT_INTERVAL, DEFAULT_SLOW_AFTER, isDomain, isPageBase, pageProblems, SUBJECT_SYSTEM, type StatusPage } from "./page.ts";
+export { DEFAULT_INTERVAL, DEFAULT_SLOW_AFTER, isDomain, isPageBase, pageDomains, pageProblems, SUBJECT_SYSTEM, type ComponentKey, type StatusPage } from "./page.ts";
 export { pagesFor, watchReads, type ReadTarget } from "./select.ts";
-export { ATLASSIAN_STATUSPAGE, CLOUDFLARE_CDN, INCIDENT_IO, registeredPage, STATUS_PAGES } from "./register.ts";
+export { ATLASSIAN_STATUSPAGE, CLOUDFLARE_CDN, INCIDENT_IO, registeredPage, STATUS_PAGES, TWILIO_KEYS } from "./register.ts";
 
 /**
  * This function makes the procedures of the source of one page: `describe`, `fetch` and `map`. It throws for a config

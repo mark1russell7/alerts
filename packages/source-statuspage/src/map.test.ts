@@ -3,7 +3,7 @@ import { categoryOf, knownKind, type Observation, type ObservationId } from "@ma
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import { incidentBody, readSummary } from "./fetch.ts";
-import { componentsOf, isHead, mapObservation, sentOf, SEVERITY_OF_IMPACT, updatesOf, URGENCY_OF_STATUS } from "./map.ts";
+import { componentsOf, isHead, keysOf, mapObservation, sentOf, SEVERITY_OF_IMPACT, updatesOf, URGENCY_OF_STATUS } from "./map.ts";
 import { SUBJECT_SYSTEM } from "./page.ts";
 import { registeredPage } from "./register.ts";
 
@@ -15,6 +15,16 @@ const CLOUDFLARE_PAGE = registeredPage("statuspage-cloudflare")!;
 const OPENAI_PAGE = registeredPage("statuspage-openai")!;
 const FETCHED = Date.parse("2026-11-18T04:34:02Z");
 const incident = (summary: typeof CLOUDFLARE, id: string): Record<string, unknown> => summary.incidents.find((each) => each["id"] === id)!;
+/** The Cloudflare page with keys for tests: a key of a group, two keys of components with one domain, and a key that no incident names. */
+const KEYED = {
+  ...CLOUDFLARE_PAGE,
+  components: [
+    { id: "zqxhg7y54vy8", name: "Europe", domain: "edge.example.test" },
+    { id: "jm5mggc2wp95", name: "Interconnect", domain: "edge.example.test" },
+    { id: "57srcl8zcn7c", name: "Workers", domain: "workers.example.test" },
+    { id: "kq0n0t0n0th3", name: "Other", domain: "other.example.test" },
+  ],
+};
 const observationOf = (body: string, fetched = FETCHED): Observation => ({ id: `o-${body.length}` as ObservationId, source: CLOUDFLARE_PAGE.id, fetched, contentType: "application/json", body, transport: { latency: 0 } });
 
 describe("mapObservation", () => {
@@ -57,6 +67,15 @@ describe("mapObservation", () => {
       page: ["https://www.cloudflarestatus.com"],
     });
     expect(knownKind(report.kind.code)).toBe(true);
+  });
+
+  it("names the domain of each endpoint of a key after the domain of the service, with one subject for each domain", () => {
+    const report = mapObservation(observationOf(incidentBody(incident(CLOUDFLARE, "k3r9i5tbre4i"))), KEYED).reports[0]!;
+    expect(report.about).toEqual([
+      { system: "domain", id: "cloudflare.com", label: "Cloudflare" },
+      { system: "domain", id: "edge.example.test", label: "Cloudflare: Europe, Interconnect" },
+    ]);
+    expect(mapObservation(observationOf(incidentBody(incident(CLOUDFLARE, "0ocqieaifg7h"))), KEYED).reports[0]!.about.map((subject) => subject.id)).toEqual(["cloudflare.com", "workers.example.test"]);
   });
 
   it("gives the urgency immediate for an incident that the provider still investigates or fixes", () => {
@@ -150,6 +169,32 @@ describe("mapObservation", () => {
         expect(Array.isArray(result.reports)).toBe(true);
       }),
     );
+  });
+});
+
+describe("keysOf", () => {
+  it("gives the keys of the components and the groups of an incident, in the order of the page", () => {
+    expect(keysOf(incident(CLOUDFLARE, "k3r9i5tbre4i"), KEYED).map((key) => key.name)).toEqual(["Europe", "Interconnect"]);
+    expect(keysOf(incident(CLOUDFLARE, "0ocqieaifg7h"), KEYED).map((key) => key.name)).toEqual(["Workers"]);
+  });
+
+  it("reads the codes of the affected components of the updates, which give no group", () => {
+    expect(keysOf({ ...incident(CLOUDFLARE, "k3r9i5tbre4i"), components: [] }, KEYED).map((key) => key.name)).toEqual(["Interconnect"]);
+  });
+
+  it("gives no key for a page with no keys", () => {
+    expect(keysOf(incident(CLOUDFLARE, "k3r9i5tbre4i"), CLOUDFLARE_PAGE)).toEqual([]);
+  });
+
+  it("names the API of Twilio for an incident on the path of an alert, and not for an incident of a carrier in APAC", () => {
+    const twilio = read("twilio-incidents-20261118.json");
+    const page = registeredPage("statuspage-twilio")!;
+    const aboutOf = (id: string) => mapObservation(observationOf(incidentBody(incident(twilio, id))), page).reports[0]!.about.map((subject) => subject.id);
+    expect(keysOf(incident(twilio, "269ytwp2jgqq"), page).map((key) => key.name)).toEqual(["SMS", "Programmable Messaging API"]);
+    expect(aboutOf("269ytwp2jgqq")).toEqual(["twilio.com", "api.twilio.com"]);
+    // The component SMS, APAC is in the group CARRIER NETWORK, and the group has no key.
+    expect(keysOf(incident(twilio, "smg76w4fhp05"), page)).toEqual([]);
+    expect(aboutOf("smg76w4fhp05")).toEqual(["twilio.com"]);
   });
 });
 

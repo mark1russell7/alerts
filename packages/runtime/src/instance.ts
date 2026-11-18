@@ -70,7 +70,7 @@ import { createEnergyChartsSource, ENERGY_CHARTS_DESCRIPTOR } from "@mark1russel
 import { createKevSource, KEV_DESCRIPTOR } from "@mark1russell7/alerts-source-cisa-kev";
 import { AWS_DOMAIN, AWS_KIND, createAwsSource } from "@mark1russell7/alerts-source-aws";
 import { createBomSwsSource, type BomSwsFetchOptions } from "@mark1russell7/alerts-source-bom-sws";
-import { createGcpSource, GCP_DOMAIN, GCP_KIND } from "@mark1russell7/alerts-source-gcp";
+import { createGcpSource, GCP_KIND, GOOGLE_DASHBOARDS, type GcpFetchOptions } from "@mark1russell7/alerts-source-gcp";
 import { createStatusPageSource, pagesFor, watchReads, type StatusPage, type StatusPageFetchOptions } from "@mark1russell7/alerts-source-statuspage";
 import { createSwpcSource, SWPC_DESCRIPTOR } from "@mark1russell7/alerts-source-swpc";
 import { createTsunamiSource, descriptorOf as tsunamiDescriptor, TSUNAMI_CENTERS, type TsunamiCenter, type TsunamiFetchOptions } from "@mark1russell7/alerts-source-tsunami";
@@ -299,13 +299,19 @@ const bomFactory =
     createBomSwsSource({ ...options, apiKey });
 
 /**
- * The feeds of the cloud providers: Google Cloud and AWS. A report of such a feed has no area. Thus the instance reads a
- * feed only when one of its persons can get its reports, with the rule of a status page (`watchReads`).
+ * The feeds of the cloud providers: the dashboards of Google (Google Cloud and Firebase) and AWS. A report of such a feed
+ * has no area. Thus the instance reads a feed only when one of its persons can get its reports, with the rule of a status
+ * page (`watchReads`). The keys of the products of a dashboard are its keys of components.
  */
 const PROVIDER_FEEDS = [
-  { domain: GCP_DOMAIN, kind: GCP_KIND, create: createGcpSource },
+  ...GOOGLE_DASHBOARDS.map((dashboard) => ({
+    domain: dashboard.domain,
+    kind: GCP_KIND,
+    components: dashboard.products,
+    create: (options: Omit<GcpFetchOptions, "dashboard">) => createGcpSource({ ...options, dashboard }),
+  })),
   { domain: AWS_DOMAIN, kind: AWS_KIND, create: createAwsSource },
-] as const;
+];
 
 /**
  * The descriptors of the sources of the instance. The function `describe` of each source gives the same descriptor.

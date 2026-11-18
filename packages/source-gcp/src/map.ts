@@ -1,16 +1,17 @@
 /**
- * The map function of the feed of Google Cloud Service Health. The fetch gives one observation for each incident that has
- * not ended. An incident gives one report of the kind `infra.cloud.outage`.
+ * The map function of the dashboards of Google. The fetch gives one observation for each incident that has not ended.
+ * An incident gives one report of the kind `infra.cloud.outage`.
  *
- * The id of the incident is the key of the report. The subjects of the report are the domain of the service and each
- * location of the incident (`provider-region:gcp/europe-west1`). Thus a person who names the service or a region gets the
- * report. The documentation gives the ids as stable and the titles as unstable, so a title is only a label.
+ * The id of the incident is the key of the report. The first subject of the report is the domain of the service. The
+ * endpoint of each key of an affected product and each location (`provider-region:gcp/europe-west1`) follow it. Thus a
+ * person who names the service, an endpoint or a region gets the report. The documentation gives the ids as stable and
+ * the titles as unstable, so a title is only a label.
  */
 
 import { categoryOf, kindLabel, Problems, reportId, type Instant, type MapResult, type Observation, type Report, type Severity, type Subject, type Urgency } from "@mark1russell7/alerts";
 import { errorMessage } from "@mark1russell7/text";
 
-import { DOMAIN_SYSTEM, GCP_BASE, GCP_DOMAIN, GCP_KIND, GCP_ORIGIN, GCP_SOURCE, REGION_SYSTEM, regionId } from "./feed.ts";
+import { DOMAIN_SYSTEM, GCP_DASHBOARD, GCP_KIND, GCP_ORIGIN, REGION_SYSTEM, regionId, type GoogleDashboard, type ProductKey } from "./feed.ts";
 
 /** The fields of the body of an incident, in this order. The fetch keeps only these fields. */
 export const INCIDENT_FIELDS = [
@@ -102,17 +103,29 @@ export function locationsOf(incident: Fields): readonly { readonly id: string; r
   return [...current, ...itemsOf(incident, "previously_affected_locations").filter((item) => !ids.has(item.id))];
 }
 
-/** This function maps one observation of the feed. It does not throw. A body that it does not understand gives a fatal problem. */
-export function mapObservation(observation: Observation): MapResult {
+/**
+ * This function gives the keys of a dashboard that an incident names: each key whose id is the id of an affected product.
+ * The order is the order of the dashboard.
+ */
+export function keysOf(incident: Fields, dashboard: Pick<GoogleDashboard, "products">): readonly ProductKey[] {
+  const ids = new Set(itemsOf(incident, "affected_products").map((product) => product.id));
+  return dashboard.products.filter((key) => ids.has(key.id));
+}
+
+/**
+ * This function maps one observation of a dashboard. The default is the dashboard of Google Cloud. It does not throw. A
+ * body that it does not understand gives a fatal problem.
+ */
+export function mapObservation(observation: Observation, dashboard: GoogleDashboard = GCP_DASHBOARD): MapResult {
   try {
-    return mapOrThrow(observation);
+    return mapOrThrow(observation, dashboard);
   } catch (error) {
     return { reports: [], problems: [{ path: "", message: `the map function failed: ${errorMessage(error)}`, fatal: true }] };
   }
 }
 
 /** This function maps one observation, and can throw. `mapObservation` catches each error. */
-function mapOrThrow(observation: Observation): MapResult {
+function mapOrThrow(observation: Observation, dashboard: GoogleDashboard): MapResult {
   let fields: unknown;
   try {
     fields = JSON.parse(observation.body);
@@ -121,7 +134,7 @@ function mapOrThrow(observation: Observation): MapResult {
   }
   // The fetch gives the whole answer as one observation when the answer is not a list of incidents.
   if (!isFields(fields) || !Object.hasOwn(fields, "id")) {
-    return { reports: [], problems: [{ path: "", message: "the observation is not one incident of Google Cloud Service Health: the format changed", fatal: true }] };
+    return { reports: [], problems: [{ path: "", message: `the observation is not one incident of ${dashboard.sender}: the format changed`, fatal: true }] };
   }
   const problems = new Problems();
   if (textOf(fields, "id") === undefined) problems.add("id", "the incident has no id: the map makes no report", "fatal");
@@ -133,11 +146,11 @@ function mapOrThrow(observation: Observation): MapResult {
   const latest = isFields(fields["most_recent_update"]) ? fields["most_recent_update"] : undefined;
   const status = latest !== undefined && typeof latest["status"] === "string" ? latest["status"] : undefined;
   if (status === undefined || URGENCY_OF_STATUS[status] === undefined) problems.add("most_recent_update.status", `the status ${JSON.stringify(latest?.["status"])} is not a status of the feed: the urgency is unknown`);
-  return { reports: [reportOf(observation, fields, severity, latest, status)], problems: problems.list };
+  return { reports: [reportOf(observation, dashboard, fields, severity, latest, status)], problems: problems.list };
 }
 
 /** This function gives the report of one valid incident. */
-function reportOf(observation: Observation, incident: Fields, severity: string | undefined, latest: Fields | undefined, status: string | undefined): Report {
+function reportOf(observation: Observation, dashboard: GoogleDashboard, incident: Fields, severity: string | undefined, latest: Fields | undefined, status: string | undefined): Report {
   const key = textOf(incident, "id")!;
   const summary = textOf(incident, "external_desc")!;
   const sent = sentOf(incident)!;
@@ -149,13 +162,16 @@ function reportOf(observation: Observation, incident: Fields, severity: string |
   const impact = textOf(incident, "status_impact");
   const uri = textOf(incident, "uri");
   const description = latest === undefined ? undefined : textOf(latest, "text");
+  const keys = keysOf(incident, dashboard);
+  const endpoints = [...new Set(keys.map((each) => each.domain))].filter((domain) => domain !== dashboard.domain);
   const about: Subject[] = [
-    { system: DOMAIN_SYSTEM, id: GCP_DOMAIN, label: "Google Cloud" },
+    { system: DOMAIN_SYSTEM, id: dashboard.domain, label: dashboard.name },
+    ...endpoints.map((domain) => ({ system: DOMAIN_SYSTEM, id: domain, label: `${dashboard.name}: ${keys.filter((each) => each.domain === domain).map((each) => each.name).join(", ")}` })),
     ...locations.map((location) => ({ system: REGION_SYSTEM, id: regionId(location.id), ...(location.title === undefined ? {} : { label: location.title }) })),
   ];
   return {
-    id: reportId({ source: GCP_SOURCE, key, sent }),
-    source: GCP_SOURCE,
+    id: reportId({ source: dashboard.id, key, sent }),
+    source: dashboard.id,
     origin: GCP_ORIGIN,
     key,
     references: [],
@@ -175,10 +191,10 @@ function reportOf(observation: Observation, incident: Fields, severity: string |
     ...(onset === undefined ? {} : { onset }),
     areas: [],
     about,
-    sender: "Google Cloud Service Health",
-    headline: `Google Cloud: ${summary}`,
+    sender: dashboard.sender,
+    headline: `${dashboard.name}: ${summary}`,
     ...(description === undefined ? {} : { description }),
-    web: uri === undefined ? GCP_BASE : `${GCP_BASE}/${uri.replace(/^\/+/, "")}`,
+    web: uri === undefined ? dashboard.base : `${dashboard.base}/${uri.replace(/^\/+/, "")}`,
     observation: observation.id,
     parameters: withValues({
       status: status === undefined ? [] : [status],
