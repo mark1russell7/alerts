@@ -2,7 +2,7 @@ import { random, seedsFrom } from "@mark1russell7/rigor-generators";
 import { describe, expect, expectTypeOf, it } from "vitest";
 import { z } from "zod";
 import { assess, COVERAGE_KIND, DEFAULT_ASSESS_POLICY } from "./assess.ts";
-import { CONFIG_FORMAT, COPY_FORMAT, copyProblems, loadConfig, ONLY_COPY, type AlertConfig, type CopySettings } from "./config.ts";
+import { CONFIG_FORMAT, CONFIG_PART_FORMAT, configHash, COPY_FORMAT, copyProblems, loadConfig, ONLY_COPY, type AlertConfig, type CopySettings } from "./config.ts";
 import type {
   Acknowledgment,
   EndMark,
@@ -84,6 +84,7 @@ import {
   addressSchema,
   addressValueSchema,
   alertConfigSchema,
+  configPartSchema,
   drillConfigSchema,
   expectationConfigSchema,
   outageConfigSchema,
@@ -419,6 +420,7 @@ const SCHEMA_NAMES = [
   "channelDescriptorSchema",
   "channelIdSchema",
   "channelQuotaSchema",
+  "configPartSchema",
   "contactConfigSchema",
   "copyHealthSchema",
   "copyIdSchema",
@@ -951,6 +953,8 @@ describe("the private configuration", () => {
     const home: CopySettings = { format: COPY_FORMAT, id: "home", rank: 0, listen: { host: "100.64.0.1", port: 4751 }, peers: [{ id: "cloud", url: "http://cloud.example.ts.net:4751" }], pingKey: "HEALTHCHECKS_PING_URL_HOME" };
     holds(copySettingsSchema, home);
     holds(copySettingsSchema, ONLY_COPY);
+    holds(copySettingsSchema, { ...home, accounts: { nwws: 2 } });
+    for (const accounts of [{ nwws: 0 }, { nwws: 1.5 }, { nwws: "2" }, { "": 2 }, []]) fails(copySettingsSchema, { ...home, accounts });
     holds(copyListenSchema, { host: "home.example.ts.net", port: 65535 });
     holds(copyPeerSchema, { id: "c-2", url: "https://[fd7a:115c::1]:4751/exchange" });
     for (const bad of [{ format: "alerts-copy/2" }, { id: "Home" }, { id: "" }, { id: "-home" }, { id: "a".repeat(33) }, { rank: -1 }, { rank: 0.5 }, { pingKey: "lower" }, { pingKey: "" }, { extra: 1 }]) fails(copySettingsSchema, { ...home, ...bad });
@@ -1040,6 +1044,37 @@ describe("the private configuration", () => {
     expect(pathsOf(JSON.stringify(wrong))).toEqual(["places[0].bufferKm", "places[1].codes[0].code"]);
     // The form holds, and the load finds the secret that the store does not have.
     expect(problemsOf(JSON.stringify(CONFIG), () => undefined)).toEqual([expect.stringContaining("names the secret PUSHOVER_USER")]);
+  });
+
+  it("merges the parts of a configuration, and gives the problems of each part with its name", () => {
+    const { places, people, contacts, ...rest } = CONFIG;
+    const root = JSON.stringify({ ...rest, places: [], people: [], contacts: [] });
+    const directory = { name: "directory", text: JSON.stringify({ format: CONFIG_PART_FORMAT, places, people }) };
+    const addresses = { name: "addresses", text: JSON.stringify({ format: CONFIG_PART_FORMAT, contacts }) };
+    const parsed = parseConfig(root, [CHANNEL], store, [directory, addresses]);
+    expect(parsed.tag).toBe("ok");
+    if (parsed.tag === "ok") {
+      expect(parsed.value.config).toEqual(CONFIG);
+      expect(configHash(parsed.value.config)).toBe(configHash(CONFIG));
+    }
+    // The schema refuses a field of the root in a part.
+    holds(configPartSchema, { format: CONFIG_PART_FORMAT });
+    fails(configPartSchema, { format: CONFIG_PART_FORMAT, policies: [] });
+    fails(configPartSchema, { format: CONFIG_FORMAT, places });
+    const problemsWith = (parts: readonly { name: string; text: string }[], text = root): readonly string[] => {
+      const result = parseConfig(text, [CHANNEL], store, parts);
+      return result.tag === "err" ? result.error : [];
+    };
+    expect(problemsWith([directory, { name: "addresses", text: "{" }])).toEqual(["The part addresses is not valid JSON."]);
+    expect(problemsWith([directory, { name: "Bad Name", text: "{" }])).toEqual(["Part 1 is not valid JSON."]);
+    expect(problemsWith([directory, { name: "addresses", text: JSON.stringify({ format: CONFIG_PART_FORMAT, contacts, drills: [] }) }])).toEqual(["The part addresses: (root): Unrecognized key: \"drills\""]);
+    // The problems of the root and of each part come together, before the merge.
+    expect(problemsWith([{ name: "addresses", text: "[]" }], "{")).toEqual(["The configuration is not valid JSON.", "The part addresses: (root): Invalid input: expected object, received array"]);
+    // An entry in two files is a problem of the merge. A missing contact is a problem of the load.
+    expect(problemsWith([directory, addresses, { name: "copy", text: JSON.stringify({ format: CONFIG_PART_FORMAT, places: [places[0]] }) }])).toEqual([
+      `The place ${places[0]!.id} is in the part copy and in the part directory.`,
+    ]);
+    expect(problemsWith([directory])).toEqual([expect.stringContaining(PERSON)]);
   });
 
   it("accepts only printable ASCII in a contact, with no space, no parenthesis and no backslash", () => {

@@ -13,22 +13,18 @@ import { errorMessage } from "@mark1russell7/text";
 import { compareCodeUnits } from "@mark1russell7/text/order";
 import { redactSecrets } from "@mark1russell7/text/redact";
 import type { Exchange } from "polite-crawler/api";
-import type { RefusalKind } from "./events.ts";
+import { REFUSAL_FAULTS, type RefusalKind } from "./events.ts";
 import type { LoopTimes } from "./loop.ts";
 
-/**
- * The record has each kind of `RefusalKind`, thus the lists below cannot lose a kind. The value tells if
- * the kind stops each delivery to the person. A `consent` refusal is the choice of one person: a STOP reply. It
- * does not stop the deliveries of the channel to the other people.
- */
-const REFUSALS: Readonly<Record<RefusalKind, boolean>> = { auth: true, refused: true, "rate-limited": true, reserved: false, consent: false };
+// The table of the kinds is `REFUSAL_FAULTS` of `events.ts`. The overdue sends of the delivery read the same table.
+const REFUSALS = REFUSAL_FAULTS;
 
 /** The kinds of a refused send. The log keeps a `refused` event for each of them. */
 export const REFUSAL_KINDS = Object.keys(REFUSALS) as readonly RefusalKind[];
 
 /**
- * The kinds of a refused send that stop each delivery to the person until the owner acts. The kind
- * `reserved` is not one of them: the channel still sends a `life-safety` message. The kind `consent` is not one of them either.
+ * The kinds of a refused send that stop each delivery to the person until the owner acts. The kinds
+ * `reserved`, `consent`, `quiet` and `expired` are not faults of the channel (`REFUSAL_FAULTS`).
  */
 export const UNREACHABLE: readonly RefusalKind[] = REFUSAL_KINDS.filter((kind) => REFUSALS[kind]);
 const unreachable: ReadonlySet<string> = new Set(UNREACHABLE);

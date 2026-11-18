@@ -180,6 +180,11 @@ export interface Runtime {
    * read that brought it, not the time of the other copy. The history route reads them.
    */
   entered(): EntryTimes;
+  /**
+   * This function ends the resources of the sources: it starts `close` of each source that has one, one time. A second
+   * call gives the same promise. It does not throw. A pass after the close throws.
+   */
+  close(): Promise<void>;
 }
 
 /**
@@ -329,11 +334,17 @@ export function openRuntime(options: RuntimeOptions): Runtime {
     return { size, conflicts };
   };
 
+  // The close of the sources, one time. A source that throws in its close does not stop the close of the other sources.
+  let closed: Promise<void> | undefined;
+  const close = (): Promise<void> =>
+    (closed ??= Promise.allSettled(options.sources.map((source) => Promise.resolve().then(() => source.close?.()))).then(() => undefined));
+
   return {
     config,
     state: () => state,
     skipped,
     async pass(stop) {
+      if (closed !== undefined) throw new Error("The runtime is closed: its sources have no session.");
       const stepped = followStep();
       const start = clock.now();
       const due = options.sources.flatMap((source, at) => {
@@ -404,6 +415,7 @@ export function openRuntime(options: RuntimeOptions): Runtime {
       return { imports: result.imports, next: result.position.next, problems: result.problems, conflicts };
     },
     entered: () => entries.times(state.own.merge),
+    close,
   };
 }
 

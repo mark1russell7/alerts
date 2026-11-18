@@ -122,7 +122,7 @@ describe("pushoverMessageOf", () => {
 
   it("refuses an address with no user key and a message that expired", () => {
     expect(pushoverMessageOf(message("notice"), {}, AT)).toEqual({ refused: "The address has no user key." });
-    expect(pushoverMessageOf(message("notice", { expires: AT }), ADDRESS, AT)).toEqual({ refused: "The message expired before the send." });
+    expect(pushoverMessageOf(message("notice", { expires: AT }), ADDRESS, AT)).toEqual({ refused: "The message expired before the send.", kind: "expired" });
   });
 });
 

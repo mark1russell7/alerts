@@ -539,7 +539,7 @@ export interface FetchRecord {
   readonly fatal: number;
   /** The count of lossy problems that the map gave for the observations of the fetch. An absent count is 0. */
   readonly lossy?: number;
-  /** The result of the canary check of the observations of the fetch, when the source has a canary. */
+  /** The result of the canary check of the observations of the fetch, when the source has a canary and the check decides. */
   readonly canary?: CanaryResult;
 }
 
@@ -570,16 +570,21 @@ export interface FetchSignal {
  *   It can then throw the reason of the signal.
  * - `map`: a pure, total function. It does not throw, and the same observation gives the same
  *   reports with the same ids.
- * - `check`: a pure function. It examines the observations of a fetch against the canary.
+ * - `check`: it examines the observations of a fetch against the canary, and sends no request. It gives `undefined`
+ *   when it cannot decide yet: no read. The health then gets no canary event. A stream gives no read until its session
+ *   had one full period of its test message.
  * - `locate`: optional. It reads `network` and is idempotent. It gives the region codes of a
  *   position, for a source that has a lookup: the `/points` query of the NWS API.
+ * - `close`: optional. It ends the resources of the source, for example the session of a stream. The runtime starts
+ *   it one time, at the stop, after the last fetch. It does not throw.
  */
 export interface SourceProcedures {
   describe(): SourceDescriptor;
   fetch(input: { readonly watch: Watch; readonly cursor?: Cursor }, signal?: FetchSignal): Promise<FetchOutcome>;
   map(input: { readonly observation: Observation }): MapResult;
-  check?(input: { readonly observations: readonly Observation[] }): CanaryResult;
+  check?(input: { readonly observations: readonly Observation[] }): CanaryResult | undefined;
   locate?(input: { readonly at: Position }): Promise<LocateOutcome>;
+  close?(): Promise<void>;
 }
 
 /** The result of a lookup of the region codes of a position. */
@@ -919,12 +924,14 @@ export interface ProviderBalance {
  * - `reserved`: the channel keeps the last units of its quota for a higher level. It still sends a message of that level.
  * - `auth` and `refused`: the provider refused the key or the message.
  * - `consent`: the address has no opt-in, or its person took the opt-in back with a STOP reply. The channel sent nothing.
+ * - `quiet`: the message is quiet, and the channel has no silent mode, as a call. The step goes after the quiet window.
+ * - `expired`: the message expired before the send. The channel sent nothing.
  */
 export type SendOutcome =
   | { readonly ok: true; readonly receipt: Receipt; readonly accepted: Instant }
   | {
       readonly ok: false;
-      readonly kind: "network" | "timeout" | "server" | "rate-limited" | "reserved" | "auth" | "refused" | "consent";
+      readonly kind: "network" | "timeout" | "server" | "rate-limited" | "reserved" | "auth" | "refused" | "consent" | "quiet" | "expired";
       readonly message: string;
       readonly retryAfter?: Duration;
     };

@@ -6,7 +6,7 @@
 
 import type { CanaryResult, Instant, Observation } from "@mark1russell7/alerts";
 import { readCap } from "@mark1russell7/alerts-format-cap";
-import { isKeepalive, keepaliveCheck } from "@mark1russell7/alerts-format-nws";
+import { isKeepalive, KEEPALIVE_MAX_AGE_MS, keepaliveCheck } from "@mark1russell7/alerts-format-nws";
 
 /** This function gives the sent time of a keepalive in an observation. Another observation gives `undefined`. */
 export function keepaliveSent(observation: Observation): Instant | undefined {
@@ -18,16 +18,27 @@ export function keepaliveSent(observation: Observation): Instant | undefined {
   return Number.isNaN(sent) ? undefined : sent;
 }
 
+/** The session of the source at a check: the time of its join in the room, and the time of the check. */
+export interface CanarySession {
+  readonly joined: Instant;
+  readonly now: Instant;
+}
+
 /**
  * This function examines the observations of one fetch against the canary. The fetch gives the newest keepalive again
- * each time, with the time of the fetch. The check passes when the newest keepalive is at most 15 minutes old. The
- * function is pure.
+ * each time, with the time of the fetch. The check passes when the newest keepalive is at most 15 minutes old.
+ *
+ * At a join, the room sends again only its last 25 products, so a new session gets no keepalive before the next one.
+ * Thus with no fresh keepalive, the check gives no read (`undefined`) in the first 15 minutes of a session. After them,
+ * or with no session, it fails. The function is pure.
  */
-export function checkCanary(observations: readonly Observation[]): CanaryResult {
+export function checkCanary(observations: readonly Observation[], session?: CanarySession): CanaryResult | undefined {
   let newest: { readonly sent: Instant; readonly fetched: Instant } | undefined;
   for (const observation of observations) {
     const sent = keepaliveSent(observation);
     if (sent !== undefined && (newest === undefined || sent > newest.sent)) newest = { sent, fetched: observation.fetched };
   }
-  return keepaliveCheck(newest);
+  const result = keepaliveCheck(newest);
+  if (result.pass || session === undefined || session.now - session.joined >= KEEPALIVE_MAX_AGE_MS) return result;
+  return undefined;
 }

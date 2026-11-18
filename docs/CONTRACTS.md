@@ -844,6 +844,7 @@ The assessment reads no clock. The caller gives the time `at`, and only a window
 
 - Each person can have a quiet window (`PersonWatch.quiet`): a time zone, and a start and an end in local times, for example `22:00` to `07:00`. An equal start and end give the full day.
 - In the window, each send below `life-safety` is quiet. A `life-safety` send ignores the window. It wakes the person.
+- A channel with no silent mode, as a call or a text, sends no quiet message. It gives the kind `quiet`. The step stays due, and it goes at the first try after the window.
 - The quiet value is for the time of the send. A step that became due before the end of the window and goes out after it is not quiet.
 - `inQuietWindow` is `inWindow` of `@mark1russell7/algebra/clock`. It calculates the local time in the time zone of the window. Thus the window follows the change to and from daylight saving time.
 - Tests hold a window across midnight, the two days of the change, an hour that occurs two times and an hour that does not occur.
@@ -989,7 +990,8 @@ The runtime cannot tell the person that it stopped. A check of Healthchecks.io t
 - A pass in which a channel gave `auth`, `refused` or `rate-limited` to a send pings `/fail`, because then the system cannot tell the person.
 - A pass with an overdue send pings `/fail`, whatever the kind of its failures. An overdue send is due, and it has no delivery `overdueAfter` after its due time. A reset or a server error that lasts thus also pings `/fail`.
 - `overdueLimit` gives `overdueAfter`: one pass limit and two full tries, each to its flight limit and its retry. It is 140 seconds for the instance. The due time comes from the log, thus a restart keeps it.
-- A send that a channel gave `reserved` or `consent` does not ping `/fail`, and it is not overdue. A `consent` refusal is the choice of the person: a STOP reply. The channel keeps the last units of its quota for `life-safety`, thus it still tells the person of the highest level.
+- A send that a channel gave `reserved`, `consent`, `quiet` or `expired` does not ping `/fail`, and it is not overdue (`REFUSAL_FAULTS`). A `consent` refusal is the choice of the person: a STOP reply.
+- A `quiet` refusal is a quiet message on a channel with no silent mode, as a call at night. An `expired` refusal is a message that expired before the send. Neither is a fault of the channel. The channel keeps the last units of its quota for `life-safety`, thus it still tells the person of the highest level.
 - The body of each ping also gives the state of the quota of each channel with a quota.
 - The fail of a channel holds until a send on the channel goes, or until the pass of the retry has no refusal on it. The delivery step sends a failed call again at the first pass at or after its `retryAt`. Thus the check does not go down and up at each retry.
 - The fail of a channel holds across a restart. At its first pass, the hook starts from `heldOf` of the log. It gives each refusal with a retry after that pass and with no later delivery on its channel. The order of the log decides, not the times. Thus a restart does not ping `success` while the channel refuses.
@@ -1150,6 +1152,18 @@ The schema `alertConfigSchema` checks the JSON of the configuration first. Then 
 A problem names ids, fields and the names of secrets. It does not hold the value of a secret, a label or a position.
 
 The function `parseConfig` reads the JSON text of the configuration. It checks the JSON, then the schema, then the references. Its result is a `Result` of `@mark1russell7/optional`: the configuration, the recipients and the opt-in list with the value of each number, or the problems. The runtime starts only with an `ok` result. A problem of the JSON does not quote the text, because the text can hold a private value.
+
+#### The parts of the configuration
+
+Two writers of one file overwrite each other. Thus each writer of places, people and contacts can keep its own part, `ConfigPart` (`alerts-config-part/1`). A part has only the fields `places`, `people` and `contacts`. The root configuration keeps the other fields.
+
+- The name of a part has small letters, digits and hyphens, with a letter first. It has 40 characters or fewer.
+- The function `mergeParts` puts the entries of the root first. The entries of the parts come after them, in the order of the names.
+- Thus the order of the reads does not change the merge or its hash. Each copy gets the same hash from the same files.
+- The merge finds a bad name and two parts with one name. It also finds an entry in two files: a place, a person, or a contact of a person on one channel.
+- A problem of a bad name gives the index of the part, not the name, because the name can hold any text.
+
+`parseConfig` takes the texts of the parts as its fourth argument. It checks the JSON and the schema of the root and of each part, and gives all their problems together. Then it merges the parts and checks the references of the merge with `loadConfig`. A problem of a part starts with the name of the part. With no parts, the result is the same as before.
 
 The runtime reads two private files in the folder `ALERTS_HOME`, or in `~/.alerts` with no variable: the configuration `config.json` and the keys `secrets.env`. A procedure that gives the configuration replaces the file later.
 

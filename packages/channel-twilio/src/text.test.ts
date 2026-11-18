@@ -108,7 +108,8 @@ describe("the map of a message to a text", () => {
       twilioTextOf(message("urgent"), {}, AT, { from: FROM }),
       twilioTextOf(message("urgent", { title: " ", body: "" }), ADDRESS, AT, { from: FROM }),
     ];
-    for (const refusal of refusals) expect(refusal).toEqual({ refused: expect.any(String) });
+    expect(refusals.map((refusal) => ("kind" in refusal ? refusal.kind : undefined))).toEqual(["quiet", "expired", undefined, undefined, undefined]);
+    for (const refusal of refusals.slice(2)) expect(refusal).toEqual({ refused: expect.any(String) });
     expect(refusals.map((refusal) => ("refused" in refusal ? refusal.refused : ""))).not.toContainEqual(expect.stringMatching(/5550100|\+999/u));
   });
 });
@@ -129,7 +130,8 @@ describe("the send of a text", () => {
 
   it("refuses a quiet message and a bad account SID with no request", async () => {
     const fake = server(accepted);
-    expect(await channelOf(fake).send({ message: message("urgent", { quiet: true }), address: ADDRESS })).toMatchObject({ ok: false, kind: "refused" });
+    expect(await channelOf(fake).send({ message: message("urgent", { quiet: true }), address: ADDRESS })).toMatchObject({ ok: false, kind: "quiet" });
+    expect(await channelOf(fake).send({ message: message("urgent", { expires: AT }), address: ADDRESS })).toMatchObject({ ok: false, kind: "expired" });
     const bad = channelOf(fake, { credentials: { accountSid: "AC-bad", secret: "fake-secret" } });
     expect(await bad.send({ message: message("urgent"), address: ADDRESS })).toMatchObject({ ok: false, kind: "auth" });
     expect(fake.calls).toEqual([]);
