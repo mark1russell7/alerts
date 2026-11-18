@@ -42,6 +42,7 @@ export { CALL_LAST_SENTENCE, CALL_REPEATS, CALL_SAY_LIMIT, callFailureOf, callSt
 export type { Refusal, TwilioCallMapOptions } from "./map.ts";
 export type { TwilioSpendGates } from "./spend.ts";
 export * from "./text.ts";
+export * from "./replies.ts";
 export type { TwilioCredentials, TwilioFetch } from "@procedures/notify/twilio";
 
 /** The time limit of one request to Twilio. */
