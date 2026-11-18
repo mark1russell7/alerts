@@ -55,7 +55,7 @@ const SUBJECTS: readonly (readonly [NodeKey, SubjectKind])[] = [
   ["domain:y.example", "entity"],
   ["topic:met", "topic"],
 ];
-const ORIGINS = ["base", "places", "services", "work", "data", "measured", "person"] as const;
+const ORIGINS = ["base", "places", "services", "delivery", "work", "data", "measured", "person"] as const;
 
 // A weight in sixteenths, so each sum is exact in floats too, with an interval that holds it.
 function weight(r: Random): Estimate {

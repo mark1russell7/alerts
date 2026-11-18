@@ -103,6 +103,7 @@ Each edge has an `origin`. Each origin except `person` is one layer of the defau
 | `base` | The human base. | The same for each person: the places where the person lives and is, and life safety. |
 | `places` | The watched places. | The configuration of the person. |
 | `services` | The services of the person. | The services that the person names. |
+| `delivery` | The path of the alerts. | The services of the channels where the person has a contact. |
 | `work` | The work of the person. | The tools and the services of a kind of work. |
 | `data` | Public data. | For example the service areas of the power utilities. |
 | `measured` | Measures. | For example the DNS providers of a domain. |
@@ -116,7 +117,7 @@ Each edge has an `origin`. Each origin except `person` is one layer of the defau
 
 `composeInterests(person, layers, own)` joins the default layers and the graph of the person into one graph. It also gives a row for each edge.
 
-- At each pair of nodes, the graph holds the edges of the strongest origin. The rank is `ORIGIN_RANK`: `person`, `measured`, `data`, `services`, `work`, `places`, `base`.
+- At each pair of nodes, the graph holds the edges of the strongest origin. The rank is `ORIGIN_RANK`: `person`, `measured`, `data`, `services`, `delivery`, `work`, `places`, `base`.
 - Each weaker edge at that pair stays as a row, with the id of the edge that replaced it. The person can see each default.
 - A person turns a default off with an edge of the origin `person` that is off. The row of the default stays.
 - Two edges of one origin at one pair are two routes.
@@ -124,22 +125,26 @@ Each edge has an `origin`. Each origin except `person` is one layer of the defau
 - The order of the layers and of their edges has no effect.
 - The mutes and the labels come from the graph of the person.
 
-A default edge has the id `<origin>/<from>><to>`, so it has the same id at each build. Three layers have a function:
+A default edge has the id `<origin>/<from>><to>`, so it has the same id at each build. Four layers have a function:
 
 | Function | Layer | Edges |
 | --- | --- | --- |
 | `placesLayer(places)` | `places` | One edge from each watched place to the person, with the weight 1. |
 | `workLayer(works)` | `work` | One edge from each topic of each kind of work. The table `WORK_DEFAULTS` gives the topics. |
 | `servicesLayer(services)` | `services` | One edge from each entity that the person names, for example `domain:example.com`. |
+| `deliveryLayer(channels)` | `delivery` | One edge from each service of the channels, with the weight 1. The source names the channels, for example `channel:push`. |
 
 - The table of the kinds of work gives topics, not chances. Thus each edge of `work` and `services` has `UNKNOWN_WEIGHT`, the full interval.
 - A topic edge reaches the person from each place on the Earth. Thus the table names only the topics that touch the work wherever they occur.
+- Each alert of the person goes through each service of a channel of the person. Thus an edge of `delivery` has the weight 1, as a watched place has.
+- A named service outranks the path of the alerts. Thus the weight that the person gives a service replaces the weight 1.
 - The layer `base` has no function yet. Without a test of the size of an event, a topic edge of the base routes each event of the world. The shadow score of AL-31 and the indicators of AL-59 give that test.
 - The layers `data` and `measured` come from adapters, for example the service areas of the power utilities.
 
-The field `defaults` of a person in the private configuration gives the inputs of the layers: `works` (keys of `WORK_DEFAULTS`) and `services` (node keys of entities).
+The field `defaults` of a person in the private configuration gives the inputs of the layers: `works` (keys of `WORK_DEFAULTS`) and `services` (node keys of entities). The switch `delivery: false` turns the layer `delivery` off.
 
-- The load joins the layer `places`, the layers of the inputs and `PersonWatch.interests`. The recipient gets the joined graph.
+- The load joins the layer `places`, the layers of the inputs, the layer `delivery` and `PersonWatch.interests`.
+- The layer `delivery` takes the field `services` of each `ChannelDescriptor` where the person has a contact. `contactChannels` finds these channels. The recipient gets the joined graph.
 - The layer `places` is always in the join. A graph of work topics alone stops the routing at the places.
 - A person with no field `defaults` keeps the watch. Thus the routing of a configuration without the field stays the same.
 - An unknown work, a service that is not an entity or a changed default is a problem of the load. Then the person keeps the watch.
