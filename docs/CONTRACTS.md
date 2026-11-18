@@ -299,7 +299,7 @@ The cell is the copy of the system on one machine. Its internet link, its DNS re
 
 The coverage has these parts:
 
-- `independent`: the smallest count of outside failure domains whose faults stop each source of the kind that is up. At 2 or more, no single outside fault stops the coverage. The policy asks for 2 or more for each life-safety kind, and 1 for each other kind. A smaller count is a system report: `urgent` for a life-safety kind, and `life-safety` at zero during a watch or a warning at the place.
+- `independent`: the smallest count of outside failure domains whose faults stop each source of the kind that is up. At 2 or more, no single outside fault stops the coverage. The policy asks for 2 or more for each life-safety kind, none for a kind of context, and 1 for each other kind. A smaller count is a system report: `urgent` for a life-safety kind, and `life-safety` at zero during a watch or a warning at the place.
 - `faults`: the domains of that smallest set. The report names them. A source with no domain in `dependsOn` gets its own domain `source:<id>`.
 - `proven`: the search of the smallest set ended. The count is a minimum hitting set, and `minimumHittingSet` of `@mark1russell7/collections/graph` calculates it exactly. When the search passes its budget, `proven` is false, and `coverageShort` gives true. A count that the search did not prove is not a pass.
 - `commonResources`: the cell resources that each of these sources uses. One fault of one of them stops all of these sources in this cell. The radio input and a second cell remove these common faults. The blindness formula of the design study uses them as the shared fault `c`.
@@ -316,7 +316,7 @@ The coverage has these parts:
 
 Each report has an observation: the canonical JSON of its facts. The log keeps it, as it keeps the observations of the sources.
 
-A health report has no area. Its subject is `{ system: "alerts.source", id: <source id> }`. So it goes only to a person who watches that subject in `PersonWatch.subjects`. Its kind is `system.health.<state>`, and it gets `notice` at most.
+A health report has no area. Its subject is `{ system: "alerts.source", id: <source id> }`. So it goes only to a person who watches that subject in `PersonWatch.subjects`. Its kind is `system.health.<state>`, and it gets `notice` at most. The health of a source whose kinds are all kinds of context has the severity `minor` and the urgency `future`. So it gets `digest` at most.
 
 A coverage report has the area of the watched place, `{ type: "place", place }`. So it goes to each person who watches that place. Its kind is `system.coverage.<kind>`. Its severity and urgency come from the gap:
 
@@ -424,6 +424,8 @@ A down-channel report has no area. Its subjects are the channel (`alerts.channel
 `threats(incidents, places)` gives the watches and the warnings. A threat is a live incident with the status `actual` at a watched place. Its stage is `watch`, `warning` or absent. A report of the core has the status `system`, so it is not a threat.
 
 The assessment policy holds four system classes, and each class admits only the status `system`. The class `system-drill` holds the drill runs, and it reaches `life-safety`. The class `system-escalation` holds the exhausted escalations, and it also reaches `life-safety`. A class can name its statuses. Else the statuses of the policy apply. The NWS kinds `system.test` and `system.admin` are not in these classes, so the policy statuses apply to them.
+
+The policy also holds the class `context`. Its kinds are `CONTEXT_KINDS`: the service alerts of public transit, `transport.transit`. Each lookup of its table gives `none`. So no person gets these reports, and the map and the log keep them. A feed of one large network has many alerts each day. The count of its alerts is a reading of an indicator. A policy of the configuration can give the kinds a level.
 
 ### Lateness across sources
 
@@ -1173,7 +1175,7 @@ The instance does not start when it finds one of these problems:
 - a step on a channel with a cost, when the configuration has no spend entry for a provider of the channel
 - a place that no regional source covers. Usually the place does not have a code of each level: the zone, the county, SAME, the state and the country. A source with the coverage `global`, for example the SWPC, covers each place with no code. Thus the check does not count it.
 
-The environment gives `PORT` (8080), `PROBE_PORT` (9090) and `SERVICE_PROFILE` (`local`, `daemon` or `pod`). The folder `ALERTS_HOME` (`.alerts` in the home folder) holds the private files: `config.json`, `secrets.env`, the log `runtime.sqlite` and the outlines of the zones `shapes.sqlite`. It also holds the counts of the quotas, `quotas.sqlite`. No repository holds them. A problem of `secrets.env` names its line and its key, and no value. The output of a failed pass shows no value of `secrets.env`.
+The environment gives `PORT` (8080), `PROBE_PORT` (9090) and `SERVICE_PROFILE` (`local`, `daemon` or `pod`). The folder `ALERTS_HOME` (`.alerts` in the home folder) holds the private files: `config.json`, `secrets.env`, the log `runtime.sqlite` and the outlines of the zones `shapes.sqlite`. It also holds the counts of the quotas, `quotas.sqlite`, and the copy of the transit catalog, `transit-catalog.json`. No repository holds them. A problem of `secrets.env` names its line and its key, and no value. The output of a failed pass shows no value of `secrets.env`.
 
 Each runtime takes the lock `home.lock` of the folder at its start, before it reads or writes a file of the folder (AL-58). The lock is the instance lock of `@mark1russell7/service/host`:
 
@@ -1182,6 +1184,15 @@ Each runtime takes the lock `home.lock` of the folder at its start, before it re
 - The test `home-lock.test.ts` starts the entry on a folder that the test holds. The entry stops with the error `HomeHeld` and writes no file.
 
 After each pass, the runtime gets the outlines of the zones of the watched states. It stops before the next fetch of the alerts. A broken file of outlines goes into quarantine, and the runtime gets the outlines again.
+
+The runtime also reads the transit feeds near the places:
+
+- At the start, the copy `transit-catalog.json` gives the feeds of service alerts whose box meets a watched place. The runtime reads `MAX_TRANSIT_FEEDS` (40) feeds at most, the smallest boxes first.
+- Only this choice reads the position of a place. No request holds a position.
+- After a pass, the runtime reads the catalog again when the copy is one day old. The read is a conditional GET. The host of the catalog has its own place in the pace, so the read does not stop a source.
+- A failed read keeps the copy, and the runtime tries again after one hour.
+- When a new copy changes the chosen feeds, the profile `daemon` stops the runtime one time. The supervisor starts it with the new feeds. Each other profile tells the operator to start it again.
+- A start with no copy reads no feed. The first read of the catalog gives the copy and the restart.
 
 ### Steps of the wall clock
 

@@ -7,7 +7,7 @@
  * sources. That is a minimum hitting set, and `@mark1russell7/collections/graph` calculates it.
  */
 import { minimumHittingSet, type HittingSetChoice } from "@mark1russell7/collections/graph";
-import { hasKind, LIFE_SAFETY_KINDS, regionContains } from "./assess.ts";
+import { CONTEXT_KINDS, hasKind, LIFE_SAFETY_KINDS, regionContains } from "./assess.ts";
 import type { Coverage, HealthState, SourceDescriptor, SourceHealth, SourceId, WatchedPlace } from "./contracts.ts";
 import { CELL_RESOURCES } from "./contracts.ts";
 import { isShape, shapeDistanceKm } from "./shapes.ts";
@@ -33,11 +33,15 @@ export interface CoveragePolicy {
 
 /**
  * The first policy. A source counts when it is `healthy` or `slow`. Each life-safety kind needs 2
- * independent domains, so no single outside fault stops it. Each other kind needs 1.
+ * independent domains, so no single outside fault stops it. A kind of context (`CONTEXT_KINDS`) needs none,
+ * because its reports reach no person. Each other kind needs 1.
  */
 export const DEFAULT_COVERAGE_POLICY: CoveragePolicy = {
   up: ["healthy", "slow"],
-  needs: [{ kinds: LIFE_SAFETY_KINDS, required: 2 }],
+  needs: [
+    { kinds: LIFE_SAFETY_KINDS, required: 2 },
+    { kinds: CONTEXT_KINDS, required: 0 },
+  ],
   otherwise: 1,
 };
 

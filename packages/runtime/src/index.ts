@@ -74,6 +74,8 @@ export interface Options {
   readonly log: { close(): void };
   /** The outlines of the instance. The service stops their refresh and closes their cache in the phase `tear down dependencies`. */
   readonly shapes?: { close(): Promise<void> };
+  /** The keeper of the transit catalog. The service stops its read in the phase `tear down dependencies`. */
+  readonly transit?: { close(): Promise<void> };
   /** The store of the counts of the quotas of the channels. The service closes it in the phase `tear down dependencies`. */
   readonly quotas?: { close(): void };
   /** The store of the indicator readings. The service closes it in the phase `tear down dependencies`. */
@@ -153,6 +155,7 @@ const parts = (options: Options): ServiceBuilder =>
       .dependency("home", { system: null, knobs: {}, operations: {} }, { connect: () => undefined, close: () => options.home?.release() })
       .dependency("log", { system: null, knobs: {}, operations: {} }, { connect: () => undefined, close: () => options.log.close() })
       .dependency("shapes", { system: null, knobs: {}, operations: {} }, { connect: () => undefined, close: () => options.shapes?.close() })
+      .dependency("transit", { system: null, knobs: {}, operations: {} }, { connect: () => undefined, close: () => options.transit?.close() })
       .dependency("quotas", { system: null, knobs: {}, operations: {} }, { connect: () => undefined, close: () => options.quotas?.close() })
       .dependency("readings", { system: null, knobs: {}, operations: {} }, { connect: () => undefined, close: () => options.readings?.close() })
       .dependency("sources", { system: null, knobs: {}, operations: {} }, { connect: () => undefined, close: () => options.sources?.close() })

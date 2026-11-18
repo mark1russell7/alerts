@@ -616,6 +616,9 @@ importers:
       '@mark1russell7/alerts-source-gfz':
         specifier: workspace:*
         version: link:../source-gfz
+      '@mark1russell7/alerts-source-gtfs-alerts':
+        specifier: workspace:*
+        version: link:../source-gtfs-alerts
       '@mark1russell7/alerts-source-ipaws':
         specifier: workspace:*
         version: link:../source-ipaws

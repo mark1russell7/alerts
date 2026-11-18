@@ -12,6 +12,7 @@ import {
   balanceFloorsBelow,
   balanceUnreadAt,
   CHANNEL_SUBJECT,
+  contextSource,
   CLOCK_STEP_WINDOW,
   CLOCK_SUBJECT,
   COPY_SUBJECT,
@@ -140,6 +141,23 @@ describe("the health reports", () => {
     expect(assess(incident!, NEIGHBOR, PLACES).reasons).toEqual([{ kind: "no-subject" }]);
     const up = systemReports(down.lines, snapshot({ health: [healthOf("healthy")] }), 300);
     expect(levels([...down.reports, ...up.reports], OPERATOR)).toEqual(["none"]);
+  });
+
+  it("gives the digest at most for the health of a source of context", () => {
+    const transit: SourceDescriptor = { ...API, id: "gtfs-a" as SourceId, title: "A transit feed", kinds: ["transport.transit"] };
+    const down = systemReports(NO_SYSTEM_LINES, snapshot({ sources: [API, transit], health: [{ ...healthOf("failing"), source: transit.id }] }), 100);
+    expect(down.reports).toMatchObject([{ kind: { code: "system.health.failing" }, severity: "minor", urgency: "future" }]);
+    expect(levels(down.reports, OPERATOR)).toEqual(["digest"]);
+    // The health of a source of other kinds keeps its level.
+    expect(levels(systemReports(NO_SYSTEM_LINES, snapshot({ sources: [API, transit], health: [healthOf("failing")] }), 100).reports, OPERATOR)).toEqual(["notice"]);
+  });
+
+  it("tells a source of context: each of its kinds is a kind of context", () => {
+    expect(contextSource({ ...API, kinds: ["transport.transit"] })).toBe(true);
+    expect(contextSource({ ...API, kinds: ["transport.transit.detour"] })).toBe(true);
+    expect(contextSource({ ...API, kinds: ["transport.transit", "met"] })).toBe(false);
+    expect(contextSource({ ...API, kinds: [] })).toBe(false);
+    expect(contextSource(API)).toBe(false);
   });
 
   it("matches a watch of one source only", () => {

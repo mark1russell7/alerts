@@ -71,6 +71,7 @@ import { createShapeStore, type ShapeCache, type ShapeStore } from "@mark1russel
 import { createNwsSource, NWS_DESCRIPTOR } from "@mark1russell7/alerts-source-nws-api";
 import { createNwwsSource, SOURCE_ID as NWWS_SOURCE, type NwwsAccount, type OpenSession } from "@mark1russell7/alerts-source-nwws";
 import { createGfzSource, GFZ_DESCRIPTOR } from "@mark1russell7/alerts-source-gfz";
+import { createCatalogFetch, createGtfsSource, type GtfsFeed, type GtfsFetchOptions } from "@mark1russell7/alerts-source-gtfs-alerts";
 import { createEnergyChartsSource, ENERGY_CHARTS_DESCRIPTOR } from "@mark1russell7/alerts-source-energy-charts";
 import { createKevSource, KEV_DESCRIPTOR } from "@mark1russell7/alerts-source-cisa-kev";
 import { createRadarAnomaliesSource, createRadarOutagesSource, type RadarSourceOptions } from "@mark1russell7/alerts-source-cloudflare-radar";
@@ -99,6 +100,7 @@ import { exchangeLoop, exchangeWorker, type EntriesSource, type ExchangeCall, ty
 import { channelQuota } from "./quota.ts";
 import { openRuntime, type Pass, type Runtime, type RuntimeOptions } from "./runtime.ts";
 import { addZoneCodes, keepShapes, placeCodesKey, type InstanceShapes, type ShapeOutcome, type ZoneCodeCounts } from "./shapes.ts";
+import { chooseFeeds, feedsKey, keepTransit, type InstanceTransit, type TransitCache, type TransitOutcome } from "./transit.ts";
 import { DELAY_LIMITS, earliest, nextFetch } from "./view.ts";
 
 /** The name of the secret that holds the API token of the Pushover application. */
@@ -286,6 +288,12 @@ const tsunamiFactory =
   (center: TsunamiCenter) =>
   (options: Omit<TsunamiFetchOptions, "center">): SourceProcedures =>
     createTsunamiSource({ ...options, center });
+
+/** This function gives the factory of the source of one transit feed. */
+const transitFactory =
+  (feed: GtfsFeed) =>
+  (options: Omit<GtfsFetchOptions, "feed">): SourceProcedures =>
+    createGtfsSource({ ...options, feed });
 
 /** This function gives the factory of the source of one status page. */
 const statusPageFactory =
@@ -652,6 +660,18 @@ export interface InstanceOptions {
   /** The instance gives each refresh of the outlines to this function. */
   readonly onShapes?: (outcome: ShapeOutcome) => void;
   /**
+   * The cache of the copy of the transit catalog (AL-60). The entry gives the file `TRANSIT_FILE` of the private folder. Without
+   * it, the instance reads no transit feed and no catalog. The instance reads each feed of the copy whose box meets a place.
+   */
+  readonly transit?: TransitCache;
+  /** The instance gives each read of the transit catalog to this function. */
+  readonly onTransit?: (outcome: TransitOutcome) => void;
+  /**
+   * The instance starts this function one time, when a new copy of the transit catalog changes the feeds of the places. The
+   * entry of the profile `daemon` stops the runtime, and the supervisor starts it again with the new feeds.
+   */
+  readonly onTransitFeeds?: () => void;
+  /**
    * The store of the indicator readings. The entry gives the file `readings.sqlite` of the private folder, and the service
    * closes it. Without it, the instance keeps no reading.
    */
@@ -698,6 +718,8 @@ export interface Instance {
   readonly loop: RuntimeLoop;
   /** The outlines of the regions. The match by shape and the map route read them here. */
   readonly shapes: InstanceShapes;
+  /** The transit feeds and the keeper of the transit catalog, when the options give the cache. The service closes the keeper. */
+  readonly transit?: InstanceTransit;
   /** The counts of the zone codes of the places at the start, from the outlines of the store. An instance with no store has none. */
   readonly zones?: ZoneCodeCounts;
   /** This function gives the state of each quota of the channels. Each call reads the stores of the gates. */
@@ -741,10 +763,10 @@ export interface Instance {
  *   copy (`nwwsSetup`). BoM is a source when the secrets have its key (`BOM_SWS_KEY`). The outages and the traffic
  *   anomalies of Cloudflare Radar are sources when the secrets have its token (`CLOUDFLARE_RADAR_KEY`). Each status page that one of the
  *   persons can get is a source (`pagesFor`). The feed of Google Cloud, AWS or Azure is a source when one of the persons
- *   can get its reports (`watchReads`).
+ *   can get its reports (`watchReads`). Each transit feed of the copy of the catalog whose box meets a place is a source.
  * - Each source gets the codes of the places. It gets the position of a place only when the place shares it with that
  *   source. The USGS, EMSC, the centers, the SWPC, GFZ, BoM, Energy-Charts, CISA KEV, Radar, Google Cloud, AWS, Azure and the
- *   status pages ask for no place.
+ *   status pages ask for no place. The transit feeds also ask for no place.
  * - The channels are Pushover, and the Twilio call channel when the secrets have its keys. Each time of the delivery comes
  *   from a fact of the channels.
  * - A spend entry of a channel gives its cap and the watch of the balance of its account.
@@ -763,6 +785,9 @@ export function openInstance(options: InstanceOptions): Instance {
   const bomKey = options.secret(BOM_SWS_KEY) ?? "";
   // Radar gives its data only with a token of an account. With no token, the instance does not read Radar.
   const radarToken = options.secret(CLOUDFLARE_RADAR_KEY) ?? "";
+  // The transit feeds come from the copy of the catalog. Only this choice reads the positions of the places, and no request holds them.
+  const transitCopy = options.transit?.read();
+  const chosen = chooseFeeds(transitCopy, localPlaces(options.config.config));
   const factories = [
     createNwsSource,
     createIpawsSource,
@@ -777,8 +802,10 @@ export function openInstance(options: InstanceOptions): Instance {
     ...(radarToken === "" ? [] : radarFactories(radarToken)),
     ...feeds.map((feed) => feed.create),
     ...pages.map((page) => statusPageFactory(page)),
+    ...chosen.feeds.map((feed) => transitFactory(feed)),
   ];
-  const pace = sourcePace(clock, wall, factories.length);
+  // The host of the transit catalog has a place of its own in the pace. Thus a read of the catalog does not stop a source.
+  const pace = sourcePace(clock, wall, factories.length + (options.transit === undefined ? 0 : 1));
   // One User-Agent for each request of the instance: the sources and the store of shapes.
   const agent = userAgent(options.config.config.contact);
   const polled = factories.map((make) => make({ pace, transport: options.transport, userAgent: agent }));
@@ -830,6 +857,24 @@ export function openInstance(options: InstanceOptions): Instance {
     }
   };
   const shapes = keepShapes({ store, places, onShapes, close: () => cache?.close() });
+  const transitCache = options.transit;
+  const transit: InstanceTransit | undefined =
+    transitCache === undefined
+      ? undefined
+      : {
+          ...keepTransit({
+            cache: transitCache,
+            copy: transitCopy,
+            fetch: createCatalogFetch({ pace, transport: options.transport, userAgent: agent }),
+            now: () => wall.now(),
+            places,
+            opened: feedsKey(chosen.feeds),
+            onFeeds: options.onTransitFeeds,
+            onTransit: options.onTransit,
+          }),
+          chosen,
+          copied: transitCopy !== undefined,
+        };
 
   const pushover = createPushoverChannel({
     token,
@@ -911,6 +956,8 @@ export function openInstance(options: InstanceOptions): Instance {
     onPass: async (pass) => {
       latest = pass;
       shapes.afterPass(pass.view.incidents, earliest(runtime.config.sources.map((descriptor) => nextFetch(runtime.state(), descriptor))));
+      // The keeper of the transit catalog reads the catalog when its copy is due. The pass does not wait for the read.
+      transit?.afterPass();
       await options.onPass?.(pass);
     },
     fetchLimit: options.fetchLimit ?? INSTANCE_FETCH_LIMIT,
@@ -987,6 +1034,7 @@ export function openInstance(options: InstanceOptions): Instance {
     runtime,
     loop,
     shapes,
+    ...(transit === undefined ? {} : { transit }),
     ...(start === undefined ? {} : { zones: start.counts }),
     quotas,
     balances,

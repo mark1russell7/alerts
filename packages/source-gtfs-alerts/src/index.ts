@@ -14,6 +14,8 @@ import { mapObservation } from "./map.ts";
 
 export { CATALOG_COLUMNS, CATALOG_URL, catalogFeeds, feedsFor, MAX_ORIGIN_LENGTH, originOf } from "./catalog.ts";
 export type { CatalogFeeds, CatalogSkip } from "./catalog.ts";
+export { CATALOG_SOURCE, CATALOG_TIMEOUT_MS, createCatalogFetch } from "./catalog-fetch.ts";
+export type { CatalogCopy, CatalogFetch, CatalogFetched, CatalogFetchOptions } from "./catalog-fetch.ts";
 export { checkCanary, FEED_MAX_AGE_MS } from "./check.ts";
 export { GTFS_MEASURES, gtfsDescriptor } from "./descriptor.ts";
 export { BODY_TYPE, createGtfsFetch, DIFFERENTIAL, FEED_TIMEOUT_MS, feedBodies } from "./fetch.ts";

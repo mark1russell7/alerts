@@ -32,6 +32,7 @@ import { memoryCache, type ShapeCache } from "@mark1russell7/alerts-shapes-nws";
 import { CANARY_PATH, createNwsSource } from "@mark1russell7/alerts-source-nws-api";
 import { fakeSessions, NWWS_DESCRIPTOR } from "@mark1russell7/alerts-source-nwws";
 import { SWPC_KINDS } from "@mark1russell7/alerts-source-swpc";
+import { CATALOG_URL, sourceIdOf, type CatalogCopy } from "@mark1russell7/alerts-source-gtfs-alerts";
 import { KEV_KINDS } from "@mark1russell7/alerts-source-cisa-kev";
 import { AWS_DESCRIPTOR } from "@mark1russell7/alerts-source-aws";
 import { AZURE_DESCRIPTOR } from "@mark1russell7/alerts-source-azure";
@@ -49,6 +50,7 @@ import { spendGates, spendQuota } from "./balance.ts";
 import { CLOCK_SKEW_LIMIT, COPY_TOKEN_KEY, EXCHANGE_EVERY, EXCHANGE_LIMIT } from "./copy.ts";
 import { overdueLimit } from "./delivery.ts";
 import type { ShapeOutcome } from "./shapes.ts";
+import type { TransitCache, TransitOutcome } from "./transit.ts";
 import { nextFetch } from "./view.ts";
 import { openRuntimeLog, type RuntimeLog } from "./log.ts";
 import { openReadingStore, READINGS_FILE } from "./readings.ts";
@@ -831,6 +833,104 @@ describe("openInstance", () => {
     await finish(clock, instance.runtime.pass());
     await finish(clock, instance.shapes.idle());
     expect(told).toBe(1);
+  });
+
+  describe("the transit feeds (AL-60)", () => {
+    // The header of the real catalog (CC0 1.0), and two feeds of service alerts of these tests. The box of the first holds the place.
+    const HEADER = fixture("alerts-source-gtfs-alerts", "mobility-database-20261117.csv").split("\n")[0] ?? "";
+    const row = (id: string, url: string, [west, south, east, north]: readonly number[]): string => {
+      const cells: Record<string, string> = {
+        id,
+        data_type: "gtfs_rt",
+        entity_type: "sa",
+        provider: `Transit ${id}`,
+        "urls.direct_download": url,
+        "urls.authentication_type": "0",
+        "location.bounding_box.minimum_longitude": String(west),
+        "location.bounding_box.minimum_latitude": String(south),
+        "location.bounding_box.maximum_longitude": String(east),
+        "location.bounding_box.maximum_latitude": String(north),
+        status: "active",
+      };
+      return HEADER.split(",").map((column) => cells[column] ?? "").join(",");
+    };
+    const NEAR = "https://transit.example.test/near.pb";
+    const CATALOG = [HEADER, row("mdb-9001", NEAR, [-99, 28, -98, 29]), row("mdb-9002", "https://transit.example.test/far.pb", [14.4, 53.3, 14.8, 53.6]), ""].join("\n");
+    // An empty feed with the header time T0. The census of the feed passes the canary.
+    const varint = (value: number): number[] => {
+      const out: number[] = [];
+      let rest = value;
+      while (rest >= 0x80) {
+        out.push((rest % 0x80) | 0x80);
+        rest = Math.floor(rest / 0x80);
+      }
+      return [...out, rest];
+    };
+    const header = [0x0a, 3, ...new TextEncoder().encode("2.0"), 0x18, ...varint(Math.floor(T0 / 1000))];
+    const EMPTY_FEED = new Uint8Array([0x0a, header.length, ...header]);
+    const withTransit = (net: ReturnType<typeof network>): Transport => async (exchange, signal) => {
+      const url = new URL(exchange.url);
+      if (url.hostname === "transit.example.test") {
+        net.exchanges.push(exchange);
+        return { status: 200, statusText: "OK", headers: { "content-type": "application/x-protobuf" }, body: "", bytes: EMPTY_FEED };
+      }
+      if (exchange.url === CATALOG_URL) {
+        net.exchanges.push(exchange);
+        return { status: 200, statusText: "OK", headers: { "content-type": "text/csv", etag: '"c1"' }, body: CATALOG };
+      }
+      return net.transport(exchange, signal);
+    };
+    const cacheOf = (copy: CatalogCopy | undefined) => {
+      const written: CatalogCopy[] = [];
+      const cache: TransitCache = { read: () => written.at(-1) ?? copy, write: (next) => void written.push(next) };
+      return { cache, written };
+    };
+
+    it("reads each transit feed of the copy whose box meets a place, and no request holds a position", async () => {
+      const net = network();
+      const { cache, written } = cacheOf({ text: CATALOG, fetched: T0 });
+      const { instance, clock } = open(store(SECRETS), CONFIG, 0, TEST_FETCH_LIMIT, { transport: withTransit(net), transit: cache });
+      expect(instance.transit?.chosen.feeds.map((feed) => feed.id)).toEqual(["mdb-9001"]);
+      expect(instance.transit?.copied).toBe(true);
+      const id = sourceIdOf({ id: "mdb-9001" });
+      expect(instance.runtime.config.sources.find((source) => source.id === id)?.kinds).toEqual(["transport.transit.service-alert"]);
+      const pass = await finish(clock, instance.runtime.pass());
+      expect(pass.fetched).toContain(id);
+      expect(pass.view?.health.find((health) => health.source === id)?.state).toBe("healthy");
+      // A kind of context needs no source, so the place has no gap of coverage for it.
+      expect(pass.view?.coverage.filter((entry) => entry.kind === "transport.transit.service-alert")).toMatchObject([{ required: 0, sources: [id] }]);
+      const transit = net.exchanges.filter((exchange) => new URL(exchange.url).hostname === "transit.example.test");
+      expect(transit.map((exchange) => exchange.url)).toEqual([NEAR]);
+      for (const exchange of transit) {
+        expect(JSON.stringify(exchange)).not.toContain(String(LONGITUDE));
+        expect(JSON.stringify(exchange)).not.toContain(String(LATITUDE));
+      }
+      // The copy is fresh, so the keeper does not read the catalog.
+      await finish(clock, instance.transit!.idle());
+      expect(written).toEqual([]);
+      expect(net.exchanges.some((exchange) => exchange.url === CATALOG_URL)).toBe(false);
+    });
+
+    it("reads the catalog after the first pass with no copy, and tells one time that the feeds changed", async () => {
+      const net = network();
+      const { cache, written } = cacheOf(undefined);
+      const outcomes: TransitOutcome[] = [];
+      let told = 0;
+      const { instance, clock } = open(store(SECRETS), CONFIG, 0, TEST_FETCH_LIMIT, { transport: withTransit(net), transit: cache, onTransit: (outcome) => outcomes.push(outcome), onTransitFeeds: () => (told += 1) });
+      expect(instance.transit?.chosen.feeds).toEqual([]);
+      expect(instance.transit?.copied).toBe(false);
+      await finish(clock, instance.runtime.pass());
+      await finish(clock, instance.transit!.idle());
+      expect(outcomes).toEqual([{ ok: true, changed: true, feeds: 1, cut: 0 }]);
+      expect(written.map((copy) => copy.text)).toEqual([CATALOG]);
+      expect(told).toBe(1);
+      const catalog = net.exchanges.filter((exchange) => exchange.url === CATALOG_URL);
+      expect(catalog).toHaveLength(1);
+      expect(catalog[0]?.headers["user-agent"]).toBe(USER_AGENT_NAME);
+      // The instance keeps the feeds of its open. The supervisor starts a new instance with the new feeds.
+      expect(instance.runtime.config.sources.some((source) => source.id === sourceIdOf({ id: "mdb-9001" }))).toBe(false);
+      await instance.transit!.close();
+    });
   });
 
   it("gets no outline without a cache of shapes", async () => {
