@@ -39,6 +39,8 @@ export interface ReadingStore {
    * The function `readSeries` of the core takes this list. A row that fails the schema of a reading gives no reading.
    */
   series(ref: SeriesRef, since: Instant): Reading[];
+  /** This function gives each series of the store, in the order of the source, the measure and the series. */
+  refs(): SeriesRef[];
   /** This function deletes each reading before `before`, and gives the count of the deleted readings. */
   prune(before: Instant): number;
   /** This function gives the count of the readings in the store. */
@@ -102,6 +104,7 @@ export function openReadingStore(path: string): FileReadingStore {
      ON CONFLICT DO NOTHING`,
   );
   const read = db.prepare("SELECT body FROM readings WHERE source = $source AND measure = $measure AND series = $series AND at >= $since ORDER BY at, observation, version");
+  const list = db.prepare("SELECT DISTINCT source, measure, series FROM readings ORDER BY source, measure, series");
   const drop = db.prepare("DELETE FROM readings WHERE at < $before");
   const total = db.prepare("SELECT count(*) AS n FROM readings");
   return {
@@ -118,6 +121,7 @@ export function openReadingStore(path: string): FileReadingStore {
       }),
     series: (ref, since) =>
       read.all({ source: ref.source, measure: ref.measure, series: ref.series, since }).flatMap((row) => readingOf(row["body"]) ?? []),
+    refs: () => list.all().map((row) => ({ source: String(row["source"]) as SourceId, measure: String(row["measure"]), series: String(row["series"]) })),
     prune: (before) => Number(drop.run({ before }).changes),
     count: () => Number(total.get()?.["n"] ?? 0),
     close: () => db.close(),

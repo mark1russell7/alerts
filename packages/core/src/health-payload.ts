@@ -1,6 +1,6 @@
 /**
  * The payload of the health route of the runtime. It tells the state of each part of the system. The parts are the
- * sources, the lateness, the coverage, the other copies, the quotas and the balances.
+ * sources, the lateness, the coverage, the other copies, the quotas, the balances and the reads on a schedule.
  */
 
 import type {
@@ -20,7 +20,7 @@ import type { Lateness } from "./lateness.ts";
 import { balanceStages, copyStages, quotaStages } from "./system-reports.ts";
 
 /** The name of the format of the health payload. A change that breaks a reader gets a new name. */
-export const HEALTH_FORMAT = "alerts-health/1";
+export const HEALTH_FORMAT = "alerts-health/2";
 
 /**
  * The health of one source in the payload. It keeps the kind of the last failure, and not its message. A message can hold
@@ -41,6 +41,21 @@ export interface CopyHealth {
 export interface QuotaHealth {
   readonly quota: ChannelQuota;
   readonly stages: readonly QuotaStage[];
+}
+
+/**
+ * The health of one read on a schedule of the runtime, for example the read of the replies of the texts. It holds no
+ * message of a failure and no value of the read.
+ */
+export interface ReadHealth {
+  /** The read, as words: for example `replies of the texts` or `spend of provider:twilio`. */
+  readonly what: string;
+  /** The end of the last read that passed, or `null` before it. */
+  readonly at: Instant | null;
+  /** This value is true when the last read failed. */
+  readonly failed: boolean;
+  /** The time of the next read, or `null` before the first read. */
+  readonly next: Instant | null;
 }
 
 /** The health of the balance of one provider account: the balance, and its stages at the time of the read. */
@@ -66,6 +81,7 @@ export interface HealthPayload {
   readonly copies: readonly CopyHealth[];
   readonly quotas: readonly QuotaHealth[];
   readonly balances: readonly BalanceHealth[];
+  readonly reads: readonly ReadHealth[];
 }
 
 /** These are the inputs of the payload of the health route. */
@@ -86,6 +102,8 @@ export interface HealthPayloadInput {
   readonly quotas: readonly ChannelQuota[];
   /** The balance of each provider account that has a read. */
   readonly balances: readonly ProviderBalance[];
+  /** The health of each read on a schedule, other than the balances, at the time of the read. */
+  readonly reads: readonly ReadHealth[];
 }
 
 /** This function gives the health of a source without the message of its last failure. */
@@ -110,5 +128,6 @@ export function healthPayload(input: HealthPayloadInput): HealthPayload {
     copies: input.copies.map((watch) => ({ copy: watch.copy, stages: copyStages(watch, now), ...(watch.read === undefined ? {} : { read: watch.read }) })),
     quotas: input.quotas.map((quota) => ({ quota, stages: quotaStages(quota) })),
     balances: input.balances.map((balance) => ({ balance, stages: balanceStages(balance, now) })),
+    reads: input.reads,
   };
 }
