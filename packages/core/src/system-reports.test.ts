@@ -26,6 +26,9 @@ import {
   quotaStages,
   recentRecovery,
   recentStep,
+  reportsShared,
+  SHARED_HANDOVER,
+  sharedHandoverAt,
   SOURCE_SUBJECT,
   stepSizeText,
   SYSTEM_SOURCE,
@@ -418,6 +421,94 @@ describe("the balance reports", () => {
     expect(levels(step.reports, WATCHER, START)).toEqual(["notice", "notice"]);
     expect(levels(step.reports, OPERATOR, START)).toEqual(["none", "none"]);
     expect(addSystemReports(NO_SYSTEM_LINES, step.reports, step.observations)).toEqual(step.lines);
+  });
+});
+
+describe("the facts of a shared account (AL-62)", () => {
+  const DAY = 86_400_000;
+  const START = Date.UTC(2026, 10, 15, 12);
+  const CALL = "twilio-call" as ChannelId;
+  const codes = (reports: readonly Report[]) => reports.map((report) => [report.op, report.kind.code]);
+  const balance = (read?: { readonly balance: number; readonly at?: number }): ProviderBalance => ({
+    provider: "provider:twilio",
+    title: "Twilio",
+    channels: [CALL],
+    floors: [5],
+    maxAge: 2 * DAY,
+    since: START,
+    ...(read === undefined ? {} : { read: { balance: read.balance, currency: "USD", at: read.at ?? START } }),
+  });
+  const watch = (copy: string, read?: number, since = START): CopyWatch => ({
+    copy,
+    skewLimit: 2_000,
+    maxAge: 60_000,
+    since,
+    ...(read === undefined ? {} : { read: { at: read, skew: 0, sameConfig: true } }),
+  });
+
+  it("chooses the copy with the smallest id of the copies that answer, and hands over after a silence", () => {
+    expect(reportsShared(undefined, [watch("copy-a", START)], START)).toBe(true);
+    expect(reportsShared("copy-b", undefined, START)).toBe(true);
+    expect(reportsShared("copy-a", [watch("copy-b", START)], START)).toBe(true);
+    expect(sharedHandoverAt("copy-a", [watch("copy-b", START)])).toBeUndefined();
+    expect(reportsShared("copy-b", [watch("copy-a", START)], START)).toBe(false);
+    expect(reportsShared("copy-b", [watch("copy-a", START)], START + SHARED_HANDOVER - 1)).toBe(false);
+    expect(reportsShared("copy-b", [watch("copy-a", START)], START + SHARED_HANDOVER)).toBe(true);
+    // With no read that passed, the silence counts from the start of the watch.
+    expect(sharedHandoverAt("copy-b", [watch("copy-a", undefined, START + DAY)])).toBe(START + DAY + SHARED_HANDOVER);
+    // Of three copies, the third reports only when each copy with a smaller id is silent.
+    const both = [watch("copy-a", START), watch("copy-b", START + DAY)];
+    expect(sharedHandoverAt("copy-c", both)).toBe(START + DAY + SHARED_HANDOVER);
+    expect(reportsShared("copy-c", both, START + SHARED_HANDOVER)).toBe(false);
+    expect(reportsShared("copy-b", both, START + SHARED_HANDOVER)).toBe(true);
+  });
+
+  it("gives the low and empty lines in one copy, and the unread line in each copy", () => {
+    const empty = [balance({ balance: -0.5 })];
+    const first = systemReports(NO_SYSTEM_LINES, snapshot({ balances: empty, copy: "copy-a", copies: [watch("copy-b", START)] }), START);
+    expect(codes(first.reports)).toEqual([
+      ["alert", "system.balance.empty"],
+      ["alert", "system.balance.low"],
+    ]);
+    const second = systemReports(NO_SYSTEM_LINES, snapshot({ balances: empty, copy: "copy-b", copies: [watch("copy-a", START)] }), START);
+    expect(second.reports).toEqual([]);
+    // The unread line is a fact of the copy: its own reads fail.
+    const unread = systemReports(NO_SYSTEM_LINES, snapshot({ balances: [balance()], copy: "copy-b", copies: [watch("copy-a", START + 2 * DAY)] }), START + 2 * DAY);
+    expect(codes(unread.reports)).toEqual([["alert", "system.balance.unread"]]);
+  });
+
+  it("ends the lines of the second copy when the first copy answers, and opens them after the handover", () => {
+    const low = [balance({ balance: 1 })];
+    // The silent copy is also unread. That line is a fact of the copy watch, not of the account.
+    const alone = systemReports(NO_SYSTEM_LINES, snapshot({ balances: low, copy: "copy-b", copies: [watch("copy-a", undefined)] }), START + SHARED_HANDOVER);
+    expect(codes(alone.reports)).toEqual([
+      ["alert", "system.balance.low"],
+      ["alert", "system.copy.unread"],
+    ]);
+    const back = systemReports(alone.lines, snapshot({ balances: low, copy: "copy-b", copies: [watch("copy-a", START + SHARED_HANDOVER + 5_000)] }), START + SHARED_HANDOVER + 5_000);
+    expect(codes(back.reports)).toEqual([
+      ["cancel", "system.balance.low"],
+      ["cancel", "system.copy.unread"],
+    ]);
+    expect(back.lines.open).toEqual({});
+    // A snapshot with no balances keeps the open balance line, also in the second copy. Only the copy line ends.
+    const unknown = systemReports(alone.lines, snapshot({ copy: "copy-b", copies: [watch("copy-a", START + SHARED_HANDOVER + 5_000)] }), START + SHARED_HANDOVER + 5_000);
+    expect(codes(unknown.reports)).toEqual([["cancel", "system.copy.unread"]]);
+    expect(Object.keys(unknown.lines.open)).toEqual(["balance/provider%3Atwilio/low/5"]);
+  });
+
+  it.each(SEEDS)("gives the facts to exactly one of two copies that answer, and to each copy in a silence (seed %i)", (seed) => {
+    const r = random(seed);
+    for (let round = 0; round < 50; round += 1) {
+      const ids = [`copy-${String(r.int(0, 999))}`, `copy-${String(r.int(0, 999))}-x`];
+      const [one, two] = r.chance(0.5) ? ids : [ids[1]!, ids[0]!];
+      const read = START + r.int(0, DAY);
+      const at = read + r.int(0, SHARED_HANDOVER - 1);
+      const answers = [reportsShared(one, [watch(two!, read)], at), reportsShared(two, [watch(one!, read)], at)];
+      expect(answers.filter(Boolean)).toHaveLength(1);
+      const late = read + SHARED_HANDOVER + r.int(0, DAY);
+      expect([reportsShared(one, [watch(two!, read)], late), reportsShared(two, [watch(one!, read)], late)]).toEqual([true, true]);
+    }
   });
 });
 

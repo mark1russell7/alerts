@@ -187,9 +187,11 @@ export interface SystemSnapshot {
   readonly quotas?: readonly ChannelQuota[];
   /**
    * The balances of the provider accounts. Each stage that `balanceStages` gives is a condition. With no
-   * balances, each open line of a balance stays open.
+   * balances, each open line of a balance stays open. Only one copy reports the stages `low` and `empty` (`reportsShared`).
    */
   readonly balances?: readonly ProviderBalance[];
+  /** The id of this copy. With the watches of the other copies, it chooses the copy that reports the facts of a shared account. */
+  readonly copy?: string;
   /**
    * The watches of the other copies of the system. Each stage that `copyStages` gives is a condition. With no copies,
    * each open line of a copy stays open.
@@ -292,6 +294,33 @@ export function copyUnreadAt(watch: CopyWatch): Instant {
   return (watch.read?.at ?? watch.since) + watch.maxAge;
 }
 
+/** The time with no read of another copy after which this copy also reports the facts of a shared account (AL-62). It is longer than a restart. */
+export const SHARED_HANDOVER: Duration = 15 * 60_000;
+
+/**
+ * This function tells if this copy reports the facts of a shared account at the time `at` (AL-62). Each copy reads the
+ * same account, thus each copy sees the same stages `low` and `empty` of a balance.
+ *
+ * - The copy with the smallest id of the copies that answer reports them. Thus the copies send one alert, not one alert each.
+ * - Another copy answers until `SHARED_HANDOVER` after its last read that passed, or after the start of its watch.
+ * - With no id of this copy, or with no watches of other copies, this copy reports them.
+ */
+export function reportsShared(copy: string | undefined, copies: readonly CopyWatch[] | undefined, at: Instant): boolean {
+  const from = sharedHandoverAt(copy, copies);
+  return from === undefined || from <= at;
+}
+
+/**
+ * This function gives the time from which this copy reports the facts of a shared account. A copy with a smaller id
+ * that answers before that time moves it. With no copy with a smaller id, it gives `undefined`.
+ */
+export function sharedHandoverAt(copy: string | undefined, copies: readonly CopyWatch[] | undefined): Instant | undefined {
+  if (copy === undefined || copies === undefined) return undefined;
+  const smaller = copies.filter((watch) => compareCodeUnits(watch.copy, copy) < 0);
+  if (smaller.length === 0) return undefined;
+  return Math.max(...smaller.map((watch) => (watch.read?.at ?? watch.since) + SHARED_HANDOVER));
+}
+
 /**
  * This function gives the latest item at `at` or before it, in `window` before `at`, or `undefined`. Of two items at
  * the same time, it gives the last in the list.
@@ -330,7 +359,8 @@ export function gapGrade(entry: Coverage, threatened: boolean): { readonly sever
  * This function adds one snapshot to the fold at the time `at`. Each of these is a condition:
  *
  * - Each source in `DOWN_STATES`, each late expectation and each coverage that is short.
- * - Each stage of a quota, each stage of a balance and each stage of another copy.
+ * - Each stage of a quota, each stage of a balance and each stage of another copy. Only one copy reports the stages
+ *   `low` and `empty` of a balance (`reportsShared`). The stage `unread` is a fact of each copy.
  * - The latest step of the wall clock in `CLOCK_STEP_WINDOW` before `at`.
  * - The latest recovery of the log in `LOG_RECOVERY_WINDOW` before `at`.
  * - Each run of a drill that waits for its acknowledgment, and each drill whose last run failed.
@@ -354,8 +384,11 @@ export function systemReports(lines: SystemLines, snapshot: SystemSnapshot, at: 
   for (const quota of snapshot.quotas ?? []) {
     for (const stage of quotaStages(quota)) conditions.set(quotaName(quota.channel, stage), quotaCondition(quota, stage));
   }
+  // The stages low and empty are facts of the account, and one copy reports them. The stage unread is a fact of this copy.
+  const shared = reportsShared(snapshot.copy, snapshot.copies, at);
   for (const balance of snapshot.balances ?? []) {
     for (const stage of balanceStages(balance, at)) {
+      if (stage !== "unread" && !shared) continue;
       if (stage !== "low") conditions.set(balanceName(balance.provider, stage), balanceCondition(balance, stage, at));
       // Each floor that the balance is below is its own line. Thus each floor gives its own alert.
       else for (const floor of balanceFloorsBelow(balance)) conditions.set(balanceName(balance.provider, stage, floor), balanceCondition(balance, stage, at, floor));
