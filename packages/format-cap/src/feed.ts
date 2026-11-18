@@ -4,7 +4,8 @@
  */
 import { Problems, type MapProblem } from "@mark1russell7/alerts";
 import { ENTITY_ACTION, EntityDecoder } from "@nodable/entities";
-import { XMLParser, XMLValidator } from "fast-xml-parser";
+import { XMLParser } from "fast-xml-parser";
+import { parseXml, xmlFault } from "./well-formed.ts";
 
 /** The namespace of Atom 1.0. */
 export const ATOM_NAMESPACE = "http://www.w3.org/2005/Atom";
@@ -79,12 +80,11 @@ export function attributeOf(value: unknown, name: string): string | undefined {
  */
 export function openFeed(xml: string): OpenFeed {
   if (xml.includes("<!DOCTYPE")) return { ok: false, reason: "the text has a DOCTYPE: a feed has no DTD", malformed: false };
-  const valid = XMLValidator.validate(xml);
-  if (valid !== true) {
-    const { msg, line, col } = valid.err;
-    return { ok: false, reason: `the XML is not well formed: ${msg} (line ${String(line)}, column ${String(col)})`, malformed: true };
-  }
-  const document: unknown = parser.parse(xml);
+  const fault = xmlFault(xml);
+  if (fault !== undefined) return { ok: false, reason: fault, malformed: true };
+  const parsed = parseXml(parser, xml);
+  if (!parsed.ok) return { ok: false, reason: parsed.fault, malformed: true };
+  const { document } = parsed;
   if (!isObject(document)) return { ok: false, reason: "the text has no root element", malformed: false };
   const problems = new Problems();
   if (document["rss"] !== undefined) {

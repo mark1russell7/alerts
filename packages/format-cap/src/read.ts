@@ -5,9 +5,10 @@
 
 import { Problems, type MapProblem } from "@mark1russell7/alerts";
 import { ENTITY_ACTION, EntityDecoder } from "@nodable/entities";
-import { XMLParser, XMLValidator } from "fast-xml-parser";
+import { XMLParser } from "fast-xml-parser";
 import { declaredNamespace, localName, nextTag, prefixOf } from "./scan.ts";
 import { capList } from "./values.ts";
+import { parseXml, xmlFault } from "./well-formed.ts";
 
 /** The namespaces of CAP that the reader knows, with their versions. */
 export const CAP_NAMESPACES: Readonly<Record<string, CapVersion>> = {
@@ -338,11 +339,8 @@ function infoOf(node: XmlObject, path: string, problems: Problems): CapInfo {
  */
 export function readCap(xml: string): CapRead {
   if (xml.includes("<!DOCTYPE")) return { ok: false, reason: "the text has a DOCTYPE: a CAP message has no DTD" };
-  const valid = XMLValidator.validate(xml);
-  if (valid !== true) {
-    const { msg, line, col } = valid.err;
-    return { ok: false, reason: `the XML is not well formed: ${msg} (line ${String(line)}, column ${String(col)})` };
-  }
+  const fault = xmlFault(xml);
+  if (fault !== undefined) return { ok: false, reason: fault };
   const root = nextTag(xml, 0);
   if (root === undefined || localName(root.name) !== "alert") {
     return { ok: false, reason: `the root element is ${root === undefined ? "absent" : root.name}, not a CAP alert` };
@@ -357,8 +355,9 @@ export function readCap(xml: string): CapRead {
     if (known === undefined) return { ok: false, reason: `the namespace ${namespace} is not CAP 1.1 or CAP 1.2` };
     version = known;
   }
-  const document: unknown = parser.parse(xml);
-  const alert = isObject(document) ? document["alert"] : undefined;
+  const parsed = parseXml(parser, xml);
+  if (!parsed.ok) return { ok: false, reason: parsed.fault };
+  const alert = isObject(parsed.document) ? parsed.document["alert"] : undefined;
   if (!isObject(alert)) return { ok: false, reason: "the alert element holds no elements" };
   const path = "alert";
   checkKnown(alert, KNOWN.alert, path, problems);
