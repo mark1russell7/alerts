@@ -850,7 +850,7 @@ export interface ChannelQuota {
 /**
  * The stages of the balance of a provider account. Each stage is a line of system reports:
  *
- * - `low`: the balance is below the floor.
+ * - `low`: the balance is below a floor. Each floor that the balance is below gives its own line `low`.
  * - `empty`: the balance is 0 or less. The provider then refuses each paid message.
  * - `unread`: no read passed for the maximum age or longer. Then the watch cannot see a low balance.
  */
@@ -906,8 +906,11 @@ export interface ProviderBalance {
   readonly title: string;
   /** The channels that the account pays for. The reports have their subjects. */
   readonly channels: readonly ChannelId[];
-  /** Below this balance, in the currency of the account, the stage is `low`. */
-  readonly floor: number;
+  /**
+   * The floors of the balance in the currency of the account. The list has one floor or more. Below a floor, the stage is
+   * `low`. Each floor that the balance is below gives its own line `low`.
+   */
+  readonly floors: readonly number[];
   /** The longest time with no read that passed. After it, the stage is `unread`. */
   readonly maxAge: Duration;
   /** The start of the watch. With no read, the time of `unread` counts from it. */

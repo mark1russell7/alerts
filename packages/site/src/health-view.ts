@@ -4,7 +4,7 @@
  * The draw functions make the elements of the panel from that data.
  */
 
-import { DOWN_STATES, kindLabel, type BalanceHealth, type CopyHealth, type HealthPayload, type HealthState, type QuotaHealth, type ReadHealth, type SourceHealthView } from "@mark1russell7/alerts";
+import { DOWN_STATES, balanceFloorsBelow, kindLabel, type BalanceHealth, type CopyHealth, type HealthPayload, type HealthState, type QuotaHealth, type ReadHealth, type SourceHealthView } from "@mark1russell7/alerts";
 import { h } from "@mark1russell7/site-pages/chrome";
 import { countOf, listOf } from "@mark1russell7/text/english";
 import { compareCodeUnits } from "@mark1russell7/text/order";
@@ -194,7 +194,11 @@ function balanceFact({ balance, stages }: BalanceHealth, at: number): DeliveryFa
     const paid = balance.channels.length === 0 ? "" : ` on ${channelsText(balance.channels)}`;
     return { ...base, tone: "bad", word: "Empty", text: join(`The balance is ${money(read.balance)}. The provider refuses each paid message${paid}.`), stopped: balance.channels };
   }
-  if (stages.includes("low") && read !== undefined) return { ...base, tone: "warn", word: "Low", text: join(`The balance is ${money(read.balance)}, and the floor is ${money(balance.floor)}.`), stopped: [] };
+  // The text gives the lowest floor that the balance is below: the last floor that gave an alert.
+  const below = balanceFloorsBelow(balance);
+  if (stages.includes("low") && read !== undefined && below.length > 0) {
+    return { ...base, tone: "warn", word: "Low", text: join(`The balance is ${money(read.balance)}, and the floor is ${money(Math.min(...below))}.`), stopped: [] };
+  }
   return unread === "" ? undefined : { ...base, tone: "warn", word: "Not read", text: unread, stopped: [] };
 }
 

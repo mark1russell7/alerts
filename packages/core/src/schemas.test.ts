@@ -928,6 +928,8 @@ describe("the private configuration", () => {
     holds(alertConfigSchema, { ...CONFIG, spend: [spend] });
     const { reserveUsd: _reserve, ...noReserve } = spend;
     holds(spendConfigSchema, { ...noReserve, floor: -1 });
+    holds(spendConfigSchema, { ...spend, floor: [5, 2] });
+    for (const floor of [[], ["5"], [5, Number.NaN]]) fails(spendConfigSchema, { ...spend, floor });
     fails(spendConfigSchema, { ...spend, reserveUsd: undefined });
     for (const bad of [{ monthlyUsd: 0 }, { monthlyUsd: -1 }, { reserveUsd: -1 }, { floor: "5" }, { timeZone: "" }, { provider: "" }, { currency: "USD" }]) fails(spendConfigSchema, { ...spend, ...bad });
     // A reserve above the cap and a bad zone are problems of the load, with the names of the fields.
