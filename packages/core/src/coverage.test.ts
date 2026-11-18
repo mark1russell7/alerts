@@ -144,6 +144,14 @@ describe("coverage", () => {
     expect(coverageShort(entry!)).toBe(false);
   });
 
+  it("needs no source for a kind of context, so a place with no transit feed has no gap", () => {
+    expect(requiredFor(DEFAULT_COVERAGE_POLICY, "transport.transit")).toBe(0);
+    expect(requiredFor(DEFAULT_COVERAGE_POLICY, "transport.rail")).toBe(1);
+    const [entry] = coverage({ sources: [API], health: [healthOf("api", "healthy")], places: [KANSAS], kinds: ["transport.transit"] });
+    expect(entry).toMatchObject({ sources: [], independent: 0, required: 0, proven: true });
+    expect(coverageShort(entry!)).toBe(false);
+  });
+
   it("gives each place and kind in order", () => {
     const state = source("state", { coverage: [{ type: "code", system: "state", code: "KS" }] });
     const entries = coverage({ sources: [state, RADIO], health: [healthOf("state", "healthy"), healthOf("radio", "healthy")], places: [KANSAS, TEXAS], kinds: [TORNADO, "met.winter"] });

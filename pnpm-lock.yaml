@@ -613,6 +613,9 @@ importers:
       '@mark1russell7/alerts-source-gfz':
         specifier: workspace:*
         version: link:../source-gfz
+      '@mark1russell7/alerts-source-gtfs-alerts':
+        specifier: workspace:*
+        version: link:../source-gtfs-alerts
       '@mark1russell7/alerts-source-ipaws':
         specifier: workspace:*
         version: link:../source-ipaws
@@ -1171,6 +1174,9 @@ importers:
       '@mark1russell7/text':
         specifier: ^0.0.13
         version: 0.0.13
+      '@procedures/json':
+        specifier: ^0.64.0
+        version: 0.64.0
       polite-crawler:
         specifier: ^0.7.10
         version: 0.7.10(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)

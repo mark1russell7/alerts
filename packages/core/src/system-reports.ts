@@ -9,7 +9,7 @@
  */
 import { canonicalJson } from "@mark1russell7/rigor-generators";
 import { compareCodeUnits } from "@mark1russell7/text/order";
-import { BALANCE_KIND, CHANNEL_KIND, CLOCK_KIND, COPY_KIND, COVERAGE_KIND, DRILL_KIND, ESCALATION_KIND, hasKind, HEALTH_KIND, LOG_KIND, matchPlaces, PERSON_SUBJECT, QUOTA_KIND } from "./assess.ts";
+import { BALANCE_KIND, CHANNEL_KIND, CLOCK_KIND, CONTEXT_KINDS, COPY_KIND, COVERAGE_KIND, DRILL_KIND, ESCALATION_KIND, hasKind, HEALTH_KIND, LOG_KIND, matchPlaces, PERSON_SUBJECT, QUOTA_KIND } from "./assess.ts";
 import type {
   Area,
   BalanceStage,
@@ -391,8 +391,9 @@ export function gapGrade(entry: Coverage, threatened: boolean): { readonly sever
 export function systemReports(lines: SystemLines, snapshot: SystemSnapshot, at: Instant): SystemStep {
   const conditions = new Map<string, Condition>();
   const titles = new Map(snapshot.sources.map((source) => [source.id, source.title]));
+  const context = new Set(snapshot.sources.filter(contextSource).map((source) => source.id));
   for (const health of snapshot.health) {
-    if (DOWN_STATES.includes(health.state)) conditions.set(healthName(health.source), healthCondition(health, titles.get(health.source) ?? health.source));
+    if (DOWN_STATES.includes(health.state)) conditions.set(healthName(health.source), healthCondition(health, titles.get(health.source) ?? health.source, context.has(health.source)));
   }
   for (const entry of snapshot.lateness ?? []) {
     if (entry.state === "late") conditions.set(lateName(entry.expectation), lateCondition(entry, titles));
@@ -771,13 +772,22 @@ function drillNoStartCondition(copy: string, drill: DrillConfig): Condition {
   };
 }
 
-function healthCondition(health: SourceHealth, title: string): Condition {
+/**
+ * This function tells if each kind of a source is a kind of context (`CONTEXT_KINDS`). The reports of such a source reach no
+ * person, so its health reaches the digest at most. A source with no kind is not a source of context.
+ */
+export function contextSource(source: SourceDescriptor): boolean {
+  return source.kinds.length > 0 && source.kinds.every((kind) => hasKind(CONTEXT_KINDS, kind));
+}
+
+function healthCondition(health: SourceHealth, title: string, context: boolean): Condition {
   return {
     // The reason of the health has counts and times, so it is not a fact: a new count gives no update.
     facts: { source: health.source, state: health.state },
     kind: { code: `${HEALTH_KIND}.${health.state}`, label: `Source ${health.state}` },
-    severity: "moderate",
-    urgency: "expected",
+    // With the default policy, the health of a source of context reaches the digest at most.
+    severity: context ? "minor" : "moderate",
+    urgency: context ? "future" : "expected",
     response: ["assess"],
     onset: health.since,
     areas: [],

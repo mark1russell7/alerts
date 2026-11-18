@@ -1,7 +1,8 @@
 /**
  * The GTFS Realtime source of the alert system: the service alerts of the transit agencies. Each feed is one source.
  * Each alert gives one report of `transport.transit.service-alert`. The census of each fetch gives two indicator
- * readings of the dimension `public-transit`. The license of each feed is in its config.
+ * readings of the dimension `public-transit`. The license of each feed is in its config. The reader of the catalog of
+ * the Mobility Database gives the config of each open feed.
  */
 
 import type { SourceProcedures } from "@mark1russell7/alerts";
@@ -11,6 +12,10 @@ import { gtfsDescriptor } from "./descriptor.ts";
 import { createGtfsFetch, type GtfsFetchOptions } from "./fetch.ts";
 import { mapObservation } from "./map.ts";
 
+export { CATALOG_COLUMNS, CATALOG_URL, catalogFeeds, feedsFor, MAX_ORIGIN_LENGTH, originOf } from "./catalog.ts";
+export type { CatalogFeeds, CatalogSkip } from "./catalog.ts";
+export { CATALOG_SOURCE, CATALOG_TIMEOUT_MS, createCatalogFetch } from "./catalog-fetch.ts";
+export type { CatalogCopy, CatalogFetch, CatalogFetched, CatalogFetchOptions } from "./catalog-fetch.ts";
 export { checkCanary, FEED_MAX_AGE_MS } from "./check.ts";
 export { GTFS_MEASURES, gtfsDescriptor } from "./descriptor.ts";
 export { BODY_TYPE, createGtfsFetch, DIFFERENTIAL, FEED_TIMEOUT_MS, feedBodies } from "./fetch.ts";

@@ -69,6 +69,7 @@ import { loadPriors } from "./priors.ts";
 import { openReadingStore, READINGS_FILE } from "./readings.ts";
 import { GOOD_FILE, privateFiles, readStartTexts, reloadHook, startConfig, type CheckOf } from "./reload.ts";
 import { shapeReport, zoneCodesText } from "./shapes.ts";
+import { openTransitCache, TRANSIT_FILE, transitReport, transitText } from "./transit.ts";
 import { supervisor } from "./supervise.ts";
 
 /** This function gives a port from the environment, or the fallback when the variable is not set. */
@@ -225,6 +226,17 @@ async function runtime(): Promise<ServiceBuilder> {
   // A broken file of readings goes into quarantine, and the store starts empty. Each series has no read until its history fills again.
   const readings = openReadingStore(join(home, READINGS_FILE));
   if (readings.quarantined !== undefined) console.error(`The file ${READINGS_FILE} was broken. It is in quarantine, and the store of readings starts empty.`);
+  // A bad copy of the transit catalog gives no feed. The next good read of the catalog replaces the file.
+  const transit = openTransitCache(join(home, TRANSIT_FILE), (problem) => console.error(`The copy of the transit catalog is not used: ${problem}.`));
+  // Only the profile daemon has a supervisor that starts the runtime again. Each other profile tells the person to start it again.
+  const restart = (what: string, reason: string): void => {
+    if (name !== "daemon") {
+      console.error(`${what} Start the runtime again to use them.`);
+      return;
+    }
+    console.error(`${what} The runtime stops, and the supervisor starts it again.`);
+    void service.lifecycle?.shutdown(reason);
+  };
   // The priors of the shadow score. A fault of the file stops only the score.
   const priors = loadPriors((message) => console.error(message));
   const instance = openInstance({
@@ -256,19 +268,20 @@ async function runtime(): Promise<ServiceBuilder> {
       if (report !== undefined) console.error(redactSecrets(report, values));
     },
     // New outlines change the codes of a place. Only the profile daemon has a supervisor that starts the runtime again.
-    onPlaceCodes: () => {
-      if (name !== "daemon") {
-        console.error("New outlines change the codes of a place. Start the runtime again to use them.");
-        return;
-      }
-      console.error("New outlines change the codes of a place. The runtime stops, and the supervisor starts it again.");
-      void service.lifecycle?.shutdown("The codes of a place changed.");
+    onPlaceCodes: () => restart("New outlines change the codes of a place.", "The codes of a place changed."),
+    transit,
+    onTransit: (outcome) => {
+      const report = transitReport(outcome);
+      if (report !== undefined) console.error(redactSecrets(report, values));
     },
+    // A new copy of the catalog changes the transit feeds of the places. The same restart applies.
+    onTransitFeeds: () => restart("A new copy of the transit catalog changes the transit feeds of the places.", "The transit feeds changed."),
     // The worker of the outage call deploys its Functions at the start and once in each day. A failed deploy goes again after a backoff.
     onOutageLog: (line) => console.log(line),
     onOutageError: (error, failures) => console.error(`A deploy of the outage call failed (${failures} in sequence): ${redactSecrets(errorMessage(error), values)}`),
   });
   if (instance.zones !== undefined) console.log(zoneCodesText(instance.zones));
+  if (instance.transit !== undefined) console.log(transitText(instance.transit.chosen, instance.transit.copied));
   if (instance.runtime.skipped > 0) {
     console.error(`The log has ${String(instance.runtime.skipped)} events of types that this build does not know. A later build wrote them. The runtime skips them.`);
   }
@@ -291,6 +304,7 @@ async function runtime(): Promise<ServiceBuilder> {
     loop: instance.loop,
     log,
     shapes: instance.shapes,
+    ...(instance.transit === undefined ? {} : { transit: instance.transit }),
     quotas,
     readings,
     sources: instance.runtime,

@@ -23,6 +23,7 @@ import type {
 } from "./contracts.ts";
 import { ASSESSED_LEVELS } from "./contracts.ts";
 import {
+  CONTEXT_KINDS,
   DEFAULT_ASSESS_POLICY,
   EARTHQUAKE_PAST_WITHIN,
   LIFE_SAFETY_KINDS,
@@ -174,6 +175,22 @@ describe("the first table", () => {
       bySeverity: "digest",
       byUrgency: "urgent",
       level: "digest",
+    });
+  });
+
+  it("gives no level to a kind of context, also at the worst severity and urgency, and keeps the other transport kinds", () => {
+    expect(CONTEXT_KINDS).toEqual(["transport.transit"]);
+    const worst = { severity: "extreme", urgency: "immediate" } as const;
+    expect(tableLevel(DEFAULT_ASSESS_POLICY, { kind: { code: "transport.transit.service-alert", label: "" }, ...worst })).toEqual({
+      class: "context",
+      bySeverity: "none",
+      byUrgency: "none",
+      level: "none",
+    });
+    expect(tableLevel(DEFAULT_ASSESS_POLICY, { kind: { code: "transport.rail.accident", label: "" }, ...worst })).toEqual({
+      bySeverity: "urgent",
+      byUrgency: "urgent",
+      level: "urgent",
     });
   });
 });
