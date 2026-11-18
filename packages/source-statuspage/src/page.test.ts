@@ -1,6 +1,6 @@
-import { knownKind, SUBJECT_SYSTEMS, type SourceId } from "@mark1russell7/alerts";
+import { knownKind, SUBJECT_SYSTEMS, subjectNode, type SourceId } from "@mark1russell7/alerts";
 import { describe, expect, it } from "vitest";
-import { endpointKey, isDomain, isPageBase, nodeOf, PAGE_FORMATS, pageProblems, pageSubjects, PATH_PATTERN, REGION_SYSTEM, regionKey, SUBJECT_SYSTEM, subjectsOf, type PageFormat, type StatusPage } from "./page.ts";
+import { endpointKey, isDomain, isPageBase, PAGE_FORMATS, pageProblems, pageSubjects, PATH_PATTERN, REGION_SYSTEM, regionKey, SUBJECT_SYSTEM, subjectsOf, type PageFormat, type StatusPage } from "./page.ts";
 import { ATLASSIAN_STATUSPAGE, registeredPage, STATUS_PAGES } from "./register.ts";
 
 const GOOD: StatusPage = { id: "statuspage-example" as SourceId, title: "Example", base: "https://status.example.test", origin: "example", domain: "example.test", kind: "infra.saas.outage", dependsOn: [ATLASSIAN_STATUSPAGE] };
@@ -79,7 +79,7 @@ describe("the keys of the components", () => {
   });
 
   it("gives the domain of the service, then each subject of a key, with no subject twice", () => {
-    expect(pageSubjects(GOOD).map(nodeOf)).toEqual(["domain:example.test"]);
+    expect(pageSubjects(GOOD).map(subjectNode)).toEqual(["domain:example.test"]);
     const keys = [
       endpointKey("a", "A", "api.example.test"),
       endpointKey("b", "B", "api.example.test"),
@@ -87,7 +87,7 @@ describe("the keys of the components", () => {
       endpointKey("d", "D", "push.example.test"),
       regionKey("e", "E", "example/europe/sms"),
     ];
-    expect(pageSubjects({ ...GOOD, components: keys }).map(nodeOf)).toEqual(["domain:example.test", "domain:api.example.test", "provider-region:example/europe/sms", "domain:push.example.test"]);
+    expect(pageSubjects({ ...GOOD, components: keys }).map(subjectNode)).toEqual(["domain:example.test", "domain:api.example.test", "provider-region:example/europe/sms", "domain:push.example.test"]);
   });
 
   it("gives the subjects of a report: the service first, then each other subject of its keys with the names of its components", () => {

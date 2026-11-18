@@ -3,10 +3,7 @@
  * register of this package names well-known pages. The config of an instance can name other pages.
  */
 
-import { knownKind, SUBJECT_SYSTEMS, type Duration, type NodeKey, type SourceId, type Subject, type SubjectSystem } from "@mark1russell7/alerts";
-
-/** The system and the id of a subject, with no label. */
-export type SubjectKey = Pick<Subject, "system" | "id">;
+import { knownKind, SUBJECT_SYSTEMS, subjectNode, type Duration, type NodeKey, type SourceId, type Subject, type SubjectKey, type SubjectSystem } from "@mark1russell7/alerts";
 
 /**
  * The key of one component of a service: the subject of the component. The subject is the domain of the endpoint that
@@ -91,13 +88,6 @@ export function regionKey(id: string, name: string, path: string): ComponentKey 
   return { id, name, subject: { system: REGION_SYSTEM, id: path } };
 }
 
-/**
- * This function gives the node of a subject in an interest graph: the system, a colon and the id, for example
- * `domain:github.com`. The core gives the same node to each subject of a report.
- */
-export function nodeOf(subject: { readonly system: string; readonly id: string }): NodeKey {
-  return `${subject.system}:${subject.id}`;
-}
 
 /**
  * This function tells if a URL is a base URL of a page. A base URL has `https:` and a host. It has no user, port, path,
@@ -120,7 +110,7 @@ export function isDomain(text: string): boolean {
  */
 export function pageSubjects(page: Pick<StatusPage, "domain" | "components">): readonly SubjectKey[] {
   const all = [{ system: SUBJECT_SYSTEM, id: page.domain }, ...(page.components ?? []).map((key) => key.subject)];
-  const nodes = all.map(nodeOf);
+  const nodes = all.map(subjectNode);
   return all.filter((_subject, index) => nodes.indexOf(nodes[index]!) === index);
 }
 
@@ -129,10 +119,10 @@ export function pageSubjects(page: Pick<StatusPage, "domain" | "components">): r
  * other subject of the keys of the report is one subject, in the order of the keys. Its label names its components.
  */
 export function subjectsOf(page: Pick<StatusPage, "title" | "domain">, keys: readonly ComponentKey[]): readonly Subject[] {
-  const service = nodeOf({ system: SUBJECT_SYSTEM, id: page.domain });
+  const service = subjectNode({ system: SUBJECT_SYSTEM, id: page.domain });
   const groups = new Map<NodeKey, { readonly subject: SubjectKey; readonly names: string[] }>();
   for (const key of keys) {
-    const node = nodeOf(key.subject);
+    const node = subjectNode(key.subject);
     if (node === service) continue;
     const group = groups.get(node) ?? { subject: key.subject, names: [] };
     if (!group.names.includes(key.name)) group.names.push(key.name);
@@ -176,7 +166,7 @@ export function pageProblems(page: StatusPage): readonly string[] {
   // One id with two subjects is correct: the component gives two subjects. One id with the same subject twice is an error.
   const seen = new Set<string>();
   for (const key of page.components ?? []) {
-    const pair = `${key.id} ${nodeOf(key.subject)}`;
+    const pair = `${key.id} ${subjectNode(key.subject)}`;
     if (key.id.trim() === "") problems.push("a key of a component has no id");
     else if (seen.has(pair)) problems.push(`the component ${JSON.stringify(key.id)} has two keys with one subject`);
     seen.add(pair);

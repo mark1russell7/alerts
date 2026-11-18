@@ -36,7 +36,7 @@ import { hasKind } from "./kind-prefix.ts";
 import type { MapShape } from "./map.ts";
 import { DEFAULT_ENTRY_MAX, DEFAULT_RELEVANCE_POLICY, canReach, relevance, topicEntry } from "./relevance.ts";
 import { isShape, shapeDistanceKm } from "./shapes.ts";
-import { kindOfNode, nodesOverlap, placeNode } from "./why.ts";
+import { kindOfNode, nodesOverlap, placeNode, subjectNode } from "./why.ts";
 
 export { hasKind } from "./kind-prefix.ts";
 
@@ -419,7 +419,7 @@ function nearestShape(shapes: readonly MapShape[], at: Position): number | undef
 export function matchSubjects(incident: Pick<Incident, "about">, watches: readonly SubjectWatch[]): SubjectWatch[] {
   return watches.filter((watch) =>
     incident.about.some(
-      (subject) => subject.system === watch.system && (watch.id === undefined || nodesOverlap(`${watch.system}:${watch.id}`, `${subject.system}:${subject.id}`)),
+      (subject) => subject.system === watch.system && (watch.id === undefined || nodesOverlap(subjectNode({ system: watch.system, id: watch.id }), subjectNode(subject))),
     ),
   );
 }
@@ -556,7 +556,7 @@ export function assess(
   for (const through of plan?.others ?? []) level = higherLevel(level, atMatch(undefined, entryLevel, through));
   for (const subject of subjects) {
     reasons.push({ kind: "subject", subject });
-    level = higherLevel(level, atMatch(undefined, table.level, kindOfNode(`${subject.system}:${subject.id ?? "*"}`) ?? "entity"));
+    level = higherLevel(level, atMatch(undefined, table.level, kindOfNode(subjectNode({ system: subject.system, id: subject.id ?? "*" })) ?? "entity"));
   }
   return result(level);
 }
@@ -636,7 +636,7 @@ function entriesOf(incident: Incident, matches: readonly PlaceMatch[], graph: In
   const found = new Map<NodeKey, SubjectEntry>();
   const add = (system: string, id: string): void => {
     if (!Object.hasOwn(SUBJECT_SYSTEMS, system)) return;
-    const node = `${system}:${id}`;
+    const node = subjectNode({ system, id });
     if (!found.has(node)) found.set(node, { node, kind: SUBJECT_SYSTEMS[system as SubjectSystem], hit: FULL_HIT });
   };
   for (const match of matches) add("place", match.place);
