@@ -92,16 +92,21 @@ const EARTHQUAKE_TABLE: LevelTable = {
 };
 
 /**
- * The kinds of context. With the default policy, a report of such a kind reaches no person. The map and the log keep it.
- * A feed of the service alerts of public transit holds many alerts each day, and the alerts of one large network can
- * fill each digest. The count of its alerts is an indicator reading. A policy of the configuration can give the kinds a level.
+ * The kinds of context. With the default policy, a report of such a kind reaches the digest at most. It starts no
+ * escalation. A feed of the service alerts of public transit holds many alerts each day. Thus only a moderate or
+ * higher severity reaches the digest, and a minor alert stays in the map and the log.
+ *
+ * The count of its alerts is an indicator reading. A policy of the configuration can give the kinds a different level.
  */
 export const CONTEXT_KINDS: readonly string[] = ["transport.transit"];
 
-/** The table of the kinds of context. Each lookup gives `none`. */
+/**
+ * The table of the kinds of context. It gives `digest` at most. A minor or unknown severity, or the urgency
+ * `past`, gives `none`.
+ */
 const CONTEXT_TABLE: LevelTable = {
-  severity: { extreme: "none", severe: "none", moderate: "none", minor: "none", unknown: "none" },
-  urgency: { immediate: "none", expected: "none", future: "none", past: "none", unknown: "none" },
+  severity: { extreme: "digest", severe: "digest", moderate: "digest", minor: "none", unknown: "none" },
+  urgency: { immediate: "digest", expected: "digest", future: "digest", past: "none", unknown: "digest" },
 };
 
 /** The table of the other kinds. These kinds reach `urgent` at most. */
@@ -203,7 +208,8 @@ const SYSTEM_TABLE: LevelTable = {
  * The earthquake class has its own table. In one hour after the onset, its urgency `past` counts as
  * `immediate`. Then `extreme` is `life-safety`, and `severe` is `urgent`.
  *
- * The kinds of context (`CONTEXT_KINDS`) reach no person.
+ * The kinds of context (`CONTEXT_KINDS`) reach the digest at most. Thus a report of such a kind starts no escalation,
+ * and the rule of the life-safety warnings does not apply to it.
  */
 export const DEFAULT_ASSESS_POLICY: AssessPolicy = {
   statuses: ["actual"],

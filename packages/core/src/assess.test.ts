@@ -178,20 +178,48 @@ describe("the first table", () => {
     });
   });
 
-  it("gives no level to a kind of context, also at the worst severity and urgency, and keeps the other transport kinds", () => {
+  it("gives a kind of context the digest at most, also at the worst severity and urgency, and keeps the other transport kinds", () => {
     expect(CONTEXT_KINDS).toEqual(["transport.transit"]);
     const worst = { severity: "extreme", urgency: "immediate" } as const;
-    expect(tableLevel(DEFAULT_ASSESS_POLICY, { kind: { code: "transport.transit.service-alert", label: "" }, ...worst })).toEqual({
+    const transit = { code: "transport.transit.service-alert", label: "" };
+    expect(tableLevel(DEFAULT_ASSESS_POLICY, { kind: transit, ...worst })).toEqual({
       class: "context",
-      bySeverity: "none",
-      byUrgency: "none",
-      level: "none",
+      bySeverity: "digest",
+      byUrgency: "digest",
+      level: "digest",
     });
+    // A minor alert and an alert that passed stay in the map and the log.
+    expect(tableLevel(DEFAULT_ASSESS_POLICY, { kind: transit, severity: "minor", urgency: "immediate" }).level).toBe("none");
+    expect(tableLevel(DEFAULT_ASSESS_POLICY, { kind: transit, severity: "severe", urgency: "past" }).level).toBe("none");
     expect(tableLevel(DEFAULT_ASSESS_POLICY, { kind: { code: "transport.rail.accident", label: "" }, ...worst })).toEqual({
       bySeverity: "urgent",
       byUrgency: "urgent",
       level: "urgent",
     });
+  });
+});
+
+describe("the transit alerts (AL-73)", () => {
+  // A transit alert at each value of the CAP fields reaches the digest at most, at a watched place and through a subject.
+  it("gives a severe, immediate transit incident the digest at most, for a person with no own edges", () => {
+    const severe = incident({ kind: "transport.transit.service-alert", severity: "severe", urgency: "immediate" });
+    const found = assess(severe, person(), places);
+    expect(found.level).toBe("digest");
+    expect(found.places).toEqual([home]);
+    const watcher: PersonWatch = { ...person(), subjects: [{ system: "gtfs-route", id: "r1" }] };
+    const named = incident({ kind: "transport.transit.service-alert", severity: "severe", urgency: "immediate", areas: [], about: [{ system: "gtfs-route", id: "r1" }] });
+    expect(assess(named, watcher, places).level).toBe("digest");
+  });
+
+  it("never gives a transit incident a level above the digest, at each severity, urgency and certainty", () => {
+    for (const severity of [...SEVERITIES, "unknown"] as const) {
+      for (const urgency of [...URGENCIES, "unknown"] as const) {
+        for (const certainty of ["observed", "likely", "possible", "unlikely", "unknown"] as const) {
+          const found = assess(incident({ kind: "transport.transit.service-alert", severity, urgency, certainty }), person(), places);
+          expect(rank(found.level), [severity, urgency, certainty].join(" ")).toBeLessThanOrEqual(rank("digest"));
+        }
+      }
+    }
   });
 });
 
