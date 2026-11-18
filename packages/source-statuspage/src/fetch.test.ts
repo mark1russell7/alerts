@@ -62,15 +62,15 @@ describe("readSummary", () => {
     expect(readSummary(CLOUDFLARE)?.incidents.join("")).not.toMatch(/Tokyo|Singapore/);
   });
 
-  it("keeps the fields of each incident in one order, and no status of its components", () => {
+  it("keeps the fields of each incident in one order, and the id, the name and the group of each component, with no status", () => {
     const first = SUMMARY.incidents[0]!;
     const reordered = Object.fromEntries(Object.entries(first).reverse());
     const components = (first["components"] as Record<string, unknown>[]).map((component) => ({ ...component, status: "major_outage", updated_at: "2026-11-18T05:00:00Z" }));
     expect(incidentBody({ ...reordered, components, newField: "x" })).toBe(incidentBody(first));
     expect(JSON.parse(incidentBody(first)).components).toEqual([
-      { id: "4n0gb0kh02gf", name: "Network" },
-      { id: "jm5mggc2wp95", name: "Cloud Network Interconnect (CNI)" },
-      { id: "w1br383gmlwj", name: "Paris, France - (CDG)" },
+      { id: "4n0gb0kh02gf", name: "Network", group_id: "1km35smx8p41" },
+      { id: "jm5mggc2wp95", name: "Cloud Network Interconnect (CNI)", group_id: "1km35smx8p41" },
+      { id: "w1br383gmlwj", name: "Paris, France - (CDG)", group_id: "zqxhg7y54vy8" },
     ]);
   });
 

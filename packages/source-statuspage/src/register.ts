@@ -8,7 +8,7 @@
 
 import type { SourceId } from "@mark1russell7/alerts";
 
-import type { StatusPage } from "./page.ts";
+import type { ComponentKey, StatusPage } from "./page.ts";
 
 /** The failure domain of each page that Atlassian Statuspage hosts. */
 export const ATLASSIAN_STATUSPAGE = "provider:atlassian-statuspage";
@@ -38,6 +38,25 @@ const page = (name: string, title: string, host: string, domain: string, kind: s
   kind,
   dependsOn,
 });
+
+/**
+ * The keys of the components of Twilio on the path of an alert call or text message. These are the SMS and the API of
+ * the messages, and Functions. For the voice of US1, these are the REST API, the PSTN, TwiML and the text to speech. The
+ * outage call starts Functions on the server of Twilio. The API of these services is `api.twilio.com`. Each id is a
+ * component of the page on 2026-11-18.
+ *
+ * An incident of a carrier names only `twilio.com`. A key of a carrier needs the region of the phone of a person, and
+ * the delivery layer gives no region yet. An outage of Twilio Video or SendGrid also names only `twilio.com`.
+ */
+export const TWILIO_KEYS: readonly ComponentKey[] = [
+  { id: "yvvy3vlp4djf", name: "SMS", domain: "api.twilio.com" },
+  { id: "x3z86l06nvl7", name: "Programmable Messaging API", domain: "api.twilio.com" },
+  { id: "mwcz6hw53t7c", name: "Voice REST API US1", domain: "api.twilio.com" },
+  { id: "g2dt752kwqs0", name: "PSTN US1", domain: "api.twilio.com" },
+  { id: "xnzrm2zg4qbv", name: "TwiML US1", domain: "api.twilio.com" },
+  { id: "dv0j99s68yxn", name: "Text-to-Speech US1", domain: "api.twilio.com" },
+  { id: "b3tl520cz8tc", name: "Functions", domain: "api.twilio.com" },
+];
 
 /** The well-known status pages, in the order of their ids. */
 export const STATUS_PAGES: readonly StatusPage[] = [
@@ -73,7 +92,7 @@ export const STATUS_PAGES: readonly StatusPage[] = [
   page("shopify", "Shopify", "www.shopifystatus.com", "shopify.com", SAAS),
   page("snowflake", "Snowflake", "status.snowflake.com", "snowflake.com", CLOUD),
   page("solana", "Solana", "status.solana.com", "solana.com", CHAIN),
-  page("twilio", "Twilio", "status.twilio.com", "twilio.com", SAAS),
+  { ...page("twilio", "Twilio", "status.twilio.com", "twilio.com", SAAS), components: TWILIO_KEYS },
   page("vercel", "Vercel", "www.vercel-status.com", "vercel.com", CLOUD),
   page("visa-acceptance", "Visa Acceptance Solutions", "status.visaacceptance.com", "visaacceptance.com", PAYMENTS, [ATLASSIAN_STATUSPAGE], "visa"),
 ];

@@ -1,6 +1,6 @@
 import { HostScheduler } from "polite-crawler/politeness";
 import { describe, expect, it } from "vitest";
-import { createGcpSource, GCP_BASE, GCP_DESCRIPTOR, regionId } from "./index.ts";
+import { createGcpSource, dashboardDescriptor, FIREBASE_DASHBOARD, FIREBASE_DESCRIPTOR, GCP_BASE, GCP_DESCRIPTOR, GOOGLE_DASHBOARDS, regionId } from "./index.ts";
 
 const clock = { now: () => 0, sleep: async () => {} };
 const reply = async () => ({ status: 200, statusText: "OK", headers: {}, body: "[]" });
@@ -30,6 +30,27 @@ describe("createGcpSource", () => {
       auth: "none",
       listing: "snapshot",
     });
+  });
+
+  it("makes the source of the Firebase dashboard: the descriptor of Google Cloud with its own id and title", () => {
+    const source = createGcpSource({ pace: { scheduler: new HostScheduler(clock, 1), now: clock.now }, transport: reply, userAgent: "alerts-tests", dashboard: FIREBASE_DASHBOARD });
+    expect(source.describe()).toBe(FIREBASE_DESCRIPTOR);
+    expect(dashboardDescriptor(FIREBASE_DASHBOARD)).toBe(FIREBASE_DESCRIPTOR);
+    expect(FIREBASE_DESCRIPTOR).toEqual({ ...GCP_DESCRIPTOR, id: "firebase-status", title: "Firebase Status Dashboard: the incidents of Firebase" });
+  });
+
+  it("holds dashboards with unique ids, bases and domains, and keys with unique ids and the domains of other endpoints", () => {
+    expect(GOOGLE_DASHBOARDS.map((dashboard) => dashboard.id)).toEqual(["gcp-status", "firebase-status"]);
+    for (const field of ["id", "base", "domain"] as const) expect(new Set(GOOGLE_DASHBOARDS.map((dashboard) => dashboard[field])).size, field).toBe(GOOGLE_DASHBOARDS.length);
+    for (const dashboard of GOOGLE_DASHBOARDS) {
+      expect(dashboard.base, dashboard.id).toMatch(/^https:\/\/[a-z0-9.-]+$/);
+      expect(new Set(dashboard.products.map((key) => key.id)).size, dashboard.id).toBe(dashboard.products.length);
+      for (const key of dashboard.products) {
+        expect(key.domain, key.id).toMatch(/^[a-z0-9-]+(\.[a-z0-9-]+)+$/);
+        expect(key.domain, key.id).not.toBe(dashboard.domain);
+        expect(key.name.trim(), key.id).not.toBe("");
+      }
+    }
   });
 
   it("gives the id of a region as the provider, a slash and the id of the location", () => {

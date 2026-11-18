@@ -1,4 +1,4 @@
-import { addressProblems, WHY_LIMITS, type Level, type Message, type PersonId, type ReportId } from "@mark1russell7/alerts";
+import { addressProblems, channelDescriptorSchema, WHY_LIMITS, type Level, type Message, type PersonId, type ReportId } from "@mark1russell7/alerts";
 import type { PushoverFetch } from "@procedures/notify/pushover";
 import { quotaGate, type QuotaGate } from "polite-crawler/api";
 import { describe, expect, it } from "vitest";
@@ -137,11 +137,17 @@ describe("the descriptor", () => {
   it("names the push service of the platform, and the resources of the cell", () => {
     expect(pushoverDescriptor("ios").dependsOn).toEqual(["provider:pushover", "provider:apns"]);
     expect(pushoverDescriptor("android").dependsOn).toEqual(["provider:pushover", "provider:fcm"]);
+    expect(pushoverDescriptor("ios").services).toEqual(["domain:api.pushover.net", "domain:api.push.apple.com"]);
+    expect(pushoverDescriptor("android").services).toEqual(["domain:api.pushover.net", "domain:fcm.googleapis.com"]);
+    expect(pushoverDescriptor().services).toEqual(["domain:api.pushover.net"]);
     expect(pushoverDescriptor()).toMatchObject({ id: "pushover", uses: ["internet", "dns", "power"], breaksThrough: true, repeats: true, ack: "poll", maxTitle: 250, maxBody: 1024 });
     // A phone takes many pushes at once, thus each copy sends a life-safety push with no floor.
     expect(pushoverDescriptor().exclusive).toBeUndefined();
     // A push takes the why line of the push limit.
     expect(pushoverDescriptor().why).toEqual(WHY_LIMITS.push);
+    // Only a message at priority 2 has a receipt, thus only life-safety asks for an acknowledgment (AL-21).
+    expect(pushoverDescriptor().ackLevels).toEqual(["life-safety"]);
+    expect(channelDescriptorSchema.parse(pushoverDescriptor("ios"))).toEqual(pushoverDescriptor("ios"));
     const fake = server();
     expect(createPushoverChannel({ token: TOKEN, fetch: fake.fetch, platform: "ios" }).describe().dependsOn).toContain("provider:apns");
   });

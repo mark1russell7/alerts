@@ -145,7 +145,22 @@ export const COPY_KIND = "system.copy";
  */
 export const DRILL_KIND = "system.drill";
 
-/** The table of the system reports that can reach `life-safety`: the coverage of a life-safety kind, and a drill run. */
+/**
+ * The prefix of the kinds of the escalation reports of the core (AL-21). `system.escalation.exhausted` tells that a
+ * person did not acknowledge a real warning in the time of the policy. An adapter does not map a message to this prefix.
+ */
+export const ESCALATION_KIND = "system.escalation";
+
+/**
+ * The subject system of a person. The id of a subject is the id of a person. A person who watches the subject of another
+ * person gets the escalation reports of that person. A subject of the person itself does not match the person.
+ */
+export const PERSON_SUBJECT = "alerts.person";
+
+/**
+ * The table of the system reports that can reach `life-safety`: the coverage of a life-safety kind, a drill run and an
+ * exhausted escalation. The severity and the urgency of an exhausted escalation give back its level.
+ */
 const LOUD_SYSTEM_TABLE: LevelTable = {
   severity: { extreme: "life-safety", severe: "urgent", moderate: "notice", minor: "digest", unknown: "urgent" },
   urgency: { immediate: "life-safety", expected: "urgent", future: "notice", past: "digest", unknown: "urgent" },
@@ -163,7 +178,7 @@ const SYSTEM_TABLE: LevelTable = {
  * be `immediate`, `expected` or `unknown`. A place of the person must be in its areas.
  *
  * The three system classes hold the reports of the core, and they admit only the status `system`. The
- * coverage of a life-safety kind and a drill run can reach `life-safety`. Each other report of the core reaches
+ * coverage of a life-safety kind, a drill run and an exhausted escalation can reach `life-safety`. Each other report of the core reaches
  * `notice` at most. The NWS kinds `system.test` and `system.admin` are not in these classes.
  *
  * The earthquake class has its own table. In one hour after the onset, its urgency `past` counts as
@@ -178,6 +193,8 @@ export const DEFAULT_ASSESS_POLICY: AssessPolicy = {
     { id: "system-coverage", kinds: LIFE_SAFETY_KINDS.map((kind) => `${COVERAGE_KIND}.${kind}`), statuses: ["system"], ...LOUD_SYSTEM_TABLE },
     // A drill run tests the path of the life-safety warnings, thus it reaches `life-safety`. A failed drill gets `notice` at most.
     { id: "system-drill", kinds: [`${DRILL_KIND}.run`], statuses: ["system"], ...LOUD_SYSTEM_TABLE },
+    // An exhausted escalation of a person keeps its level for the people who watch that person (AL-21).
+    { id: "system-escalation", kinds: [ESCALATION_KIND], statuses: ["system"], ...LOUD_SYSTEM_TABLE },
     { id: "system", kinds: [HEALTH_KIND, COVERAGE_KIND, QUOTA_KIND, BALANCE_KIND, CLOCK_KIND, LOG_KIND, COPY_KIND, DRILL_KIND], statuses: ["system"], ...SYSTEM_TABLE },
   ],
   otherwise: OTHER_TABLE,
@@ -386,7 +403,10 @@ export function assess(
     else watched.push(place);
   }
   const matches = matchPlaces(incident, watched);
-  const subjects = matchSubjects(incident, person.subjects ?? []);
+  // The escalation reports of a person go to the people who watch that person, and not to the person. Thus the subject
+  // of the person itself matches no watch of the person, also a watch with no id.
+  const others = incident.about.filter((subject) => !(subject.system === PERSON_SUBJECT && subject.id === person.person));
+  const subjects = matchSubjects({ about: others }, person.subjects ?? []);
   let muted: Assessment["muted"];
   const result = (level: AssessedLevel): Assessment => ({
     incident: incident.anchor,

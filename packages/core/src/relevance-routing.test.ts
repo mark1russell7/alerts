@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { AssessPolicy, Assessment, Incident, InterestEdge, InterestGraph, Mute, NodeKey, PersonId, PersonWatch, PlaceId, Position, ReportId, WatchedPlace } from "./contracts.ts";
+import type { AssessPolicy, Assessment, ChannelDescriptor, ChannelId, Incident, InterestEdge, InterestGraph, Mute, NodeKey, PersonId, PersonWatch, PlaceId, Position, ReportId, WatchedPlace } from "./contracts.ts";
 import { DEFAULT_ASSESS_POLICY, assess } from "./assess.ts";
 import { personInterests } from "./config.ts";
 import { DEFAULT_RELEVANCE_POLICY } from "./relevance.ts";
@@ -248,6 +248,16 @@ describe("the entries of a rule (AL-35)", () => {
     expect(named.reasons).toContainEqual(expect.objectContaining({ kind: "reach", reached: expect.arrayContaining(["domain:example.com", "topic:infra.saas"]) }));
     expect(run(down("moderate"), user(["domain:example.com"])).level).toBe("notice");
     expect(run(down("minor"), user(["domain:example.com"])).level).toBe("digest");
+  });
+
+  it("sends an outage of a service of a channel of the person as a named service, and the switch delivery turns it off", () => {
+    const push: ChannelDescriptor = { id: "push" as ChannelId, title: "Push", dependsOn: [], services: ["domain:example.com"], uses: ["internet"], breaksThrough: true, repeats: true, ack: "poll", maxTitle: 100, maxBody: 100 };
+    const reached = (delivery?: boolean) =>
+      personInterests({ watch: watcher(undefined, { rules }), defaults: { works: ["software"], ...(delivery === undefined ? {} : { delivery }) } }, [push]).watch;
+    const path = run(down("severe"), reached());
+    expect(path.level).toBe("notice");
+    expect(path.reasons).toContainEqual(expect.objectContaining({ kind: "reach", reached: expect.arrayContaining(["domain:example.com"]) }));
+    expect(run(down("severe"), reached(false)).level).toBe("digest");
   });
 
   it("matches a watched place through the kind place, and a watched subject through the kind of its system", () => {

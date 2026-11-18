@@ -58,6 +58,7 @@ export const ORIGIN_WORDS: Readonly<Record<EdgeOrigin, string>> = {
   measured: "Measured",
   data: "Public data",
   services: "Named service",
+  delivery: "Path of the alerts",
   work: "Kind of work",
   places: "Watched place",
   base: "Base of each person",
@@ -74,10 +75,17 @@ export function weightText(weight: Estimate): string {
   return `Weight ${number(weight.value)}, ${number(weight.low)} to ${number(weight.high)}`;
 }
 
-/** This function gives the words of the origin of an edge. An edge of a kind of work also names each work. */
+// The prefix of the source of each origin whose words name the items of the source.
+const SOURCE_PREFIX: Partial<Readonly<Record<EdgeOrigin, string>>> = { work: "work:", delivery: "channel:" };
+
+/**
+ * This function gives the words of the origin of an edge. An edge of a kind of work also names each work, and an edge
+ * of the path of the alerts names each channel.
+ */
 export function originText(origin: EdgeOrigin, source: string | undefined): string {
-  const works = origin === "work" && source?.startsWith("work:") === true ? source.slice("work:".length).split(",").join(", ") : "";
-  return works === "" ? ORIGIN_WORDS[origin] : `${ORIGIN_WORDS[origin]}: ${works}`;
+  const prefix = SOURCE_PREFIX[origin];
+  const items = prefix !== undefined && source?.startsWith(prefix) === true ? source.slice(prefix.length).split(",").join(", ") : "";
+  return items === "" ? ORIGIN_WORDS[origin] : `${ORIGIN_WORDS[origin]}: ${items}`;
 }
 
 function muteText(mute: Mute, labelOf: (node: NodeKey) => string): string {

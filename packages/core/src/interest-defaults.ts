@@ -2,17 +2,18 @@
 // `docs/RELEVANCE.md`, the section "The defaults").
 
 import { compareCodeUnits } from "@mark1russell7/text/order";
-import type { EdgeOrigin, Estimate, InterestEdge, InterestGraph, NodeKey, PersonId, PlaceId } from "./contracts.ts";
+import type { ChannelDescriptor, EdgeOrigin, Estimate, InterestEdge, InterestGraph, NodeKey, PersonId, PlaceId } from "./contracts.ts";
 import { TAXONOMY } from "./taxonomy.ts";
 import { kindOfNode, placeNode } from "./why.ts";
 
 /**
  * The rank of each origin, the strongest first. At one pair of nodes, the graph holds the edges of the strongest
- * origin. Each other edge at that pair stays as a row. The choice of the person comes first. A measure of the system
- * comes before public data. A service that the person names comes before a default of a kind of work. The watched
- * places come before the human base.
+ * origin. Each other edge at that pair stays as a row.
+ *
+ * The choice of the person comes first. A measure of the system comes before public data. A service that the person names comes before a service of a channel of the person. Both
+ * come before a default of a kind of work. The watched places come before the human base.
  */
-export const ORIGIN_RANK: readonly EdgeOrigin[] = ["person", "measured", "data", "services", "work", "places", "base"];
+export const ORIGIN_RANK: readonly EdgeOrigin[] = ["person", "measured", "data", "services", "delivery", "work", "places", "base"];
 
 /**
  * The weight of an edge with an unknown chance: the full interval, with the mean of a uniform chance as its value. An
@@ -106,6 +107,26 @@ export function servicesLayer(services: readonly NodeKey[]): readonly InterestEd
     if (kindOfNode(service) !== "entity") throw new RangeError(`The service "${service}" is not the key of an entity, for example domain:example.com.`);
     return interestEdge("services", service, UNKNOWN_WEIGHT);
   });
+}
+
+/**
+ * This function gives the layer `delivery`: one edge from each service of the given channels to the person. Give the
+ * channels where the person has a contact (`contactChannels`). Then the alerts of the person go through each such
+ * service, so each edge has the weight 1, as a watched place has. The source of an edge names its channels, for
+ * example `channel:twilio-call,twilio-text`. The function throws a `RangeError` for a service that is not the key of
+ * an entity.
+ */
+export function deliveryLayer(channels: readonly ChannelDescriptor[]): readonly InterestEdge[] {
+  const byService = new Map<NodeKey, string[]>();
+  for (const channel of channels) {
+    for (const service of new Set(channel.services ?? [])) {
+      if (kindOfNode(service) !== "entity") throw new RangeError(`The service "${service}" of the channel ${channel.id} is not the key of an entity, for example domain:example.com.`);
+      byService.set(service, [...(byService.get(service) ?? []), channel.id]);
+    }
+  }
+  return [...byService]
+    .sort(([a], [b]) => compareCodeUnits(a, b))
+    .map(([service, ids]) => interestEdge("delivery", service, CERTAIN, { source: `channel:${[...new Set(ids)].sort(compareCodeUnits).join(",")}` }));
 }
 
 const rankOf = (edge: InterestEdge): number => ORIGIN_RANK.indexOf(edge.origin);

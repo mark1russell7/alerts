@@ -71,7 +71,7 @@ import { createKevSource, KEV_DESCRIPTOR } from "@mark1russell7/alerts-source-ci
 import { AWS_DOMAIN, AWS_KIND, createAwsSource } from "@mark1russell7/alerts-source-aws";
 import { AZURE_DOMAIN, AZURE_KIND, createAzureSource } from "@mark1russell7/alerts-source-azure";
 import { createBomSwsSource, type BomSwsFetchOptions } from "@mark1russell7/alerts-source-bom-sws";
-import { createGcpSource, GCP_DOMAIN, GCP_KIND } from "@mark1russell7/alerts-source-gcp";
+import { createGcpSource, GCP_KIND, GOOGLE_DASHBOARDS, type GcpFetchOptions } from "@mark1russell7/alerts-source-gcp";
 import { createStatusPageSource, pagesFor, watchReads, type StatusPage, type StatusPageFetchOptions } from "@mark1russell7/alerts-source-statuspage";
 import { createSwpcSource, SWPC_DESCRIPTOR } from "@mark1russell7/alerts-source-swpc";
 import { createTsunamiSource, descriptorOf as tsunamiDescriptor, TSUNAMI_CENTERS, type TsunamiCenter, type TsunamiFetchOptions } from "@mark1russell7/alerts-source-tsunami";
@@ -300,14 +300,20 @@ const bomFactory =
     createBomSwsSource({ ...options, apiKey });
 
 /**
- * The feeds of the cloud providers: Google Cloud, AWS and Azure. A report of such a feed has no area. Thus the instance reads a
- * feed only when one of its persons can get its reports, with the rule of a status page (`watchReads`).
+ * The feeds of the cloud providers: the dashboards of Google (Google Cloud and Firebase), AWS and Azure. A report of such
+ * a feed has no area. Thus the instance reads a feed only when one of its persons can get its reports, with the rule of a
+ * status page (`watchReads`). The keys of the products of a dashboard are its keys of components.
  */
 const PROVIDER_FEEDS = [
-  { domain: GCP_DOMAIN, kind: GCP_KIND, create: createGcpSource },
+  ...GOOGLE_DASHBOARDS.map((dashboard) => ({
+    domain: dashboard.domain,
+    kind: GCP_KIND,
+    components: dashboard.products,
+    create: (options: Omit<GcpFetchOptions, "dashboard">) => createGcpSource({ ...options, dashboard }),
+  })),
   { domain: AWS_DOMAIN, kind: AWS_KIND, create: createAwsSource },
   { domain: AZURE_DOMAIN, kind: AZURE_KIND, create: createAzureSource },
-] as const;
+];
 
 /**
  * The descriptors of the sources of the instance. The function `describe` of each source gives the same descriptor.
@@ -728,7 +734,7 @@ export function openInstance(options: InstanceOptions): Instance {
   if (problems.length > 0) throw new Error(`The instance does not start. The configuration has these problems:\n- ${problems.join("\n- ")}`);
   const token = options.secret(PUSHOVER_TOKEN) ?? "";
   // The configuration does not change in a process. Thus the rows of the interests are the same at each read.
-  const interests = interestsPayload(config);
+  const interests = interestsPayload(config, INSTANCE_CHANNELS);
 
   // The store of shapes shares the pace of the sources. Thus its requests to the NWS API keep the rests of that host.
   const store = options.shapes === undefined ? undefined : createShapeStore({ pace, transport: options.transport, userAgent: agent, cache: options.shapes });

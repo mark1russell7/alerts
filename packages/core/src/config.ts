@@ -11,7 +11,7 @@ import type { Address, AssessPolicy, ChannelDescriptor, ChannelId, Duration, Esc
 import { assess, DEFAULT_ASSESS_POLICY, DRILL_KIND, matchSubjects, reachedAssessment } from "./assess.ts";
 import { policyFor, recipientProblems, ruleSteps, type ChannelRule, type Recipient } from "./delivery.ts";
 import { DRILL_PROBES, drillProblems, nextDrillAt, type DrillConfig } from "./drill.ts";
-import { composeInterests, placesLayer, servicesLayer, workLayer, type InterestRow } from "./interest-defaults.ts";
+import { composeInterests, deliveryLayer, placesLayer, servicesLayer, workLayer, type InterestRow } from "./interest-defaults.ts";
 import { incidents, normalize } from "./merge.ts";
 import { optInFields, resolveOptIn, type OptInConfig, type OptInRecord } from "./opt-in.ts";
 import { DRILL_SUBJECT, NO_SYSTEM_LINES, systemReports } from "./system-reports.ts";
@@ -57,6 +57,11 @@ export interface InterestDefaultsConfig {
   readonly works?: readonly string[];
   /** The services that the person uses. Each one is the node key of an entity, for example `domain:example.com`. */
   readonly services?: readonly NodeKey[];
+  /**
+   * The switch of the layer `delivery`: the services of the channels of the contacts of the person
+   * (`ChannelDescriptor.services`). The layer is on when the field is absent. The value `false` turns it off.
+   */
+  readonly delivery?: boolean;
 }
 
 /** A person of the configuration. */
@@ -442,7 +447,7 @@ export function loadConfig(config: AlertConfig, channels: readonly ChannelDescri
         if (!own.has(place)) problems.push(`Rule ${index} of the person ${person} names the place ${place}, and the person does not watch it. The rule matches no incident there.`);
       }
     });
-    const joined = personInterests(entry);
+    const joined = personInterests(entry, contactChannels(config, person, channels));
     if (joined.problem !== undefined) problems.push(`The defaults of the person ${person}: ${joined.problem}`);
     watches.push(joined.watch);
     problems.push(...relevanceProblems(joined.watch, own));
@@ -633,22 +638,35 @@ export interface PersonInterests {
  * This function gives the watch of a recipient: the join of the default layers and the graph of the person
  * (`composeInterests`). A person with no defaults keeps the watch, and each edge of the graph is a row.
  *
+ * The array `channels` holds the channels of the contacts of the person (`contactChannels`). The layer `delivery` takes
+ * their services, unless the field `delivery` of the defaults is `false`.
+ *
  * The layer `places` is always in the join. Without it, a graph of work topics alone stops the routing at the places.
  * A graph of another person also stays as it is: `relevanceProblems` reports it, and the places decide.
  */
-export function personInterests(entry: PersonConfig): PersonInterests {
+export function personInterests(entry: PersonConfig, channels: readonly ChannelDescriptor[] = []): PersonInterests {
   const { watch, defaults } = entry;
   const own = watch.interests;
   const kept = (problem?: string): PersonInterests => ({ watch, rows: own?.edges.map((edge) => ({ edge })) ?? [], ...(problem === undefined ? {} : { problem }) });
   if (defaults === undefined || (own !== undefined && own.person !== watch.person)) return kept();
   try {
-    const layers = [placesLayer(watch.places), workLayer(defaults.works ?? []), servicesLayer(defaults.services ?? [])];
+    const delivery = defaults.delivery === false ? [] : deliveryLayer(channels);
+    const layers = [placesLayer(watch.places), workLayer(defaults.works ?? []), servicesLayer(defaults.services ?? []), delivery];
     const { graph, rows } = composeInterests(watch.person, layers, own);
     return { watch: { ...watch, interests: graph }, rows };
   } catch (error) {
     if (error instanceof RangeError) return kept(error.message);
     throw error;
   }
+}
+
+/**
+ * This function gives the channels of the contacts of a person, in the order of `channels`. Each such descriptor has a
+ * contact of the person in the configuration. The layer `delivery` takes the services of these channels.
+ */
+export function contactChannels(config: Pick<AlertConfig, "contacts">, person: PersonId, channels: readonly ChannelDescriptor[]): readonly ChannelDescriptor[] {
+  const ids = new Set<string>(config.contacts.filter((contact) => contact.person === person).map((contact) => contact.channel));
+  return channels.filter((channel) => ids.has(channel.id));
 }
 
 /**

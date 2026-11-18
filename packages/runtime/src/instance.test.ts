@@ -36,7 +36,7 @@ import { KEV_KINDS } from "@mark1russell7/alerts-source-cisa-kev";
 import { AWS_DESCRIPTOR } from "@mark1russell7/alerts-source-aws";
 import { AZURE_DESCRIPTOR } from "@mark1russell7/alerts-source-azure";
 import { BOM_SWS_DESCRIPTOR, bomTimeText } from "@mark1russell7/alerts-source-bom-sws";
-import { GCP_DESCRIPTOR } from "@mark1russell7/alerts-source-gcp";
+import { FIREBASE_DESCRIPTOR, GCP_DESCRIPTOR } from "@mark1russell7/alerts-source-gcp";
 import { descriptorOf as statusPageDescriptor, STATUS_PAGES, type StatusPage } from "@mark1russell7/alerts-source-statuspage";
 import { ENERGY_CHARTS_MEASURES, SOURCE_ID as ENERGY_CHARTS_SOURCE, WINDOW_MINUTES } from "@mark1russell7/alerts-source-energy-charts";
 import { memoryQuotaStore, quotaGate, type Exchange, type Transport } from "polite-crawler/api";
@@ -186,6 +186,19 @@ function gcpAnswer(): string {
 }
 
 /**
+ * The answer of the Firebase Status Dashboard to the request of its history. It is the recorded incident of Cloud Messaging
+ * of the package `source-gcp` as it was after its first update. Its times move to the time of the tests. It has no end.
+ */
+function firebaseAnswer(): string {
+  const [messaging] = JSON.parse(fixture("alerts-source-gcp", "firebase-incidents-20261118.json")) as Record<string, unknown>[];
+  const { end: _end, ...live } = messaging!;
+  const time = (minutes: number): string => new Date(T0 + minutes * 60_000).toISOString();
+  const first = (live["updates"] as Record<string, unknown>[]).at(-1)!;
+  const latest = { ...first, created: time(-10), modified: time(-10), when: time(-10) };
+  return JSON.stringify([{ ...live, begin: time(-30), created: time(-10), modified: time(-10), most_recent_update: latest, updates: [latest] }]);
+}
+
+/**
  * The answer of the AWS Health Dashboard to the request of its feed, in the shape of the recorded feed of the package
  * `source-aws`. It has one update of one live event in the region `eu-west-1`, 10 minutes before the time of the tests.
  */
@@ -246,8 +259,9 @@ const STATUS_HOSTS: ReadonlyMap<string, StatusPage> = new Map(STATUS_PAGES.map((
  * the nominal frequency for each second of the query (`energyChartsAnswer`). CISA gives a catalog with one live entry (`kevAnswer`).
  * BoM gives one K index, and no alert and no warning (`bomAnswer`).
  *
- * Each status page gives its summary (`statusPageAnswer`). Google Cloud gives one live incident (`gcpAnswer`). AWS gives
- * one live event (`awsAnswer`). Azure gives one live incident (`azureAnswer`).
+ * Each status page gives its summary (`statusPageAnswer`). Google Cloud gives one live incident (`gcpAnswer`). Firebase
+ * gives one live incident of Cloud Messaging (`firebaseAnswer`). AWS gives one live event (`awsAnswer`). Azure gives one
+ * live incident (`azureAnswer`).
  *
  * Each exchange takes `delay` milliseconds of real time, as on a busy runner. With `Infinity`, no exchange ends.
  */
@@ -268,6 +282,7 @@ function network(delay = 0) {
     const statusPage = STATUS_HOSTS.get(url.hostname);
     if (statusPage !== undefined) return { status: 200, statusText: "OK", headers: { "content-type": "application/json; charset=utf-8" }, body: statusPageAnswer(statusPage) };
     if (url.hostname === "status.cloud.google.com") return { status: 200, statusText: "OK", headers: { "content-type": "application/json" }, body: gcpAnswer() };
+    if (url.hostname === "status.firebase.google.com") return { status: 200, statusText: "OK", headers: { "content-type": "application/json" }, body: firebaseAnswer() };
     if (url.hostname === "status.aws.amazon.com") return { status: 200, statusText: "OK", headers: { "content-type": "application/rss+xml" }, body: awsAnswer() };
     if (url.hostname === "sws-data.sws.bom.gov.au") return { status: 200, statusText: "OK", headers: { "content-type": "application/json" }, body: bomAnswer(url) };
     if (url.hostname === "rssfeed.azure.status.microsoft") return { status: 200, statusText: "OK", headers: { "content-type": "text/xml; charset=utf-8" }, body: azureAnswer() };
@@ -569,14 +584,14 @@ describe("openInstance", () => {
     expect(server.calls.map((call) => call.fields["title"])).toEqual([expect.stringContaining("Flood Warning")]);
   });
 
-  it("reads the status pages and the feeds of Google Cloud, AWS and Azure that a person with the work software can get, with the services and the regions as subjects", async () => {
+  it("reads the status pages and the feeds of Google Cloud, Firebase, AWS and Azure that a person with the work software can get, with the services, the endpoints and the regions as subjects", async () => {
     const software: AlertConfig = { ...CONFIG, people: CONFIG.people.map((entry) => ({ ...entry, defaults: { works: ["software"] } })) };
     const { instance, clock, net } = open(store(SECRETS), software);
     const pass = await finish(clock, instance.runtime.pass());
     const pages = STATUS_PAGES.filter((page) => ["infra.saas.outage", "infra.cloud.outage", "infra.internet.dns-cdn"].includes(page.kind));
     expect(pages.length).toBeGreaterThan(20);
-    expect(pass.fetched).toEqual(["nws-api", "ipaws", "usgs", "emsc", "tsunami-ntwc", "tsunami-ptwc", "swpc", "gfz", "energy-charts", "cisa-kev", "gcp-status", "aws-health", "azure-status", ...pages.map((page) => page.id)]);
-    for (const source of ["gcp-status", "aws-health", "azure-status"]) expect(pass.view.health.find((health) => health.source === source)?.state, source).toBe("healthy");
+    expect(pass.fetched).toEqual(["nws-api", "ipaws", "usgs", "emsc", "tsunami-ntwc", "tsunami-ptwc", "swpc", "gfz", "energy-charts", "cisa-kev", "gcp-status", "firebase-status", "aws-health", "azure-status", ...pages.map((page) => page.id)]);
+    for (const source of ["gcp-status", "firebase-status", "aws-health", "azure-status"]) expect(pass.view.health.find((health) => health.source === source)?.state, source).toBe("healthy");
     expect(pass.view.health.filter((health) => health.source.startsWith("statuspage-")).map((health) => [health.source, health.state])).toEqual(pages.map((page) => [page.id, "healthy"]));
     const asked = new Set(net.exchanges.map((exchange) => new URL(exchange.url)).filter((url) => STATUS_HOSTS.has(url.hostname)).map((url) => url.origin + url.pathname));
     expect(asked).toEqual(new Set(pages.map((page) => `${page.base}/api/v2/summary.json`)));
@@ -605,14 +620,31 @@ describe("openInstance", () => {
           { system: "provider-region", id: "gcp/asia-south2", label: "Delhi (asia-south2)" },
         ],
       ],
+      [
+        [],
+        [
+          { system: "domain", id: "fcm.googleapis.com", label: "Firebase: Cloud Messaging" },
+          { system: "domain", id: "firebase.google.com", label: "Firebase" },
+        ],
+      ],
     ]);
+  });
+
+  it("reads only the feed of Firebase for a person who names only the endpoint of its push messages", async () => {
+    const push: AlertConfig = { ...CONFIG, people: CONFIG.people.map((entry) => ({ ...entry, defaults: { services: ["domain:fcm.googleapis.com"] } })) };
+    const { instance, clock } = open(store(SECRETS), push);
+    const pass = await finish(clock, instance.runtime.pass());
+    expect(pass.fetched).toEqual(["nws-api", "ipaws", "usgs", "emsc", "tsunami-ntwc", "tsunami-ptwc", "swpc", "gfz", "energy-charts", "cisa-kev", "firebase-status"]);
+    const clouds = pass.view.incidents.filter((incident) => incident.kind.code === "infra.cloud.outage");
+    // The merge gives the subjects of an incident in the order of their canonical text.
+    expect(clouds.map((incident) => incident.about.map((subject) => subject.id))).toEqual([["fcm.googleapis.com", "firebase.google.com"]]);
   });
 
   it("reads no status page and no feed of a cloud provider for persons with no work, no service and no subject watch", async () => {
     const { instance, clock, net } = open();
     await finish(clock, instance.runtime.pass());
-    expect(net.exchanges.filter((exchange) => STATUS_HOSTS.has(new URL(exchange.url).hostname) || ["status.cloud.google.com", "status.aws.amazon.com", "rssfeed.azure.status.microsoft"].includes(new URL(exchange.url).hostname))).toEqual([]);
-    expect(instance.runtime.config.sources.some((source) => source.id.startsWith("statuspage-") || ["gcp-status", "aws-health", "azure-status"].includes(source.id))).toBe(false);
+    expect(net.exchanges.filter((exchange) => STATUS_HOSTS.has(new URL(exchange.url).hostname) || ["status.cloud.google.com", "status.firebase.google.com", "status.aws.amazon.com", "rssfeed.azure.status.microsoft"].includes(new URL(exchange.url).hostname))).toEqual([]);
+    expect(instance.runtime.config.sources.some((source) => source.id.startsWith("statuspage-") || ["gcp-status", "firebase-status", "aws-health", "azure-status"].includes(source.id))).toBe(false);
   });
 
   it("reads BoM only when the secrets have its key, and the key goes only into the body of each POST to BoM", async () => {
@@ -637,7 +669,7 @@ describe("openInstance", () => {
 
   it("keeps the times of the loop with each status page: each page has a longer interval than the shortest of the list", () => {
     const shortest = Math.min(...INSTANCE_SOURCES.map((source) => source.interval));
-    for (const descriptor of [GCP_DESCRIPTOR, AWS_DESCRIPTOR, AZURE_DESCRIPTOR, BOM_SWS_DESCRIPTOR]) {
+    for (const descriptor of [GCP_DESCRIPTOR, FIREBASE_DESCRIPTOR, AWS_DESCRIPTOR, AZURE_DESCRIPTOR, BOM_SWS_DESCRIPTOR]) {
       expect(descriptor.interval, descriptor.id).toBeGreaterThanOrEqual(shortest);
       expect(INSTANCE_FETCH_LIMIT(descriptor), descriptor.id).toBe(shortest);
     }

@@ -284,6 +284,8 @@
   "system.drill",
   "system.drill.failed",
   "system.drill.run",
+  "system.escalation",
+  "system.escalation.exhausted",
   "system.health",
   "system.health.changed",
   "system.health.failing",

@@ -771,6 +771,8 @@ export const channelDescriptorSchema: z.ZodType<ChannelDescriptor, ChannelDescri
       id: channelIdSchema,
       title: z.string(),
       dependsOn: outsideDomains,
+      // A lazy schema: the schema of a node key comes later in this file.
+      services: z.array(z.lazy(() => nodeKeySchema)).readonly().exactOptional(),
       uses: cellUses,
       breaksThrough: z.boolean(),
       repeats: z.boolean(),
@@ -782,8 +784,13 @@ export const channelDescriptorSchema: z.ZodType<ChannelDescriptor, ChannelDescri
       exclusive: z.boolean().exactOptional(),
       why: whyLimitSchema.exactOptional(),
       address: z.array(addressFieldSchema).readonly().exactOptional(),
+      ackLevels: z.array(levelSchema).readonly().exactOptional(),
     })
-    .readonly(),
+    .readonly()
+    .refine((channel) => channel.ack !== "none" || (channel.ackLevels ?? []).length === 0, {
+      error: "A channel with the ack none asks for no acknowledgment, thus it has no ackLevels.",
+      path: ["ackLevels"],
+    }),
 );
 
 /** This schema checks one message to one person on one channel. A `life-safety` message is not quiet (`contracts.ts`, line 516). */
@@ -1140,7 +1147,7 @@ export const edgeKindSchema: z.ZodType<EdgeKind, EdgeKind> = schemaOf<EdgeKind>(
 
 /** This schema checks the origin of the weight of an edge. */
 export const edgeOriginSchema: z.ZodType<EdgeOrigin, EdgeOrigin> = schemaOf<EdgeOrigin>()(
-  z.enum(["base", "places", "services", "work", "data", "measured", "person"]),
+  z.enum(["base", "places", "services", "delivery", "work", "data", "measured", "person"]),
 );
 
 /**
@@ -1407,6 +1414,7 @@ export const interestDefaultsConfigSchema: z.ZodType<InterestDefaultsConfig, Int
     .strictObject({
       works: z.array(z.string().min(1)).readonly().exactOptional(),
       services: z.array(nodeKeySchema).readonly().exactOptional(),
+      delivery: z.boolean().exactOptional(),
     })
     .readonly(),
 );

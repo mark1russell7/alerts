@@ -10,7 +10,7 @@ const SEEDS = seedsFrom(process.env["SEED"], [1, 2, 3, 4, 5, 6, 7, 8]);
 const WHY_TEXT = /^[A-Za-z ,'&.:-]+$/;
 
 const SYSTEMS = Object.keys(SUBJECT_SYSTEMS);
-const ORIGINS: readonly EdgeOrigin[] = ["base", "places", "services", "work", "data", "measured", "person"];
+const ORIGINS: readonly EdgeOrigin[] = ["base", "places", "services", "delivery", "work", "data", "measured", "person"];
 const IDS = ["home", "KSZ083", "020173", "infra.power.outage", "example.com", "us-east-1", "pkg:npm/example", "Q42", "31.97,-99.90"];
 
 // Labels that a channel text can show.
