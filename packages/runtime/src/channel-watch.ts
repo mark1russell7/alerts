@@ -7,8 +7,11 @@ import { errorMessage } from "@mark1russell7/text";
 import type { DeliveryStep } from "./delivery.ts";
 import { limited } from "./limit.ts";
 
-/** The backoff of the probes of a down channel: the first probe 1 minute after the open line, then 2, 4 and up to 30 minutes. */
+/** The backoff of the probes after failed probes: 1 minute after the first failure, then 2, 4 and up to 30 minutes. */
 export const PROBE_BACKOFF: Backoff = { base: 60_000, factor: 2, cap: 1_800_000 };
+
+/** The time from the last good call of a channel to its next probe: 15 minutes. Thus a quiet channel gets a probe too. */
+export const PROBE_IDLE: Duration = 900_000;
 
 /** The options of the watch of the channels. */
 export interface ChannelWatchOptions {
@@ -20,8 +23,10 @@ export interface ChannelWatchOptions {
   readonly clock: WallClock;
   /** The longest time that one probe waits. A probe past it is a `timeout`. */
   readonly callLimit: Duration;
-  /** The backoff of the probes. The default is `PROBE_BACKOFF`. */
+  /** The backoff of the probes after failed probes. The default is `PROBE_BACKOFF`. */
   readonly backoff?: Backoff;
+  /** The time from the last good call of a channel to its next probe. The default is `PROBE_IDLE`. */
+  readonly idle?: Duration;
 }
 
 /** The watch of the channels of this copy. It keeps its runs in memory, thus a restart empties them. */
@@ -29,10 +34,11 @@ export interface ChannelWatch {
   /** This function gives the channels for the system view: the run and the time of the last good call of each channel. */
   snapshots(): ChannelSnapshot[];
   /**
-   * This function calls the probe of each down channel when its time comes. It gives true when a probe passed. A pass is a
-   * good call: it ends the run and, in the next view, the line. A failed probe does not count in a run.
+   * This function calls the probe of each channel with a probe when its time comes. It gives true when a probe passed.
+   * A pass is a good call: it ends the run and the line. A failed probe counts in the run, thus a quiet outage opens a line.
+   * The first probe comes 1 minute after the first use of this function.
    */
-  probe(down: readonly ChannelId[], at: Instant): Promise<boolean>;
+  probe(at: Instant, lastSuccess?: Instant): Promise<boolean>;
   /**
    * This function adds the calls of one delivery step to the runs. It gives true when a run starts to open a line, or when
    * a down channel got an accepted send. Then the next view changes a line, and the runtime wakes at once.
@@ -53,6 +59,7 @@ export function lastFetchSuccess(health: Readonly<Record<string, HealthTrack>>):
 export function channelWatch(options: ChannelWatchOptions): ChannelWatch {
   const { clock, policy } = options;
   const backoff = options.backoff ?? PROBE_BACKOFF;
+  const idle = options.idle ?? PROBE_IDLE;
   const entries = options.channels.map((procedures) => ({ procedures, descriptor: procedures.describe() }));
   const probeOf = new Map<ChannelId, () => Promise<ProbeOutcome>>();
   for (const { procedures, descriptor } of entries) {
@@ -61,18 +68,21 @@ export function channelWatch(options: ChannelWatchOptions): ChannelWatch {
   }
   let runs: ChannelRun[] = [];
   const good = new Map<ChannelId, Instant>();
-  // The next probe of each down channel with a probe. The first probe of a line comes one backoff after the first view of it.
-  const probes = new Map<ChannelId, { readonly attempt: number; readonly next: Instant }>();
+  // The next probe of each channel with a probe, and the count of its failed probes in a row. After a good call, the next
+  // probe waits `idle`. After k failed probes, it waits `backoffDelay(backoff, k)`.
+  const probes = new Map<ChannelId, { readonly failed: number; readonly next: Instant }>();
 
   const noteGood = (channel: ChannelId, at: Instant): void => {
     const last = good.get(channel);
     if (last === undefined || at > last) good.set(channel, at);
   };
 
-  const schedule = (down: readonly ChannelId[], at: Instant): void => {
-    const open = new Set<string>(down);
-    for (const channel of [...probes.keys()]) if (!open.has(channel)) probes.delete(channel);
-    for (const channel of down) if (probeOf.has(channel) && !probes.has(channel)) probes.set(channel, { attempt: 1, next: at + backoffDelay(backoff, 1) });
+  const schedule = (at: Instant): void => {
+    for (const channel of probeOf.keys()) if (!probes.has(channel)) probes.set(channel, { failed: 0, next: at + backoffDelay(backoff, 1) });
+  };
+
+  const rest = (channel: ChannelId, at: Instant): void => {
+    if (probeOf.has(channel)) probes.set(channel, { failed: 0, next: at + idle });
   };
 
   const timedOut = (): ProbeOutcome => ({ ok: false, kind: "timeout", message: `The probe did not end in ${options.callLimit} ms.` });
@@ -93,8 +103,8 @@ export function channelWatch(options: ChannelWatchOptions): ChannelWatch {
         };
       }),
 
-    async probe(down, at) {
-      schedule(down, at);
+    async probe(at, lastSuccess) {
+      schedule(at);
       const due = [...probes].filter(([, entry]) => entry.next <= at);
       const outcomes = await Promise.all(
         due.map(async ([channel, entry]) => {
@@ -105,13 +115,15 @@ export function channelWatch(options: ChannelWatchOptions): ChannelWatch {
       );
       let passed = false;
       for (const { channel, entry, outcome } of outcomes) {
+        const end = clock.now();
         if (outcome.ok) {
           noteGood(channel, outcome.at);
-          runs = runs.filter((run) => run.channel !== channel);
-          probes.delete(channel);
+          runs = channelRuns(runs, { at: end, failures: [], good: [channel] });
+          rest(channel, end);
           passed = true;
         } else {
-          probes.set(channel, { attempt: entry.attempt + 1, next: clock.now() + backoffDelay(backoff, entry.attempt + 1) });
+          runs = channelRuns(runs, { at: end, failures: [{ channel, call: "probe", kind: outcome.kind }], good: [], ...(lastSuccess === undefined ? {} : { lastSuccess }) });
+          probes.set(channel, { failed: entry.failed + 1, next: end + backoffDelay(backoff, entry.failed + 1) });
         }
       }
       return passed;
@@ -123,6 +135,7 @@ export function channelWatch(options: ChannelWatchOptions): ChannelWatch {
       const failures = delivery.failures.map((failure) => ({ channel: failure.channel, call: failure.call, kind: failure.kind }));
       runs = channelRuns(runs, { at, failures, good: accepted, ...(lastSuccess === undefined ? {} : { lastSuccess }) });
       for (const sent of delivery.sent) noteGood(sent.channel, sent.at);
+      for (const channel of accepted) rest(channel, at);
       const open = new Set<string>(down);
       const opened = runs.some((run) => runOpens(run, policy) && !opening.has(run.channel) && !open.has(run.channel));
       const ended = accepted.some((channel) => open.has(channel));

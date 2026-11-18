@@ -230,6 +230,7 @@ describe("the summary", () => {
     expect(text).toContain("### The harm under an active alert (IEM and NCEI, 2023 to 2025)");
     expect(text).toContain("| TO.W | `met.tornado` | `met.tornado` | 1 | 1 | 2 | 5 | 100.0% | 666.7 | 1666.7 |");
     expect(text).toContain("The join placed each event with harm.");
+    expect(text).toContain("The rows of each year name these distinct counties and zones: 2023: 0 and 0, 2024: 1 and 0, 2025: 0 and 0.");
     expect(text).toContain("The data agree with the list of the national event numbers.");
   });
 

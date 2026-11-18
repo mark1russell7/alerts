@@ -25,6 +25,7 @@
     "@mark1russell7/text": "^0.0.13",
     "@procedures/notify": "^0.63.0",
     "esbuild": "^0.28.2",
+    "libphonenumber-js": "^1.13.16",
     "polite-crawler": "^0.7.10",
     "zod": "^4.6.7"
   }

@@ -643,16 +643,18 @@ function channelCondition(entry: ChannelSnapshot, line: SystemLine | undefined, 
     response: ["assess"],
     onset: facts.onset,
     areas: [],
-    about: [{ system: CHANNEL_SUBJECT, id: channel, label: title }, ...(entry.api ?? []).map(entitySubject)],
+    about: [{ system: CHANNEL_SUBJECT, id: channel, label: title }, ...(entry.api ?? []).flatMap(entitySubject)],
     ...text,
     parameters: { copy: [copy], channel: [channel], cause: [facts.cause], ...(run === undefined ? {} : { failures: [String(run.failures)], last: [run.kind] }) },
   };
 }
 
 // The subject of the key of an entity, as `domain:api.twilio.com`. The id is the text after the first colon.
-function entitySubject(key: string): Subject {
+// The schema refuses an endpoint key with no system or no id. A descriptor in code has no parse, thus such a key gives no subject.
+function entitySubject(key: string): Subject[] {
   const colon = key.indexOf(":");
-  return { system: key.slice(0, colon), id: key.slice(colon + 1) };
+  if (colon <= 0 || colon === key.length - 1) return [];
+  return [{ system: key.slice(0, colon), id: key.slice(colon + 1) }];
 }
 
 const EXHAUSTION_LINE = "exhausted/";

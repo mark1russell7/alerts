@@ -468,7 +468,7 @@ Each channel package registers four procedures under `alerts.channel.<id>`, and 
 | `send` | writes `network` | It sends one `Message` to one `Address`, with the copy id of this send. When `message.quiet` is true, it uses its silent mode. A failure is `{ ok: false }`. It does not throw. |
 | `status` | reads `network` | It gives the state of a receipt: accepted, delivered, acknowledged, expired or failed. |
 | `cancel` | writes `network` | It stops the repeats of a message: each copy of a receipt, or one copy by its copy id. It is idempotent. |
-| `probe` | reads `network` | It is optional. It makes an authenticated read that sends nothing and costs nothing. A success ends the line of a down channel (AL-65). |
+| `probe` | reads `network` | It is optional. It makes an authenticated read that sends nothing and costs nothing. A success ends the line of a down channel, and a failure counts in its run (AL-65). |
 
 A descriptor with `address` tells the fields of the address of a person on the channel. Each field has a name, a need and a form.
 
@@ -490,7 +490,18 @@ A channel can also name the services of one address with the optional procedure 
 - The load gives the services of the first contact of a person on the channel to that person only (`ContactServices`, `contactChannels`).
 - Only the keys of entities count. A missing secret, a lookup that throws and a key of another kind give no service.
 - The services of an address can tell a private fact, for example the region of a number. Thus no problem and no log holds them.
-- The check of the instance gives the services to the load (`InstanceCheck.services`). The route `GET /interests` uses the same lookup.
+- The check of the instance gives the services to the load (`InstanceCheck.services`). The route `GET /interests` uses the same lookup, with one change: a text shows no type of the sender.
+- The services can need a secret, for example the number of a sender. Thus `InstanceCheck.services` takes the secrets and gives the lookup.
+
+The two Twilio channels give the region of the carrier network of the phone (`twilioCallServices`, `twilioTextServices`).
+
+- A node is `provider-region:twilio/<region>/<product>`. The regions are `north-america`, `latin-america`, `apac`, `europe` and `middle-east-africa`. The status page of Twilio has the same regions.
+- The region comes from the country of the phone (libphonenumber-js) and the table `TWILIO_REGIONS`. A test holds one region for each country of libphonenumber-js.
+- The United States, Canada and the United States territories are in North America. The other countries of the North American numbering plan are in Latin America.
+- A call gives `voice`. A text gives `sms`. In North America, a text adds the type of its sender: `sms/long-code`, `sms/short-code` or `sms/toll-free`. The type comes from the number of `TWILIO_TEXT_FROM`.
+- A node covers each node below it. Thus an outage of all SMS in North America reaches each type, and an outage of one type reaches only that type.
+- The type of the real sender is a private fact. Thus the route `GET /interests` cuts each node of a carrier region to its provider, region and product (`shownNode`). The load keeps the full node.
+- A phone with no country gives no node. The functions do not throw.
 
 The channel does not escalate. The core does:
 
@@ -921,7 +932,7 @@ The core function `exhaustions(routes, channels, reports)` gives the exhausted e
 The runtime reads the results of its own calls, because the path of the alerts has no second status source (AL-65).
 
 - `channelRuns(runs, step)` adds the calls of one delivery step to the run of each channel. The runtime keeps the runs in memory.
-- Only the failed calls `send` and `status` of the kinds `network`, `timeout`, `server` and `auth` count (`COUNTED_FAILURES`).
+- Only the failed calls `send`, `status` and `probe` of the kinds `network`, `timeout`, `server` and `auth` count (`COUNTED_FAILURES`).
 - The kinds `consent`, `quiet`, `expired`, `refused`, `reserved` and `rate-limited` do not count. They are facts of a person, a message or a quota.
 - An accepted send or a probe success in a step ends the run of its channel. The failed calls of that step start no run.
 - A run opens a line at `failures` failed calls over at least `span`. The field `channelDown` of the configuration gives them, and the defaults are 3 and 60 s.
@@ -929,9 +940,11 @@ The runtime reads the results of its own calls, because the path of the alerts h
 - A run opens a line only when the network of the copy works. A failure `server` or `auth` is an answer of the provider.
 - Else a source fetch with success after the first failed call and before a later one shows the network. A copy that is offline opens no line, and its outside check tells of it.
 - An open line ends at a good call at or after its onset: an accepted send or a probe success. A restart empties the runs, and an empty run does not end a line.
-- While a line is open, the runtime calls the probe of the channel on a backoff. A channel with no probe keeps its line until an accepted send.
-- The watch of the runtime (`channelWatch`) calls the first probe 1 minute after the first view of the line. The next waits are 2, 4 and 8 minutes, up to 30 minutes (`PROBE_BACKOFF`).
-- A probe past the call limit is a `timeout`. A failed probe does not count in a run, and its message goes into no report and no log.
+- The watch of the runtime (`channelWatch`) calls the probe of each channel with a probe. A channel with no probe keeps its line until an accepted send.
+- The first probe comes 1 minute after the start. After a good call, the next probe waits 15 minutes (`PROBE_IDLE`). Thus a quiet channel gets a probe too.
+- A failed probe counts in the run. Thus an outage with no message opens a line before the next alert needs the channel.
+- After k failed probes in a row, the next probe waits 1, 2, 4 and up to 30 minutes (`PROBE_BACKOFF`). Three failed probes open a line about 3 minutes after the first.
+- A probe past the call limit is a `timeout`, and a probe that throws is a `network` failure. The message of a failed probe goes into no report and no log.
 - The probes run with the fetches of a pass. Thus a probe success ends the line in the view of the same pass.
 - A run that starts to open a line, and an accepted send on a down channel, wake the next pass at once.
 - The probe of Pushover reads the limits of the application (`apps/limits.json`). The probe of Twilio reads the balance of the account (`Balance.json`). The two reads send nothing and cost nothing.
@@ -1086,6 +1099,7 @@ The deaths of one NCEI event are too high for some kinds: NCEI enters many event
 - A county event meets only the county rows of an alert, and a zone event meets only its zone rows. Thus an alert of zones and the events of counties have no common harm.
 - Format 4 (`alerts-rates/4`) gives the areas of each kind and significance, and the harm in them, in counties and in zones, in each year (`byArea`). An area is one alert in one county or zone. It counts one time, in the VTEC year of the alert.
 - Format 4 also gives the placed events of the NCEI kind in counties and in zones (`placed`). The prior of an alert takes the kind of area with more events.
+- Format 5 (`alerts-rates/5`) adds the distinct UGC codes of the alert rows of each year, in counties and in zones (`codes`). A place is in one county and in one zone. Thus the areas of a kind in a year, over the codes of that kind of area, give the alerts in one place.
 
 The level of the table of an alert comes from its CAP severity and urgency. The archive of the VTEC alerts has no CAP fields. Thus the workflow `cap.yml` counts the CAP fields of the new NWS alerts in `data/cap.json` of the package `rates` (format `alerts-cap/1`):
 
@@ -1095,6 +1109,18 @@ The level of the table of an alert comes from its CAP severity and urgency. The 
 - Each measure uploads the whole file, and the next measure adds to it. A person examines the file and commits it from the artifact.
 - The NWS sends alerts each day. Thus a day of the window with no alert is a gap of the API. The measure gives a warning, and the file keeps the count of each day.
 - The replay of the table over the archive takes the CAP fields of each VTEC code from this file (step 4b of AL-31).
+
+The replay (`replayOf` of the package `rates`, format `alerts-replay/1`) puts the table and the score on the alerts of the archive:
+
+- A type is one kind of the taxonomy and one significance. Its keys are the CAP fields of its VTEC codes in `data/cap.json`.
+- Each key gets the level of the table at a place of the person, and the expected deaths of the shadow score.
+- The alerts of a type in one place in a year come from its areas. Its areas in counties go over the counties of that year, and its areas in zones over the zones.
+- At each risk value, the replay gives the sends at `life-safety` in one place in each year. A send at `life-safety` wakes a person at night.
+- The rule sends at `life-safety` when the table gives it, or when the expected deaths are at the risk value or higher. Thus the table stays the floor.
+- The replay also gives the sends of the score alone, the sends that the score adds, and the sends that the floor keeps.
+- A type with no read of the place or of the CAP fields is not in the curve. The replay names each such type.
+- The replay uses the CAP fields of the recent alerts for the alerts of all the years.
+- Each run of `cap.yml` writes the replay with the committed base rates and priors.
 
 The runtime reads the committed priors at its start (`committedPriors` of the package `rates`). A fault of the file stops only the score, and each alert goes on:
 

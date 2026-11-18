@@ -1357,22 +1357,17 @@ describe("the down channels in the passes of the runtime (AL-65)", () => {
   const down = (pass: { readonly view: { readonly step: { readonly reports: readonly Report[] } } }) =>
     pass.view.step.reports.filter((report) => report.kind.code === "system.channel.down").map((report) => report.op);
 
-  it("opens the line after a run of failed sends, keeps it at a restart, and a probe pass ends it with no send", async () => {
+  it("opens the line after a run of failed sends, keeps it at a restart, and the first good send ends it", async () => {
     const clock = fakeWallClock(T0);
     let up = false;
-    const probes: number[] = [];
+    // This channel has no probe. Only an accepted send ends its line.
     const failing: Script = {
-      send: () => ({ ok: false, kind: "server", message: "Pushover gave the status 503." }),
-      probe: () => {
-        probes.push(clock.now());
-        return up ? { ok: true, at: clock.now() } : { ok: false, kind: "server", message: "Pushover gave the status 503." };
-      },
+      send: () => (up ? undefined : { ok: false, kind: "server", message: "Pushover gave the status 503." }),
       describe: { services: ["domain:api.example.com"], api: ["domain:api.example.com"] },
     };
     const log = openRuntimeLog(":memory:");
     const { runtime } = open({ pushover: failing }, log, clock);
     // Failed sends at 0, 20, 40 and 60 s: the retry of the delivery is 15 s.
-    await runtime.pass();
     let last = await runtime.pass();
     for (let index = 0; index < 3; index += 1) {
       await clock.advance(20 * SECOND);
@@ -1390,24 +1385,58 @@ describe("the down channels in the passes of the runtime (AL-65)", () => {
       { system: "domain", id: "api.example.com" },
     ]);
 
-    // A restart empties the run. The line stays, and the probes start again.
+    // A restart empties the run, and the line stays.
     const again = open({ pushover: failing }, log, clock);
     await clock.advance(20 * SECOND);
     expect(down(await again.runtime.pass())).toEqual([]);
     expect(channelLines(again.runtime)).toEqual([`channel/${ONLY_COPY.id}/pushover`]);
-    const first = clock.now() + MINUTE;
-    await clock.advance(MINUTE);
-    expect(down(await again.runtime.pass())).toEqual([]);
-    expect(probes).toEqual([first]);
 
-    // The provider takes calls again. The next probe passes, and the line ends with no accepted send.
+    // The provider takes the next retry. The accepted send wakes the next pass at once, and that view ends the line.
     up = true;
-    await clock.advance(2 * MINUTE);
-    const ended = await again.runtime.pass();
-    expect(probes).toEqual([first, first + 2 * MINUTE]);
-    expect(down(ended)).toEqual(["cancel"]);
+    await clock.advance(20 * SECOND);
+    const accepted = await again.runtime.pass();
+    expect(accepted.delivery?.sent.map((sent) => sent.channel)).toEqual([PUSHOVER]);
+    expect(accepted.wakeAt).toBe(clock.now() + 1);
+    await clock.advance(1);
+    expect(down(await again.runtime.pass())).toEqual(["cancel"]);
     expect(channelLines(again.runtime)).toEqual([]);
-    expect(again.runtime.state().merge.deliveries.filter((delivery) => delivery.channel === PUSHOVER)).toEqual([]);
+    log.close();
+  });
+
+  it("finds a quiet outage by the probes alone, and a probe success ends the line with no send", async () => {
+    const clock = fakeWallClock(T0);
+    let up = false;
+    const probes: number[] = [];
+    const pushover = channel(PUSHOVER, "poll", () => clock.now(), {
+      probe: () => {
+        probes.push(clock.now());
+        return up ? { ok: true, at: clock.now() } : { ok: false, kind: "server", message: "Pushover gave the status 503." };
+      },
+      describe: { services: ["domain:api.example.com"], api: ["domain:api.example.com"] },
+    });
+    const sms = channel(SMS, "none", () => clock.now());
+    const log = openRuntimeLog(":memory:");
+    // No source gives a report, thus the runtime sends nothing.
+    const runtime = openRuntime({ log, clock, sources: [], watch: () => ({ places: [KANSAS], kinds: ["met"] }), view: VIEW, run: RUN, delivery: { ...DELIVERY, channels: [pushover.procedures, sms.procedures] } });
+    const lines = () => Object.keys(runtime.state().lines.open).filter((line) => line.startsWith("channel/"));
+    // The first probe comes 1 minute after the start. The failed probes come 1 and 2 minutes apart.
+    let pass = await runtime.pass();
+    for (let index = 0; index < 3; index += 1) {
+      await clock.advance(pass.wakeAt! - clock.now());
+      pass = await runtime.pass();
+    }
+    expect(probes).toEqual([T0 + MINUTE, T0 + 2 * MINUTE, T0 + 4 * MINUTE]);
+    // The third failed probe over 3 minutes opens the line in the view of the same pass.
+    expect(down(pass)).toEqual(["alert"]);
+    expect(lines()).toEqual([`channel/${ONLY_COPY.id}/pushover`]);
+
+    up = true;
+    await clock.advance(pass.wakeAt! - clock.now());
+    const ended = await runtime.pass();
+    expect(probes.at(-1)).toBe(T0 + 8 * MINUTE);
+    expect(down(ended)).toEqual(["cancel"]);
+    expect(lines()).toEqual([]);
+    expect(pushover.calls.send).toEqual([]);
     log.close();
   });
 

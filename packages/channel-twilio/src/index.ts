@@ -21,6 +21,7 @@ import {
   type TwilioFetch,
   type TwilioRequest,
 } from "@procedures/notify/twilio";
+import { twilioCallServices } from "./carrier.ts";
 import { TWILIO_PHONE_PATTERN, twilioCallDescriptor } from "./descriptor.ts";
 import { probeTwilioAccount } from "./probe.ts";
 import { callFailureOf, callStatusOf, twilioCallOf, type TwilioCallMapOptions } from "./map.ts";
@@ -42,6 +43,7 @@ export {
 export { CALL_LAST_SENTENCE, CALL_REPEATS, CALL_SAY_LIMIT, callFailureOf, callStatusOf, messageTextOf, spokenTextOf, twilioCallOf } from "./map.ts";
 export type { Refusal, TwilioCallMapOptions } from "./map.ts";
 export type { TwilioSpendGates } from "./spend.ts";
+export * from "./carrier.ts";
 export * from "./text.ts";
 export * from "./probe.ts";
 export * from "./replies.ts";
@@ -96,6 +98,7 @@ export interface TwilioCallChannelOptions extends TwilioCallMapOptions {
  * - `cancel({ copy })` does nothing. A call does not repeat, and Twilio keeps no tag on a call.
  * - `cancel` of a receipt with no valid call SID does nothing.
  * - `cancel` throws for each other failure, thus the caller can try again.
+ * - `services` gives the carrier region of the phone of an address (`twilioCallServices`).
  */
 export function createTwilioCallChannel(options: TwilioCallChannelOptions): ChannelProcedures {
   const now = options.now ?? Date.now;
@@ -109,6 +112,8 @@ export function createTwilioCallChannel(options: TwilioCallChannelOptions): Chan
 
   return {
     describe: () => descriptor,
+
+    services: ({ address }) => twilioCallServices(address),
 
     async send({ message, address, copy }): Promise<SendOutcome> {
       if (copy !== undefined && !COPY_ID.test(copy)) return { ok: false, kind: "refused", message: `The copy id "${copy}" has a character that the path of a stop cannot have.` };

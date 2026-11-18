@@ -389,7 +389,7 @@ export function openRuntime(options: RuntimeOptions): Runtime {
       // A watch reads only when it is due, and its check does not throw. It runs next to the fetches.
       const checks = Promise.all(scheduled.map((watch) => watch.check(clock, stop)));
       // The probes of the down channels run next to the fetches. A probe does not throw, and it ends at the call limit.
-      const probes = channels?.probe(downChannels(state.lines, self), start);
+      const probes = channels?.probe(start, lastFetchSuccess(state.health));
       // Each fetch ends before the pass ends, also when one of them fails. Thus no fetch of a pass runs on in the next pass.
       const settled = await Promise.allSettled(due.map(({ source, descriptor }) => fetchOne(source, descriptor, stop)));
       await checks;

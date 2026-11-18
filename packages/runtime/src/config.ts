@@ -169,7 +169,7 @@ export function checkTexts(texts: PrivateTexts, check: InstanceCheck, name = "Th
   const parts = partTexts(texts.parts ?? NO_PARTS);
   if (parts.tag === "err") return parts;
   const secret = envSecrets(keys.value);
-  const parsed = parseConfig(texts.config.text, check.channels, secret, parts.value, check.services);
+  const parsed = parseConfig(texts.config.text, check.channels, secret, parts.value, check.services?.(secret));
   if (parsed.tag === "err") return parsed;
   const problems = check.problems(parsed.value, secret);
   return problems.length > 0 ? err(problems) : ok({ parsed: parsed.value, keys: keys.value });
@@ -212,8 +212,11 @@ export async function checkConfig(source: ConfigSource, home: string, check: Ins
 export interface InstanceCheck {
   /** The channels of the instance. The loader checks each recipient against them. */
   readonly channels: readonly ChannelDescriptor[];
-  /** The services of the contacts, from the channels (`ContactServices`). The layer `delivery` of each person takes them. */
-  readonly services?: ContactServices;
+  /**
+   * This function gives the services of the contacts (`ContactServices`) from the secrets, because a service can need the
+   * number of a sender. The layer `delivery` of each person takes them.
+   */
+  readonly services?: (secret: SecretLookup) => ContactServices;
   /** This function gives the problems of a parsed configuration that stop the start of the instance. */
   problems(parsed: ParsedConfig, secret: SecretLookup): readonly string[];
 }
