@@ -134,7 +134,7 @@ import {
   copyProblems,
   loadConfig,
   mergeParts,
-  PART_NAME,
+  partLabel,
   type AddressValue,
   type AlertConfig,
   type ConfigPart,
@@ -1804,8 +1804,8 @@ export function parseConfig(
   if (checked.tag === "err") problems.push(...checked.error);
   const named: NamedPart[] = [];
   parts.forEach(({ name, text: partText }, index) => {
-    // A bad name can hold any text, so the problem gives the index of the part. The merge refuses the name.
-    const label = PART_NAME.test(name) ? `The part ${name}` : `Part ${index}`;
+    // The merge refuses a bad name.
+    const label = partLabel(name, index);
     const partJson = tryCatch((): unknown => JSON.parse(partText), () => [`${label} is not valid JSON.`]);
     const part = partJson.tag === "err" ? partJson : checkWith(configPartSchema, partJson.value);
     if (part.tag === "err") problems.push(...part.error.map((problem) => (partJson.tag === "err" ? problem : `${label}: ${problem}`)));
