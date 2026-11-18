@@ -468,7 +468,7 @@ Each channel package registers four procedures under `alerts.channel.<id>`, and 
 | `send` | writes `network` | It sends one `Message` to one `Address`, with the copy id of this send. When `message.quiet` is true, it uses its silent mode. A failure is `{ ok: false }`. It does not throw. |
 | `status` | reads `network` | It gives the state of a receipt: accepted, delivered, acknowledged, expired or failed. |
 | `cancel` | writes `network` | It stops the repeats of a message: each copy of a receipt, or one copy by its copy id. It is idempotent. |
-| `probe` | reads `network` | It is optional. It makes an authenticated read that sends nothing and costs nothing. A success ends the line of a down channel (AL-65). |
+| `probe` | reads `network` | It is optional. It makes an authenticated read that sends nothing and costs nothing. A success ends the line of a down channel, and a failure counts in its run (AL-65). |
 
 A descriptor with `address` tells the fields of the address of a person on the channel. Each field has a name, a need and a form.
 
@@ -921,7 +921,7 @@ The core function `exhaustions(routes, channels, reports)` gives the exhausted e
 The runtime reads the results of its own calls, because the path of the alerts has no second status source (AL-65).
 
 - `channelRuns(runs, step)` adds the calls of one delivery step to the run of each channel. The runtime keeps the runs in memory.
-- Only the failed calls `send` and `status` of the kinds `network`, `timeout`, `server` and `auth` count (`COUNTED_FAILURES`).
+- Only the failed calls `send`, `status` and `probe` of the kinds `network`, `timeout`, `server` and `auth` count (`COUNTED_FAILURES`).
 - The kinds `consent`, `quiet`, `expired`, `refused`, `reserved` and `rate-limited` do not count. They are facts of a person, a message or a quota.
 - An accepted send or a probe success in a step ends the run of its channel. The failed calls of that step start no run.
 - A run opens a line at `failures` failed calls over at least `span`. The field `channelDown` of the configuration gives them, and the defaults are 3 and 60 s.
@@ -929,9 +929,11 @@ The runtime reads the results of its own calls, because the path of the alerts h
 - A run opens a line only when the network of the copy works. A failure `server` or `auth` is an answer of the provider.
 - Else a source fetch with success after the first failed call and before a later one shows the network. A copy that is offline opens no line, and its outside check tells of it.
 - An open line ends at a good call at or after its onset: an accepted send or a probe success. A restart empties the runs, and an empty run does not end a line.
-- While a line is open, the runtime calls the probe of the channel on a backoff. A channel with no probe keeps its line until an accepted send.
-- The watch of the runtime (`channelWatch`) calls the first probe 1 minute after the first view of the line. The next waits are 2, 4 and 8 minutes, up to 30 minutes (`PROBE_BACKOFF`).
-- A probe past the call limit is a `timeout`. A failed probe does not count in a run, and its message goes into no report and no log.
+- The watch of the runtime (`channelWatch`) calls the probe of each channel with a probe. A channel with no probe keeps its line until an accepted send.
+- The first probe comes 1 minute after the start. After a good call, the next probe waits 15 minutes (`PROBE_IDLE`). Thus a quiet channel gets a probe too.
+- A failed probe counts in the run. Thus an outage with no message opens a line before the next alert needs the channel.
+- After k failed probes in a row, the next probe waits 1, 2, 4 and up to 30 minutes (`PROBE_BACKOFF`). Three failed probes open a line about 3 minutes after the first.
+- A probe past the call limit is a `timeout`, and a probe that throws is a `network` failure. The message of a failed probe goes into no report and no log.
 - The probes run with the fetches of a pass. Thus a probe success ends the line in the view of the same pass.
 - A run that starts to open a line, and an accepted send on a down channel, wake the next pass at once.
 - The probe of Pushover reads the limits of the application (`apps/limits.json`). The probe of Twilio reads the balance of the account (`Balance.json`). The two reads send nothing and cost nothing.
