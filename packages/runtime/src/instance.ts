@@ -518,6 +518,13 @@ export interface InstanceOptions {
   /** The instance gives each refresh of the outlines to this function. */
   readonly onShapes?: (outcome: ShapeOutcome) => void;
   /**
+   * The store of the indicator readings. The entry gives the file `readings.sqlite` of the private folder, and the service
+   * closes it. Without it, the instance keeps no reading.
+   */
+  readonly readings?: RuntimeOptions["readings"];
+  /** The instance gives each fault of the store of the readings to this function. */
+  readonly onReadingsFault?: RuntimeOptions["onReadingsFault"];
+  /**
    * The instance starts this function one time, when new outlines change the codes of a place. The check is after a refresh
    * with requests, when no task is due. The entry of the profile `daemon` stops the runtime, and the supervisor starts it again.
    */
@@ -715,6 +722,9 @@ export function openInstance(options: InstanceOptions): Instance {
     balances,
     // Each pass waits for the first round of the exchange, and its view has a line for each fault of another copy.
     ...(worker === undefined ? {} : { copies: worker }),
+    // The readings of each fetch go to their store, not to the log.
+    ...(options.readings === undefined ? {} : { readings: options.readings }),
+    ...(options.onReadingsFault === undefined ? {} : { onReadingsFault: options.onReadingsFault }),
     // After each pass, the store of shapes gets the outlines that are due, and it ends before the next fetch of a source.
     onPass: async (pass) => {
       latest = pass;
