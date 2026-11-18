@@ -3,7 +3,7 @@
   "name": "@mark1russell7/alerts-rates",
   "version": "0.1.0",
   "private": true,
-  "description": "The base rates of the alert system from public data: the verified share of the NWS warnings (IEM Cow), the deaths and injuries of each event type (NCEI) and the CAP certainty bands.",
+  "description": "The base rates of the alert system from public data: the verified share of the NWS warnings (IEM Cow), the deaths and injuries of each event type (NCEI), the alerts of each kind with the harm under them (IEM) and the CAP certainty bands.",
   "type": "module",
   "main": "./src/index.ts",
   "scripts": {

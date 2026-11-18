@@ -8,6 +8,8 @@ import { checkRates, gatedValues } from "./gate.ts";
 import type { Harm, YearHarm } from "./ncei.ts";
 import { cowRates, MIN_YEAR_COUNT, nceiRates, noReadOf, RATES_FORMAT, ratesFile, type RatesFile, type RatesInput } from "./rates.ts";
 import { ratesSummary } from "./summary.ts";
+import { HarmJoin, type HarmEvent, type UnderInput } from "./under.ts";
+import { AlertTally } from "./watchwarn.ts";
 
 const cowYears = { first: 2023, last: 2025 };
 const nceiYears = { first: 2023, last: 2025 };
@@ -39,12 +41,26 @@ const harms = (tornadoDeaths: readonly number[]): YearHarm[] =>
       ...(index === 0 ? { Drought: harm(2, 0, 0) } : {}),
       ...(index === 2 ? { "Space Weather": harm(1, 0, 1) } : {}),
     },
+    harmed: [],
   }));
+
+/** A synthetic join: three tornado warnings in Kansas, and one tornado with harm under them. */
+const under = (): UnderInput => {
+  const tally = new AlertTally(nceiYears);
+  const issue = Date.UTC(2024, 4, 6, 17, 50);
+  const rows = [12, 13, 14].map((eventId) => ({ wfo: "ICT", phenomenon: "TO", significance: "W" as const, eventId, year: 2024, ugc: "KSC173", issue, expire: issue + 2_400_000 }));
+  tally.add({ rows, faults: {} });
+  const event: HarmEvent = { id: "1", year: 2024, type: "Tornado", ugc: "KSC173", begin: Date.UTC(2024, 4, 6, 18), end: Date.UTC(2024, 4, 6, 18, 10), deaths: 2, injuries: 5 };
+  const join = new HarmJoin([event]);
+  for (const row of rows) join.add(row);
+  return { years: nceiYears, windows: [], counts: tally.counts(), matches: join.matches(), unplaced: [] };
+};
 
 const input = (verified: readonly number[], tornadoDeaths: readonly number[], cow: Record<CowQueryPhenomenon, CowTally> = tally(verified)): RatesInput => ({
   fetched: Date.UTC(2026, 10, 15),
   cow: { years: cowYears, params: { wfo: [], lsrbuffer: 15 }, queries: ["?begints=x"], tally: cow },
   ncei: { years: nceiYears, files: [], harms: harms(tornadoDeaths) },
+  under: under(),
 });
 
 describe("the Cow measure", () => {
@@ -121,6 +137,14 @@ describe("the file of the base rates", () => {
     expect(file.cow.queries).toEqual(["?begints=x"]);
     expect(file.cap.bands).toEqual(CAP_CERTAINTY_BANDS);
     expect(file.cap.source.section).toMatch(/^3\.2\.2/);
+    expect(file.under.kinds["met.tornado"]?.significances.W?.total).toEqual({ alerts: 3, harm: { events: 1, deaths: 2, injuries: 5 } });
+    expect(file.methods["under"]).toMatch(/The gate does not read this section/);
+  });
+
+  it("gates the same values with or without the section of the harm under an alert", () => {
+    const file = ratesFile(input([60, 70, 80], [1, 2, 6]));
+    expect(checkRates({ cow: file.cow, ncei: file.ncei }, file)).toEqual({ breaks: [], noReads: [] });
+    expect([...gatedValues(file).keys()].filter((path) => path.startsWith("under"))).toEqual([]);
   });
 
   it("keeps the counts of an extreme wind warning with the reason, and no share for it", () => {
@@ -199,6 +223,14 @@ describe("the summary", () => {
     expect(text).toContain("There is no committed file.");
     expect(ratesSummary(file, { committed: true, breaks: [], noReads: [] })).toContain("Each value is in the gate interval");
     expect(ratesSummary(file, { committed: true, breaks: [{ path: "cow.TO.share", value: 0.9, gate: [0.6, 0.8] }], noReads: [] })).toContain(`| ${escapeMarkdown("cow.TO.share")} | 0.9 | 0.6 to 0.8 |`);
+  });
+
+  it("tells the alerts and the harm under an active alert", () => {
+    const text = ratesSummary(file, { committed: false });
+    expect(text).toContain("### The harm under an active alert (IEM and NCEI, 2023 to 2025)");
+    expect(text).toContain("| TO.W | `met.tornado` | `met.tornado` | 1 | 1 | 2 | 5 | 100.0% | 666.7 | 1666.7 |");
+    expect(text).toContain("The join placed each event with harm.");
+    expect(text).toContain("The data agree with the list of the national event numbers.");
   });
 
   it("tells the phenomena that Cow does not verify, with the reason and the evidence", () => {

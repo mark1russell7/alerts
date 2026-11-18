@@ -3,8 +3,9 @@
  * database has one file of details for each year. Each row is one event in one county or zone, with
  * its type, its month, and its direct and indirect deaths and injuries.
  *
- * The functions read a file as a stream of texts. They keep only the sums of each type. They do not
- * keep a row or a state.
+ * The functions read a file as a stream of texts. They keep the sums of each type. They also keep
+ * each row with one or more deaths or injuries (`HarmRow`), for the join with the alerts
+ * (`under.ts`). The file of the base rates holds only national sums. It does not hold a row.
  */
 
 import { parseCsv } from "@procedures/json/csv";
@@ -76,8 +77,54 @@ export class RecordFramer {
   }
 }
 
-/** The columns of a file of details that the sums read. */
-export const DETAILS_COLUMNS = ["BEGIN_YEARMONTH", "EVENT_ID", "EVENT_TYPE", "INJURIES_DIRECT", "INJURIES_INDIRECT", "DEATHS_DIRECT", "DEATHS_INDIRECT"] as const;
+/** The columns of a file of details that the sums and the rows with harm read. */
+export const DETAILS_COLUMNS = [
+  "BEGIN_YEARMONTH",
+  "BEGIN_DAY",
+  "BEGIN_TIME",
+  "END_YEARMONTH",
+  "END_DAY",
+  "END_TIME",
+  "EVENT_ID",
+  "EVENT_TYPE",
+  "STATE_FIPS",
+  "CZ_TYPE",
+  "CZ_FIPS",
+  "CZ_TIMEZONE",
+  "INJURIES_DIRECT",
+  "INJURIES_INDIRECT",
+  "DEATHS_DIRECT",
+  "DEATHS_INDIRECT",
+] as const;
+
+/** A local time of NCEI, as the file gives it: `YYYYMM`, the day and `HHMM` with no leading zeros. */
+export interface NceiLocalTime {
+  readonly yearMonth: string;
+  readonly day: string;
+  readonly time: string;
+}
+
+/**
+ * One row of a file of details with one or more deaths or injuries, with the fields as the file gives them. The join
+ * with the alerts reads it (`placeHarm` of `under.ts`). The deaths and the injuries are direct plus indirect, as in
+ * the sums.
+ */
+export interface HarmRow {
+  readonly id: string;
+  readonly type: string;
+  /** The FIPS code of the state or the water, for example `20` or `1`. */
+  readonly stateFips: string;
+  /** The type of the area: C (county), Z (zone) or M (marine zone). */
+  readonly czType: string;
+  /** The number of the county or the zone, for example `173` or `5`. */
+  readonly czFips: string;
+  /** The time zone of the times, for example `CST-6`. */
+  readonly timeZone: string;
+  readonly begin: NceiLocalTime;
+  readonly end: NceiLocalTime;
+  readonly deaths: number;
+  readonly injuries: number;
+}
 
 /** The sums of one event type. */
 export interface Harm {
@@ -98,6 +145,8 @@ export interface YearHarm {
   readonly months: readonly number[];
   /** The sums of each event type, by the name of NCEI. */
   readonly types: Readonly<Record<string, Harm>>;
+  /** The rows with one or more deaths or injuries, in the order of the file. */
+  readonly harmed: readonly HarmRow[];
 }
 
 const count = (text: string, column: string, id: string): number => {
@@ -108,14 +157,16 @@ const count = (text: string, column: string, id: string): number => {
 
 /**
  * This function sums the deaths and injuries of each event type in one file of details. It reads the
- * file as a stream of texts. It throws an error for a row of a different year or a bad count. It also
- * throws an error for a row with a different count of fields, or for an event id that is not unique.
+ * file as a stream of texts. It also keeps each row with one or more deaths or injuries (`harmed`).
+ * It throws an error for a row of a different year or a bad count. It also throws an error for a row
+ * with a different count of fields, or for an event id that is not unique.
  */
 export async function sumDetails(texts: AsyncIterable<string> | Iterable<string>, year: number): Promise<YearHarm> {
   const framer = new RecordFramer();
   const types = new Map<string, { events: number; deathsDirect: number; deathsIndirect: number; injuriesDirect: number; injuriesIndirect: number }>();
   const months = new Set<number>();
   const ids = new Set<string>();
+  const harmed: HarmRow[] = [];
   let header: readonly string[] | undefined;
   let columns: Readonly<Record<(typeof DETAILS_COLUMNS)[number], number>> | undefined;
   let rows = 0;
@@ -144,11 +195,31 @@ export async function sumDetails(texts: AsyncIterable<string> | Iterable<string>
       if (type === "") throw new Error(`The event ${id} has no type.`);
       let sums = types.get(type);
       if (sums === undefined) types.set(type, (sums = { events: 0, deathsDirect: 0, deathsIndirect: 0, injuriesDirect: 0, injuriesIndirect: 0 }));
+      const deathsDirect = count(at("DEATHS_DIRECT"), "DEATHS_DIRECT", id);
+      const deathsIndirect = count(at("DEATHS_INDIRECT"), "DEATHS_INDIRECT", id);
+      const injuriesDirect = count(at("INJURIES_DIRECT"), "INJURIES_DIRECT", id);
+      const injuriesIndirect = count(at("INJURIES_INDIRECT"), "INJURIES_INDIRECT", id);
       sums.events += 1;
-      sums.deathsDirect += count(at("DEATHS_DIRECT"), "DEATHS_DIRECT", id);
-      sums.deathsIndirect += count(at("DEATHS_INDIRECT"), "DEATHS_INDIRECT", id);
-      sums.injuriesDirect += count(at("INJURIES_DIRECT"), "INJURIES_DIRECT", id);
-      sums.injuriesIndirect += count(at("INJURIES_INDIRECT"), "INJURIES_INDIRECT", id);
+      sums.deathsDirect += deathsDirect;
+      sums.deathsIndirect += deathsIndirect;
+      sums.injuriesDirect += injuriesDirect;
+      sums.injuriesIndirect += injuriesIndirect;
+      const deaths = deathsDirect + deathsIndirect;
+      const injuries = injuriesDirect + injuriesIndirect;
+      if (deaths + injuries > 0) {
+        harmed.push({
+          id,
+          type,
+          stateFips: at("STATE_FIPS").trim(),
+          czType: at("CZ_TYPE").trim(),
+          czFips: at("CZ_FIPS").trim(),
+          timeZone: at("CZ_TIMEZONE").trim(),
+          begin: { yearMonth, day: at("BEGIN_DAY").trim(), time: at("BEGIN_TIME").trim() },
+          end: { yearMonth: at("END_YEARMONTH").trim(), day: at("END_DAY").trim(), time: at("END_TIME").trim() },
+          deaths,
+          injuries,
+        });
+      }
       rows += 1;
     }
   };
@@ -156,7 +227,7 @@ export async function sumDetails(texts: AsyncIterable<string> | Iterable<string>
   take(framer.end());
   if (header === undefined) throw new Error(`The file of ${String(year)} is empty.`);
   const sortedTypes = [...types.keys()].sort();
-  return { year, rows, months: [...months].sort((a, b) => a - b), types: Object.fromEntries(sortedTypes.map((type) => [type, types.get(type) as Harm])) };
+  return { year, rows, months: [...months].sort((a, b) => a - b), types: Object.fromEntries(sortedTypes.map((type) => [type, types.get(type) as Harm])), harmed };
 }
 
 /**

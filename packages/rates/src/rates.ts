@@ -9,6 +9,9 @@
  *
  * Cow links no storm report to the phenomena of `COW_UNVERIFIED`. The file keeps their counts with
  * the reason, and it has no share for them.
+ *
+ * The section `under` has the alerts of each kind and significance, and the harm under an active alert
+ * (`under.ts`). It holds national sums only. The gate does not read it at this time.
  */
 
 import { CAP_CERTAINTY_BANDS, CAP_CERTAINTY_SOURCE, type CertaintyBand } from "@mark1russell7/alerts-format-cap";
@@ -28,10 +31,14 @@ import {
   type CowUnverifiedPhenomenon,
 } from "./cow.ts";
 import { NCEI_FOLDER_URL, nceiKind, type DetailsFile, type Harm, type YearHarm } from "./ncei.ts";
+import { underSection, type UnderInput, type UnderSection } from "./under.ts";
 import { eachYear, type Years } from "./years.ts";
 
-/** The format of the file. A change of its structure gives a new number. Format 2 adds the no reads and the unverified phenomena. */
-export const RATES_FORMAT = "alerts-rates/2";
+/**
+ * The format of the file. A change of its structure gives a new number. Format 2 adds the no reads and the unverified
+ * phenomena. Format 3 adds the section `under`: the alerts of each kind and the harm under an active alert.
+ */
+export const RATES_FORMAT = "alerts-rates/3";
 
 /** The level of each interval. */
 export const LEVEL = 0.95;
@@ -136,6 +143,8 @@ export interface RatesFile {
     readonly source: typeof CAP_CERTAINTY_SOURCE;
     readonly bands: Readonly<Record<string, CertaintyBand>>;
   };
+  /** The alerts of each kind and significance, and the harm under an active alert. */
+  readonly under: UnderSection;
 }
 
 /** The text of the methods of the file. */
@@ -147,6 +156,9 @@ export const METHODS: Readonly<Record<string, string>> = {
   unverified: "Cow links no storm report to some phenomena. The file keeps their counts with the reason and the evidence, and it has no share for them.",
   cow: "One request for each month, with one day of margin before and after the month. A warning counts in the month of its start. The id of a warning counts one time.",
   ncei: "The rows of each file of details, by EVENT_TYPE. The deaths and injuries of a type are the sums of the direct and indirect counts.",
+  under:
+    "For each alert kind and significance: the alerts of each year, and the NCEI events of the kind with harm under an active alert. An alert is one event number of one office in one VTEC year. A national number counts one time (national). An event is under an alert when an alert row of its county or zone is active from the begin of the event minus marginMs to its end. The join places no marine event. A county event meets only county rows, and a zone event meets only zone rows. The gate does not read this section.",
+  windows: "One request for each month, and one month before the first year. The service selects a row by its start, so two windows have no common row. An alert counts in the VTEC year of its number.",
 };
 
 const hull = (...ranges: readonly Range[]): Range => [Math.min(...ranges.map((range) => range[0])), Math.max(...ranges.map((range) => range[1]))];
@@ -286,6 +298,7 @@ export interface RatesInput {
     readonly files: readonly DetailsFile[];
     readonly harms: readonly YearHarm[];
   };
+  readonly under: UnderInput;
 }
 
 /** This function makes the file of the base rates from the sums of the sources. */
@@ -306,5 +319,6 @@ export function ratesFile(input: RatesInput): RatesFile {
     },
     ncei: { folder: NCEI_FOLDER_URL, years: input.ncei.years, files: input.ncei.files, newTypes: ncei.newTypes, types: ncei.types },
     cap: { source: CAP_CERTAINTY_SOURCE, bands: CAP_CERTAINTY_BANDS },
+    under: underSection(input.under),
   };
 }

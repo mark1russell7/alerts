@@ -948,6 +948,15 @@ The priors come from the base rates of the package `rates` (`priorsOf`). The fil
 - A kind with no event in the years gives no prior of deaths and no prior of injuries. Thus the score has no read for that kind.
 - The probability of a CAP certainty is the middle of its band. Its interval is the band.
 
+The deaths of one NCEI event are too high for some kinds: NCEI enters many events of these kinds because a person was hurt. An example is rip currents. Thus format 3 of the base rates (`alerts-rates/3`) adds the section `under`, the harm under an active alert. Step 4 of AL-31 takes the priors of each alert from it. The priors and the gate do not read it at this time:
+
+- The alerts come from the archive of the VTEC alerts of IEM (`watchwarn.py`), one national request for each month. The requests do not ask for the marine phenomena (`MARINE_PHENOMENA`, with the reason).
+- An alert is one event number of one office, in one VTEC year, for one phenomenon and one significance. A watch of the Storm Prediction Center and a tropical alert have a national number. Their alerts count one time for all the offices (`NATIONAL_NUMBERS`, with the reason). The measure checks this list against the data (`numberingDoubts`). A doubt is a warning of the workflow.
+- A kind of the taxonomy adds the alerts of its phenomena. An example is `met.heat.extreme`, with the excessive heat and the extreme heat warnings.
+- The harm of a kind under an alert is the deaths and injuries of the NCEI events of the NCEI kind of the alert kind (`nceiKindOf`, the same prefix rule as the score). An event is under an alert when an alert row of the same county or zone (UGC) is active. The time of the event is from its begin minus one hour (`UNDER_MARGIN_MS`) to its end.
+- The section also has the NCEI harm of each kind in the years, so the share of the harm under an alert is a division. It also counts the events that the join cannot place, by reason: marine, area, time zone or time.
+- A county event meets only the county rows of an alert, and a zone event meets only its zone rows. Thus an alert of zones and the events of counties have no common harm. The section keeps the rows of each alert in counties and in zones (`areas`).
+
 The runtime reads the committed priors at its start (`committedPriors` of the package `rates`). A fault of the file stops only the score, and each alert goes on:
 
 - The map route gives the score of each incident that reaches a person (the field `shadow` of each incident of the view).
