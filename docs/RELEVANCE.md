@@ -245,7 +245,17 @@ Step 5 routes the alerts by the relevance. `assess` uses the graph in `PersonWat
 - The entries are the matched places (`place:<id>`), the code areas, the place areas, the subjects of a known system and the topic of the kind. Each entry has a hit of 1.
 - A matched place counts only when its entry alone reaches the person: the reach at the high ends is more than 0. The cut of the mutes applies.
 - An entry that is not a watched place gives the level of the table, up to `entryMax` of the policy. The default is `urgent`, because `life-safety` needs a place of the person.
+- A rule of the person (`LevelRule`) with the field `through` matches only through entries of those kinds: `place`, `topic` or `entity`. Each kind of the other entries gets its own first rule, and the highest level wins.
 - The reason `reach` tells the reach, the entries that count, the places of the rule and the why.
+
+An example is the work `software`. Its topics reach the outages of each online service. These rules keep a service that the person names at `notice`, and send the other outages to the digest:
+
+```json
+[
+  { "kinds": ["infra"], "through": ["topic"], "max": "digest" },
+  { "kinds": ["infra"], "max": "notice" }
+]
+```
 - `Assessment.muted` holds the matched mute. The level stays the level before the mute, and the delivery uses the effect.
 - With no time, a mute with an end has no effect, so the alert is not lost.
 

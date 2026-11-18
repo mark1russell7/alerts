@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { AssessPolicy, Assessment, Incident, InterestEdge, InterestGraph, Mute, PersonId, PersonWatch, PlaceId, Position, ReportId, WatchedPlace } from "./contracts.ts";
+import type { AssessPolicy, Assessment, Incident, InterestEdge, InterestGraph, Mute, NodeKey, PersonId, PersonWatch, PlaceId, Position, ReportId, WatchedPlace } from "./contracts.ts";
 import { DEFAULT_ASSESS_POLICY, assess } from "./assess.ts";
 import { personInterests } from "./config.ts";
 import { DEFAULT_RELEVANCE_POLICY } from "./relevance.ts";
@@ -229,5 +229,41 @@ describe("the routing of a work topic (AL-35)", () => {
     expect(run(flaw("severe"), digest).level).toBe("digest");
     // A rule of another kind does not change the level.
     expect(run(flaw("moderate"), worker([{ kinds: ["met"], max: "digest" }])).level).toBe("notice");
+  });
+});
+
+describe("the entries of a rule (AL-35)", () => {
+  const down = (severity: Incident["severity"]) => incident({ kind: "infra.saas.outage", severity, areas: [], about: [{ system: "domain", id: "example.com" }] });
+  const rules: PersonWatch["rules"] = [
+    { kinds: ["infra"], through: ["topic"], max: "digest" },
+    { kinds: ["infra"], max: "notice" },
+  ];
+  const user = (services: readonly NodeKey[]) => personInterests({ watch: watcher(undefined, { rules }), defaults: { works: ["software"], services } }).watch;
+
+  it("lowers an outage that comes only through a topic of the work, and keeps a service that the person names", () => {
+    expect(run(down("severe"), user([])).level).toBe("digest");
+    // The service is a second entry. The first rule does not match through it, so the second rule applies.
+    const named = run(down("severe"), user(["domain:example.com"]));
+    expect(named.level).toBe("notice");
+    expect(named.reasons).toContainEqual(expect.objectContaining({ kind: "reach", reached: expect.arrayContaining(["domain:example.com", "topic:infra.saas"]) }));
+    expect(run(down("moderate"), user(["domain:example.com"])).level).toBe("notice");
+    expect(run(down("minor"), user(["domain:example.com"])).level).toBe("digest");
+  });
+
+  it("matches a watched place through the kind place, and a watched subject through the kind of its system", () => {
+    const base = run(incident(), watcher()).level;
+    expect(base).not.toBe("digest");
+    expect(run(incident(), watcher(undefined, { rules: [{ kinds: ["met"], through: ["topic", "entity"], max: "digest" }] })).level).toBe(base);
+    expect(run(incident(), watcher(undefined, { rules: [{ kinds: ["met"], through: ["place"], max: "digest" }] })).level).toBe("digest");
+    const subjects = [{ system: "domain", id: "example.com" }];
+    const watched = run(outage, watcher(undefined, { subjects }));
+    expect(watched.level).not.toBe("digest");
+    expect(run(outage, watcher(undefined, { subjects, rules: [{ through: ["topic"], max: "digest" }] })).level).toBe(watched.level);
+    expect(run(outage, watcher(undefined, { subjects, rules: [{ through: ["entity"], max: "digest" }] })).level).toBe("digest");
+  });
+
+  it("checks the kinds of the entries of a rule", () => {
+    expect(personWatchSchema.safeParse(watcher(undefined, { rules: [{ through: ["topic"], max: "digest" }] })).success).toBe(true);
+    expect(personWatchSchema.safeParse({ ...watcher(), rules: [{ through: ["street"], max: "digest" }] }).success).toBe(false);
   });
 });
