@@ -72,6 +72,8 @@ export interface Options {
   readonly shapes?: { close(): Promise<void> };
   /** The store of the counts of the quotas of the channels. The service closes it in the phase `tear down dependencies`. */
   readonly quotas?: { close(): void };
+  /** The store of the indicator readings. The service closes it in the phase `tear down dependencies`. */
+  readonly readings?: { close(): void };
   /**
    * The sources of the runtime (`Runtime.close`). The service ends their sessions in the phase `tear down dependencies`,
    * after the close of the worker. Thus no fetch reads a closed session.
@@ -146,6 +148,7 @@ const parts = (options: Options): ServiceBuilder =>
       .dependency("log", { system: null, knobs: {}, operations: {} }, { connect: () => undefined, close: () => options.log.close() })
       .dependency("shapes", { system: null, knobs: {}, operations: {} }, { connect: () => undefined, close: () => options.shapes?.close() })
       .dependency("quotas", { system: null, knobs: {}, operations: {} }, { connect: () => undefined, close: () => options.quotas?.close() })
+      .dependency("readings", { system: null, knobs: {}, operations: {} }, { connect: () => undefined, close: () => options.readings?.close() })
       .dependency("sources", { system: null, knobs: {}, operations: {} }, { connect: () => undefined, close: () => options.sources?.close() })
       .worker("passes", options.loop.worker.knobs, options.loop.worker),
     options.outage,

@@ -19,6 +19,7 @@ on:
       - packages/channel-twilio/**
       - packages/source-ipaws/**
       - packages/format-cap/**
+      - packages/source-nwws/**
       - pnpm-lock.yaml
       - .github/workflows/faults.yml
   # A person starts a run on a branch with no pull request: gh workflow run faults.yml --ref <branch>
@@ -59,6 +60,7 @@ jobs:
             packages/channel-twilio/**
             packages/source-ipaws/**
             packages/format-cap/**
+            packages/source-nwws/**
             pnpm-lock.yaml
             .github/workflows/faults.yml
 

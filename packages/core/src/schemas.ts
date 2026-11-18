@@ -584,7 +584,13 @@ export const mapProblemSchema: z.ZodType<MapProblem, MapProblem> = schemaOf<MapP
 
 /** This schema checks the result of the map function. */
 export const mapResultSchema: z.ZodType<MapResult, MapResult> = schemaOf<MapResult>()(
-  z.strictObject({ reports: z.array(reportSchema).readonly(), problems: z.array(mapProblemSchema).readonly() }).readonly(),
+  z
+    .strictObject({
+      reports: z.array(reportSchema).readonly(),
+      problems: z.array(mapProblemSchema).readonly(),
+      readings: z.array(readingSchema).readonly().exactOptional(),
+    })
+    .readonly(),
 );
 
 /** This schema checks the result of the canary check of a source. */

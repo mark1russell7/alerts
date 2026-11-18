@@ -41,6 +41,7 @@ export {
   type SessionHandlers,
   type SessionOptions,
 } from "./session.ts";
+export { joinRefusal, productStanza, selfPresence, type ProductStanza } from "./stanzas.ts";
 export { createSupervisor, DEFAULT_BACKOFF, type NwwsAccount, type StreamMark, type Supervisor, type SupervisorOptions, type SupervisorState } from "./supervisor.ts";
 
 /**

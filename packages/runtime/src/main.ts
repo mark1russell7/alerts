@@ -62,6 +62,7 @@ import { PROFILES, declare } from "./index.ts";
 import { daemonCheck, instanceCheck, LOUD_PING_URL_KEY, openInstance, pingKeyOf, pingTargets, userAgent } from "./instance.ts";
 import { openCheckedRuntimeLog } from "./log.ts";
 import type { ExchangeRound } from "./peers.ts";
+import { openReadingStore, READINGS_FILE } from "./readings.ts";
 import { GOOD_FILE, privateFiles, reloadHook, startConfig, type CheckOf } from "./reload.ts";
 import { shapeReport, zoneCodesText } from "./shapes.ts";
 import { supervisor } from "./supervise.ts";
@@ -187,6 +188,9 @@ async function runtime(): Promise<ServiceBuilder> {
   // A broken file of shapes goes into quarantine, and the store starts empty. Then the outlines come again from the NWS API.
   const shapes = openShapeCache(join(home, SHAPES_FILE));
   if (shapes.quarantined !== undefined) console.error(`The file ${SHAPES_FILE} was broken. It is in quarantine, and the store of shapes starts empty.`);
+  // A broken file of readings goes into quarantine, and the store starts empty. Each series has no read until its history fills again.
+  const readings = openReadingStore(join(home, READINGS_FILE));
+  if (readings.quarantined !== undefined) console.error(`The file ${READINGS_FILE} was broken. It is in quarantine, and the store of readings starts empty.`);
   const instance = openInstance({
     config,
     secret,
@@ -207,6 +211,9 @@ async function runtime(): Promise<ServiceBuilder> {
     // The output gets no secret, also when an error quotes a request.
     onError: (error, failures) => console.error(`A pass failed (${failures} in sequence): ${redactSecrets(errorMessage(error), values)}`),
     shapes,
+    readings,
+    // The kind of the error only: its message can quote a value of a reading.
+    onReadingsFault: (error, action) => console.error(`The store of readings refused a write (${action}): ${error instanceof Error ? error.name : typeof error}.`),
     onShapes: (outcome) => {
       const report = shapeReport(outcome);
       if (report !== undefined) console.error(redactSecrets(report, values));
@@ -248,6 +255,7 @@ async function runtime(): Promise<ServiceBuilder> {
     log,
     shapes: instance.shapes,
     quotas,
+    readings,
     sources: instance.runtime,
     map: instance.map,
     health: instance.health,
