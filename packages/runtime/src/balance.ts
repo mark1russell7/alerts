@@ -27,8 +27,8 @@ export interface BalanceWatchOptions {
   readonly title: string;
   /** The channels that the account pays for. The reports have their subjects. */
   readonly channels: readonly ChannelId[];
-  /** Below this balance, in the currency of the account, the core gives the line `low`. */
-  readonly floor: number;
+  /** The floors of the balance, in the currency of the account. Below each floor, the core gives one line `low`. */
+  readonly floors: readonly number[];
   /** This function reads the balance. It stops at the abort of the signal. */
   readonly read: (signal: AbortSignal) => Promise<BalanceReading>;
   /** The time between two reads that pass. The default is one day. */
@@ -62,7 +62,7 @@ export interface BalanceWatch {
 /**
  * This function makes the watch of one provider account.
  *
- * @throws Error when the watch has no channel, or when a time or the floor is not valid.
+ * @throws Error when the watch has no channel or no floor, or when a time or a floor is not valid.
  */
 export function balanceWatch(options: BalanceWatchOptions): BalanceWatch {
   const every = options.every ?? DAY;
@@ -70,7 +70,8 @@ export function balanceWatch(options: BalanceWatchOptions): BalanceWatch {
   const maxAge = options.maxAge ?? 2 * DAY;
   const limit = options.limit ?? 30_000;
   if (options.channels.length === 0) throw new Error(`The balance watch of ${options.provider} has no channel. Its reports reach no person.`);
-  if (!Number.isFinite(options.floor)) throw new Error(`The floor of the balance of ${options.provider} is not a number.`);
+  if (options.floors.length === 0) throw new Error(`The balance watch of ${options.provider} has no floor.`);
+  if (!options.floors.every(Number.isFinite)) throw new Error(`A floor of the balance of ${options.provider} is not a number.`);
   for (const [name, value] of Object.entries({ every, retry, maxAge, limit })) {
     if (!(Number.isInteger(value) && value > 0)) throw new Error(`The time ${name} of the balance watch of ${options.provider} is not a whole count of milliseconds above 0.`);
   }
@@ -99,8 +100,8 @@ export function balanceWatch(options: BalanceWatchOptions): BalanceWatch {
     nextReadAt: () => reads.nextReadAt(),
     balance() {
       if (since === undefined) return undefined;
-      const { provider, title, channels, floor } = options;
-      return { provider, title, channels, floor, maxAge, since, ...(read === undefined ? {} : { read }) };
+      const { provider, title, channels, floors } = options;
+      return { provider, title, channels, floors, maxAge, since, ...(read === undefined ? {} : { read }) };
     },
     failure: () => reads.failure(),
     shift(size) {

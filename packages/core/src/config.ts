@@ -85,8 +85,11 @@ export interface SpendConfig {
   readonly fixed?: readonly FixedCost[];
   /** The last part of the cap of the sends that only `life-safety` messages use, in US dollars. The default is 0. */
   readonly reserveUsd?: number;
-  /** Below this balance of the account, in the currency of the account, the system reports the line `low`. */
-  readonly floor: number;
+  /**
+   * The floor of the balance of the account, in the currency of the account: one floor or a list of floors. Below each
+   * floor, the system reports one line `low`. Thus the list `[5, 2]` gives one alert at 5 and one more alert at 2.
+   */
+  readonly floor: number | readonly number[];
   /** The time zone of the start of the month, as an IANA name: for example `America/New_York`. */
   readonly timeZone: string;
 }
@@ -105,6 +108,14 @@ export interface FixedCost {
  */
 export function sendCapUsd(spend: Pick<SpendConfig, "monthlyUsd" | "fixed">): number {
   return spend.monthlyUsd - (spend.fixed ?? []).reduce((sum, cost) => sum + cost.usd, 0);
+}
+
+/**
+ * This function gives the floors of the balance of a spend entry, from the highest to the lowest, each one time. One
+ * floor gives a list of one floor.
+ */
+export function balanceFloors(floor: SpendConfig["floor"]): number[] {
+  return [...new Set(typeof floor === "number" ? [floor] : floor)].sort((a, b) => b - a);
 }
 
 /** One person of the outage call, with the chain of the tries of the person. */
