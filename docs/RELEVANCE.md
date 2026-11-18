@@ -144,6 +144,8 @@ The field `defaults` of a person in the private configuration gives the inputs o
 - A person with no field `defaults` keeps the watch. Thus the routing of a configuration without the field stays the same.
 - An unknown work, a service that is not an entity or a changed default is a problem of the load. Then the person keeps the watch.
 
+The route `GET /interests` of the runtime gives the rows of the join of each person. The panel Interests of the local page shows them. Each row has its origin, its weight and its state. A default that an edge of the person replaced stays visible.
+
 ## Less, off and mute
 
 A person has three kinds of opt-out. Each one has a scope.
