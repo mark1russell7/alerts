@@ -59,6 +59,7 @@ export const HEALTHY_FIXTURE: HealthPayload = {
       stages: [],
     },
   ],
+  reads: [{ what: "replies of the texts", at: HEALTH_AT - 2 * MINUTE, failed: false, next: HEALTH_AT + 3 * MINUTE }],
 };
 
 /**
@@ -115,6 +116,10 @@ export const HEALTH_FIXTURE: HealthPayload = {
       stages: ["low", "empty"],
     },
   ],
+  reads: [
+    { what: "replies of the texts", at: HEALTH_AT - 40 * MINUTE, failed: true, next: HEALTH_AT + 5 * MINUTE },
+    { what: "spend of provider:voice-co", at: HEALTH_AT - 20 * MINUTE, failed: false, next: HEALTH_AT + 40 * MINUTE },
+  ],
 };
 
 /** A health before the first pass of the runtime: each source has no read, and the runtime watches no quota and no balance. */
@@ -128,4 +133,5 @@ export const FIRST_FIXTURE: HealthPayload = {
   copies: [],
   quotas: [],
   balances: [],
+  reads: [],
 };

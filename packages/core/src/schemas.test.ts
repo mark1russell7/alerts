@@ -507,6 +507,7 @@ const SCHEMA_NAMES = [
   "quotaHealthSchema",
   "quotaStageSchema",
   "rankDelaysSchema",
+  "readHealthSchema",
   "readingSchema",
   "receiptSchema",
   "regionCodeSchema",

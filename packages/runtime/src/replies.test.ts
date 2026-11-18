@@ -146,6 +146,18 @@ describe("the watch of the replies", () => {
     expect(replyNotes(watch)).toEqual([]);
   });
 
+  it("gives its health with no number and no message: the last read that passed, a failure and the next read", async () => {
+    const clock = fakeWallClock(T0);
+    const watch = watchOf(scripted([changes(stop(FIRST, T0 - MINUTE)), { ok: false, message: `The number ${FIRST} is not valid.` }]).read);
+    expect(watch.health()).toEqual({ what: "replies of the texts", at: null, failed: false, next: null });
+    await watch.check(clock);
+    expect(watch.health()).toEqual({ what: "replies of the texts", at: T0, failed: false, next: T0 + 5 * MINUTE });
+    await clock.advance(5 * MINUTE);
+    await watch.check(clock);
+    expect(watch.health()).toEqual({ what: "replies of the texts", at: T0, failed: true, next: T0 + 10 * MINUTE });
+    expect(JSON.stringify(watch.health())).not.toContain(FIRST.slice(1));
+  });
+
   it("moves the time of the next read and of the last read at a step of the wall clock", async () => {
     const clock = fakeWallClock(T0);
     const watch = watchOf(scripted([changes()]).read);

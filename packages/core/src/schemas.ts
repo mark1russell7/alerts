@@ -157,7 +157,7 @@ import type { EscalationEnd, Recipient } from "./delivery.ts";
 import type { DrillConfig, DrillPath } from "./drill.ts";
 import { OPT_IN_WAYS, type OptInConfig, type OptInRecord } from "./opt-in.ts";
 import type { RankDelays } from "./escalation.ts";
-import { HEALTH_FORMAT, type BalanceHealth, type CopyHealth, type HealthPayload, type QuotaHealth, type SourceHealthView } from "./health-payload.ts";
+import { HEALTH_FORMAT, type BalanceHealth, type CopyHealth, type HealthPayload, type QuotaHealth, type ReadHealth, type SourceHealthView } from "./health-payload.ts";
 import { HISTORY_FORMAT, type HistoryChange, type HistoryIncident, type HistoryPayload, type HistoryPlace, type HistoryRegion } from "./history.ts";
 import type { MapShape } from "./map.ts";
 import type { Lateness, LatenessLimit, LatenessState } from "./lateness.ts";
@@ -1666,6 +1666,18 @@ export const balanceHealthSchema: z.ZodType<BalanceHealth, BalanceHealth> = sche
   z.strictObject({ balance: providerBalanceSchema, stages: z.array(balanceStageSchema).readonly() }).readonly(),
 );
 
+/** This schema checks the health of one read on a schedule of the runtime. */
+export const readHealthSchema: z.ZodType<ReadHealth, ReadHealth> = schemaOf<ReadHealth>()(
+  z
+    .strictObject({
+      what: z.string().min(1, "The words of a read are a non-empty string."),
+      at: instantSchema.nullable(),
+      failed: z.boolean(),
+      next: instantSchema.nullable(),
+    })
+    .readonly(),
+);
+
 /** This schema checks the answer of the health route of the runtime. */
 export const healthPayloadSchema: z.ZodType<HealthPayload, HealthPayload> = schemaOf<HealthPayload>()(
   z
@@ -1679,6 +1691,7 @@ export const healthPayloadSchema: z.ZodType<HealthPayload, HealthPayload> = sche
       copies: z.array(copyHealthSchema).readonly(),
       quotas: z.array(quotaHealthSchema).readonly(),
       balances: z.array(balanceHealthSchema).readonly(),
+      reads: z.array(readHealthSchema).readonly(),
     })
     .readonly(),
 );
