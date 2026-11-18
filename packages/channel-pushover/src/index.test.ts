@@ -137,6 +137,9 @@ describe("the descriptor", () => {
   it("names the push service of the platform, and the resources of the cell", () => {
     expect(pushoverDescriptor("ios").dependsOn).toEqual(["provider:pushover", "provider:apns"]);
     expect(pushoverDescriptor("android").dependsOn).toEqual(["provider:pushover", "provider:fcm"]);
+    expect(pushoverDescriptor("ios").services).toEqual(["domain:api.pushover.net", "domain:api.push.apple.com"]);
+    expect(pushoverDescriptor("android").services).toEqual(["domain:api.pushover.net", "domain:fcm.googleapis.com"]);
+    expect(pushoverDescriptor().services).toEqual(["domain:api.pushover.net"]);
     expect(pushoverDescriptor()).toMatchObject({ id: "pushover", uses: ["internet", "dns", "power"], breaksThrough: true, repeats: true, ack: "poll", maxTitle: 250, maxBody: 1024 });
     // A phone takes many pushes at once, thus each copy sends a life-safety push with no floor.
     expect(pushoverDescriptor().exclusive).toBeUndefined();

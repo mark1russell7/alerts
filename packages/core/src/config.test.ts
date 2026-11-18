@@ -1,6 +1,6 @@
 import { random, seedsFrom } from "@mark1russell7/rigor-generators";
 import { describe, expect, it } from "vitest";
-import { type AlertConfig, balanceFloors, CONFIG_FORMAT, CONFIG_PART_FORMAT, configHash, configuredExpectations, type ContactConfig, drillRules, expectationProblems, loadConfig, localPlaces, mergeParts, type NamedPart, type PersonConfig, type PlaceConfig, placeLabels, type SecretLookup, sendCapUsd, sourcePlaces } from "./config.ts";
+import { type AlertConfig, balanceFloors, CONFIG_FORMAT, CONFIG_PART_FORMAT, configHash, configuredExpectations, type ContactConfig, contactChannels, drillRules, expectationProblems, loadConfig, localPlaces, mergeParts, type NamedPart, type PersonConfig, type PlaceConfig, placeLabels, type SecretLookup, sendCapUsd, sourcePlaces } from "./config.ts";
 import type { ChannelDescriptor, ChannelId, EscalationPolicy, InterestEdge, InterestGraph, NodeKey, PersonId, PlaceId, Position, SourceId } from "./contracts.ts";
 import { RANK_DELAY_LIMIT } from "./escalation.ts";
 import { DRILL_SUBJECT } from "./system-reports.ts";
@@ -166,6 +166,34 @@ describe("loadConfig", () => {
     const loaded = loadConfig(config({ people: [{ ...ruled, watch }] }), CHANNELS, store);
     expect(loaded.problems).toEqual([]);
     expect(loaded.recipients[0]!.watch.interests).toEqual(composeInterests(p1, [placesLayer([home])]).graph);
+  });
+
+  it("joins the services of the channels of the contacts of the person, unless the switch delivery is false", () => {
+    const served = [
+      { ...channel(pushover), services: ["domain:example.com" as NodeKey] },
+      { ...channel(sms), services: ["domain:example.net" as NodeKey, "domain:example.com" as NodeKey] },
+    ];
+    const edgesOf = (defaults: NonNullable<PersonConfig["defaults"]>) => {
+      const loaded = loadConfig(config({ people: [person(p1, [home], { defaults })] }), served, store);
+      expect(loaded.problems).toEqual([]);
+      return loaded.recipients[0]!.watch.interests!.edges;
+    };
+    const on = edgesOf({});
+    expect(on.filter((edge) => edge.origin === "delivery").map((edge) => [edge.id, edge.source])).toEqual([
+      ["delivery/domain:example.com>person", `channel:${pushover},${sms}`],
+      ["delivery/domain:example.net>person", `channel:${sms}`],
+    ]);
+    expect(edgesOf({ delivery: false }).some((edge) => edge.origin === "delivery")).toBe(false);
+    // A person with no defaults keeps the watch, with no layer.
+    const plain = loadConfig(config(), served, store);
+    expect(plain.recipients[0]!.watch.interests).toBeUndefined();
+  });
+
+  it("gives the channels where the person has a contact, in the order of the channels", () => {
+    const only = { contacts: [contacts(p1)[1]!, ...contacts(p2)] };
+    expect(contactChannels(only, p1, CHANNELS).map((one) => one.id)).toEqual([sms]);
+    expect(contactChannels(only, p2, CHANNELS).map((one) => one.id)).toEqual([pushover, sms]);
+    expect(contactChannels(only, "person-3" as PersonId, CHANNELS)).toEqual([]);
   });
 
   it("finds an unknown work, a service that is not an entity and a changed default, and keeps the watch", () => {

@@ -735,6 +735,12 @@ export interface ChannelDescriptor {
    */
   readonly dependsOn: readonly string[];
   /**
+   * The online services that the channel needs, as the keys of entities, for example `domain:api.twilio.com`. Each person
+   * with a contact on the channel gets each service in the layer `delivery` of the interest graph. Thus an outage of
+   * the path of the alerts of a person reaches that person.
+   */
+  readonly services?: readonly NodeKey[];
+  /**
    * The resources of the cell that the channel uses. A push or a text through an API uses
    * `internet`, `dns` and `power`. Thus a fault of the internet link stops each source and each such
    * channel together.
@@ -1486,12 +1492,13 @@ export type EdgeKind = "physical" | "cyber" | "geographic" | "logical" | "intere
  * - `base`: the human base, the same for each person.
  * - `places`: the watched places of the person.
  * - `services`: the services that the person names.
+ * - `delivery`: the services of the channels of the person (`ChannelDescriptor.services`).
  * - `work`: the tools and the services of a kind of work.
  * - `data`: public data, for example the service area of a power utility.
  * - `measured`: a measure of the system, for example the DNS providers of a domain.
  * - `person`: the person set the value. No default replaces it.
  */
-export type EdgeOrigin = "base" | "places" | "services" | "work" | "data" | "measured" | "person";
+export type EdgeOrigin = "base" | "places" | "services" | "delivery" | "work" | "data" | "measured" | "person";
 
 /** One edge of an interest graph: the cause at `from` can impair the node at `to`, with a chance. */
 export interface InterestEdge {

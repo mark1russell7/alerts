@@ -62,6 +62,9 @@ describe("the panel of the interests", () => {
     expect(weightText({ value: 0.333, low: 0.25, high: 0.5 })).toBe("Weight 0.33, 0.25 to 0.5");
     expect(originText("work", "work:finance,software")).toBe("Kind of work: finance, software");
     expect(originText("places", undefined)).toBe("Watched place");
+    expect(originText("delivery", "channel:pushover,twilio-call")).toBe("Path of the alerts: pushover, twilio-call");
+    expect(originText("delivery", undefined)).toBe("Path of the alerts");
+    expect(originText("services", "channel:pushover")).toBe("Named service");
   });
 
   it("gives the rows in use first, then the rows that are off, then the replaced rows, with the labels", () => {

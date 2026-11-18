@@ -134,10 +134,13 @@ export const PUSHOVER_ADDRESS: readonly AddressField[] = [
 /** This function gives the descriptor of the channel for a platform. */
 export function pushoverDescriptor(platform?: "ios" | "android"): ChannelDescriptor {
   const push = platform === "ios" ? ["provider:apns"] : platform === "android" ? ["provider:fcm"] : [];
+  // The push endpoint of the platform carries each message to the phone: Apple for iOS, Firebase Cloud Messaging for Android.
+  const pushServices = platform === "ios" ? ["domain:api.push.apple.com"] : platform === "android" ? ["domain:fcm.googleapis.com"] : [];
   return {
     id: CHANNEL_ID,
     title: "Pushover",
     dependsOn: ["provider:pushover", ...push],
+    services: ["domain:api.pushover.net", ...pushServices],
     uses: ["internet", "dns", "power"],
     // A `life-safety` message at priority 2 sounds through silent mode with the Critical Alerts of the app.
     breaksThrough: true,

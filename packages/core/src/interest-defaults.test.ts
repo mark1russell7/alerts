@@ -1,9 +1,10 @@
 import { random, seedsFrom } from "@mark1russell7/rigor-generators";
 import { describe, expect, it } from "vitest";
-import type { EdgeOrigin, Estimate, InterestEdge, InterestGraph, NodeKey, PersonId, PlaceId, RelevancePolicy, SubjectEntry } from "./contracts.ts";
+import type { ChannelDescriptor, ChannelId, EdgeOrigin, Estimate, InterestEdge, InterestGraph, NodeKey, PersonId, PlaceId, RelevancePolicy, SubjectEntry } from "./contracts.ts";
 import {
   composeInterests,
   defaultEdgeId,
+  deliveryLayer,
   ORIGIN_RANK,
   placesLayer,
   servicesLayer,
@@ -25,6 +26,19 @@ const point = (value: number): Estimate => ({ value, low: value, high: value });
 const ownGraph = (edges: readonly InterestEdge[], extra: Partial<InterestGraph> = {}): InterestGraph => ({ format: "alerts-interest/1", person: PERSON, edges, mutes: [], ...extra });
 const input = (kind: string, entries: readonly SubjectEntry[]): RelevanceInput => ({ kind, entries, at: AT, mandatory: false });
 const placeEntry = (node: NodeKey): SubjectEntry => ({ node, kind: "place", hit: point(1) });
+// A made-up channel with the given services.
+const channelOf = (id: string, services?: readonly NodeKey[]): ChannelDescriptor => ({
+  id: id as ChannelId,
+  title: id,
+  dependsOn: [],
+  ...(services === undefined ? {} : { services }),
+  uses: ["internet"],
+  breaksThrough: false,
+  repeats: false,
+  ack: "none",
+  maxTitle: 100,
+  maxBody: 100,
+});
 const edgeOf = (id: string, from: NodeKey, to: NodeKey, origin: EdgeOrigin, weight = point(0.5), on = true): InterestEdge => ({
   id,
   from,
@@ -66,7 +80,25 @@ describe("the layers", () => {
     ]);
   });
 
+  it("gives one edge of weight 1 from each service of the channels, and names each channel of a service", () => {
+    const channels = [channelOf("call", ["domain:example.net"]), channelOf("push", ["domain:example.com", "domain:example.org", "domain:example.com"]), channelOf("text", ["domain:example.net"]), channelOf("mail")];
+    expect(deliveryLayer(channels)).toEqual([
+      { id: "delivery/domain:example.com>person", from: "domain:example.com", to: "person", kind: "interest", weight: point(1), origin: "delivery", source: "channel:push", on: true },
+      { id: "delivery/domain:example.net>person", from: "domain:example.net", to: "person", kind: "interest", weight: point(1), origin: "delivery", source: "channel:call,text", on: true },
+      { id: "delivery/domain:example.org>person", from: "domain:example.org", to: "person", kind: "interest", weight: point(1), origin: "delivery", source: "channel:push", on: true },
+    ]);
+    expect(deliveryLayer([...channels].reverse())).toEqual(deliveryLayer(channels));
+    expect(deliveryLayer([])).toEqual([]);
+  });
+
+  it("keeps a service that the person names above the same service of a channel, and keeps the channel edge as a row", () => {
+    const { graph, rows } = composeInterests(PERSON, [servicesLayer(["domain:example.com"]), deliveryLayer([channelOf("push", ["domain:example.com"])])]);
+    expect(graph.edges.map((edge) => edge.id)).toEqual(["services/domain:example.com>person"]);
+    expect(rows.find((row) => row.edge.origin === "delivery")?.replacedBy).toBe("services/domain:example.com>person");
+  });
+
   it("refuses an unknown work, a topic that is not a code and a service that is not an entity", () => {
+    expect(() => deliveryLayer([channelOf("push", ["place:farm"])])).toThrow(/channel push/);
     expect(() => workLayer(["astronomy"])).toThrow(RangeError);
     expect(() => workLayer(["a"], { a: { label: "A", topics: ["not.a.code"] } })).toThrow(RangeError);
     expect(() => servicesLayer(["place:farm"])).toThrow(RangeError);

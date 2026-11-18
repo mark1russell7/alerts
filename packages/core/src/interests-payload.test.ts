@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { CONFIG_FORMAT, personInterests, type AlertConfig, type PersonConfig } from "./config.ts";
-import type { InterestEdge, InterestGraph, NodeKey, PersonId, PlaceId } from "./contracts.ts";
+import type { ChannelDescriptor, ChannelId, InterestEdge, InterestGraph, NodeKey, PersonId, PlaceId } from "./contracts.ts";
 import { composeInterests, placesLayer, workLayer } from "./interest-defaults.ts";
 import { INTERESTS_FORMAT, interestsPayload } from "./interests-payload.ts";
 import { interestsPayloadSchema } from "./schemas.ts";
@@ -52,6 +52,19 @@ describe("the payload of the interests", () => {
     expect(first!.rows.find((row) => row.edge.id === "work/topic:infra.cloud>person")?.replacedBy).toBe("mine");
     // A person with no graph and no defaults: the places decide, and the person has no row.
     expect(second).toEqual({ person: ben, routing: "places", rows: [], mutes: [], labels: {} });
+  });
+
+  it("gives the rows of the services of the channels of the contacts of each person, as the load joins them", () => {
+    const push: ChannelDescriptor = { id: "push" as ChannelId, title: "Push", dependsOn: [], services: ["domain:example.com"], uses: ["internet"], breaksThrough: true, repeats: true, ack: "poll", maxTitle: 100, maxBody: 100 };
+    const config = { ...configOf([person(ana, { defaults: {} }), person(ben, { defaults: {} })]), contacts: [{ person: ana, channel: push.id, address: { user: "made-up" } }] };
+    const [first, second] = interestsPayload(config, [push]).people;
+    const delivery = first!.rows.filter((row) => row.edge.origin === "delivery").map((row) => row.edge);
+    expect(delivery.map((edge) => [edge.id, edge.source])).toEqual([["delivery/domain:example.com>person", "channel:push"]]);
+    // The person ben has no contact on the channel, so ben has no row of it.
+    expect(second!.rows.some((row) => row.edge.origin === "delivery")).toBe(false);
+    expect(interestsPayloadSchema.safeParse(interestsPayload(config, [push])).success).toBe(true);
+    // With no channels, the payload has no row of the layer.
+    expect(interestsPayload(config).people[0]!.rows.some((row) => row.edge.origin === "delivery")).toBe(false);
   });
 
   it("gives the problem of the join, and the rows of the graph that the person keeps", () => {

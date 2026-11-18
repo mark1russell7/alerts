@@ -771,6 +771,8 @@ export const channelDescriptorSchema: z.ZodType<ChannelDescriptor, ChannelDescri
       id: channelIdSchema,
       title: z.string(),
       dependsOn: outsideDomains,
+      // A lazy schema: the schema of a node key comes later in this file.
+      services: z.array(z.lazy(() => nodeKeySchema)).readonly().exactOptional(),
       uses: cellUses,
       breaksThrough: z.boolean(),
       repeats: z.boolean(),
@@ -1140,7 +1142,7 @@ export const edgeKindSchema: z.ZodType<EdgeKind, EdgeKind> = schemaOf<EdgeKind>(
 
 /** This schema checks the origin of the weight of an edge. */
 export const edgeOriginSchema: z.ZodType<EdgeOrigin, EdgeOrigin> = schemaOf<EdgeOrigin>()(
-  z.enum(["base", "places", "services", "work", "data", "measured", "person"]),
+  z.enum(["base", "places", "services", "delivery", "work", "data", "measured", "person"]),
 );
 
 /**
@@ -1407,6 +1409,7 @@ export const interestDefaultsConfigSchema: z.ZodType<InterestDefaultsConfig, Int
     .strictObject({
       works: z.array(z.string().min(1)).readonly().exactOptional(),
       services: z.array(nodeKeySchema).readonly().exactOptional(),
+      delivery: z.boolean().exactOptional(),
     })
     .readonly(),
 );

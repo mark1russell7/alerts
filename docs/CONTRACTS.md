@@ -460,6 +460,13 @@ A descriptor with `address` tells the fields of the address of a person on the c
 - A problem names the field and its form, and not its value, because a value can be a secret.
 - The form is a regular expression of the whole value. Pushover takes the key form of `@procedures/notify`. The Twilio call takes a phone number in E.164 form.
 
+A descriptor with `services` names the online services that the channel needs, as the keys of entities. Pushover names `domain:api.pushover.net` and the push endpoint of the platform. The Twilio channels name `domain:api.twilio.com`.
+
+- A key names the endpoint that the channel uses, not the company. Thus an outage of another product of the company does not reach the path of the alerts.
+- A status source gives each component that serves an endpoint the key of that endpoint. Then an outage of the component reaches the path.
+- Each person with a contact on the channel gets each service in the layer `delivery` of the interests. `docs/RELEVANCE.md` tells the layers.
+- Thus an outage of a service on the path of the alerts reaches the person as a named service does.
+
 The channel does not escalate. The core does:
 
 - An `EscalationPolicy` gives the steps of a level: a channel and a time for each step. The first step of `life-safety` is Pushover at emergency priority. It repeats until acknowledged, and sounds through silent mode with iOS Critical Alerts.

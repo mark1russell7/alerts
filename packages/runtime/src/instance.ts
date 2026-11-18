@@ -732,7 +732,7 @@ export function openInstance(options: InstanceOptions): Instance {
   if (problems.length > 0) throw new Error(`The instance does not start. The configuration has these problems:\n- ${problems.join("\n- ")}`);
   const token = options.secret(PUSHOVER_TOKEN) ?? "";
   // The configuration does not change in a process. Thus the rows of the interests are the same at each read.
-  const interests = interestsPayload(config);
+  const interests = interestsPayload(config, INSTANCE_CHANNELS);
 
   // The store of shapes shares the pace of the sources. Thus its requests to the NWS API keep the rests of that host.
   const store = options.shapes === undefined ? undefined : createShapeStore({ pace, transport: options.transport, userAgent: agent, cache: options.shapes });
