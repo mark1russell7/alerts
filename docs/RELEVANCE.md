@@ -112,6 +112,31 @@ Each edge has an `origin`. Each origin except `person` is one layer of the defau
 - A new subject of a followed kind is in scope automatically. A new component of a service does not stay out because nobody added it.
 - A graph with only edges from a place to the person, each with the weight 1, gives the routing of the first releases. This is the compatibility gate.
 
+### The join of the layers
+
+`composeInterests(person, layers, own)` joins the default layers and the graph of the person into one graph. It also gives a row for each edge.
+
+- At each pair of nodes, the graph holds the edges of the strongest origin. The rank is `ORIGIN_RANK`: `person`, `measured`, `data`, `services`, `work`, `places`, `base`.
+- Each weaker edge at that pair stays as a row, with the id of the edge that replaced it. The person can see each default.
+- A person turns a default off with an edge of the origin `person` that is off. The row of the default stays.
+- Two edges of one origin at one pair are two routes.
+- An edge in a layer and in the graph of the person counts once. Thus a second join of a joined graph gives the same result.
+- The order of the layers and of their edges has no effect.
+- The mutes and the labels come from the graph of the person.
+
+A default edge has the id `<origin>/<from>><to>`, so it has the same id at each build. Three layers have a function:
+
+| Function | Layer | Edges |
+| --- | --- | --- |
+| `placesLayer(places)` | `places` | One edge from each watched place to the person, with the weight 1. |
+| `workLayer(works)` | `work` | One edge from each topic of each kind of work. The table `WORK_DEFAULTS` gives the topics. |
+| `servicesLayer(services)` | `services` | One edge from each entity that the person names, for example `domain:example.com`. |
+
+- The table of the kinds of work gives topics, not chances. Thus each edge of `work` and `services` has `UNKNOWN_WEIGHT`, the full interval.
+- A topic edge reaches the person from each place on the Earth. Thus the table names only the topics that touch the work wherever they occur.
+- The layer `base` has no function yet. Without a test of the size of an event, a topic edge of the base routes each event of the world. The shadow score of AL-31 and the indicators of AL-59 give that test.
+- The layers `data` and `measured` come from adapters, for example the service areas of the power utilities.
+
 ## Less, off and mute
 
 A person has three kinds of opt-out. Each one has a scope.
@@ -164,6 +189,7 @@ No text holds an address, a point or a region code.
 
 The file `relevance.ts` of the core holds the calculation. `relevance-gates.test.ts` holds the gates.
 
+- The file `interest-defaults.ts` holds the layers and their join. `interest-defaults.test.ts` holds their gates.
 - `relevance(input, graph, policy)` gives the `Relevance` of one incident. The input holds the kind, the entries, the time and the mandatory class.
 - `canReach(input, graph, policy)` tells if the reach at the high ends is more than 0. The routing uses it for each entry.
 - `DEFAULT_RELEVANCE_POLICY` gives the hop cap 4, the top 3 paths, the mandatory class `silent` and the level `urgent` for the other entries.

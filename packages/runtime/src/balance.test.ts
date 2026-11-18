@@ -14,7 +14,7 @@ const DAY = 24 * HOUR;
 const CALL = "twilio-call" as ChannelId;
 
 function watchOf(read: BalanceWatchOptions["read"], extra: Partial<BalanceWatchOptions> = {}) {
-  return balanceWatch({ provider: "provider:twilio", title: "Twilio", channels: [CALL], floor: 5, read, ...extra });
+  return balanceWatch({ provider: "provider:twilio", title: "Twilio", channels: [CALL], floors: [5], read, ...extra });
 }
 
 // A reader that gives the next answer of a list, and counts its reads.
@@ -39,7 +39,7 @@ describe("the balance watch", () => {
     expect(watch.balance()).toBeUndefined();
     expect(watch.nextReadAt()).toBeUndefined();
     await watch.check(clock);
-    expect(watch.balance()).toEqual({ provider: "provider:twilio", title: "Twilio", channels: [CALL], floor: 5, maxAge: 2 * DAY, since: T0, read: { balance: 12.5, currency: "USD", at: T0 } });
+    expect(watch.balance()).toEqual({ provider: "provider:twilio", title: "Twilio", channels: [CALL], floors: [5], maxAge: 2 * DAY, since: T0, read: { balance: 12.5, currency: "USD", at: T0 } });
     expect(watch.nextReadAt()).toBe(T0 + DAY);
     await clock.advance(DAY - 1);
     await watch.check(clock);
@@ -106,10 +106,11 @@ describe("the balance watch", () => {
     expect(reader.reads()).toBe(1);
   });
 
-  it("refuses a watch with no channel, a floor that is not a number or a time that is not valid", () => {
+  it("refuses a watch with no channel, no floor, a floor that is not a number or a time that is not valid", () => {
     const read = scripted([ok(1)]).read;
     expect(() => watchOf(read, { channels: [] })).toThrow("has no channel");
-    expect(() => watchOf(read, { floor: Number.NaN })).toThrow("not a number");
+    expect(() => watchOf(read, { floors: [5, Number.NaN] })).toThrow("not a number");
+    expect(() => watchOf(read, { floors: [] })).toThrow("no floor");
     for (const extra of [{ every: 0 }, { retry: -1 }, { maxAge: 1.5 }, { limit: Number.POSITIVE_INFINITY }]) expect(() => watchOf(read, extra), JSON.stringify(extra)).toThrow("whole count");
   });
 });

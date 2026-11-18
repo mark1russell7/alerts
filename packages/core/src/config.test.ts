@@ -1,6 +1,6 @@
 import { random, seedsFrom } from "@mark1russell7/rigor-generators";
 import { describe, expect, it } from "vitest";
-import { type AlertConfig, CONFIG_FORMAT, CONFIG_PART_FORMAT, configHash, configuredExpectations, type ContactConfig, drillRules, expectationProblems, loadConfig, localPlaces, mergeParts, type NamedPart, type PersonConfig, type PlaceConfig, placeLabels, type SecretLookup, sendCapUsd, sourcePlaces } from "./config.ts";
+import { type AlertConfig, balanceFloors, CONFIG_FORMAT, CONFIG_PART_FORMAT, configHash, configuredExpectations, type ContactConfig, drillRules, expectationProblems, loadConfig, localPlaces, mergeParts, type NamedPart, type PersonConfig, type PlaceConfig, placeLabels, type SecretLookup, sendCapUsd, sourcePlaces } from "./config.ts";
 import type { ChannelDescriptor, ChannelId, EscalationPolicy, InterestEdge, InterestGraph, NodeKey, PersonId, PlaceId, Position, SourceId } from "./contracts.ts";
 import { RANK_DELAY_LIMIT } from "./escalation.ts";
 import { DRILL_SUBJECT } from "./system-reports.ts";
@@ -177,6 +177,10 @@ describe("loadConfig", () => {
     const spend = { provider: "provider:pushover", monthlyUsd: 15, fixed, reserveUsd: 3, floor: 5, timeZone: "America/Chicago" };
     expect(sendCapUsd(spend)).toBeCloseTo(11.7, 9);
     expect(sendCapUsd({ monthlyUsd: 15 })).toBe(15);
+    // One floor is a list of one floor. A list gives its floors from the highest to the lowest, each one time.
+    expect(balanceFloors(5)).toEqual([5]);
+    expect(balanceFloors([2, 5, 2])).toEqual([5, 2]);
+    expect(loadConfig(config({ spend: [{ ...spend, floor: [5, 2] }] }), paid, store).problems).toEqual([]);
     expect(loadConfig(config({ spend: [spend] }), paid, store).problems).toEqual([]);
     expect(loadConfig(config({ spend: [{ ...spend, reserveUsd: 12 }] }), paid, store).problems).toEqual([
       "The reserve of the spend of provider:pushover is not below its monthly cap less its fixed costs.",

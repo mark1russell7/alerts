@@ -3,8 +3,8 @@
  * of the channels. Twilio also bills other usage: the calls of the outage Functions, the replies, the fees. The watch of
  * the spend gives the gates the spend of this read when it is larger.
  *
- * - The spend is the usage record `totalprice` less the record `phonenumbers`. The rent of the numbers is in the fixed
- *   costs of the cap.
+ * - The spend is the usage record `totalprice` less the record `phonenumbers`. Thus the spend has no rent of a number.
+ *   A cap holds the rent only when its spend entry lists the rent in `fixed`.
  * - Twilio counts the usage in days of GMT. The read starts at the day of GMT that holds the start of the month. Thus it
  *   can count some hours of the month before. The cap can then stop a send early, but not late.
  * - Twilio adds the usage to the records after a delay. The read can miss the usage of that delay.

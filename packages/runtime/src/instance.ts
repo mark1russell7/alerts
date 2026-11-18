@@ -5,6 +5,7 @@
  */
 import { delay, frameClock, wallClock, type Clock, type WallClock } from "@mark1russell7/algebra/clock";
 import {
+  balanceFloors,
   CLOCK_STEP_ABOVE,
   configuredExpectations,
   DEFAULT_LINK_POLICY,
@@ -774,6 +775,8 @@ export function openInstance(options: InstanceOptions): Instance {
       ...(delivery.assess === undefined ? {} : { policy: delivery.assess }),
       shape: shapes.lookup,
       basemap: shapes.basemap(),
+      // The breadth of the indicator signals of the last pass. A runtime with no store of the readings has none.
+      ...(latest?.breadth === undefined ? {} : { breadth: latest.breadth }),
     });
   };
   // The health reads the view of the last pass. The watches of the copies and of the balances are at the time of the read.
@@ -903,7 +906,7 @@ function twilioChannel(options: InstanceOptions, spend: readonly SpendConfig[] |
     provider: entry.provider,
     title: "Twilio",
     channels: textFrom === undefined ? [TWILIO_CHANNEL] : [TWILIO_CHANNEL, TEXT_CHANNEL_ID],
-    floor: entry.floor,
+    floors: balanceFloors(entry.floor),
     read: (signal) => readTwilioBalance({ credentials, fetch }, signal),
   });
   // The watch of the spend adds the other usage of the account to the count of the gates (AL-57).
