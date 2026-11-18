@@ -15,7 +15,7 @@ export const BOM_SWS_DESCRIPTOR: SourceDescriptor = {
   id: SOURCE_ID,
   title: "BoM SWS: the magnetic alerts and the geophysical warnings of the Australian region, on the NOAA scale G",
   origins: [BOM_ORIGIN],
-  dependsOn: ["provider:bom-sws"],
+  dependsOn: ["provider:bom-sws", "cdn:akamai"],
   uses: ["internet", "dns", "power"],
   kinds: BOM_SWS_KINDS,
   coverage: "global",

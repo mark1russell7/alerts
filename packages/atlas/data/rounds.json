@@ -732,5 +732,48 @@
       "dimensions": 5,
       "cause": "Round 12 plans cbsa-bwt and rocketlaunch-live, and moves cbp-bwt, digitraffic-road and ndw-open-data from later to plan. The gaps go from 112 to 109. The dimensions with two live sources go from 2 to 5. This is a gain of research: no adapter changed, so the layers do not change."
     }
+  },
+  {
+    "round": 13,
+    "date": "2026-11-18",
+    "by": "One session, for the adapters that the runtime reads and that the atlas only planned.",
+    "method": "One read of each endpoint of an adapter with a script, with a DNS lookup of each host. The script records the status, the type, the size, the canonical names and the names of the headers of a content network.",
+    "lists": [
+      "The frequency API of Energy-Charts: https://api.energy-charts.info/v2/frequency",
+      "The JSON file of the KEV catalog: https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json",
+      "The incidents of Google Cloud: https://status.cloud.google.com/incidents.json",
+      "The RSS feed of the AWS events: https://status.aws.amazon.com/rss/all.rss",
+      "The RSS feed of Azure Status: https://rssfeed.azure.status.microsoft/en-us/status/feed/"
+    ],
+    "queries": [],
+    "notes": [
+      "The atlas adopts five adapters that the runtime reads: energy-charts-frequency, cisa-kev, gcp-status-json, aws-health-rss and bom-sws-api.",
+      "The host www.cisa.gov is behind Akamai. Thus the paths of cisa-kev and cisa-advisories-rss have cdn:akamai, and the KEV descriptor names it.",
+      "The BoM host is behind Akamai, as round 9 found. The BoM descriptor names cdn:akamai. On 2026-11-18 BoM permitted personal use with no commercial use, so the source has a risk.",
+      "The AWS adapter reads status.aws.amazon.com, not health.aws.amazon.com. The DNS lookup gave names of Amazon, with no content network.",
+      "The Azure feed is behind Akamai. Its path has cdn:akamai, and the source stays planned until its adapter is in the runtime.",
+      "Google Cloud answers from the front end of Google, the provider of the feed. The path has no separate part for it.",
+      "A new descriptor test holds each origin of a descriptor in the origins of its source. It found three differences. The GCP descriptor gives google, the company of the other Google sources, in place of google-cloud. The atlas takes the ids of the core for the two others: ipaws-authority in place of us-alerting-authorities, and bom in place of bom-sws.",
+      "The status pages of source-statuspage stay planned. One adapter gives the sources of many pages, with different origins and content networks, and the descriptor test has one row for each adapter."
+    ],
+    "studies": [],
+    "measures": {
+      "classes": 201,
+      "gaps": 109,
+      "cover": {
+        "adopted": 54,
+        "paths": 54,
+        "origins": 4
+      },
+      "total": {
+        "adopted": 139,
+        "paths": 139,
+        "origins": 61
+      },
+      "unknownOrigins": 4,
+      "unknownPaths": 30,
+      "dimensions": 5,
+      "cause": "Round 13 adopts five planned sources. The cloud outages get two adopted sources on two paths from two origins, so the cover goes from 53 to 54 classes and the origin cover from 3 to 4. The gaps stay at 109, because round 1 planned each source."
+    }
   }
 ]

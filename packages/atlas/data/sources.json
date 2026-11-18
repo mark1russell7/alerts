@@ -406,7 +406,7 @@
     "calibration": null,
     "coverage": "US.",
     "origins": [
-      "us-alerting-authorities"
+      "ipaws-authority"
     ],
     "path": [
       "amberalert.ojp.gov"
@@ -660,24 +660,27 @@
     "cost": "free",
     "delay": "unknown",
     "history": "unknown",
-    "rateLimit": "unknown",
+    "rateLimit": "No published limit. The adapter asks once each 5 minutes.",
     "calibration": null,
     "coverage": "Public AWS events, not specific to an account.",
     "origins": [
       "aws"
     ],
     "path": [
-      "health.aws.amazon.com"
+      "status.aws.amazon.com"
     ],
-    "subjectIds": null,
+    "subjectIds": [
+      "domain",
+      "provider-region"
+    ],
     "risks": [],
-    "decision": "plan",
-    "adapter": null,
-    "reason": "The only public AWS signal; confirm feed URLs in round 2.",
+    "decision": "adopt",
+    "adapter": "@mark1russell7/alerts-source-aws",
+    "reason": "The only public AWS signal. The adapter reads the feed of all events each 5 minutes. Each event that has not ended is a report, with its region as a subject.",
     "evidence": [
       "https://status.aws.amazon.com/rss/all.rss"
     ],
-    "round": 1
+    "round": 13
   },
   {
     "id": "azure-status-rss",
@@ -704,7 +707,8 @@
       "microsoft"
     ],
     "path": [
-      "rssfeed.azure.status.microsoft"
+      "rssfeed.azure.status.microsoft",
+      "cdn:akamai"
     ],
     "subjectIds": null,
     "risks": [],
@@ -1075,32 +1079,34 @@
     "terms": {
       "url": "https://sws-data.sws.bom.gov.au/register",
       "automated": "allowed",
-      "redistribution": "unclear",
-      "note": "The registration page gives a key for the API, and the data is at no charge, though this remains subject to change. The copyright page of the Bureau was not opened."
+      "redistribution": "limited",
+      "note": "The registration page gives a key for the API, at no charge. On 2026-11-18 BoM permitted personal use with no commercial use, under CC BY 4.0 with its attribution."
     },
     "cost": "free",
     "delay": "unknown",
     "history": "unknown",
-    "rateLimit": "unknown",
+    "rateLimit": "No published limit. The adapter asks once each 10 minutes.",
     "calibration": null,
     "coverage": "The Australian region: the K and A indices of Australia, and the magnetic alerts and warnings of the region. A geomagnetic storm is a planetary event, so the alerts are a signal of the storm in the whole Earth.",
     "subjectIds": [],
     "origins": [
-      "bom-sws"
+      "bom"
     ],
     "path": [
       "sws-data.sws.bom.gov.au",
       "cdn:akamai"
     ],
-    "risks": [],
-    "decision": "plan",
-    "adapter": null,
-    "reason": "A third origin of the geomagnetic storm, with a free key. The key needs a registration with a name and an email address.",
+    "risks": [
+      "BoM permits personal use only, with no commercial use."
+    ],
+    "decision": "adopt",
+    "adapter": "@mark1russell7/alerts-source-bom-sws",
+    "reason": "A third origin of the geomagnetic storm, with a free key. The runtime reads it only when the secrets have the key. Each magnetic alert is a report of a current storm, and each storm day of a warning is a likely report.",
     "evidence": [
       "https://sws-data.sws.bom.gov.au/register",
       "https://sws-data.sws.bom.gov.au/api-docs"
     ],
-    "round": 9
+    "round": 13
   },
   {
     "id": "canada-recalls",
@@ -1560,7 +1566,8 @@
       "cisa"
     ],
     "path": [
-      "www.cisa.gov"
+      "www.cisa.gov",
+      "cdn:akamai"
     ],
     "subjectIds": null,
     "risks": [],
@@ -1591,25 +1598,28 @@
     "cost": "free",
     "delay": "unknown",
     "history": "unknown",
-    "rateLimit": "unknown",
+    "rateLimit": "No published limit. The adapter asks once each 15 minutes.",
     "calibration": null,
     "coverage": "World software, CVEs that CISA confirms are exploited; CSV and JSON with a schema.",
     "origins": [
       "cisa"
     ],
     "path": [
-      "www.cisa.gov"
+      "www.cisa.gov",
+      "cdn:akamai"
     ],
-    "subjectIds": null,
+    "subjectIds": [
+      "cve"
+    ],
     "risks": [],
-    "decision": "plan",
-    "adapter": null,
-    "reason": "The standard list of exploited flaws, public domain, simple to poll.",
+    "decision": "adopt",
+    "adapter": "@mark1russell7/alerts-source-cisa-kev",
+    "reason": "The standard list of exploited flaws, CC0 1.0, simple to poll. Each entry that the catalog adds is a report, with its CVE as the subject.",
     "evidence": [
       "https://www.cisa.gov/known-exploited-vulnerabilities-catalog",
       "https://www.cisa.gov/sites/default/files/licenses/kev/license.txt"
     ],
-    "round": 1
+    "round": 13
   },
   {
     "id": "cloudflare-radar-api",
@@ -2803,7 +2813,7 @@
     "cost": "free",
     "delay": "unknown",
     "history": "yes",
-    "rateLimit": "2 requests per minute by default (burst 4)",
+    "rateLimit": "2 requests per minute by default (burst 4). The adapter asks once each 2 minutes, for the past 10 minutes.",
     "calibration": null,
     "coverage": "Continental Europe",
     "origins": [
@@ -2812,15 +2822,15 @@
     "path": [
       "api.energy-charts.info"
     ],
-    "subjectIds": null,
+    "subjectIds": [],
     "risks": [],
-    "decision": "plan",
-    "adapter": null,
-    "reason": "Grid frequency of Continental Europe under CC BY 4.0, with no key. A large drop shows the loss of a big generator.",
+    "decision": "adopt",
+    "adapter": "@mark1russell7/alerts-source-energy-charts",
+    "reason": "Grid frequency of Continental Europe under CC BY 4.0, with no key. The adapter reads one meter each 2 minutes. Each minute gives two readings: its lowest and its highest value. A large drop shows the loss of a big generator.",
     "evidence": [
       "https://api.energy-charts.info/llms.txt"
     ],
-    "round": 10
+    "round": 13
   },
   {
     "id": "energy-charts-power",
@@ -4211,7 +4221,7 @@
     "cost": "free",
     "delay": "unknown",
     "history": "unknown",
-    "rateLimit": "unknown",
+    "rateLimit": "No published limit. The adapter asks once each 2 minutes.",
     "calibration": null,
     "coverage": "Public Google Cloud incidents with products, severity and affected locations.",
     "origins": [
@@ -4220,16 +4230,19 @@
     "path": [
       "status.cloud.google.com"
     ],
-    "subjectIds": null,
+    "subjectIds": [
+      "domain",
+      "provider-region"
+    ],
     "risks": [],
-    "decision": "plan",
-    "adapter": null,
-    "reason": "Structured JSON with locations and updates.",
+    "decision": "adopt",
+    "adapter": "@mark1russell7/alerts-source-gcp",
+    "reason": "Structured JSON with locations and updates. Each incident that has not ended is a report, with each affected region of Google Cloud as a subject.",
     "evidence": [
       "https://status.cloud.google.com/incidents.json",
       "https://docs.cloud.google.com/support/docs/dashboard"
     ],
-    "round": 1
+    "round": 13
   },
   {
     "id": "gdacs-rss",
@@ -5185,7 +5198,7 @@
     "coverage": "Each public alert that IPAWS gets: the WEA and EAS messages of the NWS and of the other alerting authorities of the US. The NWS WEA types: tsunami, tornado, destructive severe thunderstorm, considerable or catastrophic flash flood, hurricane, typhoon, storm surge, extreme wind, dust storm and snow squall.",
     "origins": [
       "nws",
-      "us-alerting-authorities"
+      "ipaws-authority"
     ],
     "path": [
       "apps.fema.gov",
@@ -6664,7 +6677,7 @@
     "coverage": "US states and territories, coastal and offshore waters. About 120 event types, weather and non-weather (civil, law enforcement, hazmat, 911 outage).",
     "origins": [
       "nws",
-      "us-alerting-authorities"
+      "ipaws-authority"
     ],
     "path": [
       "api.weather.gov",
@@ -6797,7 +6810,7 @@
     "coverage": "Each product of the NWS forecast offices and national centers: the US states and territories, and the coastal and offshore waters. The CAP messages are the CAP messages of the NWS API.",
     "origins": [
       "nws",
-      "us-alerting-authorities"
+      "ipaws-authority"
     ],
     "path": [
       "nwws-oi.weather.gov"

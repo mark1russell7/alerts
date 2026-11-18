@@ -24,7 +24,7 @@ describe("createBomSwsSource", () => {
     expect(BOM_SWS_DESCRIPTOR).toMatchObject({
       id: SOURCE_ID,
       origins: [BOM_ORIGIN],
-      dependsOn: ["provider:bom-sws"],
+      dependsOn: ["provider:bom-sws", "cdn:akamai"],
       kinds: BOM_SWS_KINDS,
       coverage: "global",
       transport: "poll",

@@ -39,7 +39,7 @@ describe("mapObservation", () => {
     expect(reports).toHaveLength(1);
     expect(reports[0]).toMatchObject({
       source: "gcp-status",
-      origin: "google-cloud",
+      origin: "google",
       key: "5fGQt4VbkDnr3Yp8PXPr",
       references: [],
       correlation: [],
