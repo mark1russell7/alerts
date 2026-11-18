@@ -77,6 +77,11 @@ describe("readFeed", () => {
     expect(readFeed('<rss version="2.0"></rss>')).toEqual({ ok: false, reason: "the rss element has no channel", malformed: false });
   });
 
+  it("marks a text on which the XML parser throws as malformed", () => {
+    // The validator of fast-xml-parser accepts this text, and its parser throws on it. A property test found it.
+    expect(readFeed("<:/")).toMatchObject({ ok: false, reason: expect.stringContaining("not well formed"), malformed: true });
+  });
+
   it("does not throw for any text", () => {
     fc.assert(
       fc.property(fc.string(), (text) => {

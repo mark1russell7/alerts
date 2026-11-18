@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import { readCap, type CapAlert, type CapRead } from "./read.ts";
 
@@ -82,6 +83,17 @@ describe("readCap", () => {
   it("refuses a text with a DOCTYPE", () => {
     const read = readCap(`<!DOCTYPE alert [<!ENTITY x "y">]>${message("")}`);
     expect(read).toEqual({ ok: false, reason: "the text has a DOCTYPE: a CAP message has no DTD" });
+  });
+
+  it("refuses a text on which the XML parser throws, and does not throw for any text", () => {
+    // The validator of fast-xml-parser accepts these texts, and its parser throws on them. The second text has a CAP root.
+    expect(readCap("<:/")).toEqual({ ok: false, reason: "the root element is absent, not a CAP alert" });
+    expect(readCap(`<alert xmlns="urn:oasis:names:tc:emergency:cap:1.2"><:/</alert>`)).toMatchObject({ ok: false });
+    fc.assert(
+      fc.property(fc.string(), (text) => {
+        expect(typeof readCap(text).ok).toBe("boolean");
+      }),
+    );
   });
 
   it("refuses a root element that is not an alert, and a namespace that is not CAP", () => {
