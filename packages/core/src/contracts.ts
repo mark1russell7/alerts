@@ -1137,6 +1137,15 @@ export interface LevelRule {
   readonly places?: readonly PlaceId[];
   /** The prefixes of the taxonomy codes of the rule. When it is absent, the rule applies to each kind. */
   readonly kinds?: readonly string[];
+  /**
+   * The kinds of the entries of the rule. The rule matches an incident only through an entry of one of these kinds. A
+   * watched place is an entry of the kind `place`. A watched subject has the kind of its system, or `entity`. When it
+   * is absent, the rule matches through each entry.
+   *
+   * An example is a rule with `through: ["topic"]` for the outages of online services. It lowers an outage that
+   * reaches the person only through a topic of the work. An outage of a service that the person names keeps its level.
+   */
+  readonly through?: readonly SubjectKind[];
   readonly max: AssessedLevel;
 }
 

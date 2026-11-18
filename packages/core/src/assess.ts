@@ -26,6 +26,7 @@ import type {
   RelevancePolicy,
   ReportId,
   SubjectEntry,
+  SubjectKind,
   SubjectSystem,
   SubjectWatch,
   WatchedPlace,
@@ -35,7 +36,7 @@ import { hasKind } from "./kind-prefix.ts";
 import type { MapShape } from "./map.ts";
 import { DEFAULT_ENTRY_MAX, DEFAULT_RELEVANCE_POLICY, canReach, relevance, topicEntry } from "./relevance.ts";
 import { isShape, shapeDistanceKm } from "./shapes.ts";
-import { placeNode } from "./why.ts";
+import { kindOfNode, placeNode } from "./why.ts";
 
 export { hasKind } from "./kind-prefix.ts";
 
@@ -441,17 +442,18 @@ export function assess(
       reach,
       reached: plan.reached,
       mandatory: plan.mandatory,
-      ...(plan.others ? { entryLevel } : {}),
+      ...(plan.others.length > 0 ? { entryLevel } : {}),
       ...(why === undefined ? {} : { why }),
     });
   }
   let level: AssessedLevel = "none";
-  // The level at one match: the first rule that matches can lower the level of the table.
-  const atMatch = (place: PlaceId | undefined, base: AssessedLevel): AssessedLevel => {
+  // The level at one match through an entry of the kind `through`: the first rule that matches can lower the level of the table.
+  const atMatch = (place: PlaceId | undefined, base: AssessedLevel, through: SubjectKind): AssessedLevel => {
     const index = person.rules.findIndex(
       (rule) =>
         (rule.places === undefined || (place !== undefined && rule.places.includes(place))) &&
-        (rule.kinds === undefined || hasKind(rule.kinds, incident.kind.code)),
+        (rule.kinds === undefined || hasKind(rule.kinds, incident.kind.code)) &&
+        (rule.through === undefined || rule.through.includes(through)),
     );
     const rule = person.rules[index];
     if (rule === undefined || rank(rule.max) >= rank(base)) return base;
@@ -463,12 +465,13 @@ export function assess(
     if (plan !== undefined && !plan.places.has(match.place)) continue;
     const found = placeTable(match.place);
     if (found.reports.length > 0 && found.level !== table.level) reasons.push({ kind: "place-table", place: match.place, reports: found.reports, level: found.level });
-    level = higherLevel(level, atMatch(match.place, found.level));
+    level = higherLevel(level, atMatch(match.place, found.level, "place"));
   }
-  if (plan?.others === true) level = higherLevel(level, atMatch(undefined, entryLevel));
+  // Each kind of the other entries that count gets its own rule. Thus a rule through topics does not lower an entity.
+  for (const through of plan?.others ?? []) level = higherLevel(level, atMatch(undefined, entryLevel, through));
   for (const subject of subjects) {
     reasons.push({ kind: "subject", subject });
-    level = higherLevel(level, atMatch(undefined, table.level));
+    level = higherLevel(level, atMatch(undefined, table.level, kindOfNode(`${subject.system}:${subject.id ?? "*"}`) ?? "entity"));
   }
   muted = plan?.relevance.muted;
   return result(level);
@@ -484,14 +487,17 @@ interface PlaceTable {
 interface RelevancePlan {
   // The matched places that count: each place of the rule of the life-safety warnings, and each place that reaches the person alone.
   readonly places: ReadonlySet<PlaceId>;
-  // True when an entry that is not a matched place reaches the person alone.
-  readonly others: boolean;
+  // The kinds of the entries that are not matched places and that reach the person alone, in the order of SUBJECT_KINDS.
+  readonly others: readonly SubjectKind[];
   // The entries that count, in the order of the entries.
   readonly reached: readonly NodeKey[];
   // The matched places of the rule of the life-safety warnings, in the order of the matches.
   readonly mandatory: readonly PlaceId[];
   readonly relevance: Relevance;
 }
+
+// The kinds of the entries, in the order of the reasons and the rules.
+const SUBJECT_KINDS: readonly SubjectKind[] = ["place", "topic", "entity"];
 
 // The message of a fault with no text of its own.
 const RELEVANCE_FAULT = "The relevance failed with no message.";
@@ -536,7 +542,8 @@ function planOf(
   const counted = new Set(reached);
   const places = new Set(matches.filter((match) => counted.has(placeNode(match.place))).map((match) => match.place));
   const matched = new Set(matches.map((match) => placeNode(match.place)));
-  return { places, others: reached.some((node) => !matched.has(node)), reached, mandatory, relevance: found };
+  const otherKinds = new Set(entries.filter((entry) => counted.has(entry.node) && !matched.has(entry.node)).map((entry) => entry.kind));
+  return { places, others: SUBJECT_KINDS.filter((kind) => otherKinds.has(kind)), reached, mandatory, relevance: found };
 }
 
 // The entries of an incident for a graph, one for each node: the matched places, the areas, the subjects and the topic,

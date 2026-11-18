@@ -951,12 +951,16 @@ export const assessPolicySchema: z.ZodType<AssessPolicy, AssessPolicy> = schemaO
     .readonly(),
 );
 
+/** This schema checks the kind of a subject. */
+export const subjectKindSchema: z.ZodType<SubjectKind, SubjectKind> = schemaOf<SubjectKind>()(z.enum(["place", "topic", "entity"]));
+
 /** This schema checks a rule of a person. */
 export const levelRuleSchema: z.ZodType<LevelRule, LevelRule> = schemaOf<LevelRule>()(
   z
     .strictObject({
       places: z.array(placeIdSchema).readonly().exactOptional(),
       kinds: z.array(kindCodeSchema).readonly().exactOptional(),
+      through: z.array(subjectKindSchema).readonly().exactOptional(),
       max: assessedLevelSchema,
     })
     .readonly(),
@@ -1107,9 +1111,6 @@ export const shadowScoreSchema: z.ZodType<ShadowScore, ShadowScore> = schemaOf<S
 // =============================================================================
 // Relevance (AL-35, `docs/RELEVANCE.md`)
 // =============================================================================
-
-/** This schema checks the kind of a subject. */
-export const subjectKindSchema: z.ZodType<SubjectKind, SubjectKind> = schemaOf<SubjectKind>()(z.enum(["place", "topic", "entity"]));
 
 // The key `person`, or `<system>:<id>` with a system of SUBJECT_SYSTEMS and an id that is not empty.
 const NODE_KEY = new RegExp(`^(?:person|(?:${Object.keys(SUBJECT_SYSTEMS).join("|")}):.+)$`);
