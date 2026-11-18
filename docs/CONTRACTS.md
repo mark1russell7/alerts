@@ -485,6 +485,13 @@ A descriptor with `services` names the online services that the channel needs, a
 - Each person with a contact on the channel gets each service in the layer `delivery` of the interests. `docs/RELEVANCE.md` tells the layers.
 - Thus an outage of a service on the path of the alerts reaches the person as a named service does.
 
+A channel can also name the services of one address with the optional procedure `services`. An example is the region of the carrier network of a phone number.
+
+- The load gives the services of the first contact of a person on the channel to that person only (`ContactServices`, `contactChannels`).
+- Only the keys of entities count. A missing secret, a lookup that throws and a key of another kind give no service.
+- The services of an address can tell a private fact, for example the region of a number. Thus no problem and no log holds them.
+- The check of the instance gives the services to the load (`InstanceCheck.services`). The route `GET /interests` uses the same lookup.
+
 The channel does not escalate. The core does:
 
 - An `EscalationPolicy` gives the steps of a level: a channel and a time for each step. The first step of `life-safety` is Pushover at emergency priority. It repeats until acknowledged, and sounds through silent mode with iOS Critical Alerts.
@@ -875,6 +882,7 @@ A channel rule (`ChannelRule`) of a person keeps or removes the steps of a plan 
 A policy can have a subject (`EscalationPolicy.about`, AL-43). The function `policyFor` gives the policy of a level for an incident in `route` and in the check of a drill:
 
 - An incident with the status `system`, `test` or `exercise` gets the first policy of the level whose subject matches a subject of the incident. The match is `matchSubjects`, the match of the channel rules.
+- In a system of paths (`PATH_SYSTEMS`), a subject with an id matches each subject that overlaps it (`nodesOverlap`). An example is a region of a carrier and a product of the region.
 - Each other incident, and an incident with no such policy, gets the first policy of the level with no subject. Thus no policy with a subject changes the plan of a real warning.
 - When two policies of a level match one incident, the first one in the list applies. An example is a policy about `alerts.drill` and a policy about `alerts.drill` with an id.
 - The channel rules apply to the chosen policy. The why record does not change.

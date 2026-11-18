@@ -1,7 +1,7 @@
 import { random, seedsFrom } from "@mark1russell7/rigor-generators";
 import { describe, expect, it } from "vitest";
 import { type AlertConfig, balanceFloors, CONFIG_FORMAT, CONFIG_PART_FORMAT, configHash, configuredExpectations, channelDownRules, type ContactConfig, contactChannels, drillRules, expectationProblems, loadConfig, localPlaces, mergeParts, type NamedPart, type PersonConfig, type PlaceConfig, placeLabels, type SecretLookup, sendCapUsd, sourcePlaces } from "./config.ts";
-import type { ChannelDescriptor, ChannelId, EscalationPolicy, InterestEdge, InterestGraph, NodeKey, PersonId, PlaceId, Position, SourceId } from "./contracts.ts";
+import type { ChannelDescriptor, ChannelId, ContactServices, EscalationPolicy, InterestEdge, InterestGraph, NodeKey, PersonId, PlaceId, Position, SourceId } from "./contracts.ts";
 import { RANK_DELAY_LIMIT } from "./escalation.ts";
 import { DRILL_SUBJECT } from "./system-reports.ts";
 import type { Expectation } from "./lateness.ts";
@@ -189,6 +189,35 @@ describe("loadConfig", () => {
     // A person with no defaults keeps the watch, with no layer.
     const plain = loadConfig(config(), served, store);
     expect(plain.recipients[0]!.watch.interests).toBeUndefined();
+  });
+
+  it("joins the services of the contact of the person on each channel, and keeps them out of each problem", () => {
+    const served = [channel(pushover), { ...channel(sms), services: ["domain:example.net" as NodeKey] }];
+    // A made-up lookup: a region node for the made-up number, and a node that is not an entity.
+    const services: ContactServices = (id, address) => (id === sms && address["to"] === SECRETS["SMS_NUMBER"] ? ["provider-region:example/region-1/sms", `place:${home}`] : []);
+    const graphed = config({ people: [person(p1, [home], { defaults: {} })] });
+    const deliveryOf = (loaded: ReturnType<typeof loadConfig>) => loaded.recipients[0]!.watch.interests!.edges.filter((edge) => edge.origin === "delivery").map((edge) => [edge.id, edge.source]);
+    const plain = [["delivery/domain:example.net>person", `channel:${sms}`]];
+    const loaded = loadConfig(graphed, served, store, services);
+    expect(loaded.problems).toEqual([]);
+    expect(deliveryOf(loaded)).toEqual([...plain, ["delivery/provider-region:example/region-1/sms>person", `channel:${sms}`]]);
+    // The load gives the services to the person only. The descriptor of the channel stays the same.
+    expect(served[1]!.services).toEqual(["domain:example.net"]);
+    // A lookup that throws gives no service and no problem.
+    const throwing: ContactServices = () => {
+      throw new Error("made-up failure");
+    };
+    const thrown = loadConfig(graphed, served, store, throwing);
+    expect(thrown.problems).toEqual([]);
+    expect(deliveryOf(thrown)).toEqual(plain);
+    // A contact with a missing secret gives no service. The problem names the secret, and not the region.
+    const unstored = loadConfig(graphed, served, (name) => (name === "SMS_NUMBER" ? undefined : store(name)), services);
+    expect(unstored.problems).toContain(`The field to of the contact of ${p1} on ${sms} names the secret SMS_NUMBER, and the secret store has no value for it.`);
+    expect(unstored.problems.join(" ")).not.toContain("region-1");
+    expect(deliveryOf(unstored)).toEqual(plain);
+    // The switch delivery false turns off the services of the contacts too.
+    const off = loadConfig(config({ people: [person(p1, [home], { defaults: { delivery: false } })] }), served, store, services);
+    expect(off.recipients[0]!.watch.interests!.edges.some((edge) => edge.origin === "delivery")).toBe(false);
   });
 
   it("gives the channels where the person has a contact, in the order of the channels", () => {

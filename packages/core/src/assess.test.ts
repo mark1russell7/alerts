@@ -745,3 +745,14 @@ describe("the urgency past of a recent event (AL-31)", () => {
     }
   });
 });
+
+describe("the subject watches of a system of paths", () => {
+  it("match each subject that overlaps the watch, and not a sibling", () => {
+    const about = (id: string) => ({ about: [{ system: "provider-region", id }] });
+    const watch = { system: "provider-region", id: "example/region-1/sms" };
+    expect(matchSubjects(about("example/region-1"), [watch])).toEqual([watch]);
+    expect(matchSubjects(about("example/region-1/sms/part"), [watch])).toEqual([watch]);
+    expect(matchSubjects(about("example/region-1/voice"), [watch])).toEqual([]);
+    expect(matchSubjects(about("example/region-10/sms"), [watch])).toEqual([]);
+  });
+});

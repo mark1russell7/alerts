@@ -533,7 +533,7 @@ export function daemonCheck(copy: CopySettings): InstanceCheck {
   // The copies share the loud check. A copy that pings it as its first check hides the stop of the other copies.
   if (pingKey !== LOUD_PING_URL_KEY) return check;
   const shared = `The file ${COPY_FILE}: pingKey is ${LOUD_PING_URL_KEY}, the key of the shared loud check. Each copy has its own first check.`;
-  return { channels: check.channels, problems: (parsed, secret) => [...check.problems(parsed, secret), shared] };
+  return { ...check, problems: (parsed, secret) => [...check.problems(parsed, secret), shared] };
 }
 
 /** The check of the live instance of the only copy: `daemonCheck(ONLY_COPY)`. */
@@ -754,7 +754,8 @@ export function openInstance(options: InstanceOptions): Instance {
   if (problems.length > 0) throw new Error(`The instance does not start. The configuration has these problems:\n- ${problems.join("\n- ")}`);
   const token = options.secret(PUSHOVER_TOKEN) ?? "";
   // The configuration does not change in a process. Thus the rows of the interests are the same at each read.
-  const interests = interestsPayload(config, INSTANCE_CHANNELS);
+  const contactServices = instanceCheck(copy).services;
+  const interests = interestsPayload(config, INSTANCE_CHANNELS, contactServices === undefined ? undefined : { secret: options.secret, services: contactServices });
 
   // The store of shapes shares the pace of the sources. Thus its requests to the NWS API keep the rests of that host.
   const store = options.shapes === undefined ? undefined : createShapeStore({ pace, transport: options.transport, userAgent: agent, cache: options.shapes });
