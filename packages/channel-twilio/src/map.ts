@@ -5,6 +5,7 @@
 
 import { addressProblems, type Address, type DeliveryStatus, type Instant, type Message, type SendOutcome } from "@mark1russell7/alerts";
 import { errorMessage } from "@mark1russell7/text";
+import { truncate } from "@mark1russell7/text/length";
 import { redactSecrets } from "@mark1russell7/text/redact";
 import { type TwilioCall, type TwilioCallRead, type TwilioFailure, twilioSayTwiml } from "@procedures/notify/twilio";
 import { twilioCallDescriptor } from "./descriptor.ts";
@@ -45,15 +46,8 @@ function sentence(part: string): string {
   return /[.!?]$/.test(words) ? words : `${words}.`;
 }
 
-// The start of a text with `limit` code points or fewer. The cut is at the end of a word when the text has a space.
-// The cut adds a stop, thus a cut with no space keeps one code point free for it.
-function cut(text: string, limit: number): string {
-  const points = [...text];
-  if (points.length <= limit) return text;
-  const start = points.slice(0, limit).join("");
-  const space = start.lastIndexOf(" ");
-  return sentence(space > 0 ? start.slice(0, space) : points.slice(0, limit - 1).join(""));
-}
+// The cut of a text to `limit` code points or fewer. The cut keeps each word whole and ends with a stop.
+const CUT = { unit: "code-point", boundary: "word", mark: "." } as const;
 
 /**
  * This function gives the title, the why line and the body of a message as sentences, with `limit` code points or fewer.
@@ -61,7 +55,7 @@ function cut(text: string, limit: number): string {
  */
 export function messageTextOf(message: Message, limit: number): string {
   const parts = [message.title, message.why, message.body].flatMap((part) => (part === undefined || part.trim() === "" ? [] : [sentence(part)]));
-  return cut(parts.join(" "), limit);
+  return truncate(parts.join(" "), limit, CUT);
 }
 
 /**

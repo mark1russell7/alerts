@@ -41,7 +41,7 @@ export {
   type SameLocation,
 } from "./codes.ts";
 export { isKeepalive, KEEPALIVE_AWIPS_ID, KEEPALIVE_MAX_AGE_MS, keepaliveCheck } from "./keepalive.ts";
-export { NWS_ORIGIN, US_COVERAGE, vtecOffice } from "./nws.ts";
+export { NWS_API_SOURCE, NWS_ORIGIN, nwsEvent, US_COVERAGE, vtecOffice } from "./nws.ts";
 export { statesOf } from "./watch.ts";
 export { WEA_EVENT_CODES, WEA_PARAMETER } from "./wea.ts";
 export {

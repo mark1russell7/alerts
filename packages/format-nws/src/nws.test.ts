@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { NWS_ORIGIN, vtecOffice } from "./nws.ts";
+import type { Report } from "@mark1russell7/alerts";
+import { NWS_ORIGIN, nwsEvent, vtecOffice } from "./nws.ts";
 
 describe("NWS_ORIGIN", () => {
   it("is the origin of the NWS messages in each source", () => {
@@ -19,5 +20,22 @@ describe("vtecOffice", () => {
 
   it.each(["", "ewx", "KEWX", "EW", "E1X", " EWX"])("refuses %j", (id) => {
     expect(vtecOffice(id)).toBeUndefined();
+  });
+});
+
+describe("nwsEvent", () => {
+  // Only the parameters and the kind change the result, so the test gives only these fields.
+  const report = (parameters: Report["parameters"]): Report => ({ parameters, kind: { code: "met.flood", label: "Flood" } }) as unknown as Report;
+
+  it("gives the SAME code first", () => {
+    expect(nwsEvent(report({ "eventCode.SAME": ["FFW"], "eventCode.NationalWeatherService": ["FFW2"] }))).toBe("FFW");
+  });
+
+  it("gives the NWS code when the message has no SAME code", () => {
+    expect(nwsEvent(report({ "eventCode.NationalWeatherService": ["FLS"] }))).toBe("FLS");
+  });
+
+  it("gives the code of the kind when the message has no event code", () => {
+    expect(nwsEvent(report({}))).toBe("met.flood");
   });
 });

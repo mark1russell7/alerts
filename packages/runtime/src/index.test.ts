@@ -70,7 +70,7 @@ const loopOf = () => {
 
 // A map before the first pass: no incident, no place and no region.
 const EMPTY_MAP: MapPayload = { format: MAP_FORMAT, at: null, view: { incidents: [], places: [], unshaped: [] }, basemap: [] };
-const EMPTY_HEALTH: HealthPayload = { format: HEALTH_FORMAT, at: null, now: 0, sources: [], lateness: [], coverage: [], copies: [], quotas: [], balances: [] };
+const EMPTY_HEALTH: HealthPayload = { format: HEALTH_FORMAT, at: null, now: 0, sources: [], lateness: [], coverage: [], copies: [], quotas: [], balances: [], reads: [] };
 const historyOf = (since: Instant | null): HistoryPayload => ({ format: HISTORY_FORMAT, at: null, since, next: null, incidents: [], regions: [] });
 
 // The deadline of each wait of the lifecycle test. A busy runner can take some seconds for the start and the first pass.

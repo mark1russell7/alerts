@@ -291,7 +291,7 @@ describe("one pass of the runtime", () => {
       reads += 1;
       return answer;
     };
-    const watch = balanceWatch({ provider: "provider:twilio", title: "Twilio", channels: ["twilio-call" as ChannelId], floor: 5, read, every: 60_000, retry: 60_000, maxAge: 150_000 });
+    const watch = balanceWatch({ provider: "provider:twilio", title: "Twilio", channels: ["twilio-call" as ChannelId], floors: [5], read, every: 60_000, retry: 60_000, maxAge: 150_000 });
     const balanceReports = (pass: Pass) => pass.view.step.reports.filter((report) => report.kind.code.startsWith("system.balance.")).map((report) => [report.op, report.kind.code]);
     const { clock, runtime, log } = open([], { balances: [watch] });
     const first = await runtime.pass();
@@ -527,7 +527,7 @@ describe("one pass of the runtime", () => {
     const api: SourceProcedures = { describe: () => descriptor(API, MINUTE), fetch: async () => (await clock.advance(slowFor), { ok: true, observations: [], complete: true }), map };
     let reads = 0;
     const read = async (): Promise<BalanceReading> => ((reads += 1), { ok: true, balance: 20, currency: "USD" });
-    const watch = balanceWatch({ provider: "provider:twilio", title: "Twilio", channels: ["twilio-call" as ChannelId], floor: 5, read, every: MINUTE + 10_000 });
+    const watch = balanceWatch({ provider: "provider:twilio", title: "Twilio", channels: ["twilio-call" as ChannelId], floors: [5], read, every: MINUTE + 10_000 });
     const { runtime, log } = open([api], { clock, balances: [watch] });
     expect((await runtime.pass()).wakeAt).toBe(T0 + MINUTE);
     await clock.advance(MINUTE);

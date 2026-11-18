@@ -29,7 +29,7 @@ const covered: Coverage = { place: "place:a" as PlaceId, kind: "met", sources: [
 const skewed: CopyWatch = { copy: "copy-b", skewLimit: 2_000, maxAge: 60_000, since: START, read: { at: NOW - 10_000, skew: 5_000, sameConfig: true } };
 const unread: CopyWatch = { copy: "copy-c", skewLimit: 2_000, maxAge: 60_000, since: START };
 const reserve: ChannelQuota = { channel: PUSH, limit: 100, reserve: 10, used: 95, resetAt: START + 86_400_000 };
-const low: ProviderBalance = { provider: "provider:call", title: "Calls", channels: [CALL], floor: 5, maxAge: 3_600_000, since: START, read: { balance: 3, currency: "USD", at: START + 1_000 } };
+const low: ProviderBalance = { provider: "provider:call", title: "Calls", channels: [CALL], floors: [5], maxAge: 3_600_000, since: START, read: { balance: 3, currency: "USD", at: START + 1_000 } };
 
 const input: HealthPayloadInput = {
   at: START + 110_000,
@@ -40,6 +40,7 @@ const input: HealthPayloadInput = {
   copies: [skewed, unread],
   quotas: [reserve],
   balances: [low],
+  reads: [{ what: "replies of the texts", at: START + 100_000, failed: true, next: NOW + 300_000 }],
 };
 
 describe("sourceHealthView", () => {
@@ -86,8 +87,8 @@ describe("healthPayload", () => {
   });
 
   it("gives a payload before the first pass, with empty lists", () => {
-    const empty = healthPayload({ at: null, now: START, sources: [], lateness: [], coverage: [], copies: [], quotas: [], balances: [] });
-    expect(empty).toEqual({ format: HEALTH_FORMAT, at: null, now: START, sources: [], lateness: [], coverage: [], copies: [], quotas: [], balances: [] });
+    const empty = healthPayload({ at: null, now: START, sources: [], lateness: [], coverage: [], copies: [], quotas: [], balances: [], reads: [] });
+    expect(empty).toEqual({ format: HEALTH_FORMAT, at: null, now: START, sources: [], lateness: [], coverage: [], copies: [], quotas: [], balances: [], reads: [] });
     expect(healthPayloadSchema.safeParse(empty).success).toBe(true);
   });
 

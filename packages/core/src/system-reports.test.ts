@@ -9,6 +9,7 @@ import { incidents, normalize } from "./merge.ts";
 import {
   addSystemReports,
   balanceStages,
+  balanceFloorsBelow,
   balanceUnreadAt,
   CHANNEL_SUBJECT,
   CLOCK_STEP_WINDOW,
@@ -315,7 +316,7 @@ describe("the balance reports", () => {
     provider: "provider:twilio",
     title: "Twilio",
     channels: [CALL],
-    floor: 5,
+    floors: [5],
     maxAge: 2 * DAY,
     since: START,
     ...(read === undefined ? {} : { read: { balance: read.balance, currency: "USD", at: read.at ?? START } }),
@@ -327,7 +328,7 @@ describe("the balance reports", () => {
     expect(balanceStages(balance({ balance: 4.99 }), START)).toEqual(["low"]);
     expect(balanceStages(balance({ balance: 0 }), START)).toEqual(["low", "empty"]);
     expect(balanceStages(balance({ balance: -0.5 }), START)).toEqual(["low", "empty"]);
-    expect(balanceStages(balance({ balance: 0 }, { floor: 0 }), START)).toEqual(["low", "empty"]);
+    expect(balanceStages(balance({ balance: 0 }, { floors: [0] }), START)).toEqual(["low", "empty"]);
     // The age counts from the last read, or from the start of the watch with no read.
     expect(balanceStages(balance({ balance: 20 }), START + 2 * DAY - 1)).toEqual([]);
     expect(balanceStages(balance({ balance: 20 }), START + 2 * DAY)).toEqual(["unread"]);
@@ -352,7 +353,7 @@ describe("the balance reports", () => {
         headline: "Twilio: the balance is 1.83 USD, below the floor of 5.00.",
       },
     ]);
-    expect(Object.keys(low.lines.open)).toEqual(["balance/provider%3Atwilio/low"]);
+    expect(Object.keys(low.lines.open)).toEqual(["balance/provider%3Atwilio/low/5"]);
     expect(systemReports(low.lines, snapshot({ balances: [balance({ balance: 1.2, at: START + DAY })] }), START + DAY).reports).toEqual([]);
     const empty = systemReports(low.lines, snapshot({ balances: [balance({ balance: -0.04, at: START + DAY })] }), START + DAY);
     expect(empty.reports).toMatchObject([{ op: "alert", kind: { code: "system.balance.empty" }, severity: "severe", urgency: "immediate", headline: "Twilio refuses each paid message: the balance is -0.04 USD." }]);
@@ -362,6 +363,36 @@ describe("the balance reports", () => {
       ["cancel", "system.balance.low"],
     ]);
     expect(paid.lines.open).toEqual({});
+  });
+
+  it("gives the floors below a balance from the highest to the lowest, each one time, and each floor at 0 or less", () => {
+    const two = { floors: [2, 5, 2] };
+    expect(balanceFloorsBelow(balance({ balance: 6 }, two))).toEqual([]);
+    expect(balanceFloorsBelow(balance({ balance: 4 }, two))).toEqual([5]);
+    expect(balanceFloorsBelow(balance({ balance: 1.5 }, two))).toEqual([5, 2]);
+    expect(balanceFloorsBelow(balance({ balance: 0 }, { floors: [-1, 5] }))).toEqual([5, -1]);
+    expect(balanceFloorsBelow(balance(undefined, two))).toEqual([]);
+    expect(balanceStages(balance({ balance: 1.5 }, two), START)).toEqual(["low"]);
+  });
+
+  it("gives one alert for each floor that the balance goes below, and a cancel for each floor that money passes", () => {
+    const two = { floors: [5, 2] };
+    const first = systemReports(NO_SYSTEM_LINES, snapshot({ balances: [balance({ balance: 4 }, two)] }), START);
+    expect(first.reports).toMatchObject([{ op: "alert", kind: { code: "system.balance.low" }, headline: "Twilio: the balance is 4.00 USD, below the floor of 5.00.", parameters: { floor: ["5"] } }]);
+    const second = systemReports(first.lines, snapshot({ balances: [balance({ balance: 1.5, at: START + DAY }, two)] }), START + DAY);
+    expect(second.reports).toMatchObject([{ op: "alert", headline: "Twilio: the balance is 1.50 USD, below the floor of 2.00.", parameters: { floor: ["2"] } }]);
+    expect(Object.keys(second.lines.open)).toEqual(["balance/provider%3Atwilio/low/2", "balance/provider%3Atwilio/low/5"]);
+    const some = systemReports(second.lines, snapshot({ balances: [balance({ balance: 3, at: START + 2 * DAY }, two)] }), START + 2 * DAY);
+    expect(codes(some.reports)).toEqual([["cancel", "system.balance.low"]]);
+    expect(Object.keys(some.lines.open)).toEqual(["balance/provider%3Atwilio/low/5"]);
+    expect(codes(systemReports(some.lines, snapshot({ balances: [balance({ balance: 20, at: START + 3 * DAY }, two)] }), START + 3 * DAY).reports)).toEqual([["cancel", "system.balance.low"]]);
+    // A fall past the two floors in one read gives the two alerts, and the lines rebuild from the reports.
+    const fall = systemReports(NO_SYSTEM_LINES, snapshot({ balances: [balance({ balance: 1 }, two)] }), START);
+    expect(fall.reports.map((report) => report.parameters["floor"])).toEqual([["2"], ["5"]]);
+    expect(addSystemReports(NO_SYSTEM_LINES, fall.reports, fall.observations)).toEqual(fall.lines);
+    // The other stages have no floor of their own: they give each floor.
+    const unread = systemReports(NO_SYSTEM_LINES, snapshot({ balances: [balance(undefined, two)] }), START + 2 * DAY);
+    expect(unread.reports).toMatchObject([{ kind: { code: "system.balance.unread" }, parameters: { floor: ["5", "2"] } }]);
   });
 
   it("gives the unread line when no read passes, and ends it at the next read", () => {

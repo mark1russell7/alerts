@@ -304,8 +304,8 @@ importers:
         specifier: workspace:*
         version: link:../core
       '@mark1russell7/algebra':
-        specifier: ^0.9.5
-        version: 0.9.6(zod@4.6.7)
+        specifier: ^0.9.7
+        version: 0.9.7(zod@4.6.7)
       '@mark1russell7/rigor-generators':
         specifier: ^0.1.18
         version: 0.1.19
@@ -313,8 +313,8 @@ importers:
         specifier: ^0.0.13
         version: 0.0.13
       '@procedures/notify':
-        specifier: ^0.62.1
-        version: 0.62.1(@mark1russell7/rigor-testkit@0.1.20(@mark1russell7/rigor-chaos@0.3.3)(@mark1russell7/rigor-generators@0.1.19)(@mark1russell7/rigor-proxy@0.3.2(zod@4.6.7))(@opentelemetry/api@1.10.0)(fast-check@4.10.2)(ltx@3.1.2))
+        specifier: ^0.63.0
+        version: 0.63.0(@mark1russell7/rigor-testkit@0.1.20(@mark1russell7/rigor-chaos@0.3.3)(@mark1russell7/rigor-generators@0.1.19)(@mark1russell7/rigor-proxy@0.3.2(zod@4.6.7))(@opentelemetry/api@1.10.0)(fast-check@4.10.2)(ltx@3.1.2))
       esbuild:
         specifier: ^0.28.2
         version: 0.28.2
@@ -344,8 +344,8 @@ importers:
   packages/core:
     dependencies:
       '@mark1russell7/algebra':
-        specifier: ^0.9.5
-        version: 0.9.6(zod@4.6.7)
+        specifier: ^0.9.7
+        version: 0.9.7(zod@4.6.7)
       '@mark1russell7/collections':
         specifier: ^0.11.2
         version: 0.11.2(zod@4.6.7)
@@ -510,6 +510,9 @@ importers:
 
   packages/rates:
     dependencies:
+      '@mark1russell7/alerts':
+        specifier: workspace:*
+        version: link:../core
       '@mark1russell7/alerts-format-cap':
         specifier: workspace:*
         version: link:../format-cap
@@ -517,8 +520,8 @@ importers:
         specifier: workspace:*
         version: link:../format-nws
       '@mark1russell7/rigor-statistics':
-        specifier: ^0.2.1
-        version: 0.2.4
+        specifier: ^0.2.8
+        version: 0.2.8
       '@mark1russell7/text':
         specifier: ^0.0.13
         version: 0.0.13
@@ -526,9 +529,6 @@ importers:
         specifier: ^0.57.0
         version: 0.57.0
     devDependencies:
-      '@mark1russell7/alerts':
-        specifier: workspace:*
-        version: link:../core
       '@mark1russell7/alerts-fetch':
         specifier: workspace:*
         version: link:../fetch
@@ -593,8 +593,8 @@ importers:
         specifier: workspace:*
         version: link:../source-usgs
       '@mark1russell7/algebra':
-        specifier: ^0.9.5
-        version: 0.9.6(zod@4.6.7)
+        specifier: ^0.9.7
+        version: 0.9.7(zod@4.6.7)
       '@mark1russell7/files':
         specifier: ^0.0.4
         version: 0.0.4
@@ -607,6 +607,9 @@ importers:
       '@mark1russell7/rigor-generators':
         specifier: ^0.1.19
         version: 0.1.19
+      '@mark1russell7/rigor-statistics':
+        specifier: ^0.2.8
+        version: 0.2.8
       '@mark1russell7/service':
         specifier: ^0.9.3
         version: 0.9.3(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
@@ -745,6 +748,43 @@ importers:
         specifier: ^5.0.3
         version: 5.1.0(@opentelemetry/api@1.10.0)(@types/node@26.6.6)(@vitest/coverage-v8@5.1.0)(vite@8.3.8(@types/node@26.6.6)(esbuild@0.28.2)(tsx@4.23.15)(yaml@2.9.1))
 
+  packages/source-bom-sws:
+    dependencies:
+      '@mark1russell7/alerts':
+        specifier: workspace:*
+        version: link:../core
+      '@mark1russell7/alerts-fetch':
+        specifier: workspace:*
+        version: link:../fetch
+      '@mark1russell7/alerts-space-weather':
+        specifier: workspace:*
+        version: link:../space-weather
+      '@mark1russell7/text':
+        specifier: ^0.0.13
+        version: 0.0.13
+      polite-crawler:
+        specifier: ^0.7.3
+        version: 0.7.4(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
+    devDependencies:
+      '@mark1russell7/cue':
+        specifier: ^2.0.0
+        version: 2.1.4
+      '@types/node':
+        specifier: ^26.6.5
+        version: 26.6.6
+      '@vitest/coverage-v8':
+        specifier: ^5.0.3
+        version: 5.1.0(vitest@5.1.0)
+      fast-check:
+        specifier: ^4.10.2
+        version: 4.10.2
+      typescript:
+        specifier: ^7.0.2
+        version: 7.0.2
+      vitest:
+        specifier: ^5.0.3
+        version: 5.1.0(@opentelemetry/api@1.10.0)(@types/node@26.6.6)(@vitest/coverage-v8@5.1.0)(vite@8.3.8(@types/node@26.6.6)(esbuild@0.28.2)(tsx@4.23.15)(yaml@2.9.1))
+
   packages/source-cap-feed:
     dependencies:
       '@mark1russell7/alerts':
@@ -806,6 +846,43 @@ importers:
       '@mark1russell7/cue':
         specifier: ^2.0.0
         version: 2.1.4
+      '@types/node':
+        specifier: ^26.6.5
+        version: 26.6.6
+      '@vitest/coverage-v8':
+        specifier: ^5.0.3
+        version: 5.1.0(vitest@5.1.0)
+      fast-check:
+        specifier: ^4.10.2
+        version: 4.10.2
+      typescript:
+        specifier: ^7.0.2
+        version: 7.0.2
+      vitest:
+        specifier: ^5.0.3
+        version: 5.1.0(@opentelemetry/api@1.10.0)(@types/node@26.6.6)(@vitest/coverage-v8@5.1.0)(vite@8.3.8(@types/node@26.6.6)(esbuild@0.28.2)(tsx@4.23.15)(yaml@2.9.1))
+
+  packages/source-energy-charts:
+    dependencies:
+      '@mark1russell7/alerts':
+        specifier: workspace:*
+        version: link:../core
+      '@mark1russell7/alerts-fetch':
+        specifier: workspace:*
+        version: link:../fetch
+      '@mark1russell7/text':
+        specifier: ^0.0.13
+        version: 0.0.13
+      polite-crawler:
+        specifier: ^0.7.3
+        version: 0.7.4(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
+    devDependencies:
+      '@mark1russell7/cue':
+        specifier: ^2.0.0
+        version: 2.1.4
+      '@mark1russell7/quantity':
+        specifier: ^0.4.1
+        version: 0.4.1(zod@4.6.7)
       '@types/node':
         specifier: ^26.6.5
         version: 26.6.6
@@ -887,8 +964,8 @@ importers:
         specifier: workspace:*
         version: link:../source-nws-api
       '@mark1russell7/algebra':
-        specifier: ^0.9.5
-        version: 0.9.6(zod@4.6.7)
+        specifier: ^0.9.7
+        version: 0.9.7(zod@4.6.7)
       '@mark1russell7/cue':
         specifier: ^2.0.0
         version: 2.1.4
@@ -1006,8 +1083,8 @@ importers:
         specifier: workspace:*
         version: link:../format-nws
       '@mark1russell7/algebra':
-        specifier: ^0.9.5
-        version: 0.9.6(zod@4.6.7)
+        specifier: ^0.9.7
+        version: 0.9.7(zod@4.6.7)
       '@mark1russell7/service':
         specifier: ^0.9.3
         version: 0.9.3(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
@@ -1018,6 +1095,9 @@ importers:
         specifier: ^0.14.0
         version: 0.14.0
     devDependencies:
+      '@mark1russell7/alerts-source-nws-api':
+        specifier: workspace:*
+        version: link:../source-nws-api
       '@mark1russell7/cue':
         specifier: ^2.0.0
         version: 2.1.4
@@ -1218,8 +1298,8 @@ importers:
         specifier: workspace:*
         version: link:../source-nwws
       '@mark1russell7/algebra':
-        specifier: ^0.9.5
-        version: 0.9.6(zod@4.6.7)
+        specifier: ^0.9.7
+        version: 0.9.7(zod@4.6.7)
       '@mark1russell7/rigor-chaos':
         specifier: ^0.3.3
         version: 0.3.3
@@ -1494,8 +1574,8 @@ packages:
       zod:
         optional: true
 
-  '@mark1russell7/algebra@0.9.6':
-    resolution: {integrity: sha512-FJAmXgBQTbd99es9+D4s6iit/m2nDWR1KLl5BDQWPtiNsguWzMrjqL4vMi0VIl9YKf/wTbP6yb/4r9aPF4/gng==}
+  '@mark1russell7/algebra@0.9.7':
+    resolution: {integrity: sha512-Dwh9lJHAH4RzMhtwEIrec11RY3NeWsv8UUyCvlz8psVr6cwn0Xo34b+/X/tj8Kiu+bgfiUPRzsVSuR3GR46FFw==}
     engines: {node: '>=22.19'}
     peerDependencies:
       zod: ^4.1.0
@@ -1617,10 +1697,6 @@ packages:
 
   '@mark1russell7/rigor-statistics@0.2.1':
     resolution: {integrity: sha512-4m8yw4giLH/y1HcsroBQSHAWByC5fK/iJb4dNGCPT6Eelr26bxvBz7kMC7UMFSzGcR+W8GTrAwlAQmmFnQDMuA==}
-    engines: {node: '>=22'}
-
-  '@mark1russell7/rigor-statistics@0.2.4':
-    resolution: {integrity: sha512-0L075rT+toD6edxEwDdZHiFzHP4+dJrI64Pw5gh9V33VwCfNRUMQY90AooDpMgVcC9cuxHNXegDLSOYU9ZMIlA==}
     engines: {node: '>=22'}
 
   '@mark1russell7/rigor-statistics@0.2.8':
@@ -1785,8 +1861,8 @@ packages:
       express:
         optional: true
 
-  '@procedures/client@0.62.1':
-    resolution: {integrity: sha512-zwb5axo0R2Sh5g2mFb85AE0gHhImXKrzt1/Aq4brUTEtRAJcqXptzJz1zJlhektMM4wi5zlhr6JjXnyE+//neA==}
+  '@procedures/client@0.63.0':
+    resolution: {integrity: sha512-8DyVvcfE69z7eLHBdTAWBQStL89FawH4vZa0hctiqcjdUbbKx9zIvJAuFwCqHfV/Q0fTuW202j0NSzhUWOREEQ==}
     engines: {node: '>=22'}
     peerDependencies:
       express: ^4.0.0 || ^5.0.0
@@ -1819,8 +1895,8 @@ packages:
       '@mark1russell7/rigor-testkit':
         optional: true
 
-  '@procedures/notify@0.62.1':
-    resolution: {integrity: sha512-TlySfnCUznzzV5kQU+I3O2SgTu9Kb3HA8fd14Q03JXeoVFqwbEqfI3ZTh6CwwSTzlh9ffb1dLq2vdTj4uLlgng==}
+  '@procedures/notify@0.63.0':
+    resolution: {integrity: sha512-iQJgpibiaaBrJBOEC09lbqACAYul7rqJLBRo0edMJDTSJKpCb1CKDTAX258GvFAk+HNJowaG7I0SGX4+bKEFgg==}
     engines: {node: '>=22'}
     peerDependencies:
       '@mark1russell7/rigor-testkit': ^0.1.7
@@ -3163,7 +3239,7 @@ snapshots:
     optionalDependencies:
       zod: 4.6.7
 
-  '@mark1russell7/algebra@0.9.6(zod@4.6.7)':
+  '@mark1russell7/algebra@0.9.7(zod@4.6.7)':
     dependencies:
       '@mark1russell7/quantity': 0.4.1(zod@4.6.7)
     optionalDependencies:
@@ -3272,10 +3348,6 @@ snapshots:
     dependencies:
       '@mark1russell7/rigor-generators': 0.1.19
 
-  '@mark1russell7/rigor-statistics@0.2.4':
-    dependencies:
-      '@mark1russell7/rigor-generators': 0.1.19
-
   '@mark1russell7/rigor-statistics@0.2.8':
     dependencies:
       '@mark1russell7/rigor-generators': 0.1.19
@@ -3291,7 +3363,7 @@ snapshots:
 
   '@mark1russell7/service@0.9.3(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)':
     dependencies:
-      '@mark1russell7/algebra': 0.9.6(zod@4.6.7)
+      '@mark1russell7/algebra': 0.9.7(zod@4.6.7)
       '@mark1russell7/collections': 0.11.2(zod@4.6.7)
       '@mark1russell7/files': 0.0.3
       '@mark1russell7/quantity': 0.4.1(zod@4.6.7)
@@ -3417,7 +3489,7 @@ snapshots:
       - pg
       - utf-8-validate
 
-  '@procedures/client@0.62.1':
+  '@procedures/client@0.63.0':
     dependencies:
       '@mark1russell7/algebra': 0.8.10(zod@4.6.7)
       '@mark1russell7/coeval': 0.34.0(zod@4.6.7)
@@ -3513,10 +3585,10 @@ snapshots:
       - pg
       - utf-8-validate
 
-  '@procedures/notify@0.62.1(@mark1russell7/rigor-testkit@0.1.20(@mark1russell7/rigor-chaos@0.3.3)(@mark1russell7/rigor-generators@0.1.19)(@mark1russell7/rigor-proxy@0.3.2(zod@4.6.7))(@opentelemetry/api@1.10.0)(fast-check@4.10.2)(ltx@3.1.2))':
+  '@procedures/notify@0.63.0(@mark1russell7/rigor-testkit@0.1.20(@mark1russell7/rigor-chaos@0.3.3)(@mark1russell7/rigor-generators@0.1.19)(@mark1russell7/rigor-proxy@0.3.2(zod@4.6.7))(@opentelemetry/api@1.10.0)(fast-check@4.10.2)(ltx@3.1.2))':
     dependencies:
       '@mark1russell7/text': 0.0.6
-      '@procedures/client': 0.62.1
+      '@procedures/client': 0.63.0
       zod: 4.6.7
     optionalDependencies:
       '@mark1russell7/rigor-testkit': 0.1.20(@mark1russell7/rigor-chaos@0.3.3)(@mark1russell7/rigor-generators@0.1.19)(@mark1russell7/rigor-proxy@0.3.2(zod@4.6.7))(@opentelemetry/api@1.10.0)(fast-check@4.10.2)(ltx@3.1.2)

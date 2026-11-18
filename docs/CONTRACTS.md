@@ -251,6 +251,15 @@ A zone with no regions in the table, and a shape that `@mark1russell7/geo` refus
 
 The breadth gives counts and no decision. The threat level (AL-24) reads the counts.
 
+The runtime calculates the breadth at each pass, after the fetches and before the view. The field `breadth` of the pass holds it. `series-reads.ts` of the runtime keeps the read of each series of the store between the passes:
+
+- The read of a series changes only at three events. The series gets readings. The store deletes a reading of its window. The time passes the stale time of the latest reading, or the time of a later reading.
+- A pass reads from the store only the series of these events. A seeded test holds that the reads are the reads of each series at each time.
+- A time before the time of the last pass reads each series again, because the wall clock moved back.
+- A series of a measure that no descriptor declares has no read.
+- A fault of the store goes to the hook `onReadingsFault` with the action `read`. The pass then has no breadth, and it continues.
+- The option `zones` of the runtime gives the table of the regions of each zone. Without the table, each series with the area of a zone is in `unplaced`.
+
 ## Health and coverage
 
 The core calculates the health of each source from the records of its fetches, not the adapter. The runtime writes one `FetchRecord` when each fetch ends. The health is a state machine on `@mark1russell7/algebra`, and `HEALTH_MACHINE` is its document.
@@ -333,11 +342,14 @@ A balance report has no area. Its subjects are `{ system: "alerts.channel", id: 
 
 | Stage | Condition | Severity, urgency |
 | --- | --- | --- |
-| `low` | The last read is below the floor | `moderate`, `expected` |
+| `low` | The last read is below a floor. Each floor is its own line. | `moderate`, `expected` |
 | `empty` | The last read is 0 or less. The provider refuses each paid message. | `severe`, `immediate` |
 | `unread` | No read passed for the maximum age or longer (`balanceUnreadAt`) | `moderate`, `expected` |
 
-- The facts of a line are the provider and the stage. A new balance gives no update.
+- The facts of a line are the provider, the stage and the floor of a line `low`. A new balance gives no update.
+- A spend entry gives one floor or a list of floors, for example `[5, 2]`. One floor is a list of one floor (`balanceFloors`).
+- Each floor above the last read gives one line `low`: `balance/<provider>/low/<floor>`. Thus each floor gives one alert.
+- Money above a floor cancels the line of that floor. `balanceFloorsBelow` gives the floors above the read, from the highest.
 - `low` and `empty` come from the last read that passed, also when the read is old. A read that passes ends `unread`.
 - A snapshot with no balances keeps each open line of a balance.
 - The runtime gives `balanceWatch` for each account. Each pass checks each watch, and a watch reads once a day. A failed read tries again after one hour.
@@ -501,6 +513,7 @@ The watch of the replies (`replyWatch` of the runtime, AL-56) gives the opt-in o
 The cap of the spend of a Twilio channel is two gates of `polite-crawler/api`, with one store, one key and one quota name:
 
 - The limit of the gates is the monthly cap less the fixed costs of the spend entry (`fixed`). A fixed cost is, for example, the rent of a phone number.
+- Give fixed costs only for a cap of the whole bill. With no fixed cost, the whole cap is for the sends.
 - The reserve is a part of that limit. `loadConfig` refuses fixed costs that use all of the cap, and a reserve that is not below the rest.
 - The two gates count the same units. The gate of `life-safety` has no reserve. Thus only `life-safety` uses the last part of the cap.
 - A full cap gives `rate-limited`. A cap in its reserve gives `reserved` to a message below `life-safety`.
@@ -923,6 +936,16 @@ The shadow score (`shadowScore`) is the first step. It operates next to the tabl
 - A factor that the priors do not give makes a score with no read. The score names each missing factor. It does not take 0 or a default value.
 - `assessWithShadow` adds the score as the last reason of an assessment with a reason of the table. The level and the other reasons stay those of `assess`. A seeded gate test holds this.
 
+The priors come from the base rates of the package `rates` (`priorsOf`). The file `packages/rates/data/priors.json` holds them. A test holds it equal to the priors of `data/rates.json`:
+
+- The verified share of a kind is the own share of IEM Cow. It is the share of the warnings that a storm report of the same hazard verified. Its interval is the gate interval of the share.
+- A share with a reason of no read gives no prior. A phenomenon that Cow does not verify gives no prior.
+- The deaths of one event of a kind are its deaths over its events. Each sum adds the NCEI types of the kind. The injuries are the same.
+- The interval of the deaths and of the injuries is the hull of two intervals and the value. The exact Poisson interval of the count over the events (`poissonInterval` of `@mark1russell7/rigor-statistics`) holds a small count. Thus a count of 0 gets a wide interval, not a point at 0.
+- The percentile bootstrap over the years holds the change from year to year. Its seed comes from the kind and the field. It applies only when each year has an event. Otherwise a draw of the years can have no event.
+- A kind with no event in the years gives no prior of deaths and no prior of injuries. Thus the score has no read for that kind.
+- The probability of a CAP certainty is the middle of its band. Its interval is the band.
+
 ## The service
 
 The runtime operates as one service of `@mark1russell7/service`. Its entry is `packages/runtime/src/main.ts`. Only that file uses `run()`, and only that file reads a real clock.
@@ -949,8 +972,9 @@ The function `openInstance` makes the instance of the owner from the private con
 - The sources are the NWS API and IPAWS. The channels are Pushover, and the Twilio call channel when `secrets.env` has its keys.
 - The keys of Twilio are `TWILIO_ACCOUNT_SID`, `TWILIO_API_KEY_SID`, `TWILIO_API_KEY_SECRET` and `TWILIO_FROM`. An API key signs each request.
 - The optional key `TWILIO_TEXT_FROM` adds the text channel. It holds the registered sender of texts: a phone of a 10DLC campaign or a verified toll-free phone.
+- The instance never texts from `TWILIO_FROM`. Without `TWILIO_TEXT_FROM`, the text channel and the texts of the outage call are off.
 - A spend entry of a provider of a channel gives the cap of the channel. The count of the cap is in `quotas.sqlite`.
-- The spend entry of Twilio also gives the watch of the balance: one read each day, and its floor.
+- The spend entry of Twilio also gives the watch of the balance: one read each day, and its floors.
 - Each source gets the watch of `sourcePlaces`. Thus a source gets the region codes, and a position only when the place shares it with that source.
 - The User-Agent of each request names the project and its page. It names no person.
 - The times of the delivery come from facts of the channel. A call has a limit of 10 seconds. The poll goes at the pace of the emergency repeats, 30 seconds.
@@ -1090,11 +1114,14 @@ The package `@mark1russell7/alerts-channel-twilio` operates the chain on the ser
 - The SMS message has at most `OUTAGE_TEXT_LIMIT` (160) code points. That is at most 3 segments of 1.4 cents, so a text costs no more than a call.
 - A failed read of the recent texts goes to the log, with no number. Then the caps count the calls only.
 - The setup of the runtime refuses an outage call with no spend entry for Twilio. Each problem of the monthly cap names no count, because the spend cap is private.
-- A gap stays open: the spend gate of the instance does not count the calls of the Functions. Thus one month can have more calls than the cap, by the calls of the Functions.
-- The end of the gap is AL-57. The gate also reads the usage records of Twilio for the local month, in whole UTC days. It uses the larger of that amount and its own count, by the rule of `@mark1russell7/stack-spend`.
+- The spend gate of the instance does not count the calls of the Functions as sends. The watch of the spend adds them (AL-57).
+- The gate also reads the usage records of Twilio for the local month, in whole UTC days. It uses the larger of that amount and its own count, by the rule of `@mark1russell7/stack-spend`.
+- `readTwilioSpend` gives the record `totalprice` less the record `phonenumbers`, from the GMT day of the start of the month. Thus the read has no rent of a number. The cap holds the rent only when the spend entry lists it in `fixed`.
+- The first GMT day can hold some hours of the month before. The cap can then stop a send early, but not late.
 - `spendWatch` of the runtime reads the spend of the provider each hour, from the start of the month of the cap. It notes the spend in the count of the gates. The count does not become smaller, thus the gate keeps the larger amount.
-- A failed read goes to the health of the watch, and the watch reads again after 15 minutes. A read that ends in the next month does not change the count.
-- The watch of Twilio starts after the release of `@procedures/notify` 0.63.0, which reads the usage records.
+- A failed read is a note in the body of each ping of the heartbeat, and the watch reads again after 15 minutes. A read that ends in the next month does not change the count.
+- The instance makes the watch of Twilio when the configuration has a spend entry for Twilio. Each pass of the runtime checks it.
+- Twilio adds its usage after a delay. Thus the count can miss the usage of that delay.
 - If the move of the status callback fails, the end has no `acked=1`. Then the chain calls again. That is the safe side.
 - Each handler gives the script of the call as data. The Function renders it with the TwiML builders of `@procedures/notify/twilio`.
 - `outageListOf` makes the list from the field `outage` of the private configuration and the recipients of `loadConfig`. The number of each person is the contact of the person on `twilio-call`.
@@ -1168,8 +1195,8 @@ The system fold gives the drill lines (the section of the system reports). The m
 
 The next steps are these:
 
-- The map and the explanation of a route show the steps that the channel rules remove (`Route.ruled`).
-- Then comes a drill of the outage call.
+- A drill of the outage call.
+- Later: a view of the plan of each person on the page. No page shows a plan today. That view also shows the steps that the channel rules remove (`Route.ruled`).
 
 ## People and places
 
@@ -1183,7 +1210,7 @@ The core gives the format of the private configuration, `AlertConfig` (`alerts-c
 - `people`: the `PersonWatch` of each person, a label, and the escalation policies of the person.
 - `contacts`: the address of a person on a channel. A value of an address is a text, or a reference `{ secret: "NAME" }` to a key of the secret store.
 - `policies`: the escalation policies of each person with no policies of their own.
-- `spend`: the money rules of each paid provider account. An entry has the monthly cap and its reserve in US dollars, the floor of the balance and the time zone of the month.
+- `spend`: the money rules of each paid provider account. An entry has the monthly cap and its reserve in US dollars, the floors of the balance and the time zone of the month.
 - `link`: the policy of the link rule of the merge (rule 3). Without it, the instance uses `DEFAULT_LINK_POLICY`.
 - `outage`: the people of the outage call, each with a `TryChain`. Without it, an outage of the instance calls no person.
 - `assess`: the policy of the assessment, `AssessPolicy`. It replaces the full default policy of the core. With no field, the default policy applies.
@@ -1343,6 +1370,7 @@ The route `GET /map` of the runtime gives the `MapPayload` of `mapPayload`:
 - `at`: the time of the last pass, or `null` before the first pass.
 - `view`: the view of the last pass. The payload assesses each live incident for each person, with the policy of the delivery.
 - `basemap`: the regions under the view, simplified for the view box of the page.
+- `breadth`: the breadth of the indicator signals of the last pass, in the world and at each place. A runtime with no store of the readings has no field. The field is optional, thus the format keeps its name.
 
 Thus the level on the map is the level that the delivery gives. A mute with the effect `absent` gives `none`, as in `route` (`reachedAssessment`).
 
@@ -1361,22 +1389,32 @@ The API also serves the built local page (`packages/site/dist`) on the same addr
 
 The route `GET /health` of the runtime gives the `HealthPayload` of `healthPayload`. The page reads it on its own origin, next to the map. `healthPayloadSchema` checks it.
 
-- `format`: `alerts-health/1` (`HEALTH_FORMAT`). A change that breaks a reader gets a new name.
+- `format`: `alerts-health/3` (`HEALTH_FORMAT`). A change that breaks a reader gets a new name. The second format added `reads`.
+- The third format gives the list `floors` of each balance in place of one `floor` (AL-61).
 - `at`: the time of the last pass, or `null` before the first pass. The sources, the lateness and the coverage come from that pass.
 - `now`: the time of the read. The stages of the copies and of the balances are at this time.
 - `sources`: the health of each source. The last failure keeps its time and its kind, and not its message, because a message can hold the address of a fetch.
 - `lateness` and `coverage`: the lists of the view of the last pass.
 - `copies`, `quotas` and `balances`: each watch with its stages. The stages come from `copyStages`, `quotaStages` and `balanceStages`, thus the page and the system reports agree.
+- `reads`: each read on a schedule other than the balances, for example the replies of the texts and the spend of Twilio. Each read has the end of its last read that passed, a `failed` flag and the time of its next read. It holds no message and no value of the read.
 
 The coverage holds the ids of the places. Thus only the loopback address gives the route, as for the map.
 
 The local page shows the payload in the panel "Sources" (`packages/site/src/health-read.ts`, `health-view.ts`).
 
+The panel "Indicators" of the local page shows the field `breadth` of the live map (`packages/site/src/indicators-view.ts`).
+
+- The first row is the world, and each other row is a watched place. Each row tells the dimensions out of their normal level and the dimensions with a read.
+- Each row has one line for each dimension with a series: the series out of the normal level, and the series with no read.
+- The panel tells the counts, and no decision. The threat level (AL-24) reads the same counts.
+- The panel is of the present, also when the map shows a past time. The history keeps no breadth.
+- A runtime with no store of the readings gives no field, and the panel tells it. A breadth with no series tells that no source gives indicator readings yet.
+
 - The page reads the route after each good read of the map. A runtime with no `health` option gives 404, and the panel tells that it has no health.
 - Two sentences sum the payload: the sources, and the quotas and balances that stop or limit a message. A link at the top of the page has the same sentences.
 - Each source has a row with its state, the time since its last good read and the kinds that it covers. The source that needs attention is first.
 - A source that is down or late needs attention. A source is late when an entry of `lateness` has the state `late` and names it in `to`.
-- A quota, a balance or a copy gets a row only when it has a stage.
+- A quota, a balance or a copy gets a row only when it has a stage. A read gets a row only when its last read failed.
 - The health is of the present. For a past time of the scrubber, the panel tells that it stays at the present.
 - After a failed read, the panel keeps the last rows. One sentence tells the time of that read in place of the two sentences.
 
@@ -1458,7 +1496,7 @@ The file `schemas.ts` of the core has one zod 4 schema for each data type of the
 
 ## Open points
 
-- The threat level does not read the breadth of the signals yet. The runtime does not calculate the breadth at each pass yet.
+- The threat level does not read the breadth of the signals yet. No source gives the table of the zones yet.
 - The breadth gives counts and no chance. A base rate of the signals of each dimension, from the history of the reads, gives the chance of a breadth.
 - The atlas has no table of the regions of each zone yet. Until then, each series of a zone is in `unplaced`.
 - A fault of the store of the readings goes only to the output. The health payload does not show it yet.
