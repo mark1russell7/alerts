@@ -210,13 +210,14 @@ describe("the section of the harm under an active alert", () => {
       national: NATIONAL_NUMBERS,
       rows: 4,
       faults: { expire: 1 },
+      codes: { "2024": { counties: 2, zones: 1 }, "2025": { counties: 0, zones: 1 } },
       unplaced: { "time zone": { events: 1, deaths: 4, injuries: 1 } },
     });
     expect(section.numbering["TO.W"]).toEqual({ national: false, numbers: 2, shared: 0, together: 0 });
   });
 
   it("throws an error for a phenomenon that the NWS tables do not have", () => {
-    const counts = { rows: 1, alerts: { "QQ.W": { "2024": 1, "2025": 0 } }, areas: {}, numbering: {}, faults: {} };
+    const counts = { rows: 1, alerts: { "QQ.W": { "2024": 1, "2025": 0 } }, areas: {}, codes: {}, numbering: {}, faults: {} };
     expect(() => underSection({ years, windows: [], counts, matches: [], unplaced: [] })).toThrow(/no phenomenon QQ/);
   });
 });

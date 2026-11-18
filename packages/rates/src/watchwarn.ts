@@ -230,6 +230,15 @@ export interface AreaCounts {
   readonly zones: Readonly<Record<string, number>>;
 }
 
+/**
+ * The distinct UGC codes of the rows of one year, in counties and in zones. A place is in one county and in one zone.
+ * Thus the areas of a pair in a year, over the codes of that kind of area, give the alerts in one place.
+ */
+export interface CodeCounts {
+  readonly counties: number;
+  readonly zones: number;
+}
+
 /** The counts of the alerts of a measure. */
 export interface AlertCounts {
   /** The count of rows that the tally read, with the rows of the first window. */
@@ -238,6 +247,8 @@ export interface AlertCounts {
   readonly alerts: Readonly<Record<string, Readonly<Record<string, number>>>>;
   /** The areas of each pair in counties (`C`) and in zones (`Z`), in each year. Each year has a value. */
   readonly areas: Readonly<Record<string, AreaCounts>>;
+  /** The distinct UGC codes of the rows of each year, of all the pairs, in counties and in zones. Each year has a value. */
+  readonly codes: Readonly<Record<string, CodeCounts>>;
   /** The check of the numbers of each pair. */
   readonly numbering: Readonly<Record<string, NumberingCheck>>;
   /** The rows with each fault (`readWatchwarn`). */
@@ -253,6 +264,8 @@ export class AlertTally {
   readonly #keys = new Map<string, Map<number, Set<string>>>();
   // The areas of each pair in each year, as the key of the alert and the UGC code (`alertKey|ugc`).
   readonly #areas = new Map<string, Map<number, Set<string>>>();
+  // The distinct UGC codes of the rows of each VTEC year.
+  readonly #codes = new Map<number, Set<string>>();
   readonly #numbers = new Map<string, Map<string, Map<string, number>>>();
   readonly #faults = new Map<string, number>();
   #rows = 0;
@@ -280,6 +293,9 @@ export class AlertTally {
         let areas = areasByYear.get(row.year);
         if (areas === undefined) areasByYear.set(row.year, (areas = new Set()));
         areas.add(`${key}|${row.ugc}`);
+        let codes = this.#codes.get(row.year);
+        if (codes === undefined) this.#codes.set(row.year, (codes = new Set()));
+        codes.add(row.ugc);
       }
       if (row.issue !== undefined) {
         let numbers = this.#numbers.get(pair);
@@ -328,8 +344,16 @@ export class AlertTally {
         return [pair, { national: nationalNumber(phenomenon, significance), numbers: numbers.size, shared, together }];
       }),
     );
+    const codes = Object.fromEntries(
+      years.map((year) => {
+        const all = this.#codes.get(year) ?? new Set<string>();
+        let counties = 0;
+        for (const code of all) if (code[2] === "C") counties += 1;
+        return [String(year), { counties, zones: all.size - counties }];
+      }),
+    );
     const faults = Object.fromEntries([...this.#faults.keys()].sort().map((name) => [name, this.#faults.get(name) as number]));
-    return { rows: this.#rows, alerts, areas, numbering, faults };
+    return { rows: this.#rows, alerts, areas, codes, numbering, faults };
   }
 }
 

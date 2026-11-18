@@ -66,6 +66,9 @@ function underLines(file: RatesFile, lines: string[]): void {
   lines.push("", unplaced.length === 0 ? "The join placed each event with harm." : `The join cannot place these events with harm: ${unplaced.join("; ")}.`, "");
   const faults = Object.entries(under.faults).map(([fault, rows]) => `${fault}: ${String(rows)}`);
   lines.push(`The requests gave ${String(under.rows)} rows.${faults.length === 0 ? "" : ` Rows with a fault: ${faults.join(", ")}.`}`, "");
+  // A file of format 4 or earlier has no codes.
+  const codes = Object.entries(under.codes ?? {}).map(([year, count]) => `${year}: ${String(count.counties)} and ${String(count.zones)}`);
+  if (codes.length > 0) lines.push(`The rows of each year name these distinct counties and zones: ${codes.join(", ")}.`, "");
   const doubts = numberingDoubts(under.numbering);
   lines.push(doubts.length === 0 ? "The data agree with the list of the national event numbers." : `**Doubt of the national numbers:** ${doubts.map(escapeMarkdown).join(" ")}`, "");
 }

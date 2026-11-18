@@ -1073,6 +1073,7 @@ The deaths of one NCEI event are too high for some kinds: NCEI enters many event
 - A county event meets only the county rows of an alert, and a zone event meets only its zone rows. Thus an alert of zones and the events of counties have no common harm.
 - Format 4 (`alerts-rates/4`) gives the areas of each kind and significance, and the harm in them, in counties and in zones, in each year (`byArea`). An area is one alert in one county or zone. It counts one time, in the VTEC year of the alert.
 - Format 4 also gives the placed events of the NCEI kind in counties and in zones (`placed`). The prior of an alert takes the kind of area with more events.
+- Format 5 (`alerts-rates/5`) adds the distinct UGC codes of the alert rows of each year, in counties and in zones (`codes`). A place is in one county and in one zone. Thus the areas of a kind in a year, over the codes of that kind of area, give the alerts in one place.
 
 The level of the table of an alert comes from its CAP severity and urgency. The archive of the VTEC alerts has no CAP fields. Thus the workflow `cap.yml` counts the CAP fields of the new NWS alerts in `data/cap.json` of the package `rates` (format `alerts-cap/1`):
 

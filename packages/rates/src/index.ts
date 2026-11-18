@@ -153,6 +153,7 @@ export {
   type AlertCounts,
   type AlertRow,
   type AlertSignificance,
+  type CodeCounts,
   type NumberingCheck,
   type WatchwarnRead,
 } from "./watchwarn.ts";
