@@ -414,6 +414,12 @@ An exhaustion report has no area. Its subjects are the person (`alerts.person`, 
 - The headline names the person, the kind and the title of the incident, and the level. The severity and the urgency give the level again.
 - An acknowledgment and the end of the incident cancel the line. A snapshot with no list of exhaustions keeps each open line.
 
+A down-channel report has no area. Its subjects are the channel (`alerts.channel`, `CHANNEL_SUBJECT`) and each endpoint of the channel (`ChannelDescriptor.api`). Each copy makes its own lines, because each copy has its own network path. The section on the down channels tells the rules.
+
+| Line | Kind | Condition | Level |
+| --- | --- | --- | --- |
+| `channel/<copy>/<channel>` | `system.channel.down` | A run of failed calls that opens a line, or an open line with no good call since its onset | `notice` at most |
+
 `latestIn(items, at, window)` gives the latest item in a window before a time. `recentStep` and `recentRecovery` use it.
 `threats(incidents, places)` gives the watches and the warnings. A threat is a live incident with the status `actual` at a watched place. Its stage is `watch`, `warning` or absent. A report of the core has the status `system`, so it is not a threat.
 
@@ -454,7 +460,7 @@ A copy that did not come is not a measure of the delay, because its delay is not
 
 ## The channel contract
 
-Each channel package registers four procedures under `alerts.channel.<id>`:
+Each channel package registers four procedures under `alerts.channel.<id>`, and it can register a fifth, `probe`:
 
 | Procedure | Effects | Rule |
 | --- | --- | --- |
@@ -462,6 +468,7 @@ Each channel package registers four procedures under `alerts.channel.<id>`:
 | `send` | writes `network` | It sends one `Message` to one `Address`, with the copy id of this send. When `message.quiet` is true, it uses its silent mode. A failure is `{ ok: false }`. It does not throw. |
 | `status` | reads `network` | It gives the state of a receipt: accepted, delivered, acknowledged, expired or failed. |
 | `cancel` | writes `network` | It stops the repeats of a message: each copy of a receipt, or one copy by its copy id. It is idempotent. |
+| `probe` | reads `network` | It is optional. It makes an authenticated read that sends nothing and costs nothing. A success ends the line of a down channel (AL-65). |
 
 A descriptor with `address` tells the fields of the address of a person on the channel. Each field has a name, a need and a form.
 
@@ -473,6 +480,7 @@ A descriptor with `address` tells the fields of the address of a person on the c
 A descriptor with `services` names the online services that the channel needs, as the keys of entities. Pushover names `domain:api.pushover.net` and the push endpoint of the platform. The Twilio channels name `domain:api.twilio.com`.
 
 - A key names the endpoint that the channel uses, not the company. Thus an outage of another product of the company does not reach the path of the alerts.
+- `api` names the endpoints that the calls of the channel reach. Each one is also in `services`, and the schema refuses an empty list. Pushover names `domain:api.pushover.net` only: its calls never reach the push endpoint of the platform.
 - A status source gives each component that serves an endpoint the key of that endpoint. Then an outage of the component reaches the path.
 - Each person with a contact on the channel gets each service in the layer `delivery` of the interests. `docs/RELEVANCE.md` tells the layers.
 - Thus an outage of a service on the path of the alerts reaches the person as a named service does.
@@ -899,6 +907,26 @@ The core function `exhaustions(routes, channels, reports)` gives the exhausted e
 - An exhaustion report has the status `system`. Thus it has no exhaustion of its own, and the chain stops at one step.
 - The repeats of the first person continue after the exhaustion. An acknowledgment of the first person cancels the report and the sends of the watcher.
 - When the copy that reports the shared facts changes, the old copy cancels its line and the new copy opens one. The watcher can get a second push.
+
+## The down channels
+
+The runtime reads the results of its own calls, because the path of the alerts has no second status source (AL-65).
+
+- `channelRuns(runs, step)` adds the calls of one delivery step to the run of each channel. The runtime keeps the runs in memory.
+- Only the failed calls `send` and `status` of the kinds `network`, `timeout`, `server` and `auth` count (`COUNTED_FAILURES`).
+- The kinds `consent`, `quiet`, `expired`, `refused`, `reserved` and `rate-limited` do not count. They are facts of a person, a message or a quota.
+- An accepted send or a probe success in a step ends the run of its channel. The failed calls of that step start no run.
+- A run opens a line at `failures` failed calls over at least `span`. The field `channelDown` of the configuration gives them, and the defaults are 3 and 60 s.
+- Thus one pass with three people does not open a line: its failed sends come at one time.
+- A run opens a line only when the network of the copy works. A failure `server` or `auth` is an answer of the provider.
+- Else a source fetch with success after the first failed call and before a later one shows the network. A copy that is offline opens no line, and its outside check tells of it.
+- An open line ends at a good call at or after its onset: an accepted send or a probe success. A restart empties the runs, and an empty run does not end a line.
+- While a line is open, the runtime calls the probe of the channel on a backoff. A channel with no probe keeps its line until an accepted send.
+- The facts of the line are the copy, the channel, the onset and the cause. A new count gives no update, and a new cause gives one.
+- The cause `key` comes from a last failure `auth`. Its headline tells that the provider refuses the key, and that it is not an outage. This fault does not end by itself.
+- `loadConfig` adds one channel rule for each channel of each person (`channelDownRules`). The report of a down channel goes on each other channel of the person.
+- The subjects of the report hold the endpoints of the channel. The layer `delivery` of the interests has an edge from each endpoint to each person with a contact on the channel. Thus only these people get the report.
+- A report of a status source with the same endpoint key is a separate incident. The link of the two is planned in the relevance work (AL-35).
 
 ## The digest
 

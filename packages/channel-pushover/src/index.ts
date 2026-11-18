@@ -141,6 +141,8 @@ export function pushoverDescriptor(platform?: "ios" | "android"): ChannelDescrip
     title: "Pushover",
     dependsOn: ["provider:pushover", ...push],
     services: ["domain:api.pushover.net", ...pushServices],
+    // The calls of the channel reach only the API of Pushover. The push service of the phone platform is not an endpoint.
+    api: ["domain:api.pushover.net"],
     uses: ["internet", "dns", "power"],
     // A `life-safety` message at priority 2 sounds through silent mode with the Critical Alerts of the app.
     breaksThrough: true,
