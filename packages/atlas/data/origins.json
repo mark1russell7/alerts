@@ -24,6 +24,12 @@
     "note": "OpenAQ collects the data of government and research monitors. Its US data comes from EPA AirNow, so the EPA is a separate origin. The record does not name each other agency."
   },
   {
+    "id": "apple",
+    "name": "Apple",
+    "issues": null,
+    "note": "The records of apple-system-status name this issuer."
+  },
+  {
     "id": "ashp",
     "name": "ASHP (the American Society of Health-System Pharmacists)",
     "issues": null,
@@ -357,7 +363,7 @@
     "id": "google",
     "name": "Google",
     "issues": null,
-    "note": "The records of gcp-status-json, google-pollen-api name this issuer."
+    "note": "The records of firebase-status, gcp-status-json, google-pollen-api name this issuer."
   },
   {
     "id": "hhs-ocr",

@@ -29,6 +29,7 @@ export {
 export {
   containingCodes,
   countyUgcOfSame,
+  FIRE_ZONE_PHENOMENA,
   isSameCode,
   isUgcCode,
   parseSameLocation,
@@ -40,6 +41,7 @@ export {
   stateOfSame,
   stateOfUgc,
   type SameLocation,
+  ugcRegionCodes,
 } from "./codes.ts";
 export { isKeepalive, KEEPALIVE_AWIPS_ID, KEEPALIVE_MAX_AGE_MS, keepaliveCheck } from "./keepalive.ts";
 export { NWS_API_SOURCE, NWS_ORIGIN, nwsEvent, US_COVERAGE, vtecOffice } from "./nws.ts";

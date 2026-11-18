@@ -293,7 +293,7 @@ The cell is the copy of the system on one machine. Its internet link, its DNS re
 - A source counts when its health is in `policy.up`. The first policy counts `healthy` and `slow`. A source with no health is `unknown`.
 - A source covers a kind when one of its prefixes has the kind. A source of a part of the kind does not count.
 - A source covers a place when its coverage is `global`, or when a code of its coverage holds a code of the place (`regionContains`).
-- With `containing`, the coverage adds the codes of the regions that hold each code of the place, and then their codes. The runtime gives `containingCodes` of the NWS format. A zone or a county gets its state (`state`) and its country (`iso3166`), and a county gets the code of the other system. A territory gets its own country code, not `US`. A marine zone gets no code. Thus a place with only a zone code has no false gap.
+- With `containing`, the coverage adds the codes of the regions that hold each code of the place, and then their codes. The runtime gives `containingCodes` of the NWS format. A zone, a fire zone or a county gets its state (`state`) and its country (`iso3166`), and a county gets the code of the other system. A territory gets its own country code, not `US`. A marine zone gets no code. Thus a place with only a zone code has no false gap.
 - A SAME code of a part of a county does not hold the full county. This rule errs on the safe side for the coverage: a source of a part does not hide a gap.
 - A shape of the coverage covers a place when the shape contains the position of the place. The buffer does not count, as for the codes.
 - A shape covers no place with no position. A shape that `@mark1russell7/geo` refuses covers no place, so the coverage shows a gap.
@@ -1521,10 +1521,19 @@ The core matches the area of a report to a place with one rule for each source. 
 - A block with no shape decides by its codes. A place matches when the codes of the block cover one of its codes.
 - A place with no position matches by the codes of each block.
 - `@mark1russell7/geo` can refuse a shape, for example a ring with fewer than 4 positions. When it refuses each shape of a block, the codes of that block decide. This error is on the safe side. The match has `shapeRefused: true`, and the view tells it.
+- A fire zone code (`ugc-fire`) covers only a fire zone code of a place. A place with no fire zone code of a state uses its forecast zone code (`ugc`) with the same code. This is on the safe side. The match has `zoneFallback: true`, and the view tells it.
 - One block that matches is enough.
 - The areas with no block key keep the union rule. Their codes are the floor of the match, and a shape adds a place in its buffer. A shape that geo refuses adds no place.
 - A position in a shape has the distance 0. The reason `place` of the assessment has `distanceKm` when the distance is in the buffer. A match by a shape only has no codes.
 - `@mark1russell7/geo` gives the distances. An edge of a polygon is a straight line in longitude and latitude, as in GeoJSON (RFC 7946).
+
+### The fire zones of the NWS (AL-33)
+
+The NWS has three kinds of UGC zones in a state: the counties (`KSC173`), the forecast zones and the fire weather zones. A forecast zone and a fire zone can have one code (`KSZ083`) and different outlines. Thus the two kinds have two region systems: `ugc` for the counties and the forecast zones, and `ugc-fire` for the fire zones.
+
+- The products of the fire zones are the Fire Weather Watch (`FW.A`) and the Red Flag Warning (`FW.W`). The function `ugcRegionCodes` of format-nws gives `ugc-fire` for a zone code of an alert with the phenomenon `FW`.
+- The NWS API names the kind of each zone in `affectedZones`, for example `/zones/fire/<code>`. The NWS API adapter reads it first.
+- A place gets its fire zone codes from the fire zone outlines in memory, as it gets its forecast zones. No request names its position.
 
 The keys of the sources:
 
