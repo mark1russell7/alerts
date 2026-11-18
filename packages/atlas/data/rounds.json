@@ -651,5 +651,45 @@
       "dimensions": 2,
       "cause": "Round 10 adds 63 sources of indicators, and gives dimensions to 23 older sources. No class gets a live source, so the gaps and the layers do not change. 2 of 36 dimensions have 2 or more live sources with no risk. The unknown origins go from 3 to 4, and the unknown paths from 6 to 30."
     }
+  },
+  {
+    "round": 11,
+    "date": "2026-11-17",
+    "by": "One session, after the GFZ adapter (AL-14) and the runtime that reads it. The tests of the atlas check the descriptor of the adapter.",
+    "method": "The adoption of the GFZ adapter. The facts of the service come from the reads of round 9 and one live read of the adapter on 2026-11-17. The recorded answer of the storm of May 2024 gives the facts of a storm.",
+    "lists": [
+      "The data page and the web service of the GFZ Kp index: https://kp.gfz.de/en/data",
+      "The JSON format of the web service: https://kp.gfz.de/app/format/json.txt"
+    ],
+    "queries": [],
+    "notes": [
+      "The adapter reads the Kp values of the past 3 days each 10 minutes. The field meta of each answer gives the license CC BY 4.0 and the source GFZ Potsdam.",
+      "Each 3-hour interval with a Kp of 5 or more is a report, with the level G1 to G5 of the NOAA scale. The intervals of one storm are one incident.",
+      "Each value of the service has the status pre (preliminary) or def (definitive). The report keeps the status of its value as a parameter.",
+      "Rule 3 of the merge joins a GFZ storm and a SWPC message of a geomagnetic storm. Their onsets are 6 hours apart or less, and their areas are the poles.",
+      "The window of 6 hours is a shortcut with no measure. It ends when a capture of one storm of the two sources gives the largest difference of their onsets.",
+      "The path of GFZ is the host kp.gfz.de, with no content network. The path of the SWPC has CloudFront. Thus the two sources share no part of a path and no origin.",
+      "The classes geo.space-weather and geo.space-weather.geomagnetic-storm get 2 in each layer: 2 adopted sources, 2 paths apart and 2 origins apart.",
+      "The solar radiation storm and the radio blackout keep one source. GFZ gives no measure of them. The canary of the adapter passes when the newest interval started 6 hours or less before the fetch."
+    ],
+    "studies": [],
+    "measures": {
+      "classes": 201,
+      "gaps": 112,
+      "cover": {
+        "adopted": 53,
+        "paths": 53,
+        "origins": 3
+      },
+      "total": {
+        "adopted": 136,
+        "paths": 136,
+        "origins": 58
+      },
+      "unknownOrigins": 4,
+      "unknownPaths": 30,
+      "dimensions": 2,
+      "cause": "Round 11 adopts gfz-kp-hpo, a second origin of the geomagnetic storm. The cover of the adopted sources and of the paths goes from 51 to 53 classes. The cover of the origins goes from 1 to 3. Round 9 planned this source, so the gaps do not change."
+    }
   }
 ]
