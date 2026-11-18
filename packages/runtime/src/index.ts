@@ -9,6 +9,7 @@ import type { OutageDeployWorker } from "./outage.ts";
 
 export { LOOPBACK, PAGE_INDEX, attachApi, pageFolder, statusOf, type ApiOptions, type StartStatus, type Status } from "./api.ts";
 export * from "./balance.ts";
+export * from "./channel-watch.ts";
 export * from "./config.ts";
 export * from "./copy-store.ts";
 export { CLOCK_SKEW_LIMIT, COPY_MAX_AGE, EXCHANGE_EVERY, EXCHANGE_LIMIT } from "./copy.ts";

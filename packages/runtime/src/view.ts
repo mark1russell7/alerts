@@ -25,7 +25,9 @@ import {
   systemReports,
   threats,
   type Coverage,
+  type ChannelDownConfig,
   type ChannelQuota,
+  type ChannelSnapshot,
   type CopyWatch,
   type DrillSnapshot,
   type Exhaustion,
@@ -66,6 +68,8 @@ export interface ViewConfig extends FoldContext {
   readonly coverage?: CoveragePolicy;
   /** The policy of the link rule of the merge. The default is `DEFAULT_LINK_POLICY`. The delivery uses the same policy. */
   readonly link?: LinkPolicy;
+  /** The policy of a down channel (AL-65). Each absent field has its default of the core. */
+  readonly channelDown?: ChannelDownConfig;
 }
 
 /** The view of the system at one time. */
@@ -113,6 +117,11 @@ export interface SystemParts {
    * of an exhaustion stays open. Thus a restart does not cancel an alert before its first delivery step.
    */
   readonly exhausted?: readonly Exhaustion[];
+  /**
+   * The channels of this copy, with their runs of failed calls (`ChannelWatch.snapshots`, AL-65). With no list, each open
+   * line of a down channel stays open.
+   */
+  readonly channels?: readonly ChannelSnapshot[];
 }
 
 /**
@@ -126,14 +135,14 @@ export interface SystemParts {
  * - The folds are the folds of the last view (`latenessStep`). With no folds, each fold starts again. The view is the same.
  */
 export function systemView(state: RuntimeState, config: ViewConfig, at: Instant, parts: SystemParts = {}): SystemView {
-  const { quotas, balances, copies, copy, folds, drills, exhausted } = parts;
+  const { quotas, balances, copies, copy, folds, drills, exhausted, channels } = parts;
   const steps = config.sources.map((source) => advanceHealth(state.health[source.id] ?? startHealth(source.id, state.start ?? at), at, source, config.health));
   const health = steps.map((step) => step.health);
   const found = incidents(state.merge, at, { link: linkRule(config.link ?? DEFAULT_LINK_POLICY) });
   const checks = carriages(state.merge, found, config.expectations);
   const { lateness: late, folds: next } = latenessStep(checks, config.expectations, at, ruleOf(config.delay), folds);
   const covered = coverage({ sources: config.sources, health, late: lateSources(late), places: config.places, kinds: config.kinds }, config.coverage);
-  const step = systemReports(state.lines, { sources: config.sources, health, coverage: covered, threats: threats(found, config.places), lateness: late, ...(quotas === undefined ? {} : { quotas }), ...(balances === undefined ? {} : { balances }), ...(copies === undefined ? {} : { copies }), ...(copy === undefined ? {} : { copy }), ...(drills === undefined ? {} : { drills }), ...(exhausted === undefined ? {} : { exhausted }), steps: state.steps, recoveries: state.recoveries }, at);
+  const step = systemReports(state.lines, { sources: config.sources, health, coverage: covered, threats: threats(found, config.places), lateness: late, ...(quotas === undefined ? {} : { quotas }), ...(balances === undefined ? {} : { balances }), ...(copies === undefined ? {} : { copies }), ...(copy === undefined ? {} : { copy }), ...(drills === undefined ? {} : { drills }), ...(exhausted === undefined ? {} : { exhausted }), ...(channels === undefined ? {} : { channels }), ...(config.channelDown === undefined ? {} : { channelDown: config.channelDown }), steps: state.steps, recoveries: state.recoveries }, at);
   // An incident that expires changes the threats, thus its end is a timer too.
   const ends = found.flatMap((incident) => (incident.live && incident.expires !== undefined && incident.expires > at ? [incident.expires] : []));
   // The handover of the facts of a shared account is a timer too, because this copy then reports a low balance.
