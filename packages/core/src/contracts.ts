@@ -694,8 +694,8 @@ export interface IncidentLine {
  * The level of an alert.
  * - `life-safety`: it wakes the person, sounds through silent mode and escalates until acknowledged.
  * - `urgent`: a push at once, without the break through Do Not Disturb.
- * - `notice`: a push in the day, else the digest.
- * - `digest`: the next digest.
+ * - `notice`: a push in the day. In the quiet window of the person, a quiet push that the next digest tells again.
+ * - `digest`: the next digest: one message each day for each person (`planDigests`).
  */
 export type Level = "life-safety" | "urgent" | "notice" | "digest";
 
@@ -998,11 +998,24 @@ export interface EscalationStep {
  */
 export interface EscalationPolicy {
   readonly level: Level;
+  /**
+   * The daily time of the digest. Only a policy of the level `digest` has it. Without it, the digest goes at the
+   * end of the quiet window of the person.
+   */
+  readonly daily?: DailyTime;
   /** The subject of the policy, as a subject watch. A subject watch with no id matches each subject of its system. */
   readonly about?: SubjectWatch;
   readonly steps: readonly EscalationStep[];
   /** The time after the last step at which the escalation is exhausted. Exhausted is a system alert. */
   readonly exhaustedAfter: Duration;
+}
+
+/** A local time of each day in a time zone. The digest goes at this time. */
+export interface DailyTime {
+  /** The IANA name of the time zone, for example `Europe/Berlin`. */
+  readonly zone: string;
+  /** The local time `HH:MM`, from `00:00` to `23:59`. */
+  readonly time: string;
 }
 
 /**

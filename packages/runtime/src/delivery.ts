@@ -11,11 +11,14 @@ import {
   DEFAULT_LINK_POLICY,
   NO_LABELS,
   acknowledgmentOf,
+  digestDeliveries,
+  digestMessageOf,
   graphLabels,
   incidents,
   linkRule,
   messageKey,
   messageOf,
+  planDigests,
   route,
   shadowScore,
   whyLine,
@@ -632,6 +635,102 @@ export function createDispatcher(options: DeliveryOptions, context: DeliveryCont
           );
         }
       }
+      // 3b. The digests (`planDigests`): one message for each person each day. The log keeps one delivery for each incident
+      // of a digest, thus the next plan does not tell the incident again. A digest does not repeat, thus it needs no stop.
+      const digests = planDigests({
+        state: context.state().merge,
+        incidents: found,
+        recipients: options.recipients,
+        places: context.places,
+        assess: options.assess,
+        channels: descriptors,
+        rank: options.rank,
+        rankDelay: options.rankDelay,
+        rankDelays: options.rankDelays,
+        rankFloor: options.rankFloor,
+        now: at,
+      });
+      for (const send of digests.sends) {
+        const key = send.key;
+        const flight = flying.get(key);
+        if (flight !== undefined) {
+          const ends = flight.since + options.flightLimit;
+          if (at < ends) {
+            waiting.push(ends);
+            continue;
+          }
+          // The send hangs past its flight limit. A late accept of it records nothing, and a new copy goes.
+          flight.stale = true;
+          flying.delete(key);
+        }
+        if (!ready("send", key)) continue;
+        work.push(
+          (async () => {
+            const target = { key, channel: send.channel };
+            const channel = byId.get(send.channel);
+            const address = recipients.get(send.person)?.addresses[send.channel];
+            if (channel === undefined || address === undefined) {
+              const retryAt = fail("send", target, "refused", channel === undefined ? `The system has no channel ${send.channel}.` : `The person has no address on the channel ${send.channel}.`);
+              refuse(target, "refused", retryAt);
+              return;
+            }
+            const message = digestMessageOf(send, context.state().merge.reports);
+            const release = place(send.channel);
+            if (release === undefined) return;
+            copies += 1;
+            const copy = `${context.run}-${copies}`;
+            const flight: Flight = { since: at, copy, stale: false };
+            flying.set(key, flight);
+            pending.add(copy);
+            let late = false;
+            const call = within(release, () => channel.send({ message, address, copy })).then(
+              (result) => result,
+              (error): SendOutcome => ({ ok: false, kind: "network", message: `The send threw: ${errorMessage(error)}` }),
+            );
+            void call.then((result) => {
+              if (flying.get(key) === flight) flying.delete(key);
+              pending.delete(copy);
+              // An accept after the time limit of the step goes to the log at the next step.
+              if (flight.stale || !late || !result.ok) return;
+              for (const delivery of digestDeliveries(send, result.accepted, result.receipt)) landed.push({ delivery, copy });
+              context.wake?.();
+            });
+            const outcome = await limited<SendOutcome>(
+              call,
+              options.callLimit,
+              clock,
+              () => {
+                late = true;
+                return { ok: false, kind: "timeout", message: `The send took longer than ${options.callLimit} ms. It stays in flight for up to ${options.flightLimit} ms.` };
+              },
+              (error) => ({ ok: false, kind: "network", message: `The send threw: ${errorMessage(error)}` }),
+            );
+            if (!outcome.ok) {
+              const retryAt = fail("send", target, outcome.kind, outcome.message, outcome.retryAfter);
+              if (refusal(outcome.kind)) refuse(target, outcome.kind, retryAt);
+              return;
+            }
+            reached.add(send.channel);
+            const deliveries = digestDeliveries(send, outcome.accepted, outcome.receipt);
+            let different: readonly string[];
+            try {
+              different = context.append(deliveries.map((delivery) => deliveryEvent(delivery, copy, clock.now())));
+            } catch (error) {
+              // The channel has the digest, and the log does not. The next step writes the deliveries first, thus no second digest goes.
+              landed.push(...deliveries.map((delivery) => ({ delivery, copy })));
+              context.wake?.();
+              throw error;
+            }
+            conflicts.push(...different);
+            const conflicting = new Set(different);
+            for (const delivery of deliveries) {
+              if (conflicting.has(`delivery:${delivery.key}`)) duplicates.push(delivery.key);
+              else sent.push(delivery);
+            }
+          })(),
+        );
+      }
+
       // 4. The stops of the stale copies, in parallel with the sends. A failed stop goes again at a later step.
       // On a channel that is down, only the first ready stop goes: the probe, at the time of the probe. The other stops wait for
       // a step after a good probe.
@@ -733,7 +832,7 @@ export function createDispatcher(options: DeliveryOptions, context: DeliveryCont
       const keep = new Set(open.map((delivery) => delivery.key));
       for (const key of polled.keys()) if (!keep.has(key)) polled.delete(key);
       const polls = open.map((delivery) => (polled.get(delivery.key) ?? at) + options.pollEvery);
-      const wakeAt = earliest([...after.map((entry) => entry.plan.wakeAt), ...polls, ...failures.map((failure) => failure.retryAt), ...waiting]);
+      const wakeAt = earliest([...after.map((entry) => entry.plan.wakeAt), digests.wakeAt, ...polls, ...failures.map((failure) => failure.retryAt), ...waiting]);
       const overdue = overdueSends(after, context.state().refusals, at, options.overdueAfter);
       return { routes: after, sent, duplicates, stopped, acknowledged, cancelled, failures, conflicts, overdue, ...(wakeAt === undefined ? {} : { wakeAt }) };
     },

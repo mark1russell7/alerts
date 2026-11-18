@@ -1196,3 +1196,103 @@ describe("the link rule of the merge in the delivery", () => {
     apart.log.close();
   });
 });
+
+describe("the digest step of a pass", () => {
+  // The quiet window of the person ends at 07:00 in Kansas. T0 is 13:00 there, thus the next digest time is 2026-04-02 12:00 UTC.
+  const DIGEST_AT = Date.UTC(2026, 3, 2, 12);
+  const DIGEST_POLICY: EscalationPolicy = { level: "digest", steps: [{ channel: PUSHOVER, at: 0 }], exhaustedAfter: 0 };
+  const READER: Recipient = { ...RECIPIENT, watch: { ...RECIPIENT.watch, quiet: { zone: "America/Chicago", start: "22:00", end: "07:00" } }, policies: [LIFE_SAFETY, DIGEST_POLICY] };
+  // A flood advisory: the severity minor gives the level digest.
+  const ADVISORY: SourceProcedures = {
+    ...SOURCE,
+    map: ({ observation }) => ({
+      reports: [
+        {
+          ...warning(observation),
+          kind: { code: "met.flood", label: "Flood Advisory" },
+          severity: "minor",
+          urgency: "expected",
+          expires: T0 + 3 * 24 * 60 * MINUTE,
+          headline: "Flood Advisory issued April 1 at 1:00PM CDT by NWS Wichita KS",
+        },
+      ],
+      problems: [],
+    }),
+  };
+
+  function openDigest(log: RuntimeLog, clock: ReturnType<typeof fakeWallClock>) {
+    const pushover = channel(PUSHOVER, "none", () => clock.now());
+    const sms = channel(SMS, "none", () => clock.now());
+    const runtime = openRuntime({
+      log,
+      clock,
+      sources: [ADVISORY],
+      watch: () => ({ places: [KANSAS], kinds: ["met"] }),
+      view: VIEW,
+      run: `run-${clock.now()}`,
+      delivery: { ...DELIVERY, recipients: [READER], channels: [pushover.procedures, sms.procedures] },
+    });
+    return { runtime, pushover: pushover.calls };
+  }
+
+  it("sends no message for the level digest at once, then one digest at the digest time, one time, also after a restart", async () => {
+    const log = openRuntimeLog(":memory:");
+    const clock = fakeWallClock(T0);
+    const first = openDigest(log, clock);
+    await first.runtime.pass();
+    expect(first.pushover.send).toEqual([]);
+    expect(first.runtime.state().merge.deliveries).toEqual([]);
+
+    await clock.advance(DIGEST_AT - T0);
+    await first.runtime.pass();
+    expect(first.pushover.send).toHaveLength(1);
+    const [incident] = first.runtime.state().merge.reports.map((report) => report.id);
+    expect(first.pushover.send[0]).toMatchObject({
+      person: PERSON,
+      level: "digest",
+      title: "The digest: 1 alert",
+      body: "- Flood Advisory issued April 1 at 1:00PM CDT by NWS Wichita KS",
+      incident,
+      quiet: false,
+    });
+    const deliveries = first.runtime.state().merge.deliveries;
+    expect(deliveries).toEqual([expect.objectContaining({ incident, level: "digest", person: PERSON, channel: PUSHOVER, step: 0, at: DIGEST_AT })]);
+
+    // A later pass of the same day, a restart, and the next day send no second digest of the advisory.
+    await clock.advance(MINUTE);
+    await first.runtime.pass();
+    expect(first.pushover.send).toHaveLength(1);
+    const second = openDigest(log, clock);
+    await second.runtime.pass();
+    await clock.advance(24 * 60 * MINUTE);
+    await second.runtime.pass();
+    expect(second.pushover.send).toEqual([]);
+    expect(second.runtime.state()).toEqual(rebuild(log.read(), second.runtime.config));
+    log.close();
+  });
+
+  it("keeps the digest due after a failed send, and records it after the retry", async () => {
+    const log = openRuntimeLog(":memory:");
+    const clock = fakeWallClock(DIGEST_AT);
+    const pushover = channel(PUSHOVER, "none", () => clock.now(), { send: (_message, count) => (count === 1 ? { ok: false, kind: "server", message: "The test channel failed." } : undefined) });
+    const runtime = openRuntime({
+      log,
+      clock,
+      sources: [ADVISORY],
+      watch: () => ({ places: [KANSAS], kinds: ["met"] }),
+      view: VIEW,
+      run: `run-${clock.now()}`,
+      delivery: { ...DELIVERY, recipients: [READER], channels: [pushover.procedures] },
+    });
+    // The report came at T0, before the digest time. The first send fails and makes no record.
+    await runtime.pass();
+    expect(pushover.calls.send).toHaveLength(1);
+    expect(runtime.state().merge.deliveries).toEqual([]);
+    await clock.advance(DELIVERY.retry);
+    await runtime.pass();
+    expect(pushover.calls.send).toHaveLength(2);
+    expect(pushover.calls.send[1]?.key).toBe(pushover.calls.send[0]?.key);
+    expect(runtime.state().merge.deliveries.map((delivery) => delivery.level)).toEqual(["digest"]);
+    log.close();
+  });
+});

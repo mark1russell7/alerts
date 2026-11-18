@@ -31,7 +31,7 @@ import {
   type WatchedPlace,
   type WhyRecord,
 } from "./contracts.ts";
-import { escalate, escalationProblems, quietWindowProblems, rankDelayOf, rankFloors, type EscalationPlan, type EscalationSend, type RankDelays } from "./escalation.ts";
+import { dailyTimeProblems, digestTimeOf, escalate, escalationProblems, quietWindowProblems, rankDelayOf, rankFloors, type EscalationPlan, type EscalationSend, type RankDelays } from "./escalation.ts";
 import { messageKey } from "./ids.ts";
 import { unknownKinds } from "./taxonomy.ts";
 import { assessmentWhy } from "./why.ts";
@@ -242,6 +242,7 @@ export interface Route {
  * - An incident that is not live gets an escalation only when one of its deliveries has no cancel. Its end is its expiry, or `now`.
  * - The start of an escalation is the start in the log. A new escalation starts at `now`, or earlier when the ledger shows an earlier start.
  * - The channel rules of the person (`ruleSteps`) remove steps of a system, test or exercise incident before the plan.
+ * - The level `digest` has no escalation. The digest (`planDigests`) tells it, thus a route has no delivery and no start of it.
  */
 export function route(input: RouteInput): Route[] {
   const { state, now } = input;
@@ -252,7 +253,8 @@ export function route(input: RouteInput): Route[] {
   for (const incident of input.incidents) {
     const reports = new Set<string>([incident.anchor, ...incident.reports]);
     const ofIncident = (item: { readonly incident: ReportId }): boolean => reports.has(item.incident);
-    const deliveries = state.deliveries.filter(ofIncident);
+    // A delivery of a digest is not a step of an escalation. The digest plan reads it.
+    const deliveries = state.deliveries.filter((delivery) => ofIncident(delivery) && delivery.level !== "digest");
     const open = deliveries.some((delivery) => !input.cancelled.has(delivery.key));
     if (!incident.live && !open) continue;
     const starts = input.starts.filter(ofIncident);
@@ -295,7 +297,7 @@ export function route(input: RouteInput): Route[] {
         // A change of the mode between loud and silent ends the episode now. The next episode starts in the new mode.
         const changed = current && assessed !== undefined && assessed !== "none" && known !== undefined && known !== silentNow;
         if (current && assessed !== undefined && !changed) {
-          if (assessed !== "none" && LEVELS.indexOf(assessed) > top && policyOf(assessed) !== undefined) levels.add(assessed);
+          if (assessed !== "none" && assessed !== "digest" && LEVELS.indexOf(assessed) > top && policyOf(assessed) !== undefined) levels.add(assessed);
         }
         // The live incident no longer reaches the person, or the mode changed: the episode ends now, and the log keeps the end.
         const freshEnd = current && ((assessed === "none" && levels.size > 0) || changed);
@@ -463,6 +465,15 @@ export function recipientProblems(recipient: Recipient, channels: readonly Chann
     for (const channel of rule.channels) if (!known.has(channel)) problems.push(`Channel rule ${index} names the channel ${channel}, and the system has no such channel.`);
   });
   if (recipient.watch.quiet !== undefined) for (const problem of quietWindowProblems(recipient.watch.quiet)) problems.push(`The quiet window: ${problem}`);
+  // The time of the digest: the daily time of the policy, or the end of the quiet window. Neither is a problem, not a silent default.
+  for (const policy of recipient.policies) {
+    const name = policyName(policy);
+    if (policy.daily !== undefined && policy.level !== "digest") problems.push(`The policy of ${name} has a daily time. Only a policy of the level digest uses it.`);
+    if (policy.daily !== undefined) for (const problem of dailyTimeProblems(policy.daily)) problems.push(`The daily time of the policy of ${name}: ${problem}`);
+    if (policy.level === "digest" && digestTimeOf(policy, recipient.watch.quiet) === undefined) {
+      problems.push(`The policy of ${name} has no daily time, and the person has no quiet window. The person gets no digest.`);
+    }
+  }
   return problems;
 }
 
@@ -478,7 +489,7 @@ export function recipientProblems(recipient: Recipient, channels: readonly Chann
  */
 export function messageOf(incident: Incident, reports: readonly Report[], send: EscalationSend, why?: string): Message {
   const report = textReport(incident, reports);
-  const title = report?.headline.trim() || incident.kind.label;
+  const title = titleOf(incident, report);
   const body = [report?.instruction, report?.areaText, report?.description].flatMap((part) => (part === undefined || part.trim() === "" ? [] : [part.trim()])).join("\n\n");
   return {
     key: messageKey(send),
@@ -494,6 +505,16 @@ export function messageOf(incident: Incident, reports: readonly Report[], send: 
     ...(why === undefined || why === "" ? {} : { why }),
   };
 }
+
+/**
+ * This function gives the title of an incident in a message. The title is the headline of the report of the text
+ * (`messageOf`). With no headline, it is the label of the kind of the incident.
+ */
+export function incidentTitle(incident: Incident, reports: readonly Report[]): string {
+  return titleOf(incident, textReport(incident, reports));
+}
+
+const titleOf = (incident: Incident, report: Report | undefined): string => report?.headline.trim() || incident.kind.label;
 
 /** This function gives the acknowledgment that a status of a delivery tells, or `undefined`. */
 export function acknowledgmentOf(delivery: Delivery, status: DeliveryStatus): Acknowledgment | undefined {
