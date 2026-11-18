@@ -953,7 +953,7 @@ The core function `limitRoutes` applies the send limit of each person to the rou
 
 A refused send backs off. Its wait doubles after each refusal of its key in a row, up to 10 minutes (`REFUSAL_LIMIT`).
 
-- The state keeps the count of the refusals of each key in a row (`refusalStreak`). The wait is `retry` times 2 to the power of the count.
+- The state keeps the count of the refusals of each key in a row (`refusalStreak`). The wait is `retry` times 2 to the power of the count, up to the limit (`refusalWait`). Fault case 7 takes its schedule from `refusalWait`.
 - The log keeps the last refusal of a key until its retry time plus `REFUSAL_LIMIT`, or plus its wait when the wait is longer (`refusalKept`).
 - Thus a refusal of another key in a burst, or a restart, does not set the wait back to `retry`. A delivery of the key ends the count.
 

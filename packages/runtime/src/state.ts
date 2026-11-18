@@ -183,6 +183,15 @@ export function refusalKept(refusal: Pick<Refusal, "at" | "retryAt">, at: Instan
 }
 
 /**
+ * This function gives the wait of the next try of a refused send. `streak` is the count of the refusals of the key in a
+ * row before this refusal (`refusalStreak`). The wait is `retry` after the first refusal, and it doubles for each
+ * refusal in a row, up to `limit`.
+ */
+export function refusalWait(streak: number, retry: Duration, limit: Duration = REFUSAL_LIMIT): Duration {
+  return streak === 0 ? retry : Math.max(retry, Math.min(limit, retry * 2 ** streak));
+}
+
+/**
  * This function gives the count of the refusals of a key in a row at the time `at`. A key with no refusal that the log
  * keeps (`refusalKept`) has the count 0. The wait of the next try of a refused send doubles for each refusal in a row.
  */

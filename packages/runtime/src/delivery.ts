@@ -52,7 +52,7 @@ import { errorMessage } from "@mark1russell7/text";
 import { compareCodeUnits } from "@mark1russell7/text/order";
 import { envelope, frameTag, REFUSAL_FAULTS, type ChannelFailureKind, type RefusalKind, type RefusedEvent, type RuntimeEvent } from "./events.ts";
 import { limited } from "./limit.ts";
-import { cancelledKeys, REFUSAL_LIMIT, refusalStreak, type RuntimeState } from "./state.ts";
+import { cancelledKeys, REFUSAL_LIMIT, refusalStreak, refusalWait, type RuntimeState } from "./state.ts";
 import { earliest } from "./view.ts";
 
 /** The options of the delivery. The private configuration gives the recipients and the addresses. */
@@ -413,8 +413,7 @@ export function createDispatcher(options: DeliveryOptions, context: DeliveryCont
         // The log keeps the count of the refusals in a row past the retry time (`refusalStreak`). Thus a refusal of
         // another key in a burst, or a restart, does not set the wait back to `retry`.
         const streak = call === "send" && refusal(kind as ChannelFailureKind) ? refusalStreak(context.state().refusals, target.key, at) : 0;
-        const backoff = streak === 0 ? 0 : Math.min(refusalLimit, options.retry * 2 ** streak);
-        const retryAt = at + Math.max(options.retry, after ?? 0, backoff);
+        const retryAt = at + Math.max(refusalWait(streak, options.retry, refusalLimit), after ?? 0);
         waits.set(later(call, target.copy ?? target.key), retryAt);
         failures.push({ call, key: target.key, ...(target.copy === undefined ? {} : { copy: target.copy }), channel: target.channel, kind, message, retryAt });
         return retryAt;

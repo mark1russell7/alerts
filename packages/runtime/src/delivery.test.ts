@@ -38,7 +38,7 @@ import { envelope, type RuntimeEvent } from "./events.ts";
 import { heldOf, holdStep } from "./heartbeat.ts";
 import { openRuntimeLog, type RuntimeLog } from "./log.ts";
 import { openRuntime, type RuntimeOptions } from "./runtime.ts";
-import { rebuild, REFUSAL_LIMIT, refusalStreak } from "./state.ts";
+import { rebuild, REFUSAL_LIMIT, refusalStreak, refusalWait } from "./state.ts";
 
 const T0 = Date.UTC(2026, 3, 1, 18, 0, 0);
 const SECOND = 1000;
@@ -1565,6 +1565,13 @@ describe("the send limit in the passes of the runtime (AL-72)", () => {
       expect(waits, restart ? "with a restart" : "in one process").toEqual([15, 30, 60, 120].map((wait) => [wait * SECOND, wait * SECOND]));
       log.close();
     }
+  });
+
+  it("doubles the wait of a refused send for each refusal in a row, up to the refusal limit", () => {
+    expect(Array.from({ length: 8 }, (_, streak) => refusalWait(streak, 10 * SECOND))).toEqual([10, 20, 40, 80, 160, 320, 600, 600].map((wait) => wait * SECOND));
+    expect(refusalWait(3, 10 * SECOND, 60 * SECOND)).toBe(60 * SECOND);
+    // A limit under the retry keeps the retry.
+    expect(refusalWait(2, 10 * SECOND, 5 * SECOND)).toBe(10 * SECOND);
   });
 
   it("keeps the count of the refusals of a key past its retry time, also after a refusal of another key", () => {

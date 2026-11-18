@@ -208,7 +208,7 @@ report(channel.id, channel.verdict, [
   `## ${channel.id}: a channel down`,
   "",
   `The case clock moves ${String(channel.settings.speed)} times faster than real time. Each arm has ${min(channel.settings.armMs)} min, and each outage lasts ${min(channel.settings.outageMs)} min from the start of the arm.`,
-  `Each Pushover request goes through the fault proxy. The retry of a failed call is ${s(channel.times.retry)} s, and the first delivery comes in ${s(recoverLimit(channel.settings))} s after the outage.`,
+  `Each Pushover request goes through the fault proxy. The retry of a failed call is ${s(channel.times.retry)} s, and the first delivery comes in ${s(recoverLimit(channel.settings))} s after the outage. In the arm limited, each try is a refusal, thus the waits double: the first delivery comes in ${s(recoverLimit(channel.settings, "limited"))} s.`,
   "",
   `| Arm | Requests (in the window) | To the server | Faults | Failed sends (kinds) | First delivery (s) | Pings (fail) | First fail ping (s) | ${CHANNEL_GATES.join(" | ")} |`,
   `| --- | --- | --- | --- | --- | --- | --- | --- | ${CHANNEL_GATES.map(() => "---").join(" | ")} |`,

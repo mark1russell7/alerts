@@ -105,6 +105,14 @@ describe("the plan of case 7", () => {
   it("takes the retry of the recovery limit from the delivery times of an instance", () => {
     expect(recoverLimit()).toBe(2 * DELIVERY_TIMES.retry + CASE_7_SETTINGS.tickMs);
   });
+
+  it("gives limited the first try of the back-off of refusals after the outage, plus one tick", () => {
+    // With a retry of 10 s, the tries come at 0, 10, 30, 70, 150, 310 and 630 s. The outage ends at 600 s.
+    expect(DELIVERY_TIMES.retry).toBe(10_000);
+    expect(recoverLimit(CASE_7_SETTINGS, "limited")).toBe(630_000 - CASE_7_SETTINGS.outageMs + CASE_7_SETTINGS.tickMs);
+    // An outage that ends at a try leaves only the tick.
+    expect(recoverLimit({ ...CASE_7_SETTINGS, outageMs: 310_000 }, "limited")).toBe(CASE_7_SETTINGS.tickMs);
+  });
 });
 
 describe("the gates of case 7", () => {
