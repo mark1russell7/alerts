@@ -972,7 +972,7 @@ The function `openInstance` makes the instance of the owner from the private con
 - The sources are the NWS API and IPAWS. The channels are Pushover, and the Twilio call channel when `secrets.env` has its keys.
 - The keys of Twilio are `TWILIO_ACCOUNT_SID`, `TWILIO_API_KEY_SID`, `TWILIO_API_KEY_SECRET` and `TWILIO_FROM`. An API key signs each request.
 - The optional key `TWILIO_TEXT_FROM` adds the text channel. It holds the registered sender of texts: a phone of a 10DLC campaign or a verified toll-free phone.
-- The instance never texts from `TWILIO_FROM`. Without `TWILIO_TEXT_FROM`, the text channel and the texts of the outage call are off.
+- The instance does not text from `TWILIO_FROM`. Without `TWILIO_TEXT_FROM`, the text channel and the texts of the outage call are off.
 - A spend entry of a provider of a channel gives the cap of the channel. The count of the cap is in `quotas.sqlite`.
 - The spend entry of Twilio also gives the watch of the balance: one read each day, and its floors.
 - Each source gets the watch of `sourcePlaces`. Thus a source gets the region codes, and a position only when the place shares it with that source.
@@ -1207,7 +1207,7 @@ The contracts carry only ids: `PersonId` and `PlaceId`. The runtime gets people,
 The core gives the format of the private configuration, `AlertConfig` (`alerts-config/1`). The repository holds no configuration. Each copy of the system loads the same configuration.
 
 - `places`: the id, a label, a position, the region codes and the buffer of each place. The field `sharePosition` names the sources that get the position.
-- `people`: the `PersonWatch` of each person, a label, and the escalation policies of the person.
+- `people`: the `PersonWatch` of each person, a label, and the escalation policies of the person. The field `defaults` gives the inputs of the default layers of the interest graph (`docs/RELEVANCE.md`).
 - `contacts`: the address of a person on a channel. A value of an address is a text, or a reference `{ secret: "NAME" }` to a key of the secret store.
 - `policies`: the escalation policies of each person with no policies of their own.
 - `spend`: the money rules of each paid provider account. An entry has the monthly cap and its reserve in US dollars, the floors of the balance and the time zone of the month.
