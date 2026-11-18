@@ -455,10 +455,11 @@ export function openRuntime(options: RuntimeOptions): Runtime {
         });
       }
 
-      // A source or a balance watch can come due after `start`, while the fetches of the pass run. A fetch that runs to its
-      // limit of one interval also ends at its next fetch. Such work is due, not a fault: its wake is the first instant after the pass.
-      const nextWork = earliest([...config.sources.map((descriptor) => nextFetch(state, descriptor)), ...scheduled.map((watch) => watch.nextReadAt())]);
-      const wakeAt = earliest([nextWork === undefined ? undefined : Math.max(nextWork, at + 1), view.wakeAt, delivery?.wakeAt, drilled.wakeAt, channels?.wakeAt(), changed || down ? at + 1 : undefined]);
+      // A source, a balance watch or a probe of a down channel can come due after `start`, while the fetches of the pass
+      // run. A fetch that runs to its limit of one interval also ends at its next fetch. Such work is due, not a fault:
+      // its wake is the first instant after the pass.
+      const nextWork = earliest([...config.sources.map((descriptor) => nextFetch(state, descriptor)), ...scheduled.map((watch) => watch.nextReadAt()), channels?.wakeAt()]);
+      const wakeAt = earliest([nextWork === undefined ? undefined : Math.max(nextWork, at + 1), view.wakeAt, delivery?.wakeAt, drilled.wakeAt, changed || down ? at + 1 : undefined]);
       const pass: Pass = {
         at,
         fetched: due.map(({ descriptor }) => descriptor.id),

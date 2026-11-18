@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fakeWallClock, type WallClock } from "@mark1russell7/algebra/clock";
-import { reportId, type ChannelId, type ChannelQuota, type Expectation, type FetchOutcome, type FetchSignal, type Observation, type ObservationId, type PlaceId, type Report, type SourceDescriptor, type SourceId, type SourceProcedures, type Watch, type WatchedPlace } from "@mark1russell7/alerts";
+import { reportId, type ChannelId, type ChannelProcedures, type ChannelQuota, type Expectation, type FetchOutcome, type FetchSignal, type Observation, type ObservationId, type PlaceId, type Report, type SourceDescriptor, type SourceId, type SourceProcedures, type Watch, type WatchedPlace } from "@mark1russell7/alerts";
 import { random, seedsFrom } from "@mark1russell7/rigor-generators";
 import { afterEach, describe, expect, it } from "vitest";
 import { balanceWatch, type BalanceReading } from "./balance.ts";
@@ -539,6 +539,33 @@ describe("one pass of the runtime", () => {
     slowFor = 0;
     await runtime.pass();
     expect(reads).toBe(2);
+    log.close();
+  });
+
+  it("gives a wake after the pass when the probe of a channel comes due during the fetches of the pass (AL-75)", async () => {
+    const clock = fakeWallClock(T0);
+    let slowFor = 0;
+    let probes = 0;
+    const api: SourceProcedures = { describe: () => descriptor(API, 50_000), fetch: async () => (await clock.advance(slowFor), { ok: true, observations: [], complete: true }), map };
+    // A made-up channel. Its first probe is one minute after the first pass.
+    const push: ChannelProcedures = {
+      describe: () => ({ id: "push" as ChannelId, title: "The push channel", dependsOn: [], services: ["domain:push.example.com"], api: ["domain:push.example.com"], uses: ["internet", "dns"], breaksThrough: true, repeats: false, ack: "none", maxTitle: 250, maxBody: 1024 }),
+      send: async () => ({ ok: true, receipt: {}, accepted: clock.now() }),
+      status: async () => ({ state: "delivered", at: clock.now() }),
+      cancel: async () => undefined,
+      probe: async () => ((probes += 1), { ok: true, at: clock.now() }),
+    };
+    const { runtime, log } = open([api], { clock, delivery: { recipients: [], pollEvery: 30_000, retry: 15_000, callLimit: 10_000, flightLimit: 40_000, channels: [push] } });
+    expect((await runtime.pass()).wakeAt).toBe(T0 + 50_000);
+    await clock.advance(50_000);
+    slowFor = 15_000;
+    // The pass starts at T0 + 50 s, before the probe is due, and fetches API until T0 + 65 s. The probe comes due at T0 + 60 s.
+    const second = await runtime.pass();
+    expect([probes, second.at, second.wakeAt]).toEqual([0, T0 + 65_000, T0 + 65_001]);
+    await clock.advance(1);
+    slowFor = 0;
+    await runtime.pass();
+    expect(probes).toBe(1);
     log.close();
   });
 
