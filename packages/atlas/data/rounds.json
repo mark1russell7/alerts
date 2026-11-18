@@ -651,5 +651,86 @@
       "dimensions": 2,
       "cause": "Round 10 adds 63 sources of indicators, and gives dimensions to 23 older sources. No class gets a live source, so the gaps and the layers do not change. 2 of 36 dimensions have 2 or more live sources with no risk. The unknown origins go from 3 to 4, and the unknown paths from 6 to 30."
     }
+  },
+  {
+    "round": 11,
+    "date": "2026-11-17",
+    "by": "One session, after the GFZ adapter (AL-14) and the runtime that reads it. The tests of the atlas check the descriptor of the adapter.",
+    "method": "The adoption of the GFZ adapter. The facts of the service come from the reads of round 9 and one live read of the adapter on 2026-11-17. The recorded answer of the storm of May 2024 gives the facts of a storm.",
+    "lists": [
+      "The data page and the web service of the GFZ Kp index: https://kp.gfz.de/en/data",
+      "The JSON format of the web service: https://kp.gfz.de/app/format/json.txt"
+    ],
+    "queries": [],
+    "notes": [
+      "The adapter reads the Kp values of the past 3 days each 10 minutes. The field meta of each answer gives the license CC BY 4.0 and the source GFZ Potsdam.",
+      "Each 3-hour interval with a Kp of 5 or more is a report, with the level G1 to G5 of the NOAA scale. The intervals of one storm are one incident.",
+      "Each value of the service has the status pre (preliminary) or def (definitive). The report keeps the status of its value as a parameter.",
+      "Rule 3 of the merge joins a GFZ storm and a SWPC message of a geomagnetic storm. Their onsets are 6 hours apart or less, and their areas are the poles.",
+      "The window of 6 hours is a shortcut with no measure. It ends when a capture of one storm of the two sources gives the largest difference of their onsets.",
+      "The path of GFZ is the host kp.gfz.de, with no content network. The path of the SWPC has CloudFront. Thus the two sources share no part of a path and no origin.",
+      "The classes geo.space-weather and geo.space-weather.geomagnetic-storm get 2 in each layer: 2 adopted sources, 2 paths apart and 2 origins apart.",
+      "The solar radiation storm and the radio blackout keep one source. GFZ gives no measure of them. The canary of the adapter passes when the newest interval started 6 hours or less before the fetch."
+    ],
+    "studies": [],
+    "measures": {
+      "classes": 201,
+      "gaps": 112,
+      "cover": {
+        "adopted": 53,
+        "paths": 53,
+        "origins": 3
+      },
+      "total": {
+        "adopted": 136,
+        "paths": 136,
+        "origins": 58
+      },
+      "unknownOrigins": 4,
+      "unknownPaths": 30,
+      "dimensions": 2,
+      "cause": "Round 11 adopts gfz-kp-hpo, a second origin of the geomagnetic storm. The cover of the adopted sources and of the paths goes from 51 to 53 classes. The cover of the origins goes from 1 to 3. Round 9 planned this source, so the gaps do not change."
+    }
+  },
+  {
+    "round": 12,
+    "date": "2026-11-17",
+    "by": "One session, for the transport classes with no source, after the reads of round 1 that failed.",
+    "method": "One read of each endpoint and each page of terms with a script, with a DNS lookup of each host. The script records the status, the type, the size and the names of the headers of a content network.",
+    "lists": [
+      "The current border wait times of the CBSA on the open data portal of Canada: https://open.canada.ca/data/en/dataset/d4a716f5-a2fc-4c3c-88ed-451fe05900e4",
+      "The open data files of NDW: https://opendata.ndw.nu/",
+      "The traffic message API of Digitraffic: https://tie.digitraffic.fi/api/traffic-message/v1/messages",
+      "The API page of RocketLaunch.Live: https://www.rocketlaunch.live/api",
+      "The API of the Maritime Safety Information portal of the NGA: https://msi.nga.mil/api/publications/broadcast-warn"
+    ],
+    "queries": [],
+    "notes": [
+      "The border waits get two origins, one on each side of the border of Canada and the US: the XML file of the CBP and the CSV file of the CBSA.",
+      "The road incidents get two open sources: the traffic messages of Digitraffic (Finland, CC BY 4.0) and the situation file of NDW (the Netherlands, CC0). The NDW file uses DATEX II version 3, so the end of the version 2.3 files in 2027 is no longer a risk.",
+      "The launches get a second list: the free URL of RocketLaunch.Live gives the next five launches with no key.",
+      "The portal of the NGA answered 503 with a page of maintenance. UKMTO answered 403 with a bot check, and the research does not go around a bot check. The navigational warnings and the threats to ships stay gaps.",
+      "The Digitraffic marine API has no nautical warnings in its OpenAPI document of 2026-11-17.",
+      "The RSS feed of MARAD holds pages of 2020, not the advisories. The advisories of MARAD are a web page."
+    ],
+    "studies": [],
+    "measures": {
+      "classes": 201,
+      "gaps": 109,
+      "cover": {
+        "adopted": 53,
+        "paths": 53,
+        "origins": 3
+      },
+      "total": {
+        "adopted": 136,
+        "paths": 136,
+        "origins": 58
+      },
+      "unknownOrigins": 4,
+      "unknownPaths": 30,
+      "dimensions": 5,
+      "cause": "Round 12 plans cbsa-bwt and rocketlaunch-live, and moves cbp-bwt, digitraffic-road and ndw-open-data from later to plan. The gaps go from 112 to 109. The dimensions with two live sources go from 2 to 5. This is a gain of research: no adapter changed, so the layers do not change."
+    }
   }
 ]

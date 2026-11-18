@@ -17,6 +17,7 @@ import {
   messageKey,
   messageOf,
   route,
+  shadowScore,
   whyLine,
   type Acknowledgment,
   type AssessPolicy,
@@ -32,6 +33,7 @@ import {
   type RankDelays,
   type Recipient,
   type Route,
+  type ScorePriors,
   type SendOutcome,
   type WatchedPlace,
   type WhyLabels,
@@ -51,6 +53,8 @@ export interface DeliveryOptions {
   readonly channels: readonly ChannelProcedures[];
   /** The policy of the assessment. The default is the policy of the core. */
   readonly assess?: AssessPolicy;
+  /** The priors of the shadow score. With them, the start of each escalation in the log keeps the score. */
+  readonly priors?: ScorePriors;
   /** The time between two polls of one receipt. */
   readonly pollEvery: Duration;
   /** The wait before a failed call goes again, when the channel tells no wait. */
@@ -469,7 +473,12 @@ export function createDispatcher(options: DeliveryOptions, context: DeliveryCont
 
       // 2. The start of each new escalation, before its first send. The end of each person that the incident no longer
       // reaches, before its cancels: the routes of each level of the person give the same end, and the log keeps it once.
-      write(routes.filter((entry) => entry.fresh).map((entry) => ({ ...envelope("escalation", startId(entry), at), start: entry.start })));
+      const { priors } = options;
+      write(
+        routes
+          .filter((entry) => entry.fresh)
+          .map((entry) => ({ ...envelope("escalation", startId(entry), at), start: entry.start, ...(priors === undefined ? {} : { shadow: shadowScore(entry.incident, priors) }) })),
+      );
       const ending = new Map<string, EscalationEnd>();
       for (const entry of routes) if (entry.freshEnd && entry.end !== undefined) ending.set(endId(entry), entry.end);
       write([...ending].map(([id, end]) => ({ ...envelope("escalation-end", id, at), end })));

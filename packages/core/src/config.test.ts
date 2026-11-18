@@ -5,7 +5,8 @@ import type { ChannelDescriptor, ChannelId, EscalationPolicy, InterestEdge, Inte
 import { RANK_DELAY_LIMIT } from "./escalation.ts";
 import { DRILL_SUBJECT } from "./system-reports.ts";
 import type { Expectation } from "./lateness.ts";
-import { rankDelaysSchema } from "./schemas.ts";
+import { composeInterests, placesLayer, servicesLayer, workLayer } from "./interest-defaults.ts";
+import { personConfigSchema, rankDelaysSchema } from "./schemas.ts";
 
 const SEEDS = seedsFrom(process.env["SEED"], [1, 2, 3, 4, 5, 6, 7, 8]);
 const MINUTE = 60_000;
@@ -139,6 +140,54 @@ describe("loadConfig", () => {
       "The interest graph of the person person-1 names the place place-2, and the person does not watch it.",
       "The rule of the life-safety warnings of the person person-1 names the place place-2, and the person does not watch it.",
     ]);
+  });
+
+  it("joins the default layers with the graph of the person, and keeps the watch of a person with no defaults", () => {
+    const mine: InterestEdge = { id: "mine", from: "topic:infra.cloud", to: "person", kind: "interest", weight: { value: 1, low: 1, high: 1 }, origin: "person", on: false };
+    const own: InterestGraph = { format: "alerts-interest/1", person: p1, edges: [mine], mutes: [] };
+    const defaults = { works: ["software"], services: ["domain:example.com" as NodeKey] };
+    const joined = person(p1, [home], { defaults });
+    const graphed: PersonConfig = { ...joined, watch: { ...joined.watch, interests: own } };
+    const plain = person(p2, [home]);
+    const loaded = loadConfig(config({ people: [graphed, plain], contacts: [...contacts(p1), ...contacts(p2)] }), CHANNELS, store);
+    expect(loaded.problems).toEqual([]);
+    const graph = loaded.recipients[0]!.watch.interests!;
+    expect(graph).toEqual(composeInterests(p1, [placesLayer([home]), workLayer(defaults.works), servicesLayer(defaults.services)], own).graph);
+    const ids = graph.edges.map((edge) => edge.id);
+    expect(ids).toContain(`places/place:${home}>person`);
+    expect(ids).toContain("mine");
+    expect(ids).not.toContain("work/topic:infra.cloud>person");
+    expect(loaded.recipients[1]!.watch).toBe(plain.watch);
+  });
+
+  it("joins the layer places alone for empty defaults, so a mandatory rule has its graph", () => {
+    const ruled = person(p1, [home], { defaults: {} });
+    const watch = { ...ruled.watch, mandatory: [{ place: home, on: true, rangeKm: 5 }] };
+    const loaded = loadConfig(config({ people: [{ ...ruled, watch }] }), CHANNELS, store);
+    expect(loaded.problems).toEqual([]);
+    expect(loaded.recipients[0]!.watch.interests).toEqual(composeInterests(p1, [placesLayer([home])]).graph);
+  });
+
+  it("finds an unknown work, a service that is not an entity and a changed default, and keeps the watch", () => {
+    const work = person(p1, [home], { defaults: { works: ["astronomy"] } });
+    const service = person(p1, [home], { defaults: { services: [`place:${home}` as NodeKey] } });
+    // An edge of the person with the id of a default and another weight is a second edge with one id.
+    const copied: InterestEdge = { id: `places/place:${home}>person`, from: `place:${home}`, to: "person", kind: "interest", weight: { value: 0.5, low: 0.5, high: 0.5 }, origin: "person", on: true };
+    const changed = person(p1, [home], { defaults: {} });
+    const changedWatch = { ...changed.watch, interests: { format: "alerts-interest/1" as const, person: p1, edges: [copied], mutes: [] } };
+    const problemsOf = (entry: PersonConfig) => loadConfig(config({ people: [entry] }), CHANNELS, store);
+    expect(problemsOf(work).problems).toEqual([`The defaults of the person person-1: The table of the kinds of work does not have the work "astronomy".`]);
+    expect(problemsOf(work).recipients[0]!.watch).toBe(work.watch);
+    expect(problemsOf(service).problems).toEqual([`The defaults of the person person-1: The service "place:${home}" is not the key of an entity, for example domain:example.com.`]);
+    expect(problemsOf({ ...changed, watch: changedWatch }).problems).toEqual([`The defaults of the person person-1: Two different edges have the id "places/place:${home}>person".`]);
+  });
+
+  it("checks the form of the defaults, and leaves the table and the entities to the load", () => {
+    const watch = { person: p1, places: [home], rules: [] };
+    expect(personConfigSchema.safeParse({ watch, defaults: { works: ["astronomy"], services: [`place:${home}`] } }).success).toBe(true);
+    expect(personConfigSchema.safeParse({ watch, defaults: { works: [""] } }).success).toBe(false);
+    expect(personConfigSchema.safeParse({ watch, defaults: { services: ["no-system"] } }).success).toBe(false);
+    expect(personConfigSchema.safeParse({ watch, defaults: { places: [home] } }).success).toBe(false);
   });
 
   it("finds a mandatory rule with no interest graph, and takes a graph of the person at its own places", () => {

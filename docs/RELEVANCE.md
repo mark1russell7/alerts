@@ -137,6 +137,13 @@ A default edge has the id `<origin>/<from>><to>`, so it has the same id at each 
 - The layer `base` has no function yet. Without a test of the size of an event, a topic edge of the base routes each event of the world. The shadow score of AL-31 and the indicators of AL-59 give that test.
 - The layers `data` and `measured` come from adapters, for example the service areas of the power utilities.
 
+The field `defaults` of a person in the private configuration gives the inputs of the layers: `works` (keys of `WORK_DEFAULTS`) and `services` (node keys of entities).
+
+- The load joins the layer `places`, the layers of the inputs and `PersonWatch.interests`. The recipient gets the joined graph.
+- The layer `places` is always in the join. A graph of work topics alone stops the routing at the places.
+- A person with no field `defaults` keeps the watch. Thus the routing of a configuration without the field stays the same.
+- An unknown work, a service that is not an entity or a changed default is a problem of the load. Then the person keeps the watch.
+
 ## Less, off and mute
 
 A person has three kinds of opt-out. Each one has a scope.
