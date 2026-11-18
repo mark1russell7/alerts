@@ -124,8 +124,9 @@ export interface SpendWatchOptions {
   readonly timeZone: string;
   /**
    * This function reads the spend of the account from the instant `from` to the time of the read, in US dollars. The
-   * spend does not include the fixed costs of the cap. `from` is the start of the month of the cap. It stops at the
-   * abort of the signal.
+   * spend does not include the fixed monthly costs, for example the rent of a number. The cap holds these costs only
+   * when its entry lists them in `fixed`. `from` is the start of the month of the cap. It stops at the abort of the
+   * signal.
    */
   readonly read: (from: Instant, signal: AbortSignal) => Promise<SpendReading>;
   /** The time between two reads that pass. The default is one hour. */
