@@ -29,6 +29,15 @@ describe("feedProblems", () => {
     expect(problems.join(" ")).not.toContain("transit.example.test");
   });
 
+  it("takes good places of stops and routes, and gives one problem for each bad stop or route", () => {
+    const places = { stops: { s1: [14.5, 53.4] as const }, routes: { r1: { west: 14.5, south: 53.4, east: 14.6, north: 53.5 } } };
+    expect(feedProblems({ ...FEED, places })).toEqual([]);
+    const bad = { stops: { s1: [14.5, 95] as const, s2: [Number.NaN, 0] as const }, routes: { r1: { west: 14.6, south: 53.4, east: 14.5, north: 53.5 } } };
+    const problems = feedProblems({ ...FEED, places: bad });
+    expect(problems).toHaveLength(3);
+    expect(problems.join(" ")).toContain("the route r1");
+  });
+
   it("refuses a box outside the range, or with a value that is not a number", () => {
     expect(feedProblems({ ...FEED, box: { west: -190, south: 0, east: 0, north: 1 } })).toHaveLength(1);
     expect(feedProblems({ ...FEED, box: { west: 0, south: Number.NaN, east: 1, north: 1 } })).toHaveLength(1);
