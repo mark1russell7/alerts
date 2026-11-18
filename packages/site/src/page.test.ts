@@ -64,7 +64,7 @@ describe("the local page", () => {
   const entry = read(LOCAL_ENTRY);
 
   it("has each part of the page, and asks the search engines not to list it", () => {
-    const ids = ["theme", "read", "brief", "problem", "globe", "map", "time", "past", "past-text", "now", "time-problem", "globe-tools", "words", "whole", "incidents", "unshaped", "sources-h", "health-past", "health-sum", "health-problem", "health", "health-hint", "indicators-h", "indicator-sum", "indicators"];
+    const ids = ["theme", "read", "brief", "problem", "globe", "map", "time", "past", "past-text", "now", "time-problem", "globe-tools", "words", "whole", "incidents", "unshaped", "sources-h", "health-past", "health-sum", "health-problem", "health", "health-hint", "indicators-h", "indicator-sum", "indicators", "interests-h", "interest-sum", "interests"];
     for (const id of ids) expect(local).toContain(`id="${id}"`);
     // The link at the top goes to the panel of the sources on the same page.
     expect(local).toContain('<a id="brief" href="#sources-h">');

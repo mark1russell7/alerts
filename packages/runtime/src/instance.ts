@@ -11,6 +11,7 @@ import {
   expectationProblems,
   healthPayload,
   historyPayload,
+  interestsPayload,
   linkRule,
   localPlaces,
   mapPayload,
@@ -28,6 +29,7 @@ import {
   type Expectation,
   type HealthPayload,
   type HistoryPayload,
+  type InterestsPayload,
   type Instant,
   type MapPayload,
   type OptInRecord,
@@ -587,6 +589,8 @@ export interface Instance {
    * copy. The value `since` keeps only the incidents with a change at that time or later.
    */
   readonly history: (since: Instant | null) => HistoryPayload;
+  /** This function gives the rows of the interest graph of each person, from the configuration at the start. */
+  readonly interests: () => InterestsPayload;
   /** The worker of the deploy of the outage call, when the configuration has an outage call. The service declares it. */
   readonly outage?: OutageDeployWorker;
   /** The exchange with the other copies, when the options give it. */
@@ -632,6 +636,8 @@ export function openInstance(options: InstanceOptions): Instance {
   const problems = instanceProblems(options.config, options.secret, descriptors, wall.now(), copy);
   if (problems.length > 0) throw new Error(`The instance does not start. The configuration has these problems:\n- ${problems.join("\n- ")}`);
   const token = options.secret(PUSHOVER_TOKEN) ?? "";
+  // The configuration does not change in a process. Thus the rows of the interests are the same at each read.
+  const interests = interestsPayload(config);
 
   // The store of shapes shares the pace of the sources. Thus its requests to the NWS API keep the rests of that host.
   const store = options.shapes === undefined ? undefined : createShapeStore({ pace, transport: options.transport, userAgent: agent, cache: options.shapes });
@@ -824,6 +830,7 @@ export function openInstance(options: InstanceOptions): Instance {
     map,
     health,
     history,
+    interests: () => interests,
     ...(outage === undefined ? {} : { outage }),
     ...(copies === undefined ? {} : { copies }),
   };

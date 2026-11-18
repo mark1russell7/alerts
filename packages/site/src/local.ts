@@ -9,8 +9,12 @@
  * A panel below the map tells the health of each source, and if a quota or a balance stops a message. A link at the
  * top of the page has the same two sentences. The health is of the present, also when the map shows a past time.
  *
- * The last panel tells the dimensions of the indicators out of their normal level, in the world and near each place.
+ * The next panel tells the dimensions of the indicators out of their normal level, in the world and near each place.
  * The indicators are of the present too.
+ *
+ * The last panel tells the interest graph of each person: each edge, its origin, its weight and its state. A default
+ * edge that an edge of the person replaces stays as a row. The graph changes only with the configuration. Thus the page
+ * reads it with the whole history.
  */
 
 import { NO_HISTORIES, type Histories, type MapPayload } from "@mark1russell7/alerts";
@@ -22,6 +26,8 @@ import { readHealth, type HealthRead } from "./health-read.ts";
 import { drawHealth, drawVerdicts, healthPanel, keepHealth, NO_HEALTH, type KeptHealth } from "./health-view.ts";
 import { readHistories, WHOLE_READ_EVERY_MS } from "./history-read.ts";
 import { drawIndicators, indicatorPanel } from "./indicators-view.ts";
+import { readInterests } from "./interests-read.ts";
+import { drawInterests, interestPanel } from "./interests-view.ts";
 import { readLine, readMap, READ_EVERY_MS } from "./map-read.ts";
 import { drawIncidentList, drawMapView, drawStatusLegend, drawUnshaped } from "./map-view.ts";
 import { scrubKey, scrubLabels, scrubPayload, scrubRange, scrubText, scrubWords, timeForm, type ScrubRange, type TimeForm } from "./scrub.ts";
@@ -49,6 +55,8 @@ const healthBox = byId("health");
 const healthHint = byId("health-hint");
 const indicatorSum = byId("indicator-sum");
 const indicatorBox = byId("indicators");
+const interestSum = byId("interest-sum");
+const interestBox = byId("interests");
 
 /** The live map: the last good read of the runtime. */
 let payload: MapPayload | undefined;
@@ -72,6 +80,10 @@ let health: KeptHealth = NO_HEALTH;
 let verdicts = "";
 /** The data of the panel of the indicators that the page shows. The page writes the panel again only when it changes. */
 let indicators = "";
+/** The data of the panel of the interests that the page shows. The page writes the panel again only when it changes. */
+let interests = "";
+/** This value is true after one read of the interests with an answer. A failed read starts again at the next refresh. */
+let interestsKnown = false;
 
 const time = (at: number): string => new Date(at).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
 
@@ -160,7 +172,6 @@ function showHealth(result: HealthRead | undefined): void {
   healthHint.hidden = panel.rows.length === 0;
 }
 
-/** This function sets the map of the picture from the live map and the time of the scrubber. */
 /** This function writes the panel of the indicators from the live map. The panel is of the present, as the health is. */
 function showIndicators(live: MapPayload): void {
   const panel = indicatorPanel(live.breadth, live.view.places);
@@ -171,6 +182,19 @@ function showIndicators(live: MapPayload): void {
   indicatorBox.replaceChildren(...drawIndicators(panel));
 }
 
+/** This function writes the panel of the interests from one read of the runtime. */
+async function showInterests(get: (path: string) => Promise<Response>): Promise<void> {
+  const read = await readInterests(get);
+  interestsKnown = read.ok || read.absent;
+  const panel = interestPanel(read);
+  const key = JSON.stringify(panel);
+  if (key === interests) return;
+  interests = key;
+  interestSum.replaceChildren(...drawVerdicts([panel.verdict], "p"));
+  interestBox.replaceChildren(...drawInterests(panel));
+}
+
+/** This function sets the map of the picture from the live map and the time of the scrubber. */
 function setPicture(): void {
   const replay = scrubber?.replay();
   picture = payload === undefined ? undefined : scrubPayload(payload, kept, replay);
@@ -235,6 +259,8 @@ async function refresh(): Promise<void> {
       const histories = await readHistories(get, kept, whole);
       kept = histories.kept;
       if (whole && histories.text === undefined) wholeAt = lastGood;
+      // The interests change only with the configuration. Thus the page reads them with the whole history.
+      if (whole || !interestsKnown) await showInterests(get);
       timeProblem.textContent = histories.text ?? "";
       timeProblem.hidden = histories.text === undefined;
       setRange(histories.absent);

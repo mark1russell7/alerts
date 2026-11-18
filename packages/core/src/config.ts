@@ -11,7 +11,7 @@ import type { Address, AssessPolicy, ChannelDescriptor, ChannelId, Duration, Esc
 import { assess, DEFAULT_ASSESS_POLICY, DRILL_KIND, matchSubjects, reachedAssessment } from "./assess.ts";
 import { policyFor, recipientProblems, ruleSteps, type ChannelRule, type Recipient } from "./delivery.ts";
 import { DRILL_PROBES, drillProblems, nextDrillAt, type DrillConfig } from "./drill.ts";
-import { composeInterests, placesLayer, servicesLayer, workLayer } from "./interest-defaults.ts";
+import { composeInterests, placesLayer, servicesLayer, workLayer, type InterestRow } from "./interest-defaults.ts";
 import { incidents, normalize } from "./merge.ts";
 import { optInFields, resolveOptIn, type OptInConfig, type OptInRecord } from "./opt-in.ts";
 import { DRILL_SUBJECT, NO_SYSTEM_LINES, systemReports } from "./system-reports.ts";
@@ -431,11 +431,10 @@ export function loadConfig(config: AlertConfig, channels: readonly ChannelDescri
         if (!own.has(place)) problems.push(`Rule ${index} of the person ${person} names the place ${place}, and the person does not watch it. The rule matches no incident there.`);
       }
     });
-    const joined = joinedWatch(entry);
-    if (joined.tag === "err") problems.push(`The defaults of the person ${person}: ${joined.error}`);
-    const used = joined.tag === "ok" ? joined.value : watch;
-    watches.push(used);
-    problems.push(...relevanceProblems(used, own));
+    const joined = personInterests(entry);
+    if (joined.problem !== undefined) problems.push(`The defaults of the person ${person}: ${joined.problem}`);
+    watches.push(joined.watch);
+    problems.push(...relevanceProblems(joined.watch, own));
   }
 
   const expectations = new Set<string>();
@@ -610,20 +609,33 @@ function graphPlaces(graph: InterestGraph): PlaceId[] {
   return [...new Set(nodes.flatMap((node) => placeOfNode(node) ?? []))];
 }
 
+/** The interests of one person after the load: the watch of the recipient, a row for each edge, and the problem of the join. */
+export interface PersonInterests {
+  readonly watch: PersonWatch;
+  /** The rows of the graph of the watch. A person with no graph has no row. */
+  readonly rows: readonly InterestRow[];
+  /** The text of the refusal of the join. Then the person keeps the watch of the configuration. */
+  readonly problem?: string;
+}
+
 /**
- * This function gives the watch of a recipient: the join of the default layers and the graph of the person. A person
- * with no defaults keeps the watch. The layer `places` is always in the join. Without it, a graph of work topics
- * alone stops the routing at the places. A graph of another person also stays as it is: `relevanceProblems`
- * reports it, and the places decide. The function gives the text of a refusal of the join as an error.
+ * This function gives the watch of a recipient: the join of the default layers and the graph of the person
+ * (`composeInterests`). A person with no defaults keeps the watch, and each edge of the graph is a row.
+ *
+ * The layer `places` is always in the join. Without it, a graph of work topics alone stops the routing at the places.
+ * A graph of another person also stays as it is: `relevanceProblems` reports it, and the places decide.
  */
-function joinedWatch(entry: PersonConfig): Result<PersonWatch, string> {
+export function personInterests(entry: PersonConfig): PersonInterests {
   const { watch, defaults } = entry;
-  if (defaults === undefined || (watch.interests !== undefined && watch.interests.person !== watch.person)) return ok(watch);
+  const own = watch.interests;
+  const kept = (problem?: string): PersonInterests => ({ watch, rows: own?.edges.map((edge) => ({ edge })) ?? [], ...(problem === undefined ? {} : { problem }) });
+  if (defaults === undefined || (own !== undefined && own.person !== watch.person)) return kept();
   try {
     const layers = [placesLayer(watch.places), workLayer(defaults.works ?? []), servicesLayer(defaults.services ?? [])];
-    return ok({ ...watch, interests: composeInterests(watch.person, layers, watch.interests).graph });
+    const { graph, rows } = composeInterests(watch.person, layers, own);
+    return { watch: { ...watch, interests: graph }, rows };
   } catch (error) {
-    if (error instanceof RangeError) return err(error.message);
+    if (error instanceof RangeError) return kept(error.message);
     throw error;
   }
 }

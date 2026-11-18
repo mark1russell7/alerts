@@ -159,6 +159,8 @@ import type { DrillConfig, DrillPath } from "./drill.ts";
 import { OPT_IN_WAYS, type OptInConfig, type OptInRecord } from "./opt-in.ts";
 import type { RankDelays } from "./escalation.ts";
 import { HEALTH_FORMAT, type BalanceHealth, type CopyHealth, type HealthPayload, type QuotaHealth, type ReadHealth, type SourceHealthView } from "./health-payload.ts";
+import type { InterestRow } from "./interest-defaults.ts";
+import { INTERESTS_FORMAT, type InterestsPayload, type InterestsPerson } from "./interests-payload.ts";
 import { HISTORY_FORMAT, type HistoryChange, type HistoryIncident, type HistoryPayload, type HistoryPlace, type HistoryRegion } from "./history.ts";
 import type { MapShape } from "./map.ts";
 import type { Lateness, LatenessLimit, LatenessState } from "./lateness.ts";
@@ -1768,6 +1770,31 @@ export const historyPayloadSchema: z.ZodType<HistoryPayload, HistoryPayload> = s
       regions: z.array(historyRegionSchema).readonly(),
     })
     .readonly(),
+);
+
+/** This schema checks one row of the interests of a person: an edge, and the id of the edge that replaced it. */
+export const interestRowSchema: z.ZodType<InterestRow, InterestRow> = schemaOf<InterestRow>()(
+  z.strictObject({ edge: interestEdgeSchema, replacedBy: z.string().min(1).exactOptional() }).readonly(),
+);
+
+/** This schema checks the interests of one person in the answer of the interests route of the runtime. */
+export const interestsPersonSchema: z.ZodType<InterestsPerson, InterestsPerson> = schemaOf<InterestsPerson>()(
+  z
+    .strictObject({
+      person: personIdSchema,
+      label: z.string().exactOptional(),
+      routing: z.enum(["graph", "places"]),
+      rows: z.array(interestRowSchema).readonly(),
+      mutes: z.array(muteSchema).readonly(),
+      labels: z.record(z.string(), z.string()).readonly(),
+      problem: z.string().exactOptional(),
+    })
+    .readonly(),
+);
+
+/** This schema checks the answer of the interests route of the runtime. */
+export const interestsPayloadSchema: z.ZodType<InterestsPayload, InterestsPayload> = schemaOf<InterestsPayload>()(
+  z.strictObject({ format: z.literal(INTERESTS_FORMAT), people: z.array(interestsPersonSchema).readonly() }).readonly(),
 );
 
 /**

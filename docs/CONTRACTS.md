@@ -1465,6 +1465,24 @@ The reader has no rule of its own for an expiry, because a time edge gives a cha
 
 The work for an incident with no change and no time edge at `since` or later is only the read of its times. The levels come from the watches of the people, thus only the loopback address gives the route.
 
+### The interests
+
+The function `interestsPayload` gives the `InterestsPayload` of the route `GET /interests`. The panel Interests of the local page shows it. `interestsPayloadSchema` checks the payload. The runtime gives the route on the loopback address only.
+
+- `format`: `alerts-interests/1` (`INTERESTS_FORMAT`). A change that breaks a reader gets a new name.
+- `people`: one entry for each person of the configuration, in the order of the configuration.
+
+Each entry has these fields:
+
+- `person` and `label`: the id and the label of the person.
+- `routing`: `graph` when the interest graph decides, or `places` when the watched places decide. A graph of another person gives `places`.
+- `rows`: the rows of `composeInterests` for a person with the field `defaults`. Otherwise each edge of the graph of the person is one row.
+- `mutes`: the mutes of the graph.
+- `labels`: the label of each node of the rows, from the places, the labels of the graph and the taxonomy.
+- `problem`: the problem of the join, when the load refused the defaults. Then the rows are of the graph that the person keeps.
+
+The configuration does not change in a process. Thus the runtime makes the payload one time, at its start.
+
 ## Relevance
 
 The relevance of an incident for one person is a calculation over the interest graph of the person (AL-35). The types are in the section "Relevance" of `contracts.ts`.
