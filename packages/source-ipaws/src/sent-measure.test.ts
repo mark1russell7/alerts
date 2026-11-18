@@ -1,9 +1,9 @@
 import { readFileSync } from "node:fs";
-import type { Instant, Observation, ObservationId, Report, SourceId } from "@mark1russell7/alerts";
+import { sentFails, type Instant, type Observation, type ObservationId, type Report, type SentCounts, type SourceId } from "@mark1russell7/alerts";
 import { mapObservation as mapApi, SOURCE_ID as API } from "@mark1russell7/alerts-source-nws-api";
 import { describe, expect, it } from "vitest";
 import { mapObservation as mapIpaws, SOURCE_ID as IPAWS } from "./map.ts";
-import { COPY_SUFFIX, sentFails, sentMeasure, type SentCounts } from "./sent-measure.ts";
+import { COPY_SUFFIX, sentMeasure } from "./sent-measure.ts";
 
 /**
  * The real messages of one event of a Texas office (KEWX, flash flood warning 0108): the NWS API copy and

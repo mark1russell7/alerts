@@ -21,13 +21,13 @@
 
 import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { observationId, type Instant, type Observation, type Report, type SourceId } from "@mark1russell7/alerts";
+import { observationId, sentFails, type Instant, type Observation, type Report, type SentGap, type SourceId } from "@mark1russell7/alerts";
 import { createRequester, type Requester } from "@mark1russell7/alerts-fetch";
 import { WEA_EVENT_CODES } from "@mark1russell7/alerts-format-nws";
 import { mapObservation as mapApi, NWS_BASE_URL, SOURCE_ID as API } from "@mark1russell7/alerts-source-nws-api";
 import { fetchTransport } from "polite-crawler/api";
 import { HostScheduler, realClock } from "polite-crawler/politeness";
-import { mapObservation as mapIpaws, NWS_SENDER, SOURCE_ID as IPAWS, sentFails, sentMeasure, type SentGap } from "../src/index.ts";
+import { mapObservation as mapIpaws, NWS_SENDER, SOURCE_ID as IPAWS, sentMeasure } from "../src/index.ts";
 
 /** A generic name: the requests carry no name of a person or a project. */
 const USER_AGENT = "alerts-measure";

@@ -21,6 +21,7 @@
     "@xmpp/client": "^0.14.0"
   },
   "devDependencies": {
+    "@mark1russell7/alerts-source-nws-api": "workspace:*",
     "@mark1russell7/cue": "^2.0.0",
     "@mark1russell7/rigor-testkit": "^0.1.20",
     "@types/node": "^26.6.5",
