@@ -68,6 +68,6 @@ export {
   type RatesInput,
   type Share,
 } from "./rates.ts";
-export { MIN_RATE_COUNT, priorsOf } from "./priors.ts";
+export { priorsOf } from "./priors.ts";
 export { ratesSummary, TOP_TYPES, type GateResult } from "./summary.ts";
 export { COW_YEARS, eachYear, lastFullYear, measureYears, NCEI_YEARS, parseYears, type Years } from "./years.ts";

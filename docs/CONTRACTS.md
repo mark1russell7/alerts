@@ -937,9 +937,9 @@ The priors come from the base rates of the package `rates` (`priorsOf`). The fil
 - The verified share of a kind is the own share of IEM Cow. It is the share of the warnings that a storm report of the same hazard verified. Its interval is the gate interval of the share.
 - A share with a reason of no read gives no prior. A phenomenon that Cow does not verify gives no prior.
 - The deaths of one event of a kind are its deaths over its events. Each sum adds the NCEI types of the kind. The injuries are the same.
-- The interval of the deaths and of the injuries is the percentile bootstrap over the years. The seed comes from the kind and the field. The interval holds the value.
-- A kind with fewer than `MIN_RATE_COUNT` (10) events or deaths gives no prior of deaths. The injuries are the same. Thus the score has no read for that kind.
-- This limit is a shortcut. A bootstrap over 10 years gives an interval that is too narrow for a small count. Its end is an exact Poisson interval in `@mark1russell7/rigor-statistics`. Then a small count gets a prior with a wide interval.
+- The interval of the deaths and of the injuries is the hull of two intervals and the value. The exact Poisson interval of the count over the events (`poissonInterval` of `@mark1russell7/rigor-statistics`) holds a small count. Thus a count of 0 gets a wide interval, not a point at 0.
+- The percentile bootstrap over the years holds the change from year to year. Its seed comes from the kind and the field. It applies only when each year has an event. Otherwise a draw of the years can have no event.
+- A kind with no event in the years gives no prior of deaths and no prior of injuries. Thus the score has no read for that kind.
 - The probability of a CAP certainty is the middle of its band. Its interval is the band.
 
 ## The service

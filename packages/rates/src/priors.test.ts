@@ -1,9 +1,10 @@
 import { readFileSync } from "node:fs";
 import { scorePriorsSchema, shadowScore, type ScorePriors } from "@mark1russell7/alerts";
+import { poissonInterval } from "@mark1russell7/rigor-statistics";
 import { describe, expect, it } from "vitest";
 
-import { MIN_RATE_COUNT, priorsOf } from "./priors.ts";
-import type { RatesFile } from "./rates.ts";
+import { priorsOf } from "./priors.ts";
+import { LEVEL, type RatesFile } from "./rates.ts";
 
 const RATES_TEXT = readFileSync(new URL("../data/rates.json", import.meta.url), "utf8");
 const PRIORS_TEXT = readFileSync(new URL("../data/priors.json", import.meta.url), "utf8");
@@ -76,19 +77,53 @@ describe("the deaths and injuries of one event", () => {
     }
   });
 
-  it(`are absent for a kind with fewer than ${String(MIN_RATE_COUNT)} counts, and the other count stays`, () => {
+  it("have an interval that holds the exact Poisson interval of the count over the events", () => {
+    const tornado = RATES.ncei.types["Tornado"];
+    if (tornado === undefined) throw new Error("The rates have no Tornado type.");
+    const years = Object.values(tornado.byYear);
+    const exact = poissonInterval(
+      years.reduce((sum, year) => sum + year.deaths, 0),
+      years.reduce((sum, year) => sum + year.events, 0),
+      LEVEL,
+    );
+    const deaths = PRIORS.kinds["met.tornado"]?.deaths;
+    expect(deaths?.low).toBeLessThanOrEqual(exact.low);
+    expect(deaths?.high).toBeGreaterThanOrEqual(exact.high);
+  });
+
+  it("give a count of 0 a wide interval, not a point, and the other count stays", () => {
     const rates = copy();
     const tornado = rates.ncei.types["Tornado"];
     if (tornado === undefined) throw new Error("The rates have no Tornado type.");
-    const years = Object.keys(tornado.byYear);
-    for (const [index, year] of years.entries()) {
-      const counts = tornado.byYear[year];
-      if (counts !== undefined) counts.deaths = index === 0 ? MIN_RATE_COUNT - 1 : 0;
-    }
-    expect(priorsOf(rates).kinds["met.tornado"]?.deaths).toBeUndefined();
+    for (const counts of Object.values(tornado.byYear)) counts.deaths = 0;
+    const events = Object.values(tornado.byYear).reduce((sum, year) => sum + year.events, 0);
+    const deaths = priorsOf(rates).kinds["met.tornado"]?.deaths;
+    expect(deaths).toEqual({ value: 0, low: 0, high: poissonInterval(0, events, LEVEL).high });
+    expect(deaths?.high).toBeGreaterThan(0);
     expect(priorsOf(rates).kinds["met.tornado"]?.injuries).toEqual(PRIORS.kinds["met.tornado"]?.injuries);
-    if (tornado.byYear[years[0] ?? ""] !== undefined) tornado.byYear[years[0] ?? ""]!.deaths = MIN_RATE_COUNT;
-    expect(priorsOf(rates).kinds["met.tornado"]?.deaths?.value).toBeGreaterThan(0);
+  });
+
+  it("use only the exact interval when a year has no event, so no draw of the years divides by 0", () => {
+    const rates = copy();
+    const tornado = rates.ncei.types["Tornado"];
+    if (tornado === undefined) throw new Error("The rates have no Tornado type.");
+    const [first, ...others] = Object.keys(tornado.byYear);
+    for (const year of others) tornado.byYear[year] = { events: 0, deaths: 0, injuries: 0 };
+    const kept = tornado.byYear[first ?? ""];
+    if (kept === undefined) throw new Error("The Tornado type has no year.");
+    const exact = poissonInterval(kept.deaths, kept.events, LEVEL);
+    const value = kept.deaths / kept.events;
+    expect(priorsOf(rates).kinds["met.tornado"]?.deaths).toEqual({ value, low: Math.min(exact.low, value), high: Math.max(exact.high, value) });
+  });
+
+  it("are absent for a kind with no event in the years", () => {
+    const rates = copy();
+    const tornado = rates.ncei.types["Tornado"];
+    if (tornado === undefined) throw new Error("The rates have no Tornado type.");
+    for (const year of Object.keys(tornado.byYear)) tornado.byYear[year] = { events: 0, deaths: 0, injuries: 0 };
+    expect(priorsOf(rates).kinds["met.tornado"]?.deaths).toBeUndefined();
+    expect(priorsOf(rates).kinds["met.tornado"]?.injuries).toBeUndefined();
+    expect(priorsOf(rates).kinds["met.tornado"]?.verified).toEqual(PRIORS.kinds["met.tornado"]?.verified);
   });
 
   it("are absent for a type with no kind", () => {

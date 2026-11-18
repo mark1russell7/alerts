@@ -6,27 +6,17 @@
  *   the same hazard verified. The interval is the gate interval of the share. A share with a reason of no read gives no
  *   prior.
  * - The deaths and the injuries of one event of a kind come from NCEI. Each is its count over its events, summed over
- *   the types of the kind. The interval is the percentile bootstrap over the years. A kind with too few
- *   counts or events gives no prior.
+ *   the types of the kind. The interval is the hull of the exact Poisson interval and the percentile bootstrap over the
+ *   years. A kind with no event gives no prior.
  * - The probability of each CAP certainty word is the middle of its band, and the interval is the band.
  *
  * A field with no prior is absent. Then the shadow score of a kind with that field has no read. It does not take 0.
  */
 
 import { PRIORS_FORMAT, type Certainty, type Estimate, type KindPrior, type ScorePriors } from "@mark1russell7/alerts";
-import { bootstrap } from "@mark1russell7/rigor-statistics";
+import { bootstrap, poissonInterval } from "@mark1russell7/rigor-statistics";
 
 import { BOOTSTRAP_RUNS, LEVEL, type RatesFile, type Share } from "./rates.ts";
-
-/**
- * The least count of deaths or injuries, and the least count of events, of a kind for a prior of one event. With fewer,
- * the kind has no prior for that count. The value follows `MIN_YEAR_COUNT` of the shares.
- *
- * This limit is a shortcut. A bootstrap of 10 years gives a narrow interval for a small count, and an exact Poisson
- * interval does not exist in `@mark1russell7/rigor-statistics` at this time. When it exists, its interval joins the
- * hull, and a small count gets a prior with a wide interval.
- */
-export const MIN_RATE_COUNT = 10;
 
 /** The CAP certainty words, in the order of the contract. */
 const CERTAINTIES: readonly Certainty[] = ["observed", "likely", "possible", "unlikely", "unknown"];
@@ -45,20 +35,32 @@ function verifiedOf(share: Share): Estimate | undefined {
 }
 
 /**
- * This function gives the count of one event of a kind, with the percentile bootstrap interval over the years. It gives
- * undefined when the kind has fewer than `MIN_RATE_COUNT` events or counts. The hull holds the value.
+ * This function gives the count of one event of a kind, or undefined when the kind has no event in the years.
+ *
+ * - The exact Poisson interval of the count over the events holds a small count. A count of 0 gets a wide interval, not
+ *   a point at 0.
+ * - The percentile bootstrap over the years holds the change from year to year. It applies only when each year has an
+ *   event. Otherwise a draw of the years can have no event, and its share has no value.
+ * - The interval is the hull of the two intervals and the value.
  */
 function perEventOf(years: readonly KindYear[], part: "deaths" | "injuries", seed: string): Estimate | undefined {
   const events = years.reduce((sum, year) => sum + year.events, 0);
+  if (events === 0) return undefined;
   const count = years.reduce((sum, year) => sum + year[part], 0);
-  if (events < MIN_RATE_COUNT || count < MIN_RATE_COUNT) return undefined;
   const value = count / events;
-  const drawn = bootstrap(years, (sample) => sample.reduce((sum, year) => sum + year[part], 0) / sample.reduce((sum, year) => sum + year.events, 0), {
-    runs: BOOTSTRAP_RUNS,
-    level: LEVEL,
-    seed,
-  });
-  return { value, low: Math.min(drawn.low, value), high: Math.max(drawn.high, value) };
+  const exact = poissonInterval(count, events, LEVEL);
+  let low = Math.min(exact.low, value);
+  let high = Math.max(exact.high, value);
+  if (years.every((year) => year.events > 0)) {
+    const drawn = bootstrap(years, (sample) => sample.reduce((sum, year) => sum + year[part], 0) / sample.reduce((sum, year) => sum + year.events, 0), {
+      runs: BOOTSTRAP_RUNS,
+      level: LEVEL,
+      seed,
+    });
+    low = Math.min(low, drawn.low);
+    high = Math.max(high, drawn.high);
+  }
+  return { value, low, high };
 }
 
 /** This function gives the counts of each kind in each year of NCEI, summed over the event types of the kind. Each year of the file has a row. */
