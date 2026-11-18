@@ -46,7 +46,7 @@ export const zoneKey = (key: ZoneKey): string => `${key.kind}:${key.id}`;
 
 /** The regions that the store keeps current: the zones of each state, and the zones of each code. */
 export interface Wanted {
-  /** The postal codes of the states, for example `KS`. The store keeps each county and forecast zone of each state. */
+  /** The postal codes of the states, for example `KS`. The store keeps each county, forecast zone and fire zone of each state. */
   readonly states: readonly string[];
   /**
    * The region codes that need a shape first, for example the codes of the live incidents. A code can

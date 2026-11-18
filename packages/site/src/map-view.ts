@@ -110,9 +110,12 @@ export function placeTitle(place: MapPlace): string {
   return `${place.label}: ${LEVEL_WORDS[place.level]}.${gaps === "" ? "" : ` The coverage is short for: ${gaps}.`}`;
 }
 
-/** This function gives the words of a region of the basemap: its name and its code, for example `Center (KSZ083)`. */
+/**
+ * This function gives the words of a region of the basemap: its name and its code, for example `Center (KSZ083)`. A fire
+ * zone (`ugc-fire`) tells its kind, for example `Center (fire zone KSZ083)`, because a forecast zone can have the same code.
+ */
 export function regionTitle(region: MapRegion): string {
-  return `${region.name} (${region.code.code})`;
+  return `${region.name} (${region.code.system === "ugc-fire" ? "fire zone " : ""}${region.code.code})`;
 }
 
 /** This function gives the words of the map for a reader of the screen: what the map shows, and the counts of its parts. */

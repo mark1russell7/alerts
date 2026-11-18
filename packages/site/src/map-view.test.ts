@@ -94,6 +94,9 @@ describe("the classes of the map", () => {
     expect(regions.map((one) => one.attrs["data-code"])).toEqual(["KSZ083", "KSZ990", "KSZ991"]);
     expect(regions.map((one) => byClass(one, "zone").length)).toEqual([1, 1, 2]);
     expect(MAP_FIXTURE.basemap.map(regionTitle)).toEqual(["Center Plains (KSZ083)", "North Plains (KSZ990)", "Side Plains (KSZ991)"]);
+    // A fire zone tells its kind, because a forecast zone can have the same code (AL-33).
+    const fire = { ...MAP_FIXTURE.basemap[0]!, code: { system: "ugc-fire", code: "KSZ083" } };
+    expect(regionTitle(fire)).toBe("Center Plains (fire zone KSZ083)");
   });
 
   it("draws a pin for a place with a position, and an outline with its label for a place with only shapes", () => {

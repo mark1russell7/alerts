@@ -8,16 +8,20 @@ import { parseGeometry, type Geometry } from "@mark1russell7/geo";
 import { compareCodeUnits } from "@mark1russell7/text/order";
 
 /**
- * The kinds of zones of the store: the counties (`KSC173`) and the forecast zones (`KSZ083`). The
- * store has no fire zones (AL-33) and no marine zones.
+ * The kinds of zones of the store: the counties (`KSC173`), the forecast zones (`KSZ083`) and the fire
+ * weather zones (`KSZ083` too, AL-33). A fire zone and a forecast zone can have one code and different
+ * outlines. The store has no marine zones.
  */
-export type ZoneKind = "county" | "forecast";
+export type ZoneKind = "county" | "forecast" | "fire";
 
 /** The kinds of zones, in the order of the code: a county code is before a zone code of a state. */
-export const ZONE_KINDS: readonly ZoneKind[] = ["county", "forecast"];
+export const ZONE_KINDS: readonly ZoneKind[] = ["county", "forecast", "fire"];
+
+/** The kinds of the zones of the base map: the counties and the forecast zones. The fire zones have their own map. */
+export const BASEMAP_KINDS: readonly ZoneKind[] = ["county", "forecast"];
 
 /** The value of the property `type` of a row of each kind. The NWS API gives the type `public` to a forecast zone. */
-const ROW_TYPE: Readonly<Record<ZoneKind, string>> = { county: "county", forecast: "public" };
+const ROW_TYPE: Readonly<Record<ZoneKind, string>> = { county: "county", forecast: "public", fire: "fire" };
 
 /** The key of one zone: its kind and its UGC code in capital letters. */
 export interface ZoneKey {
@@ -37,16 +41,29 @@ export function zoneKindOf(ugc: string): ZoneKind | undefined {
 
 /**
  * This function gives the zone of a region code, or `undefined`. The system `ugc` gives its county or
- * forecast zone. The system `same` gives the full county, also for a part of a county.
- *
- * The NWS uses a `Z` code for a forecast zone and for a fire zone. This function gives the forecast
- * zone. In most states the two zones have the same outline. AL-33 adds the fire zones.
+ * forecast zone. The system `same` gives the full county, also for a part of a county. The system
+ * `ugc-fire` gives the fire zone of a `Z` code (AL-33).
  */
 export function zoneOfCode(code: RegionCode): ZoneKey | undefined {
+  if (code.system === "ugc-fire") {
+    const ugc = code.code.trim().toUpperCase();
+    return zoneKindOf(ugc) === "forecast" ? { kind: "fire", id: ugc } : undefined;
+  }
   const ugc = code.system === "ugc" ? code.code.trim().toUpperCase() : code.system === "same" ? countyUgcOfSame(code.code) : undefined;
   if (ugc === undefined) return undefined;
   const kind = zoneKindOf(ugc);
   return kind === undefined ? undefined : { kind, id: ugc };
+}
+
+/** This function gives the region code of a zone: the system `ugc-fire` for a fire zone, and `ugc` for the other kinds. */
+export function codeOfZone(key: ZoneKey): RegionCode {
+  return { system: key.kind === "fire" ? "ugc-fire" : "ugc", code: key.id };
+}
+
+/** This function tells if a UGC code fits a kind. A county has a `C` code. The other kinds have a `Z` code. */
+function fitsKind(ugc: string, kind: ZoneKind): boolean {
+  const form = zoneKindOf(ugc);
+  return form !== undefined && (kind === "county" ? form === "county" : form === "forecast");
 }
 
 /** This function compares two codes by their code units, thus the order does not change with the locale. */
@@ -101,7 +118,7 @@ export function readList(body: string, state: string, kind: ZoneKind): ReadList 
   for (const [at, feature] of (parsed["features"] as readonly unknown[]).entries()) {
     const properties = isRecord(feature) && isRecord(feature["properties"]) ? feature["properties"] : undefined;
     const id = typeof properties?.["id"] === "string" ? properties["id"].trim().toUpperCase() : undefined;
-    if (id === undefined || stateOfUgc(id) !== state || zoneKindOf(id) !== kind || properties?.["type"] !== ROW_TYPE[kind]) {
+    if (id === undefined || stateOfUgc(id) !== state || !fitsKind(id, kind) || properties?.["type"] !== ROW_TYPE[kind]) {
       problems.push(`Row ${String(at)} of the list of the ${kind} zones of ${state} is not a ${kind} zone of ${state}.`);
       continue;
     }

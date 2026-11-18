@@ -24,19 +24,25 @@ const input = (state: ShapeState, extra: Partial<PlanInput> = {}): PlanInput => 
 const ids = (tasks: readonly Task[]): string[] => tasks.map(taskId);
 
 describe("plan", () => {
-  it("asks for the two lists of a new state", () => {
-    expect(plan(input(records([], [])))).toEqual({ tasks: [{ type: "list", state: "KS", kind: "county" }, { type: "list", state: "KS", kind: "forecast" }] });
+  it("asks for the three lists of a new state", () => {
+    expect(plan(input(records([], [])))).toEqual({
+      tasks: [
+        { type: "list", state: "KS", kind: "county" },
+        { type: "list", state: "KS", kind: "forecast" },
+        { type: "list", state: "KS", kind: "fire" },
+      ],
+    });
   });
 
   it("puts the zones of the codes first, then the lists, then the zones of the lists", () => {
     const state = records([list("KS", "county", ["KSC015", "KSC173"])], [zone("KSC015")]);
-    const wanted = { states: ["ks"], codes: [{ system: "ugc", code: "TXC167" }, { system: "same", code: "020173" }, { system: "state", code: "KS" }] };
-    expect(ids(plan(input(state, { wanted })).tasks)).toEqual(["zone:county:TXC167", "zone:county:KSC173", "list:KS:forecast"]);
+    const wanted = { states: ["ks"], codes: [{ system: "ugc", code: "TXC167" }, { system: "ugc-fire", code: "TXZ205" }, { system: "same", code: "020173" }, { system: "state", code: "KS" }] };
+    expect(ids(plan(input(state, { wanted })).tasks)).toEqual(["zone:county:TXC167", "zone:fire:TXZ205", "zone:county:KSC173", "list:KS:forecast", "list:KS:fire"]);
   });
 
   it("asks again for the records older than the refresh period, from the oldest, and tells the next time", () => {
     const state = records(
-      [list("KS", "county", ["KSC015", "KSC079", "KSC173"], NOW - REFRESH), list("KS", "forecast", [], NOW - DAY)],
+      [list("KS", "county", ["KSC015", "KSC079", "KSC173"], NOW - REFRESH), list("KS", "forecast", [], NOW - DAY), list("KS", "fire", [], NOW - DAY)],
       [zone("KSC015", NOW - REFRESH + 10), zone("KSC079", NOW - REFRESH - 10), zone("KSC173", NOW - 2 * DAY)],
     );
     expect(plan(input(state))).toEqual({
@@ -51,7 +57,13 @@ describe("plan", () => {
   it("waits until the time of retryAt, also for a task with no record", () => {
     const state = records([], []);
     const retryAt = (task: Task): number | undefined => (taskId(task) === "list:KS:county" ? NOW + DAY : undefined);
-    expect(plan(input(state, { retryAt }))).toEqual({ tasks: [{ type: "list", state: "KS", kind: "forecast" }], next: NOW + DAY });
+    expect(plan(input(state, { retryAt }))).toEqual({
+      tasks: [
+        { type: "list", state: "KS", kind: "forecast" },
+        { type: "list", state: "KS", kind: "fire" },
+      ],
+      next: NOW + DAY,
+    });
   });
 
   it("keeps no task for the zones of a state that is not wanted", () => {
@@ -87,5 +99,12 @@ describe("dropsOf", () => {
     const state = records([], [zone("KSC015"), zone("KSC173"), zone("KSZ083"), zone("TXC167")]);
     expect(dropsOf(state, { state: "KS", kind: "county", ids: ["KSC173"] })).toEqual([{ kind: "county", id: "KSC015" }]);
     expect(dropsOf(state, { state: "KS", kind: "forecast", ids: ["KSZ083"] })).toEqual([]);
+  });
+
+  it("drops only the fire zones for a list of fire zones, and keeps the forecast zone with the same code (AL-33)", () => {
+    const fire = (id: string): CachedZone => ({ ...zone(id), kind: "fire" });
+    const state = records([], [zone("KSZ083"), fire("KSZ083"), fire("KSZ084")]);
+    expect(dropsOf(state, { state: "KS", kind: "fire", ids: ["KSZ083"] })).toEqual([{ kind: "fire", id: "KSZ084" }]);
+    expect(dropsOf(state, { state: "KS", kind: "forecast", ids: [] })).toEqual([{ kind: "forecast", id: "KSZ083" }]);
   });
 });

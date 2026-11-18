@@ -1533,6 +1533,8 @@ The NWS has three kinds of UGC zones in a state: the counties (`KSC173`), the fo
 - The products of the fire zones are the Fire Weather Watch (`FW.A`) and the Red Flag Warning (`FW.W`). The function `ugcRegionCodes` of format-nws gives `ugc-fire` for a zone code of an alert with the phenomenon `FW`.
 - The NWS API names the kind of each zone in `affectedZones`, for example `/zones/fire/<code>`. The NWS API adapter reads it first.
 - A place gets its fire zone codes from the fire zone outlines in memory, as it gets its forecast zones. No request names its position.
+- The shape store gets the list of the fire zones of each state, and the outline of each fire zone. The fire zones are not in the basemap.
+- The function `fireZones` of the store gives the fire zones of a state only when it has the outline of each zone of the list. Otherwise it gives none, and the place keeps the fallback to its forecast zone.
 
 The keys of the sources:
 

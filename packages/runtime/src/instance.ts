@@ -851,8 +851,9 @@ export function openInstance(options: InstanceOptions): Instance {
   // The store of shapes shares the pace of the sources. Thus its requests to the NWS API keep the rests of that host.
   const store = options.shapes === undefined ? undefined : createShapeStore({ pace, transport: options.transport, userAgent: agent, cache: options.shapes });
   const cache = options.shapes;
-  // The places get the codes of the zones near their positions, from the outlines of the store at the start.
-  const zoned = (from: ShapeStore) => addZoneCodes(config, (state) => from.basemap(state));
+  // The places get the codes of the zones near their positions, from the outlines of the store at the start. The fire zones
+  // give the fire zone codes (AL-33). The store gives them only when it has each fire zone of the state.
+  const zoned = (from: ShapeStore) => addZoneCodes(config, (state) => [...from.basemap(state), ...from.fireZones(state)]);
   const start = store === undefined ? undefined : zoned(store);
   const placed = start?.config ?? config;
   const places = localPlaces(placed);

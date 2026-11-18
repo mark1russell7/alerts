@@ -10,7 +10,7 @@ import { NWS_BASE_URL } from "@mark1russell7/alerts-source-nws-api";
 import type { Answer, Condition, Conditions, Pace, Transport } from "polite-crawler/api";
 import type { ShapeCache } from "./cache.ts";
 import { dropsOf, listKey, plan, taskId, zoneKey, type CachedList, type CachedZone, type Plan, type ShapeState, type Task, type Wanted } from "./plan.ts";
-import { compareCodes, listPath, readList, readZone, ZONE_KINDS, zoneOfCode, zonePath } from "./zones.ts";
+import { BASEMAP_KINDS, codeOfZone, compareCodes, listPath, readList, readZone, zoneOfCode, zonePath, type ZoneKind } from "./zones.ts";
 
 /**
  * The age of a record when the store asks for it again: 7 days. Each request is conditional, thus a
@@ -91,11 +91,18 @@ export interface ShapeStore {
   readonly lookup: ShapeLookup;
   /**
    * This function gives the region of a code, with the name and the shapes of its zone, or `undefined` when the store has no record.
-   * The code of the region is the UGC code of the zone. Thus a SAME code gives the UGC code of its county.
+   * The code of the region is the UGC code of the zone. Thus a SAME code gives the UGC code of its county. A fire zone code
+   * (`ugc-fire`) gives the fire zone, with its `ugc-fire` code.
    */
   region(code: RegionCode): MapRegion | undefined;
   /** This function gives the regions of the basemap of a state: each county, then each forecast zone, in the order of the code. */
   basemap(state: string): readonly MapRegion[];
+  /**
+   * This function gives the fire zones of a state, with their `ugc-fire` codes, in the order of the code (AL-33). It gives them only
+   * when the store has the outline of each zone of the list. Else it gives none: a place then has no fire zone code of the
+   * state, and the match uses its forecast zone code. Thus a place does not lose an alert while the store loads the outlines.
+   */
+  fireZones(state: string): readonly MapRegion[];
   /** This function gives the time when the next task of these regions is due, or `undefined` when no task waits. */
   nextDue(wanted: Wanted): Instant | undefined;
   /**
@@ -178,6 +185,13 @@ export function createShapeStore(options: ShapeStoreOptions): ShapeStore {
 
   const notModified = (answer: Answer): boolean => answer.classified.outcome === "not-modified";
 
+  // The regions of the zones of one kind of a state that have a record, in the order of the list.
+  const regionsOf = (state: string, kind: ZoneKind): MapRegion[] =>
+    (lists.get(listKey(state, kind))?.ids ?? []).flatMap((id): MapRegion[] => {
+      const zone = zones.get(zoneKey({ kind, id }));
+      return zone === undefined ? [] : [{ code: codeOfZone(zone), name: zone.name, shapes: zone.shapes }];
+    });
+
   const runList = async (task: Extract<Task, { type: "list" }>, signal: AbortSignal | undefined): Promise<Done> => {
     const old = lists.get(listKey(task.state, task.kind));
     const { requested, condition } = await get(listPath(task.state, task.kind), `the ${task.kind} zones of ${task.state}`, old?.condition, signal);
@@ -230,17 +244,18 @@ export function createShapeStore(options: ShapeStoreOptions): ShapeStore {
     region(code) {
       const key = zoneOfCode(code);
       const zone = key === undefined ? undefined : zones.get(zoneKey(key));
-      return zone === undefined ? undefined : { code: { system: "ugc", code: zone.id }, name: zone.name, shapes: zone.shapes };
+      return zone === undefined ? undefined : { code: codeOfZone(zone), name: zone.name, shapes: zone.shapes };
     },
     basemap(name) {
       const code = stateCode(name);
+      return code === undefined ? [] : BASEMAP_KINDS.flatMap((kind) => regionsOf(code, kind));
+    },
+    fireZones(name) {
+      const code = stateCode(name);
       if (code === undefined) return [];
-      return ZONE_KINDS.flatMap((kind) =>
-        (lists.get(listKey(code, kind))?.ids ?? []).flatMap((id): MapRegion[] => {
-          const zone = zones.get(zoneKey({ kind, id }));
-          return zone === undefined ? [] : [{ code: { system: "ugc", code: zone.id }, name: zone.name, shapes: zone.shapes }];
-        }),
-      );
+      const ids = lists.get(listKey(code, "fire"))?.ids ?? [];
+      const regions = regionsOf(code, "fire");
+      return ids.length > 0 && regions.length === ids.length ? regions : [];
     },
     nextDue(wanted) {
       const now = pace.now();
