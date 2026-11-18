@@ -13,6 +13,7 @@ import { BALANCE_KIND, CHANNEL_KIND, CLOCK_KIND, COPY_KIND, COVERAGE_KIND, DRILL
 import type {
   Area,
   BalanceStage,
+  ChannelId,
   ChannelQuota,
   CopyStage,
   CopyWatch,
@@ -571,6 +572,15 @@ const CHANNEL_LINE = "channel/";
 
 function channelName(copy: string, channel: string): string {
   return `${CHANNEL_LINE}${copy}/${channel}`;
+}
+
+/** This function gives the channels of a copy with an open line of a down channel, in the order of their ids. The runtime probes them. */
+export function downChannels(lines: SystemLines, copy: string): ChannelId[] {
+  const prefix = channelName(copy, "");
+  return Object.keys(lines.open)
+    .filter((name) => name.startsWith(prefix))
+    .map((name) => name.slice(prefix.length) as ChannelId)
+    .sort(compareCodeUnits);
 }
 
 // The facts of the line of a down channel. A new count is not a fact, so the line gives one alert. A new cause gives an update.

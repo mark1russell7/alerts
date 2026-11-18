@@ -251,3 +251,12 @@ describe("the status of a text", () => {
     expect(fake.calls).toEqual([]);
   });
 });
+
+describe("the probe of the text channel", () => {
+  it("reads the balance of the account and sends no text", async () => {
+    const fake = server({ status: 200, body: { balance: "12.5", currency: "USD", account_sid: CREDENTIALS.accountSid } });
+    expect(await channelOf(fake).probe?.()).toEqual({ ok: true, at: AT });
+    expect(fake.calls.map((call) => call.method)).toEqual(["GET"]);
+    expect(fake.calls[0]?.url).toMatch(/\/Balance\.json$/u);
+  });
+});

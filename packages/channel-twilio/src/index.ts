@@ -1,6 +1,6 @@
 /**
  * The Twilio voice call channel and the Twilio text channel of the alert system. They give the procedures of the channel
- * contract of `@mark1russell7/alerts`: `describe`, `send`, `status` and `cancel`. The package also reads the balance of the
+ * contract of `@mark1russell7/alerts`: `describe`, `send`, `status`, `cancel` and `probe`. The package also reads the balance of the
  * account. The requests of the Twilio API come from `@procedures/notify/twilio`.
  */
 
@@ -22,6 +22,7 @@ import {
   type TwilioRequest,
 } from "@procedures/notify/twilio";
 import { TWILIO_PHONE_PATTERN, twilioCallDescriptor } from "./descriptor.ts";
+import { probeTwilioAccount } from "./probe.ts";
 import { callFailureOf, callStatusOf, twilioCallOf, type TwilioCallMapOptions } from "./map.ts";
 import { takeSpend, type TwilioSpendGates } from "./spend.ts";
 
@@ -42,6 +43,7 @@ export { CALL_LAST_SENTENCE, CALL_REPEATS, CALL_SAY_LIMIT, callFailureOf, callSt
 export type { Refusal, TwilioCallMapOptions } from "./map.ts";
 export type { TwilioSpendGates } from "./spend.ts";
 export * from "./text.ts";
+export * from "./probe.ts";
 export * from "./replies.ts";
 export * from "./usage.ts";
 export type { TwilioCredentials, TwilioFetch } from "@procedures/notify/twilio";
@@ -159,6 +161,9 @@ export function createTwilioCallChannel(options: TwilioCallChannelOptions): Chan
       const result = await call(request);
       if (!result.ok && result.kind !== "refused") throw new Error(`Twilio did not end the call (${result.kind}): ${result.errors.join(" ")}`);
     },
+
+    // The read of the balance sends nothing and costs nothing (AL-65).
+    probe: () => probeTwilioAccount({ credentials: options.credentials, fetch: options.fetch, timeoutMs, now }),
   };
 }
 
