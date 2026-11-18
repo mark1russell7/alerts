@@ -4,7 +4,7 @@ import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import { incidentBody, readSummary } from "./fetch.ts";
 import { componentsOf, isHead, keysOf, mapObservation, sentOf, SEVERITY_OF_IMPACT, updatesOf, URGENCY_OF_STATUS } from "./map.ts";
-import { SUBJECT_SYSTEM } from "./page.ts";
+import { endpointKey, REGION_SYSTEM, SUBJECT_SYSTEM } from "./page.ts";
 import { registeredPage } from "./register.ts";
 
 /** The real summaries of two pages, with a part of their components (`fixtures/README.md`). */
@@ -19,10 +19,10 @@ const incident = (summary: typeof CLOUDFLARE, id: string): Record<string, unknow
 const KEYED = {
   ...CLOUDFLARE_PAGE,
   components: [
-    { id: "zqxhg7y54vy8", name: "Europe", domain: "edge.example.test" },
-    { id: "jm5mggc2wp95", name: "Interconnect", domain: "edge.example.test" },
-    { id: "57srcl8zcn7c", name: "Workers", domain: "workers.example.test" },
-    { id: "kq0n0t0n0th3", name: "Other", domain: "other.example.test" },
+    endpointKey("zqxhg7y54vy8", "Europe", "edge.example.test"),
+    endpointKey("jm5mggc2wp95", "Interconnect", "edge.example.test"),
+    endpointKey("57srcl8zcn7c", "Workers", "workers.example.test"),
+    endpointKey("kq0n0t0n0th3", "Other", "other.example.test"),
   ],
 };
 const observationOf = (body: string, fetched = FETCHED): Observation => ({ id: `o-${body.length}` as ObservationId, source: CLOUDFLARE_PAGE.id, fetched, contentType: "application/json", body, transport: { latency: 0 } });
@@ -186,15 +186,19 @@ describe("keysOf", () => {
     expect(keysOf(incident(CLOUDFLARE, "k3r9i5tbre4i"), CLOUDFLARE_PAGE)).toEqual([]);
   });
 
-  it("names the API of Twilio for an incident on the path of an alert, and not for an incident of a carrier in APAC", () => {
+  it("names the API of Twilio for an incident on the path of an alert, and the path of the region for an incident of a carrier", () => {
     const twilio = read("twilio-incidents-20261118.json");
     const page = registeredPage("statuspage-twilio")!;
     const aboutOf = (id: string) => mapObservation(observationOf(incidentBody(incident(twilio, id))), page).reports[0]!.about.map((subject) => subject.id);
     expect(keysOf(incident(twilio, "269ytwp2jgqq"), page).map((key) => key.name)).toEqual(["SMS", "Programmable Messaging API"]);
     expect(aboutOf("269ytwp2jgqq")).toEqual(["twilio.com", "api.twilio.com"]);
-    // The component SMS, APAC is in the group CARRIER NETWORK, and the group has no key.
-    expect(keysOf(incident(twilio, "smg76w4fhp05"), page)).toEqual([]);
-    expect(aboutOf("smg76w4fhp05")).toEqual(["twilio.com"]);
+    // The component SMS, APAC is in the group CARRIER NETWORK. Its key names the SMS of APAC, not the API.
+    expect(keysOf(incident(twilio, "smg76w4fhp05"), page).map((key) => key.name)).toEqual(["SMS, APAC"]);
+    const carrier = mapObservation(observationOf(incidentBody(incident(twilio, "smg76w4fhp05"))), page).reports[0]!;
+    expect(carrier.about).toEqual([
+      { system: SUBJECT_SYSTEM, id: "twilio.com", label: "Twilio" },
+      { system: REGION_SYSTEM, id: "twilio/apac/sms", label: "Twilio: SMS, APAC" },
+    ]);
   });
 });
 

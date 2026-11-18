@@ -38,16 +38,22 @@ export {
 export {
   DEFAULT_INTERVAL,
   DEFAULT_SLOW_AFTER,
+  endpointKey,
   isDomain,
   isPageBase,
+  nodeOf,
   PAGE_FORMATS,
-  pageDomains,
   pageProblems,
+  pageSubjects,
+  PATH_PATTERN,
+  REGION_SYSTEM,
+  regionKey,
   SUBJECT_SYSTEM,
   subjectsOf,
   type ComponentKey,
   type PageFormat,
   type StatusPage,
+  type SubjectKey,
 } from "./page.ts";
 export {
   COMPONENT_ITEM_FIELDS,

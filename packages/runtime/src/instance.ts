@@ -78,7 +78,7 @@ import { AWS_DOMAIN, AWS_KIND, createAwsSource } from "@mark1russell7/alerts-sou
 import { AZURE_DOMAIN, AZURE_KIND, createAzureSource } from "@mark1russell7/alerts-source-azure";
 import { createBomSwsSource, type BomSwsFetchOptions } from "@mark1russell7/alerts-source-bom-sws";
 import { createGcpSource, GCP_KIND, GOOGLE_DASHBOARDS, type GcpFetchOptions } from "@mark1russell7/alerts-source-gcp";
-import { createStatusPageSource, pagesFor, watchReads, type StatusPage, type StatusPageFetchOptions } from "@mark1russell7/alerts-source-statuspage";
+import { createStatusPageSource, endpointKey, pagesFor, watchReads, type StatusPage, type StatusPageFetchOptions } from "@mark1russell7/alerts-source-statuspage";
 import { createSwpcSource, SWPC_DESCRIPTOR } from "@mark1russell7/alerts-source-swpc";
 import { createTsunamiSource, descriptorOf as tsunamiDescriptor, TSUNAMI_CENTERS, type TsunamiCenter, type TsunamiFetchOptions } from "@mark1russell7/alerts-source-tsunami";
 import { createUsgsSource, USGS_DESCRIPTOR } from "@mark1russell7/alerts-source-usgs";
@@ -328,7 +328,7 @@ const PROVIDER_FEEDS = [
   ...GOOGLE_DASHBOARDS.map((dashboard) => ({
     domain: dashboard.domain,
     kind: GCP_KIND,
-    components: dashboard.products,
+    components: dashboard.products.map((product) => endpointKey(product.id, product.name, product.domain)),
     create: (options: Omit<GcpFetchOptions, "dashboard">) => createGcpSource({ ...options, dashboard }),
   })),
   { domain: AWS_DOMAIN, kind: AWS_KIND, create: createAwsSource },

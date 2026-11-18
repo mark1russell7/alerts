@@ -73,4 +73,19 @@ describe("watchReads", () => {
     expect(watchReads(watchOf(servicesLayer(["domain:video.twilio.com"])), twilio)).toBe(false);
     expect(watchReads(watchOf(servicesLayer(["domain:api.github.com"])), registeredPage("statuspage-github")!)).toBe(false);
   });
+
+  it("reads the page of Twilio for a path that overlaps the path of a carrier component, and not for another path", () => {
+    const twilio = registeredPage("statuspage-twilio")!;
+    const reads = (node: string): boolean => watchReads(watchOf(servicesLayer([node])), twilio);
+    // A channel of the SMS of North America covers each kind of number. A watch of a kind of number is below the SMS.
+    for (const node of ["provider-region:twilio", "provider-region:twilio/europe", "provider-region:twilio/europe/sms", "provider-region:twilio/north-america/sms", "provider-region:twilio/north-america/sms/short-code/x"]) {
+      expect(reads(node), node).toBe(true);
+    }
+    for (const node of ["provider-region:twilio/europe/mms", "provider-region:twilio/north-america/rcs", "provider-region:twilio-x", "provider-region:gcp/europe-west1", "domain:twilio/europe/sms"]) {
+      expect(reads(node), node).toBe(false);
+    }
+    expect(watchReads(watchOf(undefined, [{ system: "provider-region", id: "twilio/apac" }]), twilio)).toBe(true);
+    expect(watchReads(watchOf(undefined, [{ system: "provider-region" }]), twilio)).toBe(true);
+    expect(watchReads(watchOf(undefined, [{ system: "provider-region" }]), registeredPage("statuspage-github")!)).toBe(false);
+  });
 });
