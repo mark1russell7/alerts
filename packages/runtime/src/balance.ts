@@ -1,12 +1,15 @@
 /**
- * The watch of the balance of a paid provider account, and the quota of the spend of a channel.
+ * The watch of the balance of a paid provider account, the watch of its spend, and the quota of the spend of a channel.
  *
  * - The runtime starts `check` of each watch in each pass. A watch reads only when it is due: at its first check, then once in each interval.
- * - A failed read keeps the last read that passed. The core gives the line `unread` when the last read is too old.
- * - The watch keeps no record. After a restart, the first check reads again.
+ * - A failed read keeps the last read that passed. The core gives the line `unread` when the last balance is too old.
+ * - The watch keeps no record. After a restart, the first check reads again. The gates keep the count of the spend.
+ * - The start of the month of a cap comes from `monthStartOf` of the Twilio channel, its one copy in this repository. Its
+ *   home is the civil time of `@mark1russell7/algebra/clock`. It moves there when that entry has the month of an instant.
  */
 import type { BalanceRead, ChannelDescriptor, ChannelId, Duration, Instant, ProviderBalance, SpendConfig } from "@mark1russell7/alerts";
-import type { WallClock } from "@mark1russell7/algebra/clock";
+import { localTime, type WallClock } from "@mark1russell7/algebra/clock";
+import { monthStartOf } from "@mark1russell7/alerts-channel-twilio";
 import { errorMessage } from "@mark1russell7/text";
 import { quotaGate, type Quota, type QuotaGate, type QuotaGateOptions } from "polite-crawler/api";
 import { limited } from "./limit.ts";
@@ -75,6 +78,79 @@ export function balanceWatch(options: BalanceWatchOptions): BalanceWatch {
   }
   let since: Instant | undefined;
   let read: BalanceRead | undefined;
+  const reads = readSchedule<BalanceReading>({
+    what: "balance",
+    every,
+    retry,
+    limit,
+    read: (signal) => options.read(signal),
+    use(reading, at) {
+      if (!reading.ok) return reading.message;
+      if (!(Number.isFinite(reading.balance) && /^[A-Z]{3}$/.test(reading.currency))) return "The read of the balance gave no finite balance or no currency code.";
+      read = { balance: reading.balance, currency: reading.currency, at };
+      return undefined;
+    },
+  });
+
+  return {
+    provider: options.provider,
+    check(clock, stop) {
+      since ??= clock.now();
+      return reads.check(clock, stop);
+    },
+    nextReadAt: () => reads.nextReadAt(),
+    balance() {
+      if (since === undefined) return undefined;
+      const { provider, title, channels, floor } = options;
+      return { provider, title, channels, floor, maxAge, since, ...(read === undefined ? {} : { read }) };
+    },
+    failure: () => reads.failure(),
+    shift(size) {
+      if (since !== undefined) since += size;
+      reads.shift(size);
+      if (read !== undefined) read = { ...read, at: read.at + size };
+    },
+  };
+}
+
+/** A failed read of a provider. A reader gives it, and the schedule gives it for a throw or for a read past its limit. */
+interface ReadFailure {
+  readonly ok: false;
+  readonly message: string;
+}
+
+/** The options of the schedule of the reads of a watch. */
+interface ReadScheduleOptions<R> {
+  /** The thing that the watch reads, in a message: for example `balance`. */
+  readonly what: string;
+  readonly every: Duration;
+  readonly retry: Duration;
+  readonly limit: Duration;
+  /** This function reads once, from the time `at`. It stops at the abort of the signal. */
+  readonly read: (signal: AbortSignal, at: Instant) => Promise<R | ReadFailure>;
+  /**
+   * This function uses the reading of a read that started at `startedAt` and ended at `at`. It gives the message of a
+   * failure, or `undefined` when it took the reading.
+   */
+  readonly use: (reading: R | ReadFailure, at: Instant, startedAt: Instant) => string | undefined;
+}
+
+/** The schedule of the reads of a watch. */
+interface ReadSchedule {
+  /** This method reads when the read is due, and gives no result. It starts one read for two checks at the same time. It does not throw. */
+  check(clock: WallClock, stop?: AbortSignal): Promise<void>;
+  nextReadAt(): Instant | undefined;
+  failure(): string | undefined;
+  shift(size: Duration): void;
+}
+
+/**
+ * This function makes the schedule of a watch. It reads at the first check. After a read that the watch took, it reads
+ * again after `every`. After a failure, it reads again after `retry`. A read longer than `limit` is a failure. A read
+ * that the stop ended is not a failure, and the next check reads again.
+ */
+function readSchedule<R>(options: ReadScheduleOptions<R>): ReadSchedule {
+  const { what, every, retry, limit } = options;
   let next: Instant | undefined;
   let failed: string | undefined;
   let running: Promise<void> | undefined;
@@ -88,30 +164,22 @@ export function balanceWatch(options: BalanceWatchOptions): BalanceWatch {
     };
     if (stop?.aborted === true) return;
     stop?.addEventListener("abort", onStop, { once: true });
-    const work = Promise.resolve().then(() => options.read(own.signal));
-    const late = (): BalanceReading => ({ ok: false, message: `The read of the balance took longer than ${limit} ms.` });
-    const thrown = (error: unknown): BalanceReading => ({ ok: false, message: `The read of the balance failed: ${errorMessage(error)}` });
-    const reading = await limited(work, limit, clock, late, thrown);
+    const startedAt = clock.now();
+    const work = Promise.resolve().then(() => options.read(own.signal, startedAt));
+    const late = (): ReadFailure => ({ ok: false, message: `The read of the ${what} took longer than ${limit} ms.` });
+    const thrown = (error: unknown): ReadFailure => ({ ok: false, message: `The read of the ${what} failed: ${errorMessage(error)}` });
+    const reading = await limited<R | ReadFailure>(work, limit, clock, late, thrown);
     stop?.removeEventListener("abort", onStop);
-    own.abort(new Error("The read of the balance ended."));
+    own.abort(new Error(`The read of the ${what} ended.`));
     // A read that the stop ended is not a fault of the provider. The next start reads again.
     if (stopped) return;
     const at = clock.now();
-    const valid = reading.ok && Number.isFinite(reading.balance) && /^[A-Z]{3}$/.test(reading.currency);
-    if (reading.ok && valid) {
-      read = { balance: reading.balance, currency: reading.currency, at };
-      failed = undefined;
-      next = at + every;
-    } else {
-      failed = reading.ok ? "The read of the balance gave no finite balance or no currency code." : reading.message;
-      next = at + retry;
-    }
+    failed = options.use(reading, at, startedAt);
+    next = at + (failed === undefined ? every : retry);
   };
 
   return {
-    provider: options.provider,
     check(clock, stop) {
-      since ??= clock.now();
       if (running !== undefined) return running;
       if (next !== undefined && clock.now() < next) return Promise.resolve();
       running = once(clock, stop).finally(() => {
@@ -120,16 +188,116 @@ export function balanceWatch(options: BalanceWatchOptions): BalanceWatch {
       return running;
     },
     nextReadAt: () => next,
-    balance() {
-      if (since === undefined) return undefined;
-      const { provider, title, channels, floor } = options;
-      return { provider, title, channels, floor, maxAge, since, ...(read === undefined ? {} : { read }) };
-    },
     failure: () => failed,
     shift(size) {
-      if (since !== undefined) since += size;
       if (next !== undefined) next += size;
-      if (read !== undefined) read = { ...read, at: read.at + size };
+    },
+  };
+}
+
+/** The answer of a reader of the spend. A reader does not throw. A throw is a failure too. */
+export type SpendReading = { readonly ok: true; readonly usedUsd: number } | { readonly ok: false; readonly message: string };
+
+/** The options of one watch of the spend. */
+export interface SpendWatchOptions {
+  /** The provider, as an id in the `dependsOn` of its channels: for example `provider:twilio`. */
+  readonly provider: string;
+  /** The gates of the cap of the provider. The watch adds the spend of the provider to their count. */
+  readonly gates: SpendGates;
+  /** The IANA time zone of the month of the cap: the `timeZone` of the spend entry. */
+  readonly timeZone: string;
+  /**
+   * This function reads the spend of the account from the instant `from` to the time of the read, in US dollars. The
+   * spend does not include the fixed costs of the cap. `from` is the start of the month of the cap. It stops at the
+   * abort of the signal.
+   */
+  readonly read: (from: Instant, signal: AbortSignal) => Promise<SpendReading>;
+  /** The time between two reads that pass. The default is one hour. */
+  readonly every?: Duration;
+  /** The time after a failed read before the next read. The default is 15 minutes. */
+  readonly retry?: Duration;
+  /** The longest time of one read. The default is 30 seconds. */
+  readonly limit?: Duration;
+}
+
+/** The last read of the spend that the watch took. */
+export interface SpendRead {
+  /** The spend of the month that the provider gave, in US dollars. */
+  readonly usedUsd: number;
+  /** The spend in the units of the quota: whole cents, rounded up. */
+  readonly units: number;
+  readonly at: Instant;
+}
+
+/** The watch of the spend of one provider account. */
+export interface SpendWatch {
+  readonly provider: string;
+  /** This method reads the spend when the read is due, and gives no result. It does not throw. */
+  check(clock: WallClock, stop?: AbortSignal): Promise<void>;
+  /** This method gives the time of the next read. Before the first check, the read is due at once. */
+  nextReadAt(): Instant | undefined;
+  /** This method gives the last read that the watch took. */
+  spend(): SpendRead | undefined;
+  /** This method gives the message of the last read when it failed. */
+  failure(): string | undefined;
+  /** This method moves the own times of the watch by the size of a step of the wall clock. */
+  shift(size: Duration): void;
+}
+
+/**
+ * This function makes the watch of the spend of one provider account. The gates count only the sends of the channels.
+ * The provider also bills other usage: a reply, a call of another tool, a fee that is not in the fixed costs. Each read
+ * gives the count of the gates the spend of the provider, when it is larger. The count does not become smaller at any time.
+ *
+ * - The provider adds its usage after a delay. Thus the count can miss the sends of that delay that the gates did not count.
+ * - A read that ends in the next month gives a failure, and no count. The next read reads the new month.
+ * - The watch does not block the key at any time. A full month refuses each send, also `life-safety`, as the count of the gates does.
+ *
+ * @throws Error when a time is not valid, or when the time zone is not an IANA time zone.
+ */
+export function spendWatch(options: SpendWatchOptions): SpendWatch {
+  const every = options.every ?? HOUR;
+  const retry = options.retry ?? 15 * MINUTE;
+  const limit = options.limit ?? 30_000;
+  for (const [name, value] of Object.entries({ every, retry, limit })) {
+    if (!(Number.isInteger(value) && value > 0)) throw new Error(`The time ${name} of the spend watch of ${options.provider} is not a whole count of milliseconds above 0.`);
+  }
+  const zone = options.timeZone;
+  if (localTime(0, zone) === undefined) throw new Error(`The time zone of the spend watch of ${options.provider} is not an IANA time zone.`);
+  // The two gates have one name, one key and one store. Thus a note of one gate changes the count of both.
+  const { gate } = options.gates;
+  let last: SpendRead | undefined;
+  const reads = readSchedule<SpendReading>({
+    what: "spend",
+    every,
+    retry,
+    limit,
+    read: (signal, at) => options.read(monthStartOf(at, zone), signal),
+    use(reading, at, startedAt) {
+      if (!reading.ok) return reading.message;
+      if (!Number.isFinite(reading.usedUsd)) return "The read of the spend gave no finite amount.";
+      if (monthStartOf(at, zone) !== monthStartOf(startedAt, zone)) return "The month of the cap ended during the read of the spend.";
+      // A credit gives a spend below 0. The count stays at the count of the gates.
+      const units = spendUnits(Math.max(0, reading.usedUsd));
+      try {
+        // A reading with no `resetAt` blocks nothing. It only makes the count of the month larger.
+        gate.note({ remaining: Math.max(0, gate.quota.limit - units) });
+      } catch (error) {
+        return `The count of the spend did not take the read: ${errorMessage(error)}`;
+      }
+      last = { usedUsd: reading.usedUsd, units, at };
+      return undefined;
+    },
+  });
+  return {
+    provider: options.provider,
+    check: (clock, stop) => reads.check(clock, stop),
+    nextReadAt: () => reads.nextReadAt(),
+    spend: () => last,
+    failure: () => reads.failure(),
+    shift(size) {
+      reads.shift(size);
+      if (last !== undefined) last = { ...last, at: last.at + size };
     },
   };
 }

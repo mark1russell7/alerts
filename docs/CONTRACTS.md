@@ -1035,6 +1035,9 @@ The package `@mark1russell7/alerts-channel-twilio` operates the chain on the ser
 - The setup of the runtime refuses an outage call with no spend entry for Twilio. Each problem of the monthly cap names no count, because the spend cap is private.
 - A gap stays open: the spend gate of the instance does not count the calls of the Functions. Thus one month can have more calls than the cap, by the calls of the Functions.
 - The end of the gap is AL-57. The gate also reads the usage records of Twilio for the local month, in whole UTC days. It uses the larger of that amount and its own count, by the rule of `@mark1russell7/stack-spend`.
+- `spendWatch` of the runtime reads the spend of the provider each hour, from the start of the month of the cap. It notes the spend in the count of the gates. The count does not become smaller, thus the gate keeps the larger amount.
+- A failed read goes to the health of the watch, and the watch reads again after 15 minutes. A read that ends in the next month does not change the count.
+- The watch of Twilio starts after the release of `@procedures/notify` 0.63.0, which reads the usage records.
 - If the move of the status callback fails, the end has no `acked=1`. Then the chain calls again. That is the safe side.
 - Each handler gives the script of the call as data. The Function renders it with the TwiML builders of `@procedures/notify/twilio`.
 - `outageListOf` makes the list from the field `outage` of the private configuration and the recipients of `loadConfig`. The number of each person is the contact of the person on `twilio-call`.
