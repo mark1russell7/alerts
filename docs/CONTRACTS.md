@@ -1182,8 +1182,8 @@ The system fold gives the drill lines (the section of the system reports). The m
 
 The next steps are these:
 
-- The map and the explanation of a route show the steps that the channel rules remove (`Route.ruled`).
-- Then comes a drill of the outage call.
+- A drill of the outage call.
+- Later: a view of the plan of each person on the page. No page shows a plan today. That view also shows the steps that the channel rules remove (`Route.ruled`).
 
 ## People and places
 
