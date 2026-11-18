@@ -212,6 +212,20 @@ The function `readSeries` of `baseline.ts` reads one series at one time. It give
 - The order of the readings does not change the read. Of two readings at one time, the reading with the smaller observation id counts.
 - `DEFAULT_BASELINE` holds these values. A seeded gate test holds that a history with too few values gives no score.
 
+### The store of the readings
+
+The map of a source gives its readings in the field `readings` of `MapResult`. The runtime keeps them in the file `readings.sqlite` of the home folder, not in the event log.
+
+- The fetch step checks each reading of a new observation: the schema of a reading, then `readingProblems`. The reading must also name its own observation.
+- A reading that fails a check is a lossy problem of its observation, at the path `readings[n]`. The store does not get it.
+- The runtime writes the readings of a fetch before its events. A failed write of the log gives the readings again at the next fetch.
+- The key of a reading is its source, measure, series, version, time and observation. A second write of a key changes nothing.
+- The read of a series gives each version, in the order of the times. The function `readSeries` takes this list.
+- The store deletes each reading that is older than `READING_RETENTION`: the window of `DEFAULT_BASELINE` and one day. The deletion is at most once in each hour.
+- A fault of the store does not stop the pass, because the alerts do not need the readings. The entry writes the kind of the error to the output.
+- A broken file goes into quarantine, and the store starts empty. A source does not give its old readings again, thus each series has no read until its history fills.
+- Each copy keeps its own readings. The exchange of the copies does not send them.
+
 ## Health and coverage
 
 The core calculates the health of each source from the records of its fetches, not the adapter. The runtime writes one `FetchRecord` when each fetch ends. The health is a state machine on `@mark1russell7/algebra`, and `HEALTH_MACHINE` is its document.
@@ -1374,7 +1388,8 @@ The file `schemas.ts` of the core has one zod 4 schema for each data type of the
 
 ## Open points
 
-- No store keeps the indicator readings yet. The next changes add the store of the readings and the breadth of the signals in the threat level.
+- The threat level does not read the indicators yet. The next change adds the breadth of the signals: the count of the dimensions with a signal in an area.
+- A fault of the store of the readings goes only to the output. The health payload does not show it yet.
 - The season of a baseline is in UTC. A change of the clock moves a local rush hour by 1 h in UTC. A season in the local time of the area, with the civil time of `@mark1russell7/algebra`, replaces it.
 - Some units of the indicator sources are not in the grammar of `@mark1russell7/quantity`. They are `MW`, `MWh`, `µSv/h`, `µg`, `hPa`, `Bq`, `ppm` and each currency other than `USD`. A measure in such a unit fails its schema until the package adds the unit.
 - The procedure tools take the schema of each input and output from `schemas.ts`.
