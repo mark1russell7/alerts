@@ -224,7 +224,7 @@ A `NodeKey` is `person`, or `<system>:<id>`. The id is the text after the first 
 
 The system `place` holds the watched places of a person, by their ids in the configuration.
 
-An id of the system `provider-region` is the provider, a slash and the id of the region of the provider: `provider-region:gcp/europe-west1` or `provider-region:aws/eu-west-1`. The ids of the regions come from the feed of the provider, not from its titles.
+An id of the system `provider-region` is the provider, a slash and the id of the region of the provider: `provider-region:gcp/europe-west1`, `provider-region:aws/eu-west-1` or `provider-region:azure/westeurope`. The ids of the regions come from the feed of the provider, not from its titles. The feed of Azure gives only the name of each region. Its id is the name in lower case with no spaces, as the names of the regions in the API of Azure.
 
 ## The gates
 

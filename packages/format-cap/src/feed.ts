@@ -21,6 +21,8 @@ export interface FeedEntry {
   readonly updated?: string;
   /** The `description` of an RSS item, or the `summary` (else `content`) of an Atom entry. */
   readonly summary?: string;
+  /** The text of each `category` of an RSS item, or the `term` of each `category` of an Atom entry, in the order of the document. */
+  readonly categories?: readonly string[];
 }
 
 /** A feed, as `readFeed` reads it. `malformed` tells a text that is not well formed: a cut answer gives such a text. */
@@ -41,7 +43,7 @@ const parser = new XMLParser({
   parseTagValue: false,
   parseAttributeValue: false,
   trimValues: true,
-  isArray: (name) => name === "item" || name === "entry" || name === "link" || name === "enclosure",
+  isArray: (name) => name === "item" || name === "entry" || name === "link" || name === "enclosure" || name === "category",
   // The decoder blocks each entity of a DOCTYPE: a second guard, after the refusal of a DOCTYPE.
   entityDecoder: new EntityDecoder({
     numericAllowed: true,
@@ -123,7 +125,11 @@ function entryOf(format: "rss" | "atom", node: XmlObject): FeedEntry {
     format === "rss"
       ? { id: textOf(node["guid"]), title: textOf(node["title"]), link: listOf(node["link"]).map(textOf).find((link) => link !== undefined), updated: textOf(node["pubDate"]), summary: textOf(node["description"]) }
       : { id: textOf(node["id"]), title: textOf(node["title"]), link: atomLink(node), updated: textOf(node["updated"]) ?? textOf(node["published"]), summary: textOf(node["summary"]) ?? textOf(node["content"]) };
-  return Object.fromEntries(Object.entries(fields).filter(([, value]) => value !== undefined)) as FeedEntry;
+  const categories = listOf(node["category"])
+    .map((category) => (format === "rss" ? textOf(category) : attributeOf(category, "term")))
+    .filter((category) => category !== undefined);
+  const present = Object.fromEntries(Object.entries(fields).filter(([, value]) => value !== undefined)) as FeedEntry;
+  return categories.length === 0 ? present : { ...present, categories };
 }
 
 /**

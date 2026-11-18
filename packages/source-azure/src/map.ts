@@ -1,0 +1,128 @@
+/**
+ * The map function of the feed of Azure Status. The fetch gives one observation for each item of the feed. An item gives
+ * one report of `infra.cloud.outage`.
+ *
+ * The key of the report is the `guid` of the item: a slug of its title. The time of the report is the `pubDate` of the
+ * item, the start of the impact. The item has no time of each update. Thus a new text of an item with the same `guid`
+ * gives no new report. The subjects of the report are the domain of the service and each region of its categories
+ * (`provider-region:azure/westeurope`).
+ */
+
+import { categoryOf, kindLabel, Problems, reportId, type Instant, type MapResult, type Observation, type Report, type Subject } from "@mark1russell7/alerts";
+import { errorMessage } from "@mark1russell7/text";
+import { scanHtml } from "@mark1russell7/text/html";
+import { decodeReferences } from "@mark1russell7/text/references";
+
+import { AZURE_DOMAIN, AZURE_KIND, AZURE_ORIGIN, AZURE_PAGE, AZURE_SOURCE, categoriesOf, DOMAIN_SYSTEM, REGION_SYSTEM, regionId } from "./feed.ts";
+
+/**
+ * The severity of each report. The status page of Azure tells only of widespread incidents, but an item gives no level.
+ * Thus each report has the middle level.
+ */
+export const AZURE_SEVERITY = "moderate";
+
+type Fields = Readonly<Record<string, unknown>>;
+
+/** This function tells if a value is an object of fields, as the other source packages do. The move of this guard to one home is open. */
+const isFields = (value: unknown): value is Fields => typeof value === "object" && value !== null && !Array.isArray(value);
+
+/** This function gives the text of a field, or `undefined` for an empty or absent text. */
+function textOf(fields: Fields, field: string): string | undefined {
+  const value = fields[field];
+  return typeof value === "string" && value.trim() !== "" ? value.trim() : undefined;
+}
+
+/** This function gives the time of a field, or `undefined` for an absent value or a value that is not a time. */
+function timeOf(fields: Fields, field: string): Instant | undefined {
+  const text = textOf(fields, field);
+  const time = text === undefined ? Number.NaN : Date.parse(text);
+  return Number.isFinite(time) ? time : undefined;
+}
+
+/** This function gives the texts of a list field. A value that is not a text gives no entry. */
+function textsOf(fields: Fields, field: string): readonly string[] {
+  const value = fields[field];
+  return Array.isArray(value) ? value.filter((each): each is string => typeof each === "string" && each.trim() !== "").map((each) => each.trim()) : [];
+}
+
+/**
+ * This function gives the plain text of the HTML of a description. It removes the tags, decodes the character references
+ * and puts one space for each run of white space. An empty text gives `undefined`.
+ */
+export function plainText(html: string | undefined): string | undefined {
+  if (html === undefined) return undefined;
+  const text = decodeReferences(scanHtml(html).text).replace(/\s+/g, " ").trim();
+  return text === "" ? undefined : text;
+}
+
+/** This function maps one observation of the feed. It does not throw. A body that it does not understand gives a fatal problem. */
+export function mapObservation(observation: Observation): MapResult {
+  try {
+    return mapOrThrow(observation);
+  } catch (error) {
+    return { reports: [], problems: [{ path: "", message: `the map function failed: ${errorMessage(error)}`, fatal: true }] };
+  }
+}
+
+/** This function maps one observation, and can throw. `mapObservation` catches each error. */
+function mapOrThrow(observation: Observation): MapResult {
+  let fields: unknown;
+  try {
+    fields = JSON.parse(observation.body);
+  } catch {
+    return { reports: [], problems: [{ path: "", message: "the body is not JSON", fatal: true }] };
+  }
+  // The fetch gives an item with no guid as its own observation, with no key.
+  if (!isFields(fields) || !Object.hasOwn(fields, "key")) {
+    return { reports: [], problems: [{ path: "", message: "the observation is not one incident of Azure Status: the format changed", fatal: true }] };
+  }
+  const problems = new Problems();
+  if (textOf(fields, "key") === undefined) problems.add("key", "the incident has no guid: the map makes no report", "fatal");
+  if (timeOf(fields, "published") === undefined) problems.add("published", "the incident has no time: the map makes no report", "fatal");
+  if (textOf(fields, "title") === undefined) problems.add("title", "the incident has no title: the map makes no report", "fatal");
+  if (problems.fatal > 0) return { reports: [], problems: problems.list };
+  return { reports: [reportOf(observation, fields)], problems: problems.list };
+}
+
+/** This function gives the report of one valid incident. */
+function reportOf(observation: Observation, incident: Fields): Report {
+  const key = textOf(incident, "key")!;
+  const title = textOf(incident, "title")!;
+  const sent = timeOf(incident, "published")!;
+  const { regions, services } = categoriesOf(textsOf(incident, "categories"));
+  const description = plainText(textOf(incident, "description"));
+  const link = textOf(incident, "link");
+  const about: Subject[] = [{ system: DOMAIN_SYSTEM, id: AZURE_DOMAIN, label: "Microsoft Azure" }, ...regions.map((region) => ({ system: REGION_SYSTEM, id: regionId(region), label: region }))];
+  return {
+    id: reportId({ source: AZURE_SOURCE, key, sent }),
+    source: AZURE_SOURCE,
+    origin: AZURE_ORIGIN,
+    key,
+    references: [],
+    correlation: [],
+    status: "actual",
+    op: "alert",
+    kind: { code: AZURE_KIND, label: kindLabel(AZURE_KIND) },
+    categories: [categoryOf(AZURE_KIND)],
+    severity: AZURE_SEVERITY,
+    urgency: "immediate",
+    certainty: "observed",
+    response: ["monitor"],
+    sent,
+    received: observation.fetched,
+    effective: sent,
+    areas: [],
+    about,
+    sender: "Azure Status",
+    headline: `Azure: ${title}`,
+    ...(description === undefined ? {} : { description }),
+    web: link !== undefined && link.startsWith("https://") ? link : AZURE_PAGE,
+    observation: observation.id,
+    parameters: withValues({ service: services, region: regions }),
+  };
+}
+
+/** This function removes each parameter with no value. */
+function withValues(parameters: Readonly<Record<string, readonly string[]>>): Readonly<Record<string, readonly string[]>> {
+  return Object.fromEntries(Object.entries(parameters).filter(([, values]) => values.length > 0));
+}
