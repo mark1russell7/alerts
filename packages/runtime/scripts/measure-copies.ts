@@ -1,0 +1,68 @@
+/**
+ * This script measures the copies of each candidate expectation over the log of a runtime (AL-8). The expectations of
+ * the runtime and the candidates of the sources go through the same measure. Thus the result shows the rate of the
+ * copies of a candidate before the runtime uses it.
+ *
+ * The script opens the log to read only, and replays it with the fold of the runtime. It prints only counts, delays
+ * and event codes: no key, no area and no text of a message.
+ *
+ * Usage: `node scripts/measure-copies.ts --store=<path of runtime.sqlite> [--censor=<minutes>]`
+ */
+
+import { DEFAULT_LINK_POLICY, linkRule } from "@mark1russell7/alerts";
+import { nwsEvent } from "@mark1russell7/alerts-format-nws";
+import { COPY_SUFFIX, SOURCE_ID as IPAWS } from "@mark1russell7/alerts-source-ipaws";
+import { COPY_EXPECTATION } from "@mark1russell7/alerts-source-nwws";
+import { openDatabase } from "@mark1russell7/sqlite";
+import { copySummaries, type CopyCandidate } from "../src/copy-store.ts";
+import { parseEvent } from "../src/events.ts";
+import { INSTANCE_EXPECTATIONS, INSTANCE_SOURCES } from "../src/instance.ts";
+import { rebuild } from "../src/state.ts";
+
+const option = (name: string): string | undefined => process.argv.find((arg) => arg.startsWith(`--${name}=`))?.slice(name.length + 3);
+const store = option("store");
+if (store === undefined) {
+  console.error("Give the log of a runtime: --store=<path of runtime.sqlite>");
+  process.exit(2);
+}
+const censorMinutes = Number(option("censor") ?? "10");
+if (!Number.isFinite(censorMinutes) || censorMinutes < 0) {
+  console.error("The value of --censor is a count of minutes, 0 or more.");
+  process.exit(2);
+}
+
+// The candidates: the expectations of the runtime, then the candidates of the sources. An IPAWS copy has its own key.
+const CANDIDATES: readonly CopyCandidate[] = [
+  ...INSTANCE_EXPECTATIONS.map((expectation) => (expectation.to === IPAWS ? { expectation, copyKey: (key: string) => `${key}${COPY_SUFFIX}` } : { expectation })),
+  { expectation: COPY_EXPECTATION },
+];
+
+const db = openDatabase(store, { readOnly: true });
+let rows: readonly { body: string }[];
+try {
+  rows = db.prepare("SELECT body FROM events ORDER BY seq").all() as unknown as readonly { body: string }[];
+} finally {
+  db.close();
+}
+const state = rebuild(
+  rows.map((row) => parseEvent(JSON.parse(row.body))),
+  { sources: INSTANCE_SOURCES },
+);
+const summaries = copySummaries(state.merge.reports, state.time, CANDIDATES, {
+  censor: censorMinutes * 60_000,
+  eventOf: nwsEvent,
+  link: linkRule(DEFAULT_LINK_POLICY),
+});
+
+const iso = (at: number | undefined): string => (at === undefined ? "none" : new Date(at).toISOString());
+const seconds = (ms: number): string => (ms / 1000).toFixed(1);
+console.log(`log: ${String(rows.length)} events, end ${iso(state.time)}`);
+for (const summary of summaries) {
+  console.log(`\n${summary.id} (${summary.from} -> ${summary.to}), since ${iso(summary.since)}`);
+  console.log(`  counts: ${JSON.stringify(summary.counts)}`);
+  const delays = summary.delays;
+  if (delays !== undefined) {
+    console.log(`  delays (s): n ${String(delays.count)}, min ${seconds(delays.min)}, median ${seconds(delays.median)}, p90 ${seconds(delays.p90)}, max ${seconds(delays.max)}`);
+  }
+  for (const [kind, events] of Object.entries(summary.events)) console.log(`  ${kind}: ${JSON.stringify(events)}`);
+}

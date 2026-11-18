@@ -10,7 +10,7 @@ import { createIpawsFetch, type IpawsFetchOptions } from "./fetch.ts";
 import { mapObservation } from "./map.ts";
 
 export { IPAWS_DESCRIPTOR } from "./descriptor.ts";
-export { NWS_API_SOURCE, WEA_EXPECTATION } from "./expectation.ts";
+export { WEA_EXPECTATION } from "./expectation.ts";
 export {
   createIpawsFetch,
   CURSOR_SINCE,
@@ -27,8 +27,8 @@ export {
 } from "./fetch.ts";
 export type { IpawsFetchInput, IpawsFetchOptions, Since } from "./fetch.ts";
 export { mapObservation, NWS_SENDER, ORIGINS, originOf, SOURCE_ID } from "./map.ts";
-export { COPY_SUFFIX, eventOf, sentFails, sentMeasure } from "./sent-measure.ts";
-export type { CopyTime, SentCheck, SentClass, SentCounts, SentGap, SentMeasure, SentMeasureOptions } from "./sent-measure.ts";
+export { COPY_SUFFIX, sentMeasure } from "./sent-measure.ts";
+export type { SentMeasureOptions } from "./sent-measure.ts";
 
 /** The options of the IPAWS source. */
 export interface IpawsSourceOptions extends IpawsFetchOptions {
