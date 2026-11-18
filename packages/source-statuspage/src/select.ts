@@ -10,12 +10,15 @@ import { STATUS_PAGES } from "./register.ts";
 
 const TOPIC = "topic:";
 
+/** The fields of a page that the choice reads. A feed of one provider with no area gives the same fields. */
+export type ReadTarget = Pick<StatusPage, "domain" | "kind">;
+
 /**
  * This function tells if a person can get the reports of a page. One edge of the interest graph is on at the domain of
  * the service. Or one edge that is on comes from a topic of the kind of the page. Or the person watches the system
  * `domain`, or the domain of the service.
  */
-export function watchReads(watch: PersonWatch, page: StatusPage): boolean {
+export function watchReads(watch: PersonWatch, page: ReadTarget): boolean {
   const node = `${SUBJECT_SYSTEM}:${page.domain}`;
   const edges = (watch.interests?.edges ?? []).filter((edge) => edge.on);
   if (edges.some((edge) => edge.from === node || edge.to === node)) return true;
