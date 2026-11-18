@@ -1,6 +1,6 @@
 {
-  "format": "alerts-rates/4",
-  "fetched": "2026-11-18T14:03:56.553Z",
+  "format": "alerts-rates/5",
+  "fetched": "2026-11-18T20:06:12.533Z",
   "level": 0.95,
   "methods": {
     "share": "The Wilson score interval of the verified warnings in all the warnings, at the level of the file.",
@@ -10,7 +10,7 @@
     "unverified": "Cow links no storm report to some phenomena. The file keeps their counts with the reason and the evidence, and it has no share for them.",
     "cow": "One request for each month, with one day of margin before and after the month. A warning counts in the month of its start. The id of a warning counts one time.",
     "ncei": "The rows of each file of details, by EVENT_TYPE. The deaths and injuries of a type are the sums of the direct and indirect counts.",
-    "under": "For each alert kind and significance: the alerts of each year, and the NCEI events of the kind with harm under an active alert. An alert is one event number of one office in one VTEC year. A national number counts one time (national). An event is under an alert when an alert row of its county or zone is active from the begin of the event minus marginMs to its end. NCEI gives its own state codes to the territories and the waters, and the join reads them (NCEI_TERRITORIES, NCEI_WATERS). A water event meets only the rows of its marine zone. A county event meets only county rows, and a zone event meets only zone rows. The gate does not read this section.",
+    "under": "For each alert kind and significance: the alerts of each year, and the NCEI events of the kind with harm under an active alert. An alert is one event number of one office in one VTEC year. A national number counts one time (national). An event is under an alert when an alert row of its county or zone is active from the begin of the event minus marginMs to its end. NCEI gives its own state codes to the territories and the waters, and the join reads them (NCEI_TERRITORIES, NCEI_WATERS). A water event meets only the rows of its marine zone. A county event meets only county rows, and a zone event meets only zone rows. The codes are the distinct UGC codes of the rows of each year. The gate does not read this section.",
     "windows": "One request for each month, and one month before the first year. The service selects a row by its start, so two windows have no common row. An alert counts in the VTEC year of its number."
   },
   "cow": {
@@ -5571,6 +5571,28 @@
     },
     "rows": 1922745,
     "faults": {},
+    "codes": {
+      "2021": {
+        "counties": 3183,
+        "zones": 4575
+      },
+      "2022": {
+        "counties": 3187,
+        "zones": 4692
+      },
+      "2023": {
+        "counties": 3187,
+        "zones": 4606
+      },
+      "2024": {
+        "counties": 3182,
+        "zones": 4751
+      },
+      "2025": {
+        "counties": 3180,
+        "zones": 4756
+      }
+    },
     "unplaced": {},
     "kinds": {
       "env.air-stagnation": {
