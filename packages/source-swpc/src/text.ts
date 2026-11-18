@@ -16,6 +16,7 @@
  */
 
 import type { Instant } from "@mark1russell7/alerts";
+import type { ScaleLevel } from "@mark1russell7/alerts-space-weather";
 
 /** The head words of a message, as the SWPC writes them before the first colon of the head line. */
 export const HEADS = ["ALERT", "WARNING", "WATCH", "SUMMARY", "EXTENDED WARNING", "CONTINUED ALERT", "CANCEL ALERT", "CANCEL WARNING", "CANCEL WATCH", "CANCEL SUMMARY"] as const;
@@ -93,12 +94,6 @@ export function periodEnd(text: string, issued: Instant): Instant | undefined {
   const day = Math.floor(issued / DAY_MS) * DAY_MS;
   const begins = day + start * HOUR_MS <= issued ? day + start * HOUR_MS : day - DAY_MS + start * HOUR_MS;
   return begins + 3 * HOUR_MS;
-}
-
-/** A level of a NOAA space weather scale: `G` (geomagnetic storms), `S` (solar radiation storms) or `R` (radio blackouts), 1 to 5. */
-export interface ScaleLevel {
-  readonly scale: "G" | "S" | "R";
-  readonly level: 1 | 2 | 3 | 4 | 5;
 }
 
 const SCALE = /^([GSR])([1-5])\b/;

@@ -1,5 +1,6 @@
 /**
- * This module keeps the private files of the runtime current: `config.json`, `secrets.env` and `copy.json`.
+ * This module keeps the private files of the runtime current: `config.json`, `secrets.env`, `copy.json` and the parts
+ * of the configuration in the folder `parts`. Each rule below is the same for a part as for `config.json`.
  * The supervisor does the restart, thus the runtime has one start path.
  *
  * - The start uses the private files when they pass the check. A ready runtime writes them as the last good set, `start.good.json`.
@@ -7,7 +8,7 @@
  * - Before the start uses the private files, it writes their key into the start marker `start.pending`. A ready runtime removes the marker.
  * - The marker counts the starts with its key that stopped before they were ready. One stop, for example a reboot, gives a second try of the files.
  *   After `STOP_LIMIT` stops in a row, the start uses the last good set. Thus a crash loop stops, and one stop does not give an old set.
- * - At each pass, the hook reads the three files again. A change that passes the check stops the runtime,
+ * - At each pass, the hook reads the private files again. A change that passes the check stops the runtime,
  *   and the supervisor starts it again with the new files.
  * - A change with problems gives its problems one time. The runtime keeps the files of its start.
  * - A new text of the restart request `restart.request` restarts the runtime with no check. Thus a deploy
@@ -21,7 +22,21 @@ import type { CopySettings } from "@mark1russell7/alerts";
 import { err, ok, type Result } from "@mark1russell7/optional";
 import { canonicalHash } from "@mark1russell7/rigor-generators";
 import * as z from "zod";
-import { checkTexts, ConfigRefused, readText, SECRETS_FILE, type CheckedConfig, type FileText, type InstanceCheck, type PrivateTexts } from "./config.ts";
+import {
+  checkTexts,
+  ConfigRefused,
+  NO_PARTS,
+  noParts,
+  PARTS_FOLDER,
+  readParts,
+  readText,
+  SECRETS_FILE,
+  type CheckedConfig,
+  type FileText,
+  type InstanceCheck,
+  type PartsTexts,
+  type PrivateTexts,
+} from "./config.ts";
 import { COPY_FILE, copySettings } from "./copy.ts";
 
 /** This name is the name of the last good set of the private files in the private folder. Only a ready runtime writes it. */
@@ -59,6 +74,8 @@ export interface PrivateFiles {
   readonly config: string;
   readonly secrets: string;
   readonly copy: string;
+  /** The folder of the parts of the configuration. */
+  readonly parts: string;
   /** The last good set of the private files. Only `ready` of a start writes it. */
   readonly good: string;
   /** The start marker. Only the start and `ready` write it. */
@@ -73,23 +90,24 @@ export function privateFiles(home: string, config: string): PrivateFiles {
     config,
     secrets: join(home, SECRETS_FILE),
     copy: join(home, COPY_FILE),
+    parts: join(home, PARTS_FOLDER),
     good: join(home, GOOD_FILE),
     marker: join(home, START_MARKER_FILE),
     request: join(home, RESTART_REQUEST_FILE),
   };
 }
 
-/** The texts of the three private files of a start: `config.json`, `secrets.env` and `copy.json`. */
+/** The texts of the private files of a start: `config.json`, `secrets.env`, `copy.json` and the parts. */
 export interface StartTexts extends PrivateTexts {
   readonly copy: FileText;
 }
 
 const readAt = (path: string): Promise<FileText> => readText(() => readFile(path, "utf8"));
 
-/** This function reads the texts of the three private files. A file that cannot be read gives the code of the error. */
+/** This function reads the texts of the private files. A file that cannot be read gives the code of the error. */
 export async function readStartTexts(files: PrivateFiles): Promise<StartTexts> {
-  const [config, secrets, copy] = await Promise.all([readAt(files.config), readAt(files.secrets), readAt(files.copy)]);
-  return { config, secrets, copy };
+  const [config, secrets, copy, parts] = await Promise.all([readAt(files.config), readAt(files.secrets), readAt(files.copy), readParts(files.parts)]);
+  return { config, secrets, copy, parts };
 }
 
 /** This function reads the text of the restart request. A missing file gives the code of the error. */
@@ -107,7 +125,7 @@ export interface CheckedStart extends CheckedConfig {
 }
 
 /**
- * This function checks the texts of the three private files, as the start does. It reads no file. The
+ * This function checks the texts of the private files, as the start does. It reads no file. The
  * problems of `copy.json` come first, because the check of the instance depends on the copy.
  */
 export function checkStart(texts: StartTexts, checkOf: CheckOf): Result<CheckedStart, readonly string[]> {
@@ -118,17 +136,20 @@ export function checkStart(texts: StartTexts, checkOf: CheckOf): Result<CheckedS
   return checked.tag === "ok" ? ok({ ...checked.value, copy: copy.value, check }) : checked;
 }
 
+// The texts of the parts in a key. With no parts, a key has no entry for them. Thus a key from before the parts stays the same.
+const partsInKey = (texts: StartTexts): readonly PartsTexts[] => (noParts(texts.parts) ? [] : [texts.parts ?? NO_PARTS]);
+
 /** This function gives the key of the texts. Two reads have one key only when each text and each error code is the same. */
 export function textsKey(texts: StartTexts): string {
-  return JSON.stringify([texts.config, texts.secrets, texts.copy]);
+  return JSON.stringify([texts.config, texts.secrets, texts.copy, ...partsInKey(texts)]);
 }
 
 /**
- * This function gives the key of a start: the SHA-256 of the texts of the three files and of the restart
+ * This function gives the key of a start: the SHA-256 of the texts of the private files and of the restart
  * request. Thus a new restart request gives a new key, and the next start uses the private files again.
  */
 export function startKey(texts: StartTexts, request: FileText): string {
-  return canonicalHash([START_KEY_SCHEME, texts.config, texts.secrets, texts.copy, request], { form: "json" });
+  return canonicalHash([START_KEY_SCHEME, texts.config, texts.secrets, texts.copy, request, ...partsInKey(texts)], { form: "json" });
 }
 
 /** The files of a start: the private files, or the last good set. */
@@ -136,7 +157,9 @@ export type StartUse = "files" | "good";
 
 const fileTextSchema = z.union([z.strictObject({ text: z.string() }), z.strictObject({ code: z.string() })]);
 const markerSchema = z.strictObject({ format: z.literal(MARKER_FORMAT), key: z.string(), use: z.enum(["files", "good"]), starts: z.number().int().min(1) });
-const goodSchema = z.strictObject({ format: z.literal(GOOD_FORMAT), config: fileTextSchema, secrets: fileTextSchema, copy: fileTextSchema });
+const partsSchema = z.union([z.strictObject({ files: z.array(z.strictObject({ name: z.string(), file: fileTextSchema })) }), z.strictObject({ code: z.string() })]);
+// A set from before the parts has no field `parts`. Thus it stays a valid set with no parts.
+const goodSchema = z.strictObject({ format: z.literal(GOOD_FORMAT), config: fileTextSchema, secrets: fileTextSchema, copy: fileTextSchema, parts: partsSchema.optional() });
 
 // The value of a JSON text, or undefined for a text that is not JSON.
 function jsonOf(text: string): unknown {
@@ -171,12 +194,15 @@ export function markerText(marker: StartMarker): string {
 export function parseGood(file: FileText): Result<StartTexts, readonly string[]> {
   if ("code" in file) return err([`The last good set ${GOOD_FILE} cannot be read (${file.code}).`]);
   const parsed = goodSchema.safeParse(jsonOf(file.text));
-  return parsed.success ? ok({ config: parsed.data.config, secrets: parsed.data.secrets, copy: parsed.data.copy }) : err([`The last good set ${GOOD_FILE} is not a valid set.`]);
+  if (!parsed.success) return err([`The last good set ${GOOD_FILE} is not a valid set.`]);
+  const { config, secrets, copy, parts } = parsed.data;
+  return ok({ config, secrets, copy, parts: parts ?? NO_PARTS });
 }
 
-/** This function gives the text of the last good set of the texts. */
+/** This function gives the text of the last good set of the texts. A set with no parts has no field `parts`, as before the parts. */
 export function goodText(texts: StartTexts): string {
-  return `${JSON.stringify({ format: GOOD_FORMAT, config: texts.config, secrets: texts.secrets, copy: texts.copy })}\n`;
+  const parts = noParts(texts.parts) ? {} : { parts: texts.parts };
+  return `${JSON.stringify({ format: GOOD_FORMAT, config: texts.config, secrets: texts.secrets, copy: texts.copy, ...parts })}\n`;
 }
 
 /** The ports of a start. A test gives fakes, thus it can make a write or a removal fail. */
@@ -189,7 +215,7 @@ export interface StartPorts {
 
 /** The configuration of the start, the files that it came from, and the mark of a good start. */
 export interface StartedConfig extends CheckedStart {
-  /** The texts of the three files at the start. The hook compares each later read with them. */
+  /** The texts of the private files at the start. The hook compares each later read with them. */
   readonly texts: StartTexts;
   /** The text of the restart request at the start. The hook restarts the runtime for each other text. */
   readonly request: FileText;

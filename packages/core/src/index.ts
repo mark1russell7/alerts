@@ -31,6 +31,7 @@ export * from "./health-payload.ts";
 export * from "./history.ts";
 export * from "./indicators.ts";
 export * from "./baseline.ts";
+export * from "./breadth.ts";
 export * from "./history-reader.ts";
 export * from "./map.ts";
 export * from "./problems.ts";

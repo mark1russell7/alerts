@@ -4,9 +4,9 @@ import { join } from "node:path";
 import { fakeWallClock } from "@mark1russell7/algebra/clock";
 import type { ChannelId } from "@mark1russell7/alerts";
 import { SqliteHostStateStore } from "polite-crawler";
-import { memoryQuotaStore, quotaGate } from "polite-crawler/api";
+import { memoryQuotaStore, quotaGate, type QuotaStore } from "polite-crawler/api";
 import { describe, expect, it } from "vitest";
-import { balanceWatch, spendGates, spendQuota, spendUnits, type BalanceReading, type BalanceWatchOptions } from "./balance.ts";
+import { balanceWatch, spendGates, spendQuota, spendUnits, spendWatch, type BalanceReading, type BalanceWatchOptions, type SpendReading, type SpendWatchOptions } from "./balance.ts";
 
 const T0 = Date.UTC(2026, 10, 15, 12);
 const HOUR = 3_600_000;
@@ -111,6 +111,144 @@ describe("the balance watch", () => {
     expect(() => watchOf(read, { channels: [] })).toThrow("has no channel");
     expect(() => watchOf(read, { floor: Number.NaN })).toThrow("not a number");
     for (const extra of [{ every: 0 }, { retry: -1 }, { maxAge: 1.5 }, { limit: Number.POSITIVE_INFINITY }]) expect(() => watchOf(read, extra), JSON.stringify(extra)).toThrow("whole count");
+  });
+});
+
+describe("the spend watch", () => {
+  // A cap of 15 US dollars less a fixed cost of 2.15 gives 1285 cents. The month is the month of New York.
+  const ZONE = "America/New_York";
+  const quota = spendQuota({ name: "Twilio spend", monthlyUsd: 15, fixed: [{ what: "toll-free number", usd: 2.15 }], reserveUsd: 3, timeZone: ZONE });
+  // The month of November starts at 00:00 EDT, and the month of December at 00:00 EST.
+  const NOVEMBER = Date.UTC(2026, 10, 1, 4);
+  const DECEMBER = Date.UTC(2026, 11, 1, 5);
+  const spent = (usedUsd: number): SpendReading => ({ ok: true, usedUsd });
+
+  function setup(answers: readonly (SpendReading | Error)[], extra: Partial<SpendWatchOptions> & { readonly at?: number; readonly store?: QuotaStore } = {}) {
+    const { at = T0, store = memoryQuotaStore(), ...options } = extra;
+    const clock = fakeWallClock(at);
+    const gates = spendGates(quota, { key: "twilio:account", store, now: () => clock.now() });
+    const froms: number[] = [];
+    let reads = 0;
+    const read = async (from: number): Promise<SpendReading> => {
+      froms.push(from);
+      const answer = answers[Math.min(reads, answers.length - 1)]!;
+      reads += 1;
+      if (answer instanceof Error) throw answer;
+      return answer;
+    };
+    const watch = spendWatch({ provider: "provider:twilio", gates, timeZone: ZONE, read, ...options });
+    return { clock, gates, watch, froms, reads: () => reads };
+  }
+
+  it("reads the spend from the start of the month at the first check, then each hour, and makes the count of the gates larger", async () => {
+    const { clock, gates, watch, froms, reads } = setup([spent(3.2105), spent(2), spent(4)]);
+    expect(watch.nextReadAt()).toBeUndefined();
+    gates.gate.take(4);
+    await watch.check(clock);
+    expect(froms).toEqual([NOVEMBER]);
+    expect(watch.spend()).toEqual({ usedUsd: 3.2105, units: 322, at: T0 });
+    expect([gates.gate.state().used, gates.lifeSafety.state().used]).toEqual([322, 322]);
+    expect(watch.nextReadAt()).toBe(T0 + HOUR);
+    await clock.advance(HOUR - 1);
+    await watch.check(clock);
+    expect(reads()).toBe(1);
+    // A smaller spend changes nothing: the count keeps the sends of the gates.
+    await clock.advance(1);
+    gates.gate.take(4);
+    await watch.check(clock);
+    expect(gates.gate.state().used).toBe(326);
+    await clock.advance(HOUR);
+    await watch.check(clock);
+    expect(gates.gate.state().used).toBe(400);
+    expect(watch.failure()).toBeUndefined();
+  });
+
+  it("fills the month for a spend above the cap with no block, and keeps the count for a credit", async () => {
+    const full = setup([spent(40)]);
+    await full.watch.check(full.clock);
+    expect(full.watch.spend()?.units).toBe(4_000);
+    expect(full.gates.gate.state()).toMatchObject({ used: 1_285, left: 0 });
+    expect(full.gates.gate.state().blockedUntil).toBeUndefined();
+    // The month is full, thus life-safety is refused too, as the count of the gates refuses it.
+    expect(() => full.gates.lifeSafety.take(4)).toThrow();
+
+    const credit = setup([spent(-1.5)]);
+    credit.gates.gate.take(4);
+    await credit.watch.check(credit.clock);
+    expect(credit.watch.spend()).toEqual({ usedUsd: -1.5, units: 0, at: T0 });
+    expect(credit.gates.gate.state().used).toBe(4);
+  });
+
+  it("keeps the last read after a failure, a throw, a bad amount or a timeout, and reads again after 15 minutes", async () => {
+    const { clock, gates, watch } = setup([spent(1), { ok: false, message: "The key is not valid." }, new Error("The network is down."), spent(Number.NaN), spent(2)]);
+    await watch.check(clock);
+    const failures: (string | undefined)[] = [];
+    for (let step = 1; step <= 4; step += 1) {
+      await clock.advance(step === 1 ? HOUR : 15 * 60_000);
+      await watch.check(clock);
+      failures.push(watch.failure());
+      expect(watch.spend()?.usedUsd).toBe(step === 4 ? 2 : 1);
+    }
+    expect(failures).toEqual(["The key is not valid.", "The read of the spend failed: The network is down.", "The read of the spend gave no finite amount.", undefined]);
+    expect(gates.gate.state().used).toBe(200);
+
+    const hanging = spendWatch({
+      provider: "provider:twilio",
+      gates,
+      timeZone: ZONE,
+      limit: 5_000,
+      read: (_from, signal) => new Promise<SpendReading>((resolve) => signal.addEventListener("abort", () => resolve({ ok: false, message: "aborted" }))),
+    });
+    const running = hanging.check(clock);
+    await clock.advance(5_000);
+    await running;
+    expect(hanging.failure()).toBe("The read of the spend took longer than 5000 ms.");
+    expect(hanging.nextReadAt()).toBe(clock.now() + 15 * 60_000);
+  });
+
+  it("takes no read that ends in the next month, and the next read reads the new month", async () => {
+    const start = DECEMBER - 1_000;
+    const clock = fakeWallClock(start);
+    const gates = spendGates(quota, { key: "twilio:account", store: memoryQuotaStore(), now: () => clock.now() });
+    const froms: number[] = [];
+    const watch = spendWatch({
+      provider: "provider:twilio",
+      gates,
+      timeZone: ZONE,
+      read: (from) => {
+        froms.push(from);
+        return new Promise<SpendReading>((resolve) => clock.after(2_000, () => resolve(spent(5))));
+      },
+    });
+    const running = watch.check(clock);
+    await clock.advance(2_000);
+    await running;
+    expect(watch.failure()).toBe("The month of the cap ended during the read of the spend.");
+    expect(watch.spend()).toBeUndefined();
+    expect(gates.gate.state().used).toBe(0);
+    await clock.advance(15 * 60_000);
+    const again = watch.check(clock);
+    await clock.advance(2_000);
+    await again;
+    expect(froms).toEqual([NOVEMBER, DECEMBER]);
+    expect(gates.gate.state().used).toBe(500);
+  });
+
+  it("gives a failure when the store of the gates fails", async () => {
+    const broken: QuotaStore = {
+      changeQuota: () => {
+        throw new Error("The disk is full.");
+      },
+    };
+    const { clock, watch } = setup([spent(1)], { store: broken });
+    await watch.check(clock);
+    expect(watch.failure()).toBe("The count of the spend did not take the read: The disk is full.");
+    expect(watch.spend()).toBeUndefined();
+  });
+
+  it("refuses a time that is not valid and a name that is not a time zone", () => {
+    for (const extra of [{ every: 0 }, { retry: -1 }, { limit: 1.5 }]) expect(() => setup([spent(1)], extra), JSON.stringify(extra)).toThrow("whole count");
+    expect(() => setup([spent(1)], { timeZone: "Mars/Olympus" })).toThrow("not an IANA time zone");
   });
 });
 
