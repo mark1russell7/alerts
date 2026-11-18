@@ -89,7 +89,7 @@ describe("throttleRoutes", () => {
     expect(result.suppressions).toEqual([]);
   });
 
-  it("(c) sends a life-safety alert at the same level inside the window: a new incident, and each step of an escalation", () => {
+  it("(c) sends a life-safety alert at the same level inside the window: a new incident, and the re-page (step 1) of an escalation with no acknowledgment", () => {
     // A life-safety message went 1 minute before. Two new life-safety incidents in one pass and step 1 of the first all go.
     const deliveries = [sent(1, "life-safety", T0)];
     const routes = [entry(2, { level: "life-safety", due: T0 + MINUTE }), entry(3, { level: "life-safety", due: T0 + MINUTE }), entry(1, { level: "life-safety", due: T0 + 5 * MINUTE, step: 1 })];
