@@ -28,6 +28,9 @@ describe("queriesOf", () => {
 
   it("asks by zone for a place with no state", () => {
     expect(paths([TEXAS, ZONE_ONLY])).toEqual(["/alerts/active?area=TX", "/alerts/active?zone=WAC045", WEA_PATH, CANARY_PATH]);
+    // The query by zone also asks for the fire zones of a place (AL-33). A code of the two kinds is in the query one time.
+    const fireZones = place("f", [{ system: "ugc", code: "TXZ205" }, { system: "ugc-fire", code: "TXZ205" }, { system: "ugc-fire", code: "TXZ206" }]);
+    expect(paths([fireZones])).toEqual(["/alerts/active?zone=TXZ205,TXZ206", WEA_PATH, CANARY_PATH]);
   });
 
   it("asks for the whole country for a place with no state and no zone, and then not for the WEA messages", () => {

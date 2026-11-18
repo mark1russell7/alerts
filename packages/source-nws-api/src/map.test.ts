@@ -250,7 +250,7 @@ describe("the region codes of an alert", () => {
 
   it("gives a report with a valid region code, or a fatal problem, when one field of a recorded alert changes", () => {
     const valid = (area: Report["areas"][number]): boolean =>
-      area.type !== "code" || (area.system === "ugc" ? isUgcCode(area.code) : area.system === "same" && isSameCode(area.code));
+      area.type !== "code" || (area.system === "ugc" || area.system === "ugc-fire" ? isUgcCode(area.code) : area.system === "same" && isSameCode(area.code));
     const change = fc.constantFrom(...NAMES).chain((name) =>
       fc.tuple(
         fc.constant(name),
@@ -275,6 +275,46 @@ describe("the region codes of an alert", () => {
         return notAlert || result.problems.some((problem) => problem.fatal);
       }),
     );
+  });
+});
+
+describe("the fire zones of an alert (AL-33)", () => {
+  // A Red Flag Warning made from a recorded alert. The codes are codes of Texas, and the event is made up.
+  const base = feature("nws-flw.json");
+  const redFlag = (properties: Record<string, unknown>): unknown => ({
+    ...base,
+    geometry: null,
+    properties: {
+      ...base.properties,
+      event: "Red Flag Warning",
+      parameters: { ...base.properties.parameters, VTEC: ["/O.NEW.KEWX.FW.W.0003.261118T1800Z-261119T0300Z/"] },
+      geocode: { UGC: ["TXZ205", "TXZ206"], SAME: ["048029"] },
+      affectedZones: ["https://api.weather.gov/zones/fire/TXZ205", "https://api.weather.gov/zones/fire/TXZ206"],
+      ...properties,
+    },
+  });
+  const zonesOf = (body: unknown): unknown[] =>
+    (mapOne(body).report?.areas ?? []).flatMap((area) => (area.type === "code" && area.system !== "same" ? [`${area.system}:${area.code}`] : []));
+
+  it("gives a fire zone code for each zone that affectedZones names as a fire zone", () => {
+    expect(zonesOf(redFlag({}))).toEqual(["ugc-fire:TXZ205", "ugc-fire:TXZ206"]);
+    expect(mapOne(redFlag({})).problems).toEqual([]);
+  });
+
+  it("lets affectedZones decide first, and the VTEC phenomenon decide for a code that the list does not name", () => {
+    const mixed = ["https://api.weather.gov/zones/forecast/TXZ205", "https://api.weather.gov/zones/fire/TXZ205"];
+    expect(zonesOf(redFlag({ affectedZones: mixed }))).toEqual(["ugc:TXZ205", "ugc-fire:TXZ205", "ugc-fire:TXZ206"]);
+    expect(zonesOf(redFlag({ affectedZones: ["https://api.weather.gov/zones/forecast/TXZ205"] }))).toEqual(["ugc:TXZ205", "ugc-fire:TXZ206"]);
+    const { affectedZones: _zones, ...rest } = (redFlag({}) as { properties: Record<string, unknown> }).properties;
+    expect(zonesOf({ ...base, geometry: null, properties: rest })).toEqual(["ugc-fire:TXZ205", "ugc-fire:TXZ206"]);
+  });
+
+  it("gives forecast zone codes for an alert of another phenomenon, and a problem for a list that is not texts", () => {
+    const wind = { parameters: { ...base.properties.parameters, VTEC: ["/O.NEW.KEWX.WI.Y.0003.261118T1800Z-261119T0300Z/"] }, affectedZones: undefined };
+    expect(zonesOf(redFlag(wind))).toEqual(["ugc:TXZ205", "ugc:TXZ206"]);
+    const { report, problems } = mapOne(redFlag({ affectedZones: 5 }));
+    expect(report?.areas.filter((area) => area.type === "code" && area.system === "ugc-fire")).toHaveLength(2);
+    expect(problems.map((problem) => problem.path)).toEqual(["properties.affectedZones"]);
   });
 });
 

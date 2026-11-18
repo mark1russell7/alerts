@@ -27,7 +27,7 @@ import {
   type Status,
   type Urgency,
 } from "@mark1russell7/alerts";
-import { parseVtec, resolveKind, vtecKey, type ResolvedKind, type Vtec } from "@mark1russell7/alerts-format-nws";
+import { parseVtec, resolveKind, ugcRegionCodes, vtecKey, type ResolvedKind, type Vtec } from "@mark1russell7/alerts-format-nws";
 
 import { capCircle, capPolygon } from "./geometry.ts";
 import { chooseInfo } from "./info.ts";
@@ -87,8 +87,11 @@ function grouped(pairs: readonly CapPair[], prefix = ""): Record<string, string[
  * With keyed areas, the key of each area is the path of its CAP `area` element, for example `info[0].area[1]`.
  * Then the shapes of an element decide for it. The NWS writes the warned area as the polygon, and the codes name each
  * region that the polygon touches. Another sender can mean the union of the parts, so its areas get no key.
+ *
+ * A UGC zone code of an alert with the VTEC phenomenon `FW` is a fire zone (`ugc-fire`, AL-33). `ugcRegionCodes` decides
+ * from the phenomena. A UGC value of an unknown form stays a `ugc` code, as before.
  */
-function areasOf({ info, index }: Block, keyed: boolean, problems: ProblemSink): Area[] {
+function areasOf({ info, index }: Block, keyed: boolean, phenomena: readonly string[], problems: ProblemSink): Area[] {
   const areas: Area[] = [];
   const codes = new Set<string>();
   info.areas.forEach((area, at) => {
@@ -109,14 +112,24 @@ function areasOf({ info, index }: Block, keyed: boolean, problems: ProblemSink):
         continue;
       }
       const code = system === "ugc" ? geocode.value.trim().toUpperCase() : geocode.value.trim();
-      // Two area elements can name one region. The report has it one time in each element, or one time with no key.
-      const once = keyed ? `${path} ${system}:${code}` : `${system}:${code}`;
-      if (code === "" || codes.has(once)) continue;
-      codes.add(once);
-      areas.push({ type: "code", system, code, ...block });
+      if (code === "") continue;
+      const systems = system === "ugc" ? ugcSystems(code, phenomena) : [system];
+      for (const one of systems) {
+        // Two area elements can name one region. The report has it one time in each element, or one time with no key.
+        const once = keyed ? `${path} ${one}:${code}` : `${one}:${code}`;
+        if (codes.has(once)) continue;
+        codes.add(once);
+        areas.push({ type: "code", system: one, code, ...block });
+      }
     }
   });
   return areas;
+}
+
+// The region systems of a UGC value: `ugc`, `ugc-fire` or the two. A value of an unknown form stays `ugc`.
+function ugcSystems(code: string, phenomena: readonly string[]): string[] {
+  const codes = ugcRegionCodes(code, phenomena);
+  return codes.length === 0 ? ["ugc"] : codes.map((one) => one.system);
 }
 
 /**
@@ -243,7 +256,7 @@ function blockReport(alert: CapAlert, message: Message, block: Block | undefined
     response,
     sent: message.sent,
     received: observation.fetched,
-    areas: block === undefined ? [] : areasOf(block, options.keyed, problems),
+    areas: block === undefined ? [] : areasOf(block, options.keyed, vtec.map((one) => one.phenomenon), problems),
     about: [],
     sender: info?.senderName?.trim() || alert.sender,
     headline: info?.headline?.trim() || valuesOf(parameters, "NWSheadline")[0] || name || message.key,
