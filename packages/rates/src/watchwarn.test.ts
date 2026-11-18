@@ -171,13 +171,23 @@ describe("the count of the alerts", () => {
     expect(tally.counts()).toEqual({
       rows: 7,
       alerts: { "RP.S": { "2024": 0, "2025": 1 }, "TO.A": { "2024": 1, "2025": 0 }, "TO.W": { "2024": 2, "2025": 0 } },
-      areas: { "RP.S": { counties: 0, zones: 1 }, "TO.A": { counties: 2, zones: 0 }, "TO.W": { counties: 3, zones: 0 } },
+      areas: {
+        "RP.S": { counties: { "2024": 0, "2025": 0 }, zones: { "2024": 0, "2025": 1 } },
+        "TO.A": { counties: { "2024": 2, "2025": 0 }, zones: { "2024": 0, "2025": 0 } },
+        "TO.W": { counties: { "2024": 3, "2025": 0 }, zones: { "2024": 0, "2025": 0 } },
+      },
       numbering: {
         "TO.A": { national: true, numbers: 1, shared: 1, together: 1 },
         "TO.W": { national: false, numbers: 1, shared: 1, together: 0 },
       },
       faults: { key: 1, ugc: 3 },
     });
+  });
+
+  it("counts an area one time when two rows give it, in the year of the alert", () => {
+    const tally = new AlertTally({ first: 2024, last: 2025 });
+    tally.add({ rows: [row(), row(), row({ ugc: "KSZ083" }), row({ year: 2025, eventId: 7 })], faults: {} });
+    expect(tally.counts().areas["TO.W"]).toEqual({ counties: { "2024": 1, "2025": 1 }, zones: { "2024": 1, "2025": 0 } });
   });
 
   it("tells a doubt of the list of the national numbers only with enough shared numbers", () => {

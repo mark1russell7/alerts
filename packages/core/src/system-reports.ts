@@ -9,7 +9,7 @@
  */
 import { canonicalJson } from "@mark1russell7/rigor-generators";
 import { compareCodeUnits } from "@mark1russell7/text/order";
-import { BALANCE_KIND, CLOCK_KIND, COPY_KIND, COVERAGE_KIND, DRILL_KIND, ESCALATION_KIND, hasKind, HEALTH_KIND, LOG_KIND, matchPlaces, PERSON_SUBJECT, QUOTA_KIND } from "./assess.ts";
+import { BALANCE_KIND, CHANNEL_KIND, CLOCK_KIND, COPY_KIND, COVERAGE_KIND, DRILL_KIND, ESCALATION_KIND, hasKind, HEALTH_KIND, LOG_KIND, matchPlaces, PERSON_SUBJECT, QUOTA_KIND } from "./assess.ts";
 import type {
   Area,
   BalanceStage,
@@ -38,6 +38,7 @@ import type {
   Urgency,
   WatchedPlace,
 } from "./contracts.ts";
+import { channelDownPolicy, runOpens, type ChannelDownConfig, type ChannelDownPolicy, type ChannelRun, type ChannelSnapshot } from "./channel-down.ts";
 import { coverageShort } from "./coverage.ts";
 import type { Exhaustion } from "./delivery.ts";
 import { drillVerdict, type DrillConfig, type DrillRun } from "./drill.ts";
@@ -215,6 +216,14 @@ export interface SystemSnapshot {
    * watch the person. Only one copy reports them (`reportsShared`). With no list, each open line of an exhaustion stays open.
    */
   readonly exhausted?: readonly Exhaustion[];
+  /**
+   * The channels of this copy, with their runs of failed calls (AL-65). A run that `runOpens` under the policy is a
+   * condition. An open line stays a condition until a good call at or after its onset, also with no run. With no list,
+   * each open line of a channel stays open.
+   */
+  readonly channels?: readonly ChannelSnapshot[];
+  /** The policy of a down channel. Each absent field has its value of `DEFAULT_CHANNEL_DOWN`. */
+  readonly channelDown?: ChannelDownConfig;
 }
 
 /** The result of one step of the fold. */
@@ -374,6 +383,7 @@ export function gapGrade(entry: Coverage, threatened: boolean): { readonly sever
  * - The latest recovery of the log in `LOG_RECOVERY_WINDOW` before `at`.
  * - Each run of a drill that waits for its acknowledgment, and each drill whose last run failed.
  * - Each exhausted escalation of a real warning. Only one copy reports it (`reportsShared`).
+ * - Each down channel of the copy: a run that opens a line, or an open line with no good call since its onset.
  *
  * An open line with no condition in the snapshot ends with a cancel. Equal snapshots give no new report.
  */
@@ -422,6 +432,13 @@ export function systemReports(lines: SystemLines, snapshot: SystemSnapshot, at: 
   }
   // The two copies see the same exhaustion in the shared log. Thus one copy reports it, as with a shared balance.
   if (shared) for (const entry of snapshot.exhausted ?? []) conditions.set(exhaustionName(entry), exhaustionCondition(entry));
+  // Each copy reports its own down channels, because each copy has its own network path to the provider.
+  const policy = channelDownPolicy(snapshot.channelDown);
+  for (const entry of snapshot.channels ?? []) {
+    const name = channelName(entry.copy, entry.channel);
+    const condition = channelCondition(entry, lines.open[name], policy);
+    if (condition !== undefined) conditions.set(name, condition);
+  }
   const names = [...new Set([...Object.keys(lines.open), ...conditions.keys()])].sort(compareCodeUnits);
   let count = lines.count;
   const open = new Map(Object.entries(lines.open));
@@ -435,6 +452,7 @@ export function systemReports(lines: SystemLines, snapshot: SystemSnapshot, at: 
     if (condition === undefined && snapshot.copies === undefined && name.startsWith(COPY_LINE)) continue;
     if (condition === undefined && snapshot.drills === undefined && name.startsWith(DRILL_LINE)) continue;
     if (condition === undefined && snapshot.exhausted === undefined && name.startsWith(EXHAUSTION_LINE)) continue;
+    if (condition === undefined && snapshot.channels === undefined && name.startsWith(CHANNEL_LINE)) continue;
     const draft = condition === undefined ? (line === undefined ? undefined : cancelOf(line)) : condition;
     if (draft === undefined) continue;
     const facts = canonicalJson(draft.facts, { form: "json" });
@@ -549,6 +567,84 @@ function coverageName(place: PlaceId, kind: string): string {
 }
 
 // The start of the name of each line of an exhausted escalation. The copy is not in the name: one copy reports it.
+const CHANNEL_LINE = "channel/";
+
+function channelName(copy: string, channel: string): string {
+  return `${CHANNEL_LINE}${copy}/${channel}`;
+}
+
+// The facts of the line of a down channel. A new count is not a fact, so the line gives one alert. A new cause gives an update.
+interface ChannelDownFacts {
+  readonly copy: string;
+  readonly channel: string;
+  readonly onset: Instant;
+  /** `key`: the provider refuses the key of the channel. `outage`: the calls get no answer, or a fault of the provider. */
+  readonly cause: "key" | "outage";
+}
+
+function causeOf(run: ChannelRun): ChannelDownFacts["cause"] {
+  return run.kind === "auth" ? "key" : "outage";
+}
+
+// The time of a run in a text: whole seconds under 2 min, else whole minutes.
+function spanText(span: number): string {
+  return stepSizeText(span < 120_000 ? Math.round(span / 1000) * 1000 : Math.round(span / 60_000) * 60_000);
+}
+
+const FAILURE_TEXT: Readonly<Record<string, string>> = {
+  network: "the network to the provider failed",
+  timeout: "the provider gave no answer in time",
+  server: "the provider gave a server error",
+  auth: "the provider refused the key",
+};
+
+// The condition of one channel of a copy. An open line stays until a good call at or after its onset. A restart
+// empties the run, and an empty run does not end the line. A closed line opens only for a run that `runOpens`.
+function channelCondition(entry: ChannelSnapshot, line: SystemLine | undefined, policy: ChannelDownPolicy): Condition | undefined {
+  const { copy, channel, title, run, good } = entry;
+  const open = line === undefined ? undefined : (JSON.parse(line.facts) as ChannelDownFacts);
+  let facts: ChannelDownFacts;
+  if (open !== undefined) {
+    if (good !== undefined && good >= open.onset) return undefined;
+    facts = run === undefined ? open : { ...open, cause: causeOf(run) };
+  } else {
+    if (run === undefined || !runOpens(run, policy) || (good !== undefined && good >= run.first)) return undefined;
+    facts = { copy, channel, onset: run.first, cause: causeOf(run) };
+  }
+  const code = `${CHANNEL_KIND}.down`;
+  const count = run === undefined ? "" : ` ${String(run.failures)} calls failed in ${spanText(run.last - run.first)}, and ${FAILURE_TEXT[run.kind] ?? run.kind} at the last call.`;
+  const text =
+    facts.cause === "key"
+      ? {
+          headline: `The provider of ${title} refuses the key of the channel. This is not an outage.`,
+          description: `The copy ${copy} cannot send on ${title}.${count} The fault does not end by itself.`,
+          instruction: "Replace the key of the channel in the secrets of the copy. Until then, the other channels carry the alerts.",
+        }
+      : {
+          headline: `${title} is down for the copy ${copy}.`,
+          description: `The calls of the copy ${copy} to the provider of ${title} fail.${count}`,
+          instruction: "The other channels carry the alerts. The line ends at the next call that passes.",
+        };
+  return {
+    facts: { ...facts },
+    kind: { code, label: kindLabel(code) },
+    severity: "severe",
+    urgency: "expected",
+    response: ["assess"],
+    onset: facts.onset,
+    areas: [],
+    about: [{ system: CHANNEL_SUBJECT, id: channel, label: title }, ...(entry.api ?? []).map(entitySubject)],
+    ...text,
+    parameters: { copy: [copy], channel: [channel], cause: [facts.cause], ...(run === undefined ? {} : { failures: [String(run.failures)], last: [run.kind] }) },
+  };
+}
+
+// The subject of the key of an entity, as `domain:api.twilio.com`. The id is the text after the first colon.
+function entitySubject(key: string): Subject {
+  const colon = key.indexOf(":");
+  return { system: key.slice(0, colon), id: key.slice(colon + 1) };
+}
+
 const EXHAUSTION_LINE = "exhausted/";
 
 function exhaustionName(entry: Exhaustion): string {

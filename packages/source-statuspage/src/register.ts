@@ -1,6 +1,7 @@
 /**
  * The register of well-known status pages. Each page gave a summary with a list of incidents to a probe on 2026-11-18.
- * The pages of Atlassian Statuspage gave an `ETag`. The page of incident.io gave none.
+ * The pages of Atlassian Statuspage gave an `ETag`. The page of incident.io gave none. The page of StatusIQ gave its feed,
+ * with no `ETag`.
  *
  * The kind of a page is the kind of its service. The service is an online service, a cloud platform, a provider of DNS,
  * delivery or certificates, or a payment service. It can also be a bank, a broker, a crypto exchange or a blockchain.
@@ -15,6 +16,9 @@ export const ATLASSIAN_STATUSPAGE = "provider:atlassian-statuspage";
 
 /** The failure domain of each page that incident.io hosts. */
 export const INCIDENT_IO = "provider:incident-io";
+
+/** The failure domain of each page that Site24x7 StatusIQ hosts. The host of such a page is an alias of `site24x7sp.com`. */
+export const STATUSIQ = "provider:site24x7-statusiq";
 
 /** The failure domain of a page behind the delivery network of Cloudflare. */
 export const CLOUDFLARE_CDN = "cdn:cloudflare";
@@ -58,6 +62,19 @@ export const TWILIO_KEYS: readonly ComponentKey[] = [
   { id: "b3tl520cz8tc", name: "Functions", domain: "api.twilio.com" },
 ];
 
+/**
+ * The keys of the components of Pushover that deliver a message: the queue of outbound messages and the four servers of
+ * the API. The API of these components is `api.pushover.net`. Each id is a component of the page on 2026-11-18. An outage
+ * of the dashboard names only `pushover.net`.
+ */
+export const PUSHOVER_KEYS: readonly ComponentKey[] = [
+  { id: "Xt5Xa7RUGZkb8L55acKKAdKJSFNX3IWXJvaVT3vKiIeFeuT8A-avC5Z0nJZirwB6", name: "Outbound Message Queue", domain: "api.pushover.net" },
+  { id: "Xt5Xa7RUGZkb8L55acKKAdKJSFNX3IWXJvaVT3vKiIcnWztijJIDzxTWBujQEd3M", name: "US Central (F)", domain: "api.pushover.net" },
+  { id: "Xt5Xa7RUGZkb8L55acKKAdKJSFNX3IWXJvaVT3vKiIeiu-9ysiEgekUK3gEuk9hO", name: "US Central (T)", domain: "api.pushover.net" },
+  { id: "Xt5Xa7RUGZkb8L55acKKAdKJSFNX3IWXJvaVT3vKiIfTbKS2mFwt4hT84B6JuyjD", name: "US West (A)", domain: "api.pushover.net" },
+  { id: "Xt5Xa7RUGZkb8L55acKKAdKJSFNX3IWXJvaVT3vKiIcrDRsdTbAIJSMnDRKdrfEZ", name: "US West (H)", domain: "api.pushover.net" },
+];
+
 /** The well-known status pages, in the order of their ids. */
 export const STATUS_PAGES: readonly StatusPage[] = [
   page("bitbucket", "Bitbucket", "bitbucket.status.atlassian.com", "bitbucket.org", SAAS, [ATLASSIAN_STATUSPAGE], "atlassian"),
@@ -85,6 +102,7 @@ export const STATUS_PAGES: readonly StatusPage[] = [
   page("newrelic", "New Relic", "status.newrelic.com", "newrelic.com", SAAS),
   page("npm", "npm", "status.npmjs.org", "npmjs.com", SAAS),
   page("openai", "OpenAI", "status.openai.com", "openai.com", SAAS, [INCIDENT_IO]),
+  { ...page("pushover", "Pushover", "status.pushover.net", "pushover.net", SAAS, [STATUSIQ]), format: "statusiq", components: PUSHOVER_KEYS },
   page("reddit", "Reddit", "www.redditstatus.com", "reddit.com", SAAS),
   page("render", "Render", "status.render.com", "render.com", CLOUD),
   page("robinhood", "Robinhood", "status.robinhood.com", "robinhood.com", BROKER),

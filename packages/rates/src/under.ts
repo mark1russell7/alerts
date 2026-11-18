@@ -261,6 +261,21 @@ export interface HarmCount {
   readonly injuries: number;
 }
 
+/** The kinds of area of an alert row: counties (`C`) and zones (`Z`). */
+export type AreaType = "counties" | "zones";
+
+/**
+ * The measure of one kind of area of one alert kind and one significance. An area is one alert in one county or zone.
+ * The harm is the harm of the NCEI kind under an active alert in an area of this kind. The join meets a county event
+ * only with a county row. Thus the harm in counties over the areas in counties is the harm of one area.
+ */
+export interface AreaRate {
+  /** The areas of each year. */
+  readonly areas: Readonly<Record<string, number>>;
+  /** The events of the NCEI kind under an active alert in an area of this kind, with their deaths and injuries, in each year. */
+  readonly harm: Readonly<Record<string, HarmCount>>;
+}
+
 /** The measure of one alert kind and one significance. */
 export interface UnderRate {
   /** The alerts of each year. */
@@ -273,8 +288,8 @@ export interface UnderRate {
   readonly total: { readonly alerts: number; readonly harm: HarmCount };
   /** The events of each NCEI type under an active alert, over the years. This count has each type, also of other kinds. */
   readonly byType: Readonly<Record<string, HarmCount>>;
-  /** The rows of the alerts in counties and in zones. The join meets a county event only with a county row, and a zone event only with a zone row. */
-  readonly areas: { readonly counties: number; readonly zones: number };
+  /** The measure of the areas in counties and in zones. The sum of their harm is `harm`. */
+  readonly byArea: Readonly<Record<AreaType, AreaRate>>;
 }
 
 /** The measure of one alert kind. */
@@ -284,6 +299,11 @@ export interface UnderKind {
   readonly nceiTypes: readonly string[];
   /** Each event with harm of the NCEI kind in each year, also each event that the join cannot place. */
   readonly ncei: Readonly<Record<string, HarmCount>>;
+  /**
+   * The placed events with harm of the NCEI kind in counties and in zones, over the years. NCEI enters most events of a
+   * kind in one kind of area. The prior of an alert takes the measure of that kind of area.
+   */
+  readonly placed: Readonly<Record<AreaType, number>>;
   /** The measure of each significance with one or more alerts. */
   readonly significances: Readonly<Partial<Record<AlertSignificance, UnderRate>>>;
 }
@@ -323,6 +343,9 @@ export interface UnderInput {
 }
 
 type MutableCount = { events: number; deaths: number; injuries: number };
+/** This function gives the kind of area of a UGC code. Its third letter is `C` for a county and `Z` for a zone. */
+export const areaType = (ugc: string): AreaType => (ugc[2] === "C" ? "counties" : "zones");
+const AREA_TYPES: readonly AreaType[] = ["counties", "zones"];
 const zero = (): MutableCount => ({ events: 0, deaths: 0, injuries: 0 });
 const addTo = (count: MutableCount, event: { readonly deaths: number; readonly injuries: number }): void => {
   count.events += 1;
@@ -355,8 +378,13 @@ export function underSection(input: UnderInput): UnderSection {
     const ncei = nceiKindOf(kind);
     const nceiTypes = nceiTypesOf(ncei);
     const all = new Map(years.map((year) => [year, zero()]));
+    const placed: Record<AreaType, number> = { counties: 0, zones: 0 };
     if (ncei !== null) {
-      for (const { event } of input.matches) if (nceiKind(event.type) === ncei) addTo(all.get(String(event.year)) as MutableCount, event);
+      for (const { event } of input.matches) {
+        if (nceiKind(event.type) !== ncei) continue;
+        addTo(all.get(String(event.year)) as MutableCount, event);
+        placed[areaType(event.ugc)] += 1;
+      }
       for (const event of input.unplaced) if (nceiKind(event.type) === ncei) addTo(all.get(String(event.year)) as MutableCount, event);
     }
     const significances: Partial<Record<AlertSignificance, UnderRate>> = {};
@@ -367,6 +395,7 @@ export function underSection(input: UnderInput): UnderSection {
       const totalAlerts = Object.values(alerts).reduce((sum, count) => sum + count, 0);
       if (totalAlerts === 0) continue;
       const harm = new Map(years.map((year) => [year, zero()]));
+      const areaHarm = Object.fromEntries(AREA_TYPES.map((type) => [type, new Map(years.map((year) => [year, zero()]))])) as Record<AreaType, Map<string, MutableCount>>;
       const byType = new Map<string, MutableCount>();
       const total = zero();
       const key = `${kind}|${significance}`;
@@ -377,25 +406,24 @@ export function underSection(input: UnderInput): UnderSection {
         addTo(typeCount, event);
         if (ncei !== null && nceiKind(event.type) === ncei) {
           addTo(harm.get(String(event.year)) as MutableCount, event);
+          addTo(areaHarm[areaType(event.ugc)].get(String(event.year)) as MutableCount, event);
           addTo(total, event);
         }
       }
-      const areas = { counties: 0, zones: 0 };
-      for (const phenomenon of phenomena) {
-        const rows = input.counts.areas[`${phenomenon}.${significance}`];
-        areas.counties += rows?.counties ?? 0;
-        areas.zones += rows?.zones ?? 0;
-      }
+      const areaCount = (type: AreaType, year: string): number => phenomena.reduce((sum, phenomenon) => sum + (input.counts.areas[`${phenomenon}.${significance}`]?.[type][year] ?? 0), 0);
+      const byArea = Object.fromEntries(
+        AREA_TYPES.map((type) => [type, { areas: Object.fromEntries(years.map((year) => [year, areaCount(type, year)])), harm: Object.fromEntries(areaHarm[type]) }]),
+      ) as Record<AreaType, AreaRate>;
       significances[significance] = {
         alerts,
         phenomena: Object.fromEntries([...phenomena].sort().map((phenomenon) => [phenomenon, Object.values(input.counts.alerts[`${phenomenon}.${significance}`] ?? {}).reduce((sum, count) => sum + count, 0)])),
         harm: Object.fromEntries(harm),
         total: { alerts: totalAlerts, harm: total },
         byType: sorted(byType),
-        areas,
+        byArea,
       };
     }
-    if (Object.keys(significances).length > 0) kinds.set(kind, { nceiKind: ncei, nceiTypes, ncei: Object.fromEntries(all), significances });
+    if (Object.keys(significances).length > 0) kinds.set(kind, { nceiKind: ncei, nceiTypes, ncei: Object.fromEntries(all), placed, significances });
   }
 
   const unplaced = new Map<string, MutableCount>();

@@ -274,6 +274,8 @@
   "system.balance.empty",
   "system.balance.low",
   "system.balance.unread",
+  "system.channel",
+  "system.channel.down",
   "system.clock",
   "system.clock.step",
   "system.copy",

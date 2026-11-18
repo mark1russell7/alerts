@@ -72,7 +72,7 @@ export {
   type Share,
 } from "./rates.ts";
 export { committedPriors, PRIORS_URL } from "./committed.ts";
-export { priorsOf } from "./priors.ts";
+export { areaTypeOf, priorsOf } from "./priors.ts";
 export { ratesSummary, TOP_TYPES, TOP_UNDER, type GateResult } from "./summary.ts";
 export {
   HarmJoin,

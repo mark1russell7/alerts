@@ -1315,6 +1315,9 @@ importers:
       '@mark1russell7/alerts-fetch':
         specifier: workspace:*
         version: link:../fetch
+      '@mark1russell7/alerts-format-cap':
+        specifier: workspace:*
+        version: link:../format-cap
       '@mark1russell7/text':
         specifier: ^0.0.13
         version: 0.0.13

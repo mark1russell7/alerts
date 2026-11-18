@@ -152,6 +152,12 @@ export const DRILL_KIND = "system.drill";
 export const ESCALATION_KIND = "system.escalation";
 
 /**
+ * The prefix of the kinds of the channel reports of the core (AL-65). `system.channel.down` tells that the calls of a
+ * channel of this copy fail. An adapter does not map a message to this prefix.
+ */
+export const CHANNEL_KIND = "system.channel";
+
+/**
  * The subject system of a person. The id of a subject is the id of a person. A person who watches the subject of another
  * person gets the escalation reports of that person. A subject of the person itself does not match the person.
  */
@@ -195,7 +201,7 @@ export const DEFAULT_ASSESS_POLICY: AssessPolicy = {
     { id: "system-drill", kinds: [`${DRILL_KIND}.run`], statuses: ["system"], ...LOUD_SYSTEM_TABLE },
     // An exhausted escalation of a person keeps its level for the people who watch that person (AL-21).
     { id: "system-escalation", kinds: [ESCALATION_KIND], statuses: ["system"], ...LOUD_SYSTEM_TABLE },
-    { id: "system", kinds: [HEALTH_KIND, COVERAGE_KIND, QUOTA_KIND, BALANCE_KIND, CLOCK_KIND, LOG_KIND, COPY_KIND, DRILL_KIND], statuses: ["system"], ...SYSTEM_TABLE },
+    { id: "system", kinds: [HEALTH_KIND, COVERAGE_KIND, QUOTA_KIND, BALANCE_KIND, CLOCK_KIND, LOG_KIND, COPY_KIND, DRILL_KIND, CHANNEL_KIND], statuses: ["system"], ...SYSTEM_TABLE },
   ],
   otherwise: OTHER_TABLE,
 };
