@@ -3,8 +3,9 @@
  * the reports of an incident. These functions only write text. The core makes each decision.
  */
 
-import { placeOfNode, type AssessedLevel, type AssessReason, type Estimate, type HealthStep, type Incident, type Report, type ScoreFactor, type ShadowScore } from "@mark1russell7/alerts";
+import { placeOfNode, type AssessedLevel, type AssessReason, type HealthStep, type Incident, type Report } from "@mark1russell7/alerts";
 import { NAMES, SHORT_NAMES } from "./demo.ts";
+import { estimateText, shadowText } from "./score-view.ts";
 
 /** This function gives the name of a person or a place on the page. */
 export function nameOf(id: string): string {
@@ -62,34 +63,6 @@ export const LEVEL_MEANINGS: Readonly<Record<AssessedLevel, string>> = {
 // A distance in kilometers for a person: one decimal, and a floor of 0.1.
 function kilometers(distance: number): string {
   return distance < 0.1 ? "less than 0.1 km" : `${distance.toFixed(1)} km`;
-}
-
-// A number with two significant digits.
-function figure(value: number): string {
-  return Number(value.toPrecision(2)).toString();
-}
-
-// A measured value with its interval.
-function estimateText(estimate: Estimate): string {
-  return `${figure(estimate.value)} (${figure(estimate.low)} to ${figure(estimate.high)})`;
-}
-
-// The source of the probability of a shadow score.
-function probabilitySource(factor: ScoreFactor): string {
-  return factor.from.table === "kinds" ? `the verified share of the warnings of "${factor.from.key}"` : `the certainty "${factor.from.key}"`;
-}
-
-/** This function gives the text of a shadow score. The score does not decide the level, and the text tells this first. */
-export function shadowText(score: ShadowScore): string {
-  if (!score.read) return `The shadow score does not decide the level, and it has no value. The priors do not give these factors: ${score.missing.join(", ")}.`;
-  const { probability, deaths, injuries, expected } = score;
-  const harm = `One event of this kind gives ${estimateText(deaths.estimate)} deaths and ${estimateText(injuries.estimate)} injuries.`;
-  const keys =
-    deaths.from.key === injuries.from.key
-      ? `These counts come from the measures of "${deaths.from.key}".`
-      : `The deaths come from the measures of "${deaths.from.key}", and the injuries from "${injuries.from.key}".`;
-  const product = `The expected harm is the probability times each count: ${estimateText(expected.deaths)} deaths and ${estimateText(expected.injuries)} injuries.`;
-  return `The shadow score does not decide the level. The probability of the event is ${estimateText(probability.estimate)}, from ${probabilitySource(probability)}. ${harm} ${keys} ${product}`;
 }
 
 /** This function gives the text of one reason of an assessment. */
