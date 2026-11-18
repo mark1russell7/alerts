@@ -33,6 +33,7 @@ import { CANARY_PATH, createNwsSource } from "@mark1russell7/alerts-source-nws-a
 import { fakeSessions, NWWS_DESCRIPTOR } from "@mark1russell7/alerts-source-nwws";
 import { SWPC_KINDS } from "@mark1russell7/alerts-source-swpc";
 import { KEV_KINDS } from "@mark1russell7/alerts-source-cisa-kev";
+import { AWS_DESCRIPTOR } from "@mark1russell7/alerts-source-aws";
 import { GCP_DESCRIPTOR } from "@mark1russell7/alerts-source-gcp";
 import { descriptorOf as statusPageDescriptor, STATUS_PAGES, type StatusPage } from "@mark1russell7/alerts-source-statuspage";
 import { ENERGY_CHARTS_MEASURES, SOURCE_ID as ENERGY_CHARTS_SOURCE, WINDOW_MINUTES } from "@mark1russell7/alerts-source-energy-charts";
@@ -182,6 +183,24 @@ function gcpAnswer(): string {
   return JSON.stringify([{ ...live, begin: time(-30), created: time(-20), modified: time(-10), most_recent_update: latest, updates: [latest], currently_affected_locations: region, previously_affected_locations: [] }]);
 }
 
+/**
+ * The answer of the AWS Health Dashboard to the request of its feed, in the shape of the recorded feed of the package
+ * `source-aws`. It has one update of one live event in the region `eu-west-1`, 10 minutes before the time of the tests.
+ */
+function awsAnswer(): string {
+  const seconds = Math.floor((T0 - 10 * MINUTE) / 1000);
+  const item = [
+    "<item>",
+    "<title><![CDATA[Service disruption: Increased Error Rates]]></title>",
+    "<link>https://status.aws.amazon.com/</link>",
+    `<pubDate>${new Date(seconds * 1000).toUTCString()}</pubDate>`,
+    `<guid isPermaLink="false">https://status.aws.amazon.com/#ec2-eu-west-1_${String(seconds)}</guid>`,
+    "<description><![CDATA[We are investigating increased error rates in the eu-west-1 Region.]]></description>",
+    "</item>",
+  ].join("");
+  return `<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"><channel><title><![CDATA[Amazon Web Services Service Status]]></title><link>https://status.aws.amazon.com/</link><ttl>5</ttl>${item}</channel></rss>`;
+}
+
 /** The status page of each host. */
 const STATUS_HOSTS: ReadonlyMap<string, StatusPage> = new Map(STATUS_PAGES.map((page) => [new URL(page.base).hostname, page]));
 
@@ -195,7 +214,8 @@ const STATUS_HOSTS: ReadonlyMap<string, StatusPage> = new Map(STATUS_PAGES.map((
  *
  * GFZ gives a quiet value of the index Kp for each interval of the window of the query (`gfzAnswer`). Energy-Charts gives
  * the nominal frequency for each second of the query (`energyChartsAnswer`). CISA gives a catalog with one live entry (`kevAnswer`).
- * Each status page gives its summary (`statusPageAnswer`). Google Cloud gives one live incident (`gcpAnswer`).
+ * Each status page gives its summary (`statusPageAnswer`). Google Cloud gives one live incident (`gcpAnswer`). AWS gives
+ * one live event (`awsAnswer`).
  *
  * Each exchange takes `delay` milliseconds of real time, as on a busy runner. With `Infinity`, no exchange ends.
  */
@@ -216,6 +236,7 @@ function network(delay = 0) {
     const statusPage = STATUS_HOSTS.get(url.hostname);
     if (statusPage !== undefined) return { status: 200, statusText: "OK", headers: { "content-type": "application/json; charset=utf-8" }, body: statusPageAnswer(statusPage) };
     if (url.hostname === "status.cloud.google.com") return { status: 200, statusText: "OK", headers: { "content-type": "application/json" }, body: gcpAnswer() };
+    if (url.hostname === "status.aws.amazon.com") return { status: 200, statusText: "OK", headers: { "content-type": "application/rss+xml" }, body: awsAnswer() };
     if (url.hostname === "www.cisa.gov") return { status: 200, statusText: "OK", headers: { "content-type": "application/json" }, body: kevAnswer() };
     if (url.hostname === "api.energy-charts.info") return { status: 200, statusText: "OK", headers: { "content-type": "application/json" }, body: energyChartsAnswer(url) };
     if (url.hostname === "www.tsunami.gov") {
@@ -514,21 +535,28 @@ describe("openInstance", () => {
     expect(server.calls.map((call) => call.fields["title"])).toEqual([expect.stringContaining("Flood Warning")]);
   });
 
-  it("reads the status pages and the feed of Google Cloud that a person with the work software can get, with the services and the regions as subjects", async () => {
+  it("reads the status pages and the feeds of Google Cloud and AWS that a person with the work software can get, with the services and the regions as subjects", async () => {
     const software: AlertConfig = { ...CONFIG, people: CONFIG.people.map((entry) => ({ ...entry, defaults: { works: ["software"] } })) };
     const { instance, clock, net } = open(store(SECRETS), software);
     const pass = await finish(clock, instance.runtime.pass());
     const pages = STATUS_PAGES.filter((page) => ["infra.saas.outage", "infra.cloud.outage", "infra.internet.dns-cdn"].includes(page.kind));
     expect(pages.length).toBeGreaterThan(20);
-    expect(pass.fetched).toEqual(["nws-api", "ipaws", "usgs", "emsc", "tsunami-ntwc", "tsunami-ptwc", "swpc", "gfz", "energy-charts", "cisa-kev", "gcp-status", ...pages.map((page) => page.id)]);
-    expect(pass.view.health.find((health) => health.source === "gcp-status")?.state).toBe("healthy");
+    expect(pass.fetched).toEqual(["nws-api", "ipaws", "usgs", "emsc", "tsunami-ntwc", "tsunami-ptwc", "swpc", "gfz", "energy-charts", "cisa-kev", "gcp-status", "aws-health", ...pages.map((page) => page.id)]);
+    for (const source of ["gcp-status", "aws-health"]) expect(pass.view.health.find((health) => health.source === source)?.state, source).toBe("healthy");
     expect(pass.view.health.filter((health) => health.source.startsWith("statuspage-")).map((health) => [health.source, health.state])).toEqual(pages.map((page) => [page.id, "healthy"]));
     const asked = new Set(net.exchanges.map((exchange) => new URL(exchange.url)).filter((url) => STATUS_HOSTS.has(url.hostname)).map((url) => url.origin + url.pathname));
     expect(asked).toEqual(new Set(pages.map((page) => `${page.base}/api/v2/summary.json`)));
     const outages = pass.view.incidents.filter((incident) => incident.kind.code === "infra.saas.outage");
     expect(outages.map((incident) => [incident.areas, incident.about])).toEqual([[[], [{ system: "domain", id: "github.com", label: "GitHub" }]]]);
-    const clouds = pass.view.incidents.filter((incident) => incident.kind.code === "infra.cloud.outage");
+    const clouds = pass.view.incidents.filter((incident) => incident.kind.code === "infra.cloud.outage").sort((a, b) => a.about[0]!.id.localeCompare(b.about[0]!.id));
     expect(clouds.map((incident) => [incident.areas, incident.about])).toEqual([
+      [
+        [],
+        [
+          { system: "domain", id: "aws.amazon.com", label: "Amazon Web Services" },
+          { system: "provider-region", id: "aws/eu-west-1" },
+        ],
+      ],
       [
         [],
         [
@@ -539,17 +567,19 @@ describe("openInstance", () => {
     ]);
   });
 
-  it("reads no status page and no feed of Google Cloud for persons with no work, no service and no subject watch", async () => {
+  it("reads no status page and no feed of a cloud provider for persons with no work, no service and no subject watch", async () => {
     const { instance, clock, net } = open();
     await finish(clock, instance.runtime.pass());
-    expect(net.exchanges.filter((exchange) => STATUS_HOSTS.has(new URL(exchange.url).hostname) || new URL(exchange.url).hostname === "status.cloud.google.com")).toEqual([]);
-    expect(instance.runtime.config.sources.some((source) => source.id.startsWith("statuspage-") || source.id === "gcp-status")).toBe(false);
+    expect(net.exchanges.filter((exchange) => STATUS_HOSTS.has(new URL(exchange.url).hostname) || ["status.cloud.google.com", "status.aws.amazon.com"].includes(new URL(exchange.url).hostname))).toEqual([]);
+    expect(instance.runtime.config.sources.some((source) => source.id.startsWith("statuspage-") || ["gcp-status", "aws-health"].includes(source.id))).toBe(false);
   });
 
   it("keeps the times of the loop with each status page: each page has a longer interval than the shortest of the list", () => {
     const shortest = Math.min(...INSTANCE_SOURCES.map((source) => source.interval));
-    expect(GCP_DESCRIPTOR.interval).toBeGreaterThanOrEqual(shortest);
-    expect(INSTANCE_FETCH_LIMIT(GCP_DESCRIPTOR)).toBe(shortest);
+    for (const descriptor of [GCP_DESCRIPTOR, AWS_DESCRIPTOR]) {
+      expect(descriptor.interval, descriptor.id).toBeGreaterThanOrEqual(shortest);
+      expect(INSTANCE_FETCH_LIMIT(descriptor), descriptor.id).toBe(shortest);
+    }
     for (const page of STATUS_PAGES) {
       expect(statusPageDescriptor(page).interval, page.id).toBeGreaterThanOrEqual(shortest);
       expect(INSTANCE_FETCH_LIMIT(statusPageDescriptor(page)), page.id).toBe(shortest);
