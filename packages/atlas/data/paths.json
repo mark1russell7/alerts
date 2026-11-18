@@ -450,6 +450,12 @@
     "note": "The host of the data of glofas."
   },
   {
+    "id": "fdo.rocketlaunch.live",
+    "name": "fdo.rocketlaunch.live",
+    "kind": "host",
+    "note": "The host of the free URL of rocketlaunch-live."
+  },
+  {
     "id": "feeds.meteoalarm.org",
     "name": "feeds.meteoalarm.org",
     "kind": "host",
@@ -886,6 +892,12 @@
     "name": "www.bls.gov",
     "kind": "host",
     "note": "The host of the feed of bls-release-calendar."
+  },
+  {
+    "id": "www.cbsa-asfc.gc.ca",
+    "name": "www.cbsa-asfc.gc.ca",
+    "kind": "host",
+    "note": "The host of the file of cbsa-bwt."
   },
   {
     "id": "www.cdc.gov",

@@ -1228,35 +1228,79 @@
       "border-crossings"
     ],
     "url": "https://bwt.cbp.gov/",
-    "access": "page",
+    "access": "feed",
     "auth": "none",
     "terms": {
-      "url": null,
+      "url": "https://www.cbp.gov/site-policy-notices/copyright-notice",
       "automated": "unclear",
-      "redistribution": "unclear",
-      "note": "The page rendered only a title."
+      "redistribution": "allowed",
+      "note": "The copyright notice puts the information of the CBP site in the public domain, and it asks for the credit of the CBP. It tells nothing of automated reading."
     },
     "cost": "free",
-    "delay": "unknown",
+    "delay": "One read at 03:04 UTC on 2026-11-18 had the update time 11:00 pm EST of 2026-11-17 on each port, 4 minutes before the read.",
     "history": "unknown",
-    "rateLimit": "unknown",
+    "rateLimit": "No published limit. One XML file of 182 KB holds all ports.",
     "calibration": null,
-    "coverage": "US land borders (from the agency).",
+    "coverage": "85 ports of entry on the US land borders: 30 on the border with Canada and 55 on the border with Mexico. Each port gives the wait and the open lanes of cars, pedestrians and trucks.",
     "origins": [
       "cbp"
     ],
     "path": [
-      "bwt.cbp.gov"
+      "bwt.cbp.gov",
+      "cdn:akamai"
     ],
-    "subjectIds": null,
+    "subjectIds": [],
     "risks": [],
-    "decision": "later",
+    "decision": "plan",
     "adapter": null,
-    "reason": "Official waits; feed to be confirmed.",
+    "reason": "The official waits at the US land ports in one public XML file, with no key. A DNS lookup gave a name of Akamai in front of the host.",
     "evidence": [
-      "https://bwt.cbp.gov/api/bwtnew"
+      "https://bwt.cbp.gov/xml/bwt.xml",
+      "https://www.cbp.gov/site-policy-notices/copyright-notice"
     ],
-    "round": 1
+    "round": 12
+  },
+  {
+    "id": "cbsa-bwt",
+    "name": "CBSA current border wait times (CSV)",
+    "classes": [
+      "transport.road.border-wait"
+    ],
+    "dimensions": [
+      "border-crossings"
+    ],
+    "url": "https://open.canada.ca/data/en/dataset/d4a716f5-a2fc-4c3c-88ed-451fe05900e4",
+    "access": "file",
+    "auth": "none",
+    "terms": {
+      "url": "https://open.canada.ca/en/open-government-licence-canada",
+      "automated": "allowed",
+      "redistribution": "allowed",
+      "note": "The open data portal gives the dataset under the Open Government Licence - Canada, with the update frequency continual. The licence lets any lawful use, with the attribution of the source."
+    },
+    "cost": "free",
+    "delay": "One read at 03:04 UTC on 2026-11-18: the file had changed at 03:00 UTC, and the rows had times of 21:54 in the local zone of each office.",
+    "history": "The portal keeps monthly files of the past waits in other datasets.",
+    "rateLimit": "No published limit. One CSV file of 3 KB holds all offices.",
+    "calibration": null,
+    "coverage": "29 land border offices of Canada: the waits of commercial and traveller traffic into Canada and into the US.",
+    "origins": [
+      "cbsa"
+    ],
+    "path": [
+      "www.cbsa-asfc.gc.ca"
+    ],
+    "subjectIds": [],
+    "risks": [],
+    "decision": "plan",
+    "adapter": null,
+    "reason": "A second origin of the waits at the border of Canada and the US, from the other side of the border, with no key. The file uses two semicolons as the separator.",
+    "evidence": [
+      "https://open.canada.ca/data/api/action/package_search?q=border%20wait%20times&rows=5",
+      "https://www.cbsa-asfc.gc.ca/bwt-taf/bwt-eng.csv",
+      "https://open.canada.ca/en/open-government-licence-canada"
+    ],
+    "round": 12
   },
   {
     "id": "cdc-han",
@@ -2174,7 +2218,7 @@
       "note": "CC BY 4.0 with the credit of Fintraffic. Send a Digitraffic-User header and use gzip. The limit is 60 requests per minute per IP."
     },
     "cost": "free",
-    "delay": "unknown",
+    "delay": "The traffic messages of one read at 03:04 UTC on 2026-11-18 had the update time 02:50:21 UTC. The answer has a max-age of 60 seconds.",
     "history": "unknown",
     "rateLimit": "60 requests per minute per IP. The MQTT limit is 5 per IP.",
     "calibration": null,
@@ -2183,18 +2227,20 @@
       "fintraffic"
     ],
     "path": [
-      "tie.digitraffic.fi"
+      "tie.digitraffic.fi",
+      "cdn:cloudfront"
     ],
     "subjectIds": null,
     "risks": [],
-    "decision": "later",
+    "decision": "plan",
     "adapter": null,
-    "reason": "Open counts, speeds and traffic messages for Finland under CC BY 4.0, with no key. The ranking of round 10 puts other sources first.",
+    "reason": "Open traffic messages, counts and speeds for Finland under CC BY 4.0, with no key. The traffic announcements give accidents, closures and other road events as GeoJSON.",
     "evidence": [
       "https://www.digitraffic.fi/en/support/instructions/",
-      "https://www.digitraffic.fi/en/terms-of-service/"
+      "https://www.digitraffic.fi/en/terms-of-service/",
+      "https://tie.digitraffic.fi/api/traffic-message/v1/messages?inactiveHours=0&includeAreaGeometry=false&situationType=TRAFFIC_ANNOUNCEMENT"
     ],
-    "round": 10
+    "round": 12
   },
   {
     "id": "downdetector",
@@ -5464,7 +5510,8 @@
       "the-space-devs"
     ],
     "path": [
-      "ll.thespacedevs.com"
+      "ll.thespacedevs.com",
+      "cdn:cloudflare"
     ],
     "subjectIds": null,
     "risks": [],
@@ -5472,9 +5519,10 @@
     "adapter": null,
     "reason": "One list of launches with times and pads.",
     "evidence": [
-      "https://thespacedevs.com/llapi"
+      "https://thespacedevs.com/llapi",
+      "https://ll.thespacedevs.com/2.3.0/launches/upcoming/?limit=1&mode=list"
     ],
-    "round": 1
+    "round": 12
   },
   {
     "id": "limitless-api",
@@ -5901,17 +5949,17 @@
     "access": "file",
     "auth": "none",
     "terms": {
-      "url": null,
-      "automated": "unclear",
-      "redistribution": "unclear",
-      "note": "A terms page exists, but its content was not read."
+      "url": "https://docs.ndw.nu/algemeen/data-gebruiksvoorwaarden/",
+      "automated": "allowed",
+      "redistribution": "allowed",
+      "note": "The open data of NDW is under CC0 1.0, unless a dataset states other terms. NDW asks no credit. The data come as is, with no guarantee."
     },
     "cost": "free",
-    "delay": "unknown",
+    "delay": "The file actueel_beeld.xml.gz of one read at 03:07 UTC on 2026-11-18 held records of 03:06 UTC.",
     "history": "yes (the archive Dexter)",
     "rateLimit": "unknown",
     "calibration": null,
-    "coverage": "Netherlands",
+    "coverage": "The roads of the Netherlands: closures, roadworks, broken-down vehicles, speed limits and diversions. One read gave 1209 situation records.",
     "origins": [
       "ndw"
     ],
@@ -5919,17 +5967,17 @@
       "opendata.ndw.nu"
     ],
     "subjectIds": null,
-    "risks": [
-      "The DATEX II v2.3 files end on 9 February 2027."
-    ],
-    "decision": "later",
+    "risks": [],
+    "decision": "plan",
     "adapter": null,
-    "reason": "Open speed, flow and closure files for the Netherlands, with no key. The terms page was not read, and the DATEX II v2.3 files end in 2027.",
+    "reason": "Open road situations for the Netherlands under CC0, with no key. The current file uses DATEX II version 3, so the end of the version 2.3 files in 2027 does not stop it.",
     "evidence": [
       "https://opendata.ndw.nu/",
-      "https://docs.ndw.nu/en/"
+      "https://docs.ndw.nu/en/",
+      "https://docs.ndw.nu/algemeen/data-gebruiksvoorwaarden/",
+      "https://opendata.ndw.nu/actueel_beeld.xml.gz"
     ],
-    "round": 10
+    "round": 12
   },
   {
     "id": "neso-data-portal",
@@ -6024,7 +6072,7 @@
       "url": null,
       "automated": "unclear",
       "redistribution": "unclear",
-      "note": "Both pages returned 503."
+      "note": "The portal and its API answered 503 at 03:04 UTC on 2026-11-18, so no terms were read."
     },
     "cost": "free",
     "delay": "unknown",
@@ -6036,15 +6084,19 @@
       "nga"
     ],
     "path": [
-      "msi.nga.mil"
+      "msi.nga.mil",
+      "cdn:akamai"
     ],
     "subjectIds": null,
     "risks": [],
     "decision": "later",
     "adapter": null,
-    "reason": "Official warnings to mariners; recheck in round 2.",
-    "evidence": [],
-    "round": 1
+    "reason": "Official warnings to mariners and the reports of attacks on ships. At 03:04 UTC on 2026-11-18, the API answered 503 with a page that tells of the maintenance of the portal.",
+    "evidence": [
+      "https://msi.nga.mil/api/publications/broadcast-warn?output=json&status=A",
+      "https://msi.nga.mil/api/publications/asam?output=json&sort=date&minOccurDate=2026-09-01"
+    ],
+    "round": 12
   },
   {
     "id": "nhc-rss",
@@ -8059,6 +8111,45 @@
     "round": 9
   },
   {
+    "id": "rocketlaunch-live",
+    "name": "RocketLaunch.Live API (the next five launches)",
+    "classes": [
+      "transport.space.launch"
+    ],
+    "url": "https://www.rocketlaunch.live/api",
+    "access": "api",
+    "auth": "none",
+    "terms": {
+      "url": "https://www.rocketlaunch.live/api",
+      "automated": "limited",
+      "redistribution": "unclear",
+      "note": "The API page gives the next five launches free at one URL with no key. The full API is for paid members. The research found no page of terms."
+    },
+    "cost": "free-tier",
+    "delay": "One read at 03:04 UTC on 2026-11-18 had changed at 02:41 UTC. The answer has a max-age of 60 seconds.",
+    "history": "The free URL gives only the next five launches.",
+    "rateLimit": "No published limit for the free URL.",
+    "calibration": null,
+    "coverage": "The next five rocket launches of the world, with the provider, the vehicle, the pad, the window and a summary of the weather.",
+    "origins": [
+      "rocketlaunch-live"
+    ],
+    "path": [
+      "fdo.rocketlaunch.live",
+      "cdn:cloudflare"
+    ],
+    "subjectIds": [],
+    "risks": [],
+    "decision": "plan",
+    "adapter": null,
+    "reason": "A second list of launches, curated apart from Launch Library 2, with no key. Only the next five launches are free, which covers the next days.",
+    "evidence": [
+      "https://www.rocketlaunch.live/api",
+      "https://fdo.rocketlaunch.live/json/launches/next/5"
+    ],
+    "round": 12
+  },
+  {
     "id": "safecast",
     "name": "Safecast",
     "classes": [
@@ -9190,7 +9281,7 @@
       "url": null,
       "automated": "unclear",
       "redistribution": "unclear",
-      "note": "The page returned 403."
+      "note": "At 03:04 UTC on 2026-11-18, the page answered 403 with a bot check. The research does not go around a bot check."
     },
     "cost": "unknown",
     "delay": "unknown",
@@ -9208,9 +9299,9 @@
     "risks": [],
     "decision": "later",
     "adapter": null,
-    "reason": "Primary source on attacks to shipping; access not confirmed.",
+    "reason": "The primary source of the reports of attacks on ships near the Middle East. Its pages refuse automated reads with a bot check.",
     "evidence": [],
-    "round": 1
+    "round": 12
   },
   {
     "id": "uscg-navcen",
