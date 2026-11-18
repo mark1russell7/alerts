@@ -9,7 +9,7 @@ name: Measure WEA
 on:
   # The NWS API keeps 7 days, and each run reads the last 6.5 days. Thus the runs of each day overlap.
   schedule:
-    - cron: "54 9 * * *"
+    - cron: "21 9 * * *"
   # A pull request that changes the measure gets a run, as a smoke test of the script.
   pull_request:
     paths:
