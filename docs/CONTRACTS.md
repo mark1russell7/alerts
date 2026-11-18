@@ -490,7 +490,18 @@ A channel can also name the services of one address with the optional procedure 
 - The load gives the services of the first contact of a person on the channel to that person only (`ContactServices`, `contactChannels`).
 - Only the keys of entities count. A missing secret, a lookup that throws and a key of another kind give no service.
 - The services of an address can tell a private fact, for example the region of a number. Thus no problem and no log holds them.
-- The check of the instance gives the services to the load (`InstanceCheck.services`). The route `GET /interests` uses the same lookup.
+- The check of the instance gives the services to the load (`InstanceCheck.services`). The route `GET /interests` uses the same lookup, with one change: a text shows no type of the sender.
+- The services can need a secret, for example the number of a sender. Thus `InstanceCheck.services` takes the secrets and gives the lookup.
+
+The two Twilio channels give the region of the carrier network of the phone (`twilioCallServices`, `twilioTextServices`).
+
+- A node is `provider-region:twilio/<region>/<product>`. The regions are `north-america`, `latin-america`, `apac`, `europe` and `middle-east-africa`. The status page of Twilio has the same regions.
+- The region comes from the country of the phone (libphonenumber-js) and the table `TWILIO_REGIONS`. A test holds one region for each country of libphonenumber-js.
+- The United States, Canada and the United States territories are in North America. The other countries of the North American numbering plan are in Latin America.
+- A call gives `voice`. A text gives `sms`. In North America, a text adds the type of its sender: `sms/long-code`, `sms/short-code` or `sms/toll-free`. The type comes from the number of `TWILIO_TEXT_FROM`.
+- A node covers each node below it. Thus an outage of all SMS in North America reaches each type, and an outage of one type reaches only that type.
+- The type of the real sender is a private fact. Thus the route `GET /interests` cuts each node of a carrier region to its provider, region and product (`shownNode`). The load keeps the full node.
+- A phone with no country gives no node. The functions do not throw.
 
 The channel does not escalate. The core does:
 

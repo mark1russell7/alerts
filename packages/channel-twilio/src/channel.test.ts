@@ -307,3 +307,14 @@ describe("the probe of the call channel", () => {
     expect(fake.calls).toEqual([]);
   });
 });
+
+describe("the services of a contact", () => {
+  it("gives the voice node of the region of the phone, and an empty list for a phone that it cannot read, with no request", () => {
+    const fake = server();
+    const channel = channelOf(fake);
+    // 202-555-0143 is a number for fiction.
+    expect(channel.services?.({ address: { to: "+12025550143" } })).toEqual(["provider-region:twilio/north-america/voice"]);
+    expect(channel.services?.({ address: ADDRESS })).toEqual([]);
+    expect(fake.calls).toEqual([]);
+  });
+});

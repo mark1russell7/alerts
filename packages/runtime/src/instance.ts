@@ -21,10 +21,12 @@ import {
   placeLabels,
   sourceCovers,
   sourcePlaces,
+  type Address,
   type ChannelDescriptor,
   type ChannelId,
   type ChannelProcedures,
   type ChannelQuota,
+  type ContactServices,
   type CopySettings,
   type Duration,
   type Expectation,
@@ -33,6 +35,7 @@ import {
   type InterestsPayload,
   type Instant,
   type MapPayload,
+  type NodeKey,
   type OptInRecord,
   type ParsedConfig,
   type ScorePriors,
@@ -53,8 +56,10 @@ import {
   TWILIO_CALL_TIMEOUT_MS,
   TWILIO_TEXT_COST_USD,
   twilioCallDescriptor,
+  twilioCallServices,
   twilioSetupProblems,
   twilioTextDescriptor,
+  twilioTextServices,
   type TextOptIn,
   type TwilioCredentials,
   type TwilioFetch,
@@ -513,9 +518,49 @@ export function instanceProblems(parsed: ParsedConfig, secret: SecretLookup, des
   ];
 }
 
-/** This function gives the check of a configuration file for the instance of a copy: its channels and the problems that stop its start. */
+/**
+ * This function gives the services of the contacts of the instance (`ContactServices`). A contact of the call channel or the
+ * text channel gets the carrier region of Twilio of its phone. The text channel adds the type of the number of
+ * `TWILIO_TEXT_FROM_KEY`. Each other channel gives no services. No log and no problem holds the result.
+ */
+export function instanceServices(secret: SecretLookup): ContactServices {
+  const textFrom = secret(TWILIO_TEXT_FROM_KEY);
+  const byChannel = new Map<ChannelId, (address: Address) => readonly NodeKey[]>([
+    [TWILIO_CHANNEL, twilioCallServices],
+    [TEXT_CHANNEL_ID, (address) => twilioTextServices(address, textFrom)],
+  ]);
+  return (channel, address) => byChannel.get(channel)?.(address) ?? [];
+}
+
+// The system of the carrier regions, and the parts of its path that the route `GET /interests` shows: the provider, the
+// region and the product.
+const PROVIDER_REGION = "provider-region:";
+const SHOWN_PARTS = 3;
+
+/**
+ * This function cuts a node of a carrier region to its provider, region and product. A deeper part, as the type of a text
+ * sender, is a private fact. Each other node stays the same.
+ */
+export function shownNode(node: NodeKey): NodeKey {
+  if (!node.startsWith(PROVIDER_REGION)) return node;
+  return PROVIDER_REGION + node.slice(PROVIDER_REGION.length).split("/").slice(0, SHOWN_PARTS).join("/");
+}
+
+/**
+ * This function gives the services of the contacts that the route `GET /interests` shows (`shownNode`). Thus a text shows
+ * `.../north-america/sms` with no type of the sender. The load keeps the full node, thus the matching does not change.
+ */
+export function shownServices(secret: SecretLookup): ContactServices {
+  const services = instanceServices(secret);
+  return (channel, address) => [...new Set(services(channel, address).map(shownNode))];
+}
+
+/**
+ * This function gives the check of a configuration file for the instance of a copy. The check has the channels, the
+ * services of the contacts and the problems that stop the start.
+ */
 export function instanceCheck(copy: CopySettings = ONLY_COPY): InstanceCheck {
-  return { channels: INSTANCE_CHANNELS, problems: (parsed, secret) => instanceProblems(parsed, secret, INSTANCE_SOURCES, wallClock().now(), copy) };
+  return { channels: INSTANCE_CHANNELS, services: instanceServices, problems: (parsed, secret) => instanceProblems(parsed, secret, INSTANCE_SOURCES, wallClock().now(), copy) };
 }
 
 /** The check of a configuration file for the instance of the only copy: `instanceCheck(ONLY_COPY)`. */
@@ -754,8 +799,7 @@ export function openInstance(options: InstanceOptions): Instance {
   if (problems.length > 0) throw new Error(`The instance does not start. The configuration has these problems:\n- ${problems.join("\n- ")}`);
   const token = options.secret(PUSHOVER_TOKEN) ?? "";
   // The configuration does not change in a process. Thus the rows of the interests are the same at each read.
-  const contactServices = instanceCheck(copy).services;
-  const interests = interestsPayload(config, INSTANCE_CHANNELS, contactServices === undefined ? undefined : { secret: options.secret, services: contactServices });
+  const interests = interestsPayload(config, INSTANCE_CHANNELS, { secret: options.secret, services: shownServices(options.secret) });
 
   // The store of shapes shares the pace of the sources. Thus its requests to the NWS API keep the rests of that host.
   const store = options.shapes === undefined ? undefined : createShapeStore({ pace, transport: options.transport, userAgent: agent, cache: options.shapes });
