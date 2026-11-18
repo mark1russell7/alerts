@@ -361,7 +361,7 @@ A clock report has no area. Its subject is `{ system: "alerts.clock", id: "wall"
 
 - The condition is the latest step of the wall clock in `CLOCK_STEP_WINDOW` (24 hours) before the time of the snapshot (`recentStep`).
 - The facts of the line are the time and the size of the step. A second step in the window gives an update.
-- The line stays open for the window, thus the digest of the day shows the step. At the end of the window, the line ends with a cancel.
+- The line stays open for the window, thus the next digest shows the step. At the end of the window, the line ends with a cancel.
 - The headline gives the direction and the size of the step, in whole hours, minutes or seconds (`stepSizeText`).
 
 A log report has no area. Its subject is `{ system: "alerts.log", id: "runtime" }`. Its kind is `system.log.recovered`:
@@ -740,6 +740,7 @@ The core function `route` gives the escalations at a time. Each escalation is on
 
 - The levels of an incident and a person are the levels of its starts and its deliveries, and the assessed level.
 - The assessed level counts only when it is higher than those levels and the person has a policy for it. So the level does not go down.
+- The level `digest` has no escalation, and a delivery of the level `digest` does not count. The digest tells it (see "The digest").
 - Only the highest level continues. A lower level ends at the start of a higher level, so its repeats stop.
 - An escalation continues until an acknowledgment, the end of the incident or the end of the person. An acknowledgment of a level also covers each lower level.
 - The end of an incident is its expiry, or the time when it stops being live.
@@ -846,6 +847,8 @@ A recipient has no problem from `recipientProblems` before it gets alerts:
 - No two policies have the same level and the same subject.
 - No rule keeps a life-safety kind, or the coverage of one, below `life-safety`. A rule with no kinds applies to each kind.
 - Each rule names kinds of the taxonomy, and the quiet window has a good time zone and good local times.
+- Only a policy of the level `digest` has a daily time. The daily time has a good time zone and a good local time.
+- A policy of the level `digest` with no daily time needs a quiet window of the person. Else the person gets no digest.
 - Each channel rule has one or more kinds of the taxonomy, and each of its channels is a channel of the instance.
 
 The message of a send takes its text from one report of the incident. That report is the latest one with the severity and the urgency of the incident. The body has the instruction first, then the area and the description. The channel cuts the text to its limits.
@@ -855,14 +858,47 @@ One part waits:
 - The exhaustion alert to the next person waits for a second person (AL-21). Until then, the repeats continue after the exhaustion, and the routes of each pass show it.
 - When the exhaustion alert comes (AL-21), it skips a plan with no step, because a channel rule empties such a plan on purpose. A test of AL-21 holds this rule.
 
+## The digest
+
+The core function `planDigests` gives the digests at a time (AL-64). A digest is one message each day for each person. The runtime sends it in the delivery step, after the escalations.
+
+- A person gets a digest when the person has a policy of the level `digest` with no subject.
+- The field `daily` of that policy gives the digest time: a time zone of the IANA database and a local time `HH:MM`.
+- A policy with no field `daily` uses the end of the quiet window of the person.
+- Each step of the policy sends one message on its channel. The field `at` of the step adds a wait after the digest time.
+- In a gap of the local time, the digest time is the end of the gap. When the local time goes back, the digest time is the first such instant.
+
+The digest time of a pass is the last digest time at or before the time of the pass. A digest tells two kinds of incidents:
+
+- Each live incident at the level `digest` for the person. The system got it at or before the digest time. A later incident waits for the next digest.
+- Each incident that a quiet push of `notice` or `urgent` told in the quiet window, after the digest time before. Thus the morning digest tells again what came in the night.
+
+The rules of the entries:
+
+- Each incident is one entry, by its anchor. An incident of the night has the highest level of its quiet pushes.
+- An incident of the level `digest` goes in one digest of each step. A louder delivery to the person keeps it out, because the person already has its message.
+- A digest of the same digest time that told an incident of the night keeps it out.
+- The entries go from the highest level to the lowest, then from the earliest receipt.
+- A digest with no entry sends nothing.
+- A runtime that was down at the digest time sends the digest when it comes back, until the next digest time.
+
+The record of a digest:
+
+- The key of the message comes from the person, the digest time and the step (`digestKey`). Thus a send after a failure has the same key.
+- An accepted digest writes one delivery of the level `digest` for each entry (`digestDeliveries`). Its key comes from `digestEntryKey`.
+- The merge state keeps each delivery. Thus a restart and each other copy know the incidents that a digest told.
+- A failed send writes nothing, and the digest stays due. The flight limit and the refusals apply as to each other send.
+- A copy of rank N waits N times the rank delay of the level `digest` before a send. On an exclusive channel, the rank floor applies.
+- The title gives the count of the entries. The body has one line for each entry, after its level when that level is not `digest`.
+
 ## Levels and the first night rule
 
 | Level | What it does |
 | --- | --- |
 | `life-safety` | It wakes the person, sounds through silent mode and escalates until acknowledged. |
 | `urgent` | A push at once, without the break through Do Not Disturb. |
-| `notice` | A push in the day, else the digest. |
-| `digest` | The next digest. |
+| `notice` | A push in the day. In the quiet window of the person, a quiet push that the next digest tells again. |
+| `digest` | The next digest: one message each day for each person. |
 
 The first assessment is a table of data: `DEFAULT_ASSESS_POLICY`. The policy puts each kind in a class. Each class has two lookups: the highest level for the severity and the highest level for the urgency. The level of the table is the lower of the two.
 

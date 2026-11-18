@@ -99,9 +99,9 @@ export interface DigestPlan {
  *   of today had nothing to tell.
  * - An incident of the level `digest` goes in one digest of each step. A delivery of a louder level to the person
  *   keeps it out, because the person already has its message.
- * - A quiet message of `notice` or `urgent` in the quiet window, after the digest time before and at or before the digest
- *   time, puts its incident in the digest again, with the highest such level. A digest of this digest time that told the
- *   incident keeps it out.
+ * - A quiet message of `notice` or `urgent` in the quiet window puts its incident in the digest again. The message is after
+ *   the digest time before, and at or before the digest time. The entry has the highest such level. A digest of this
+ *   digest time that told the incident keeps it out.
  * - A digest with no incident sends nothing.
  * - A runtime that was down at the digest time sends the digest when it comes back, until the next digest time.
  */
@@ -187,8 +187,8 @@ export function digestMessageOf(send: DigestSend, reports: readonly Report[]): M
 }
 
 /**
- * This function gives the record of a digest that a channel accepted: one delivery of the level `digest` for each
- * incident of the digest, with the time of the accept and the receipt of the channel.
+ * This function gives the record of a digest that a channel accepted. The record is one delivery of the level `digest`
+ * for each incident of the digest. Each delivery has the time of the accept and the receipt of the channel.
  */
 export function digestDeliveries(send: DigestSend, accepted: Instant, receipt?: Receipt): Delivery[] {
   return send.entries.map((entry) => ({

@@ -507,8 +507,8 @@ export function messageOf(incident: Incident, reports: readonly Report[], send: 
 }
 
 /**
- * This function gives the title of an incident in a message: the headline of the report of the text (`messageOf`), or
- * else the label of the kind of the incident.
+ * This function gives the title of an incident in a message. The title is the headline of the report of the text
+ * (`messageOf`). With no headline, it is the label of the kind of the incident.
  */
 export function incidentTitle(incident: Incident, reports: readonly Report[]): string {
   return titleOf(incident, textReport(incident, reports));

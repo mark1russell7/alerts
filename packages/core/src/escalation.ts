@@ -413,8 +413,8 @@ export function dailyTimeProblems(daily: DailyTime): string[] {
 }
 
 /**
- * This function gives the instant of a daily time near `at`: the last one at or before `at`, or with `next` the first
- * one after `at`. A bad daily time or a bad `at` gives `undefined`, and `dailyTimeProblems` finds the bad time.
+ * This function gives the instant of a daily time near `at`. It is the last one at or before `at`. With `next`, it is
+ * the first one after `at`. A bad daily time or a bad `at` gives `undefined`, and `dailyTimeProblems` finds the bad time.
  *
  * - A local time in the gap of a change forward gives the end of the gap. Thus each day has its instant.
  * - A local time in the hour of a change back occurs two times. Only the first instant counts.
@@ -433,8 +433,8 @@ export function dailyInstant(daily: DailyTime, at: Instant, next = false): Insta
 }
 
 /**
- * This function gives the daily time of the digest of a person: the time of the digest policy, or else the end of
- * the quiet window of the person. With neither, it gives `undefined`, and the person gets no digest.
+ * This function gives the daily time of the digest of a person. It is the time of the digest policy, or else the end
+ * of the quiet window of the person. With neither, it gives `undefined`, and the person gets no digest.
  */
 export function digestTimeOf(policy: EscalationPolicy, quiet: QuietWindow | undefined): DailyTime | undefined {
   return policy.daily ?? (quiet === undefined ? undefined : { zone: quiet.zone, time: quiet.end });
