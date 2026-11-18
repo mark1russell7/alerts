@@ -19,6 +19,10 @@
  *
  * A parent class counts its sources at each of its leaf codes, and each count takes the leaf code with the
  * most. Thus two sources of two different children are not a pair of the parent.
+ *
+ * A family is a set of sources of one kind with a public list of members, for example the numbering
+ * authorities of the CVE Program. The count of a family measures the sources that exist. The sources that name
+ * the family measure the members that the atlas knows.
  */
 
 import {
@@ -67,6 +71,11 @@ export const LIVE_DECISIONS: readonly Decision[] = ["adopt", "plan"];
 
 /** The least count of sources of a class, with no reason of a gap. With 2 sources, one source can fail and the class stays live. */
 export const MIN_SOURCES = 2;
+
+/** The formats of the public list of the members of a family. */
+export const LIST_FORMATS = ["json", "csv", "xml", "html", "git"] as const;
+/** One format of a list of members. */
+export type ListFormat = (typeof LIST_FORMATS)[number];
 
 /** The kinds of the parts of a path. */
 export const PATH_KINDS = ["host", "cdn", "carrier", "provider"] as const;
@@ -201,6 +210,40 @@ export interface Source {
   readonly evidence: readonly string[];
   /** The research round that added or last changed the record. */
   readonly round: number;
+  /** The ids of the families in `families.json` that the source is a member of. Absent: the source is in no family. */
+  readonly families?: readonly string[];
+}
+
+/** The public list of the members of a family. */
+export interface MemberList {
+  readonly url: string;
+  readonly format: ListFormat;
+}
+
+/**
+ * One family of sources: the sources of one kind with a public list of members. The atlas does not hold a
+ * record of each member. The count gives the size of the family on one date.
+ */
+export interface Family {
+  readonly id: string;
+  readonly name: string;
+  /** The classes that the members give events of. */
+  readonly classes: readonly string[];
+  /** The rule that makes a source a member, in one sentence. */
+  readonly memberRule: string;
+  readonly list: MemberList;
+  /** The members on the list at the date `countAt`, or `null` when the research did not count them. */
+  readonly count: number | null;
+  /** The local date of the count, `YYYY-MM-DD`, or `null` when `count` is `null`. */
+  readonly countAt: string | null;
+  /** The usual formats of the data of the members, for example `csaf` or `rss`. */
+  readonly formats: readonly string[];
+  /** The basis of the record and the method of the count. */
+  readonly note: string;
+  /** Each page that the research opened for this record. */
+  readonly evidence: readonly string[];
+  /** The research round that added or last changed the record. */
+  readonly round: number;
 }
 
 /** One study that a round read, for example a study of the lead time of a signal. */
@@ -249,6 +292,13 @@ export interface Measures {
    * records of the rounds before round 10 do not have this measure.
    */
   readonly dimensions?: number;
+  /** The records of families. The records of the rounds before round 15 do not have this measure. */
+  readonly families?: number;
+  /**
+   * The sum of the counts of the families. A source in two families counts two times, so this measure is the
+   * size of the lists, not of a set. The records of the rounds before round 15 do not have this measure.
+   */
+  readonly members?: number;
 }
 
 /** The measures that a round records, with the cause of the change from the record before. */
@@ -284,6 +334,8 @@ export interface Atlas {
   readonly paths: readonly PathPart[];
   /** The tree of the regions. An empty list is the whole Earth as one part. */
   readonly regions: readonly Region[];
+  /** The families of sources. */
+  readonly families: readonly Family[];
 }
 
 /** One problem of the atlas. */
@@ -549,7 +601,29 @@ export function measures(atlas: Atlas): Measures {
     unknownOrigins: kept.filter((source) => allOrigins(source).includes(UNKNOWN)).length,
     unknownPaths: kept.filter((source) => listOf(source.path).includes(UNKNOWN)).length,
     dimensions: dimensionCoverage(atlas).filter((row) => row.sources.length >= MIN_SOURCES).length,
+    families: atlas.families.length,
+    members: atlas.families.reduce((total, family) => total + (family.count ?? 0), 0),
   };
+}
+
+/** The members of one family that the atlas knows. */
+export interface FamilyCoverage {
+  readonly id: string;
+  /** The members on the public list, or `null` when the research did not count them. */
+  readonly count: number | null;
+  /** The ids of the sources that name the family, with each decision. */
+  readonly sources: readonly string[];
+  /** The ids of the adopted and planned sources of `sources` with no risk. */
+  readonly live: readonly string[];
+}
+
+/** This function gives the sources of each family, in the order of `families.json`. */
+export function familyCoverage(atlas: Atlas): FamilyCoverage[] {
+  return atlas.families.map((family) => {
+    const sources = atlas.sources.filter((source) => source.families?.includes(family.id) === true);
+    const live = sources.filter((source) => LIVE_DECISIONS.includes(source.decision) && source.risks.length === 0);
+    return { id: family.id, count: family.count, sources: sources.map((source) => source.id), live: live.map((source) => source.id) };
+  });
 }
 
 /** The live sources of one dimension of indicators. */
@@ -580,7 +654,7 @@ export function checkAtlas(atlas: Atlas, context: AtlasContext = {}): AtlasProbl
     if (recorded === undefined) add(at, "the round has no measures");
     else {
       const layered = (group: Layers | undefined): unknown[] => LAYERS.map((name) => group?.[name]);
-      const optional = recorded.dimensions === undefined ? [] : [recorded.dimensions];
+      const optional = [recorded.dimensions, recorded.families, recorded.members].filter((value) => value !== undefined);
       const values = [recorded.classes, recorded.gaps, ...layered(recorded.cover), ...layered(recorded.total), recorded.unknownOrigins, recorded.unknownPaths, ...optional];
       for (const value of values) if (!Number.isSafeInteger(value) || (value as number) < 0) add(at, `the measure ${String(value)} is not a count`);
       if (typeof recorded.cause !== "string" || recorded.cause.trim() === "") add(at, "the measures have no cause");
@@ -649,12 +723,46 @@ export function checkAtlas(atlas: Atlas, context: AtlasContext = {}): AtlasProbl
     if (latest !== undefined && (now.dimensions ?? 0) < dimensionFloor) {
       add("atlas", `${String(now.dimensions ?? 0)} dimensions have ${String(MIN_SOURCES)} live sources, below the ${String(dimensionFloor)} of round ${String(latest.round)}`);
     }
+    // A list of an outside body can become shorter. Then a new round records the count and names the cause.
+    for (const name of ["families", "members"] as const) {
+      const floor = (latest as Partial<Round> | undefined)?.measures?.[name] ?? 0;
+      if (latest !== undefined && (now[name] ?? 0) < floor) add("atlas", `the ${name} measure is ${String(now[name] ?? 0)}, below the ${String(floor)} of round ${String(latest.round)}`);
+    }
   }
-  const classIds = new Set<string>();
+  const classIds = new Set(atlas.classes.map((item) => item.id));
+  const familyIds = new Set<string>();
+  for (const family of atlas.families) {
+    const at = `family ${family.id}`;
+    if (familyIds.has(family.id)) add(at, "the id is not unique");
+    familyIds.add(family.id);
+    if (!SOURCE_ID.test(family.id)) add(at, "the id is not in lower case with hyphens");
+    if (family.name.trim() === "" || family.memberRule.trim() === "" || family.note.trim() === "") add(at, "the family has no name, no rule of a member or no note");
+    if (family.classes.length === 0) add(at, "the family has no class");
+    for (const id of family.classes) if (!classIds.has(id)) add(at, `the class ${id} is not a class of the atlas`);
+    if (!isUrl(family.list.url)) add(at, "the url of the list is not an http or https URL");
+    if (!(LIST_FORMATS as readonly string[]).includes(family.list.format)) add(at, `the format ${family.list.format} of the list is not known`);
+    if (family.count === null ? family.countAt !== null : !Number.isSafeInteger(family.count) || family.count < 0 || family.countAt === null || !DATE.test(family.countAt)) {
+      add(at, "the count is not a count with a date YYYY-MM-DD, or a date has no count");
+    }
+    if (family.evidence.length === 0) add(at, "the family has no evidence");
+    for (const url of family.evidence) if (!isUrl(url)) add(at, `the evidence ${url} is not an http or https URL`);
+    if (!rounds.has(family.round)) add(at, `the round ${String(family.round)} has no record`);
+  }
+  for (const source of atlas.sources) {
+    const named: unknown = (source as Partial<Source>).families;
+    if (named === undefined) continue;
+    const at = `source ${source.id}`;
+    if (!Array.isArray(named) || named.length === 0) add(at, "the field families has no id: give one or more, or no field");
+    else {
+      if (new Set(named).size !== named.length) add(at, "the families have a duplicate");
+      for (const id of named as string[]) if (!familyIds.has(id)) add(at, `the family ${id} is not in families.json`);
+    }
+  }
+  const seenClasses = new Set<string>();
   for (const item of atlas.classes) {
     const at = `class ${item.id}`;
-    if (classIds.has(item.id)) add(at, "the id is not unique");
-    classIds.add(item.id);
+    if (seenClasses.has(item.id)) add(at, "the id is not unique");
+    seenClasses.add(item.id);
     if (!ID.test(item.id)) add(at, "the id is not a dotted id in lower case");
     if (!knownKind(item.id)) add(at, "the id is not a code of the taxonomy of the core");
     if (item.subjectKinds.length === 0) add(at, "the class has no subject kind");
