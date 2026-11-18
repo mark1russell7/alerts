@@ -27,13 +27,13 @@ const BURST = T0 + S.burstAtMs;
 
 const send = (incident: string, at: number, level: BurstSend["level"] = "notice", copy: BurstSend["copy"] = "home"): BurstSend => ({ copy, at, incident, level, person: "person-1" });
 
-// A record with no fault: 6 floods and each tornado sent at the burst, and each other flood held.
+// A record with no fault: the first flood and each tornado sent at the burst, and each other flood held or suppressed.
 function recordOf(arm: BurstArm, change: Partial<BurstRecord> = {}): BurstRecord {
   return {
     arm,
-    sends: [...TORNADOES.map((id) => send(id, BURST, "life-safety")), ...FLOODS.slice(0, S.limits.notice).map((id) => send(id, BURST))],
+    sends: [...TORNADOES.map((id) => send(id, BURST, "life-safety")), send(FLOODS[0]!, BURST)],
     countFrom: T0,
-    holds: FLOODS.slice(S.limits.notice).map((incident) => ({ copy: "home", at: BURST, incident, level: "notice", episode: 0 })),
+    holds: FLOODS.slice(1).map((incident) => ({ copy: "home", at: BURST, incident, level: "notice", episode: 0 })),
     floods: FLOODS,
     tornadoes: TORNADOES,
     flaps: arm === "flapping" ? ["flap-1", "flap-2"] : [],
@@ -57,6 +57,7 @@ describe("the plan of case 15", () => {
     expect(burstSettingsProblems({ ...S, floods: S.limits.notice })).toHaveLength(1);
     expect(burstSettingsProblems({ ...S, stepMs: 60_000 })).toHaveLength(1);
     expect(burstSettingsProblems({ ...S, rollbackMs: S.limits.window })).toHaveLength(1);
+    expect(burstSettingsProblems({ ...S, throttle: { ...S.throttle, window: S.rollbackMs } })).toHaveLength(1);
     expect(burstSettingsProblems({ ...S, quietMs: S.armMs - 15 * MINUTE })).toHaveLength(1);
     expect(burstSettingsProblems({ ...S, waveFloods: 0 })).toHaveLength(1);
   });
@@ -87,13 +88,13 @@ describe("the gates of case 15", () => {
 
   it("fails capped for one send past the limit, and counts only the sends from countFrom", () => {
     const record = recordOf("one-copy");
-    const over = { ...record, sends: [...record.sends, send(FLOODS[S.limits.notice]!, BURST + MINUTE)] };
+    const over = { ...record, sends: [...record.sends, ...FLOODS.slice(1, S.limits.notice + 1).map((id) => send(id, BURST + MINUTE))] };
     expect(burstResultOf(over).gates.capped).toBe(false);
     expect(burstResultOf(over).peak.notice).toBe(S.limits.notice + 1);
     expect(burstResultOf({ ...over, countFrom: BURST + 1 }).gates.capped).toBe(true);
   });
 
-  it("fails held for a flood with no send and no hold, and for a send after a hold of its copy", () => {
+  it("fails held for a flood with no send, no hold and no suppression, and for a send after a hold of its copy", () => {
     const record = recordOf("one-copy");
     expect(burstResultOf({ ...record, holds: record.holds.slice(1) }).gates.held).toBe(false);
     const late = { ...record, sends: [...record.sends, send(FLOODS[S.floods - 1]!, BURST + MINUTE)] };
@@ -101,6 +102,14 @@ describe("the gates of case 15", () => {
     // A send of the other copy after a hold is not a send after its own hold.
     const other = { ...record, sends: [...record.sends, send(FLOODS[S.floods - 1]!, BURST + MINUTE, "notice", "cloud")] };
     expect(burstResultOf(other).gates.held).toBe(true);
+  });
+
+  it("fails throttled for a second notice of a copy in one window of the throttle", () => {
+    const record = recordOf("two-copies");
+    expect(burstResultOf({ ...record, sends: [...record.sends, send(FLOODS[1]!, BURST + MINUTE)] }).gates.throttled).toBe(false);
+    // A notice of the other copy, or a notice at the end of the window, is not a second notice of the copy in the window.
+    expect(burstResultOf({ ...record, sends: [...record.sends, send(FLOODS[1]!, BURST + MINUTE, "notice", "cloud")] }).gates.throttled).toBe(true);
+    expect(burstResultOf({ ...record, sends: [...record.sends, send(FLOODS[1]!, BURST + S.throttle.window)] }).gates.throttled).toBe(true);
   });
 
   it("fails lifeSafety when a tornado warning has no send", () => {
@@ -124,7 +133,7 @@ describe("the gates of case 15", () => {
     expect(burstResultOf({ ...record, sends: [...record.sends, send(FLOODS[0]!, BURST + MINUTE, "notice", "cloud")] }).gates.oneSend).toBe(false);
   });
 
-  it("fails flapped with no flap incident, and for a flap with no send and no hold", () => {
+  it("fails flapped with no flap incident, and for a flap with no send, no hold and no suppression", () => {
     const [flapping] = goodRecords().filter((record) => record.arm === "flapping");
     expect(burstResultOf({ ...flapping!, flaps: ["flap-1"] }).gates.flapped).toBe(true);
     expect(burstResultOf({ ...flapping!, flaps: [] }).gates.flapped).toBe(false);
@@ -140,7 +149,8 @@ describe("the verdict of case 15", () => {
   });
 
   it("reads and fails when an arm with two copies sends past the limit", () => {
-    const records = goodRecords().map((record) => (record.arm === "split" ? { ...record, sends: [...record.sends, send(FLOODS[S.limits.notice]!, BURST, "notice", "cloud")] } : record));
+    const past = FLOODS.slice(1, S.limits.notice + 1).map((id) => send(id, BURST, "notice", "cloud"));
+    const records = goodRecords().map((record) => (record.arm === "split" ? { ...record, sends: [...record.sends, ...past] } : record));
     const verdict = burstVerdictOf(records);
     expect([verdict.read, verdict.pass]).toEqual([true, false]);
     expect(verdict.results.split.gates.capped).toBe(false);

@@ -545,6 +545,7 @@ const SCHEMA_NAMES = [
   "subjectKindSchema",
   "subjectSchema",
   "subjectWatchSchema",
+  "throttleConfigSchema",
   "transportSchema",
   "tryChainSchema",
   "underPriorSchema",

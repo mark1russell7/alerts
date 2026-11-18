@@ -33,6 +33,7 @@ import {
 } from "./contracts.ts";
 import { dailyTimeProblems, digestTimeOf, escalate, escalationProblems, quietWindowProblems, rankDelayOf, rankFloors, type EscalationPlan, type EscalationSend, type RankDelays } from "./escalation.ts";
 import { messageKey } from "./ids.ts";
+import type { Suppression } from "./throttle.ts";
 import { unknownKinds } from "./taxonomy.ts";
 import { assessmentWhy } from "./why.ts";
 
@@ -233,6 +234,11 @@ export interface Route {
   readonly why?: WhyRecord;
   /** The hold of the send limit (`limitRoutes`). A held route has no send in its plan. Its cancels stay. */
   readonly held?: EscalationHold;
+  /**
+   * The first suppression of the throttle (`throttleRoutes`), when the escalation has no delivery. The person did not get
+   * its message, thus such a route gives no exhaustion.
+   */
+  readonly suppressed?: Suppression;
 }
 
 /**
@@ -432,6 +438,7 @@ export function asksForAck(policy: EscalationPolicy, channels: readonly ChannelD
  * - Its policy has a step after the channel rules. A plan that a channel rule empties sent nothing to the person.
  * - A step of its policy asks for an acknowledgment (`asksForAck`). Without such a step, no acknowledgment can come.
  * - The send limit did not hold it (`Route.held`). A held escalation sent nothing, and the digest tells it.
+ * - The throttle did not stop it with no delivery (`Route.suppressed`). Such an escalation sent nothing, and the digest tells it.
  *
  * The reports give the title of each warning (`incidentTitle`).
  */
@@ -439,7 +446,7 @@ export function exhaustions(routes: readonly Route[], channels: readonly Channel
   const found: Exhaustion[] = [];
   for (const entry of routes) {
     const { incident, plan, policy } = entry;
-    if (entry.held !== undefined || incident.status !== "actual" || plan.state !== "exhausted" || plan.exhaustedAt === undefined) continue;
+    if (entry.held !== undefined || entry.suppressed !== undefined || incident.status !== "actual" || plan.state !== "exhausted" || plan.exhaustedAt === undefined) continue;
     if (policy.steps.length === 0 || !asksForAck(policy, channels)) continue;
     found.push({ incident: entry.start.incident, person: entry.person, level: policy.level, episode: entry.episode, at: plan.exhaustedAt, kind: incident.kind, title: incidentTitle(incident, reports) });
   }

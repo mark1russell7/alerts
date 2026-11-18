@@ -985,6 +985,32 @@ A new source starts in the observe mode (AL-73). It sends nothing below `life-sa
 - The log holds the reports and the start of the mode. Thus a restart does not start the 24 hours again.
 - `GET /status` gives the mode of each source. A source that observes also has its hours, its rate in each hour, its highest share and its reason.
 
+## The throttle
+
+The core function `throttleRoutes` applies the rise-only throttle of each person and channel to the routes of a pass (AL-72 part 4). It comes after the send limit.
+
+- In one window, a channel sends a second message to a person only when the level is above each level that it sent to the person in the window.
+- A send at the same level or at a lower level does not go. It gets a suppression with its reason: `same-level` or `lower-level`.
+- The suppression is an event `suppressed` of the log of the copy. It is not shared. Its field `over` has the highest level in the window.
+- A suppression does not end. Thus a suppressed send does not go late, also after its window.
+- The default window is 30 minutes for each person and channel (`DEFAULT_THROTTLE`).
+- The field `throttle` of the configuration changes the window, the key or the levels with an exemption. The window is one minute to one day.
+- The key `channel` has one window for each person and channel. The key `incident` has one window for each person, channel and incident.
+- A level with an exemption always sends. The default exemption is `life-safety`. Thus a `life-safety` alert of a new incident goes at once, and each step of its escalation goes until the acknowledgment.
+- The sends of a level with an exemption count in the bar of the other levels. A digest has no throttle, and it does not count.
+- The bar counts the deliveries of the other copies, thus the throttle applies over all the copies.
+- A send in flight, or a send with an open copy in the log, goes. Its level counts in the bar.
+- The other sends of a pass go in the order of their due times, then of the anchor, the episode, the step and the channel.
+- An escalation with a suppression and no delivery has no exhaustion. The next digest tells its incident.
+- The send limit stays. It counts the new escalations of each level over all the channels, and the throttle counts the messages on each channel.
+
+The default window comes from a replay of the burst of 2026-11-18, with made-up ids (`packages/core/fixtures/burst-2026-11-18.json`).
+
+- The burst gave 171 messages to one person on one channel in 22 minutes: 130 at `notice` and 41 at `urgent`, in two waves 9 minutes apart.
+- With a window of 15 minutes or more, the replay gives 2 messages in the burst: the first notice and the first urgent message. A window of 10 minutes gives 3.
+- On 2026-11-16 and 2026-11-17, the shortest time between two messages that did not come at the same time was 32 minutes.
+- The default window, 30 minutes, is in the range from 15 to 32 minutes. It keeps the burst at 2 messages, and it stops no separate message of a normal day.
+
 ## The down channels
 
 The runtime reads the results of its own calls, because the path of the alerts has no second status source (AL-65).
@@ -1026,7 +1052,7 @@ The digest time of a pass is the last digest time at or before the time of the p
 
 - Each live incident at the level `digest` for the person. The system got it at or before the digest time. A later incident waits for the next digest.
 - Each incident that a quiet push of `notice` or `urgent` told in the quiet window, after the digest time before. Thus the morning digest tells again what came in the night.
-- Each incident that the send limit held after the digest time before, when the person has no message of the incident (AL-72).
+- Each incident that the send limit held or the throttle stopped after the digest time before, when the person has no message of the incident (AL-72).
 
 The rules of the entries:
 

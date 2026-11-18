@@ -7,7 +7,7 @@
  * - Each live incident of the level `digest` for the person that no earlier digest told, and that no louder message told.
  * - Each incident that a quiet message of the level `notice` or `urgent` told in the quiet window since the digest time before.
  *   Thus the morning digest tells again what came in the night.
- * - Each incident that the send limit held since the digest time before, with no message to the person (AL-72).
+ * - Each incident that the send limit held or the throttle stopped since the digest time before, with no message to the person (AL-72).
  *
  * The record of a digest is one delivery for each incident in it (`digestDeliveries`). The merge state keeps each delivery, thus
  * a restart and each other copy of the system know which incidents a digest told. A send that failed makes no record, thus
@@ -55,7 +55,7 @@ export interface DigestInput {
   readonly rankDelays?: RankDelays | undefined;
   /** The least wait of one rank before a send on an exclusive channel. */
   readonly rankFloor?: Duration | undefined;
-  /** The holds of the send limit (`limitRoutes`). The default is no hold. */
+  /** The holds of the send limit (`limitRoutes`) and the suppressions of the throttle (`throttleRoutes`). The default is no hold. */
   readonly holds?: readonly EscalationHold[] | undefined;
   readonly now: Instant;
 }
@@ -105,9 +105,9 @@ export interface DigestPlan {
  * - A quiet message of `notice` or `urgent` in the quiet window puts its incident in the digest again. The message is after
  *   the digest time before, and at or before the digest time. The entry has the highest such level. A digest of this
  *   digest time that told the incident keeps it out.
- * - A hold of the send limit puts its incident in the digest when the person has no message of the incident. The hold
- *   is after the digest time before, and at or before the digest time. The entry has the highest level of such holds. A
- *   digest of this digest time that told the incident keeps it out.
+ * - A hold of the send limit or a suppression of the throttle puts its incident in the digest when the person has no
+ *   message of the incident. The hold is after the digest time before, and at or before the digest time. The entry has
+ *   the highest level of such holds. A digest of this digest time that told the incident keeps it out.
  * - A digest with no incident sends nothing.
  * - Each step of a person sends one digest for each digest time, across the copies. A digest delivery of the step at or
  *   after the digest time keeps the step quiet. Thus the entries that only this copy knows wait for the next digest.
