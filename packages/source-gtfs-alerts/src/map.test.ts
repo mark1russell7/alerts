@@ -98,7 +98,6 @@ describe("mapObservation of the real feeds", () => {
       certainty: "observed",
       sent: FETCHED,
       onset: Date.parse("2026-11-09T00:01:00Z"),
-      expires: Date.parse("2026-11-20T22:59:00Z"),
       headline: "ZDiTM Szczecin: Route changed: Metalowa ↔ Miechowska",
       web: "https://www.zditm.szczecin.pl/en/passenger/disruptions/other/1124",
       parameters: { effect: ["MODIFIED_SERVICE"], cause: ["OTHER_CAUSE"], route: ["85", "904"], language: ["pl", "en", "de", "uk"] },
@@ -110,6 +109,8 @@ describe("mapObservation of the real feeds", () => {
       { system: ROUTE_SUBJECT, id: "mdb-1967/85" },
       { system: ROUTE_SUBJECT, id: "mdb-1967/904" },
     ]);
+    // The end of the period of the route is to come, and some feeds move such an end at each fetch. Thus the report has no expiry.
+    expect(route?.expires).toBeUndefined();
     // The stop moved with no end: the report has no expiry.
     expect(reports[1]?.expires).toBeUndefined();
     expect(reports[1]?.parameters["effect"]).toEqual(["STOP_MOVED"]);
@@ -126,8 +127,9 @@ describe("mapObservation of the real feeds", () => {
     const byKey = new Map(reports.map((report) => [report.key.replace("RUT:SituationNumber:", ""), report]));
     // An alert that starts after the fetch is a future report, with the start of its period as its onset.
     expect(byKey.get("SM-5b1ba2062e664e1aa117b1a70d9981eb")).toMatchObject({ urgency: "future", certainty: "likely", onset: Date.parse("2026-11-19T00:06:00Z") });
-    // An alert of each night: the onset is the start of the night of the fetch, and the expiry the end of the last night.
-    expect(byKey.get("2026-76070-2")).toMatchObject({ urgency: "immediate", onset: Date.parse("2026-11-17T21:00:00Z"), expires: Date.parse("2026-11-30T05:00:00Z") });
+    // An alert of each night: the onset is the start of the night of the fetch. The last night is to come, thus the report has no expiry.
+    expect(byKey.get("2026-76070-2")).toMatchObject({ urgency: "immediate", onset: Date.parse("2026-11-17T21:00:00Z") });
+    expect(byKey.get("2026-76070-2")?.expires).toBeUndefined();
     // The English text wins when the feed names the languages. A text with no language code gives no language.
     expect(byKey.get("313478")).toMatchObject({ headline: "Ruter: Change of platform at Brynseng", parameters: { language: ["no", "en"] } });
     expect(byKey.get("2026-74405-1")?.parameters["language"]).toBeUndefined();
