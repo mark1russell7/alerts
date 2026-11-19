@@ -1545,6 +1545,9 @@ describe("the send limit in the passes of the runtime (AL-72)", () => {
     expect(holds(log)).toHaveLength(BURST - 2);
     // The line of the notice ends one window after the last hold. The end is a cancel, not a send: the phone gets no second message.
     await clock.advance(LIMITS.window);
+    await runtime.pass();
+    // The view of a pass reads the merge state before the system reports of the pass. Thus the next pass shows the cancel.
+    await clock.advance(MINUTE);
     const after = await runtime.pass();
     expect(after.view.incidents.filter((incident) => incident.kind.code === "system.limit.held").map((incident) => incident.live)).toEqual([false]);
     expect(sms.send).toHaveLength(3);
@@ -1618,9 +1621,13 @@ describe("the send limit in the passes of the runtime (AL-72)", () => {
       const { clock, log } = first;
       let { runtime } = first;
       const waits: number[][] = [];
+      // The notice of the send limit (AL-81) has its own refused sends from a later round. The test follows the keys of the first round.
+      let keys: ReadonlySet<string> | undefined;
       for (let round = 0; round < 4; round += 1) {
         const pass = await runtime.pass();
-        const failures = pass.delivery?.failures.filter((failure) => failure.call === "send") ?? [];
+        const sends = pass.delivery?.failures.filter((failure) => failure.call === "send") ?? [];
+        keys ??= new Set(sends.map((failure) => failure.key));
+        const failures = sends.filter((failure) => keys?.has(failure.key));
         expect(failures.map((failure) => failure.kind)).toEqual(["refused", "refused"]);
         const round_ = failures.map((failure) => failure.retryAt - clock.now());
         waits.push(round_);
