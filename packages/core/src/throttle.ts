@@ -4,7 +4,7 @@
  * the channel sent to the person in the window. A send of the same level or of a lower level does not go. The log keeps
  * it as a suppression with its reason, and the digest tells its incident. Each stream has its own window. By default,
  * the system lines (the kinds of the family `system`) are one stream, and the alerts are the other stream. Thus a health
- * notice never stops a weather notice, and a weather notice never stops a health notice.
+ * notice does not stop a weather notice, and a weather notice does not stop a health notice.
  */
 import { compareCodeUnits } from "@mark1russell7/text/order";
 import { LEVELS, type ChannelId, type Delivery, type Duration, type Instant, type Level, type PersonId, type Report, type ReportId } from "./contracts.ts";

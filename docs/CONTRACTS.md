@@ -990,7 +990,7 @@ A new source starts in the observe mode (AL-73). It sends nothing below `life-sa
 The core function `throttleRoutes` applies the rise-only throttle of each person, channel and stream to the routes of a pass (AL-72 part 4). It comes after the send limit.
 
 - In one window, a channel sends a second message of a stream to a person only at a higher level.
-- By default, there are two streams: the system lines (the kinds of the family `system`) and the alerts (each other kind). Thus a health notice never stops a weather notice, and a weather notice never stops a health notice.
+- By default, there are two streams: the system lines (the kinds of the family `system`) and the alerts (each other kind). Thus a health notice does not stop a weather notice, and a weather notice does not stop a health notice.
 - With the streams `family`, each family of the alerts is a stream. The family is the first part of the kind, for example `met` of `met.flood`. The system lines stay one stream.
 - The kind of the incident of a route, or of the report of a delivery, gives the stream. The report comes from the merge state. A retirement removes a report and its deliveries together, thus a delivery in the window always has its report.
 - A delivery of a report that the copy does not know is in the stream of the system lines. The copies share the reports of the alerts, but not the system lines. Thus such a delivery is a system line of the other copy.
