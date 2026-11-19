@@ -21,6 +21,7 @@ import type {
   ReportId,
   ShadowScore,
   SourceId,
+  Suppression,
 } from "@mark1russell7/alerts";
 
 // The kind of a failed call of a channel has its home in the core. The runtime gives it again, as before.
@@ -174,6 +175,14 @@ export interface HoldEvent extends Envelope<"hold"> {
 }
 
 /**
+ * The throttle of the person and the channel stopped a send (`throttleRoutes` of the core, AL-72 part 4). The send does
+ * not go, and the next digest tells its incident. This event is not shared: each copy keeps its own suppressions.
+ */
+export interface SuppressedEvent extends Envelope<"suppressed"> {
+  readonly suppression: Suppression;
+}
+
+/**
  * The wall clock stepped against the monotonic clock, back or forward. The fold moves each own instant of the state by
  * `size`. Thus each timer keeps its distance on the monotonic clock, and a rebuild gives the same state.
  */
@@ -299,6 +308,7 @@ export type RuntimeEvent =
   | EscalationEvent
   | EscalationEndEvent
   | HoldEvent
+  | SuppressedEvent
   | DeliveryEvent
   | AcknowledgmentEvent
   | CancelledEvent
@@ -324,6 +334,7 @@ export const EVENT_TYPES: readonly RuntimeEvent["type"][] = [
   "escalation",
   "escalation-end",
   "hold",
+  "suppressed",
   "delivery",
   "acknowledgment",
   "cancelled",

@@ -16,6 +16,7 @@ import {
   exhaustions,
   holdKey,
   limitRoutes,
+  throttleRoutes,
   graphLabels,
   incidents,
   linkRule,
@@ -40,9 +41,11 @@ import {
   type LinkPolicy,
   type RankDelays,
   type Recipient,
-  type LimitResult,
+  type EscalationHold,
   type Route,
   type SendLimits,
+  type Suppression,
+  type Throttle,
   type ScorePriors,
   type SendOutcome,
   type WatchedPlace,
@@ -104,6 +107,11 @@ export interface DeliveryOptions {
   readonly refusalLimit?: Duration;
   /** The send limit of each person (`limitRoutes` of the core, AL-72). The default is `DEFAULT_SEND_LIMITS`. */
   readonly sendLimits?: SendLimits;
+  /**
+   * The rise-only throttle of each person and channel (`throttleRoutes` of the core, AL-72 part 4). Without it, the
+   * runtime has no throttle. The instance gives the throttle of the configuration (`throttleOf`).
+   */
+  readonly throttle?: Throttle;
   /**
    * The private labels of the nodes of the why records, for the why line of each message. The labels stay in the
    * runtime: no record and no log event holds them. Without them, each why line uses plain nouns.
@@ -387,8 +395,9 @@ export function createDispatcher(options: DeliveryOptions, context: DeliveryCont
       for (const [call, until] of waits) if (until <= at) waits.delete(call);
       const merged = incidents(context.state().merge, at, { link });
       const found = context.cut === undefined ? merged : context.cut(merged, at);
-      // The routes at the time of the step, after the send limit of each person. The new holds go to the log in step 2.
-      const routesNow = (): LimitResult => {
+      // The routes at the time of the step, after the send limit of each person and the throttle of each channel. The new
+      // holds and suppressions go to the log in step 2.
+      const routesNow = (): { readonly routes: readonly Route[]; readonly holds: readonly EscalationHold[]; readonly suppressions: readonly Suppression[] } => {
         const state = context.state();
         const routes = route({
           state: state.merge,
@@ -408,7 +417,12 @@ export function createDispatcher(options: DeliveryOptions, context: DeliveryCont
         });
         // A send in flight, or an open copy of the log, can already be on the phone. Thus its route keeps its place.
         const started = new Set([...flying.keys(), ...Object.values(state.copies).map((copy) => copy.key)]);
-        return limitRoutes({ routes, deliveries: state.merge.deliveries, holds: state.holds, limits: options.sendLimits, share: context.share?.(at), started, now: at });
+        const limited = limitRoutes({ routes, deliveries: state.merge.deliveries, holds: state.holds, limits: options.sendLimits, share: context.share?.(at), started, now: at });
+        // The send limit counts new escalations, and the throttle counts messages on each channel. The send limit stays a
+        // cap over all the channels.
+        if (options.throttle === undefined) return { ...limited, suppressions: [] };
+        const throttled = throttleRoutes({ routes: limited.routes, deliveries: state.merge.deliveries, suppressions: state.suppressions, reports: state.merge.reports, throttle: options.throttle, started, now: at });
+        return { routes: throttled.routes, holds: limited.holds, suppressions: throttled.suppressions };
       };
       const failures: DeliveryFailure[] = [];
       const conflicts: string[] = [];
@@ -528,6 +542,8 @@ export function createDispatcher(options: DeliveryOptions, context: DeliveryCont
       write([...ending].map(([id, end]) => ({ ...envelope("escalation-end", id, at), end })));
       // The holds of the send limit, after the start of each escalation. A held escalation has no send in this step.
       write(capped.holds.map((hold) => ({ ...envelope("hold", `hold:${holdKey(hold)}`, at), hold })));
+      // The suppressions of the throttle. A suppressed send does not go in this step or later.
+      write(capped.suppressions.map((suppression) => ({ ...envelope("suppressed", `suppressed:${suppression.key}`, at), suppression })));
 
       // 3. The sends and the cancels. Each result goes to the log at once, thus a crash loses the fewest results.
       const cancelled: string[] = [];
@@ -691,7 +707,7 @@ export function createDispatcher(options: DeliveryOptions, context: DeliveryCont
         rankDelay: options.rankDelay,
         rankDelays: options.rankDelays,
         rankFloor: options.rankFloor,
-        holds: context.state().holds,
+        holds: [...context.state().holds, ...context.state().suppressions],
         now: at,
       });
       for (const send of digests.sends) {

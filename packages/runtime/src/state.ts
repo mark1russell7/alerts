@@ -32,6 +32,7 @@ import {
   type EscalationEnd,
   type EscalationHold,
   type EscalationStart,
+  type Suppression,
   type HealthOptions,
   type HealthTrack,
   type Instant,
@@ -117,6 +118,8 @@ export interface RuntimeState {
   readonly escalationEnds: readonly EscalationEnd[];
   /** The holds of the send limit of this copy (AL-72), in the order of the log. Each copy keeps its own holds. */
   readonly holds: readonly EscalationHold[];
+  /** The suppressions of the throttle of this copy (AL-72 part 4), in the order of the log. Each copy keeps its own. */
+  readonly suppressions: readonly Suppression[];
   /**
    * The open copies, by copy id: each send on a channel that repeats with no delivery of its copy and no
    * `settled` event. The channel can repeat them. After a restart, the delivery step stops them.
@@ -237,6 +240,7 @@ export const EMPTY_RUNTIME: RuntimeState = {
   starts: [],
   escalationEnds: [],
   holds: [],
+  suppressions: [],
   copies: {},
   refusals: {},
   delivered: {},
@@ -399,6 +403,8 @@ function foldRest(state: RuntimeState, event: RuntimeEvent, context: FoldContext
       return { ...base, starts: [...state.starts, event.start] };
     case "hold":
       return { ...base, holds: [...state.holds, event.hold] };
+    case "suppressed":
+      return { ...base, suppressions: [...state.suppressions, event.suppression] };
     case "escalation-end": {
       const own = { ...state.own, escalationEnds: [...state.own.escalationEnds, event.end] };
       return { ...base, own, escalationEnds: joinedEnds(own, state.imported) };
@@ -491,6 +497,7 @@ function foldRetired(state: RuntimeState, event: RetiredEvent): RuntimeState {
     ...joined(own, imported),
     starts: state.starts.filter((start) => !gone.has(start.incident)),
     holds: state.holds.filter((hold) => !gone.has(hold.incident)),
+    suppressions: state.suppressions.filter((suppression) => !gone.has(suppression.incident)),
     cancelled: state.cancelled.filter((key) => !cancelled.has(key)),
     cancelledSince: withoutAll(state.cancelledSince, cancelled),
     cancelTombstones: retireKeys(state.cancelTombstones, event.cancelled, event.until, event.time),
@@ -591,6 +598,7 @@ export function shiftState(state: RuntimeState, size: Duration): RuntimeState {
     cancelTombstones: state.cancelTombstones.map((tombstone) => ({ ...tombstone, until: tombstone.until + size })),
     starts: state.starts.map((start) => shiftEscalationStart(start, size)),
     holds: state.holds.map((hold) => ({ ...hold, at: hold.at + size })),
+    suppressions: state.suppressions.map((suppression) => ({ ...suppression, at: suppression.at + size })),
     steps: state.steps.map((step) => ({ ...step, at: step.at + size })),
     recoveries: state.recoveries.map((recovery) => ({ ...recovery, at: recovery.at + size })),
     drills: Object.fromEntries(Object.entries(state.drills).map(([drill, at]) => [drill, at + size])),

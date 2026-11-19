@@ -161,6 +161,7 @@ import type { TryChain } from "./chain.ts";
 import type { ChannelDownConfig, ChannelRun } from "./channel-down.ts";
 import type { SourceClearConfig } from "./system-reports.ts";
 import type { SendLimitConfig } from "./send-limit.ts";
+import type { ThrottleConfig } from "./throttle.ts";
 import type { EscalationEnd, Recipient } from "./delivery.ts";
 import type { DrillConfig, DrillPath } from "./drill.ts";
 import { OPT_IN_WAYS, type OptInConfig, type OptInRecord } from "./opt-in.ts";
@@ -1592,6 +1593,11 @@ export const sendLimitConfigSchema: z.ZodType<SendLimitConfig, SendLimitConfig> 
   z.strictObject({ window: durationSchema.exactOptional(), notice: z.number().int().exactOptional(), urgent: z.number().int().exactOptional() }).readonly(),
 );
 
+/** This schema checks the throttle of each person and channel (AL-72 part 4). `loadConfig` checks the bounds of the window. */
+export const throttleConfigSchema: z.ZodType<ThrottleConfig, ThrottleConfig> = schemaOf<ThrottleConfig>()(
+  z.strictObject({ window: durationSchema.exactOptional(), key: z.enum(["channel", "incident"]).exactOptional(), streams: z.enum(["system", "family"]).exactOptional(), exempt: z.array(levelSchema).readonly().exactOptional() }).readonly(),
+);
+
 /** This schema checks the policy of a down channel (AL-65). A run opens a line at 1 failed call or more. */
 export const channelDownConfigSchema: z.ZodType<ChannelDownConfig, ChannelDownConfig> = schemaOf<ChannelDownConfig>()(
   z.strictObject({ failures: z.number().int().min(1).exactOptional(), span: durationSchema.exactOptional() }).readonly(),
@@ -1628,6 +1634,7 @@ export const alertConfigSchema: z.ZodType<AlertConfig, AlertConfig> = schemaOf<A
       channelDown: channelDownConfigSchema.exactOptional(),
       sourceClear: sourceClearConfigSchema.exactOptional(),
       sendLimit: sendLimitConfigSchema.exactOptional(),
+      throttle: throttleConfigSchema.exactOptional(),
     })
     .readonly(),
 );

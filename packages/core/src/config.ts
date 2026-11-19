@@ -20,6 +20,7 @@ import type { TryChain } from "./chain.ts";
 import type { Expectation } from "./lateness.ts";
 import { rankDelayProblems, rankFloorProblems, type RankDelays } from "./escalation.ts";
 import { sendLimitProblems, type SendLimitConfig } from "./send-limit.ts";
+import { throttleProblems, type ThrottleConfig } from "./throttle.ts";
 import type { LinkPolicy } from "./link.ts";
 import { kindOfNode, placeNode, placeOfNode, type WhyLabels } from "./why.ts";
 
@@ -218,6 +219,11 @@ export interface AlertConfig {
    * over all the copies. Each field that is absent keeps its default (`DEFAULT_SEND_LIMITS`).
    */
   readonly sendLimit?: SendLimitConfig;
+  /**
+   * The rise-only throttle of each person, channel and stream (AL-72 part 4). In one window, a channel sends again to a
+   * person only for a higher level of the stream. Each field that is absent keeps its default (`DEFAULT_THROTTLE`).
+   */
+  readonly throttle?: ThrottleConfig;
 }
 
 /** The name of the format of a part of the configuration. A change that breaks a part gets a new name. */
@@ -529,6 +535,7 @@ export function loadConfig(config: AlertConfig, channels: readonly ChannelDescri
   problems.push(...rankDelayProblems(config.rankDelay ?? {}));
   problems.push(...rankFloorProblems(config.rankFloor));
   problems.push(...sendLimitProblems(config.sendLimit ?? {}));
+  problems.push(...throttleProblems(config.throttle ?? {}));
 
   const called = new Set<string>();
   for (const { person, chain } of config.outage?.people ?? []) {

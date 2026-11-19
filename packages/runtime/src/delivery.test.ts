@@ -1,6 +1,7 @@
 import { fakeWallClock } from "@mark1russell7/algebra/clock";
 import {
   COPY_ID,
+  DEFAULT_THROTTLE,
   ESCALATION_KIND,
   ONLY_COPY,
   PERSON_SUBJECT,
@@ -1541,6 +1542,36 @@ describe("the send limit in the passes of the runtime (AL-72)", () => {
     // The fold of the log gives the same holds.
     expect(runtime.state()).toEqual(rebuild(log.read(), runtime.config));
     expect(runtime.state().holds).toHaveLength(BURST - 2);
+    log.close();
+  });
+
+  const suppressed = (log: RuntimeLog) => [...log.read()].flatMap((event) => (event.type === "suppressed" ? [event.suppression] : []));
+
+  it("(d) writes a suppressed event with its reason for each send under the bar of the throttle, and never sends it (AL-72 part 4)", async () => {
+    // An urgent message went to the person on the text channel 1 minute before the burst.
+    const log = openRuntimeLog(":memory:");
+    const incident = reportId({ source: API, key: "earlier", sent: T0 - 2 * MINUTE });
+    const delivery = { key: messageKey({ incident, level: "urgent", person: PERSON, step: 0 }), incident, level: "urgent" as const, person: PERSON, channel: SMS, step: 0, at: T0 - MINUTE, receipt: {} };
+    // Its report is in the merge state, thus it is in the stream of the alerts. The person does not watch its kind: it has no route.
+    const seen: Observation = { id: "api:earlier" as ObservationId, source: API, fetched: T0 - 2 * MINUTE, contentType: "application/json", body: "{}", transport: { latency: 0 } };
+    const earlier: Report = { ...warning(seen), id: incident, key: "earlier", sent: T0 - 2 * MINUTE, kind: { code: "geo.landslide", label: "Landslide Warning" }, categories: ["geo"], areas: [{ type: "code", system: "ugc", code: "TXZ205" }] };
+    const fetched: RuntimeEvent = { ...envelope("fetch", "fetch:earlier", T0 - 2 * MINUTE), record: { source: API, at: T0 - 2 * MINUTE, took: 100, fresh: 1, fatal: 0 }, reports: [earlier], problems: [] };
+    log.appendAll([fetched, { ...envelope("delivery", `delivery:${delivery.key}`, T0 - MINUTE), delivery }], () => undefined);
+    const { clock, runtime, sms } = openBurst({}, { sendLimits: LIMITS, throttle: DEFAULT_THROTTLE }, log);
+    await runtime.pass();
+    // The send limit admits 2 notices and holds the rest. The throttle stops the 2 notices: they are under the urgent message.
+    expect(sms.send).toHaveLength(0);
+    const first = suppressed(log);
+    expect(first.map((one) => [one.level, one.reason, one.over, one.channel, one.person])).toEqual(Array.from({ length: LIMITS.notice }, () => ["notice", "lower-level", "urgent", SMS, PERSON]));
+    expect(holds(log)).toHaveLength(BURST - LIMITS.notice);
+    // After the window, the suppressed sends still do not go, and no pass writes them again.
+    await clock.advance(DEFAULT_THROTTLE.window + MINUTE);
+    await runtime.pass();
+    expect(sms.send).toHaveLength(0);
+    expect(suppressed(log)).toEqual(first);
+    // The fold of the log gives the same suppressions.
+    expect(runtime.state()).toEqual(rebuild(log.read(), runtime.config));
+    expect(runtime.state().suppressions).toEqual(first);
     log.close();
   });
 

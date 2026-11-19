@@ -2,7 +2,8 @@
  * AL-72, case 15: a burst of new incidents and the send limit of each person. One source gives 100 made-up flood
  * statements and 2 made-up tornado warnings for one place at one time. A flood statement reaches the person at
  * `notice`, and a tornado warning reaches the person at `life-safety`. The send limit holds the notices past the limit
- * of the person, and the next digest tells them. A `life-safety` alert has no limit.
+ * of the person, and the next digest tells them. A `life-safety` alert has no limit. The throttle of the channel stops
+ * each notice after the first notice in its window (AL-72 part 4), and the next digest tells them too.
  *
  * Each arm has one runtime or two runtimes on one fake wall clock: `home` with rank 0 and `cloud` with rank 1, as two
  * instances. The case does each pass and each read of the exchange itself, in steps of `stepMs`. A read takes the pages
@@ -25,12 +26,15 @@
  * The gates of each arm:
  *
  * - `capped`: in each window of the limit, the incidents with a send to the person at a level are not more than the limit.
- * - `held`: each flood statement has a send or a hold. No copy sends an incident after its own hold of the incident.
+ * - `held`: each flood statement has a send, a hold or a suppression. No copy sends an incident after its own hold or
+ *   suppression of the incident.
  * - `lifeSafety`: each tornado warning has a send.
- * - `settles`: in the last `quietMs` of the arm, no copy writes an escalation, a hold or an end, and no copy sends.
+ * - `settles`: in the last `quietMs` of the arm, no copy writes an escalation, a hold, a suppression or an end, and no
+ *   copy sends.
  * - `noThrow`: no pass throws, and each read of the exchange has no problem.
  * - `oneSend`, in the arms where the copies read each other at each step: no incident has a send of each copy.
- * - `flapped`, in `flapping`: the flaps gave 1 system incident or more, and each one has a send or a hold. Before
+ * - `throttled`: in each window of the throttle, each copy sends at most one notice to the person.
+ * - `flapped`, in `flapping`: the flaps gave 1 system incident or more, and each one has a send, a hold or a suppression. Before
  *   AL-75, each flap opens a new incident. A flap window of the health line keeps one incident for each episode.
  */
 import { fakeWallClock, type WallClock } from "@mark1russell7/algebra/clock";
@@ -50,6 +54,8 @@ import {
   reportId,
   type SendLimits,
   type SourceDescriptor,
+  DEFAULT_THROTTLE,
+  type Throttle,
   type SourceId,
   type SourceProcedures,
   SOURCE_SUBJECT,
@@ -99,11 +105,11 @@ export const BURST_ARMS = ["one-copy", "two-copies", "split", "imported", "flapp
 export type BurstArm = (typeof BURST_ARMS)[number];
 
 /** The gates of the case. */
-export const BURST_GATES = ["capped", "held", "lifeSafety", "settles", "noThrow", "oneSend", "flapped"] as const;
+export const BURST_GATES = ["capped", "held", "throttled", "lifeSafety", "settles", "noThrow", "oneSend", "flapped"] as const;
 /** One gate of the case. */
 export type BurstGate = (typeof BURST_GATES)[number];
 
-const BASE_GATES: readonly BurstGate[] = ["capped", "held", "lifeSafety", "settles", "noThrow"];
+const BASE_GATES: readonly BurstGate[] = ["capped", "held", "throttled", "lifeSafety", "settles", "noThrow"];
 
 /** The gates of each arm. */
 export const ARM_BURST_GATES: Readonly<Record<BurstArm, readonly BurstGate[]>> = {
@@ -146,6 +152,8 @@ export interface BurstSettings {
   readonly waveAtMs: number;
   /** The send limits of the person. */
   readonly limits: SendLimits;
+  /** The throttle of each person and channel. The first life of `rollback` has no throttle. */
+  readonly throttle: Throttle;
 }
 
 /** The settings of the case in CI, as the prediction states. */
@@ -163,6 +171,7 @@ export const CASE_15_SETTINGS: BurstSettings = {
   waveFloods: 10,
   waveAtMs: 10 * MINUTE,
   limits: DEFAULT_SEND_LIMITS,
+  throttle: DEFAULT_THROTTLE,
 };
 
 /** This function gives the problems of the settings. A setting with a problem cannot read. */
@@ -173,7 +182,7 @@ export function burstSettingsProblems(settings: BurstSettings): string[] {
   if (!(settings.stepMs > 0 && settings.stepMs < RANK_DELAY)) problems.push("Each step is not shorter than the rank delay, thus the copies cannot read each other before a send of rank 1.");
   if (!(settings.burstAtMs > settings.stepMs)) problems.push("The burst comes before the first read of the copies.");
   if (!(settings.quietMs > 0 && settings.armMs - settings.quietMs > Math.max(settings.splitMs, settings.flapMs, settings.burstAtMs))) problems.push("The quiet tail starts before the end of the faults.");
-  if (!(settings.rollbackMs >= settings.firstLifeMs + settings.limits.window)) problems.push("The second life starts in the window of the sends of the first life, thus it does not test a full count.");
+  if (!(settings.rollbackMs >= settings.firstLifeMs + Math.max(settings.limits.window, settings.throttle.window))) problems.push("The second life starts in the window of the sends of the first life, thus it does not test a full count.");
   if (!(Number.isInteger(settings.waveFloods) && settings.waveFloods >= 1)) problems.push("The rollback arm has no second wave.");
   if (!(settings.waveAtMs > settings.stepMs && settings.waveAtMs < settings.armMs - settings.quietMs)) problems.push("The second wave does not come between the first step and the quiet tail.");
   return problems;
@@ -188,7 +197,7 @@ export interface BurstSend {
   readonly person: string;
 }
 
-/** One hold of a copy. */
+/** One hold of the send limit or one suppression of the throttle of a copy. */
 export interface BurstHold {
   readonly copy: BurstCopy;
   readonly at: number;
@@ -279,8 +288,15 @@ export function burstResultOf(record: BurstRecord, settings: BurstSettings = CAS
         const lost = record.floods.filter((id) => !sentIds.has(id) && !heldIds.has(id));
         const late = record.holds.filter((hold) => counted.some((send) => send.copy === hold.copy && send.incident === hold.incident && send.level === hold.level && send.at > hold.at));
         gates.held = lost.length === 0 && late.length === 0;
-        if (lost.length > 0) problems.push(`${record.arm}: ${String(lost.length)} floods have no send and no hold.`);
-        if (late.length > 0) problems.push(`${record.arm}: ${String(late.length)} sends came after a hold of their copy.`);
+        if (lost.length > 0) problems.push(`${record.arm}: ${String(lost.length)} floods have no send, no hold and no suppression.`);
+        if (late.length > 0) problems.push(`${record.arm}: ${String(late.length)} sends came after a hold or a suppression of their copy.`);
+        break;
+      }
+      case "throttled": {
+        const copies = [...new Set(counted.map((send) => send.copy))];
+        const peaks = copies.map((copy) => peakOf(counted.filter((send) => send.copy === copy), "notice", settings.throttle.window));
+        gates.throttled = peaks.every((peak) => peak <= 1);
+        if (!gates.throttled) problems.push(`${record.arm}: a copy sent ${String(Math.max(...peaks))} notices in one window of the throttle.`);
         break;
       }
       case "lifeSafety": {
@@ -292,7 +308,7 @@ export function burstResultOf(record: BurstRecord, settings: BurstSettings = CAS
       case "settles": {
         const late = record.sends.filter((send) => send.at >= record.quietFrom).length;
         gates.settles = late === 0 && record.quietEvents === 0;
-        if (!gates.settles) problems.push(`${record.arm}: ${String(late)} sends and ${String(record.quietEvents)} escalations, holds or ends in the quiet tail.`);
+        if (!gates.settles) problems.push(`${record.arm}: ${String(late)} sends and ${String(record.quietEvents)} escalations, holds, suppressions or ends in the quiet tail.`);
         break;
       }
       case "noThrow":
@@ -310,7 +326,7 @@ export function burstResultOf(record: BurstRecord, settings: BurstSettings = CAS
       case "flapped": {
         const lost = record.flaps.filter((id) => !sentIds.has(id) && !heldIds.has(id));
         gates.flapped = record.flaps.length >= 1 && lost.length === 0;
-        if (!gates.flapped) problems.push(`${record.arm}: ${String(record.flaps.length)} flap incidents, ${String(lost.length)} with no send and no hold.`);
+        if (!gates.flapped) problems.push(`${record.arm}: ${String(record.flaps.length)} flap incidents, ${String(lost.length)} with no send, no hold and no suppression.`);
         break;
       }
     }
@@ -509,6 +525,7 @@ interface OpenInput {
   readonly sends: BurstSend[];
   readonly two: boolean;
   readonly limits: SendLimits;
+  readonly throttle?: Throttle | undefined;
   readonly life: number;
   readonly log?: RuntimeLog;
   /** The time of the second wave of the source. */
@@ -535,6 +552,7 @@ function openCopy(input: OpenInput): Copy {
       rank: input.id === "home" ? 0 : 1,
       rankDelay: RANK_DELAY,
       sendLimits: input.limits,
+      ...(input.throttle === undefined ? {} : { throttle: input.throttle }),
     },
   });
   return { id: input.id, runtime, log, ...(checks === undefined ? {} : { checks }) };
@@ -553,12 +571,14 @@ function readAll(reader: Copy, writer: Copy, at: number): string[] {
   return problems;
 }
 
-const QUIET_TYPES: ReadonlySet<RuntimeEvent["type"]> = new Set(["escalation", "hold", "escalation-end"]);
+const QUIET_TYPES: ReadonlySet<RuntimeEvent["type"]> = new Set(["escalation", "hold", "suppressed", "escalation-end"]);
 
+// The holds of the send limit and the suppressions of the throttle of a copy. Each one keeps its incident from a send.
 function holdsOf(copy: Copy): BurstHold[] {
-  return [...copy.log.read()].flatMap((event) =>
-    event.type === "hold" ? [{ copy: copy.id, at: event.hold.at, incident: event.hold.incident, level: event.hold.level, episode: event.hold.episode }] : [],
-  );
+  return [...copy.log.read()].flatMap((event) => {
+    const hold = event.type === "hold" ? event.hold : event.type === "suppressed" ? event.suppression : undefined;
+    return hold === undefined ? [] : [{ copy: copy.id, at: hold.at, incident: hold.incident, level: hold.level, episode: hold.episode }];
+  });
 }
 
 // The incidents of the flaps: each new report of the failing health of the flap source.
@@ -622,12 +642,12 @@ export async function runBurstArm(arm: BurstArm, settings: BurstSettings = CASE_
       await clock.advance(start + settings.rollbackMs - clock.now());
       countFrom = clock.now();
       end = countFrom + settings.armMs;
-      copies = [openCopy({ ...base, id: "home", limits: settings.limits, life: 2, log, waveAt: waveAtOf(settings, start) })];
+      copies = [openCopy({ ...base, id: "home", limits: settings.limits, throttle: settings.throttle, life: 2, log, waveAt: waveAtOf(settings, start) })];
       await steps(end, countFrom);
     } else {
       copies = two
-        ? [openCopy({ ...base, id: "home", limits: settings.limits, life: 1 }), openCopy({ ...base, id: "cloud", limits: settings.limits, life: 1 })]
-        : [openCopy({ ...base, id: "home", limits: settings.limits, life: 1 })];
+        ? [openCopy({ ...base, id: "home", limits: settings.limits, throttle: settings.throttle, life: 1 }), openCopy({ ...base, id: "cloud", limits: settings.limits, throttle: settings.throttle, life: 1 })]
+        : [openCopy({ ...base, id: "home", limits: settings.limits, throttle: settings.throttle, life: 1 })];
       await steps(end, start);
     }
     const quietFrom = end - settings.quietMs;

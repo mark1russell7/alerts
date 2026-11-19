@@ -22,6 +22,7 @@ import {
   placeLabels,
   placeCodesWithContaining,
   sendLimitsOf,
+  throttleOf,
   sourceCovers,
   sourcePlaces,
   type Address,
@@ -945,6 +946,7 @@ export function openInstance(options: InstanceOptions): Instance {
     ...(config.rankDelay === undefined ? {} : { rankDelays: config.rankDelay }),
     rankFloor: config.rankFloor ?? RANK_FLOOR,
     sendLimits: sendLimitsOf(config.sendLimit),
+    throttle: throttleOf(config.throttle),
   };
 
   // The last pass of the runtime, from the loop or from a direct call of `pass`. The map reads it.
