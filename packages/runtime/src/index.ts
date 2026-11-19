@@ -32,6 +32,8 @@ export * from "./schedule.ts";
 export * from "./snapshot.ts";
 export * from "./snapshot-measure.ts";
 export * from "./state.ts";
+export * from "./tell-intake.ts";
+export * from "./tell-message.ts";
 export * from "./view.ts";
 
 const s = (value: number) => ({ value, unit: "s" });
@@ -106,6 +108,8 @@ export interface Options {
   readonly start?: StartStatus;
   /** The exchange with the other copies of the system. */
   readonly exchange?: ServiceExchange;
+  /** The procedures host of the intake of the messages of the operator (`tellHost`, AL-92). It declares its server on the service. */
+  readonly tell?: { declare(svc: ServiceBuilder): ServiceBuilder };
 }
 
 /**
@@ -144,7 +148,8 @@ export const declare = (options: Options): ServiceBuilder => {
   const exchange = options.exchange;
   // The worker of the exchange stops before the log closes, because the service closes each worker before its dependencies.
   const withWorker = exchange?.loop === undefined ? svc : svc.worker(EXCHANGE_WORKER, exchange.loop.knobs, exchange.loop);
-  return exchange?.host === undefined ? withWorker : exchange.host.declare(withWorker);
+  const withHost = exchange?.host === undefined ? withWorker : exchange.host.declare(withWorker);
+  return options.tell === undefined ? withHost : options.tell.declare(withHost);
 };
 
 // The parts of the service of each runtime: the API, the dependencies, the workers of the passes and of the outage call, the checks and the policies.

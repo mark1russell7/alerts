@@ -108,6 +108,7 @@ import { channelQuota } from "./quota.ts";
 import { openRuntime, type Pass, type Runtime, type RuntimeOptions } from "./runtime.ts";
 import { addZoneCodes, keepShapes, placeCodesKey, refreshUntil, shapeSources, type InstanceShapes, type ShapeOutcome, type ZoneCodeCounts } from "./shapes.ts";
 import { chooseFeeds, feedsKey, keepTransit, type InstanceTransit, type TransitCache, type TransitOutcome } from "./transit.ts";
+import { tellSource, type TellIntake } from "./tell-intake.ts";
 import { DELAY_LIMITS, nextFetch } from "./view.ts";
 
 /** The name of the secret that holds the API token of the Pushover application. */
@@ -637,6 +638,11 @@ export interface InstanceOptions {
    * gives a fake session. The instance has the source only when the secrets have the keys of the account of the copy.
    */
   readonly nwwsOpen?: OpenSession;
+  /**
+   * The intake of the messages of the operator (AL-92, `tell-intake.ts`). With it, the instance has the source `tell`.
+   * Its fetch folds the messages of the intake into the lines of the reports of the merge state.
+   */
+  readonly tell?: TellIntake;
   /** The fetch of the Pushover channel. */
   readonly pushover: PushoverChannelOptions["fetch"];
   /**
@@ -849,7 +855,9 @@ export function openInstance(options: InstanceOptions): Instance {
     account.tag === "ok" && account.value !== undefined
       ? createNwwsSource({ account: account.value, clock: wall, ...(options.nwwsOpen === undefined ? {} : { open: options.nwwsOpen }) })
       : undefined;
-  const sources: readonly SourceProcedures[] = stream === undefined ? polled : [...polled, stream];
+  // The source of the messages of the operator reads the merge state of the runtime at each fetch. The first fetch is after the start.
+  const intake = options.tell === undefined ? undefined : tellSource(options.tell, () => runtime.state().merge.reports, () => wall.now());
+  const sources: readonly SourceProcedures[] = [...polled, ...(stream === undefined ? [] : [stream]), ...(intake === undefined ? [] : [intake])];
 
   const descriptors = sources.map((source) => source.describe());
   const kinds = [...new Set(descriptors.flatMap((descriptor) => descriptor.kinds))];
