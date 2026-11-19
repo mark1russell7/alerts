@@ -5,7 +5,7 @@
  * that it gets.
  */
 import { isFrameClock, type WallClock } from "@mark1russell7/algebra/clock";
-import { channelDownPolicy, DEFAULT_LINK_POLICY, downChannels, indicatorBreadth, limitShare, linkRule, observeConditions, ONLY_COPY, type ChannelQuota, type ChannelSnapshot, type CopyWatch, type Duration, type EntryTimes, type Exhaustion, type FetchOutcome, type Incident, type IndicatorBreadth, type Instant, type LatenessFolds, type ObserveCondition, type ReportId, type SourceDescriptor, type SourceId, type StoreFill, type SourceProcedures, type Watch, type ZoneRegions } from "@mark1russell7/alerts";
+import { channelDownPolicy, DEFAULT_LINK_POLICY, DEFAULT_SEND_LIMITS, downChannels, heldPersons, indicatorBreadth, limitShare, linkRule, observeConditions, ONLY_COPY, type ChannelQuota, type ChannelSnapshot, type CopyWatch, type Duration, type EntryTimes, type Exhaustion, type FetchOutcome, type HeldPerson, type Incident, type IndicatorBreadth, type Instant, type LatenessFolds, type ObserveCondition, type ReportId, type SourceDescriptor, type SourceId, type StoreFill, type SourceProcedures, type Watch, type ZoneRegions } from "@mark1russell7/alerts";
 import { errorMessage } from "@mark1russell7/text";
 import type { BalanceWatch } from "./balance.ts";
 import { channelWatch, lastFetchSuccess } from "./channel-watch.ts";
@@ -280,6 +280,10 @@ export function openRuntime(options: RuntimeOptions): Runtime {
     limits: options.delivery?.sendLimits,
     ...(copies === undefined ? {} : { share: (at: Instant) => limitShare(copies.watches(), at) }),
   };
+  // The window of the send limit (AL-72). The holds in it give the notice of the send limit to each person (AL-81).
+  const holdWindow = (options.delivery?.sendLimits ?? DEFAULT_SEND_LIMITS).window;
+  const heldOf = (at: Instant): readonly HeldPerson[] => heldPersons(state.holds, state.merge.reports, holdWindow, at);
+  const personsOf = (list: readonly HeldPerson[]): string => JSON.stringify(list.map((entry) => entry.person));
   // The life-safety incidents of observing sources only that the last cut sent, in memory only.
   let lifeSafety: readonly Incident[] = [];
   const dispatcher = options.delivery === undefined ? undefined : createDispatcher(options.delivery, {
@@ -465,7 +469,9 @@ export function openRuntime(options: RuntimeOptions): Runtime {
       if (modes.length > 0) conflicts.push(...append(modes));
       const quotas = readQuotas();
       const stores = readStores();
-      const view = systemView(state, config, at, { drills: drilled.snapshots, ...(quotas === undefined ? {} : { quotas }), ...(stores === undefined ? {} : { stores }), balances: watches.flatMap((watch) => watch.balance() ?? []), ...(options.copies === undefined ? {} : { copies: options.copies.watches(), copy: self }), ...(folds === undefined ? {} : { folds }), ...(exhausted === undefined ? {} : { exhausted }), ...(channels === undefined ? {} : { channels: channels.snapshots() }), ...(observing === undefined ? {} : { observing }) });
+      // The persons with a hold of the send limit (AL-81). With no delivery, no person has a hold, and each open line stays.
+      const held = dispatcher === undefined ? undefined : heldOf(at);
+      const view = systemView(state, config, at, { drills: drilled.snapshots, ...(quotas === undefined ? {} : { quotas }), ...(stores === undefined ? {} : { stores }), balances: watches.flatMap((watch) => watch.balance() ?? []), ...(options.copies === undefined ? {} : { copies: options.copies.watches(), copy: self }), ...(folds === undefined ? {} : { folds }), ...(exhausted === undefined ? {} : { exhausted }), ...(held === undefined ? {} : { held }), ...(channels === undefined ? {} : { channels: channels.snapshots() }), ...(observing === undefined ? {} : { observing }) });
       folds = view.folds;
       const event = systemEvent(view);
       if (event !== undefined) conflicts.push(...append([event]));
@@ -480,6 +486,8 @@ export function openRuntime(options: RuntimeOptions): Runtime {
       // A missing list is an empty list. After a restart, the second pass gives the list, and it can end an open line.
       const changed = delivery !== undefined && JSON.stringify(delivery.exhausted) !== JSON.stringify(exhausted ?? []);
       if (delivery !== undefined) exhausted = delivery.exhausted;
+      // A new person with a hold goes into the view of the next pass. Thus that pass comes at once, and the person gets the notice.
+      const heldChanged = held !== undefined && delivery !== undefined && personsOf(heldOf(clock.now())) !== personsOf(held);
       // A run that starts to open a line, or an accepted send on a down channel, changes a line in the view of the next pass.
       const down = delivery !== undefined && channels !== undefined && channels.step(delivery, clock.now(), downChannels(state.lines, self), lastFetchSuccess(state.health));
       // The conditions of the observe mode go into the view of the next pass. A new condition brings that pass at once. A new
@@ -511,7 +519,7 @@ export function openRuntime(options: RuntimeOptions): Runtime {
       // run. A fetch that runs to its limit of one interval also ends at its next fetch. Such work is due, not a fault:
       // its wake is the first instant after the pass.
       const nextWork = earliest([...config.sources.map((descriptor) => nextFetch(state, descriptor)), ...scheduled.map((watch) => watch.nextReadAt()), channels?.wakeAt()]);
-      const wakeAt = earliest([nextWork === undefined ? undefined : Math.max(nextWork, at + 1), view.wakeAt, delivery?.wakeAt, drilled.wakeAt, ...observeEnds, changed || down || observeChanged ? at + 1 : undefined]);
+      const wakeAt = earliest([nextWork === undefined ? undefined : Math.max(nextWork, at + 1), view.wakeAt, delivery?.wakeAt, drilled.wakeAt, ...observeEnds, changed || down || observeChanged || heldChanged ? at + 1 : undefined]);
       const pass: Pass = {
         at,
         fetched: due.map(({ descriptor }) => descriptor.id),

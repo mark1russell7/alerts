@@ -2,7 +2,8 @@
  * This module holds the send limit of each person (AL-72). It is pure. The limit keeps a burst of new incidents away
  * from the phone of a person. Each level below `life-safety` admits a count of new escalations in each window, over all
  * the copies of the system. The digest tells each incident that the limit held. The private incidents (AL-92) have their own
- * places, thus the messages of the operator and the alerts do not take places from each other.
+ * places, thus the messages of the operator and the alerts do not take places from each other. A person with a hold gets
+ * one notice in each window (`heldPersons`, AL-81).
  */
 import { compareCodeUnits } from "@mark1russell7/text/order";
 import { isPrivate } from "./audience.ts";
@@ -79,6 +80,38 @@ export function isLimitedLevel(level: Level): level is LimitedLevel {
  */
 export function limitShare(watches: readonly CopyWatch[], at: Instant): number {
   return 1 / (1 + watches.filter((watch) => watch.read === undefined || copyStages(watch, at).includes("unread")).length);
+}
+
+/** The holds of one person in the window of the send limit (AL-81). */
+export interface HeldPerson {
+  readonly person: PersonId;
+  /** The time of the first hold in the window. */
+  readonly first: Instant;
+  /** The time of the last hold in the window. */
+  readonly last: Instant;
+  /** The time when the last hold leaves the window: one window after it. Then the person has no hold. */
+  readonly until: Instant;
+  /** The count of the holds in the window. */
+  readonly count: number;
+}
+
+/**
+ * This function gives each person with a hold in the window before `at`, in the order of the person ids (AL-81).
+ *
+ * - A hold counts from its time until one window after it. A hold after `at` does not count.
+ * - A hold of a private report (`reports`, AL-92) does not count. Thus a held message of the operator, or a held notice
+ *   of the send limit, opens no notice of the send limit.
+ */
+export function heldPersons(holds: readonly EscalationHold[], reports: readonly Pick<Report, "id" | "addresses">[], window: Duration, at: Instant): HeldPerson[] {
+  // A hold names the report of the start of its escalation, thus the ids of the private reports find each private hold.
+  const secret = new Set(reports.filter(isPrivate).map((report) => report.id));
+  const persons = new Map<PersonId, { readonly first: Instant; readonly last: Instant; readonly count: number }>();
+  for (const hold of holds) {
+    if (hold.at > at || hold.at + window <= at || secret.has(hold.incident)) continue;
+    const known = persons.get(hold.person);
+    persons.set(hold.person, known === undefined ? { first: hold.at, last: hold.at, count: 1 } : { first: Math.min(known.first, hold.at), last: Math.max(known.last, hold.at), count: known.count + 1 });
+  }
+  return [...persons.entries()].sort(([a], [b]) => compareCodeUnits(a, b)).map(([person, entry]) => ({ person, first: entry.first, last: entry.last, until: entry.last + window, count: entry.count }));
 }
 
 /** This function gives the key of a hold: one hold for each escalation and episode. */

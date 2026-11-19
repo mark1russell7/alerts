@@ -1527,18 +1527,30 @@ describe("the send limit in the passes of the runtime (AL-72)", () => {
   }
   const holds = (log: RuntimeLog) => [...log.read()].flatMap((event) => (event.type === "hold" ? [event.hold] : []));
 
-  it("sends a burst of new incidents up to the limit of the person, and holds the rest once", async () => {
+  it("sends a burst of new incidents up to the limit of the person, holds the rest once, and tells the person once", async () => {
     const { clock, log, runtime, sms } = openBurst();
-    await runtime.pass();
+    const first = await runtime.pass();
     expect(sms.send).toHaveLength(2);
     expect(new Set(sms.send.map((message) => message.level))).toEqual(new Set(["notice"]));
     expect(holds(log)).toHaveLength(BURST - 2);
+    // The new holds bring the next pass at once. It gives the notice of the send limit (AL-81).
+    expect(first.wakeAt).toBe(first.at + 1);
     for (let minute = 1; minute <= 5; minute += 1) {
       await clock.advance(MINUTE);
       await runtime.pass();
     }
-    expect(sms.send).toHaveLength(2);
+    // The person gets one private notice that the limit holds alerts. No later pass sends a held alert or a second notice.
+    expect(sms.send.map((message) => [message.level, message.person])).toEqual([...Array.from({ length: 3 }, () => ["notice", PERSON])]);
+    expect(sms.send[2]?.title).toContain("The send limit holds new alerts for you");
     expect(holds(log)).toHaveLength(BURST - 2);
+    // The line of the notice ends one window after the last hold. The end is a cancel, not a send: the phone gets no second message.
+    await clock.advance(LIMITS.window);
+    await runtime.pass();
+    // The view of a pass reads the merge state before the system reports of the pass. Thus the next pass shows the cancel.
+    await clock.advance(MINUTE);
+    const after = await runtime.pass();
+    expect(after.view.incidents.filter((incident) => incident.kind.code === "system.limit.held").map((incident) => incident.live)).toEqual([false]);
+    expect(sms.send).toHaveLength(3);
     // The fold of the log gives the same holds.
     expect(runtime.state()).toEqual(rebuild(log.read(), runtime.config));
     expect(runtime.state().holds).toHaveLength(BURST - 2);
@@ -1567,7 +1579,8 @@ describe("the send limit in the passes of the runtime (AL-72)", () => {
     // After the window, the suppressed sends still do not go, and no pass writes them again.
     await clock.advance(DEFAULT_THROTTLE.window + MINUTE);
     await runtime.pass();
-    expect(sms.send).toHaveLength(0);
+    // The only send is the notice of the send limit (AL-81). It is private, thus the urgent message does not stop it.
+    expect(sms.send.map((message) => message.title)).toEqual([expect.stringContaining("The send limit holds new alerts for you")]);
     expect(suppressed(log)).toEqual(first);
     // The fold of the log gives the same suppressions.
     expect(runtime.state()).toEqual(rebuild(log.read(), runtime.config));
@@ -1586,9 +1599,12 @@ describe("the send limit in the passes of the runtime (AL-72)", () => {
     const refuse: Script = { send: () => ({ ok: false, kind: "refused", message: "The number is not valid." }) };
     const { clock, log, runtime } = openBurst(refuse, { sendLimits: { ...LIMITS, notice: 1 }, refusalLimit: 60 * SECOND });
     const waits: number[] = [];
+    // The notice of the send limit (AL-81) has its own refused sends. The test follows the key of the first refused send.
+    let key: string | undefined;
     for (let round = 0; round < 5; round += 1) {
       const pass = await runtime.pass();
-      const failure = pass.delivery?.failures[0];
+      const failure = pass.delivery?.failures.find((entry) => key === undefined || entry.key === key);
+      key ??= failure?.key;
       expect(failure?.kind).toBe("refused");
       const wait = (failure?.retryAt ?? clock.now()) - clock.now();
       waits.push(wait);
@@ -1605,9 +1621,13 @@ describe("the send limit in the passes of the runtime (AL-72)", () => {
       const { clock, log } = first;
       let { runtime } = first;
       const waits: number[][] = [];
+      // The notice of the send limit (AL-81) has its own refused sends from a later round. The test follows the keys of the first round.
+      let keys: ReadonlySet<string> | undefined;
       for (let round = 0; round < 4; round += 1) {
         const pass = await runtime.pass();
-        const failures = pass.delivery?.failures.filter((failure) => failure.call === "send") ?? [];
+        const sends = pass.delivery?.failures.filter((failure) => failure.call === "send") ?? [];
+        keys ??= new Set(sends.map((failure) => failure.key));
+        const failures = sends.filter((failure) => keys?.has(failure.key));
         expect(failures.map((failure) => failure.kind)).toEqual(["refused", "refused"]);
         const round_ = failures.map((failure) => failure.retryAt - clock.now());
         waits.push(round_);
