@@ -176,6 +176,12 @@ export const ESCALATION_KIND = "system.escalation";
 export const CHANNEL_KIND = "system.channel";
 
 /**
+ * The prefix of the kinds of the store reports of the core (AL-86). `system.store.empty` tells that a family of a store of
+ * the runtime has no entry in the time after a start. An adapter does not map a message to this prefix.
+ */
+export const STORE_KIND = "system.store";
+
+/**
  * The subject system of a person. The id of a subject is the id of a person. A person who watches the subject of another
  * person gets the escalation reports of that person. A subject of the person itself does not match the person.
  */
@@ -222,7 +228,7 @@ export const DEFAULT_ASSESS_POLICY: AssessPolicy = {
     { id: "system-drill", kinds: [`${DRILL_KIND}.run`], statuses: ["system"], ...LOUD_SYSTEM_TABLE },
     // An exhausted escalation of a person keeps its level for the people who watch that person (AL-21).
     { id: "system-escalation", kinds: [ESCALATION_KIND], statuses: ["system"], ...LOUD_SYSTEM_TABLE },
-    { id: "system", kinds: [HEALTH_KIND, COVERAGE_KIND, QUOTA_KIND, BALANCE_KIND, CLOCK_KIND, LOG_KIND, COPY_KIND, DRILL_KIND, CHANNEL_KIND], statuses: ["system"], ...SYSTEM_TABLE },
+    { id: "system", kinds: [HEALTH_KIND, COVERAGE_KIND, QUOTA_KIND, BALANCE_KIND, CLOCK_KIND, LOG_KIND, COPY_KIND, DRILL_KIND, CHANNEL_KIND, STORE_KIND], statuses: ["system"], ...SYSTEM_TABLE },
     // The service alerts of public transit are context. Their counts are indicator readings.
     { id: "context", kinds: CONTEXT_KINDS, ...CONTEXT_TABLE },
   ],

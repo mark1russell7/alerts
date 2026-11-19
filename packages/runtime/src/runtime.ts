@@ -5,7 +5,7 @@
  * that it gets.
  */
 import { isFrameClock, type WallClock } from "@mark1russell7/algebra/clock";
-import { channelDownPolicy, DEFAULT_LINK_POLICY, downChannels, indicatorBreadth, limitShare, linkRule, observeConditions, ONLY_COPY, type ChannelQuota, type ChannelSnapshot, type CopyWatch, type Duration, type EntryTimes, type Exhaustion, type FetchOutcome, type Incident, type IndicatorBreadth, type Instant, type LatenessFolds, type ObserveCondition, type ReportId, type SourceDescriptor, type SourceId, type SourceProcedures, type Watch, type ZoneRegions } from "@mark1russell7/alerts";
+import { channelDownPolicy, DEFAULT_LINK_POLICY, downChannels, indicatorBreadth, limitShare, linkRule, observeConditions, ONLY_COPY, type ChannelQuota, type ChannelSnapshot, type CopyWatch, type Duration, type EntryTimes, type Exhaustion, type FetchOutcome, type Incident, type IndicatorBreadth, type Instant, type LatenessFolds, type ObserveCondition, type ReportId, type SourceDescriptor, type SourceId, type StoreFill, type SourceProcedures, type Watch, type ZoneRegions } from "@mark1russell7/alerts";
 import { errorMessage } from "@mark1russell7/text";
 import type { BalanceWatch } from "./balance.ts";
 import { channelWatch, lastFetchSuccess } from "./channel-watch.ts";
@@ -81,6 +81,11 @@ export interface RuntimeOptions {
    * line of system reports. A throw keeps each open line of a quota as it is.
    */
   readonly quotas?: () => readonly ChannelQuota[];
+  /**
+   * This function gives the fills of the families of the stores at the time of the view (AL-86). Each family with no entry at
+   * the end of its window is a line of system reports. A throw keeps each open line of a store as it is.
+   */
+  readonly stores?: () => readonly StoreFill[];
   /**
    * The watches of the balances of the paid provider accounts. Each pass starts `check` of each watch, next to
    * its fetches. Each stage of a balance is a line of system reports.
@@ -388,6 +393,16 @@ export function openRuntime(options: RuntimeOptions): Runtime {
     }
   };
 
+  // A fault of the read of a store ends no line of a store.
+  const readStores = (): readonly StoreFill[] | undefined => {
+    if (options.stores === undefined) return [];
+    try {
+      return options.stores();
+    } catch {
+      return undefined;
+    }
+  };
+
   // A step of the wall clock since the last mark moves each own instant: the fold of the clock event moves the state,
   // and then the dispatcher, the balance watches and the copy watches move their times in memory. The mark comes after the write. Thus
   // a failed write leaves the step to the next pass, and the next pass writes it with the same id.
@@ -449,7 +464,8 @@ export function openRuntime(options: RuntimeOptions): Runtime {
       const modes = modeEvents(state, config.sources, at);
       if (modes.length > 0) conflicts.push(...append(modes));
       const quotas = readQuotas();
-      const view = systemView(state, config, at, { drills: drilled.snapshots, ...(quotas === undefined ? {} : { quotas }), balances: watches.flatMap((watch) => watch.balance() ?? []), ...(options.copies === undefined ? {} : { copies: options.copies.watches(), copy: self }), ...(folds === undefined ? {} : { folds }), ...(exhausted === undefined ? {} : { exhausted }), ...(channels === undefined ? {} : { channels: channels.snapshots() }), ...(observing === undefined ? {} : { observing }) });
+      const stores = readStores();
+      const view = systemView(state, config, at, { drills: drilled.snapshots, ...(quotas === undefined ? {} : { quotas }), ...(stores === undefined ? {} : { stores }), balances: watches.flatMap((watch) => watch.balance() ?? []), ...(options.copies === undefined ? {} : { copies: options.copies.watches(), copy: self }), ...(folds === undefined ? {} : { folds }), ...(exhausted === undefined ? {} : { exhausted }), ...(channels === undefined ? {} : { channels: channels.snapshots() }), ...(observing === undefined ? {} : { observing }) });
       folds = view.folds;
       const event = systemEvent(view);
       if (event !== undefined) conflicts.push(...append([event]));

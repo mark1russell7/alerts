@@ -302,6 +302,8 @@
   "system.quota.low",
   "system.quota.reserve",
   "system.quota.spent",
+  "system.store",
+  "system.store.empty",
   "system.test",
   "transport",
   "transport.air",
