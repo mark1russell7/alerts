@@ -683,8 +683,9 @@ export interface InstanceOptions {
   /** The instance gives each refresh of the outlines to this function. */
   readonly onShapes?: (outcome: ShapeOutcome) => void;
   /**
-   * This function tells if the start is good: the service runs, and one pass ended. Until then, no refresh of the shapes starts.
-   * Thus a refresh does not run in the first pass or before the ready mark of the supervisor (AL-75). The default is a good start.
+   * This function tells if the start is good: the service runs, and one pass ended. Until then, no refresh of the shapes starts,
+   * and the keeper does not read the transit catalog. Thus this work does not run before the ready mark of the supervisor (AL-75).
+   * A read of the catalog parses megabytes, and a new copy restarts the runtime. The default is a good start.
    */
   readonly startGood?: () => boolean;
   /**
@@ -988,13 +989,15 @@ export function openInstance(options: InstanceOptions): Instance {
     ...(options.readings === undefined ? {} : { readings: options.readings }),
     ...(options.onReadingsFault === undefined ? {} : { onReadingsFault: options.onReadingsFault }),
     // After each pass, the store of shapes gets the outlines that are due, and it ends before the next fetch from its host (AL-33).
-    // The first refresh starts at a pass after the good start. The entry marks the start after this function, thus the pass
-    // that makes the start good starts no refresh.
+    // The keeper of the transit catalog reads the catalog when its copy is due. The pass does not wait for the two.
+    // The two start at a pass after the good start (AL-75). The entry marks the start after this function, thus the pass that
+    // makes the start good starts neither of them.
     onPass: async (pass) => {
       latest = pass;
-      if (options.startGood?.() ?? true) shapes.afterPass(pass.view.incidents, refreshUntil(runtime.config.sources, (descriptor) => nextFetch(runtime.state(), descriptor)));
-      // The keeper of the transit catalog reads the catalog when its copy is due. The pass does not wait for the read.
-      transit?.afterPass();
+      if (options.startGood?.() ?? true) {
+        shapes.afterPass(pass.view.incidents, refreshUntil(runtime.config.sources, (descriptor) => nextFetch(runtime.state(), descriptor)));
+        transit?.afterPass();
+      }
       await options.onPass?.(pass);
     },
     fetchLimit: options.fetchLimit ?? INSTANCE_FETCH_LIMIT,
