@@ -406,6 +406,7 @@ export const reportSchema: z.ZodType<Report, Report> = schemaOf<Report>()(
       areas: z.array(areaSchema).readonly(),
       areaText: z.string().exactOptional(),
       about: z.array(subjectSchema).readonly(),
+      addresses: z.array(personIdSchema).min(1, "A private report has one address or more.").readonly().exactOptional(),
       sender: z.string(),
       headline: z.string(),
       description: z.string().exactOptional(),
@@ -415,8 +416,8 @@ export const reportSchema: z.ZodType<Report, Report> = schemaOf<Report>()(
       parameters: z.record(z.string(), z.array(z.string()).readonly()).readonly(),
     })
     .readonly()
-    .refine((report) => report.areas.length > 0 || report.about.length > 0, {
-      error: "A report has one area or more, or one subject or more.",
+    .refine((report) => report.areas.length > 0 || report.about.length > 0 || (report.addresses?.length ?? 0) > 0, {
+      error: "A report has one area or more, one subject or more, or one address or more.",
       path: ["areas"],
     }),
 );
@@ -712,6 +713,7 @@ export const incidentSchema: z.ZodType<Incident, Incident> = schemaOf<Incident>(
       expires: instantSchema.exactOptional(),
       areas: z.array(areaSchema).readonly(),
       about: z.array(subjectSchema).readonly(),
+      addresses: z.array(personIdSchema).min(1, "A private incident has one address or more.").readonly().exactOptional(),
       live: z.boolean(),
       corroboration: count(),
       lines: z.array(incidentLineSchema).min(2, "An incident with lines has two lines or more.").readonly().exactOptional(),
@@ -1332,6 +1334,8 @@ export const assessReasonSchema: z.ZodType<AssessReason, AssessReason> = schemaO
       z.strictObject({ kind: z.literal("status"), status: statusSchema }),
       z.strictObject({ kind: z.literal("no-place") }),
       z.strictObject({ kind: z.literal("no-subject") }),
+      z.strictObject({ kind: z.literal("not-addressed") }),
+      z.strictObject({ kind: z.literal("addressed") }),
       z.strictObject({ kind: z.literal("no-codes") }),
       z.strictObject({ kind: z.literal("unknown-place"), place: placeIdSchema }),
       z.strictObject({

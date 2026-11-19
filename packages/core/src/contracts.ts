@@ -210,6 +210,11 @@ export interface Report {
   readonly areas: readonly Area[];
   readonly areaText?: string;
   readonly about: readonly Subject[];
+  /**
+   * The persons of a private report: the CAP scope `Private` with its `addresses`. Each id is a person of the configuration.
+   * A private report reaches only these persons. Absent means the CAP scope `Public`.
+   */
+  readonly addresses?: readonly PersonId[];
   /** The authority that sent the message, for example `NWS Topeka KS`. */
   readonly sender: string;
   readonly headline: string;
@@ -660,6 +665,8 @@ export interface Incident {
   readonly expires?: Instant;
   readonly areas: readonly Area[];
   readonly about: readonly Subject[];
+  /** The persons of a private incident: the `addresses` of its reports. Each report of an incident has the same audience. */
+  readonly addresses?: readonly PersonId[];
   /** False when each line of reports is cancelled, expired or ended at the time of the calculation. */
   readonly live: boolean;
   /** The count of different origins that report the event. */
@@ -1421,6 +1428,10 @@ export type AssessReason =
   | { readonly kind: "no-place" }
   /** The incident has no area, and the person watches no subject of the incident. */
   | { readonly kind: "no-subject" }
+  /** The incident is private (AL-92), and the person is not in its addresses. */
+  | { readonly kind: "not-addressed" }
+  /** The incident is private, and the person is in its addresses. The places and the subjects do not count. */
+  | { readonly kind: "addressed" }
   /**
    * The areas of the incident have no code and no place, and no shape can match. Either the areas have
    * no shape, or no place of the person has a position.

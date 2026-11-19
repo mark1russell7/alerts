@@ -12,6 +12,7 @@ export * from "./ids.ts";
 export * from "./merge.ts";
 export * from "./retention.ts";
 export * from "./assess.ts";
+export * from "./audience.ts";
 export * from "./score.ts";
 export * from "./escalation.ts";
 export * from "./chain.ts";

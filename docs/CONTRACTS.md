@@ -81,6 +81,32 @@ The chain is a known limit. The rule compares two reports at a time, and the inc
 
 A pairwise rule only joins incidents when a report comes. It does not split an incident, so a sent alert stays with its incident. The severity of the incident is the highest of its live heads.
 
+### Private reports
+
+A private report has the field `addresses`: the persons that its sender named (AL-92). A report with no field `addresses` is public.
+
+- The CAP scope `Private` gives a private report, and the scope `Public` gives a public report.
+- The CAP format maps only the scope `Public`. A message with another scope gives a fatal problem and no report.
+- The audience of a report is `public`, or the sorted set of its addresses (`audience.ts`).
+- Two reports join only with the same audience. The keys of rules 1 and 2 and the blocks of rule 3 hold the audience.
+- Thus a private report never changes a public incident. A private incident has the addresses of its reports.
+- `assess` gives each person outside the addresses the level `none`, with the reason `not-addressed`.
+- A person of the addresses gets the level of the table, with the reason `addressed`. The places, the subjects and the interests do not count.
+- The rules of the person apply to a private incident as to a subject.
+
+Each reader of the incidents shows a private incident as this table tells.
+
+| Reader | A private incident in it |
+| --- | --- |
+| The delivery (`route`) and the digest (`planDigests`) | Only for the persons of its addresses, through `assess`. |
+| The map (`/map`) and the history (`/history`) | Not shown. Each viewer of the page sees them. |
+| The threats of the coverage reports (`threats`) | Not counted. A coverage report goes to each person of the place. |
+| The report of an exhausted escalation | The label of its kind, not its title. The watchers of the person are not in its addresses. |
+| `/interests`, `/health` and `/status` | Not shown. These routes hold no incident. |
+| The rates (AL-31) | Not counted. The rates read the archive of the NWS alerts, not the merge state. |
+
+The exchange gives private reports to the other copy of the same operator. That copy applies the same rules. Old code refuses the field `addresses`. Thus a source of private reports starts only after each copy runs this code.
+
 ### The lines and the heads
 
 A line is a report and the reports of its source that update or cancel it. The head of a line is its last report: no report of the same source references it. A cancel of a part is the one exception (below). An incident is live at a time when one or more heads are not cancelled, not expired and not ended at that time. Its corroboration is the count of the different origins of its reports.

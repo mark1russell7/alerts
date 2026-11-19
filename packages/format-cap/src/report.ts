@@ -271,6 +271,7 @@ function blockReport(alert: CapAlert, message: Message, block: Block | undefined
  *
  * - An acknowledgment or an error gives no report.
  * - A message with no identifier or no valid sent time gives no report and a fatal problem.
+ * - A message with a scope other than `Public` gives no report and a fatal problem.
  * - A message with no info block gives one report with no kind and no area, and a lossy problem.
  * - A value of the message that a report does not hold is a lossy problem.
  */
@@ -287,6 +288,13 @@ export function capReports(alert: CapAlert, observation: Observation, options: C
   }
   const messageType = alert.msgType.trim().toLowerCase();
   if (CAP_NOT_ALERTS.has(messageType)) return [];
+  // The addresses of a CAP message name no person of the configuration. A public report of a private or restricted
+  // message would reach each person, so the map function maps only the scope Public (AL-92).
+  const scope = alert.scope.trim();
+  if (scope.toLowerCase() !== "public") {
+    problems.add("scope", `the alert has the scope ${JSON.stringify(scope)}, and the map function maps only the scope Public`, "fatal");
+    return [];
+  }
 
   const references = new Set(alert.references.map((reference) => reference.identifier.trim()).filter((identifier) => identifier !== ""));
   references.delete(key);

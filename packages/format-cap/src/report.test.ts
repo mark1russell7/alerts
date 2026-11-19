@@ -59,6 +59,15 @@ function mapText(body: string, options: CapReportOptions = OPTIONS): { reports: 
 const codesOf = (report: Report): string[] => report.areas.flatMap((area) => (area.type === "code" ? [`${area.system}:${area.code}`] : []));
 
 describe("the reports of one CAP message", () => {
+  it("gives no report for a message with a scope other than Public, and a fatal problem (AL-92)", () => {
+    for (const scope of ["Private", "Restricted"]) {
+      const { reports, problems } = mapText(messageText("TEST-S", THREE).replace("<scope>Public</scope>", `<scope>${scope}</scope>`));
+      expect(reports).toEqual([]);
+      expect(problems.list.some((problem) => problem.path === "scope" && problem.fatal)).toBe(true);
+    }
+    expect(mapText(messageText("TEST-S", THREE).replace("<scope>Public</scope>", "<scope>public</scope>")).reports).toHaveLength(3);
+  });
+
   it("gives one report for each block, with the key of the message and the part of the block in its id", () => {
     const { reports, problems } = mapText(messageText("TEST-3", THREE));
     expect(problems.list).toEqual([]);

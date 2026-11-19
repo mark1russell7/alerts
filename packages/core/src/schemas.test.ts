@@ -731,6 +731,16 @@ describe("the value rules", () => {
     holds(reportSchema, { ...WARNING, areas: [], about: [{ system: SOURCE_SUBJECT, id: "nws-api" }] });
   });
 
+  it("a private report has one address or more, and the addresses replace the area (AL-92)", () => {
+    const person = "person-1" as PersonId;
+    holds(reportSchema, { ...WARNING, areas: [], about: [], addresses: [person] });
+    holds(reportSchema, { ...WARNING, addresses: [person] });
+    fails(reportSchema, { ...WARNING, addresses: [] });
+    fails(reportSchema, { ...WARNING, addresses: [""] });
+    holds(incidentSchema, { ...incidents(normalize({ reports: [WARNING] }), T0)[0], addresses: [person] });
+    fails(incidentSchema, { ...incidents(normalize({ reports: [WARNING] }), T0)[0], addresses: [] });
+  });
+
   it("the code of a kind is in the taxonomy", () => {
     fails(kindSchema, { code: "met.tornadoo", label: "Tornado Warning" });
     fails(kindSchema, { code: "system.coverage.system.health", label: "Coverage" });

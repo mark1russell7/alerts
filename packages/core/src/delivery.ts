@@ -5,6 +5,7 @@
  */
 import { compareCodeUnits } from "@mark1russell7/text/order";
 import { assess, COVERAGE_KIND, DEFAULT_ASSESS_POLICY, hasKind, LIFE_SAFETY_KINDS, matchSubjects, PERSON_SUBJECT, QUOTA_KIND, reachedAssessment } from "./assess.ts";
+import { isPrivate } from "./audience.ts";
 import {
   LEVELS,
   type Acknowledgment,
@@ -470,7 +471,8 @@ export function exhaustions(routes: readonly Route[], channels: readonly Channel
     const { incident, plan, policy } = entry;
     if (entry.held !== undefined || entry.suppressed !== undefined || incident.status !== "actual" || plan.state !== "exhausted" || plan.exhaustedAt === undefined) continue;
     if (policy.steps.length === 0 || !asksForAck(policy, channels)) continue;
-    found.push({ incident: entry.start.incident, person: entry.person, level: policy.level, episode: entry.episode, at: plan.exhaustedAt, kind: incident.kind, title: incidentTitle(incident, reports) });
+    // The people who watch the person are not in the addresses of a private incident: its title stays out (AL-92).
+    found.push({ incident: entry.start.incident, person: entry.person, level: policy.level, episode: entry.episode, at: plan.exhaustedAt, kind: incident.kind, title: isPrivate(incident) ? incident.kind.label : incidentTitle(incident, reports) });
   }
   return found;
 }

@@ -148,6 +148,17 @@ describe("dailyInstant", () => {
 });
 
 describe("planDigests", () => {
+  it("puts a private incident in the digest of the persons of its addresses only (AL-92)", () => {
+    const other = "person-2" as PersonId;
+    const base = recipient();
+    const recipients = [base, { ...base, watch: { ...base.watch, person: other } }];
+    const plan = planDigests(input({ incidents: [incident(first), incident(second, { addresses: [person] })], recipients }));
+    expect(plan.sends.map((send) => [send.person, send.entries.map((entry) => entry.incident.anchor)])).toEqual([
+      [person, [first, second]],
+      [other, [first]],
+    ]);
+  });
+
   it("sends one digest at the end of the quiet window, with each incident of the level digest", () => {
     const plan = planDigests(input({ incidents: [incident(first), incident(second)] }));
     expect(plan.sends).toHaveLength(1);
