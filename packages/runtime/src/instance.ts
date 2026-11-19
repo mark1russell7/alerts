@@ -105,9 +105,9 @@ import { outageDeploy, outageDeployWorker, outageSetup, type OutageDeployWorker 
 import { exchangeLoop, exchangeWorker, type EntriesSource, type ExchangeCall, type ExchangeRound, type ExchangeWorker } from "./peers.ts";
 import { channelQuota } from "./quota.ts";
 import { openRuntime, type Pass, type Runtime, type RuntimeOptions } from "./runtime.ts";
-import { addZoneCodes, keepShapes, placeCodesKey, type InstanceShapes, type ShapeOutcome, type ZoneCodeCounts } from "./shapes.ts";
+import { addZoneCodes, keepShapes, placeCodesKey, refreshUntil, type InstanceShapes, type ShapeOutcome, type ZoneCodeCounts } from "./shapes.ts";
 import { chooseFeeds, feedsKey, keepTransit, type InstanceTransit, type TransitCache, type TransitOutcome } from "./transit.ts";
-import { DELAY_LIMITS, earliest, nextFetch } from "./view.ts";
+import { DELAY_LIMITS, nextFetch } from "./view.ts";
 
 /** The name of the secret that holds the API token of the Pushover application. */
 export const PUSHOVER_TOKEN = "PUSHOVER_APP_TOKEN";
@@ -982,10 +982,10 @@ export function openInstance(options: InstanceOptions): Instance {
     // The readings of each fetch go to their store, not to the log.
     ...(options.readings === undefined ? {} : { readings: options.readings }),
     ...(options.onReadingsFault === undefined ? {} : { onReadingsFault: options.onReadingsFault }),
-    // After each pass, the store of shapes gets the outlines that are due, and it ends before the next fetch of a source.
+    // After each pass, the store of shapes gets the outlines that are due, and it ends before the next fetch from its host (AL-33).
     onPass: async (pass) => {
       latest = pass;
-      shapes.afterPass(pass.view.incidents, earliest(runtime.config.sources.map((descriptor) => nextFetch(runtime.state(), descriptor))));
+      shapes.afterPass(pass.view.incidents, refreshUntil(runtime.config.sources, (descriptor) => nextFetch(runtime.state(), descriptor)));
       // The keeper of the transit catalog reads the catalog when its copy is due. The pass does not wait for the read.
       transit?.afterPass();
       await options.onPass?.(pass);

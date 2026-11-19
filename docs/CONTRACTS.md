@@ -1273,7 +1273,7 @@ Each runtime takes the lock `home.lock` of the folder at its start, before it re
 - The shutdown releases the lock last, after the log closes. A lock of a process that stopped is stale, and the next start removes it.
 - The test `home-lock.test.ts` starts the entry on a folder that the test holds. The entry stops with the error `HomeHeld` and writes no file.
 
-After each pass, the runtime gets the outlines of the zones of the watched states. It stops before the next fetch of the alerts. A broken file of outlines goes into quarantine, and the runtime gets the outlines again.
+After each pass, the runtime gets the outlines of the zones of the watched states. It stops before the next fetch of a source of the NWS API (`refreshUntil`). A fetch of another host does not limit it. A broken file of outlines goes into quarantine, and the runtime gets the outlines again.
 
 The runtime also reads the transit feeds near the places:
 

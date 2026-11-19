@@ -5,6 +5,7 @@
 
 import type { SourceDescriptor } from "@mark1russell7/alerts";
 import { KIND_PREFIXES, NWS_ORIGIN, US_COVERAGE } from "@mark1russell7/alerts-format-nws";
+import { NWS_PROVIDER } from "./fetch.ts";
 import { SOURCE_ID } from "./map.ts";
 
 /** The descriptor of the NWS API source. */
@@ -13,7 +14,7 @@ export const NWS_DESCRIPTOR: SourceDescriptor = {
   title: "NWS alerts API (api.weather.gov)",
   origins: [NWS_ORIGIN],
   // The NWS API answers through the Akamai network (api.weather.gov is a name of edgekey.net)
-  dependsOn: ["provider:nws-api", "cdn:akamai"],
+  dependsOn: [NWS_PROVIDER, "cdn:akamai"],
   uses: ["internet", "dns", "power"],
   kinds: KIND_PREFIXES,
   coverage: US_COVERAGE,

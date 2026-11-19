@@ -7,9 +7,10 @@
  * many megabytes. The keeper simplifies the regions of the watched states again only when the store changes them. An
  * incident changes only the small copy of the regions outside those states.
  */
-import { basemapToleranceKm, simplifyBasemap, type AlertConfig, type Incident, type Instant, type MapRegion, type PlaceConfig, type RegionCode, type ShapeLookup, type WatchedPlace } from "@mark1russell7/alerts";
+import { basemapToleranceKm, simplifyBasemap, type AlertConfig, type Incident, type Instant, type MapRegion, type PlaceConfig, type RegionCode, type ShapeLookup, type SourceDescriptor, type WatchedPlace } from "@mark1russell7/alerts";
 import { stateOfCode } from "@mark1russell7/alerts-format-nws";
 import { compareCodes, zoneCodesNear, type Refreshed, type ShapeStore, type Wanted } from "@mark1russell7/alerts-shapes-nws";
+import { NWS_PROVIDER } from "@mark1russell7/alerts-source-nws-api";
 import { countOf, errorMessage } from "@mark1russell7/text";
 
 /**
@@ -192,11 +193,28 @@ export interface InstanceShapes {
   close(): Promise<void>;
 }
 
+/**
+ * This function gives the limit of a refresh of the shapes: the next fetch of a source of the NWS API (`NWS_PROVIDER`).
+ * The store sends its requests to that host only. Thus a fetch of another host does not wait for the store, and it does not
+ * limit the refresh. With no source of the NWS API, the function gives `undefined`, and no refresh starts.
+ *
+ * The limit of the earliest fetch of all the sources stopped each refresh: with 51 sources, a fetch is due each 2 seconds.
+ */
+export function refreshUntil(sources: readonly SourceDescriptor[], nextFetch: (source: SourceDescriptor) => Instant): Instant | undefined {
+  let until: Instant | undefined;
+  for (const source of sources) {
+    if (!source.dependsOn.includes(NWS_PROVIDER)) continue;
+    const next = nextFetch(source);
+    if (until === undefined || next < until) until = next;
+  }
+  return until;
+}
+
 /** The outlines of the instance, with the step that the instance starts after each pass. */
 export interface ShapeKeeper extends InstanceShapes {
   /**
    * This function starts a refresh of the store, when no refresh is in progress. The refresh starts no request that can end
-   * after `until`: the next fetch of a source. With no `until`, no refresh starts.
+   * after `until`: the next fetch from the host of the store (`refreshUntil`). With no `until`, no refresh starts.
    */
   afterPass(incidents: readonly Incident[], until: Instant | undefined): void;
 }

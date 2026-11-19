@@ -1,7 +1,8 @@
-import { CONFIG_FORMAT, type AlertConfig, type Incident, type MapRegion, type PlaceConfig, type PlaceId, type Position, type RegionCode, type ReportId, type WatchedPlace } from "@mark1russell7/alerts";
+import { CONFIG_FORMAT, type AlertConfig, type Incident, type MapRegion, type PlaceConfig, type PlaceId, type Position, type RegionCode, type ReportId, type SourceDescriptor, type SourceId, type WatchedPlace } from "@mark1russell7/alerts";
 import type { Refreshed, RefreshInput, ShapeStore } from "@mark1russell7/alerts-shapes-nws";
+import { NWS_DESCRIPTOR, NWS_PROVIDER } from "@mark1russell7/alerts-source-nws-api";
 import { describe, expect, it } from "vitest";
-import { addZoneCodes, keepShapes, liveCodes, placeCodesKey, shapeReport, wantedShapes, withZoneCodes, zoneCodesText, type ShapeOutcome } from "./shapes.ts";
+import { addZoneCodes, keepShapes, liveCodes, placeCodesKey, refreshUntil, shapeReport, wantedShapes, withZoneCodes, zoneCodesText, type ShapeOutcome } from "./shapes.ts";
 
 const T0 = Date.UTC(2026, 10, 15, 18, 0, 0);
 const RING = [
@@ -234,6 +235,26 @@ describe("shapeReport", () => {
 
   it("gives the message of an error", () => {
     expect(shapeReport({ ok: false, error: new Error("The disk is full.") })).toBe("The refresh of the shapes threw: The disk is full.");
+  });
+});
+
+describe("refreshUntil", () => {
+  // A source of another host. It is due each 15 seconds, as the NWWS source of a live copy.
+  const other: SourceDescriptor = { ...NWS_DESCRIPTOR, id: "other" as SourceId, dependsOn: ["provider:other"] };
+  const second: SourceDescriptor = { ...NWS_DESCRIPTOR, id: "second" as SourceId };
+  const due = (times: Record<string, number>) => (source: SourceDescriptor) => times[source.id] ?? T0;
+
+  it("gives the next fetch of the sources of the NWS API, not the next fetch of another host (AL-33)", () => {
+    expect(NWS_DESCRIPTOR.dependsOn).toContain(NWS_PROVIDER);
+    const times = { [NWS_DESCRIPTOR.id]: T0 + 50_000, other: T0 + 2_000 };
+    expect(refreshUntil([other, NWS_DESCRIPTOR], due(times))).toBe(T0 + 50_000);
+    // The earliest source of the NWS API gives the limit.
+    expect(refreshUntil([NWS_DESCRIPTOR, second, other], due({ ...times, second: T0 + 30_000 }))).toBe(T0 + 30_000);
+  });
+
+  it("gives undefined with no source of the NWS API, thus no refresh starts", () => {
+    expect(refreshUntil([other], due({ other: T0 + 2_000 }))).toBeUndefined();
+    expect(refreshUntil([], due({}))).toBeUndefined();
   });
 });
 
