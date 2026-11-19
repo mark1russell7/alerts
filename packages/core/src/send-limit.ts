@@ -140,8 +140,8 @@ export interface LimitResult {
  *   phone can already have its message. Thus a new route with an earlier due time cannot take its place.
  * - A held route has no send in its plan. Its cancels stay.
  * - A private incident (`addresses`, AL-92) has its own places for each person and level, with the same counts. Only the
- *   deliveries of the private reports count in them. Thus a burst of messages of the operator does not hold an alert, and
- *   a busy hour of alerts does not hold a message of the operator.
+ *   deliveries of the private reports count in them. Thus a burst of messages of the operator does not hold an alert.
+ *   Also, a busy hour of alerts does not hold a message of the operator.
  */
 export function limitRoutes(input: LimitInput): LimitResult {
   const limits = input.limits ?? DEFAULT_SEND_LIMITS;
