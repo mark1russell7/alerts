@@ -242,6 +242,24 @@ export interface Route {
 }
 
 /**
+ * This function gives a reader of the items of a set of report ids. The reader gives the items in the order of the
+ * list, so it gives the value of a filter of the list.
+ */
+function byReport<T extends { readonly incident: ReportId }>(items: readonly T[]): (reports: ReadonlySet<string>) => T[] {
+  const index = new Map<string, number[]>();
+  items.forEach((item, at) => {
+    const held = index.get(item.incident);
+    if (held === undefined) index.set(item.incident, [at]);
+    else held.push(at);
+  });
+  return (reports) => {
+    const found: number[] = [];
+    for (const report of reports) for (const at of index.get(report) ?? []) found.push(at);
+    return found.sort((a, b) => a - b).map((at) => items[at]!);
+  };
+}
+
+/**
  * This function gives the escalations at `now`, in the order of the anchor, the person, the episode and the level.
  *
  * - The levels of an incident and a person are each level of a start or a delivery, and the assessed level.
@@ -272,16 +290,20 @@ export function route(input: RouteInput): Route[] {
   const polling = new Set(input.channels.filter((channel) => channel.ack === "poll").map((channel) => channel.id as string));
   const floors = rankFloors(input.channels, input.rankFloor);
   const routes: Route[] = [];
+  // The parts of each report id. Thus each incident reads only its own parts, not each part of the state.
+  const deliveriesOf = byReport(state.deliveries.filter((delivery) => delivery.level !== "digest"));
+  const startsOf = byReport(input.starts);
+  const acksOf = byReport(state.acks);
+  const endsOf = byReport(input.ends ?? []);
   for (const incident of input.incidents) {
     const reports = new Set<string>([incident.anchor, ...incident.reports]);
-    const ofIncident = (item: { readonly incident: ReportId }): boolean => reports.has(item.incident);
     // A delivery of a digest is not a step of an escalation. The digest plan reads it.
-    const deliveries = state.deliveries.filter((delivery) => ofIncident(delivery) && delivery.level !== "digest");
+    const deliveries = deliveriesOf(reports);
     const open = deliveries.some((delivery) => !input.cancelled.has(delivery.key));
     if (!incident.live && !open) continue;
-    const starts = input.starts.filter(ofIncident);
-    const acks = state.acks.filter(ofIncident);
-    const ends = (input.ends ?? []).filter(ofIncident);
+    const starts = startsOf(reports);
+    const acks = acksOf(reports);
+    const ends = endsOf(reports);
     const end = endOf(incident, now);
     for (const recipient of input.recipients) {
       const person = recipient.watch.person;
