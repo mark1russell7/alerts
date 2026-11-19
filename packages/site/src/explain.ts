@@ -76,6 +76,10 @@ export function reasonText(reason: AssessReason, incident: Pick<Incident, "sever
       return "No place of this person is in the areas of the incident.";
     case "no-subject":
       return "The incident has no area, and the person watches none of its subjects.";
+    case "not-addressed":
+      return "The incident is private, and this person is not one of its addresses.";
+    case "addressed":
+      return "The incident is private, and its sender named this person.";
     case "no-codes":
       return "The areas have no codes, and no shape can match: no place of this person has a position.";
     case "unknown-place":

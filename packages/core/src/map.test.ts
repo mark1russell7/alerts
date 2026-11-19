@@ -211,6 +211,14 @@ describe("the payload of the map route", () => {
     expect("breadth" in mapPayload(payloadInput())).toBe(false);
   });
 
+  it("shows no private incident, also to a person of its addresses (AL-92)", () => {
+    const shown = incident("a");
+    const hidden = incident("b", { addresses: [PERSON_A] });
+    const payload = mapPayload(payloadInput({ incidents: [shown, hidden] }));
+    expect(payload.view.incidents.map((one) => one.anchor)).toEqual([shown.anchor]);
+    expect(mapPayload(payloadInput({ incidents: [hidden] })).view.incidents).toEqual([]);
+  });
+
   it("gives the level that the delivery gives the person", () => {
     const tornado = incident("a");
     const payload = mapPayload(payloadInput({ incidents: [tornado] }));

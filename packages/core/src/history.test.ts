@@ -76,6 +76,15 @@ const update = report({ key: "w2", sent: T0 + 10 * MINUTE, op: "update", referen
 const ids = (...reports: readonly Report[]): ReportId[] => reports.map((one) => one.id).sort();
 
 describe("historyPayload", () => {
+  it("reads no private report: the payload is the payload without it (AL-92)", () => {
+    const secret = report({ key: "p1", sent: T0 + 30 * MINUTE, addresses: [person.person], areas: [], headline: "A private message" });
+    const ended = { report: secret.id, at: T0 + 40 * MINUTE, ended: true };
+    const withSecret = historyPayload(input(merge([first, update, secret], { ends: [ended] })));
+    expect(withSecret).toEqual(historyPayload(input(merge([first, update]))));
+    expect(withSecret.incidents.flatMap((history) => history.reports)).not.toContain(secret.id);
+    expect(historyPayload(input(merge([secret]))).incidents).toEqual([]);
+  });
+
   it("gives one change for each time of entry, with the level, the severity and the codes at that time", () => {
     const state = merge([first, update]);
     const payload = historyPayload(input(state));

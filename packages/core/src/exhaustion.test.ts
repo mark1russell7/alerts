@@ -1,7 +1,7 @@
 import { random, seedsFrom } from "@mark1russell7/rigor-generators";
 import { describe, expect, it } from "vitest";
 import { ESCALATION_KIND, PERSON_SUBJECT } from "./assess.ts";
-import type { Acknowledgment, ChannelDescriptor, CopyWatch, ChannelId, EscalationPolicy, Incident, Level, PersonId, PlaceId, ReportId, Status, WatchedPlace } from "./contracts.ts";
+import type { Acknowledgment, ChannelDescriptor, CopyWatch, ChannelId, EscalationPolicy, Incident, Level, PersonId, PlaceId, Report, ReportId, Status, WatchedPlace } from "./contracts.ts";
 import { asksForAck, exhaustions, recipientProblems, route, type EscalationStart, type Exhaustion, type Recipient, type Route } from "./delivery.ts";
 import { incidents, normalize } from "./merge.ts";
 import { DRILL_SUBJECT, INCIDENT_SUBJECT, NO_SYSTEM_LINES, systemReports, type SystemSnapshot } from "./system-reports.ts";
@@ -90,6 +90,14 @@ function reported(list: readonly Exhaustion[], at: number, extra: Partial<System
 
 describe("exhaustions() of the routes (AL-21)", () => {
   const people = [recipient(watched, { places: [home] })];
+
+  it("gives the label of the kind as the title of a private warning, and not its text (AL-92)", () => {
+    // The fields of the report that the title reads.
+    const text = { id: WARNING.anchor, severity: WARNING.severity, urgency: WARNING.urgency, sent: T0, headline: "A private message" } as unknown as Report;
+    const secret: Incident = { ...WARNING, addresses: [watched] };
+    expect(exhaustions(routesAt(people, [WARNING], EXHAUSTED_AT), CHANNELS, [text]).map((one) => one.title)).toEqual(["A private message"]);
+    expect(exhaustions(routesAt(people, [secret], EXHAUSTED_AT), CHANNELS, [text]).map((one) => one.title)).toEqual(["Tornado"]);
+  });
 
   it("gives one exhaustion of a real warning at the end of its policy, and none before it", () => {
     expect(exhausted(routesAt(people, [WARNING], EXHAUSTED_AT - 1))).toEqual([]);

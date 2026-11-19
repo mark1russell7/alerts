@@ -678,3 +678,44 @@ describe("the lines of an incident (AL-14)", () => {
     }
   });
 });
+
+describe("the audience of the reports (AL-92)", () => {
+  const other = "person-2" as PersonId;
+  const found = (reports: readonly Report[], options: IncidentOptions = {}): readonly Incident[] => incidents(normalize({ reports }), T0, options);
+  const audiences = (list: readonly Incident[]): (readonly PersonId[] | undefined)[] => list.map((one) => one.addresses);
+  const later = T0 + 60_000;
+
+  it("joins no private report to a public report with the same key, reference or correlation", () => {
+    const vtec = [{ system: "vtec", id: "KTOP.TO.W.0001" }];
+    const shown = report({ key: "k1", correlation: vtec });
+    const cases: readonly Report[] = [
+      report({ key: "k1", sent: later, addresses: [person] }),
+      report({ key: "k2", sent: later, references: ["k1"], addresses: [person] }),
+      report({ key: "k3", sent: later, correlation: vtec, addresses: [person] }),
+    ];
+    for (const secret of cases) {
+      const list = found([shown, secret]);
+      expect(list).toHaveLength(2);
+      expect(audiences(list).sort()).toEqual([[person], undefined]);
+    }
+  });
+
+  it("gives a public incident no field addresses, thus the strict schema of an older build reads it", () => {
+    const [incident] = found([report({ key: "k1" })]);
+    expect(incident).toBeDefined();
+    expect(Object.hasOwn(incident!, "addresses")).toBe(false);
+  });
+
+  it("joins no private report to a public report through the link rule", () => {
+    const link: LinkRule = { blocks: (x) => [x.kind.code], matches: () => true };
+    expect(found([report({ key: "k1" }), report({ key: "k2", source: "nwws" })], { link })).toHaveLength(1);
+    expect(found([report({ key: "k1" }), report({ key: "k2", source: "nwws", addresses: [person] })], { link })).toHaveLength(2);
+    expect(found([report({ key: "k1", addresses: [person] }), report({ key: "k2", source: "nwws", addresses: [person] })], { link })).toHaveLength(1);
+  });
+
+  it("joins two private reports only with the same addresses, in any order, and sorts the addresses of the incident", () => {
+    expect(found([report({ key: "k1", addresses: [person] }), report({ key: "k1", sent: later, addresses: [other] })])).toHaveLength(2);
+    const list = found([report({ key: "k1", addresses: [other, person] }), report({ key: "k1", sent: later, addresses: [person, other, person] })]);
+    expect(audiences(list)).toEqual([[person, other]]);
+  });
+});

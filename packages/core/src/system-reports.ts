@@ -10,6 +10,7 @@
 import { canonicalJson } from "@mark1russell7/rigor-generators";
 import { compareCodeUnits } from "@mark1russell7/text/order";
 import { BALANCE_KIND, CHANNEL_KIND, CLOCK_KIND, CONTEXT_KINDS, COPY_KIND, COVERAGE_KIND, DRILL_KIND, ESCALATION_KIND, hasKind, HEALTH_KIND, LOG_KIND, matchPlaces, PERSON_SUBJECT, QUOTA_KIND, STORE_KIND } from "./assess.ts";
+import { isPrivate } from "./audience.ts";
 import type {
   Area,
   BalanceStage,
@@ -332,7 +333,7 @@ export interface SystemStep {
 export function threats(incidents: readonly Incident[], places: readonly WatchedPlace[]): Threat[] {
   return incidents.flatMap((incident) => {
     const stage = incident.kind.significance;
-    if (!incident.live || incident.status !== "actual" || (stage !== undefined && !THREAT_STAGES.includes(stage))) return [];
+    if (isPrivate(incident) || !incident.live || incident.status !== "actual" || (stage !== undefined && !THREAT_STAGES.includes(stage))) return [];
     return matchPlaces(incident, places).map((match) => ({ place: match.place, kind: incident.kind.code }));
   });
 }

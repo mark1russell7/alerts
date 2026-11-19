@@ -5,6 +5,7 @@
  */
 import { compareCodeUnits } from "@mark1russell7/text/order";
 import { assess, classOf, DEFAULT_ASSESS_POLICY, higherLevel, matchPlaces, reachedAssessment } from "./assess.ts";
+import { isPrivate } from "./audience.ts";
 import type { AssessedLevel, AssessPolicy, EndMark, Incident, Instant, Kind, MergeState, PersonWatch, PlaceId, RegionCode, Report, ReportId, Severity, Status } from "./contracts.ts";
 import { compareRegionCodes, regionCodeKey, SEVERITY_ORDER, type MapPlaceInput, type MapShape, type ShapeLookup } from "./map.ts";
 import { incidents, type IncidentOptions, type LinkRule } from "./merge.ts";
@@ -145,11 +146,16 @@ export function historyPayload(input: HistoryInput): HistoryPayload {
   const mutes = input.people.flatMap((person) => (person.interests?.mutes ?? []).flatMap((mute) => (mute.until === undefined ? [] : [mute.until])));
   const entered = input.entered ?? OWN_ENTRY_TIMES;
   const options: IncidentOptions = input.link === undefined ? {} : { link: input.link };
-  const byId = new Map(input.merge.reports.map((report) => [report.id, report]));
-  const entries = new Map(input.merge.reports.map((report) => [report.id, entered.report(report)]));
+  // Each viewer of the page sees the history, so it reads no private report and no end mark of one (AL-92, `audience.ts`).
+  // A private report never joins a public one, thus the other incidents do not change.
+  const reports = input.merge.reports.filter((report) => !isPrivate(report));
+  const publicIds = new Set(reports.map((report) => report.id));
+  const state: MergeState = { ...input.merge, reports, ends: input.merge.ends.filter((mark) => publicIds.has(mark.report)) };
+  const byId = new Map(state.reports.map((report) => [report.id, report]));
+  const entries = new Map(state.reports.map((report) => [report.id, entered.report(report)]));
   // Each end mark has its time of entry. Thus the parts at a time have only the marks that this copy knew at that time.
   const marks = new Map<ReportId, EndMark[]>();
-  for (const mark of input.merge.ends) marks.set(mark.report, [...(marks.get(mark.report) ?? []), { ...mark, at: entered.mark(mark) }]);
+  for (const mark of state.ends) marks.set(mark.report, [...(marks.get(mark.report) ?? []), { ...mark, at: entered.mark(mark) }]);
   // The time edges count up to the horizon: the time of the payload, or the newest time of entry when it is later. A take
   // of the exchange after the last pass gives a later time of entry. Thus a later read finds each new edge after its since.
   let horizon = input.at ?? Number.NEGATIVE_INFINITY;
@@ -165,7 +171,7 @@ export function historyPayload(input: HistoryInput): HistoryPayload {
   let next: Instant | null = null;
   const shown: HistoryIncident[] = [];
   // The groups of the reports do not read the time. Thus the time of the current incidents changes nothing.
-  for (const incident of incidents(input.merge, input.at ?? 0, options)) {
+  for (const incident of incidents(state, input.at ?? 0, options)) {
     const own = incident.reports.flatMap((id) => byId.get(id) ?? []);
     const ownMarks = incident.reports.flatMap((id) => marks.get(id) ?? []);
     const entryTimes = [...own.map((report) => entries.get(report.id)!), ...ownMarks.map((mark) => mark.at)];
@@ -185,7 +191,7 @@ export function historyPayload(input: HistoryInput): HistoryPayload {
       const marked = new Set(ownMarks.filter((mark) => mark.at === at).map((mark) => mark.report));
       const fact = came.length > 0 || known.some((report) => marked.has(report.id));
       if (!fact && !edges.has(at)) continue;
-      const parts = incidents({ ...input.merge, reports: known, ends: ownMarks }, at, options);
+      const parts = incidents({ ...state, reports: known, ends: ownMarks }, at, options);
       const change = changeOf(at, parts, came.sort(compareCodeUnits), input, lookup);
       const previous = changes.at(-1);
       // A time edge with no new fact gives a change only when the view changes.

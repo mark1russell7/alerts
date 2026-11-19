@@ -835,3 +835,35 @@ describe("the fire zones (AL-33)", () => {
     expect(assessmentSchema.safeParse({ ...result, reasons }).success).toBe(false);
   });
 });
+
+describe("a private incident (AL-92)", () => {
+  const addressed = "person-1" as PersonId;
+  const stranger = "person-9" as PersonId;
+
+  it("gives no level to a person outside its addresses, also at a watched place in its areas", () => {
+    const secret = incident({ addresses: [addressed] });
+    const result = assess(secret, { ...person(), person: stranger }, places);
+    expect(result).toEqual({ incident: secret.anchor, person: stranger, level: "none", places: [], reasons: [{ kind: "not-addressed" }] });
+    expect(assessmentSchema.safeParse(result).success).toBe(true);
+  });
+
+  it("gives the level of the table to a person of its addresses, with no area and no watched place", () => {
+    const secret = incident({ addresses: [addressed], areas: [] });
+    const result = assess(secret, person([], []), places);
+    expect(result.level).toBe("life-safety");
+    expect(result.reasons.map((reason) => reason.kind)).toEqual(["table", "addressed"]);
+    expect(assessmentSchema.safeParse(result).success).toBe(true);
+    // A public incident with no area and no subject reaches nobody.
+    expect(assess(incident({ areas: [] }), person([], []), places).level).toBe("none");
+  });
+
+  it("keeps the rules of the person: a rule of each place can lower the level, and a rule of one place cannot", () => {
+    const secret = incident({ addresses: [addressed], areas: [] });
+    expect(assess(secret, person([{ max: "notice" }]), places).level).toBe("notice");
+    expect(assess(secret, person([{ max: "notice", places: [home] }]), places).level).toBe("life-safety");
+  });
+
+  it("gives no level to a person of its addresses after its end", () => {
+    expect(assess(incident({ addresses: [addressed], live: false }), person(), places).level).toBe("none");
+  });
+});

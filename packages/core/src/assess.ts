@@ -6,6 +6,7 @@
  * the two applies. The level for a person is the highest level at the places of the person, after the rules
  * of the person. The assessment reads no clock: the field `live` of the incident holds the time.
  */
+import { inAudience, isPrivate } from "./audience.ts";
 import type {
   AssessedLevel,
   AssessPolicy,
@@ -469,6 +470,10 @@ export function assess(
   policy: AssessPolicy = DEFAULT_ASSESS_POLICY,
   at?: Instant,
 ): Assessment {
+  // A private incident reaches only the persons of its addresses (AL-92, `audience.ts`).
+  if (!inAudience(incident, person.person)) {
+    return { incident: incident.anchor, person: person.person, level: "none", places: [], reasons: [{ kind: "not-addressed" }] };
+  }
   const byId = new Map(places.map((place) => [place.id, place]));
   const reasons: AssessReason[] = [];
   const watched: WatchedPlace[] = [];
@@ -516,7 +521,8 @@ export function assess(
   };
   const relevancePolicy = policy.relevance ?? DEFAULT_RELEVANCE_POLICY;
   let plan: RelevancePlan | undefined;
-  if (person.interests !== undefined) {
+  // The sender of a private incident named the person, so the interest graph does not decide.
+  if (person.interests !== undefined && !isPrivate(incident)) {
     try {
       plan = planOf(incident, person, person.interests, matches, byId, (id) => placeTable(id).level, relevancePolicy, at);
     } catch (error) {
@@ -526,7 +532,7 @@ export function assess(
   }
   // The result keeps the mute also when nothing reaches the person, because a mute that removes each entry is the cause.
   muted = plan?.relevance.muted;
-  if (matches.length === 0 && subjects.length === 0 && (plan === undefined || plan.reached.length === 0)) {
+  if (!isPrivate(incident) && matches.length === 0 && subjects.length === 0 && (plan === undefined || plan.reached.length === 0)) {
     reasons.push({ kind: noMatch(incident, watched) });
     return result("none");
   }
@@ -557,6 +563,10 @@ export function assess(
     reasons.push(place === undefined ? { kind: "rule", index, max: rule.max } : { kind: "rule", place, index, max: rule.max });
     return rule.max;
   };
+  if (isPrivate(incident)) {
+    reasons.push({ kind: "addressed" });
+    return result(atMatch(undefined, table.level, "entity"));
+  }
   for (const match of matches) {
     reasons.push({ kind: "place", ...match });
     if (plan !== undefined && !plan.places.has(match.place)) continue;

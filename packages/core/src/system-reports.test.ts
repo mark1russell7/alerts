@@ -284,6 +284,10 @@ describe("the coverage reports", () => {
     expect(threats([{ ...warning, areas: [{ type: "code", system: "same", code: "020001" }] }], PLACES)).toEqual([]);
   });
 
+  it("finds no threat in a private incident: a coverage gap tells each person of the place (AL-92)", () => {
+    expect(threats([{ ...warning, addresses: [NEIGHBOR.person] }], PLACES)).toEqual([]);
+  });
+
   it("grades a gap by its count and its threat", () => {
     expect(gapGrade(gap(), true)).toEqual({ severity: "extreme", urgency: "immediate" });
     expect(gapGrade(gap(), false)).toEqual({ severity: "severe", urgency: "expected" });

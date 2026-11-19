@@ -8,6 +8,7 @@
 import { stronglyConnectedComponents } from "@mark1russell7/collections/graph";
 import { canonicalJson } from "@mark1russell7/rigor-generators";
 import { compareCodeUnits } from "@mark1russell7/text/order";
+import { audienceKey, audienceOf } from "./audience.ts";
 import type {
   Acknowledgment,
   Area,
@@ -249,16 +250,18 @@ function groupsOf(reports: readonly Report[], link: LinkRule | undefined): reado
     if (first === undefined) firstOf.set(key, index);
     else connect(first, index);
   };
+  // Each key holds the audience of the report. Thus reports with two audiences never connect (AL-92, `audience.ts`).
   reports.forEach((report, index) => {
-    share(JSON.stringify(["key", report.status, report.source, report.key]), index);
-    for (const reference of report.references) share(JSON.stringify(["key", report.status, report.source, reference]), index);
-    for (const key of report.correlation) share(JSON.stringify(["correlation", report.status, key.system, key.id]), index);
+    const audience = audienceKey(report);
+    share(JSON.stringify(["key", audience, report.status, report.source, report.key]), index);
+    for (const reference of report.references) share(JSON.stringify(["key", audience, report.status, report.source, reference]), index);
+    for (const key of report.correlation) share(JSON.stringify(["correlation", audience, report.status, key.system, key.id]), index);
   });
   if (link !== undefined) {
     const blocks = new Map<string, number[]>();
     reports.forEach((report, index) => {
       for (const block of new Set(link.blocks(report))) {
-        const key = JSON.stringify([report.status, block]);
+        const key = JSON.stringify([audienceKey(report), report.status, block]);
         const members = blocks.get(key);
         if (members === undefined) blocks.set(key, [index]);
         else members.push(index);
@@ -381,6 +384,8 @@ function incidentOf(group: readonly Report[], at: Instant, ended: ReadonlySet<Re
     certainty: top(stated, (values) => CERTAINTY.indexOf(values.certainty)).certainty,
     areas: uniqueByText(lines.flatMap((line) => line.areas)),
     about: uniqueByText(basis.flatMap((report) => report.about)),
+    // Each report of a group has the same audience, so the first report gives it.
+    ...(first.addresses === undefined ? {} : { addresses: audienceOf(first.addresses) }),
     live: liveHeads.length > 0,
     corroboration: new Set(group.map((report) => report.origin)).size,
     // The lines are present only when their values differ. Else each place gets the values of the incident.

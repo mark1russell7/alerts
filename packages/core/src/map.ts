@@ -5,6 +5,7 @@
  */
 import { compareCodeUnits } from "@mark1russell7/text/order";
 import { assess, higherLevel, matchPlaces, reachedAssessment } from "./assess.ts";
+import { isPrivate } from "./audience.ts";
 import type { IndicatorBreadth } from "./breadth.ts";
 import {
   ASSESSED_LEVELS,
@@ -179,7 +180,9 @@ function withShadow(view: MapView, live: readonly Incident[], priors: ScorePrior
  * With the priors, each incident that reaches a person gets its shadow score.
  */
 export function mapPayload(input: MapPayloadInput): MapPayload {
-  const { at, people, policy, basemap, priors, breadth, ...view } = input;
+  const { at, people, policy, basemap, priors, breadth, ...given } = input;
+  // Each viewer of the page sees the map, so it shows no private incident (AL-92, `audience.ts`).
+  const view = { ...given, incidents: given.incidents.filter((incident) => !isPrivate(incident)) };
   const live = view.incidents.filter((incident) => incident.live);
   const assessments = live.flatMap((incident) => people.map((person) => reachedAssessment(assess(incident, person, view.places, policy, at ?? undefined))));
   const drawn = mapView({ ...view, assessments });
