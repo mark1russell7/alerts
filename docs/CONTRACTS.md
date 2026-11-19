@@ -1606,6 +1606,8 @@ A deploy of new code does not change the live checkout (AL-89). The live path of
 - A host with no scope runs the stage with only the low priority.
 - When each step passes, the stage writes its mark in `host/deploy.json`: the commit, the time and the checks.
 - The stage removes the old mark first. Thus a stage that stops in its middle leaves no mark.
+- A first deploy has a live slot with no `deploy.ts`. Then the other slot starts its own `deploy.ts` with `ALERTS_LIVE`.
+- `ALERTS_LIVE` names the live path in place of the path of the entry file (`liveRoot`). `install.ts` reads it too.
 - `node src/deploy.ts swap` points the live path at the staged slot in one step. It refuses a slot with no mark of its commit, a missing check or a change in its tree.
 - On Linux, the swap renames a new symbolic link over the old link. On Windows, it removes the junction and makes a new one. A start in that short gap fails, and the supervisor starts the runtime again.
 - The old slot stays as it is. A second `swap` goes back to it. Do not go back after the new code wrote a new kind of event to the log.

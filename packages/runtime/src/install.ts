@@ -23,7 +23,8 @@
  * time of the ready wait passed. A runtime that is not ready sends no alert.
  *
  * The environment gives `ALERTS_HOME`, the folder of the private files, as for `main.ts`. Without
- * it, the folder is `.alerts` in the home folder.
+ * it, the folder is `.alerts` in the home folder. `ALERTS_LIVE` names the live path in place of the checkout of this
+ * file, for a first deploy (`deploy.ts`).
  */
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
@@ -45,14 +46,15 @@ import { discoveryPid, hostReadyWindow, hostTask, readinessProbe, RUNTIME_GRACE,
 import { hostFileText } from "./start-times.ts";
 import { checksKeys, daemonCheck, INSTANCE_TIMES, USER_AGENT_NAME } from "./instance.ts";
 import { checkStart, GOOD_FILE, privateFiles, readStartTexts, requestRestart, restartUse, type RestartOutcome } from "./reload.ts";
-import { entryRoot } from "./slots.ts";
+import { liveRoot } from "./slots.ts";
 
 const ACTIONS = ["install", "remove", "status", "restart"] as const;
 const action = process.argv[2];
 
 const home = alertsHome(process.env, process.cwd());
 // The path of the command line, not resolved: an install through the live link gives the task the link (AL-89).
-const root = entryRoot(process.argv[1], join(fileURLToPath(new URL(".", import.meta.url)), ".."));
+// `ALERTS_LIVE` names the live path for a first deploy, when the live slot has an older install.ts (`liveRoot`).
+const root = liveRoot(process.env, process.argv[1], join(fileURLToPath(new URL(".", import.meta.url)), ".."));
 const spec = hostTask({ home, root, node: process.execPath });
 const ports = nodeHostPorts();
 // The supervisor writes this discovery file. With it, the remove stops the live process tree.

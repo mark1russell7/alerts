@@ -48,6 +48,19 @@ export function entryRoot(entry: string | undefined, fallback: string): string {
   return dirname(dirname(entry));
 }
 
+/** The variable that names the live path for `deploy.ts` and `install.ts`, in place of the path of their entry file. */
+export const LIVE_VARIABLE = "ALERTS_LIVE";
+
+/**
+ * This function gives the folder of the package `runtime` of the live path. The variable `ALERTS_LIVE` names the live
+ * path. It is for a first deploy, when the live slot has no `deploy.ts`: the staged slot starts its own `deploy.ts`
+ * and `install.ts` with it. With no variable, the path of the entry file gives the folder (`entryRoot`).
+ */
+export function liveRoot(env: Readonly<Record<string, string | undefined>>, entry: string | undefined, fallback: string): string {
+  const live = env[LIVE_VARIABLE];
+  return live !== undefined && live !== "" ? join(live, "packages", "runtime") : entryRoot(entry, fallback);
+}
+
 /** This function gives the checkout of the folder of the package `runtime`: two folders up. */
 export const checkoutOf = (root: string): string => dirname(dirname(root));
 

@@ -8,6 +8,7 @@ import {
   checkoutOf,
   entryRoot,
   installArgs,
+  liveRoot,
   loadStep,
   otherSlot,
   parseDeployFile,
@@ -48,6 +49,17 @@ describe("the names and paths of the slots (AL-89)", () => {
     expect(entryRoot(join("top", "live", "packages", "runtime", "main.ts"), "fallback")).toBe("fallback");
     expect(entryRoot(join("top", "src", "notes.txt"), "fallback")).toBe("fallback");
     expect(checkoutOf(join("top", "live", "packages", "runtime"))).toBe(join("top", "live"));
+  });
+
+  it("takes the live path from ALERTS_LIVE in place of the path of the entry, for a first deploy", () => {
+    const entry = join("top", "live-b", "packages", "runtime", "src", "deploy.ts");
+    const live = join("top", "live");
+    expect(liveRoot({ ALERTS_LIVE: live }, entry, "fallback")).toBe(join(live, "packages", "runtime"));
+    expect(checkoutOf(liveRoot({ ALERTS_LIVE: live }, entry, "fallback"))).toBe(live);
+    // With no variable, or an empty one, the entry gives the folder, as before.
+    expect(liveRoot({}, entry, "fallback")).toBe(join("top", "live-b", "packages", "runtime"));
+    expect(liveRoot({ ALERTS_LIVE: "" }, entry, "fallback")).toBe(join("top", "live-b", "packages", "runtime"));
+    expect(liveRoot({ ALERTS_LIVE: live }, undefined, "fallback")).toBe(join(live, "packages", "runtime"));
   });
 
   it("compares paths with no case on Windows, and with the case elsewhere", () => {

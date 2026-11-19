@@ -17,6 +17,9 @@
  * of the boot task.
  *
  * The environment gives `ALERTS_HOME`, as for `main.ts`, and `PNPM`, the program of pnpm (`slots.ts`, `pnpmCall`).
+ * `ALERTS_LIVE` names the live path in place of the path of this file (`slots.ts`, `liveRoot`). Use it only for a first
+ * deploy, when the live slot has no `deploy.ts`. Then check out and install the commit in the other slot. Start
+ * `ALERTS_LIVE=<live> node <other slot>/packages/runtime/src/deploy.ts stage <commit>`, and then `swap`.
  * The exit code is 0 for success, 1 for a refusal or a failed step, and 2 for a wrong command. The output holds no value of a private file.
  */
 import { mkdtemp, readFile, rm } from "node:fs/promises";
@@ -32,7 +35,7 @@ import {
   adoptLive,
   checkoutOf,
   DEPLOY_FILE,
-  entryRoot,
+  liveRoot,
   installArgs,
   loadStep,
   otherSlot,
@@ -56,7 +59,7 @@ import {
 
 const USAGE = "The command is: node src/deploy.ts status | adopt | stage <commit> [--page] | swap";
 
-const root = entryRoot(process.argv[1], join(fileURLToPath(new URL(".", import.meta.url)), ".."));
+const root = liveRoot(process.env, process.argv[1], join(fileURLToPath(new URL(".", import.meta.url)), ".."));
 const slots = slotsOf(checkoutOf(root));
 const home = alertsHome(process.env, process.cwd());
 const deployPath = join(hostFolder(home), DEPLOY_FILE);
