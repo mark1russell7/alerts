@@ -18,8 +18,8 @@
  *
  * The environment gives `ALERTS_HOME`, as for `main.ts`, and `PNPM`, the program of pnpm (`slots.ts`, `pnpmCall`).
  * `ALERTS_LIVE` names the live path in place of the path of this file (`slots.ts`, `liveRoot`). Use it only for a first
- * deploy, when the live slot has no `deploy.ts`: check out and install the commit in the other slot, then start
- * `ALERTS_LIVE=<live> node <other slot>/packages/runtime/src/deploy.ts stage <commit>` and then `swap`.
+ * deploy, when the live slot has no `deploy.ts`. Then check out and install the commit in the other slot. Start
+ * `ALERTS_LIVE=<live> node <other slot>/packages/runtime/src/deploy.ts stage <commit>`, and then `swap`.
  * The exit code is 0 for success, 1 for a refusal or a failed step, and 2 for a wrong command. The output holds no value of a private file.
  */
 import { mkdtemp, readFile, rm } from "node:fs/promises";
