@@ -1,3 +1,4 @@
+import { HEALTH_KIND, LIMIT_KIND, type PersonId, throttleStreamOf } from "@mark1russell7/alerts";
 import { beforeAll, describe, expect, it } from "vitest";
 import {
   ARM_BURST_GATES,
@@ -111,10 +112,14 @@ describe("the gates of case 15", () => {
     // A notice of the other copy, or a notice at the end of the window, is not a second notice of the copy in the window.
     expect(burstResultOf({ ...record, sends: [...record.sends, send(FLOODS[1]!, BURST + MINUTE, "notice", "cloud")] }).gates.throttled).toBe(true);
     expect(burstResultOf({ ...record, sends: [...record.sends, send(FLOODS[1]!, BURST + S.throttle.window)] }).gates.throttled).toBe(true);
-    // A system line is its own stream: one held notice in the window of a flood notice is not a second notice (AL-81).
-    const held = { ...record, streams: { "held-1": "system", "held-2": "system" } };
-    expect(burstResultOf({ ...held, sends: [...record.sends, send("held-1", BURST + MINUTE)] }).gates.throttled).toBe(true);
-    expect(burstResultOf({ ...held, sends: [...record.sends, send("held-1", BURST + MINUTE), send("held-2", BURST + 2 * MINUTE)] }).gates.throttled).toBe(false);
+    // The streams come from the rule of the throttle. A health line is in the stream of the system lines. The held notice
+    // of the send limit (AL-81) has addresses, thus it is a private stream. With a flood notice, they are not second notices.
+    const health = (id: string): [string, string] => [id, throttleStreamOf({ kind: { code: `${HEALTH_KIND}.failing` } }, id, S.throttle.streams)];
+    const held: [string, string] = ["held-1", throttleStreamOf({ kind: { code: `${LIMIT_KIND}.held` }, addresses: ["person-1" as PersonId] }, "held-1", S.throttle.streams)];
+    const streams = Object.fromEntries([health("health-1"), health("health-2"), held]);
+    expect(burstResultOf({ ...record, streams, sends: [...record.sends, send("health-1", BURST + MINUTE), send("held-1", BURST + 2 * MINUTE)] }).gates.throttled).toBe(true);
+    // Two health lines in one window are two notices of the stream of the system lines.
+    expect(burstResultOf({ ...record, streams, sends: [...record.sends, send("health-1", BURST + MINUTE), send("health-2", BURST + 2 * MINUTE)] }).gates.throttled).toBe(false);
   });
 
   it("fails lifeSafety when a tornado warning has no send", () => {

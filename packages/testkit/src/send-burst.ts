@@ -34,7 +34,7 @@
  * - `noThrow`: no pass throws, and each read of the exchange has no problem.
  * - `oneSend`, in the arms where the copies read each other at each step: no incident has a send of each copy.
  * - `throttled`: in each window of the throttle, each copy sends at most one notice of each stream to the person. The
- *   system lines, such as the held notice of the send limit (AL-81), and the alerts are two streams.
+ *   streams come from `throttleStreamOf`, the rule of the throttle.
  * - `flapped`, in `flapping`: the flaps gave 1 system incident or more, and each one has a send, a hold or a suppression. Before
  *   AL-75, each flap opens a new incident. A flap window of the health line keeps one incident for each episode.
  */
@@ -597,7 +597,7 @@ function flapsOf(copy: Copy): string[] {
 
 // The stream of the throttle of each report of a copy.
 function streamsOf(copy: Copy, throttle: Throttle): [string, string][] {
-  return copy.runtime.state().merge.reports.map((report) => [report.id, throttleStreamOf(report.kind.code, throttle.streams)]);
+  return copy.runtime.state().merge.reports.map((report) => [report.id, throttleStreamOf(report, report.id, throttle.streams)]);
 }
 
 /** This function runs one arm of the case and gives its record. */
