@@ -20,7 +20,7 @@
     "@mark1russell7/quantity": "^0.4.2",
     "@mark1russell7/rigor-generators": "^0.1.18",
     "@mark1russell7/rigor-statistics": "^0.2.8",
-    "@mark1russell7/text": "^0.0.16",
+    "@mark1russell7/text": "^0.0.17",
     "zod": "^4.6.7"
   },
   "devDependencies": {
