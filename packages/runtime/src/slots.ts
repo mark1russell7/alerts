@@ -272,7 +272,7 @@ export function installArgs(page: boolean): readonly string[] {
 }
 
 /** The time limit of one step of a stage: 20 minutes. */
-export const STEP_TIMEOUT_MS = 20 * 60_000;
+export const STEP_TIMEOUT_MS: number = 20 * 60_000;
 
 /** This interface is one program of a stage: its arguments, and the variables that go over the environment of the stage. */
 export interface StageStep {
