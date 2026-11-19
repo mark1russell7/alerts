@@ -23,6 +23,8 @@ import {
   copyStages,
   copyUnreadAt,
   gapGrade,
+  HELD_SHOWN,
+  heldText,
   latestIn,
   LOG_RECOVERY_WINDOW,
   LOG_SUBJECT,
@@ -50,7 +52,7 @@ import {
   type SystemSnapshot,
 } from "./system-reports.ts";
 import { alertConfigSchema, reportSchema, sourceClearConfigSchema } from "./schemas.ts";
-import type { HeldPerson } from "./send-limit.ts";
+import type { HeldAlert, HeldPerson } from "./send-limit.ts";
 import { unknownKinds } from "./taxonomy.ts";
 
 const SEEDS = seedsFrom(process.env["SEED"], [1, 2, 3, 4, 5, 6, 7, 8]);
@@ -895,7 +897,7 @@ describe("the store reports (AL-86)", () => {
 describe("the notices of the send limit (AL-81)", () => {
   const AT = Date.UTC(2026, 10, 18, 12);
   const WINDOW = 60 * 60_000;
-  const held = (person: PersonWatch, first = AT - 60_000, last = AT): HeldPerson => ({ person: person.person, first, last, until: last + WINDOW, count: 2 });
+  const held = (person: PersonWatch, first = AT - 60_000, last = AT): HeldPerson => ({ person: person.person, first, last, until: last + WINDOW, count: 2, alerts: [] });
 
   it("gives one private notice to each person with a hold, with the person as its only address", () => {
     expect(unknownKinds(["system.limit", "system.limit.held"])).toEqual([]);
@@ -940,6 +942,30 @@ describe("the notices of the send limit (AL-81)", () => {
     const lines = addSystemReports(NO_SYSTEM_LINES, step.reports, step.observations);
     expect(lines).toEqual(step.lines);
     expect(systemReports(lines, snapshot({ held: [] }), AT + WINDOW).reports[0]?.addresses).toEqual([OPERATOR.person]);
+  });
+
+  it("names the held alerts from the highest level, and the count of the rest (AL-98)", () => {
+    const alert = (index: number, level: "notice" | "urgent"): HeldAlert => ({ incident: String(index).repeat(64) as ReportId, level, headline: `Flood Statement ${index}` });
+    const alerts = [alert(1, "urgent"), alert(2, "notice"), alert(3, "notice"), alert(4, "notice"), alert(5, "notice")];
+    expect(heldText({ alerts: alerts.slice(0, HELD_SHOWN) }).split("\n")).toEqual([
+      "The send limit holds 3 new alerts for you:",
+      "- Flood Statement 1 (urgent)",
+      "- Flood Statement 2 (notice)",
+      "- Flood Statement 3 (notice)",
+      "The limit does not hold a life-safety warning.",
+    ]);
+    expect(heldText({ alerts }).split("\n")).toEqual([
+      "The send limit holds 5 new alerts for you:",
+      "- Flood Statement 1 (urgent)",
+      "- Flood Statement 2 (notice)",
+      "- Flood Statement 3 (notice)",
+      "- 2 other alerts",
+      "The limit does not hold a life-safety warning.",
+    ]);
+    // With no known report, the text names no alert.
+    expect(heldText({ alerts: [] })).toBe("More new alerts came than your send limit lets through in one window. The limit does not hold a life-safety warning.");
+    const step = systemReports(NO_SYSTEM_LINES, snapshot({ held: [{ ...held(OPERATOR), alerts }] }), AT);
+    expect(step.reports[0]?.description).toBe(heldText({ alerts }));
   });
 
   it("comes from one copy: the copy that reports the facts of a shared account", () => {

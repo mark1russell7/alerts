@@ -8,6 +8,7 @@
  * The end of the condition gives a cancel. The fold reads no clock.
  */
 import { canonicalJson } from "@mark1russell7/rigor-generators";
+import { countOf } from "@mark1russell7/text/english";
 import { compareCodeUnits } from "@mark1russell7/text/order";
 import { BALANCE_KIND, CHANNEL_KIND, CLOCK_KIND, CONTEXT_KINDS, COPY_KIND, COVERAGE_KIND, DRILL_KIND, ESCALATION_KIND, hasKind, HEALTH_KIND, LIMIT_KIND, LOG_KIND, matchPlaces, PERSON_SUBJECT, QUOTA_KIND, STORE_KIND } from "./assess.ts";
 import { isPrivate } from "./audience.ts";
@@ -870,6 +871,22 @@ function exhaustionCondition(entry: Exhaustion): Condition {
 
 const HELD_LINE = "held/";
 
+/** The count of the held alerts that a notice of the send limit names (AL-98). The next digest tells each one. */
+export const HELD_SHOWN = 3;
+
+/**
+ * This function gives the text of a notice of the send limit (AL-98). It names the held alerts from the highest level,
+ * with their levels, and the count of the rest. The text is the text of the first report of the line. Thus a later hold
+ * in the window does not change it.
+ */
+export function heldText(entry: Pick<HeldPerson, "alerts">): string {
+  const end = "The limit does not hold a life-safety warning.";
+  if (entry.alerts.length === 0) return `More new alerts came than your send limit lets through in one window. ${end}`;
+  const shown = entry.alerts.slice(0, HELD_SHOWN).map((alert) => `- ${alert.headline} (${alert.level})`);
+  const rest = entry.alerts.length - shown.length;
+  return [`The send limit holds ${countOf(entry.alerts.length, "new alert")} for you:`, ...shown, ...(rest > 0 ? [`- ${countOf(rest, "other alert")}`] : []), end].join("\n");
+}
+
 function heldName(entry: HeldPerson): string {
   return `${HELD_LINE}${encodeURIComponent(entry.person)}`;
 }
@@ -891,7 +908,7 @@ function heldCondition(entry: HeldPerson): Condition {
     about: [{ system: PERSON_SUBJECT, id: entry.person, label: `Person ${entry.person}` }],
     addresses: [entry.person],
     headline: "The send limit holds new alerts for you",
-    description: "More new alerts came than your send limit lets through in one window. The limit does not hold a life-safety warning.",
+    description: heldText(entry),
     instruction: "Read the next digest. It tells each held alert.",
     parameters: { person: [entry.person] },
   };

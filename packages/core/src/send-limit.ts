@@ -7,7 +7,8 @@
  */
 import { compareCodeUnits } from "@mark1russell7/text/order";
 import { isPrivate } from "./audience.ts";
-import type { CopyWatch, Delivery, Duration, Instant, Level, PersonId, Report } from "./contracts.ts";
+import { LEVELS } from "./contracts.ts";
+import type { CopyWatch, Delivery, Duration, Instant, Level, PersonId, Report, ReportId } from "./contracts.ts";
 import type { EscalationHold, Route } from "./delivery.ts";
 import { messageKey } from "./ids.ts";
 import { copyStages } from "./system-reports.ts";
@@ -93,6 +94,18 @@ export interface HeldPerson {
   readonly until: Instant;
   /** The count of the holds in the window. */
   readonly count: number;
+  /**
+   * The held alerts, one for each incident with its highest held level (AL-98). They come from the highest level, then
+   * from the earliest hold. A hold of a report that the state does not have gives no alert.
+   */
+  readonly alerts: readonly HeldAlert[];
+}
+
+/** One held alert of a person: the incident, its highest held level and its headline (AL-98). */
+export interface HeldAlert {
+  readonly incident: ReportId;
+  readonly level: Level;
+  readonly headline: string;
 }
 
 /**
@@ -101,17 +114,41 @@ export interface HeldPerson {
  * - A hold counts from its time until one window after it. A hold after `at` does not count.
  * - A hold of a private report (`reports`, AL-92) does not count. Thus a held message of the operator, or a held notice
  *   of the send limit, opens no notice of the send limit.
+ * - The headline of each held alert comes from the report of the hold (AL-98). Thus the notice tells which alerts wait.
  */
-export function heldPersons(holds: readonly EscalationHold[], reports: readonly Pick<Report, "id" | "addresses">[], window: Duration, at: Instant): HeldPerson[] {
+export function heldPersons(holds: readonly EscalationHold[], reports: readonly Pick<Report, "id" | "addresses" | "headline">[], window: Duration, at: Instant): HeldPerson[] {
   // A hold names the report of the start of its escalation, thus the ids of the private reports find each private hold.
   const secret = new Set(reports.filter(isPrivate).map((report) => report.id));
-  const persons = new Map<PersonId, { readonly first: Instant; readonly last: Instant; readonly count: number }>();
+  const headlines = new Map(reports.map((report) => [report.id, report.headline]));
+  const persons = new Map<PersonId, EscalationHold[]>();
   for (const hold of holds) {
     if (hold.at > at || hold.at + window <= at || secret.has(hold.incident)) continue;
-    const known = persons.get(hold.person);
-    persons.set(hold.person, known === undefined ? { first: hold.at, last: hold.at, count: 1 } : { first: Math.min(known.first, hold.at), last: Math.max(known.last, hold.at), count: known.count + 1 });
+    const list = persons.get(hold.person);
+    if (list === undefined) persons.set(hold.person, [hold]);
+    else list.push(hold);
   }
-  return [...persons.entries()].sort(([a], [b]) => compareCodeUnits(a, b)).map(([person, entry]) => ({ person, first: entry.first, last: entry.last, until: entry.last + window, count: entry.count }));
+  return [...persons.entries()].sort(([a], [b]) => compareCodeUnits(a, b)).map(([person, list]) => {
+    const first = Math.min(...list.map((hold) => hold.at));
+    const last = Math.max(...list.map((hold) => hold.at));
+    return { person, first, last, until: last + window, count: list.length, alerts: heldAlerts(list, headlines) };
+  });
+}
+
+/** This function gives the held alerts of the holds of one person: one for each incident with a known report (AL-98). */
+function heldAlerts(list: readonly EscalationHold[], headlines: ReadonlyMap<ReportId, string>): HeldAlert[] {
+  const rank = (level: Level): number => LEVELS.indexOf(level);
+  const top = new Map<ReportId, EscalationHold>();
+  for (const hold of list) {
+    const known = top.get(hold.incident);
+    if (known === undefined || rank(hold.level) > rank(known.level) || (hold.level === known.level && hold.at < known.at)) top.set(hold.incident, hold);
+  }
+  return [...top.values()]
+    .flatMap((hold) => {
+      const headline = headlines.get(hold.incident);
+      return headline === undefined ? [] : [{ hold, headline }];
+    })
+    .sort((a, b) => rank(b.hold.level) - rank(a.hold.level) || a.hold.at - b.hold.at || compareCodeUnits(a.hold.incident, b.hold.incident))
+    .map(({ hold, headline }) => ({ incident: hold.incident, level: hold.level, headline }));
 }
 
 /** This function gives the key of a hold: one hold for each escalation and episode. */

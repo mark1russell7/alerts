@@ -288,8 +288,8 @@ describe("heldPersons (AL-81)", () => {
   it("gives each person with a hold in the window, in the order of the person ids, with the first, the last and the end", () => {
     const holds = [holdOf(1, T0 - 50 * MINUTE, other), holdOf(2, T0 - 40 * MINUTE), holdOf(3, T0 - 10 * MINUTE), holdOf(4, T0 - 30 * MINUTE)];
     expect(heldPersons(holds, [], HOUR, T0)).toEqual([
-      { person, first: T0 - 40 * MINUTE, last: T0 - 10 * MINUTE, until: T0 + 50 * MINUTE, count: 3 },
-      { person: other, first: T0 - 50 * MINUTE, last: T0 - 50 * MINUTE, until: T0 + 10 * MINUTE, count: 1 },
+      { person, first: T0 - 40 * MINUTE, last: T0 - 10 * MINUTE, until: T0 + 50 * MINUTE, count: 3, alerts: [] },
+      { person: other, first: T0 - 50 * MINUTE, last: T0 - 50 * MINUTE, until: T0 + 10 * MINUTE, count: 1, alerts: [] },
     ]);
   });
 
@@ -303,7 +303,27 @@ describe("heldPersons (AL-81)", () => {
 
   it("does not count a hold of a private report: a held message of the operator gives no notice of the send limit", () => {
     const holds = [holdOf(1, T0 - MINUTE), holdOf(2, T0 - MINUTE, other)];
-    const reports = [{ id: idOf(1), addresses: [person] }, { id: idOf(2) }];
+    const reports = [{ id: idOf(1), addresses: [person], headline: "A message of the operator" }, { id: idOf(2), headline: "Flood Statement" }];
     expect(heldPersons(holds, reports, HOUR, T0).map((entry) => entry.person)).toEqual([other]);
+  });
+
+  it("gives the held alerts of each person: one for each incident with its highest level, from the highest level and the earliest hold (AL-98)", () => {
+    const holds = [
+      holdOf(1, T0 - 30 * MINUTE),
+      { ...holdOf(2, T0 - 20 * MINUTE), level: "urgent" as const },
+      // The incident 1 rises to urgent. It is one alert, at its highest level.
+      { ...holdOf(1, T0 - 10 * MINUTE), level: "urgent" as const, episode: 1 },
+      holdOf(3, T0 - 40 * MINUTE),
+      // The state does not have the report of the incident 4: its hold counts, and it gives no alert.
+      holdOf(4, T0 - 5 * MINUTE),
+    ];
+    const reports = [1, 2, 3].map((index) => ({ id: idOf(index), headline: `Headline ${index}` }));
+    const [entry] = heldPersons(holds, reports, HOUR, T0);
+    expect(entry?.count).toBe(5);
+    expect(entry?.alerts).toEqual([
+      { incident: idOf(2), level: "urgent", headline: "Headline 2" },
+      { incident: idOf(1), level: "urgent", headline: "Headline 1" },
+      { incident: idOf(3), level: "notice", headline: "Headline 3" },
+    ]);
   });
 });
