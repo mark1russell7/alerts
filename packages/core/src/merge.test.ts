@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { Acknowledgment, ChannelId, Delivery, EndMark, Incident, MergeState, ObservationId, PersonId, Report, Severity, SourceId, Status } from "./contracts.ts";
 import { reportId } from "./ids.ts";
 import { areasWithoutBlocks } from "./shapes.ts";
-import { EMPTY_STATE, acknowledgedLevel, add, endedReports, incidents, join, normalize, sentLevel, type LinkRule } from "./merge.ts";
+import { EMPTY_STATE, acknowledgedLevel, add, endedReports, incidents, join, normalize, sentLevel, type IncidentOptions, type LinkRule, type MergeParts } from "./merge.ts";
 
 const SEEDS = seedsFrom(process.env["SEED"], [1, 2, 3, 4, 5, 6, 7, 8]);
 const HOUR = 3_600_000;
@@ -143,6 +143,98 @@ describe("the join", () => {
   it("keeps each end mark one time", () => {
     const mark: EndMark = { report: report({ key: "k" }).id, at: T0, ended: true };
     expect(add(add(EMPTY_STATE, { ends: [mark] }), { ends: [{ ...mark }] }).ends).toEqual([mark]);
+  });
+});
+
+// Random parts over the pool of the random states. Some parts retire a report of the state or of the parts.
+function randomParts(r: Random, from: MergeState): MergeParts {
+  const other = randomState(r);
+  const ids = [...from.reports, ...other.reports].map((x) => x.id);
+  return {
+    reports: r.sample(other.reports, r.int(0, other.reports.length)),
+    deliveries: other.deliveries,
+    acks: other.acks,
+    ends: other.ends,
+    ...(ids.length > 0 && r.chance(0.3) ? { retired: [{ report: r.pick(ids), until: T0 + r.below(3) * HOUR }] } : {}),
+  };
+}
+
+// The normalize of the parts of a state and of new parts: the value that `add` gives.
+const fullAdd = (state: MergeState, parts: MergeParts): MergeState =>
+  normalize({
+    reports: [...state.reports, ...(parts.reports ?? [])],
+    deliveries: [...state.deliveries, ...(parts.deliveries ?? [])],
+    acks: [...state.acks, ...(parts.acks ?? [])],
+    ends: [...state.ends, ...(parts.ends ?? [])],
+    retired: [...state.retired, ...(parts.retired ?? [])],
+  });
+
+describe("the add of parts", () => {
+  it.each(SEEDS)("gives the normalize of all the parts, for a state in the one form and for a copy of it (seed %i)", (seed) => {
+    const r = random(seed);
+    for (let round = 0; round < 60; round += 1) {
+      let state = randomState(r);
+      for (let step = 0; step < 5; step += 1) {
+        const parts = randomParts(r, state);
+        const full = fullAdd(state, parts);
+        same(add(state, parts), full);
+        // A copy is not in the one form for the merge, so it gets the full normalize.
+        same(add({ ...state }, parts), full);
+        state = add(state, parts);
+      }
+    }
+  });
+
+  it("gives the same state when no part is new", () => {
+    const a = report({ key: "a" });
+    const mark: EndMark = { report: a.id, at: T0, ended: true };
+    const state = normalize({ reports: [a, report({ key: "b" })], ends: [mark], retired: [{ report: report({ key: "c" }).id, until: T0 + HOUR }] });
+    expect(add(state, {})).toBe(state);
+    // Equal copies of the parts, and a tombstone with an earlier end, change nothing.
+    expect(add(state, { reports: [report({ key: "a" })], ends: [{ ...mark }], retired: [{ report: report({ key: "c" }).id, until: T0 }] })).toBe(state);
+  });
+
+  it("keeps each report object of a large state, and puts a new report in the order of the ids", () => {
+    const state = normalize({ reports: Array.from({ length: 2000 }, (_, i) => report({ key: `k${i}` })) });
+    const extra = report({ key: "new" });
+    const next = add(state, { reports: [extra] });
+    same(next, fullAdd(state, { reports: [extra] }));
+    expect(next.reports).toHaveLength(2001);
+    expect(next.reports.filter((x) => x !== extra).every((x, i) => x === state.reports[i])).toBe(true);
+    expect(next.deliveries).toBe(state.deliveries);
+  });
+
+  it("removes the parts of a report that a new tombstone retires", () => {
+    const a = report({ key: "a" });
+    const state = normalize({ reports: [a, report({ key: "b" })], deliveries: [{ key: "m1", incident: a.id, level: "urgent", person, channel: pushover, step: 0, at: T0 }] });
+    const next = add(state, { retired: [{ report: a.id, until: T0 + HOUR }] });
+    expect(next.reports.map((x) => x.id)).toEqual([report({ key: "b" }).id]);
+    expect(next.deliveries).toEqual([]);
+    // A report with a tombstone does not come back.
+    expect(add(next, { reports: [a] })).toBe(next);
+  });
+});
+
+describe("the cache of the incidents", () => {
+  const link: LinkRule = { blocks: (x) => [x.headline], matches: (a, b) => a.source !== b.source };
+  const choices: readonly IncidentOptions[] = [{}, { link }];
+
+  it.each(SEEDS)("gives the incidents of a fresh copy of the state, at each time in each order (seed %i)", (seed) => {
+    const r = random(seed);
+    let state = EMPTY_STATE;
+    for (let round = 0; round < 40; round += 1) {
+      state = add(state, randomParts(r, state));
+      for (const at of r.shuffle([T0 - HOUR, T0, T0 + HOUR, T0 + 2 * HOUR, T0 + 3 * HOUR])) {
+        for (const options of choices) same(incidents(state, at, options), incidents(structuredClone(state), at, options));
+      }
+    }
+  });
+
+  it("makes an incident live again for a past time, after a later time ended it", () => {
+    const state = normalize({ reports: [report({ key: "a" })] });
+    expect(incidents(state, T0)[0]!.live).toBe(true);
+    expect(incidents(state, T0 + 2 * HOUR)[0]!.live).toBe(false);
+    expect(incidents(state, T0)[0]!.live).toBe(true);
   });
 });
 
