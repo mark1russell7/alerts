@@ -700,6 +700,12 @@ describe("the audience of the reports (AL-92)", () => {
     }
   });
 
+  it("gives a public incident no field addresses, thus the strict schema of an older build reads it", () => {
+    const [incident] = found([report({ key: "k1" })]);
+    expect(incident).toBeDefined();
+    expect(Object.hasOwn(incident!, "addresses")).toBe(false);
+  });
+
   it("joins no private report to a public report through the link rule", () => {
     const link: LinkRule = { blocks: (x) => [x.kind.code], matches: () => true };
     expect(found([report({ key: "k1" }), report({ key: "k2", source: "nwws" })], { link })).toHaveLength(1);
