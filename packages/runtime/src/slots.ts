@@ -14,7 +14,8 @@
 import { createHash } from "node:crypto";
 import type { Stats } from "node:fs";
 import { lstat, readlink, rename, rmdir, symlink, unlink } from "node:fs/promises";
-import { basename, dirname, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
+import { runCommand, type CommandResult } from "@procedures/shell/command";
 
 /** The names of the two slots. */
 export const SLOT_NAMES = ["a", "b"] as const;
@@ -268,4 +269,35 @@ export function stageScope(totalMemory: number): readonly string[] {
 export function installArgs(page: boolean): readonly string[] {
   const scope = page ? [] : ["--prod", "--filter", "@mark1russell7/alerts-runtime..."];
   return ["install", "--frozen-lockfile", ...scope, "--prefer-offline", "--network-concurrency=2", "--child-concurrency=1", "--reporter=silent"];
+}
+
+/** The time limit of one step of a stage: 20 minutes. */
+export const STEP_TIMEOUT_MS = 20 * 60_000;
+
+/** This interface is one program of a stage: its arguments, and the variables that go over the environment of the stage. */
+export interface StageStep {
+  readonly program: string;
+  readonly args: readonly string[];
+  readonly env: Readonly<Record<string, string>>;
+}
+
+/**
+ * This function gives the load step of a stage. The load runs `main.ts load` of the slot in the empty home `scratch`.
+ * The variable `ALERTS_HOME` of the step goes over the live home of the environment. Thus no module of the new code writes to the live home.
+ */
+export function loadStep(runtime: string, scratch: string, node: string): StageStep {
+  return { program: node, args: [join(runtime, "src", "main.ts"), "load"], env: { ALERTS_HOME: scratch } };
+}
+
+/**
+ * This function runs one program of a stage to its end. The variables of `env` go over the environment of this process.
+ * A failure throws with the end of the output.
+ */
+export async function runStep(name: string, program: string, args: readonly string[], cwd: string, env: Readonly<Record<string, string>> = {}): Promise<CommandResult> {
+  const result = await runCommand(program, { args: [...args], cwd, env: { ...env }, timeout: STEP_TIMEOUT_MS });
+  if (!result.success) {
+    const tail = `${result.stderr}\n${result.stdout}`.trim().split("\n").slice(-12).join("\n");
+    throw new Error(`The step "${name}" failed with the code ${result.exitCode}${result.timedOut === true ? " (time-out)" : ""}.\n${tail}`);
+  }
+  return result;
 }

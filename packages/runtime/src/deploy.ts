@@ -34,10 +34,12 @@ import {
   DEPLOY_FILE,
   entryRoot,
   installArgs,
+  loadStep,
   otherSlot,
   parseDeployFile,
   pnpmCall,
   readLive,
+  runStep,
   SERVICE_PACKAGE,
   slotsOf,
   STAGE_CHECKS,
@@ -53,7 +55,6 @@ import {
 } from "./slots.ts";
 
 const USAGE = "The command is: node src/deploy.ts status | adopt | stage <commit> [--page] | swap";
-const STEP_TIMEOUT_MS = 20 * 60_000;
 
 const root = entryRoot(process.argv[1], join(fileURLToPath(new URL(".", import.meta.url)), ".."));
 const slots = slotsOf(checkoutOf(root));
@@ -67,15 +68,7 @@ const readText = async (path: string): Promise<string | undefined> => {
 const readMarks = async (): Promise<DeployFile> => parseDeployFile(await readText(deployPath));
 const writeMarks = (file: DeployFile): Promise<void> => writeFileAtomic(deployPath, `${JSON.stringify(file, null, 2)}\n`);
 
-/** This function runs one program to its end. A failure prints the end of its output and throws. */
-async function step(name: string, program: string, args: readonly string[], cwd: string, env: Record<string, string> = {}): Promise<CommandResult> {
-  const result = await runCommand(program, { args, cwd, env, timeout: STEP_TIMEOUT_MS });
-  if (!result.success) {
-    const tail = `${result.stderr}\n${result.stdout}`.trim().split("\n").slice(-12).join("\n");
-    throw new Error(`The step "${name}" failed with the code ${result.exitCode}${result.timedOut === true ? " (time-out)" : ""}.\n${tail}`);
-  }
-  return result;
-}
+const step = runStep;
 
 /**
  * This function gives the arguments of `systemd-run` for the heavy steps of a stage, or undefined when no scope of the user
@@ -152,7 +145,7 @@ async function stage(commit: string, page: boolean): Promise<void> {
   setPriority(constants.priority.PRIORITY_LOW);
   // A nice value does not count against another cgroup. A scope next to the runtime caps the memory and the weight of each heavy step.
   const scope = await scopeOf();
-  const heavy = (name: string, program: string, args: readonly string[], cwd: string, env: Record<string, string> = {}): Promise<CommandResult> =>
+  const heavy = (name: string, program: string, args: readonly string[], cwd: string, env: Readonly<Record<string, string>> = {}): Promise<CommandResult> =>
     scope === undefined ? step(name, program, args, cwd, env) : step(name, "systemd-run", [...scope, program, ...args], cwd, env);
   console.log(scope === undefined ? "The stage runs with no scope: only its priority is low." : `The heavy steps run in a scope: ${scope.slice(4).join(" ")}.`);
   const slot = otherSlot(live);
@@ -181,7 +174,8 @@ async function stage(commit: string, page: boolean): Promise<void> {
   // The load needs no private file. An empty home keeps each write of a module away from the live home.
   const scratch = await mkdtemp(join(tmpdir(), "alerts-load-"));
   try {
-    await heavy("load", process.execPath, [join(runtime, "src", "main.ts"), "load"], runtime, { ALERTS_HOME: scratch });
+    const load = loadStep(runtime, scratch, process.execPath);
+    await heavy("load", load.program, load.args, runtime, load.env);
   } finally {
     await rm(scratch, { recursive: true, force: true });
   }

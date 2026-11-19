@@ -8,10 +8,12 @@ import {
   checkoutOf,
   entryRoot,
   installArgs,
+  loadStep,
   otherSlot,
   parseDeployFile,
   pnpmCall,
   readLive,
+  runStep,
   samePath,
   SERVICE_PACKAGE,
   stageScope,
@@ -174,5 +176,46 @@ describe("the parts of the supervisor and the calls of pnpm (AL-89)", () => {
   it("caps a stage at a quarter of the memory of the host, with a floor, and a low weight for the processor", () => {
     expect(stageScope(1024 * 2 ** 20)).toEqual(["--user", "--scope", "--quiet", "-p", `MemoryHigh=${256 * 2 ** 20}`, "-p", "CPUWeight=10"]);
     expect(stageScope(100 * 2 ** 20)).toContain(`MemoryHigh=${64 * 2 ** 20}`);
+  });
+});
+
+describe("the load step of a stage (AL-89)", () => {
+  const saved = { home: process.env["ALERTS_HOME"], keep: process.env["ALERTS_STEP_KEEP"] };
+  afterEach(() => {
+    for (const [name, value] of [["ALERTS_HOME", saved.home], ["ALERTS_STEP_KEEP", saved.keep]] as const) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+  });
+
+  it("loads the slot in the scratch home, and not in the live home of the process", () => {
+    process.env["ALERTS_HOME"] = join(tmpdir(), "alerts-live-home");
+    const runtime = join("slot-b", "packages", "runtime");
+    const scratch = join(tmpdir(), "alerts-load-x");
+    const step = loadStep(runtime, scratch, "/usr/bin/node");
+    expect(step.program).toBe("/usr/bin/node");
+    expect(step.args).toEqual([join(runtime, "src", "main.ts"), "load"]);
+    expect(step.env).toEqual({ ALERTS_HOME: scratch });
+    expect(Object.values(step.env)).not.toContain(process.env["ALERTS_HOME"]);
+  });
+
+  it("merges the env of a step over process.env: the scratch home wins, and the other variables of the process stay", async () => {
+    const live = await mkdtemp(join(tmpdir(), "alerts-live-"));
+    const scratch = await mkdtemp(join(tmpdir(), "alerts-load-"));
+    process.env["ALERTS_HOME"] = live;
+    process.env["ALERTS_STEP_KEEP"] = "kept";
+    try {
+      const step = loadStep(scratch, scratch, process.execPath);
+      const print = "process.stdout.write(JSON.stringify([process.env.ALERTS_HOME, process.env.ALERTS_STEP_KEEP]))";
+      const result = await runStep("load", step.program, ["-e", print], scratch, step.env);
+      expect(JSON.parse(result.stdout)).toEqual([scratch, "kept"]);
+    } finally {
+      await rm(live, { recursive: true, force: true });
+      await rm(scratch, { recursive: true, force: true });
+    }
+  });
+
+  it("throws with the name and the exit code of a failed step", async () => {
+    await expect(runStep("load", process.execPath, ["-e", "process.exit(3)"], tmpdir())).rejects.toThrow('The step "load" failed with the code 3.');
   });
 });

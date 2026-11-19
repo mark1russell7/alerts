@@ -1598,6 +1598,7 @@ A deploy of new code does not change the live checkout (AL-89). The live path of
 - Then the stage installs the dependencies with the lockfile (`--frozen-lockfile`). `--page` also installs each package and builds the local page.
 - Then the stage starts `check.ts` and `main.ts load` with the new code. The mode `load` loads each module and starts no service.
 - `check.ts` reads the live private files. `main.ts load` gets an empty temporary home, thus it cannot change the live home.
+- `loadStep` gives the load its empty home. `runStep` puts the variables of a step over the environment of the stage.
 - The stage and each of its programs run at the lowest priority of the processor.
 - On Linux, the install, the page, the check and the load run in a scope of the user manager (`systemd-run --user --scope`).
 - The scope caps the memory of each step at a quarter of the memory of the host, and gives it the processor weight 10.
