@@ -683,6 +683,11 @@ export interface InstanceOptions {
   /** The instance gives each refresh of the outlines to this function. */
   readonly onShapes?: (outcome: ShapeOutcome) => void;
   /**
+   * This function tells if the start is good: the service runs, and one pass ended. Until then, no refresh of the shapes starts.
+   * Thus a refresh never runs in the first pass or before the ready mark of the supervisor (AL-75). The default is a good start.
+   */
+  readonly startGood?: () => boolean;
+  /**
    * The cache of the copy of the transit catalog (AL-60). The entry gives the file `TRANSIT_FILE` of the private folder. Without
    * it, the instance reads no transit feed and no catalog. The instance reads each feed of the copy whose box meets a place.
    */
@@ -983,9 +988,11 @@ export function openInstance(options: InstanceOptions): Instance {
     ...(options.readings === undefined ? {} : { readings: options.readings }),
     ...(options.onReadingsFault === undefined ? {} : { onReadingsFault: options.onReadingsFault }),
     // After each pass, the store of shapes gets the outlines that are due, and it ends before the next fetch from its host (AL-33).
+    // The first refresh starts at a pass after the good start. The entry marks the start after this function, thus the pass
+    // that makes the start good starts no refresh.
     onPass: async (pass) => {
       latest = pass;
-      shapes.afterPass(pass.view.incidents, refreshUntil(runtime.config.sources, (descriptor) => nextFetch(runtime.state(), descriptor)));
+      if (options.startGood?.() ?? true) shapes.afterPass(pass.view.incidents, refreshUntil(runtime.config.sources, (descriptor) => nextFetch(runtime.state(), descriptor)));
       // The keeper of the transit catalog reads the catalog when its copy is due. The pass does not wait for the read.
       transit?.afterPass();
       await options.onPass?.(pass);

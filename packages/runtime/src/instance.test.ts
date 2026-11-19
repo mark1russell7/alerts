@@ -868,6 +868,23 @@ describe("openInstance", () => {
     expect(alerts.filter((url) => url.searchParams.has("zone"))).toEqual([]);
   });
 
+  it("starts no refresh of the shapes before a pass after the good start (AL-75)", async () => {
+    const net = network();
+    const outcomes: ShapeOutcome[] = [];
+    let good = false;
+    const { instance, clock } = open(store(SECRETS), CONFIG, 0, TEST_FETCH_LIMIT, { transport: withZones(net), shapes: memoryCache(), onShapes: (outcome) => outcomes.push(outcome), startGood: () => good });
+    const zones = () => net.exchanges.filter((exchange) => new URL(exchange.url).pathname.startsWith("/zones")).length;
+    await finish(clock, instance.runtime.pass());
+    await finish(clock, instance.shapes.idle());
+    expect(outcomes).toEqual([]);
+    expect(zones()).toBe(0);
+    good = true;
+    await finish(clock, instance.runtime.pass());
+    await finish(clock, instance.shapes.idle());
+    expect(outcomes).toEqual([{ ok: true, refreshed: expect.objectContaining({ stop: "done", failures: [] }) }]);
+    expect(zones()).toBeGreaterThan(0);
+  });
+
   it("tells one time when new outlines change the codes of a place", async () => {
     const net = network();
     const outcomes: ShapeOutcome[] = [];
