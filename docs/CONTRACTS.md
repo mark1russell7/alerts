@@ -1598,7 +1598,11 @@ A deploy of new code does not change the live checkout (AL-89). The live path of
 - Then the stage installs the dependencies with the lockfile (`--frozen-lockfile`). `--page` also installs each package and builds the local page.
 - Then the stage starts `check.ts` and `main.ts load` with the new code. The mode `load` loads each module and starts no service.
 - `check.ts` reads the live private files. `main.ts load` gets an empty temporary home, thus it cannot change the live home.
-- The stage and each of its programs run at the lowest priority of the processor. Thus a stage on a small host does not stop the live runtime.
+- The stage and each of its programs run at the lowest priority of the processor.
+- On Linux, the install, the page, the check and the load run in a scope of the user manager (`systemd-run --user --scope`).
+- The scope caps the memory of each step at a quarter of the memory of the host, and gives it the processor weight 10.
+- A nice value does not count against another `cgroup`. The scope is next to the runtime, thus its weight counts against the runtime.
+- A host with no scope runs the stage with only the low priority.
 - When each step passes, the stage writes its mark in `host/deploy.json`: the commit, the time and the checks.
 - The stage removes the old mark first. Thus a stage that stops in its middle leaves no mark.
 - `node src/deploy.ts swap` points the live path at the staged slot in one step. It refuses a slot with no mark of its commit, a missing check or a change in its tree.

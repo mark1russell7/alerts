@@ -247,6 +247,23 @@ export function pnpmCall(env: Readonly<Record<string, string | undefined>>, node
   return { program: "pnpm", prefix: [] };
 }
 
+/** The part of the memory of the host that the programs of a stage can use before the kernel takes their pages back. */
+export const STAGE_MEMORY_SHARE = 0.25;
+
+/** The weight of a stage for the processor, against the weight 100 of the runtime in the same slice. */
+export const STAGE_CPU_WEIGHT = 10;
+
+/**
+ * This function gives the arguments of `systemd-run` that start a program of a stage in a scope of the user manager.
+ * The scope caps the memory of the program at a share of the memory of the host.
+ * It also gives the program a low weight for the processor.
+ * Thus a stage on a small host pays for its own memory with its own pages, and the live runtime keeps its pages.
+ */
+export function stageScope(totalMemory: number): readonly string[] {
+  const high = Math.max(64 * 2 ** 20, Math.floor(totalMemory * STAGE_MEMORY_SHARE));
+  return ["--user", "--scope", "--quiet", "-p", `MemoryHigh=${high}`, "-p", `CPUWeight=${STAGE_CPU_WEIGHT}`];
+}
+
 /** This function gives the arguments of the install of a stage: the runtime and its packages, or each package for the local page. */
 export function installArgs(page: boolean): readonly string[] {
   const scope = page ? [] : ["--prod", "--filter", "@mark1russell7/alerts-runtime..."];

@@ -14,6 +14,7 @@ import {
   readLive,
   samePath,
   SERVICE_PACKAGE,
+  stageScope,
   slotOfTarget,
   slotsOf,
   STAGE_CHECKS,
@@ -168,5 +169,10 @@ describe("the parts of the supervisor and the calls of pnpm (AL-89)", () => {
     expect(installArgs(false).slice(0, 2)).toEqual(["install", "--frozen-lockfile"]);
     expect(installArgs(false)).toEqual(expect.arrayContaining(["--prod", "--filter", "@mark1russell7/alerts-runtime..."]));
     expect(installArgs(true)).not.toContain("--prod");
+  });
+
+  it("caps a stage at a quarter of the memory of the host, with a floor, and a low weight for the processor", () => {
+    expect(stageScope(1024 * 2 ** 20)).toEqual(["--user", "--scope", "--quiet", "-p", `MemoryHigh=${256 * 2 ** 20}`, "-p", "CPUWeight=10"]);
+    expect(stageScope(100 * 2 ** 20)).toContain(`MemoryHigh=${64 * 2 ** 20}`);
   });
 });

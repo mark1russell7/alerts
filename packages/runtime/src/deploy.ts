@@ -20,7 +20,7 @@
  * The exit code is 0 for success, 1 for a refusal or a failed step, and 2 for a wrong command. The output holds no value of a private file.
  */
 import { mkdtemp, readFile, rm } from "node:fs/promises";
-import { constants, setPriority, tmpdir } from "node:os";
+import { constants, setPriority, tmpdir, totalmem } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { writeFileAtomic } from "@procedures/fs/files";
@@ -41,6 +41,7 @@ import {
   SERVICE_PACKAGE,
   slotsOf,
   STAGE_CHECKS,
+  stageScope,
   SUPERVISOR_FILES,
   supervisorChanges,
   swapLink,
@@ -74,6 +75,17 @@ async function step(name: string, program: string, args: readonly string[], cwd:
     throw new Error(`The step "${name}" failed with the code ${result.exitCode}${result.timedOut === true ? " (time-out)" : ""}.\n${tail}`);
   }
   return result;
+}
+
+/**
+ * This function gives the arguments of `systemd-run` for the heavy steps of a stage, or undefined when no scope of the user
+ * manager can start. On a host with no scope, the stage runs only at the lowest priority of the processor.
+ */
+async function scopeOf(): Promise<readonly string[] | undefined> {
+  if (process.platform !== "linux") return undefined;
+  const scope = stageScope(totalmem());
+  const probe = await runCommand("systemd-run", { args: [...scope, "true"], timeout: 60_000 });
+  return probe.success ? scope : undefined;
 }
 
 const git = (cwd: string, ...args: string[]): Promise<CommandResult> => step(`git ${args[0] ?? ""}`, "git", args, cwd);
@@ -136,8 +148,13 @@ async function status(): Promise<void> {
 
 async function stage(commit: string, page: boolean): Promise<void> {
   const live = await liveSlot();
-  // The stage and each program that it starts run at the lowest priority of the processor. Thus they do not take the processor from the live runtime.
+  // The stage and each program that it starts run at the lowest priority of the processor.
   setPriority(constants.priority.PRIORITY_LOW);
+  // A nice value does not count against another cgroup. A scope next to the runtime caps the memory and the weight of each heavy step.
+  const scope = await scopeOf();
+  const heavy = (name: string, program: string, args: readonly string[], cwd: string, env: Record<string, string> = {}): Promise<CommandResult> =>
+    scope === undefined ? step(name, program, args, cwd, env) : step(name, "systemd-run", [...scope, program, ...args], cwd, env);
+  console.log(scope === undefined ? "The stage runs with no scope: only its priority is low." : `The heavy steps run in a scope: ${scope.slice(4).join(" ")}.`);
   const slot = otherSlot(live);
   const folder = slots[slot];
   const call = pnpmCall(process.env, process.execPath);
@@ -156,15 +173,15 @@ async function stage(commit: string, page: boolean): Promise<void> {
   const sha = (await headOf(folder)) ?? "";
   console.log(`Slot ${slot} has the commit ${sha.slice(0, 7)}.`);
   const env = { CI: "1", COREPACK_ENABLE_DOWNLOAD_PROMPT: "0" };
-  await step("install", call.program, [...call.prefix, ...installArgs(page)], folder, env);
-  if (page) await step("page", call.program, [...call.prefix, "--filter", "./packages/site", "build"], folder, env);
+  await heavy("install", call.program, [...call.prefix, ...installArgs(page)], folder, env);
+  if (page) await heavy("page", call.program, [...call.prefix, "--filter", "./packages/site", "build"], folder, env);
   const runtime = join(folder, "packages", "runtime");
-  const config = await step("config", process.execPath, [join(runtime, "src", "check.ts")], runtime);
+  const config = await heavy("config", process.execPath, [join(runtime, "src", "check.ts")], runtime);
   console.log(config.stdout.trim());
   // The load needs no private file. An empty home keeps each write of a module away from the live home.
   const scratch = await mkdtemp(join(tmpdir(), "alerts-load-"));
   try {
-    await step("load", process.execPath, [join(runtime, "src", "main.ts"), "load"], runtime, { ALERTS_HOME: scratch });
+    await heavy("load", process.execPath, [join(runtime, "src", "main.ts"), "load"], runtime, { ALERTS_HOME: scratch });
   } finally {
     await rm(scratch, { recursive: true, force: true });
   }
