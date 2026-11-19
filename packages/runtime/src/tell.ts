@@ -11,7 +11,8 @@
  * This path is a stopgap with no throttle and no check for a repeated message. Its end is the intake of events in the runtime (AL-92).
  *
  * The environment gives `ALERTS_HOME`, as for `main.ts`. The output holds no value of a private file, no person and
- * no address. The exit code is 0 for a sent message or a dry run, 1 for a refusal or a failed send, and 2 for a wrong command.
+ * no address. The exit code is 0 for a sent message or a dry run.
+ * It is 1 for a refusal or a failed send, and 2 for a wrong command.
  */
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
