@@ -3,7 +3,7 @@
  * A report with `addresses` is private: the CAP scope `Private`. It reaches only the persons of its addresses.
  *
  * The merge puts reports in one incident only when their audiences are the same. Thus the text of a private report
- * does not reach a person outside its addresses through an incident, and a public report does not lose its persons.
+ * does not reach a person outside its addresses through an incident. Also, a public report does not lose its persons.
  */
 import { compareCodeUnits } from "@mark1russell7/text/order";
 import type { PersonId } from "./contracts.ts";
