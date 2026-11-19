@@ -45,12 +45,14 @@ import { discoveryPid, hostReadyWindow, hostTask, readinessProbe, RUNTIME_GRACE,
 import { hostFileText } from "./start-times.ts";
 import { checksKeys, daemonCheck, INSTANCE_TIMES, USER_AGENT_NAME } from "./instance.ts";
 import { checkStart, GOOD_FILE, privateFiles, readStartTexts, requestRestart, restartUse, type RestartOutcome } from "./reload.ts";
+import { entryRoot } from "./slots.ts";
 
 const ACTIONS = ["install", "remove", "status", "restart"] as const;
 const action = process.argv[2];
 
 const home = alertsHome(process.env, process.cwd());
-const root = join(fileURLToPath(new URL(".", import.meta.url)), "..");
+// The path of the command line, not resolved: an install through the live link gives the task the link (AL-89).
+const root = entryRoot(process.argv[1], join(fileURLToPath(new URL(".", import.meta.url)), ".."));
 const spec = hostTask({ home, root, node: process.execPath });
 const ports = nodeHostPorts();
 // The supervisor writes this discovery file. With it, the remove stops the live process tree.

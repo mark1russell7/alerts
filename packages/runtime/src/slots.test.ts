@@ -1,0 +1,172 @@
+import { spawnSync } from "node:child_process";
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import {
+  adoptLive,
+  checkoutOf,
+  entryRoot,
+  installArgs,
+  otherSlot,
+  parseDeployFile,
+  pnpmCall,
+  readLive,
+  samePath,
+  SERVICE_PACKAGE,
+  slotOfTarget,
+  slotsOf,
+  STAGE_CHECKS,
+  SUPERVISOR_FILES,
+  supervisorChanges,
+  swapLink,
+  swapRefusal,
+  withMark,
+  type LiveState,
+  type StageMark,
+} from "./slots.ts";
+
+const SHA = "1".repeat(40);
+const OTHER_SHA = "2".repeat(40);
+const goodMark: StageMark = { sha: SHA, at: "2026-11-19T02:00:00.000Z", checks: [...STAGE_CHECKS] };
+const linkTo = (slot: "a" | "b" | undefined): LiveState => ({ kind: "link", target: "live-x", slot });
+
+describe("the names and paths of the slots (AL-89)", () => {
+  it("gives two slots next to the live path, and the other slot of each", () => {
+    expect(slotsOf(join("top", "live"))).toEqual({ live: join("top", "live"), a: join("top", "live-a"), b: join("top", "live-b") });
+    expect(otherSlot("a")).toBe("b");
+    expect(otherSlot("b")).toBe("a");
+  });
+
+  it("gives the folder of the package from the path of an entry, and the fallback for another path", () => {
+    const entry = join("top", "live", "packages", "runtime", "src", "main.ts");
+    expect(entryRoot(entry, "fallback")).toBe(join("top", "live", "packages", "runtime"));
+    expect(entryRoot(undefined, "fallback")).toBe("fallback");
+    expect(entryRoot(join("top", "live", "packages", "runtime", "main.ts"), "fallback")).toBe("fallback");
+    expect(entryRoot(join("top", "src", "notes.txt"), "fallback")).toBe("fallback");
+    expect(checkoutOf(join("top", "live", "packages", "runtime"))).toBe(join("top", "live"));
+  });
+
+  it("compares paths with no case on Windows, and with the case elsewhere", () => {
+    expect(samePath("C:\\Git\\Live-A\\", "\\\\?\\c:\\git\\live-a", "win32")).toBe(true);
+    expect(samePath("/srv/Live-a", "/srv/live-a", "linux")).toBe(false);
+    expect(samePath("/srv/live-a/", "/srv/live-a", "linux")).toBe(true);
+  });
+
+  it("finds the slot of a relative or a full target, and no slot for another folder", () => {
+    const slots = slotsOf(join(tmpdir(), "live"));
+    expect(slotOfTarget(slots, "live-b")).toBe("b");
+    expect(slotOfTarget(slots, slots.a)).toBe("a");
+    expect(slotOfTarget(slots, join(tmpdir(), "elsewhere"))).toBeUndefined();
+  });
+});
+
+describe("the swap of the live link on the file system (AL-89)", () => {
+  let top = "";
+  beforeEach(async () => {
+    top = await mkdtemp(join(tmpdir(), "alerts-slots-"));
+  });
+  afterEach(async () => {
+    await rm(top, { recursive: true, force: true });
+  });
+
+  it("adopts a checkout as slot a, and swaps the link to slot b and back with each slot kept", async () => {
+    const slots = slotsOf(join(top, "live"));
+    await mkdir(slots.live);
+    await writeFile(join(slots.live, "marker"), "a");
+    expect(await readLive(slots)).toEqual({ kind: "folder" });
+
+    await adoptLive(slots);
+    expect(await readLive(slots)).toMatchObject({ kind: "link", slot: "a" });
+    expect(await readFile(join(slots.live, "marker"), "utf8")).toBe("a");
+
+    await mkdir(slots.b);
+    await writeFile(join(slots.b, "marker"), "b");
+    await swapLink(slots.live, slots.b);
+    expect(await readLive(slots)).toMatchObject({ kind: "link", slot: "b" });
+    expect(await readFile(join(slots.live, "marker"), "utf8")).toBe("b");
+    expect(await readFile(join(slots.a, "marker"), "utf8")).toBe("a");
+
+    await swapLink(slots.live, slots.a);
+    expect(await readLive(slots)).toMatchObject({ kind: "link", slot: "a" });
+    // The swap leaves no temporary link.
+    expect((await readdir(top)).sort()).toEqual(["live", "live-a", "live-b"]);
+  });
+
+  it("starts each process through the link in the slot that the link names at its start", async () => {
+    const slots = slotsOf(join(top, "live"));
+    for (const name of ["a", "b"] as const) {
+      await mkdir(slots[name]);
+      await writeFile(join(slots[name], "marker"), name);
+    }
+    // The supervisor gives each start the live path as its folder, as `hostGroup` does with the root of `entryRoot`.
+    const start = (): string => spawnSync(process.execPath, ["-e", "process.stdout.write(require('node:fs').readFileSync('marker', 'utf8'))"], { cwd: slots.live, encoding: "utf8" }).stdout;
+    await swapLink(slots.live, slots.a);
+    expect(start()).toBe("a");
+    await swapLink(slots.live, slots.b);
+    expect(start()).toBe("b");
+  });
+
+  it("refuses to swap a live path that is a folder, and to adopt a link or over an existing slot a", async () => {
+    const slots = slotsOf(join(top, "live"));
+    await mkdir(slots.live);
+    await mkdir(slots.b);
+    await expect(swapLink(slots.live, slots.b)).rejects.toThrow("not a link");
+    await mkdir(slots.a);
+    await expect(adoptLive(slots)).rejects.toThrow("Slot a exists");
+    await rm(slots.live, { recursive: true });
+    await swapLink(slots.live, slots.a);
+    await expect(adoptLive(slots)).rejects.toThrow("a link already");
+  });
+});
+
+describe("the marks of a stage and the swap rule (AL-89)", () => {
+  it("reads no mark from no file, a bad text or a bad form, and keeps only the good marks", () => {
+    expect(parseDeployFile(undefined)).toEqual({ format: 1, marks: {} });
+    expect(parseDeployFile("{")).toEqual({ format: 1, marks: {} });
+    expect(parseDeployFile(JSON.stringify({ format: 2, marks: { a: goodMark } }))).toEqual({ format: 1, marks: {} });
+    const text = JSON.stringify({ format: 1, marks: { a: goodMark, b: { sha: SHA, at: "x", checks: "install" } } });
+    expect(parseDeployFile(text)).toEqual({ format: 1, marks: { a: goodMark } });
+  });
+
+  it("sets and removes the mark of one slot", () => {
+    const file = withMark({ format: 1, marks: {} }, "b", goodMark);
+    expect(file.marks.b).toEqual(goodMark);
+    expect(withMark(file, "b", undefined)).toEqual({ format: 1, marks: {} });
+  });
+
+  it("swaps only to a slot staged at its commit with each check and no change", () => {
+    const facts = { live: linkTo("a"), mark: goodMark, head: SHA, clean: true };
+    expect(swapRefusal(facts)).toBeUndefined();
+    expect(swapRefusal({ ...facts, live: { kind: "folder" } })).toContain("adopt");
+    expect(swapRefusal({ ...facts, live: linkTo(undefined) })).toContain("adopt");
+    expect(swapRefusal({ ...facts, head: undefined })).toContain("Slot b has no checkout");
+    expect(swapRefusal({ ...facts, mark: undefined })).toContain("no stage");
+    expect(swapRefusal({ ...facts, head: OTHER_SHA })).toContain("no stage");
+    expect(swapRefusal({ ...facts, mark: { ...goodMark, checks: ["install", "config"] } })).toContain("load");
+    expect(swapRefusal({ ...facts, clean: false })).toContain("changes");
+  });
+});
+
+describe("the parts of the supervisor and the calls of pnpm (AL-89)", () => {
+  const parts = Object.fromEntries([...SUPERVISOR_FILES.map((file) => [file, `hash of ${file}`]), [SERVICE_PACKAGE, "0.10.0"]]);
+
+  it("gives each part of the supervisor that changes, and counts a missing part as a change", () => {
+    expect(supervisorChanges(parts, { ...parts })).toEqual([]);
+    expect(supervisorChanges(parts, { ...parts, "packages/runtime/src/host.ts": "new" })).toEqual(["packages/runtime/src/host.ts"]);
+    expect(supervisorChanges(parts, { ...parts, [SERVICE_PACKAGE]: undefined })).toEqual([SERVICE_PACKAGE]);
+  });
+
+  it("starts a script of pnpm with Node, a program by its name, and refuses no program on Windows", () => {
+    expect(pnpmCall({ PNPM: "/opt/pnpm/pnpm.cjs" }, "/usr/bin/node", "linux")).toEqual({ program: "/usr/bin/node", prefix: ["/opt/pnpm/pnpm.cjs"] });
+    expect(pnpmCall({ PNPM: "/opt/pnpm/pnpm" }, "/usr/bin/node", "linux")).toEqual({ program: "/opt/pnpm/pnpm", prefix: [] });
+    expect(pnpmCall({}, "/usr/bin/node", "linux")).toEqual({ program: "pnpm", prefix: [] });
+    expect(pnpmCall({}, "node.exe", "win32")).toHaveProperty("refused");
+  });
+
+  it("installs with the lockfile: the runtime only, or each package for the local page", () => {
+    expect(installArgs(false).slice(0, 2)).toEqual(["install", "--frozen-lockfile"]);
+    expect(installArgs(false)).toEqual(expect.arrayContaining(["--prod", "--filter", "@mark1russell7/alerts-runtime..."]));
+    expect(installArgs(true)).not.toContain("--prod");
+  });
+});

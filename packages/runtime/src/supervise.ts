@@ -12,10 +12,12 @@ import { fileURLToPath } from "node:url";
 import type { ServiceBuilder } from "@mark1russell7/service";
 import { discoveryOf, nodeHostPorts, removeDiscovery, superviseGroup, writeDiscovery } from "@mark1russell7/service/host";
 import { declareSupervisor, hostGroup, hostReadyWindow, supervisorDiscovery, supervisorHome } from "./host.ts";
+import { entryRoot } from "./slots.ts";
 import { hostFileText, readyWindowText } from "./start-times.ts";
 
-// The folder of the package. The runtime starts from the same checkout as the supervisor.
-const ROOT = join(fileURLToPath(new URL(".", import.meta.url)), "..");
+// The folder of the package. The runtime starts from the same checkout as the supervisor, through the path of the command
+// line. Thus a live path that is a link to a slot gives each start the slot that the link names at that time (AL-89).
+const ROOT = entryRoot(process.argv[1], join(fileURLToPath(new URL(".", import.meta.url)), ".."));
 
 /**
  * This function makes the service of the supervisor for the folder of the private files. The service

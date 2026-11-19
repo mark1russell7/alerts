@@ -3,6 +3,8 @@
  *
  * - `node src/main.ts` starts the runtime.
  * - `node src/main.ts supervise <folder>` starts the supervisor of the runtime (`supervise.ts`). The boot task starts it.
+ * - `node src/main.ts load` loads each module of the runtime, and stops with the code 0. It starts no service. The stage of a
+ *   deploy uses it to check the code of a new slot (`deploy.ts`).
  *
  * The lifecycle owns the signals of the process. After SIGTERM or Ctrl-C, the service stops in its
  * phases, and the process exits with 0 or 1.
@@ -339,9 +341,15 @@ async function runtime(): Promise<ServiceBuilder> {
   return service;
 }
 
-const MODES = ["supervise"];
+const MODES = ["supervise", "load"];
 const mode = process.argv[2];
 if (mode !== undefined && !MODES.includes(mode)) throw new Error(`The first argument is "${mode}". Give no argument for the runtime, or one of: ${MODES.join(", ")}.`);
+
+// The static imports above loaded each module. Thus `load` stops here, before a service starts.
+if (mode === "load") {
+  console.log("Each module of the runtime loads.");
+  process.exit(0);
+}
 
 // The process exits after the shutdown of the service.
 const started = mode === "supervise" ? supervisor(process.argv[3]) : await runtime();

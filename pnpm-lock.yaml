@@ -685,6 +685,9 @@ importers:
       '@procedures/peer':
         specifier: ^0.64.0
         version: 0.64.0(@opentelemetry/api@1.10.0)(ws@8.23.0)
+      '@procedures/shell':
+        specifier: ^0.64.0
+        version: 0.64.0
       polite-crawler:
         specifier: ^0.7.10
         version: 0.7.10(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
@@ -2235,6 +2238,10 @@ packages:
 
   '@procedures/peer@0.64.0':
     resolution: {integrity: sha512-vY+oTziWXyk6FJDnTjQEfyq4SVPI6pT1YBf6FsQzWXsh2AnBuMHV2cL+Vs5A9xg5nRnMfEkqppCIYxFrfi3spw==}
+    engines: {node: '>=22'}
+
+  '@procedures/shell@0.64.0':
+    resolution: {integrity: sha512-Vt10JnYUzqnm2To9g7KK8ZhYV/QHtaRoUR0rlRHn2iqKTWrNHCSbh3crdHkXLpLLAw6Buup1HrQiSJ6fo2HpwQ==}
     engines: {node: '>=22'}
 
   '@publint/pack@0.1.7':
@@ -3897,6 +3904,19 @@ snapshots:
       - pg
       - utf-8-validate
       - ws
+
+  '@procedures/shell@0.64.0':
+    dependencies:
+      '@procedures/client': 0.64.0
+      zod: 4.6.7
+    transitivePeerDependencies:
+      - '@grpc/grpc-js'
+      - amqplib
+      - bufferutil
+      - ioredis
+      - mongodb
+      - pg
+      - utf-8-validate
 
   '@publint/pack@0.1.7':
     dependencies:

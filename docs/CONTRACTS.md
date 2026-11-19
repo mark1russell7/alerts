@@ -1576,10 +1576,30 @@ The start keeps the last good set of the private files, and a change of the file
 - A new text of the restart request `restart.request` in the folder stops the runtime with no check. Then the supervisor starts it again.
 - A read error of the request gives no restart. The start reads the request too, thus the new runtime does not restart for the same request.
 
-A deploy of new code to the live checkout does these steps, with no elevated shell:
+A deploy of new code does not change the live checkout (AL-89). The live path of the checkout is a link to one of two slots: the checkouts `<live>-a` and `<live>-b` next to it. The module `slots.ts` gives the rules, and `deploy.ts` gives the commands. Start each command through the live path, thus with the code of the live slot.
 
-1. Check out the new code, and install its dependencies.
-2. Start `node src/install.ts restart` in the runtime package. It checks the private files with the new code. A problem stops it before the request.
+- `node src/deploy.ts adopt` moves the checkout to slot `a`, and makes the live path a link to it. Start it one time on each copy.
+- On Linux, `adopt` operates while the runtime runs. On Windows, a folder in use cannot move, thus stop the boot task first.
+- `node src/deploy.ts stage <commit>` clones the live slot into the other slot when it does not exist, and checks out the commit there.
+- Then the stage installs the dependencies with the lockfile (`--frozen-lockfile`). `--page` also installs each package and builds the local page.
+- Then the stage starts `check.ts` and `main.ts load` with the new code. The mode `load` loads each module and starts no service.
+- When each step passes, the stage writes its mark in `host/deploy.json`: the commit, the time and the checks.
+- The stage removes the old mark first. Thus a stage that stops in its middle leaves no mark.
+- `node src/deploy.ts swap` points the live path at the staged slot in one step. It refuses a slot with no mark of its commit, a missing check or a change in its tree.
+- On Linux, the swap renames a new symbolic link over the old link. On Windows, it removes the junction and makes a new one. A start in that short gap fails, and the supervisor starts the runtime again.
+- The old slot stays as it is. A second `swap` goes back to it. Do not go back after the new code wrote a new kind of event to the log.
+- `node src/deploy.ts status` gives the live slot, and the commit and the mark of each slot.
+
+The supervisor and `install.ts` take the folder of the package from the path of the command line (`entryRoot`), not from the URL of the module. Node resolves the links in the URL of a module, but not in the path of the command line. Thus each start of the runtime goes through the link, and takes the slot that the link names at that time.
+
+The supervisor loads its own files only at its own start. The stage and the swap tell when `supervise.ts`, `host.ts`, `start-times.ts` or the version of `@mark1russell7/service` change. Such a change needs a restart of the boot task.
+
+The environment variable `PNPM` gives the program of pnpm. A path that ends in `.cjs` starts with Node. On Windows the variable is necessary, because Node cannot start `pnpm.cmd` with no shell.
+
+After a swap, a deploy of new code to the live checkout does these steps, with no elevated shell:
+
+1. The swap puts the new code at the live path. The runtime takes it at its next start.
+2. Start `node src/install.ts restart` in the runtime package, through the live path. It checks the private files with the new code. A problem stops it before the request.
 3. The command writes a new request. Then it waits for a new process ID in `host/runtime.json`, for the readiness of the new runtime, and for the end of its start marker.
 4. Code 0 tells that the new runtime is ready with the private files. Code 1 gives the problem, for example a new runtime on the last good set. Code 2 gives a wrong command.
 
