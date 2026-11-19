@@ -684,7 +684,7 @@ export interface InstanceOptions {
   readonly onShapes?: (outcome: ShapeOutcome) => void;
   /**
    * This function tells if the start is good: the service runs, and one pass ended. Until then, no refresh of the shapes starts.
-   * Thus a refresh never runs in the first pass or before the ready mark of the supervisor (AL-75). The default is a good start.
+   * Thus a refresh does not run in the first pass or before the ready mark of the supervisor (AL-75). The default is a good start.
    */
   readonly startGood?: () => boolean;
   /**
