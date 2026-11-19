@@ -5,6 +5,7 @@
 import type { MapShape, Position, RegionCode } from "@mark1russell7/alerts";
 import { countyUgcOfSame, stateOfUgc } from "@mark1russell7/alerts-format-nws";
 import { parseGeometry, type Geometry } from "@mark1russell7/geo";
+import { isRecord } from "@mark1russell7/optional/read";
 import { compareCodeUnits } from "@mark1russell7/text/order";
 
 /**
@@ -89,8 +90,6 @@ export function zonePath(key: ZoneKey): string {
 export type ReadList =
   | { readonly ok: true; readonly ids: readonly string[]; readonly complete: boolean; readonly problems: readonly string[] }
   | { readonly ok: false; readonly problem: string };
-
-const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> => typeof value === "object" && value !== null && !Array.isArray(value);
 
 /** This function parses a JSON text. It gives `undefined` for a text that is not JSON. */
 function parseJson(body: string): unknown {

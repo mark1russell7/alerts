@@ -21,6 +21,7 @@ import type {
   Urgency,
 } from "@mark1russell7/alerts";
 import { categoryOf, Problems, reportId } from "@mark1russell7/alerts";
+import { isRecord, type Fields } from "@mark1russell7/optional/read";
 import { errorMessage } from "@mark1russell7/text";
 
 import {
@@ -78,10 +79,6 @@ export const KNOWN_FIELDS: ReadonlySet<string> = new Set([
   "replacedAt",
 ]);
 
-type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
-type JsonObject = { [key: string]: Json };
-
-const isObject = (value: unknown): value is JsonObject => typeof value === "object" && value !== null && !Array.isArray(value);
 const textOf = (value: unknown): string | undefined => (typeof value === "string" && value.trim() !== "" ? value : undefined);
 /** This function gives a list of the texts of a value: a text, or a list of texts. */
 const textsOf = (value: unknown): string[] =>
@@ -111,8 +108,8 @@ function textsAt(value: unknown, path: string, problems: Problems): string[] {
 }
 
 /** This function reads an object field. An absent field and null give `undefined`. Another value is a lossy problem. */
-function objectAt(value: unknown, path: string, problems: Problems): JsonObject | undefined {
-  if (isObject(value)) return value;
+function objectAt(value: unknown, path: string, problems: Problems): Fields | undefined {
+  if (isRecord(value)) return value;
   if (value !== undefined && value !== null) problems.add(path, `the value is ${typeOf(value)}, not an object`);
   return undefined;
 }
@@ -166,10 +163,10 @@ const BLOCK = "feature";
  * zone, for example `/zones/fire/TXZ205`, and decides first. For a code that the list does not name, the VTEC phenomena
  * decide (`ugcRegionCodes`, AL-33).
  */
-function areasOf(feature: JsonObject, properties: JsonObject, phenomena: readonly string[], problems: Problems): Area[] {
+function areasOf(feature: Fields, properties: Fields, phenomena: readonly string[], problems: Problems): Area[] {
   const areas: Area[] = [];
   const geometry = feature["geometry"];
-  if (isObject(geometry)) {
+  if (isRecord(geometry)) {
     const type = geometry["type"];
     if (type === "Polygon") {
       const polygon = polygonOf(geometry["coordinates"], "geometry.coordinates", problems);
@@ -186,7 +183,7 @@ function areasOf(feature: JsonObject, properties: JsonObject, phenomena: readonl
     problems.add("geometry", "the geometry is not an object");
   }
   const geocode = properties["geocode"];
-  if (!isObject(geocode)) {
+  if (!isRecord(geocode)) {
     problems.add("properties.geocode", geocode === undefined ? "the alert has no geocode" : "the geocode is not an object");
     return areas;
   }
@@ -196,7 +193,7 @@ function areasOf(feature: JsonObject, properties: JsonObject, phenomena: readonl
   const kinds = zoneKindsOf(properties, problems);
   for (const [field, { system, normal, valid }] of Object.entries(REGION_CODES)) {
     const value = geocode[field];
-    const items: readonly Json[] | undefined = typeof value === "string" ? [value] : Array.isArray(value) ? value : undefined;
+    const items: readonly unknown[] | undefined = typeof value === "string" ? [value] : Array.isArray(value) ? value : undefined;
     if (items === undefined) {
       problems.add(`properties.geocode.${field}`, `the geocode has no ${field} list`);
       continue;
@@ -217,7 +214,7 @@ const ZONE_URL = /\/zones\/([a-z]+)\/([A-Za-z]{2}[CZcz]\d{3})$/;
  * This function gives the kinds of the zones of the list `affectedZones`, by their UGC codes. The kind is `forecast`,
  * `fire`, `county` or another kind of the NWS API. A URL of another form names no kind.
  */
-function zoneKindsOf(properties: JsonObject, problems: Problems): ReadonlyMap<string, ReadonlySet<string>> {
+function zoneKindsOf(properties: Fields, problems: Problems): ReadonlyMap<string, ReadonlySet<string>> {
   const kinds = new Map<string, Set<string>>();
   for (const url of textsAt(properties["affectedZones"], "properties.affectedZones", problems)) {
     const match = ZONE_URL.exec(url.trim());
@@ -251,12 +248,12 @@ const REGION_CODES: Readonly<Record<string, { system: string; normal: (text: str
  * This function reads the CAP references: the current list and the expired list of the NWS. A reference
  * with no identifier is a lossy problem, because the core cannot link the report to it.
  */
-function referencesOf(properties: JsonObject, key: string, parameters: JsonObject | undefined, problems: Problems): string[] {
+function referencesOf(properties: Fields, key: string, parameters: Fields | undefined, problems: Problems): string[] {
   const keys = new Set<string>();
   const references = properties["references"];
   if (Array.isArray(references)) {
     references.forEach((reference, index) => {
-      const identifier = isObject(reference) ? textOf(reference["identifier"]) : undefined;
+      const identifier = isRecord(reference) ? textOf(reference["identifier"]) : undefined;
       if (identifier === undefined) problems.add(`properties.references[${index}]`, "the reference has no identifier");
       else keys.add(identifier);
     });
@@ -283,7 +280,7 @@ function referencesOf(properties: JsonObject, key: string, parameters: JsonObjec
  * The NWS API adds `replacedBy` and `replacedAt` to a message after a later message replaces it. The core ends the
  * message from the later message itself, so the two fields stay parameters.
  */
-function parametersOf(properties: JsonObject, parameters: JsonObject | undefined, eventCode: JsonObject | undefined, problems: Problems): Record<string, string[]> {
+function parametersOf(properties: Fields, parameters: Fields | undefined, eventCode: Fields | undefined, problems: Problems): Record<string, string[]> {
   const result: Record<string, string[]> = {};
   for (const [name, value] of Object.entries(parameters ?? {})) {
     if (name === "expiredReferences") continue;
@@ -310,12 +307,12 @@ function withoutAbsent<T extends object>(value: T): Present<T> {
  * value that the report lacks, or holds as a fallback, is a lossy problem, so the health shows the loss.
  */
 function mapFeature(feature: unknown, observation: Observation, problems: Problems): Report | undefined {
-  if (!isObject(feature) || feature["type"] !== "Feature") {
+  if (!isRecord(feature) || feature["type"] !== "Feature") {
     problems.add("", "the message is not a GeoJSON feature", "fatal");
     return undefined;
   }
   const properties = feature["properties"];
-  if (!isObject(properties)) {
+  if (!isRecord(properties)) {
     problems.add("properties", "the feature has no properties", "fatal");
     return undefined;
   }
@@ -451,7 +448,7 @@ function mapOrThrow(observation: Observation): MapResult {
   } catch {
     return { reports: [], problems: [{ path: "", message: "the body is not JSON", fatal: true }] };
   }
-  const features = isObject(body) && body["type"] === "FeatureCollection" && Array.isArray(body["features"]) ? body["features"] : undefined;
+  const features = isRecord(body) && body["type"] === "FeatureCollection" && Array.isArray(body["features"]) ? body["features"] : undefined;
   const messages: { readonly feature: unknown; readonly path: string }[] =
     features === undefined ? [{ feature: body, path: "" }] : features.map((feature, index) => ({ feature, path: `features[${index}]` }));
   const reports: Report[] = [];

@@ -11,6 +11,7 @@
 
 import { certaintySchema, severitySchema, urgencySchema, type Certainty, type Instant, type Severity, type Urgency } from "@mark1russell7/alerts";
 import { parseVtec } from "@mark1russell7/alerts-format-nws";
+import { isRecord } from "@mark1russell7/optional/read";
 import { compareCodeUnits } from "@mark1russell7/text/order";
 
 /** The format of the file of the CAP fields. A change that breaks the file gets a new name. */
@@ -129,8 +130,7 @@ export function nextPath(link: string): string {
   return `${url.pathname}${url.search}`;
 }
 
-const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
-const textOf = (value: unknown): string => (typeof value === "string" ? value : "");
+const textOf =(value: unknown): string => (typeof value === "string" ? value : "");
 
 /** This function reads one page of the alerts. A text that is not a collection of alerts with ids gives an error. */
 export function readCapPage(body: string): CapPage {

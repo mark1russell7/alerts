@@ -43,6 +43,7 @@ import {
 } from "@mark1russell7/alerts";
 import { fetchEvents } from "@mark1russell7/alerts-runtime";
 import { checkCanary, mapObservation, NWS_DESCRIPTOR, SOURCE_ID } from "@mark1russell7/alerts-source-nws-api";
+import { isRecord } from "@mark1russell7/optional/read";
 import { type Fault, faultPlanOf } from "@mark1russell7/rigor-chaos";
 import { startFaultProxy } from "@mark1russell7/rigor-proxy";
 import { caseBodies, type FetchLimits, type FetchResult, fetchResult, mainAfter, type OutcomeSummary, startNwsServer, summaryOf } from "./nws.ts";
@@ -65,7 +66,6 @@ export const CASE_3_LIMITS: FetchLimits = { timeoutMs: 5000 };
 const SEVERITY_NAMES: Readonly<Record<string, string>> = { Extreme: "Critical", Severe: "High", Moderate: "Medium", Minor: "Low" };
 const URGENCY_NAMES: Readonly<Record<string, string>> = { Immediate: "Now", Expected: "Soon", Future: "Later", Past: "Over" };
 
-const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
 const renamed = (names: Readonly<Record<string, string>>, value: unknown): unknown => (typeof value === "string" ? (names[value] ?? value) : value);
 
 function changeProperties(arm: FormatArm, properties: Record<string, unknown>): Record<string, unknown> {

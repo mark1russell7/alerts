@@ -5,6 +5,7 @@
  */
 
 import { INTERESTS_FORMAT, interestsPayloadSchema, type InterestsPayload } from "@mark1russell7/alerts";
+import { isRecord } from "@mark1russell7/optional/read";
 
 /** The path of the interests route of the runtime. */
 export const INTERESTS_PATH = "/interests";
@@ -19,8 +20,6 @@ const SOURCE_TEXT = "The panel of the interests reads them from the alert runtim
 
 /** The words of the page when the runtime gives interests of a different format. */
 export const OTHER_INTERESTS_TEXT = `${SOURCE_TEXT} The runtime has a different version of the interests. Start the runtime of the version of this page.`;
-
-const isObject = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null;
 
 /**
  * This function reads the interests from the runtime once. A status 404 tells that the runtime has no interests route.
@@ -42,7 +41,7 @@ export async function readInterests(get: (path: string) => Promise<Response>): P
   } catch {
     return fail("The answer of the runtime is not JSON.");
   }
-  if (!isObject(data) || typeof data["format"] !== "string") return fail("The answer of the runtime is not a list of interests.");
+  if (!isRecord(data) || typeof data["format"] !== "string") return fail("The answer of the runtime is not a list of interests.");
   if (data["format"] !== INTERESTS_FORMAT) return { ok: false, absent: false, text: OTHER_INTERESTS_TEXT };
   const result = interestsPayloadSchema.safeParse(data);
   return result.success ? { ok: true, payload: result.data } : fail("The answer of the runtime is not a list of interests.");
