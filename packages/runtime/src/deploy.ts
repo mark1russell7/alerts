@@ -19,7 +19,8 @@
  * The environment gives `ALERTS_HOME`, as for `main.ts`, and `PNPM`, the program of pnpm (`slots.ts`, `pnpmCall`).
  * The exit code is 0 for success, 1 for a refusal or a failed step, and 2 for a wrong command. The output holds no value of a private file.
  */
-import { readFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { constants, setPriority, tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { writeFileAtomic } from "@procedures/fs/files";
@@ -135,6 +136,8 @@ async function status(): Promise<void> {
 
 async function stage(commit: string, page: boolean): Promise<void> {
   const live = await liveSlot();
+  // The stage and each program that it starts run at the lowest priority of the processor. Thus they do not take the processor from the live runtime.
+  setPriority(constants.priority.PRIORITY_LOW);
   const slot = otherSlot(live);
   const folder = slots[slot];
   const call = pnpmCall(process.env, process.execPath);
@@ -158,7 +161,13 @@ async function stage(commit: string, page: boolean): Promise<void> {
   const runtime = join(folder, "packages", "runtime");
   const config = await step("config", process.execPath, [join(runtime, "src", "check.ts")], runtime);
   console.log(config.stdout.trim());
-  await step("load", process.execPath, [join(runtime, "src", "main.ts"), "load"], runtime);
+  // The load needs no private file. An empty home keeps each write of a module away from the live home.
+  const scratch = await mkdtemp(join(tmpdir(), "alerts-load-"));
+  try {
+    await step("load", process.execPath, [join(runtime, "src", "main.ts"), "load"], runtime, { ALERTS_HOME: scratch });
+  } finally {
+    await rm(scratch, { recursive: true, force: true });
+  }
   await writeMarks(withMark(await readMarks(), slot, { sha, at: new Date().toISOString(), checks: [...STAGE_CHECKS] }));
   console.log(`Slot ${slot} is staged at ${sha.slice(0, 7)}: ${STAGE_CHECKS.join(", ")} passed.`);
   await tellSupervisor(live, slot);

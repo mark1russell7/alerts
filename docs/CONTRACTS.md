@@ -1597,6 +1597,8 @@ A deploy of new code does not change the live checkout (AL-89). The live path of
 - `node src/deploy.ts stage <commit>` clones the live slot into the other slot when it does not exist, and checks out the commit there.
 - Then the stage installs the dependencies with the lockfile (`--frozen-lockfile`). `--page` also installs each package and builds the local page.
 - Then the stage starts `check.ts` and `main.ts load` with the new code. The mode `load` loads each module and starts no service.
+- `check.ts` reads the live private files. `main.ts load` gets an empty temporary home, thus it cannot change the live home.
+- The stage and each of its programs run at the lowest priority of the processor. Thus a stage on a small host does not stop the live runtime.
 - When each step passes, the stage writes its mark in `host/deploy.json`: the commit, the time and the checks.
 - The stage removes the old mark first. Thus a stage that stops in its middle leaves no mark.
 - `node src/deploy.ts swap` points the live path at the staged slot in one step. It refuses a slot with no mark of its commit, a missing check or a change in its tree.
