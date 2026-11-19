@@ -3,13 +3,14 @@
  * supervisor (`main.ts supervise`). The supervisor starts the runtime (`main.ts`). It starts the runtime
  * again after an exit, or after the liveness probe fails. The entry gives the paths and the ports.
  */
+import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { add, sum, valueIn, type Quantity } from "@mark1russell7/quantity";
 import { daemon, service, type Profile, type ServiceBuilder } from "@mark1russell7/service";
 import type { GroupSpec, ServiceSpec } from "@mark1russell7/service/host";
 import { holdingPasses, READINESS, STARTUP_BUDGET, STOP_MESSAGE } from "./index.ts";
-import { alertsHome, HOME_VARIABLE, type FileText } from "./config.ts";
+import { alertsHome, HOME_VARIABLE, readText, type FileText } from "./config.ts";
 import { INSTANCE_TIMES } from "./instance.ts";
 import { parseStartTimes, readyWindow, startTimesPath, type ReadyWindow } from "./start-times.ts";
 
@@ -18,6 +19,60 @@ const s = (value: number): Quantity => ({ value, unit: "s" });
 
 /** The name of the boot task, of the group of the supervisor and of its folder. */
 export const HOST_NAME = "alerts";
+
+/** The node flag that closes the inspector to `SIGUSR1`. Node 22.14 and later know it. */
+export const NO_SIGUSR1 = "--disable-sigusr1";
+
+/**
+ * This function gives the node flags of the supervisor and the runtime. The runtime holds the keys of the send services,
+ * so a signal must not open its inspector. A node that does not know the flag gets no flag, because an unknown flag stops the start.
+ */
+export const nodeFlags = (known: ReadonlySet<string> = process.allowedNodeEnvironmentFlags): string[] => (known.has(NO_SIGUSR1) ? [NO_SIGUSR1] : []);
+
+/**
+ * This function gives the warning of a process with an open inspector signal, or null. The entry writes it at each start,
+ * thus a node without the flag shows the gap.
+ */
+export const signalWarning = (execArgv: readonly string[] = process.execArgv, version: string = process.version): string | null =>
+  execArgv.includes(NO_SIGUSR1) ? null : `The inspector signal is not disabled: node ${version}.`;
+
+/** The state of the inspector signal of a live process: closed by the flag, open, or no read. */
+export type SignalState = "closed" | "open" | "no read";
+
+/**
+ * This function gives the state of the inspector signal from the text of `/proc/<pid>/cmdline`. Only the node flags before
+ * the script count. No text, or a process that does not start `main.ts`, gives "no read".
+ */
+export function signalState(cmdline: string | null): SignalState {
+  if (cmdline === null || cmdline === "") return "no read";
+  const args = cmdline.split("\0").slice(1);
+  const script = args.findIndex((arg) => !arg.startsWith("-"));
+  if (script < 0 || !args[script]!.endsWith("main.ts")) return "no read";
+  return args.slice(0, script).includes(NO_SIGUSR1) ? "closed" : "open";
+}
+
+/** The states of the inspector signal of the supervisor and the runtime. */
+export interface SignalStates {
+  readonly supervisor: SignalState;
+  readonly runtime: SignalState;
+}
+
+/**
+ * This function reads the states of the inspector signal of the supervisor and the runtime. It reads their discovery files,
+ * then `/proc`. A missing file, a process that stopped or a host with no `/proc` gives "no read".
+ */
+export async function readSignals(home: string, read: (path: string) => Promise<FileText> = (path) => readText(() => readFile(path, "utf8"))): Promise<SignalStates> {
+  const state = async (discovery: string): Promise<SignalState> => {
+    const pid = discoveryPid(await read(discovery));
+    if (pid === undefined) return "no read";
+    const cmdline = await read(`/proc/${String(pid)}/cmdline`);
+    return signalState("code" in cmdline ? null : cmdline.text);
+  };
+  return { supervisor: await state(supervisorDiscovery(home)), runtime: await state(runtimeDiscovery(home)) };
+}
+
+/** This function gives the line of the check for the states of the inspector signal. */
+export const signalText = (states: SignalStates): string => `The inspector signal: the supervisor ${states.supervisor}, the runtime ${states.runtime}.`;
 
 /** The ports of the live instance. They are below the dynamic ports of Windows, and away from the usual ports of servers in development. */
 export const HOST_PORTS: { readonly port: number; readonly probePort: number } = { port: 4750, probePort: 4751 };
@@ -110,6 +165,7 @@ export function discoveryPid(text: FileText): number | undefined {
  * - A ready runtime that fails `/liveness` 3 times in sequence, 10 s apart, stops. Then the supervisor
  *   starts it again. One slow answer does not stop it.
  * - The stop goes on the IPC channel, because a Windows process cannot catch a signal of its parent.
+ * - The runtime starts with `nodeFlags()`. Thus a `SIGUSR1` does not open the inspector of a process that holds the keys.
  */
 export function hostGroup(options: HostOptions): GroupSpec {
   const port = options.port ?? HOST_PORTS.port;
@@ -122,7 +178,7 @@ export function hostGroup(options: HostOptions): GroupSpec {
       {
         name: RUNTIME_PROGRAM,
         program: options.node,
-        args: ["src/main.ts"],
+        args: [...nodeFlags(), "src/main.ts"],
         cwd: options.root,
         env: { ALERTS_HOME: options.home, PORT: String(port), PROBE_PORT: String(probePort), SERVICE_PROFILE: "daemon" },
         ipc: true,
@@ -147,7 +203,7 @@ export function hostTask(options: HostOptions): ServiceSpec {
     name: HOST_NAME,
     description: "The alerts runtime: a supervisor that keeps the runtime alive.",
     program: options.node,
-    args: [join(options.root, "src", "main.ts"), "supervise", options.home],
+    args: [...nodeFlags(), join(options.root, "src", "main.ts"), "supervise", options.home],
     cwd: options.root,
     start: "boot",
     restart: { after: { value: 1, unit: "min" } },

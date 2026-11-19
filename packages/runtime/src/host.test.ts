@@ -1,3 +1,6 @@
+import { spawn } from "node:child_process";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { valueIn } from "@mark1russell7/quantity";
 import { groupProblems, renderSystemdUnit, renderTaskXml, serviceProblems, superviseGroup } from "@mark1russell7/service/host";
@@ -12,6 +15,12 @@ import {
   hostGroup,
   hostReadyWindow,
   hostTask,
+  nodeFlags,
+  NO_SIGUSR1,
+  readSignals,
+  signalState,
+  signalText,
+  signalWarning,
   READY_WITHIN,
   readinessProbe,
   RUNTIME_GRACE,
@@ -60,6 +69,26 @@ async function pass(host: Awaited<ReturnType<typeof started>>["host"], seconds: 
   }
 }
 
+/** This helper starts a node with the flags, sends it `SIGUSR1` and gives its error output. Port 0 gives a free inspector port. */
+const afterSigusr1 = (flags: readonly string[]): Promise<string> =>
+  new Promise((done, fail) => {
+    const child = spawn(process.execPath, [...flags, "--inspect-port=0", "-e", "process.stdout.write('up'); setInterval(() => {}, 1000);"], {
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let errors = "";
+    const end = setTimeout(() => child.kill("SIGKILL"), 3000);
+    child.stderr.on("data", (chunk: Buffer) => {
+      errors += String(chunk);
+      if (errors.includes("Debugger listening")) child.kill("SIGKILL");
+    });
+    child.stdout.once("data", () => child.kill("SIGUSR1"));
+    child.on("error", fail);
+    child.on("close", () => {
+      clearTimeout(end);
+      done(errors);
+    });
+  });
+
 describe("the host of the instance", () => {
   it("resolves the folder argument of the supervisor as the runtime resolves ALERTS_HOME", () => {
     const user = join("/home", "owner");
@@ -107,7 +136,7 @@ describe("the host of the instance", () => {
     const { host, group } = await started();
     expect(host.children).toHaveLength(1);
     const { request } = host.children[0]!;
-    expect(request).toMatchObject({ program: NODE, args: ["src/main.ts"], cwd: ROOT, ipc: true });
+    expect(request).toMatchObject({ program: NODE, args: [...nodeFlags(), "src/main.ts"], cwd: ROOT, ipc: true });
     expect(request.env).toMatchObject({ ALERTS_HOME: HOME, PORT: String(HOST_PORTS.port), PROBE_PORT: String(HOST_PORTS.probePort), SERVICE_PROFILE: "daemon" });
     expect(group.states()[0]).toMatchObject({ name: "runtime", phase: "ready", restarts: 0 });
     await group.stop();
@@ -143,7 +172,7 @@ describe("the host of the instance", () => {
 
   it("gives a boot task that starts the supervisor with the folder of the private files, and starts it again 1 minute after a stop", () => {
     const spec = hostTask(OPTIONS);
-    expect(spec.args).toEqual([join(ROOT, "src", "main.ts"), "supervise", HOME]);
+    expect(spec.args).toEqual([...nodeFlags(), join(ROOT, "src", "main.ts"), "supervise", HOME]);
     expect(supervisorDiscovery(HOME)).toBe(join(HOME, "host", "supervisor.json"));
     const xml = renderTaskXml(spec, { user: "HOST\\test", conhost: "C:\\Windows\\System32\\conhost.exe" });
     expect(xml).toContain("<BootTrigger>");
@@ -162,6 +191,69 @@ describe("the host of the instance", () => {
     expect(unit).toContain(`TimeoutStopSec=${Math.ceil(msOf(SUPERVISOR_GRACE) / 1000)}`);
     expect(unit).toContain("Restart=always");
   });
+
+  it("starts the supervisor and the runtime with the inspector closed to SIGUSR1, when the node knows the flag", () => {
+    expect(nodeFlags(new Set([NO_SIGUSR1]))).toEqual([NO_SIGUSR1]);
+    expect(nodeFlags(new Set())).toEqual([]);
+    // The node of CI is 22.14 or later. Thus the boot task, the systemd unit and the runtime get the flag.
+    expect(process.allowedNodeEnvironmentFlags.has(NO_SIGUSR1)).toBe(true);
+    const spec = hostTask(OPTIONS);
+    expect(spec.args?.[0]).toBe(NO_SIGUSR1);
+    expect(renderSystemdUnit(spec)).toMatch(/^ExecStart=.*--disable-sigusr1/m);
+    expect(hostGroup(OPTIONS).programs[0]!.args?.[0]).toBe(NO_SIGUSR1);
+  });
+
+  it("warns at the start of a process with an open inspector signal, and is silent with the flag", () => {
+    expect(signalWarning([], "v22.3.0")).toBe("The inspector signal is not disabled: node v22.3.0.");
+    expect(signalWarning([NO_SIGUSR1], "v24.0.0")).toBeNull();
+  });
+
+  it("reads the flag from the command line of a process before its script, and gives no read for another process", () => {
+    expect(signalState("/opt/node\0--disable-sigusr1\0src/main.ts")).toBe("closed");
+    expect(signalState("/opt/node\0src/main.ts\0supervise\0/srv/a")).toBe("open");
+    // A flag after the script is an argument of the script, not a flag of node.
+    expect(signalState("/opt/node\0src/main.ts\0--disable-sigusr1")).toBe("open");
+    expect(signalState("/bin/sh\0-c\0sleep 1")).toBe("no read");
+    expect(signalState("")).toBe("no read");
+    expect(signalState(null)).toBe("no read");
+  });
+
+  it("reads the states of the supervisor and the runtime through their discovery files", async () => {
+    const files = new Map([
+      [join(HOME, "host", "supervisor.json"), JSON.stringify({ pid: 11 })],
+      [join(HOME, "host", "runtime.json"), JSON.stringify({ pid: 12 })],
+      ["/proc/11/cmdline", "/opt/node\0--disable-sigusr1\0/srv/a/src/main.ts\0supervise\0/srv/h"],
+    ]);
+    const read = async (path: string) => (files.has(path) ? { text: files.get(path)! } : { code: "ENOENT" });
+    const states = await readSignals(HOME, read);
+    expect(states).toEqual({ supervisor: "closed", runtime: "no read" });
+    expect(signalText(states)).toBe("The inspector signal: the supervisor closed, the runtime no read.");
+  });
+
+  it.skipIf(process.platform !== "linux")("reads the flag of a real process through /proc", async () => {
+    const home = await mkdtemp(join(tmpdir(), "alerts-signal-"));
+    await writeFile(join(home, "main.ts"), "process.stdout.write('up'); setInterval(() => {}, 1000);\n");
+    await mkdir(join(home, "host"));
+    const child = spawn(process.execPath, [NO_SIGUSR1, join(home, "main.ts")], { stdio: ["ignore", "pipe", "ignore"] });
+    try {
+      // The first output comes after the exec of node, thus /proc gives the command line of node.
+      await new Promise((up) => child.stdout.once("data", up));
+      await writeFile(join(home, "host", "runtime.json"), JSON.stringify({ pid: child.pid }));
+      expect(await readSignals(home)).toEqual({ supervisor: "no read", runtime: "closed" });
+    } finally {
+      child.kill("SIGKILL");
+      await rm(home, { recursive: true, force: true });
+    }
+  });
+
+  it.skipIf(process.platform === "win32")(
+    "gives a SIGUSR1 no inspector in a node with the flag, and an inspector in a node without it",
+    async () => {
+      expect(await afterSigusr1([])).toContain("Debugger listening");
+      expect(await afterSigusr1([NO_SIGUSR1])).not.toContain("Debugger listening");
+    },
+    15_000,
+  );
 });
 
 describe("the discovery file of the runtime", () => {
