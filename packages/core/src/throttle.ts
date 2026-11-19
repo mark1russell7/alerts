@@ -163,7 +163,8 @@ const rankOf = (level: Level): number => LEVELS.indexOf(level);
  *   the family `system`. The routes and the reports give the kind of the incident of a delivery.
  * - A delivery of an incident with no route and no report is in the stream of the system lines. The copies share the
  *   reports of the alerts (the `fetch` events), but not the system lines. Thus such a delivery is a system line of the
- *   other copy.
+ *   other copy. An alert delivery of the other copy can come before its report. Then the worst result is one more push.
+ *   The other choice can stop a weather notice under a system line of the other copy, and only the digest then tells it.
  * - A send of a level with an exemption goes. Thus a `life-safety` alert of a new incident goes, and each step of an
  *   escalation of `life-safety` goes until the acknowledgment.
  * - A send with a suppression in the log does not go. The suppression does not end, thus the send does not go late.

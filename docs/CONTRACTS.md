@@ -994,6 +994,7 @@ The core function `throttleRoutes` applies the rise-only throttle of each person
 - With the streams `family`, each family of the alerts is a stream. The family is the first part of the kind, for example `met` of `met.flood`. The system lines stay one stream.
 - The kind of the incident of a route, or of the report of a delivery, gives the stream. The report comes from the merge state. A retirement removes a report and its deliveries together, thus a delivery in the window always has its report.
 - A delivery of a report that the copy does not know is in the stream of the system lines. The copies share the reports of the alerts, but not the system lines. Thus such a delivery is a system line of the other copy.
+- An alert delivery of the other copy can come before its report. Then the worst result is one more push. The other choice can stop a weather notice under a system line of the other copy, and only the digest then tells it.
 - A send at the same level or at a lower level does not go. It gets a suppression with its reason: `same-level` or `lower-level`.
 - The suppression is an event `suppressed` of the log of the copy. It is not shared. Its field `over` has the highest level of the stream in the window.
 - A suppression does not end. Thus a suppressed send does not go late, also after its window.
