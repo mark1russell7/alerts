@@ -105,9 +105,9 @@ import { outageDeploy, outageDeployWorker, outageSetup, type OutageDeployWorker 
 import { exchangeLoop, exchangeWorker, type EntriesSource, type ExchangeCall, type ExchangeRound, type ExchangeWorker } from "./peers.ts";
 import { channelQuota } from "./quota.ts";
 import { openRuntime, type Pass, type Runtime, type RuntimeOptions } from "./runtime.ts";
-import { addZoneCodes, keepShapes, placeCodesKey, type InstanceShapes, type ShapeOutcome, type ZoneCodeCounts } from "./shapes.ts";
+import { addZoneCodes, keepShapes, placeCodesKey, refreshUntil, type InstanceShapes, type ShapeOutcome, type ZoneCodeCounts } from "./shapes.ts";
 import { chooseFeeds, feedsKey, keepTransit, type InstanceTransit, type TransitCache, type TransitOutcome } from "./transit.ts";
-import { DELAY_LIMITS, earliest, nextFetch } from "./view.ts";
+import { DELAY_LIMITS, nextFetch } from "./view.ts";
 
 /** The name of the secret that holds the API token of the Pushover application. */
 export const PUSHOVER_TOKEN = "PUSHOVER_APP_TOKEN";
@@ -683,6 +683,12 @@ export interface InstanceOptions {
   /** The instance gives each refresh of the outlines to this function. */
   readonly onShapes?: (outcome: ShapeOutcome) => void;
   /**
+   * This function tells if the start is good: the service runs, and one pass ended. Until then, no refresh of the shapes starts,
+   * and the keeper does not read the transit catalog. Thus this work does not run before the ready mark of the supervisor (AL-75).
+   * A read of the catalog parses megabytes, and a new copy restarts the runtime. The default is a good start.
+   */
+  readonly startGood?: () => boolean;
+  /**
    * The cache of the copy of the transit catalog (AL-60). The entry gives the file `TRANSIT_FILE` of the private folder. Without
    * it, the instance reads no transit feed and no catalog. The instance reads each feed of the copy whose box meets a place.
    */
@@ -982,12 +988,16 @@ export function openInstance(options: InstanceOptions): Instance {
     // The readings of each fetch go to their store, not to the log.
     ...(options.readings === undefined ? {} : { readings: options.readings }),
     ...(options.onReadingsFault === undefined ? {} : { onReadingsFault: options.onReadingsFault }),
-    // After each pass, the store of shapes gets the outlines that are due, and it ends before the next fetch of a source.
+    // After each pass, the store of shapes gets the outlines that are due, and it ends before the next fetch from its host (AL-33).
+    // The keeper of the transit catalog reads the catalog when its copy is due. The pass does not wait for the two.
+    // The two start at a pass after the good start (AL-75). The entry marks the start after this function, thus the pass that
+    // makes the start good starts neither of them.
     onPass: async (pass) => {
       latest = pass;
-      shapes.afterPass(pass.view.incidents, earliest(runtime.config.sources.map((descriptor) => nextFetch(runtime.state(), descriptor))));
-      // The keeper of the transit catalog reads the catalog when its copy is due. The pass does not wait for the read.
-      transit?.afterPass();
+      if (options.startGood?.() ?? true) {
+        shapes.afterPass(pass.view.incidents, refreshUntil(runtime.config.sources, (descriptor) => nextFetch(runtime.state(), descriptor)));
+        transit?.afterPass();
+      }
       await options.onPass?.(pass);
     },
     fetchLimit: options.fetchLimit ?? INSTANCE_FETCH_LIMIT,

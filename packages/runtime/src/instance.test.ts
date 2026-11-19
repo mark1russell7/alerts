@@ -51,7 +51,7 @@ import { spendGates, spendQuota } from "./balance.ts";
 import { CLOCK_SKEW_LIMIT, COPY_TOKEN_KEY, EXCHANGE_EVERY, EXCHANGE_LIMIT } from "./copy.ts";
 import { overdueLimit } from "./delivery.ts";
 import type { ShapeOutcome } from "./shapes.ts";
-import type { TransitCache, TransitOutcome } from "./transit.ts";
+import { CATALOG_REFRESH, type TransitCache, type TransitOutcome } from "./transit.ts";
 import { nextFetch } from "./view.ts";
 import { openRuntimeLog, type RuntimeLog } from "./log.ts";
 import { openReadingStore, READINGS_FILE } from "./readings.ts";
@@ -868,6 +868,23 @@ describe("openInstance", () => {
     expect(alerts.filter((url) => url.searchParams.has("zone"))).toEqual([]);
   });
 
+  it("starts no refresh of the shapes before a pass after the good start (AL-75)", async () => {
+    const net = network();
+    const outcomes: ShapeOutcome[] = [];
+    let good = false;
+    const { instance, clock } = open(store(SECRETS), CONFIG, 0, TEST_FETCH_LIMIT, { transport: withZones(net), shapes: memoryCache(), onShapes: (outcome) => outcomes.push(outcome), startGood: () => good });
+    const zones = () => net.exchanges.filter((exchange) => new URL(exchange.url).pathname.startsWith("/zones")).length;
+    await finish(clock, instance.runtime.pass());
+    await finish(clock, instance.shapes.idle());
+    expect(outcomes).toEqual([]);
+    expect(zones()).toBe(0);
+    good = true;
+    await finish(clock, instance.runtime.pass());
+    await finish(clock, instance.shapes.idle());
+    expect(outcomes).toEqual([{ ok: true, refreshed: expect.objectContaining({ stop: "done", failures: [] }) }]);
+    expect(zones()).toBeGreaterThan(0);
+  });
+
   it("tells one time when new outlines change the codes of a place", async () => {
     const net = network();
     const outcomes: ShapeOutcome[] = [];
@@ -981,6 +998,26 @@ describe("openInstance", () => {
       expect(catalog[0]?.headers["user-agent"]).toBe(USER_AGENT_NAME);
       // The instance keeps the feeds of its open. The supervisor starts a new instance with the new feeds.
       expect(instance.runtime.config.sources.some((source) => source.id === sourceIdOf({ id: "mdb-9001" }))).toBe(false);
+      await instance.transit!.close();
+    });
+
+    it("reads no catalog before a pass after the good start, also with a copy that is one day old (AL-75)", async () => {
+      const net = network();
+      const { cache, written } = cacheOf({ text: CATALOG, fetched: T0 - CATALOG_REFRESH });
+      const outcomes: TransitOutcome[] = [];
+      let good = false;
+      const { instance, clock } = open(store(SECRETS), CONFIG, 0, TEST_FETCH_LIMIT, { transport: withTransit(net), transit: cache, onTransit: (outcome) => outcomes.push(outcome), startGood: () => good });
+      const reads = () => net.exchanges.filter((exchange) => exchange.url === CATALOG_URL).length;
+      await finish(clock, instance.runtime.pass());
+      await finish(clock, instance.transit!.idle());
+      expect(reads()).toBe(0);
+      expect(outcomes).toEqual([]);
+      expect(written).toEqual([]);
+      good = true;
+      await finish(clock, instance.runtime.pass());
+      await finish(clock, instance.transit!.idle());
+      expect(reads()).toBe(1);
+      expect(outcomes).toHaveLength(1);
       await instance.transit!.close();
     });
   });

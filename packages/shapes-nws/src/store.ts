@@ -56,7 +56,8 @@ export interface RefreshInput {
   readonly wanted: Wanted;
   /**
    * The refresh starts no request that can end after this time. The caller gives the time of its next
-   * fetch of the alerts. Thus a refresh delays a fetch of the alerts by one request or less.
+   * fetch from the host of the store (the sources with `NWS_PROVIDER`). The store shares the pace of that host, and a
+   * request waits only for the rest of its own host. Thus a refresh delays a fetch of the alerts by one request or less.
    */
   readonly until: Instant;
   readonly signal?: AbortSignal;

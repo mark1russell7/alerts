@@ -13,6 +13,9 @@ import { SOURCE_ID } from "./map.ts";
 /** The base URL of the NWS API. */
 export const NWS_BASE_URL = "https://api.weather.gov";
 
+/** The provider of the NWS API, in the field `dependsOn` of each source that sends its requests to `NWS_BASE_URL`. */
+export const NWS_PROVIDER = "provider:nws-api";
+
 /** The query of the canary: the newest test messages. The NWS sends a keepalive test message each 10 minutes. */
 export const CANARY_PATH = "/alerts?status=test&limit=2";
 

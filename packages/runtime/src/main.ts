@@ -279,6 +279,8 @@ async function runtime(): Promise<ServiceBuilder> {
     readings,
     // The kind of the error only: its message can quote a value of a reading.
     onReadingsFault: (error, action) => console.error(`The store of readings failed (${action}): ${error instanceof Error ? error.name : typeof error}.`),
+    // The store of shapes and the keeper of the transit catalog start their work at a pass after the good start (AL-75).
+    startGood: () => marked,
     onShapes: (outcome) => {
       const report = shapeReport(outcome);
       if (report !== undefined) console.error(redactSecrets(report, values));
