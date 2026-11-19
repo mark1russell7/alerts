@@ -8,6 +8,10 @@
  * observation. Thus each copy and each start of the runtime give one id to one text. A new text of an alert is a new
  * observation, and a new report with the same key. The feed is a snapshot, so an alert that leaves the feed ends its report.
  *
+ * The body of an alert has no end of a period that is still to come (`stableAlert`). Some feeds move each end at each
+ * fetch, for example to two hours after the fetch. Thus a report has no `expires` while its end is to come, and the
+ * snapshot ends it.
+ *
  * The areas of a report are the stops and the routes of its alert with a known place (`areasOf`). The box of the
  * feed is not an area of a report. The subjects of a report are the feed, its routes and its stops (`subjectsOf`). With the default
  * policy, a transit report reaches the digest at most.
@@ -144,6 +148,23 @@ function startAt(alert: Alert, time: Instant): Instant | undefined {
   if (current !== undefined) return millis(current.start);
   const starts = periods.map((range) => millis(range.start)).filter((start): start is Instant => start !== undefined && start > time);
   return starts.length === 0 ? undefined : Math.min(...starts);
+}
+
+/**
+ * This function gives an alert with no end of a period that is still to come at a time. Some feeds move each end at each
+ * fetch, for example to two hours after the fetch. Thus an alert with no change gives the same text at each fetch. An end
+ * that passed stays, because it does not move. The fetch gives the full alert to `ended` and to the census first.
+ */
+export function stableAlert(alert: Alert, time: Instant): Alert {
+  const periods = alert.activePeriod;
+  if (periods === undefined) return alert;
+  return { ...alert, activePeriod: periods.map((range) => (range.end === undefined || millis(range.end)! < time ? range : withoutEnd(range))) };
+}
+
+/** This function gives a time range with no end. */
+function withoutEnd(range: TimeRange): TimeRange {
+  const { end: _end, ...rest } = range;
+  return rest;
 }
 
 /** This function gives the end of the last time range of an alert, or `undefined` when a time range has no end. */

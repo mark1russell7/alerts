@@ -3,8 +3,9 @@
  * decodes the protobuf message. The request holds no place and no query of its own.
  *
  * The feed is a snapshot. Each fetch gives one census of the feed and one observation for each alert that has not ended.
- * The body of an alert holds no time of the fetch. Thus an alert with no change gives the same observation again, and
- * the log keeps it one time. A differential feed lists only the changes, so its list is not complete.
+ * The body of an alert holds no time of the fetch, and no end that is still to come (`stableAlert`). Thus an alert with no
+ * change gives the same observation again, and the log keeps it one time. A differential feed lists only the changes, so
+ * its list is not complete.
  */
 
 import { observationId, type FetchOutcome, type FetchSignal, type Instant, type Observation, type Watch } from "@mark1russell7/alerts";
@@ -12,7 +13,7 @@ import { createRequester } from "@mark1russell7/alerts-fetch";
 import type { Condition, Pace, Transport } from "polite-crawler/api";
 
 import { sourceIdOf, type GtfsFeed } from "./feed.ts";
-import { alertText, censusText, ended, inEffect, NO_SERVICE } from "./map.ts";
+import { alertText, censusText, ended, inEffect, NO_SERVICE, stableAlert } from "./map.ts";
 import { decodeFeed, type FeedMessage } from "./proto.ts";
 
 /** The longest time of one request when the source gives none, in milliseconds. */
@@ -75,7 +76,7 @@ export function feedBodies(feed: Pick<GtfsFeed, "id">, message: FeedMessage, fet
     noService: active.filter((entity) => entity.alert!.effect === NO_SERVICE).length,
   });
   const open = alerts.filter((entity) => !ended(entity.alert!, fetched));
-  const bodies = [...new Set([census, ...open.map((entity) => alertText(feed.id, entity.id ?? "", entity.alert!))])];
+  const bodies = [...new Set([census, ...open.map((entity) => alertText(feed.id, entity.id ?? "", stableAlert(entity.alert!, fetched)))])];
   return { bodies, complete: message.header?.incrementality !== DIFFERENTIAL, ...(asOf === undefined ? {} : { asOf }) };
 }
 

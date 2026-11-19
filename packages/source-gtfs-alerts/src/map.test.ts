@@ -19,12 +19,13 @@ import {
   NO_SERVICE_ALERTS,
   ROUTE_SUBJECT,
   severityOf,
+  stableAlert,
   STOP_RADIUS_KM,
   STOP_SUBJECT,
   subjectsOf,
   textIn,
 } from "./map.ts";
-import { decodeFeed, type Alert, type TimeRange } from "./proto.ts";
+import { decodeFeed, type Alert, type FeedEntity, type FeedMessage, type TimeRange } from "./proto.ts";
 
 /** The real bytes of two feeds (`fixtures/README.md`), and the time of their fetch. */
 const ZDITM = decodeFeed(readFileSync(new URL("../fixtures/zditm-szczecin-20261118T0358Z.pb", import.meta.url)));
@@ -171,6 +172,81 @@ describe("the id of a transit report (AL-73)", () => {
     expect(after?.key).toBe(before?.key);
     expect(after?.id).not.toBe(before?.id);
     expect(report("Trams stop.")?.id).toBe(before?.id);
+  });
+});
+
+describe("an alert whose feed moves its end at each fetch (AL-75)", () => {
+  const STEP = 5 * 60_000;
+  const DETOUR = "Buses take a detour.";
+  /** This function gives the feed one fetch later. Some feeds move each end that is to come, and their own time, at each fetch. */
+  const moved = (message: FeedMessage, from: number, by: number): FeedMessage => ({
+    ...message,
+    entity: (message.entity ?? []).map((entity) =>
+      entity.alert?.activePeriod === undefined
+        ? entity
+        : { ...entity, alert: { ...entity.alert, activePeriod: entity.alert.activePeriod.map((range) => (range.end !== undefined && range.end * 1000 >= from ? { ...range, end: range.end + by / 1000 } : range)) } },
+    ),
+  });
+  /** An alert with a rolling end, two hours after each fetch, as a real feed gives it. */
+  const rolling = (fetched: number, text = DETOUR): FeedEntity => ({
+    id: "rolling",
+    alert: { activePeriod: [{ start: S("2026-11-17T00:00:00Z"), end: Math.floor(fetched / 1000) + 7_172 }], headerText: { translation: [{ text }] } },
+  });
+  const feedAt = (fetched: number, text?: string): FeedMessage => {
+    const message = moved(RUTER, RUTER_FETCHED, fetched - RUTER_FETCHED);
+    return { ...message, entity: [...(message.entity ?? []), rolling(fetched, text)] };
+  };
+  const observationsAt = (fetched: number, text?: string) => observationsOf(RUTER_FEED, feedAt(fetched, text), fetched).slice(1);
+  const reportsAt = (fetched: number, text?: string) => observationsAt(fetched, text).flatMap((observation) => mapObservation(RUTER_FEED, observation).reports);
+  const idsAt = (fetched: number, text?: string) => new Map(reportsAt(fetched, text).map((report) => [report.key, report.id]));
+
+  it("gives the same observations and report ids one fetch later, though each end that is to come moved", () => {
+    const [first, next] = [RUTER_FETCHED, RUTER_FETCHED + STEP];
+    // The raw alert changed between the two fetches: its end is in it.
+    expect(alertText(RUTER_FEED.id, "rolling", rolling(next).alert!)).not.toBe(alertText(RUTER_FEED.id, "rolling", rolling(first).alert!));
+    expect(observationsAt(next).map((observation) => observation.id)).toEqual(observationsAt(first).map((observation) => observation.id));
+    expect(idsAt(first).size).toBe(60);
+    expect(idsAt(next)).toEqual(idsAt(first));
+  });
+
+  it("gives a report with no planned end while its end is to come, and keeps its start", () => {
+    const reports = reportsAt(RUTER_FETCHED);
+    const detour = reports.find((report) => report.key === "rolling");
+    expect(detour?.onset).toBe(S("2026-11-17T00:00:00Z") * 1000);
+    expect(detour?.urgency).toBe("immediate");
+    expect(reports.filter((report) => report.expires !== undefined)).toEqual([]);
+  });
+
+  it("gives a new version with the same key to a changed text one fetch later, and keeps the id of each other alert", () => {
+    const first = idsAt(RUTER_FETCHED);
+    const next = idsAt(RUTER_FETCHED + STEP, "Buses take a detour until noon.");
+    expect([...next].filter(([key, id]) => first.get(key) !== id).map(([key]) => key)).toEqual(["rolling"]);
+  });
+
+  it("keeps each end that passed, and takes out each end that is to come", () => {
+    const at = Date.parse("2026-11-18T03:00:00Z");
+    const passed = { start: S("2026-11-18T01:00:00Z"), end: S("2026-11-18T02:00:00Z") };
+    const alert: Alert = { activePeriod: [passed, { start: S("2026-11-18T05:00:00Z"), end: S("2026-11-18T06:00:00Z") }, { start: S("2026-11-19T05:00:00Z") }] };
+    expect(stableAlert(alert, at).activePeriod).toEqual([passed, { start: S("2026-11-18T05:00:00Z") }, { start: S("2026-11-19T05:00:00Z") }]);
+    // An end at the time of the fetch is to come: its period holds the time.
+    expect(stableAlert({ activePeriod: [{ end: at / 1000 }] }, at).activePeriod).toEqual([{}]);
+    const none: Alert = { headerText: { translation: [{ text: "x" }] } };
+    expect(stableAlert(none, at)).toBe(none);
+  });
+
+  it("keeps the state of each alert at the time, and gives the same alert one fetch later, for each list of periods", () => {
+    const range = fc.record({ start: fc.integer({ min: 0, max: 100 }), end: fc.integer({ min: 0, max: 100 }) }, { requiredKeys: [] });
+    fc.assert(
+      fc.property(fc.array(range, { maxLength: 4 }), fc.integer({ min: 0, max: 100 }), fc.integer({ min: 1, max: 50 }), (periods, seconds, step) => {
+        const alert: Alert = { activePeriod: periods };
+        const at = seconds * 1000;
+        const stable = stableAlert(alert, at);
+        expect([inEffect(stable, at), ended(stable, at)]).toEqual([inEffect(alert, at), ended(alert, at)]);
+        // The feed moves each end that is to come by the step of the fetch.
+        const later: Alert = { activePeriod: periods.map((each) => (each.end !== undefined && each.end >= seconds ? { ...each, end: each.end + step } : each)) };
+        expect(stableAlert(later, at + step * 1000)).toEqual(stable);
+      }),
+    );
   });
 });
 

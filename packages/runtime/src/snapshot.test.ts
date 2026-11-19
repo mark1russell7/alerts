@@ -1,10 +1,11 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fakeWallClock } from "@mark1russell7/algebra/clock";
 import {
   incidents,
   normalize,
+  observationId,
   reportId,
   type FetchOutcome,
   type MergeState,
@@ -18,6 +19,18 @@ import {
   type SourceProcedures,
   type WatchedPlace,
 } from "@mark1russell7/alerts";
+import {
+  BODY_TYPE,
+  decodeFeed,
+  feedBodies,
+  GTFS_KIND,
+  gtfsDescriptor,
+  mapObservation,
+  sourceIdOf,
+  type FeedEntity,
+  type FeedMessage,
+  type GtfsFeed,
+} from "@mark1russell7/alerts-source-gtfs-alerts";
 import { afterEach, describe, expect, it } from "vitest";
 import type { RuntimeEvent } from "./events.ts";
 import { openRuntimeLog } from "./log.ts";
@@ -318,5 +331,74 @@ describe("a snapshot source in the runtime", () => {
     const liveOfB = (at: number) => incidents(state.merge, at).find((incident) => incident.reports.includes(ids.b))?.live;
     expect(liveOfB(mark!.at - 1)).toBe(true);
     expect(liveOfB(mark!.at)).toBe(false);
+  });
+});
+
+describe("a transit feed that moves its ends, in the runtime (AL-75)", () => {
+  const HOUR = 60 * MINUTE;
+  const RUTER = decodeFeed(readFileSync(new URL("../../source-gtfs-alerts/fixtures/ruter-20261118T0358Z.pb", import.meta.url)));
+  const RUTER_AT = Date.parse("2026-11-18T03:58:18Z");
+  const FEED: GtfsFeed = { id: "mdb-1799", title: "Ruter", url: "https://transit.example.test/ruter", origin: "ruter", box: { west: 10.2, south: 59.6, east: 11.4, north: 60.2 } };
+  // A public place: the center of Oslo.
+  const OSLO: WatchedPlace = { id: "place:a" as PlaceId, codes: [], at: [10.75, 59.91], bufferKm: 0 };
+
+  /** This function gives the feed at a time. As real feeds do, the feed moves its own time and each end that is to come. */
+  function feedAt(fetched: number, text: string): FeedMessage {
+    const by = (fetched - RUTER_AT) / 1000;
+    const entity = (RUTER.entity ?? []).map((each) =>
+      each.alert?.activePeriod === undefined
+        ? each
+        : { ...each, alert: { ...each.alert, activePeriod: each.alert.activePeriod.map((range) => (range.end !== undefined && range.end * 1000 >= RUTER_AT ? { ...range, end: range.end + by } : range)) } },
+    );
+    // An alert with a rolling end: two hours after each fetch.
+    const rolling: FeedEntity = { id: "rolling", alert: { activePeriod: [{ start: Date.parse("2026-11-17T00:00:00Z") / 1000, end: Math.floor(fetched / 1000) + 7_172 }], headerText: { translation: [{ text }] } } };
+    const header = RUTER.header?.timestamp === undefined ? RUTER.header : { ...RUTER.header, timestamp: RUTER.header.timestamp + by };
+    return { ...RUTER, ...(header === undefined ? {} : { header }), entity: [...entity, rolling] };
+  }
+
+  it("appends no observation and no report for an alert with no change, and does not end or retire it", async () => {
+    const source = sourceIdOf(FEED);
+    const clock = fakeWallClock(RUTER_AT);
+    let text = "Buses take a detour.";
+    const procedures: SourceProcedures = {
+      describe: () => gtfsDescriptor(FEED),
+      // The fetch gives the bodies of the feed as the fetch of the source gives them, with no request. The tests of the source cover the request.
+      async fetch() {
+        const fetched = clock.now();
+        const { bodies, complete, asOf } = feedBodies(FEED, feedAt(fetched, text), fetched);
+        const observations = bodies.map((body): Observation => ({ id: observationId({ source, contentType: BODY_TYPE, url: FEED.url, body }), source, fetched, contentType: BODY_TYPE, body, transport: { latency: 0 } }));
+        return { ok: true, observations, complete, ...(asOf === undefined ? {} : { asOf }) };
+      },
+      map: ({ observation }) => mapObservation(FEED, observation),
+    };
+    const log = openRuntimeLog(":memory:");
+    const view: RuntimeOptions["view"] = { ...VIEW, places: [OSLO], kinds: [GTFS_KIND] };
+    const runtime = openRuntime({ log, clock, sources: [procedures], watch: () => ({ places: [OSLO], kinds: [GTFS_KIND] }), view, run: "run-0", retention: { horizon: 2 * HOUR, life: 6 * HOUR, every: HOUR } });
+    const count = (type: RuntimeEvent["type"]) => [...log.read()].filter((event) => event.type === type).length;
+    const alerts = () => [...log.read()].filter((event) => event.type === "observation" && (JSON.parse(event.observation.body) as { type: string }).type === "alert").length;
+    const reports = () => runtime.state().own.merge.reports.filter((report) => report.source === source);
+
+    await runtime.pass();
+    const first = reports().map((report) => report.id);
+    expect(first).toHaveLength(60);
+    expect(alerts()).toBe(60);
+    // Five minutes later, each end moved. No alert gives a new observation, thus no report is new.
+    await clock.advance(5 * MINUTE);
+    await runtime.pass();
+    expect(count("fetch")).toBe(2);
+    expect(alerts()).toBe(60);
+    expect(reports().map((report) => report.id)).toEqual(first);
+    // Past the horizon of the retention, each alert is still in the feed. Nothing ends it and nothing retires it.
+    await clock.advance(3 * HOUR);
+    await runtime.pass();
+    expect([count("fetch"), count("ended"), count("retired")]).toEqual([3, 0, 0]);
+    expect(reports().map((report) => report.id)).toEqual(first);
+    // A changed text is one new observation, and a new version of its key.
+    text = "Buses take a detour until noon.";
+    await clock.advance(5 * MINUTE);
+    await runtime.pass();
+    expect(alerts()).toBe(61);
+    expect(reports().filter((report) => !first.includes(report.id)).map((report) => report.key)).toEqual(["rolling"]);
+    log.close();
   });
 });
