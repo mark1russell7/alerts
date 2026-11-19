@@ -3,6 +3,7 @@ import {
   COPY_ID,
   DEFAULT_THROTTLE,
   ESCALATION_KIND,
+  HELD_SHOWN,
   ONLY_COPY,
   PERSON_SUBJECT,
   PRIORS_FORMAT,
@@ -1542,6 +1543,9 @@ describe("the send limit in the passes of the runtime (AL-72)", () => {
     // The person gets one private notice that the limit holds alerts. No later pass sends a held alert or a second notice.
     expect(sms.send.map((message) => [message.level, message.person])).toEqual([...Array.from({ length: 3 }, () => ["notice", PERSON])]);
     expect(sms.send[2]?.title).toContain("The send limit holds new alerts for you");
+    // The notice names the held alerts and the count of the rest (AL-98).
+    expect(sms.send[2]?.body).toContain(`The send limit holds ${BURST - 2} new alerts for you:\n- Flood Statement`);
+    expect(sms.send[2]?.body).toContain(`- ${BURST - 2 - HELD_SHOWN} other alerts`);
     expect(holds(log)).toHaveLength(BURST - 2);
     // The line of the notice ends one window after the last hold. The end is a cancel, not a send: the phone gets no second message.
     await clock.advance(LIMITS.window);
