@@ -1543,6 +1543,11 @@ describe("the send limit in the passes of the runtime (AL-72)", () => {
     expect(sms.send.map((message) => [message.level, message.person])).toEqual([...Array.from({ length: 3 }, () => ["notice", PERSON])]);
     expect(sms.send[2]?.title).toContain("The send limit holds new alerts for you");
     expect(holds(log)).toHaveLength(BURST - 2);
+    // The line of the notice ends one window after the last hold. The end is a cancel, not a send: the phone gets no second message.
+    await clock.advance(LIMITS.window);
+    const after = await runtime.pass();
+    expect(after.view.incidents.filter((incident) => incident.kind.code === "system.limit.held").map((incident) => incident.live)).toEqual([false]);
+    expect(sms.send).toHaveLength(3);
     // The fold of the log gives the same holds.
     expect(runtime.state()).toEqual(rebuild(log.read(), runtime.config));
     expect(runtime.state().holds).toHaveLength(BURST - 2);
