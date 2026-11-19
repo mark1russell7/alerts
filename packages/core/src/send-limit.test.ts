@@ -28,8 +28,8 @@ function sent(incident: ReportId, level: Level, at: number, who: PersonId = pers
 }
 
 // A route of an escalation, as `route` gives it. With `delivered`, the episode has a delivery of step 0.
-function entry(index: number, options: { readonly level?: Level; readonly due?: number; readonly who?: PersonId; readonly episode?: number; readonly delivered?: number } = {}): Route {
-  const { level = "notice", due = T0, who = person, episode = 0, delivered } = options;
+function entry(index: number, options: { readonly level?: Level; readonly due?: number; readonly who?: PersonId; readonly episode?: number; readonly delivered?: number; readonly addresses?: readonly PersonId[] } = {}): Route {
+  const { level = "notice", due = T0, who = person, episode = 0, delivered, addresses } = options;
   const incident: Incident = {
     anchor: idOf(index),
     reports: [idOf(index)],
@@ -42,6 +42,7 @@ function entry(index: number, options: { readonly level?: Level; readonly due?: 
     about: [],
     live: true,
     corroboration: 1,
+    ...(addresses === undefined ? {} : { addresses }),
   };
   const deliveries = delivered === undefined ? [] : [sent(idOf(index), level, delivered, who)];
   const step = deliveries.length;
@@ -70,6 +71,34 @@ const heldOf = (routes: readonly Route[]): string[] => routes.filter((item) => i
 const LIMITS: SendLimits = { window: HOUR, notice: 3, urgent: 5 };
 
 describe("limitRoutes", () => {
+  describe("the private places (AL-92)", () => {
+    // Six private notices went in the hour: the default limit of the level notice.
+    const privates = Array.from({ length: 6 }, (_, index) => idOf(index + 1));
+    const reports = privates.map((id) => ({ id, addresses: [person] }));
+    const deliveries = privates.map((id, index) => sent(id, "notice", T0 + index * MINUTE));
+    const now = T0 + 10 * MINUTE;
+
+    it("gives a public notice a place after six private notices, and holds a seventh private notice", () => {
+      const routes = [entry(7, { addresses: [person], due: now }), entry(8, { due: now })];
+      const result = limitRoutes({ routes, deliveries, holds: [], limits: DEFAULT_SEND_LIMITS, reports, now });
+      expect(heldOf(result.routes)).toEqual(["07:person-1:0"]);
+    });
+
+    it("gives a private notice a place after six public notices, and holds a seventh public notice", () => {
+      const routes = [entry(7, { addresses: [person], due: now }), entry(8, { due: now })];
+      const result = limitRoutes({ routes, deliveries, holds: [], limits: DEFAULT_SEND_LIMITS, now });
+      expect(heldOf(result.routes)).toEqual(["08:person-1:0"]);
+    });
+
+    it("finds the private deliveries through the routes, also with no report of the merge state", () => {
+      // The routes of the six private incidents hold their deliveries. Thus the seventh private notice gets a hold, and the public notice goes.
+      const live = privates.map((_, index) => entry(index + 1, { addresses: [person], delivered: T0 + index * MINUTE }));
+      const routes = [...live, entry(7, { addresses: [person], due: now }), entry(8, { due: now })];
+      const result = limitRoutes({ routes, deliveries, holds: [], limits: DEFAULT_SEND_LIMITS, now });
+      expect(heldOf(result.routes)).toEqual(["07:person-1:0"]);
+    });
+  });
+
   it("admits the new escalations of each person and level up to the limit, and holds the rest", () => {
     const routes = [...Array.from({ length: 5 }, (_, index) => entry(index, { due: T0 + index })), ...Array.from({ length: 6 }, (_, index) => entry(10 + index, { level: "urgent", due: T0 + index }))];
     const result = limitRoutes({ routes, deliveries: [], holds: [], limits: LIMITS, now: T0 + HOUR });

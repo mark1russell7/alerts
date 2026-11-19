@@ -1,10 +1,12 @@
 /**
  * This module holds the send limit of each person (AL-72). It is pure. The limit keeps a burst of new incidents away
  * from the phone of a person. Each level below `life-safety` admits a count of new escalations in each window, over all
- * the copies of the system. The digest tells each incident that the limit held.
+ * the copies of the system. The digest tells each incident that the limit held. The private incidents (AL-92) have their own
+ * places, thus the messages of the operator and the alerts do not take places from each other.
  */
 import { compareCodeUnits } from "@mark1russell7/text/order";
-import type { CopyWatch, Delivery, Duration, Instant, Level, PersonId } from "./contracts.ts";
+import { isPrivate } from "./audience.ts";
+import type { CopyWatch, Delivery, Duration, Instant, Level, PersonId, Report } from "./contracts.ts";
 import type { EscalationHold, Route } from "./delivery.ts";
 import { messageKey } from "./ids.ts";
 import { copyStages } from "./system-reports.ts";
@@ -101,6 +103,11 @@ export interface LimitInput {
    * A route with one of these sends keeps its place. The default is no key.
    */
   readonly started?: ReadonlySet<string> | undefined;
+  /**
+   * The reports of the merge state (`MergeState.reports`). A delivery of a private report counts only in the private
+   * places of its person and level. The default is no report: then only the routes tell the private incidents.
+   */
+  readonly reports?: readonly Pick<Report, "id" | "addresses">[] | undefined;
   readonly now: Instant;
 }
 
@@ -132,12 +139,21 @@ export interface LimitResult {
  * - A route with a started send (`started`) gets a place before each other new route, and it does not get a hold. The
  *   phone can already have its message. Thus a new route with an earlier due time cannot take its place.
  * - A held route has no send in its plan. Its cancels stay.
+ * - A private incident (`addresses`, AL-92) has its own places for each person and level, with the same counts. Only the
+ *   deliveries of the private reports count in them. Thus a burst of messages of the operator does not hold an alert, and
+ *   a busy hour of alerts does not hold a message of the operator.
  */
 export function limitRoutes(input: LimitInput): LimitResult {
   const limits = input.limits ?? DEFAULT_SEND_LIMITS;
   const share = input.share !== undefined && input.share > 0 && input.share <= 1 ? input.share : 1;
   const logged = new Map(input.holds.map((hold) => [holdKey(hold), hold]));
-  const groupOf = (person: PersonId, level: Level): string => `${level} ${person}`;
+  // The ids of the private reports: of the reports of the merge state, and of the incidents of the routes. A delivery holds
+  // the anchor of its incident at the time of its send. The anchor is one of the reports, thus the set finds it also after
+  // a change of the anchor.
+  const secret = new Set<string>();
+  for (const report of input.reports ?? []) if (isPrivate(report)) secret.add(report.id);
+  for (const entry of input.routes) if (isPrivate(entry.incident)) for (const id of [entry.incident.anchor, ...entry.incident.reports]) secret.add(id);
+  const groupOf = (person: PersonId, level: Level, only: boolean): string => `${level} ${person}${only ? " private" : ""}`;
   // The incidents of each person at each level with a limit that have a delivery in the window. An incident counts one
   // time, also with many steps or episodes. A time that is not a number is in no window. Two reports of one merged
   // incident can count two times, thus the limit can hold an escalation early, never late.
@@ -145,7 +161,7 @@ export function limitRoutes(input: LimitInput): LimitResult {
   const used = new Map<string, number>();
   for (const delivery of input.deliveries) {
     if (!isLimitedLevel(delivery.level) || !(delivery.at > input.now - limits.window && delivery.at <= input.now)) continue;
-    const group = groupOf(delivery.person, delivery.level);
+    const group = groupOf(delivery.person, delivery.level, secret.has(delivery.incident));
     const key = `${group} ${delivery.incident}`;
     if (counted.has(key)) continue;
     counted.add(key);
@@ -164,7 +180,7 @@ export function limitRoutes(input: LimitInput): LimitResult {
       return;
     }
     if (entry.deliveries.length > 0 || entry.plan.sends.length === 0) return;
-    const group = groupOf(entry.person, level);
+    const group = groupOf(entry.person, level, isPrivate(entry.incident));
     const due = Math.min(...entry.plan.sends.map((send) => send.due));
     const started = input.started !== undefined && entry.plan.sends.some((send) => input.started?.has(messageKey(send)) === true);
     fresh.set(group, [...(fresh.get(group) ?? []), { index, due, started }]);

@@ -417,7 +417,7 @@ export function createDispatcher(options: DeliveryOptions, context: DeliveryCont
         });
         // A send in flight, or an open copy of the log, can already be on the phone. Thus its route keeps its place.
         const started = new Set([...flying.keys(), ...Object.values(state.copies).map((copy) => copy.key)]);
-        const limited = limitRoutes({ routes, deliveries: state.merge.deliveries, holds: state.holds, limits: options.sendLimits, share: context.share?.(at), started, now: at });
+        const limited = limitRoutes({ routes, deliveries: state.merge.deliveries, holds: state.holds, limits: options.sendLimits, share: context.share?.(at), started, reports: state.merge.reports, now: at });
         // The send limit counts new escalations, and the throttle counts messages on each channel. The send limit stays a
         // cap over all the channels.
         if (options.throttle === undefined) return { ...limited, suppressions: [] };

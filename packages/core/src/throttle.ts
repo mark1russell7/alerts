@@ -207,8 +207,10 @@ export function throttleRoutes(input: ThrottleInput): ThrottleResult {
   // A private incident is a message to its persons (AL-92). It is its own stream, by its anchor. Thus the throttle stops
   // only its repeats, and a system line does not stop it. Its intake has its own gates: a check of repeats and a daily cap.
   const routeStreams = input.routes.map((entry) => (isPrivate(entry.incident) ? `${PRIVATE_STREAM} ${entry.incident.anchor}` : streamOf(entry.incident.kind.code)));
-  // The stream of each known report. A delivery of an unknown report is a system line of the other copy. The anchor of
-  // an incident is the id of its first report, thus a private report by its own id gives the stream of its incident.
+  // The stream of each known report. A delivery of an unknown report is a system line of the other copy. A delivery holds
+  // the anchor of its incident at its send, thus after the end of the route a private report by its own id gives the
+  // stream. A later report with a smaller id changes the anchor, and then a new route has another stream. Two private
+  // reports in one incident are rare, thus the worst result is one more push.
   const reportStreams = new Map<string, string>();
   for (const report of input.reports ?? []) reportStreams.set(report.id, isPrivate(report) ? `${PRIVATE_STREAM} ${report.id}` : streamOf(report.kind.code));
   reportsOf.forEach((reports, route) => {

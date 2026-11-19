@@ -93,7 +93,7 @@ A private report has the field `addresses`: the persons that its sender named (A
 - `assess` gives each person outside the addresses the level `none`, with the reason `not-addressed`.
 - A person of the addresses gets the level of the table, with the reason `addressed`. The places, the subjects and the interests do not count.
 - The rules of the person apply to a private incident as to a subject.
-- The throttle gives each private incident its own stream. The send limit counts it as each other escalation.
+- The throttle gives each private incident its own stream. The send limit gives the private incidents their own places for each person and level, with the same counts. Thus the messages of the operator and the alerts do not take places from each other.
 
 Each reader of the incidents shows a private incident as this table tells.
 
@@ -1032,6 +1032,7 @@ The core function `throttleRoutes` applies the rise-only throttle of each person
 - With the streams `family`, each family of the alerts is a stream. The family is the first part of the kind, for example `met` of `met.flood`. The system lines stay one stream.
 - The kind of the incident of a route, or of the report of a delivery, gives the stream. The report comes from the merge state. A retirement removes a report and its deliveries together, thus a delivery in the window always has its report.
 - A private incident (`addresses`, AL-92) is its own stream, by its anchor. Thus only its own deliveries count in its bar, and a system line does not stop it. Its intake has its own gates: a check of repeats and a daily cap.
+- A later report with a smaller id changes the anchor of an incident. After the end of a route, a new route then has another stream. Two private reports in one incident are rare, thus the worst result is one more push.
 - A delivery of a report that the copy does not know is in the stream of the system lines. The copies share the reports of the alerts, but not the system lines. Thus such a delivery is a system line of the other copy.
 - An alert delivery of the other copy can come before its report. Then the worst result is one more push. The other choice can stop a weather notice under a system line of the other copy, and only the digest then tells it.
 - A send at the same level or at a lower level does not go. It gets a suppression with its reason: `same-level` or `lower-level`.
@@ -1487,6 +1488,8 @@ The command `node src/tell.ts --title <title> --message <text> [--url <link>]` s
 - The quota gate of the runtime does not count the message. The next answer of Pushover to the runtime gives the gate its count.
 
 This path is a stopgap. It has no throttle, no daily cap and no check for a repeated message. Its end is the intake of events in the running runtime, the second step of AL-92. Then each message is an event of a named class, and the policies of the person route it.
+
+The intake is on the loopback address of one copy. Thus a message that needs the operator has no second copy. When that copy or its channel is down, the message does not come.
 
 ### Drills
 
