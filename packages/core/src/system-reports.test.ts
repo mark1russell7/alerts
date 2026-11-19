@@ -37,11 +37,15 @@ import {
   sourceClearTime,
   sharedHandoverAt,
   SOURCE_SUBJECT,
+  STORE_FILL_WINDOW,
+  STORE_SUBJECT,
+  storeEmptyAt,
   stepSizeText,
   SYSTEM_SOURCE,
   systemReports,
   threats,
   type LogRecovery,
+  type StoreFill,
   type SystemLines,
   type SystemSnapshot,
 } from "./system-reports.ts";
@@ -824,6 +828,62 @@ describe("the log reports", () => {
     expect(none.reports).toMatchObject([{ severity: "moderate", urgency: "expected" }]);
     expect(none.reports[0]!.description).toContain("It kept 0 events, and it could not read each part of the file. A lost event");
     expect(levels(none.reports, WATCHER, START)).toEqual(["notice"]);
+  });
+});
+
+describe("the store reports (AL-86)", () => {
+  const START = Date.UTC(2026, 10, 18, 12);
+  const END = START + STORE_FILL_WINDOW;
+  const fire: StoreFill = { store: "shapes", family: "fire", entries: 0, since: START, within: STORE_FILL_WINDOW, sources: [API.id] };
+  const county: StoreFill = { ...fire, family: "county" };
+  const codes = (reports: readonly Report[]) => reports.map((report) => [report.op, report.kind.code, report.about[0]!.id]);
+
+  it("gives no report before the end of the window, and an alert for each family with no entry at its end", () => {
+    expect(STORE_FILL_WINDOW).toBe(60 * 60_000);
+    expect(unknownKinds(["system.store", "system.store.empty"])).toEqual([]);
+    expect(storeEmptyAt(fire)).toBe(END);
+    expect(systemReports(NO_SYSTEM_LINES, snapshot({ stores: [fire, county] }), END - 1).reports).toEqual([]);
+    const late = systemReports(NO_SYSTEM_LINES, snapshot({ stores: [fire, { ...county, entries: 3 }] }), END);
+    expect(late.reports).toMatchObject([
+      {
+        op: "alert",
+        status: "system",
+        kind: { code: "system.store.empty", label: "Empty store" },
+        severity: "moderate",
+        urgency: "expected",
+        areas: [],
+        about: [
+          { system: STORE_SUBJECT, id: "shapes/fire" },
+          { system: SOURCE_SUBJECT, id: API.id, label: "The API" },
+        ],
+        headline: "The store shapes has no entry of the family fire 60 minutes after the start.",
+        parameters: { entries: ["0"], within: [String(STORE_FILL_WINDOW)] },
+      },
+    ]);
+    expect(Object.keys(late.lines.open)).toEqual(["store/shapes/fire"]);
+  });
+
+  it("keeps the line over a restart with no entry, keeps it with no list, and ends it at the first entry", () => {
+    const first = systemReports(NO_SYSTEM_LINES, snapshot({ stores: [fire] }), END);
+    // A restart gives a new start. The family has no entry, thus the line stays open, with no new report.
+    const restart: StoreFill = { ...fire, since: END + 60_000 };
+    const held = systemReports(first.lines, snapshot({ stores: [restart] }), END + 61_000);
+    expect(held.reports).toEqual([]);
+    expect(held.lines).toEqual(first.lines);
+    // With no list, as when the read of the store throws, the line stays open.
+    expect(systemReports(first.lines, snapshot(), END + 62_000).reports).toEqual([]);
+    const filled = systemReports(first.lines, snapshot({ stores: [{ ...restart, entries: 1 }] }), END + 63_000);
+    expect(codes(filled.reports)).toEqual([["cancel", "system.store.empty", "shapes/fire"]]);
+    expect(filled.lines.open).toEqual({});
+    // An empty list is a copy with no store. Then no family is a condition.
+    expect(codes(systemReports(first.lines, snapshot({ stores: [] }), END + 64_000).reports)).toEqual([["cancel", "system.store.empty", "shapes/fire"]]);
+  });
+
+  it("goes as a notice to the person who watches a source of the store or the store, and to no other person", () => {
+    const step = systemReports(NO_SYSTEM_LINES, snapshot({ stores: [fire] }), END);
+    expect(levels(step.reports, OPERATOR, END)).toEqual(["notice"]);
+    expect(levels(step.reports, NEIGHBOR, END)).toEqual(["none"]);
+    expect(levels(step.reports, { ...NEIGHBOR, subjects: [{ system: STORE_SUBJECT }] }, END)).toEqual(["notice"]);
   });
 });
 

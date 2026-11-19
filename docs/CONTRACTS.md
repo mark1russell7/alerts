@@ -383,6 +383,17 @@ A log report has no area. Its subject is `{ system: "alerts.log", id: "runtime" 
 - The line stays open for the window. At the end of the window, the line ends with a cancel.
 - The description names the quarantine folder and the count of the kept events.
 
+A store report has no area. Its kind is `system.store.empty` (AL-86), with the severity `moderate` and the urgency `expected`. Thus it gets `notice` at most:
+
+- The runtime gives a `StoreFill` for each family of each store: the count of its entries, the start of the instance and the window.
+- The window is `STORE_FILL_WINDOW` (60 minutes). The store of shapes has the families `county`, `forecast` and `fire`.
+- The condition is a family with no entry at the end of its window (`storeEmptyAt`). The end of the window is a timer of the pass.
+- The subjects are `{ system: "alerts.store", id: "<store>/<family>" }` (`STORE_SUBJECT`) and each source that feeds the store.
+- Thus a person who watches a source of the store gets the report. The sources of the store of shapes are the sources of the NWS API.
+- The facts of the line are the store and the family. A restart gives a new start, and an open line stays open while the family has no entry.
+- The first entry of the family ends the line with a cancel. A snapshot with no list of stores keeps each open line of a store.
+- A store that gets no turn after a start, as a refresh that waits for the good start, fails the check.
+
 A copy report has no area. Its subject is `{ system: "alerts.copy", id: <copy id> }` (`COPY_SUBJECT`). Its kind is `system.copy.<stage>`, with the severity `moderate` and the urgency `expected`. Thus it gets `notice` at most. `copyStages` gives the stages of a `CopyWatch` at a time, and each stage is one line:
 
 | Stage | Condition |

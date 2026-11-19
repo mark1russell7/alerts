@@ -13,6 +13,7 @@ import {
   matchPlaces,
   ONLY_COPY,
   parseConfig,
+  STORE_FILL_WINDOW,
   type AlertConfig,
   type Watch,
   type ChannelId,
@@ -367,6 +368,30 @@ function withZones(net: ReturnType<typeof network>): Transport {
     net.exchanges.push(exchange);
     return { status: 200, statusText: "OK", headers: { "content-type": "application/geo+json" }, body };
   };
+}
+
+/** This function adds the answers of the zone service with one fire zone of the state. It has the outline of the forecast zone. */
+function withFire(net: ReturnType<typeof network>): Transport {
+  const zones = withZones(net);
+  const answers: Readonly<Record<string, string>> = {
+    "/zones?area=TX&type=fire": JSON.stringify({ type: "FeatureCollection", features: [{ type: "Feature", geometry: null, properties: { id: "TXZ230", type: "fire", name: "Fire zone" } }] }),
+    "/zones/fire/TXZ230": ZONE_ANSWERS["/zones/forecast/TXZ230"]!,
+  };
+  return async (exchange, signal) => {
+    const url = new URL(exchange.url);
+    const body = url.hostname === "api.weather.gov" ? answers[url.pathname + url.search] : undefined;
+    if (body === undefined) return zones(exchange, signal);
+    net.exchanges.push(exchange);
+    return { status: 200, statusText: "OK", headers: { "content-type": "application/geo+json" }, body };
+  };
+}
+
+/** This function gives the subjects of the open lines of the empty families of the stores (AL-86), in their order. */
+function emptyStores(instance: Instance) {
+  return Object.values(instance.runtime.state().lines.open)
+    .filter((line) => line.kind.code === "system.store.empty")
+    .map((line) => line.about[0]?.id)
+    .sort();
 }
 
 /** A fake Pushover server. It accepts each message. */
@@ -883,6 +908,39 @@ describe("openInstance", () => {
     await finish(clock, instance.shapes.idle());
     expect(outcomes).toEqual([{ ok: true, refreshed: expect.objectContaining({ stop: "done", failures: [] }) }]);
     expect(zones()).toBeGreaterThan(0);
+  });
+
+  it("gives a notice for each family of the store of shapes when the store gets no turn in its window after the start (AL-86)", async () => {
+    const net = network();
+    // The start does not become good, thus the store gets no turn to fetch.
+    const { instance, clock } = open(store(SECRETS), CONFIG, 0, TEST_FETCH_LIMIT, { transport: withZones(net), shapes: memoryCache(), startGood: () => false });
+    await finish(clock, instance.runtime.pass());
+    expect(emptyStores(instance)).toEqual([]);
+    await clock.advance(STORE_FILL_WINDOW);
+    await finish(clock, instance.runtime.pass());
+    expect(emptyStores(instance)).toEqual(["shapes/county", "shapes/fire", "shapes/forecast"]);
+    expect(net.exchanges.filter((exchange) => new URL(exchange.url).pathname.startsWith("/zones"))).toEqual([]);
+    // The sources of the NWS API feed the store. Thus a person who watches the source gets the notice.
+    const line = Object.values(instance.runtime.state().lines.open).find((entry) => entry.kind.code === "system.store.empty");
+    expect(line?.about.slice(1)).toEqual([{ system: "alerts.source", id: "nws-api", label: expect.any(String) }]);
+  });
+
+  it("gives no notice of the store of shapes when each family fills in its window (AL-86)", async () => {
+    const net = network();
+    const { instance, clock } = open(store(SECRETS), CONFIG, 0, TEST_FETCH_LIMIT, { transport: withFire(net), shapes: memoryCache() });
+    const families = () => instance.shapes.fill(T0, STORE_FILL_WINDOW, []).map((fill) => [fill.family, fill.entries]);
+    for (let pass = 0; pass < 4 && families().some(([, entries]) => entries === 0); pass++) {
+      await finish(clock, instance.runtime.pass());
+      await finish(clock, instance.shapes.idle());
+    }
+    expect(families()).toEqual([
+      ["county", 1],
+      ["forecast", 1],
+      ["fire", 1],
+    ]);
+    await clock.advance(STORE_FILL_WINDOW);
+    await finish(clock, instance.runtime.pass());
+    expect(emptyStores(instance)).toEqual([]);
   });
 
   it("tells one time when new outlines change the codes of a place", async () => {

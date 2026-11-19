@@ -7,9 +7,9 @@
  * many megabytes. The keeper simplifies the regions of the watched states again only when the store changes them. An
  * incident changes only the small copy of the regions outside those states.
  */
-import { basemapToleranceKm, simplifyBasemap, type AlertConfig, type Incident, type Instant, type MapRegion, type PlaceConfig, type RegionCode, type ShapeLookup, type SourceDescriptor, type WatchedPlace } from "@mark1russell7/alerts";
+import { basemapToleranceKm, simplifyBasemap, type AlertConfig, type Duration, type Incident, type Instant, type MapRegion, type PlaceConfig, type RegionCode, type ShapeLookup, type SourceDescriptor, type SourceId, type StoreFill, type WatchedPlace } from "@mark1russell7/alerts";
 import { stateOfCode } from "@mark1russell7/alerts-format-nws";
-import { compareCodes, zoneCodesNear, type Refreshed, type ShapeStore, type Wanted } from "@mark1russell7/alerts-shapes-nws";
+import { compareCodes, ZONE_KINDS, zoneCodesNear, zoneKindOf, type Refreshed, type ShapeStore, type Wanted, type ZoneKind } from "@mark1russell7/alerts-shapes-nws";
 import { NWS_PROVIDER } from "@mark1russell7/alerts-source-nws-api";
 import { countOf, errorMessage } from "@mark1russell7/text";
 
@@ -187,10 +187,21 @@ export interface InstanceShapes {
    * The outlines are simplified for the view box of the page with `simplifyBasemap`.
    */
   basemap(): readonly MapRegion[];
+  /**
+   * This function gives the fill of each family of the store (AL-86): the counties, the forecast zones and the fire zones of the
+   * watched states. A fire zone counts only when the store has the outline of each fire zone of its state (`fireZones`).
+   * With no store or no watched state, it gives no fill.
+   */
+  fill(since: Instant, within: Duration, sources: readonly SourceId[]): StoreFill[];
   /** This function waits for the end of the refresh in progress. It does not throw. */
   idle(): Promise<void>;
   /** This function stops the refresh in progress, waits for its end, and closes the cache of the store. */
   close(): Promise<void>;
+}
+
+/** This function gives the sources of the NWS API (`NWS_PROVIDER`). The store of shapes sends its requests to their host. */
+export function shapeSources(sources: readonly SourceDescriptor[]): SourceDescriptor[] {
+  return sources.filter((source) => source.dependsOn.includes(NWS_PROVIDER));
 }
 
 /**
@@ -202,8 +213,7 @@ export interface InstanceShapes {
  */
 export function refreshUntil(sources: readonly SourceDescriptor[], nextFetch: (source: SourceDescriptor) => Instant): Instant | undefined {
   let until: Instant | undefined;
-  for (const source of sources) {
-    if (!source.dependsOn.includes(NWS_PROVIDER)) continue;
+  for (const source of shapeSources(sources)) {
     const next = nextFetch(source);
     if (until === undefined || next < until) until = next;
   }
@@ -231,6 +241,19 @@ export interface ShapeKeeperOptions {
   readonly close?: (() => void) | undefined;
 }
 
+// The count of the entries of each family of the store in the watched states. A fire zone counts only with each outline of its state.
+function countFamilies(store: ShapeStore, states: readonly string[]): Record<ZoneKind, number> {
+  const entries: Record<ZoneKind, number> = { county: 0, forecast: 0, fire: 0 };
+  for (const state of states) {
+    for (const region of store.basemap(state)) {
+      const kind = zoneKindOf(region.code.code);
+      if (kind !== undefined) entries[kind] += 1;
+    }
+    entries.fire += store.fireZones(state).length;
+  }
+  return entries;
+}
+
 /** This function makes the keeper of the outlines of the instance. */
 export function keepShapes(options: ShapeKeeperOptions): ShapeKeeper {
   const { store, places } = options;
@@ -239,6 +262,8 @@ export function keepShapes(options: ShapeKeeperOptions): ShapeKeeper {
   let incidents: readonly Incident[] = [];
   let running: Promise<void> | undefined;
   let closed = false;
+  // The counts of the families. Only a refresh changes the store, thus the keeper counts again after the end of each refresh.
+  let counts: Record<ZoneKind, number> | undefined;
   const report = (outcome: ShapeOutcome): void => {
     try {
       options.onShapes?.(outcome);
@@ -289,6 +314,11 @@ export function keepShapes(options: ShapeKeeperOptions): ShapeKeeper {
       }
       return last.regions;
     },
+    fill(since, within, sources) {
+      if (store === undefined || states.length === 0) return [];
+      const entries = (counts ??= countFamilies(store, states));
+      return ZONE_KINDS.map((family) => ({ store: "shapes", family, entries: entries[family], since, within, sources }));
+    },
     afterPass(live, until) {
       incidents = live;
       if (store === undefined || until === undefined || closed || running !== undefined) return;
@@ -299,6 +329,7 @@ export function keepShapes(options: ShapeKeeperOptions): ShapeKeeper {
       );
       running = work.finally(() => {
         running = undefined;
+        counts = undefined;
       });
     },
     idle: async () => {

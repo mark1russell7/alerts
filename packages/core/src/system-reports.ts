@@ -9,7 +9,7 @@
  */
 import { canonicalJson } from "@mark1russell7/rigor-generators";
 import { compareCodeUnits } from "@mark1russell7/text/order";
-import { BALANCE_KIND, CHANNEL_KIND, CLOCK_KIND, CONTEXT_KINDS, COPY_KIND, COVERAGE_KIND, DRILL_KIND, ESCALATION_KIND, hasKind, HEALTH_KIND, LOG_KIND, matchPlaces, PERSON_SUBJECT, QUOTA_KIND } from "./assess.ts";
+import { BALANCE_KIND, CHANNEL_KIND, CLOCK_KIND, CONTEXT_KINDS, COPY_KIND, COVERAGE_KIND, DRILL_KIND, ESCALATION_KIND, hasKind, HEALTH_KIND, LOG_KIND, matchPlaces, PERSON_SUBJECT, QUOTA_KIND, STORE_KIND } from "./assess.ts";
 import type {
   Area,
   BalanceStage,
@@ -68,6 +68,9 @@ export const COPY_SUBJECT = "alerts.copy";
 
 /** The system of the subjects of the drill reports. The id of a subject is the id of a drill. */
 export const DRILL_SUBJECT = "alerts.drill";
+
+/** The system of the subjects of the store reports (AL-86). The id of a subject is the store and the family, as `shapes/fire`. */
+export const STORE_SUBJECT = "alerts.store";
 
 /** The subject system of an incident. The id of a subject is a report of the incident: an exhausted escalation links its warning. */
 export const INCIDENT_SUBJECT = "alerts.incident";
@@ -165,6 +168,33 @@ export const LOG_RECOVERY_WINDOW: Duration = 24 * 60 * 60 * 1000;
 export const CLOCK_STEP_WINDOW: Duration = 24 * 60 * 60 * 1000;
 
 /**
+ * The fill of one family of a store of the runtime (AL-86), as the fire zones of the store of shapes. A store fills after each
+ * start. A family with no entry at the end of its window is a condition.
+ */
+export interface StoreFill {
+  /** The id of the store, as `shapes`. */
+  readonly store: string;
+  /** The family of the entries, as `fire`. */
+  readonly family: string;
+  /** The count of the entries of the family at the time of the snapshot. */
+  readonly entries: number;
+  /** The start of the instance that fills the store. */
+  readonly since: Instant;
+  /** The time after the start in which the family gets its first entry. */
+  readonly within: Duration;
+  /** The sources that feed the store. A person who watches one of them gets the report. */
+  readonly sources: readonly SourceId[];
+}
+
+/** The time after a start in which each family of a store gets its first entry (AL-86). */
+export const STORE_FILL_WINDOW: Duration = 60 * 60 * 1000;
+
+/** This function gives the time when a family with no entry becomes a condition: the end of its window after the start. */
+export function storeEmptyAt(fill: StoreFill): Instant {
+  return fill.since + fill.within;
+}
+
+/**
  * This function gives the size of a step in a text: whole hours, whole minutes, or else whole seconds. A step of
  * 3600000 ms is `1 h`, a step of 600000 ms is `10 min`, and a step of 90000 ms is `90 s`.
  */
@@ -254,6 +284,11 @@ export interface SystemSnapshot {
   readonly steps?: readonly ClockStep[];
   /** The recoveries of the log. The latest recovery in `LOG_RECOVERY_WINDOW` before the time of the snapshot is a condition. */
   readonly recoveries?: readonly LogRecovery[];
+  /**
+   * The fills of the families of the stores (AL-86). A family with no entry at `storeEmptyAt` is a condition. An open line
+   * stays a condition while its family has no entry, also after a restart. With no list, each open line of a store stays open.
+   */
+  readonly stores?: readonly StoreFill[];
   /**
    * The drills of the copy. A run that waits for its acknowledgment is a condition, and a failed last run is a condition.
    * With no drills, each open line of a drill stays open.
@@ -440,6 +475,7 @@ export function gapGrade(entry: Coverage, threatened: boolean): { readonly sever
  * - Each run of a drill that waits for its acknowledgment, and each drill whose last run failed.
  * - Each exhausted escalation of a real warning. Only one copy reports it (`reportsShared`).
  * - Each down channel of the copy: a run that opens a line, or an open line with no good call since its onset.
+ * - Each family of a store with no entry at the end of its window after the start, or with an open line and no entry.
  *
  * An open line with no condition in the snapshot ends with a cancel. Equal snapshots give no new report.
  */
@@ -503,6 +539,11 @@ export function systemReports(lines: SystemLines, snapshot: SystemSnapshot, at: 
     if (condition !== undefined) conditions.set(name, condition);
   }
   for (const entry of snapshot.observing ?? []) conditions.set(observeName(entry), observeCondition(entry, titles.get(entry.source) ?? entry.source, context.has(entry.source)));
+  // A restart gives a new start. Thus an open line of a family with no entry stays open, and it gives no new alert.
+  for (const fill of snapshot.stores ?? []) {
+    const name = storeName(fill);
+    if (fill.entries === 0 && (at >= storeEmptyAt(fill) || lines.open[name] !== undefined)) conditions.set(name, storeCondition(fill, titles));
+  }
   const names = [...new Set([...Object.keys(lines.open), ...conditions.keys()])].sort(compareCodeUnits);
   let count = lines.count;
   const open = new Map(Object.entries(lines.open));
@@ -518,6 +559,7 @@ export function systemReports(lines: SystemLines, snapshot: SystemSnapshot, at: 
     if (condition === undefined && snapshot.exhausted === undefined && name.startsWith(EXHAUSTION_LINE)) continue;
     if (condition === undefined && snapshot.channels === undefined && name.startsWith(CHANNEL_LINE)) continue;
     if (condition === undefined && snapshot.observing === undefined && name.startsWith(OBSERVE_LINE)) continue;
+    if (condition === undefined && snapshot.stores === undefined && name.startsWith(STORE_LINE)) continue;
     const draft = condition === undefined ? (line === undefined ? undefined : cancelOf(line)) : condition;
     if (draft === undefined) continue;
     const facts = canonicalJson(draft.facts, { form: "json" });
@@ -626,6 +668,13 @@ const CLOCK_LINE = "clock";
 
 // The name of the line of the recoveries of the log. A second recovery in the window of an open line gives an update.
 const LOG_LINE = "log";
+
+// The start of the name of each line of a store. The store and the family follow it.
+const STORE_LINE = "store/";
+
+function storeName(fill: StoreFill): string {
+  return `${STORE_LINE}${encodeURIComponent(fill.store)}/${encodeURIComponent(fill.family)}`;
+}
 
 function coverageName(place: PlaceId, kind: string): string {
   return `coverage/${encodeURIComponent(place)}/${encodeURIComponent(kind)}`;
@@ -1117,6 +1166,29 @@ function logCondition(recovery: LogRecovery): Condition {
     description: `The alert system moved the broken file into the quarantine folder ${recovery.quarantine}, and it started a new log. ${kept}`,
     instruction: "Examine the disk of the computer. Keep the quarantine folder until you know the cause.",
     parameters: { quarantine: [recovery.quarantine], kept: [String(recovery.kept)], lost: [String(recovery.lost)], whole: [String(recovery.whole)] },
+  };
+}
+
+// A family with no entry stops a feature, not a send. Thus it gets `notice` at most.
+function storeCondition(fill: StoreFill, titles: ReadonlyMap<SourceId, string>): Condition {
+  const code = `${STORE_KIND}.empty`;
+  const minutes = Math.round(fill.within / 60_000);
+  return {
+    // A new count or a new start is not a fact. Thus a restart gives no update and no new alert.
+    facts: { store: fill.store, family: fill.family },
+    kind: { code, label: kindLabel(code) },
+    severity: "moderate",
+    urgency: "expected",
+    response: ["assess"],
+    areas: [],
+    about: [
+      { system: STORE_SUBJECT, id: `${fill.store}/${fill.family}`, label: `Store ${fill.store}, family ${fill.family}` },
+      ...fill.sources.map((source) => ({ system: SOURCE_SUBJECT, id: source, label: titles.get(source) ?? source })),
+    ],
+    headline: `The store ${fill.store} has no entry of the family ${fill.family} ${String(minutes)} minutes after the start.`,
+    description: "The store did not fill in the time. Its sources can be down, or the store gets no turn to fetch. Each feature that reads the family works without it.",
+    instruction: "Examine the health of the sources of the store and the log of its refreshes.",
+    parameters: { entries: [String(fill.entries)], within: [String(fill.within)] },
   };
 }
 

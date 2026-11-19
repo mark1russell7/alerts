@@ -25,6 +25,7 @@ import {
   throttleOf,
   sourceCovers,
   sourcePlaces,
+  STORE_FILL_WINDOW,
   type Address,
   type ChannelDescriptor,
   type ChannelId,
@@ -105,7 +106,7 @@ import { outageDeploy, outageDeployWorker, outageSetup, type OutageDeployWorker 
 import { exchangeLoop, exchangeWorker, type EntriesSource, type ExchangeCall, type ExchangeRound, type ExchangeWorker } from "./peers.ts";
 import { channelQuota } from "./quota.ts";
 import { openRuntime, type Pass, type Runtime, type RuntimeOptions } from "./runtime.ts";
-import { addZoneCodes, keepShapes, placeCodesKey, refreshUntil, type InstanceShapes, type ShapeOutcome, type ZoneCodeCounts } from "./shapes.ts";
+import { addZoneCodes, keepShapes, placeCodesKey, refreshUntil, shapeSources, type InstanceShapes, type ShapeOutcome, type ZoneCodeCounts } from "./shapes.ts";
 import { chooseFeeds, feedsKey, keepTransit, type InstanceTransit, type TransitCache, type TransitOutcome } from "./transit.ts";
 import { DELAY_LIMITS, nextFetch } from "./view.ts";
 
@@ -957,6 +958,8 @@ export function openInstance(options: InstanceOptions): Instance {
 
   // The last pass of the runtime, from the loop or from a direct call of `pass`. The map reads it.
   let latest: Pass | undefined;
+  // The start of this instance. Each family of a store gets its first entry in its window after this time (AL-86).
+  const startedAt = wall.now();
   const runtime: Runtime = openRuntime({
     log: options.log,
     clock: wall,
@@ -981,6 +984,8 @@ export function openInstance(options: InstanceOptions): Instance {
     // Each stage of a quota is a line of system reports, and so is each stage of a balance.
     quotas,
     balances,
+    // Each family of a store with no entry at the end of its window after the start is a line of system reports (AL-86).
+    stores: () => shapes.fill(startedAt, STORE_FILL_WINDOW, shapeSources(runtime.config.sources).map((source) => source.id)),
     // Each pass reads the replies of the texts and the spend of Twilio when each read is due.
     ...(reads.length === 0 ? {} : { reads }),
     // Each pass waits for the first round of the exchange, and its view has a line for each fault of another copy.
