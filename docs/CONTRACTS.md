@@ -1446,6 +1446,20 @@ The runtime operates the deploy in the worker `outage` of its service (`outage.t
 - A failed deploy goes again after a backoff: one minute, then double, up to one hour. The pass limit bounds one deploy, so the drain of the service holds it.
 - `GET /status` gives the state of the last deploy: `pending`, `current` or `failed`, with its stage and its count of failures. The state holds no private value.
 
+### A message of the operator (AL-92)
+
+The command `node src/tell.ts --title <title> --message <text> [--url <link>]` sends one message to the person who operates the system, on Pushover. The module `tell-message.ts` gives its rules.
+
+- The command reads the private files and checks them as the start of the runtime does. The key of Pushover stays in its process.
+- The person who operates the system watches each source: the watch `{ system: "alerts.source" }`. Only such a person with a contact on Pushover gets the message.
+- The command sends only to one person. With no person or with more people, it sends nothing and gives the code 1.
+- `--dry-run` gives the count of the people and sends nothing. The output holds no person, no address and no value of a key.
+- The message has the level `notice`. In the quiet window of the person, it goes in the silent mode, as the escalation does it.
+- A link is an absolute URL with `https` or `http`. The message expires after one day.
+- The quota gate of the runtime does not count the message. The next answer of Pushover to the runtime gives the gate its count.
+
+This path is a stopgap. It has no throttle, no daily cap and no check for a repeated message. Its end is the intake of events in the running runtime, the second step of AL-92. Then each message is an event of a named class, and the policies of the person route it.
+
 ### Drills
 
 The fakes and the fault cases of CI test the code. Only a drill tests the live path: the provider, the phone and the person (AL-43). The module `drill.ts` of the core gives the drills as data and as pure functions. The functions read no clock.
