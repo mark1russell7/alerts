@@ -1605,11 +1605,11 @@ export const throttleConfigSchema: z.ZodType<ThrottleConfig, ThrottleConfig> = s
 );
 
 // The origin of a site on the loopback address, with a port and no path.
-const LOOPBACK_ORIGIN = /^https?://(?:127.0.0.1|localhost|[::1]):[0-9]{1,5}$/iu;
+const LOOPBACK_ORIGIN = /^https?:\/\/(?:127\.0\.0\.1|localhost|\[::1\]):[0-9]{1,5}$/iu;
 // The origin of a site that a phone opens: `https`, a host of two labels or more and an optional port, with no path.
-const PHONE_ORIGIN = /^https://[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+(?::[0-9]{1,5})?$/iu;
+const PHONE_ORIGIN = /^https:\/\/[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+(?::[0-9]{1,5})?$/iu;
 // An IPv4 address. A phone does not open the loopback form of the site, thus the phone origin has no such host.
-const IPV4_HOST = /^https://[0-9.]+(?::[0-9]{1,5})?$/u;
+const IPV4_HOST = /^https:\/\/[0-9.]+(?::[0-9]{1,5})?$/u;
 
 /** This schema checks the two forms of the links of a local site (AL-92): a loopback origin and a phone origin. */
 export const tellSiteSchema: z.ZodType<TellSite, TellSite> = schemaOf<TellSite>()(

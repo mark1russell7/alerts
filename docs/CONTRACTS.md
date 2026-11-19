@@ -1504,6 +1504,7 @@ The runtime takes each message of the operator as an event of the source `tell`.
 These are the limits of the intake:
 
 - The buffer and the count of the day are in memory. A stop of the runtime before the next fetch loses the messages of the buffer.
+- A restart sets the count of the day to zero. The send limit of each person still holds the sends of each hour.
 - The source `tell` fetches each 15 seconds. Thus a message comes up to 15 seconds after its call, plus the time of the pass.
 - The intake is on the loopback address of one copy. Thus a message that needs the operator has no second copy. When that copy or its channel is down, the message does not come.
 - AL-95 moves the procedure onto the procedures host of the service. AL-96 gives each session of the operator one command for its messages.

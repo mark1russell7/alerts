@@ -1209,4 +1209,16 @@ describe("the intake of the messages of the operator (AL-92)", () => {
     expect(site("http://127.0.0.1:4000", "https://127.0.0.1:4000")).toBe(false);
     expect(site("http://127.0.0.1:4000", "https://site.example.net/a/")).toBe(false);
   });
+
+  it("reads each dot and each bracket of an origin as itself, not as a pattern", () => {
+    const { tellConfigSchema } = schemas;
+    const site = (local: string, phone: string) => tellConfigSchema.safeParse({ port: 4790, site: { local, phone } }).success;
+    // A dot of the phone origin is a dot, not each character.
+    expect(site("http://127.0.0.1:4000", "https://exampleXnet")).toBe(false);
+    expect(site("http://127.0.0.1:4000", "https://a.example.net:8443")).toBe(true);
+    // The brackets of [::1] are part of the host, not a set of characters.
+    expect(site("http://[::1]:8080", "https://site.example.net")).toBe(true);
+    expect(site("http://:1:8080", "https://site.example.net")).toBe(false);
+    expect(site("http://127x0x0x1:8080", "https://site.example.net")).toBe(false);
+  });
 });
