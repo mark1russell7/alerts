@@ -149,8 +149,8 @@ export function historyPayload(input: HistoryInput): HistoryPayload {
   // Each viewer of the page sees the history, so it reads no private report and no end mark of one (AL-92, `audience.ts`).
   // A private report never joins a public one, thus the other incidents do not change.
   const reports = input.merge.reports.filter((report) => !isPrivate(report));
-  const shown = new Set(reports.map((report) => report.id));
-  const state: MergeState = { ...input.merge, reports, ends: input.merge.ends.filter((mark) => shown.has(mark.report)) };
+  const publicIds = new Set(reports.map((report) => report.id));
+  const state: MergeState = { ...input.merge, reports, ends: input.merge.ends.filter((mark) => publicIds.has(mark.report)) };
   const byId = new Map(state.reports.map((report) => [report.id, report]));
   const entries = new Map(state.reports.map((report) => [report.id, entered.report(report)]));
   // Each end mark has its time of entry. Thus the parts at a time have only the marks that this copy knew at that time.

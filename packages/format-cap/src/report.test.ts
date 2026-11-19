@@ -59,13 +59,23 @@ function mapText(body: string, options: CapReportOptions = OPTIONS): { reports: 
 const codesOf = (report: Report): string[] => report.areas.flatMap((area) => (area.type === "code" ? [`${area.system}:${area.code}`] : []));
 
 describe("the reports of one CAP message", () => {
-  it("gives no report for a message with a scope other than Public, and a fatal problem (AL-92)", () => {
+  it("gives no report for a message with a scope other than Public, and a note that does not change the health (AL-92)", () => {
     for (const scope of ["Private", "Restricted"]) {
       const { reports, problems } = mapText(messageText("TEST-S", THREE).replace("<scope>Public</scope>", `<scope>${scope}</scope>`));
       expect(reports).toEqual([]);
-      expect(problems.list.some((problem) => problem.path === "scope" && problem.fatal)).toBe(true);
+      expect(problems.list).toEqual([{ path: "scope", message: expect.stringContaining(JSON.stringify(scope)), fatal: false }]);
     }
     expect(mapText(messageText("TEST-S", THREE).replace("<scope>Public</scope>", "<scope>public</scope>")).reports).toHaveLength(3);
+  });
+
+  it("maps the Public message of a fetch with one Restricted message, and counts no fatal and no lossy problem (AL-92)", () => {
+    const restricted = mapText(messageText("TEST-R", THREE).replace("<scope>Public</scope>", "<scope>Restricted</scope>"));
+    const open = mapText(messageText("TEST-P", THREE));
+    expect([...restricted.reports, ...open.reports].map((report) => report.key)).toEqual(["TEST-P", "TEST-P", "TEST-P"]);
+    // A fetch sums these two counts of each message. With 0 and 0, the health of the source stays as it is.
+    expect(restricted.problems.fatal + open.problems.fatal).toBe(0);
+    expect(restricted.problems.lossy + open.problems.lossy).toBe(0);
+    expect([...restricted.problems.list, ...open.problems.list].map((problem) => problem.path)).toEqual(["scope"]);
   });
 
   it("gives one report for each block, with the key of the message and the part of the block in its id", () => {

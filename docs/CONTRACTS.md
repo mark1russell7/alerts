@@ -86,7 +86,7 @@ A pairwise rule only joins incidents when a report comes. It does not split an i
 A private report has the field `addresses`: the persons that its sender named (AL-92). A report with no field `addresses` is public.
 
 - The CAP scope `Private` gives a private report, and the scope `Public` gives a public report.
-- The CAP format maps only the scope `Public`. A message with another scope gives a fatal problem and no report.
+- The CAP format maps only the scope `Public`. A message with another scope gives a note and no report. The health of the source does not change.
 - The audience of a report is `public`, or the sorted set of its addresses (`audience.ts`).
 - Two reports join only with the same audience. The keys of rules 1 and 2 and the blocks of rule 3 hold the audience.
 - Thus a private report never changes a public incident. A private incident has the addresses of its reports.
