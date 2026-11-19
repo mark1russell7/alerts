@@ -4,6 +4,7 @@
  */
 
 import { Problems, type MapProblem } from "@mark1russell7/alerts";
+import { isRecord } from "@mark1russell7/optional/read";
 import { ENTITY_ACTION, EntityDecoder } from "@nodable/entities";
 import { XMLParser } from "fast-xml-parser";
 import { declaredNamespace, localName, nextTag, prefixOf } from "./scan.ts";
@@ -187,8 +188,6 @@ const parser = new XMLParser({
 
 type XmlObject = { readonly [name: string]: unknown };
 
-const isObject = (value: unknown): value is XmlObject => typeof value === "object" && value !== null && !Array.isArray(value);
-
 /** This function reports each element of an object that the reader does not know. */
 function checkKnown(node: XmlObject, known: ReadonlySet<string>, path: string, problems: Problems): void {
   for (const name of Object.keys(node)) {
@@ -237,7 +236,7 @@ function objectsOf(node: XmlObject, name: string, path: string, problems: Proble
   const objects: { node: XmlObject; path: string }[] = [];
   itemsOf(node, name).forEach((item, index) => {
     const at = `${path}.${name}[${String(index)}]`;
-    if (isObject(item)) objects.push({ node: item, path: at });
+    if (isRecord(item)) objects.push({ node: item, path: at });
     else problems.add(at, "the element holds a text, not elements");
   });
   return objects;
@@ -357,8 +356,8 @@ export function readCap(xml: string): CapRead {
   }
   const parsed = parseXml(parser, xml);
   if (!parsed.ok) return { ok: false, reason: parsed.fault };
-  const alert = isObject(parsed.document) ? parsed.document["alert"] : undefined;
-  if (!isObject(alert)) return { ok: false, reason: "the alert element holds no elements" };
+  const alert = isRecord(parsed.document) ? parsed.document["alert"] : undefined;
+  if (!isRecord(alert)) return { ok: false, reason: "the alert element holds no elements" };
   const path = "alert";
   checkKnown(alert, KNOWN.alert, path, problems);
   const result: CapAlert = present({

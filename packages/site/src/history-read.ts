@@ -4,6 +4,7 @@
  */
 
 import { addHistory, HISTORY_FORMAT, NO_HISTORIES, type Histories, type HistoryPayload } from "@mark1russell7/alerts";
+import { isRecord } from "@mark1russell7/optional/read";
 
 /** The path of the history route of the runtime. */
 export const HISTORY_PATH = "/history";
@@ -19,7 +20,6 @@ const SOURCE_TEXT = "The time scrubber reads the history from the alert runtime 
 /** The words of the page when the runtime gives a history of a different format. */
 export const OTHER_FORMAT_TEXT = `${SOURCE_TEXT} The runtime has a different version of the history. Start the runtime of the version of this page.`;
 
-const isObject = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null;
 const isTime = (value: unknown): boolean => value === null || (typeof value === "number" && Number.isFinite(value));
 
 /**
@@ -28,10 +28,10 @@ const isTime = (value: unknown): boolean => value === null || (typeof value === 
  * The reader finds the change of a time by that sequence, so a different sequence is not a history.
  */
 function isIncident(value: unknown): boolean {
-  if (!isObject(value) || typeof value["anchor"] !== "string" || !Array.isArray(value["reports"]) || !Array.isArray(value["changes"])) return false;
+  if (!isRecord(value) || typeof value["anchor"] !== "string" || !Array.isArray(value["reports"]) || !Array.isArray(value["changes"])) return false;
   let last = -Infinity;
   for (const change of value["changes"] as readonly unknown[]) {
-    if (!isObject(change) || !Array.isArray(change["codes"]) || !Array.isArray(change["shapes"]) || !Array.isArray(change["places"])) return false;
+    if (!isRecord(change) || !Array.isArray(change["codes"]) || !Array.isArray(change["shapes"]) || !Array.isArray(change["places"])) return false;
     const at = change["at"];
     // A time that is not a number is not after the last time, so this test refuses it also.
     if (typeof at !== "number" || !(at >= last)) return false;
@@ -47,7 +47,7 @@ function isIncident(value: unknown): boolean {
 function isPayload(value: Record<string, unknown>): boolean {
   if (!isTime(value["at"]) || !isTime(value["since"]) || !isTime(value["next"])) return false;
   const regions = value["regions"];
-  return Array.isArray(value["incidents"]) && value["incidents"].every(isIncident) && Array.isArray(regions) && regions.every((region) => isObject(region) && isObject(region["code"]) && Array.isArray(region["shapes"]));
+  return Array.isArray(value["incidents"]) && value["incidents"].every(isIncident) && Array.isArray(regions) && regions.every((region) => isRecord(region) && isRecord(region["code"]) && Array.isArray(region["shapes"]));
 }
 
 /** This function gives the path of a read. The value `null` asks for each incident, and a time asks for the incidents with a change at that time or later. */
@@ -73,7 +73,7 @@ export async function readHistory(get: (path: string) => Promise<Response>, sinc
     return fail("The answer of the runtime is not JSON.");
   }
   // A history names its format. An answer with the name of a different format comes from a runtime of a different version.
-  if (!isObject(data) || typeof data["format"] !== "string") return fail("The answer of the runtime is not a history.");
+  if (!isRecord(data) || typeof data["format"] !== "string") return fail("The answer of the runtime is not a history.");
   if (data["format"] !== HISTORY_FORMAT) return { ok: false, absent: false, text: OTHER_FORMAT_TEXT };
   return isPayload(data) ? { ok: true, payload: data as unknown as HistoryPayload } : fail("The answer of the runtime is not a history.");
 }

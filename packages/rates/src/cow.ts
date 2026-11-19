@@ -10,6 +10,7 @@
  */
 
 import { PHENOMENA } from "@mark1russell7/alerts-format-nws";
+import { isRecord } from "@mark1russell7/optional/read";
 
 /** The URL of the Cow service of IEM. */
 export const COW_URL = "https://mesonet.agron.iastate.edu/api/1/cow.json";
@@ -146,8 +147,6 @@ export function cowQuery(window: CowWindow): string {
   const phenomena = COW_QUERY_PHENOMENA.map((phenomenon) => `&phenomena=${phenomenon}`).join("");
   return `?begints=${queryTime(window.start - COW_MARGIN_MS)}&endts=${queryTime(window.end + COW_MARGIN_MS)}${phenomena}`;
 }
-
-const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> => typeof value === "object" && value !== null && !Array.isArray(value);
 
 /** This function gives the features of a GeoJSON collection of a Cow answer. */
 function featuresOf(answer: Readonly<Record<string, unknown>>, name: string): readonly Readonly<Record<string, unknown>>[] {

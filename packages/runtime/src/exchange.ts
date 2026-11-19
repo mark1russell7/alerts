@@ -7,6 +7,7 @@
  */
 import { acknowledgmentSchema, checkWith, copyIdSchema, deliverySchema, escalationEndSchema, reportSchema, type Instant } from "@mark1russell7/alerts";
 import { err, ok, type Result } from "@mark1russell7/optional";
+import { isRecord } from "@mark1russell7/optional/read";
 import { envelope, type ExchangeEvent, type ImportEvent, type RuntimeEvent, type SharedEvent } from "./events.ts";
 import type { RuntimeLog } from "./log.ts";
 import type { ExchangeCursor } from "./state.ts";
@@ -225,8 +226,4 @@ export function itemProblem(value: unknown): string | undefined {
     if (!field.check(event[key])) return `the field ${key} of the event ${type} is not valid.`;
   }
   return Object.keys(value).every((key) => key === "from" || key === "event") ? undefined : "the item has a field other than from and event.";
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

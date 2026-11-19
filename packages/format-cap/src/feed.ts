@@ -3,6 +3,7 @@
  * that reads a feed of texts uses it too. The reader refuses a DOCTYPE and a text that is not well formed.
  */
 import { Problems, type MapProblem } from "@mark1russell7/alerts";
+import { isRecord } from "@mark1russell7/optional/read";
 import { ENTITY_ACTION, EntityDecoder } from "@nodable/entities";
 import { XMLParser } from "fast-xml-parser";
 import { parseXml, xmlFault } from "./well-formed.ts";
@@ -56,21 +57,18 @@ const parser = new XMLParser({
 /** An element of a feed, as the parser gives it. Each attribute has the prefix `@_`. */
 export type XmlObject = { readonly [name: string]: unknown };
 
-/** This function tells if a value is an element with children or attributes. */
-export const isObject = (value: unknown): value is XmlObject => typeof value === "object" && value !== null && !Array.isArray(value);
-
 /** This function gives a list for a value that the parser gives as one value or as a list. */
 export const listOf = (value: unknown): readonly unknown[] => (Array.isArray(value) ? value : value === undefined ? [] : [value]);
 
 /** This function gives the text of an element: a string, or the text of an element with attributes. An empty text gives `undefined`. */
 export function textOf(value: unknown): string | undefined {
-  const text = typeof value === "string" ? value : isObject(value) && typeof value["#text"] === "string" ? value["#text"] : undefined;
+  const text = typeof value === "string" ? value : isRecord(value) && typeof value["#text"] === "string" ? value["#text"] : undefined;
   return text === undefined || text.trim() === "" ? undefined : text.trim();
 }
 
 /** This function gives the value of an attribute of an element, or `undefined`. */
 export function attributeOf(value: unknown, name: string): string | undefined {
-  const attribute = isObject(value) ? value[`@_${name}`] : undefined;
+  const attribute = isRecord(value) ? value[`@_${name}`] : undefined;
   return typeof attribute === "string" && attribute.trim() !== "" ? attribute.trim() : undefined;
 }
 
@@ -85,12 +83,12 @@ export function openFeed(xml: string): OpenFeed {
   const parsed = parseXml(parser, xml);
   if (!parsed.ok) return { ok: false, reason: parsed.fault, malformed: true };
   const { document } = parsed;
-  if (!isObject(document)) return { ok: false, reason: "the text has no root element", malformed: false };
+  if (!isRecord(document)) return { ok: false, reason: "the text has no root element", malformed: false };
   const problems = new Problems();
   if (document["rss"] !== undefined) {
     const rss = document["rss"];
-    const channel = isObject(rss) ? rss["channel"] : undefined;
-    if (!isObject(channel)) return { ok: false, reason: "the rss element has no channel", malformed: false };
+    const channel = isRecord(rss) ? rss["channel"] : undefined;
+    if (!isRecord(channel)) return { ok: false, reason: "the rss element has no channel", malformed: false };
     const version = attributeOf(rss, "version");
     if (version !== "2.0") problems.add("rss", `the version of RSS is ${version ?? "absent"}, not 2.0`, "note");
     return { ok: true, format: "rss", head: channel, nodes: listOf(channel["item"]), problems };
@@ -98,7 +96,7 @@ export function openFeed(xml: string): OpenFeed {
   if (document["feed"] !== undefined) {
     const feed = document["feed"];
     // An empty feed element is an Atom feed with no entry.
-    const head: XmlObject = isObject(feed) ? feed : {};
+    const head: XmlObject = isRecord(feed) ? feed : {};
     const namespace = attributeOf(head, "xmlns");
     if (namespace !== ATOM_NAMESPACE) problems.add("feed", `the namespace of the feed is ${namespace ?? "absent"}, not the namespace of Atom 1.0`, "note");
     return { ok: true, format: "atom", head, nodes: listOf(head["entry"]), problems };
@@ -143,7 +141,7 @@ export function readFeed(xml: string): FeedRead {
   const name = open.format === "rss" ? "item" : "entry";
   const entries: FeedEntry[] = [];
   open.nodes.forEach((node, index) => {
-    if (isObject(node)) entries.push(entryOf(open.format, node));
+    if (isRecord(node)) entries.push(entryOf(open.format, node));
     else open.problems.add(`${name}[${String(index)}]`, `the ${name} is empty`);
   });
   const title = textOf(open.head["title"]);

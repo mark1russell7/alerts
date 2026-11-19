@@ -4,6 +4,7 @@
  */
 
 import type { MapPayload } from "@mark1russell7/alerts";
+import { isRecord } from "@mark1russell7/optional/read";
 
 /** The path of the map route of the runtime. */
 export const MAP_PATH = "/map";
@@ -19,11 +20,9 @@ const SOURCE_TEXT = "This page reads the alert runtime on this computer.";
 /** The words of the page when the runtime does not answer. */
 export const NO_ANSWER_TEXT = `${SOURCE_TEXT} The runtime does not answer. Start the runtime. The page reads it again every ${String(READ_EVERY_MS / 1000)} seconds.`;
 
-const isObject = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null;
-
 /** This function examines a region of the basemap: a code with a system and a value, a name and a list of shapes. */
 function isRegion(value: unknown): boolean {
-  if (!isObject(value) || !isObject(value["code"])) return false;
+  if (!isRecord(value) || !isRecord(value["code"])) return false;
   const code = value["code"];
   return typeof code["system"] === "string" && typeof code["code"] === "string" && typeof value["name"] === "string" && Array.isArray(value["shapes"]);
 }
@@ -33,7 +32,7 @@ function isRegion(value: unknown): boolean {
  * The runtime of the same version writes the payload on the same computer. Thus the page does not examine each shape.
  */
 function isPayload(value: unknown): value is MapPayload {
-  if (!isObject(value) || !isObject(value["view"]) || !Array.isArray(value["basemap"]) || !value["basemap"].every(isRegion)) return false;
+  if (!isRecord(value) || !isRecord(value["view"]) || !Array.isArray(value["basemap"]) || !value["basemap"].every(isRegion)) return false;
   const view = value["view"];
   return Array.isArray(view["incidents"]) && Array.isArray(view["places"]) && Array.isArray(view["unshaped"]);
 }

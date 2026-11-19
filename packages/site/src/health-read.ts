@@ -4,6 +4,7 @@
  */
 
 import { HEALTH_FORMAT, healthPayloadSchema, type HealthPayload } from "@mark1russell7/alerts";
+import { isRecord } from "@mark1russell7/optional/read";
 
 /** The path of the health route of the runtime. */
 export const HEALTH_PATH = "/health";
@@ -18,8 +19,6 @@ const SOURCE_TEXT = "The panel of the sources reads the health from the alert ru
 
 /** The words of the page when the runtime gives a health of a different format. */
 export const OTHER_HEALTH_TEXT = `${SOURCE_TEXT} The runtime has a different version of the health. Start the runtime of the version of this page.`;
-
-const isObject = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null;
 
 /**
  * This function reads the health from the runtime once. A status 404 tells that the runtime has no health route.
@@ -42,7 +41,7 @@ export async function readHealth(get: (path: string) => Promise<Response>): Prom
     return fail("The answer of the runtime is not JSON.");
   }
   // A health names its format. An answer with the name of a different format comes from a runtime of a different version.
-  if (!isObject(data) || typeof data["format"] !== "string") return fail("The answer of the runtime is not a health.");
+  if (!isRecord(data) || typeof data["format"] !== "string") return fail("The answer of the runtime is not a health.");
   if (data["format"] !== HEALTH_FORMAT) return { ok: false, absent: false, text: OTHER_HEALTH_TEXT };
   const result = healthPayloadSchema.safeParse(data);
   return result.success ? { ok: true, payload: result.data } : fail("The answer of the runtime is not a health.");

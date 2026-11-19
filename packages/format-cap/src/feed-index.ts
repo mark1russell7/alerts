@@ -5,7 +5,8 @@
  */
 import type { MapProblem, Problems } from "@mark1russell7/alerts";
 
-import { atomLink, attributeOf, isObject, listOf, openFeed, textOf, type XmlObject } from "./feed.ts";
+import { isRecord } from "@mark1russell7/optional/read";
+import { atomLink, attributeOf, listOf, openFeed, textOf, type XmlObject } from "./feed.ts";
 
 export { ATOM_NAMESPACE } from "./feed.ts";
 
@@ -47,7 +48,7 @@ function entriesOf(format: "rss" | "atom", nodes: readonly unknown[], problems: 
   const ids = new Set<string>();
   nodes.forEach((node, index) => {
     const path = `${name}[${String(index)}]`;
-    if (!isObject(node)) {
+    if (!isRecord(node)) {
       problems.add(path, `the ${name} is empty`);
       return;
     }
