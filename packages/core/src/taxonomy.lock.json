@@ -296,6 +296,8 @@
   "system.health.silent",
   "system.health.slow",
   "system.health.unknown",
+  "system.limit",
+  "system.limit.held",
   "system.log",
   "system.log.recovered",
   "system.quota",

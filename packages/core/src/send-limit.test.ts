@@ -4,7 +4,7 @@ import type { ChannelDescriptor, ChannelId, CopyWatch, Delivery, EscalationPolic
 import { exhaustions, route, type EscalationEnd, type EscalationHold, type EscalationStart, type Recipient, type Route } from "./delivery.ts";
 import { planDigests } from "./digest.ts";
 import { messageKey } from "./ids.ts";
-import { DEFAULT_SEND_LIMITS, holdKey, isLimitedLevel, limitRoutes, limitShare, sendLimitProblems, sendLimitsOf, type SendLimits } from "./send-limit.ts";
+import { DEFAULT_SEND_LIMITS, heldPersons, holdKey, isLimitedLevel, limitRoutes, limitShare, sendLimitProblems, sendLimitsOf, type SendLimits } from "./send-limit.ts";
 
 const SEEDS = seedsFrom(process.env["SEED"], [1, 2, 3, 4, 5, 6, 7, 8]);
 const MINUTE = 60_000;
@@ -279,5 +279,31 @@ describe("limitShare", () => {
   it("gives a part for a copy with no read from the start of its watch, because two copies can start in a split", () => {
     expect(limitShare([watch(undefined)], T0)).toBe(0.5);
     expect(limitShare([watch(undefined), watch(T0)], T0 + 1000)).toBe(0.5);
+  });
+});
+
+describe("heldPersons (AL-81)", () => {
+  const holdOf = (index: number, at: number, who: PersonId = person): EscalationHold => ({ incident: idOf(index), level: "notice", person: who, episode: 0, at });
+
+  it("gives each person with a hold in the window, in the order of the person ids, with the first, the last and the end", () => {
+    const holds = [holdOf(1, T0 - 50 * MINUTE, other), holdOf(2, T0 - 40 * MINUTE), holdOf(3, T0 - 10 * MINUTE), holdOf(4, T0 - 30 * MINUTE)];
+    expect(heldPersons(holds, [], HOUR, T0)).toEqual([
+      { person, first: T0 - 40 * MINUTE, last: T0 - 10 * MINUTE, until: T0 + 50 * MINUTE, count: 3 },
+      { person: other, first: T0 - 50 * MINUTE, last: T0 - 50 * MINUTE, until: T0 + 10 * MINUTE, count: 1 },
+    ]);
+  });
+
+  it("does not count a hold at or before the start of the window, or a hold after the time", () => {
+    const holds = [holdOf(1, T0 - HOUR), holdOf(2, T0 + 1)];
+    expect(heldPersons(holds, [], HOUR, T0)).toEqual([]);
+    // The person leaves at the end of the window after the last hold.
+    expect(heldPersons([holdOf(3, T0)], [], HOUR, T0 + HOUR - 1).map((entry) => entry.person)).toEqual([person]);
+    expect(heldPersons([holdOf(3, T0)], [], HOUR, T0 + HOUR)).toEqual([]);
+  });
+
+  it("does not count a hold of a private report: a held message of the operator gives no notice of the send limit", () => {
+    const holds = [holdOf(1, T0 - MINUTE), holdOf(2, T0 - MINUTE, other)];
+    const reports = [{ id: idOf(1), addresses: [person] }, { id: idOf(2) }];
+    expect(heldPersons(holds, reports, HOUR, T0).map((entry) => entry.person)).toEqual([other]);
   });
 });

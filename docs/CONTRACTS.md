@@ -992,6 +992,11 @@ The core function `limitRoutes` applies the send limit of each person to the rou
 - A route with a send in flight, or with an open copy in the log, gets a place before each other new route. It does not get a hold, because the phone can already have its message.
 - A new escalation with no place gets a hold. The hold is an event `hold` of the log of the copy. It is not shared.
 - A held escalation sends nothing in its episode. Its cancels go. It has no exhaustion and no overdue send. The next digest tells its incident.
+- A person with a hold in the window gets one private notice of the kind `system.limit.held` (AL-81). Its address is the person, thus no other person gets it.
+- The person is the only fact of the notice. Thus a later hold in the window gives no new report. The line ends one window after the last hold.
+- A hold of a private report does not count (`heldPersons`). Thus a held message of the operator, or a held notice, opens no notice.
+- Only one copy reports the notice (`reportsShared`), as for a low balance. Each copy counts the deliveries of all the copies, thus each copy holds the same burst.
+- The notice takes a private place of the person. Thus a burst of alerts does not hold it, and the throttle does not stop it.
 - A copy takes a share of each count for each other copy that it cannot read: 1 divided by 1 plus the count of such copies (`limitShare`).
 - A copy that it cannot read is in the stage `unread` (no read for 60 s), or it has no read from the start of its watch.
 - Thus two copies that do not see each other send the full count together, not two times the count. Each share has one place at least.
