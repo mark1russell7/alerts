@@ -72,7 +72,7 @@ import { openReadingStore, READINGS_FILE } from "./readings.ts";
 import { GOOD_FILE, privateFiles, readStartTexts, reloadHook, startConfig, type CheckOf } from "./reload.ts";
 import { shapeReport, zoneCodesText } from "./shapes.ts";
 import { openTransitCache, TRANSIT_FILE, transitReport, transitText } from "./transit.ts";
-import { hostFolder } from "./host.ts";
+import { hostFolder, signalWarning } from "./host.ts";
 import { addStartTime, startTimesPath, type StartTime } from "./start-times.ts";
 import { supervisor } from "./supervise.ts";
 
@@ -350,6 +350,10 @@ if (mode === "load") {
   console.log("Each module of the runtime loads.");
   process.exit(0);
 }
+
+// A supervisor or a runtime with an open inspector signal tells so at each start (AL-93).
+const signal = signalWarning();
+if (signal !== null) console.warn(signal);
 
 // The process exits after the shutdown of the service.
 const started = mode === "supervise" ? supervisor(process.argv[3]) : await runtime();

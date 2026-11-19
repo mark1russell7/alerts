@@ -9,6 +9,7 @@
  * - The check uses the keys of `secrets.env`, the settings of the copy `copy.json` and the check of the live instance, the profile `daemon`.
  * - It finds each problem that stops the start: the form of a key, a missing key and a place that no regional source covers.
  * - The exit code is 0 for a valid file, 1 for a file with problems and 2 for a wrong command.
+ * - It also tells if the inspector signal of the live supervisor and runtime is closed. This line does not change the exit code.
  *
  * The environment gives `ALERTS_HOME`, as for `main.ts`. The output holds no value of the file, no
  * value of a key and no path.
@@ -18,6 +19,7 @@ import { PART_NAME } from "@mark1russell7/alerts";
 import { countOf } from "@mark1russell7/text";
 import { alertsHome, checkConfig, configPath, fileSource, type PartSource } from "./config.ts";
 import { readCopySettings } from "./copy.ts";
+import { readSignals, signalText } from "./host.ts";
 import { daemonCheck } from "./instance.ts";
 
 const USAGE = "The command is: node src/check.ts [file], or node src/check.ts --part <name> <file>";
@@ -50,4 +52,5 @@ if (parsed === undefined) {
     console.error(`The configuration has ${countOf(result.error.length, "problem")}:\n- ${result.error.join("\n- ")}`);
     process.exitCode = 1;
   }
+  console.log(signalText(await readSignals(home)));
 }
