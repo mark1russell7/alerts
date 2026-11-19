@@ -14,7 +14,7 @@
   "dependencies": {
     "@mark1russell7/alerts": "workspace:*",
     "@mark1russell7/alerts-fetch": "workspace:*",
-    "@mark1russell7/text": "^0.0.13",
+    "@mark1russell7/text": "^0.0.16",
     "@procedures/json": "^0.64.0",
     "polite-crawler": "^0.7.10",
     "protobufjs": "^8.8.1"

@@ -16,7 +16,7 @@
     "@mark1russell7/alerts-format-cap": "workspace:*",
     "@mark1russell7/alerts-format-nws": "workspace:*",
     "@mark1russell7/rigor-statistics": "^0.2.8",
-    "@mark1russell7/text": "^0.0.13",
+    "@mark1russell7/text": "^0.0.16",
     "@procedures/json": "^0.64.0"
   },
   "devDependencies": {
