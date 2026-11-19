@@ -93,6 +93,7 @@ A private report has the field `addresses`: the persons that its sender named (A
 - `assess` gives each person outside the addresses the level `none`, with the reason `not-addressed`.
 - A person of the addresses gets the level of the table, with the reason `addressed`. The places, the subjects and the interests do not count.
 - The rules of the person apply to a private incident as to a subject.
+- The throttle gives each private incident its own stream. The send limit counts it as each other escalation.
 
 Each reader of the incidents shows a private incident as this table tells.
 
@@ -469,7 +470,7 @@ A down-channel report has no area. Its subjects are the channel (`alerts.channel
 `latestIn(items, at, window)` gives the latest item in a window before a time. `recentStep` and `recentRecovery` use it.
 `threats(incidents, places)` gives the watches and the warnings. A threat is a live incident with the status `actual` at a watched place. Its stage is `watch`, `warning` or absent. A report of the core has the status `system`, so it is not a threat.
 
-The assessment policy holds four system classes, and each class admits only the status `system`. The class `system-drill` holds the drill runs, and it reaches `life-safety`. The class `system-escalation` holds the exhausted escalations, and it also reaches `life-safety`. A class can name its statuses. Else the statuses of the policy apply. The NWS kinds `system.test` and `system.admin` are not in these classes, so the policy statuses apply to them.
+The assessment policy holds five system classes, and each class admits only the status `system`. The class `system-drill` holds the drill runs, and it reaches `life-safety`. The class `system-escalation` holds the exhausted escalations, and it also reaches `life-safety`. The class `system-tell` holds the messages of the operator (`system.tell.<class>`, AL-92). It reaches `urgent` at most. A class can name its statuses. Else the statuses of the policy apply. The NWS kinds `system.test` and `system.admin` are not in these classes, so the policy statuses apply to them.
 
 The policy also holds the class `context`. Its kinds are `CONTEXT_KINDS`: the service alerts of public transit, `transport.transit`. Each lookup of its table gives `none`. So no person gets these reports, and the map and the log keep them. A feed of one large network has many alerts each day. The count of its alerts is a reading of an indicator. A policy of the configuration can give the kinds a level.
 
@@ -1030,6 +1031,7 @@ The core function `throttleRoutes` applies the rise-only throttle of each person
 - By default, there are two streams: the system lines (the kinds of the family `system`) and the alerts (each other kind). Thus a health notice does not stop a weather notice, and a weather notice does not stop a health notice.
 - With the streams `family`, each family of the alerts is a stream. The family is the first part of the kind, for example `met` of `met.flood`. The system lines stay one stream.
 - The kind of the incident of a route, or of the report of a delivery, gives the stream. The report comes from the merge state. A retirement removes a report and its deliveries together, thus a delivery in the window always has its report.
+- A private incident (`addresses`, AL-92) is its own stream, by its anchor. Thus only its own deliveries count in its bar, and a system line does not stop it. Its intake has its own gates: a check of repeats and a daily cap.
 - A delivery of a report that the copy does not know is in the stream of the system lines. The copies share the reports of the alerts, but not the system lines. Thus such a delivery is a system line of the other copy.
 - An alert delivery of the other copy can come before its report. Then the worst result is one more push. The other choice can stop a weather notice under a system line of the other copy, and only the digest then tells it.
 - A send at the same level or at a lower level does not go. It gets a suppression with its reason: `same-level` or `lower-level`.
