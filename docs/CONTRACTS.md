@@ -1477,19 +1477,37 @@ The runtime operates the deploy in the worker `outage` of its service (`outage.t
 
 ### A message of the operator (AL-92)
 
-The command `node src/tell.ts --title <title> --message <text> [--url <link>]` sends one message to the person who operates the system, on Pushover. The module `tell-message.ts` gives its rules.
+The runtime takes each message of the operator as an event of the source `tell`. Thus the merge, the routes, the send limit, the quiet window and the quota gate apply to it. The modules `tell-message.ts` and `tell-intake.ts` give its rules.
 
-- The command reads the private files and checks them as the start of the runtime does. The key of Pushover stays in its process.
-- The person who operates the system watches each source: the watch `{ system: "alerts.source" }`. Only such a person with a contact on Pushover gets the message.
-- The command sends only to one person. With no person or with more people, it sends nothing and gives the code 1.
-- `--dry-run` gives the count of the people and sends nothing. The output holds no person, no address and no value of a key.
-- The message has the level `notice`. In the quiet window of the person, it goes in the silent mode, as the escalation does it.
-- A link is an absolute URL with `https` or `http`. The message expires after one day.
-- The quota gate of the runtime does not count the message. The next answer of Pushover to the runtime gives the gate its count.
+- The entry `tell` of `config.json` opens the intake: `{ "port": <port>, "dailyCap": <count>, "site": { "local": <origin>, "phone": <origin> } }`. Only `port` is necessary.
+- Without the entry, the runtime has no intake. Old code refuses the entry. Thus it goes into a copy only after each copy runs the new code.
+- The intake is the procedure `alerts.tell` on the loopback address, at the path `/tell`. Each call needs the token of the file `tell.token` of the home.
+- The runtime makes `tell.token` at its first start with the entry, with the mode 0600. The flag `wx` keeps a file that another process made first.
+- A message has a class, an item and a text. It can also have a title, a link, the persons `to` and the flag `urgent`.
+- The classes are `needs-you`, `done-you-asked` and `live`. Only a message `needs-you` can be urgent.
+- With no `to`, the message goes to the operator: the one person who watches each source. With no such person or with two, the intake refuses the message.
+- The intake refuses a person of `to` that the configuration does not have. The text of a refusal names no person.
+- The report of a message is private: its addresses are its persons. The policies of the persons route it at the level of its class.
+- An urgent message is `severe` and `immediate`, thus `urgent`. Each other message is `moderate` and `expected`, thus `notice`.
+- A message below `life-safety` is quiet in the quiet window of the person, as each send is. AL-97 asks the owner if an urgent message can sound.
+- Each item, class and set of persons has a line of reports. At each fetch, the lines come from the live reports of each copy. They have no state of their own.
+- A message with the same facts as its open line gives no report. A message with new facts updates the incident, and the escalation does not send again.
+- A message with no open line starts a new incident. Thus it sends one time.
+- A message `done-you-asked` also cancels the open line `needs-you` of its item and its persons. Thus the escalation of the request ends.
+- A link of the local site (`site.local`), or a path that starts with `/`, goes to the phone form (`site.phone`). The path, the query and the fragment stay.
+- The intake refuses each other link on the loopback address, in each form of the address. Thus a loopback link never reaches a channel.
+- The intake takes `dailyCap` messages in 24 hours or fewer, by default 20. After the cap, it refuses with the code `TOO_MANY_REQUESTS`.
+- Each other refusal has the code `BAD_REQUEST`.
+- The command `node src/tell.ts --class <class> --item <item> --message <text>` calls the intake. It also takes `--title`, `--url`, `--to` and `--urgent`.
+- The command reads the port from `config.json` and the token from `tell.token`. It reads no secret, and its output holds no person and no token.
 
-This path is a stopgap. It has no throttle, no daily cap and no check for a repeated message. Its end is the intake of events in the running runtime, the second step of AL-92. Then each message is an event of a named class, and the policies of the person route it.
+These are the limits of the intake:
 
-The intake is on the loopback address of one copy. Thus a message that needs the operator has no second copy. When that copy or its channel is down, the message does not come.
+- The buffer and the count of the day are in memory. A stop of the runtime before the next fetch loses the messages of the buffer.
+- A restart sets the count of the day to zero. The send limit of each person still holds the sends of each hour.
+- The source `tell` fetches each 15 seconds. Thus a message comes up to 15 seconds after its call, plus the time of the pass.
+- The intake is on the loopback address of one copy. Thus a message that needs the operator has no second copy. When that copy or its channel is down, the message does not come.
+- AL-95 moves the procedure onto the procedures host of the service. AL-96 gives each session of the operator one command for its messages.
 
 ### Drills
 

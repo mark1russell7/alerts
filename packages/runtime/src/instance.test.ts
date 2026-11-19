@@ -26,6 +26,7 @@ import {
   type CopySettings,
   type SourceId,
   type SpendConfig,
+  type TellConfig,
 } from "@mark1russell7/alerts";
 import type { TwilioFetch } from "@mark1russell7/alerts-channel-twilio";
 import { PUSHOVER_QUOTA, PUSHOVER_RESERVE_NOTICES, PUSHOVER_TIMEOUT_MS, type PushoverChannelOptions } from "@mark1russell7/alerts-channel-pushover";
@@ -54,6 +55,8 @@ import { overdueLimit } from "./delivery.ts";
 import type { ShapeOutcome } from "./shapes.ts";
 import { CATALOG_REFRESH, type TransitCache, type TransitOutcome } from "./transit.ts";
 import { nextFetch } from "./view.ts";
+import { createTellIntake, TELL_DESCRIPTOR } from "./tell-intake.ts";
+import type { TellEvent } from "./tell-message.ts";
 import { openRuntimeLog, type RuntimeLog } from "./log.ts";
 import { openReadingStore, READINGS_FILE } from "./readings.ts";
 
@@ -1729,5 +1732,81 @@ describe("the services of the contacts of the instance", () => {
     // A phone with no country gives no node.
     const unknown = open(store({ ...SECRETS, PHONE: "+15555550123" }), config).instance.interests().people[0]?.rows ?? [];
     expect(unknown.map((row) => row.edge.id).filter((id) => id.includes("provider-region:twilio"))).toEqual([]);
+  });
+});
+
+describe("the messages of the operator (AL-92)", () => {
+  // A made-up site: a local origin and a phone origin under a name for examples. The test opens no port.
+  const PHONE = "https://site.example.net:10000";
+  const TELL: TellConfig = { port: 4799, site: { local: "http://127.0.0.1:4000", phone: PHONE } };
+  // The person watches each source and no place. Thus no recorded warning reaches the person, and only the messages do.
+  const TELLING: AlertConfig = { ...CONFIG, people: [{ watch: { person, places: [], rules: [], subjects: [{ system: "alerts.source" }] } }], tell: TELL };
+  const ASK: TellEvent = { class: "needs-you", item: "AL-92", text: "The deploy waits for your restart.", url: "http://127.0.0.1:4000/a/alerts/" };
+
+  function openTelling() {
+    const parsed = parseConfig(JSON.stringify(TELLING), INSTANCE_CHANNELS, store(SECRETS));
+    if (parsed.tag === "err") throw new Error(parsed.error.join("\n"));
+    let now = (): number => T0;
+    const intake = createTellIntake({ config: TELL, recipients: parsed.value.recipients, now: () => now() });
+    const opened = open(store(SECRETS), TELLING, undefined, undefined, { tell: intake });
+    now = () => opened.clock.now();
+    // Each pass after the first waits for the interval of the source tell.
+    const pass = async (first = false) => {
+      if (!first) await opened.clock.advance(TELL_DESCRIPTOR.interval);
+      return finish(opened.clock, opened.instance.runtime.pass());
+    };
+    const told = () => opened.server.calls.filter((call) => (call.fields["title"] ?? "").includes("AL-92"));
+    // The step of the view has only the system reports. The incidents of the view show each report of the source tell.
+    const tells = (result: Awaited<ReturnType<typeof pass>>) =>
+      result.view.incidents.filter((incident) => incident.kind.code.startsWith("system.tell.")).map((incident) => [incident.kind.code, incident.live, incident.reports.length]);
+    return { ...opened, intake, pass, told, tells };
+  }
+
+  it("sends a new class once, and a repeat of the same class is no send: the same facts give no report, and new facts update the incident", async () => {
+    const { intake, pass, told, tells } = openTelling();
+    intake.take(ASK);
+    const first = await pass(true);
+    expect(first.fetched).toContain("tell");
+    expect(tells(first)).toEqual([["system.tell.needs-you", true, 1]]);
+    expect(told().map((call) => call.fields["title"])).toEqual([expect.stringContaining("Needs you: AL-92")]);
+    intake.take(ASK);
+    const same = await pass();
+    expect(same.fetched).toContain("tell");
+    expect(tells(same)).toEqual([["system.tell.needs-you", true, 1]]);
+    intake.take({ ...ASK, text: "The deploy still waits for your restart." });
+    const changed = await pass();
+    // The update joins the incident of the first report. The throttle sends no second message at the same level.
+    expect(tells(changed)).toEqual([["system.tell.needs-you", true, 2]]);
+    expect(told()).toHaveLength(1);
+    // A new class is a new incident. It sends once.
+    intake.take({ class: "live", item: "AL-92", text: "The swap is live." });
+    await pass();
+    await pass();
+    expect(told().map((call) => call.fields["title"])).toEqual([expect.stringContaining("Needs you: AL-92"), expect.stringContaining("Live: AL-92")]);
+  });
+
+  it("ends a live needs-you at a message done-you-asked, and sends the done message", async () => {
+    const { intake, pass, told, tells } = openTelling();
+    intake.take(ASK);
+    await pass(true);
+    intake.take({ class: "done-you-asked", item: "AL-92", text: "The restart is done." });
+    const done = await pass();
+    // The cancel joins the incident of the request and ends it. The done message is a new incident.
+    expect(tells(done)).toHaveLength(2);
+    expect(tells(done)).toContainEqual(["system.tell.done-you-asked", true, 1]);
+    expect(tells(done)).toContainEqual(["system.tell.needs-you", false, 2]);
+    await pass();
+    expect(told().map((call) => call.fields["title"])).toEqual([expect.stringContaining("Needs you: AL-92"), expect.stringContaining("Done: AL-92")]);
+  });
+
+  it("never gives a loopback link to Pushover: a link of the local site goes in its phone form, and the intake refuses each other one", async () => {
+    const { intake, pass, told, server } = openTelling();
+    intake.take(ASK);
+    expect(() => intake.take({ ...ASK, item: "AL-93", url: "http://127.0.0.1:9999/a/" })).toThrow(/loopback/u);
+    expect(() => intake.take({ ...ASK, item: "AL-94", url: "http://[::ffff:127.0.0.1]:9999/a/" })).toThrow(/loopback/u);
+    await pass(true);
+    expect(told().map((call) => call.fields["url"])).toEqual([`${PHONE}/a/alerts/`]);
+    const loopback = /127\.|localhost|\[::|0\.0\.0\.0/u;
+    expect(server.calls.filter((call) => loopback.test(`${call.fields["url"] ?? ""} ${call.fields["message"] ?? ""}`))).toEqual([]);
   });
 });

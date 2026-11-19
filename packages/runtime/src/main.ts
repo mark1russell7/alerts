@@ -58,6 +58,7 @@ import { alertsHome, ConfigRefused, configPath, envSecrets } from "./config.ts";
 import { pageFolder, pageWarning, readPageState } from "./api.ts";
 import { COPY_TOKEN_KEY } from "./copy.ts";
 import { configFilesCall, EXCHANGE_TOKEN_LENGTH, exchangeCall, exchangeHost } from "./exchange-http.ts";
+import { createTellIntake, tellHost, tellToken } from "./tell-intake.ts";
 import { heartbeat, heldOf, type PassSummary } from "./heartbeat.ts";
 import { holdHome } from "./home-lock.ts";
 import { quotaNote } from "./quota.ts";
@@ -257,6 +258,9 @@ async function runtime(): Promise<ServiceBuilder> {
   };
   // The priors of the shadow score. A fault of the file stops only the score.
   const priors = loadPriors((message) => console.error(message));
+  // The intake of the messages of the operator (AL-92). Only the entry tell of config.json opens it.
+  const tellConfig = config.config.tell;
+  const tellIntake = tellConfig === undefined ? undefined : createTellIntake({ config: tellConfig, recipients: config.recipients, now: () => wall.now() });
   const instance = openInstance({
     config,
     secret,
@@ -273,6 +277,7 @@ async function runtime(): Promise<ServiceBuilder> {
     spendStore: quotas,
     run: randomUUID(),
     copy,
+    ...(tellIntake === undefined ? {} : { tell: tellIntake }),
     ...(token === undefined ? {} : { exchange: { call: exchangeCall({ token }), configHash: configHash(config.config) }, onExchange }),
     onPass,
     // The output gets no secret, also when an error quotes a request.
@@ -310,6 +315,9 @@ async function runtime(): Promise<ServiceBuilder> {
   const copies = instance.copies;
   const host = copies === undefined || copy.listen === undefined || token === undefined ? undefined : exchangeHost({ source: copies.source, token, listen: copy.listen, configFiles: configFilesOf({ copy, use: loaded.use, texts: loaded.texts, configHash: configHash(config.config) }) });
   const exchange = { ...(copies?.loop === undefined ? {} : { loop: copies.loop }), ...(host === undefined ? {} : { host }) };
+  // The listener of the intake is on the loopback address. The runtime makes the file tell.token at its first start with the entry.
+  const tell = tellIntake === undefined || tellConfig === undefined ? undefined : tellHost({ intake: tellIntake, token: await tellToken(home), port: tellConfig.port });
+  if (tell !== undefined) console.log("The intake of the messages of the operator is on the loopback address.");
 
   // The built local page. The line tells the state of the page, and it holds no path.
   const runtimeRoot = fileURLToPath(new URL("..", import.meta.url));
@@ -336,6 +344,7 @@ async function runtime(): Promise<ServiceBuilder> {
     ...(instance.outage === undefined ? {} : { outage: instance.outage }),
     start: { use: loaded.use, reasons: loaded.fallback.length },
     exchange,
+    ...(tell === undefined ? {} : { tell }),
     home: held.lock,
   });
   return service;

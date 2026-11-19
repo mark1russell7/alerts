@@ -546,6 +546,7 @@ const SCHEMA_NAMES = [
   "subjectSchema",
   "subjectWatchSchema",
   "tellConfigSchema",
+  "tellSiteSchema",
   "throttleConfigSchema",
   "transportSchema",
   "tryChainSchema",
@@ -1190,5 +1191,34 @@ describe("the intake of the messages of the operator (AL-92)", () => {
     expect(tellConfigSchema.safeParse({ port: 65536 }).success).toBe(false);
     expect(tellConfigSchema.safeParse({ port: 4790, dailyCap: 0 }).success).toBe(false);
     expect(tellConfigSchema.safeParse({ port: 4790, host: "0.0.0.0" }).success).toBe(false);
+  });
+
+  it("takes a site with a loopback origin and a phone origin, and refuses a path, another host or an address for the phone", () => {
+    const { tellConfigSchema } = schemas;
+    const site = (local: string, phone: string) => tellConfigSchema.safeParse({ port: 4790, site: { local, phone } }).success;
+    expect(site("http://127.0.0.1:4000", "https://site.example.net")).toBe(true);
+    expect(site("http://localhost:4000", "https://site.example.net:10000")).toBe(true);
+    expect(site("http://[::1]:4000", "https://site.example.net")).toBe(true);
+    // The local origin is on the loopback address, with a port and no path.
+    expect(site("http://site.example.net:4000", "https://site.example.net")).toBe(false);
+    expect(site("http://127.0.0.1", "https://site.example.net")).toBe(false);
+    expect(site("http://127.0.0.1:4000/a/", "https://site.example.net")).toBe(false);
+    // The phone origin is https with a name of two labels or more, and no path.
+    expect(site("http://127.0.0.1:4000", "http://site.example.net")).toBe(false);
+    expect(site("http://127.0.0.1:4000", "https://localhost:4000")).toBe(false);
+    expect(site("http://127.0.0.1:4000", "https://127.0.0.1:4000")).toBe(false);
+    expect(site("http://127.0.0.1:4000", "https://site.example.net/a/")).toBe(false);
+  });
+
+  it("reads each dot and each bracket of an origin as itself, not as a pattern", () => {
+    const { tellConfigSchema } = schemas;
+    const site = (local: string, phone: string) => tellConfigSchema.safeParse({ port: 4790, site: { local, phone } }).success;
+    // A dot of the phone origin is a dot, not each character.
+    expect(site("http://127.0.0.1:4000", "https://exampleXnet")).toBe(false);
+    expect(site("http://127.0.0.1:4000", "https://a.example.net:8443")).toBe(true);
+    // The brackets of [::1] are part of the host, not a set of characters.
+    expect(site("http://[::1]:8080", "https://site.example.net")).toBe(true);
+    expect(site("http://:1:8080", "https://site.example.net")).toBe(false);
+    expect(site("http://127x0x0x1:8080", "https://site.example.net")).toBe(false);
   });
 });

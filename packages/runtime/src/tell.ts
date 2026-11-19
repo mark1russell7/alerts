@@ -1,94 +1,96 @@
 /**
- * This file sends one message from the operator to the person who operates the system, on Pushover (AL-92,
- * `tell-message.ts`). The key of Pushover stays in this process.
+ * This file gives one message of the operator to the intake of the runtime on this computer (AL-92, `tell-intake.ts`).
+ * The runtime routes the message as a private report. Thus the merge, the send limit, the quiet window and the quota gate apply to it.
  *
- * - `node src/tell.ts --title <title> --message <text> [--url <link>] [--dry-run]` sends the message.
- * - `--dry-run` reads the private files and gives the count of the people who get the message, and sends nothing.
- * - The command reads the private files and checks them as the start of the runtime does.
- * - It sends only to one person. With no person or with more people, it sends nothing.
- * - The quota gate of the runtime does not count this message. The next answer of Pushover gives the gate its count.
+ * - `node src/tell.ts --class <class> --item <item> --message <text> [--title <title>] [--url <link>] [--to <person>]... [--urgent]`
+ * - The classes are `needs-you`, `done-you-asked` and `live`. Only a message `needs-you` can be urgent.
+ * - With no `--to`, the message goes to the operator: the one person who watches each source.
+ * - The runtime changes a link of the local site, or a path that starts with `/`, to its phone form.
+ * - The runtime refuses each other link on the loopback address.
+ * - The command reads the port from the entry `tell` of `config.json`, and the token from the file `tell.token`. It reads no secret.
  *
- * This path is a stopgap with no throttle and no check for a repeated message. Its end is the intake of events in the runtime (AL-92).
- *
- * The environment gives `ALERTS_HOME`, as for `main.ts`. The output holds no value of a private file, no person and
- * no address. The exit code is 0 for a sent message or a dry run.
- * It is 1 for a refusal or a failed send, and 2 for a wrong command.
+ * The environment gives `ALERTS_HOME`, as for `main.ts`. The output holds no person and no token.
+ * The exit code is 0 when the runtime took the message, 1 for a refusal or a failed call, and 2 for a wrong command.
  */
 import { readFile } from "node:fs/promises";
-import { join } from "node:path";
 import { parseArgs } from "node:util";
-import { createPushoverChannel } from "@mark1russell7/alerts-channel-pushover";
-import { countOf, errorMessage } from "@mark1russell7/text";
-import { alertsHome, checkTexts, configPath, PARTS_FOLDER, readParts, readText, SECRETS_FILE } from "./config.ts";
-import { readCopySettings } from "./copy.ts";
-import { daemonCheck, PUSHOVER_TOKEN } from "./instance.ts";
-import { linkProblem, tellMessage, tellTargets, type TellInput } from "./tell-message.ts";
+import { tellConfigSchema } from "@mark1russell7/alerts";
+import { errorMessage } from "@mark1russell7/text";
+import { alertsHome, configPath, readText } from "./config.ts";
+import { readTellToken, TELL_CALL_LIMIT, TELL_TOKEN_FILE, tellCall } from "./tell-intake.ts";
+import { tellEventSchema, type TellEvent } from "./tell-message.ts";
 
-const USAGE = "The command is: node src/tell.ts --title <title> --message <text> [--url <link>] [--dry-run]";
+const USAGE =
+  "The command is: node src/tell.ts --class <needs-you|done-you-asked|live> --item <item> --message <text> [--title <title>] [--url <link>] [--to <person>]... [--urgent]";
 
-/** This function gives the text of the message, or the problem of the command. */
-function command(args: readonly string[]): { readonly input: TellInput; readonly dryRun: boolean } | { readonly problem: string } {
-  let values: { title?: string; message?: string; url?: string; "dry-run"?: boolean };
+/** This function gives the message of the command, or the problem of the command. */
+function command(args: readonly string[]): { readonly event: TellEvent } | { readonly problem: string } {
+  let values: { class?: string; item?: string; message?: string; title?: string; url?: string; to?: string[]; urgent?: boolean };
   try {
     ({ values } = parseArgs({
       args: [...args],
-      options: { title: { type: "string" }, message: { type: "string" }, url: { type: "string" }, "dry-run": { type: "boolean" } },
+      options: {
+        class: { type: "string" },
+        item: { type: "string" },
+        message: { type: "string" },
+        title: { type: "string" },
+        url: { type: "string" },
+        to: { type: "string", multiple: true },
+        urgent: { type: "boolean" },
+      },
       strict: true,
       allowPositionals: false,
     }));
   } catch (error) {
     return { problem: errorMessage(error) };
   }
-  const title = values.title?.trim() ?? "";
-  const body = values.message?.trim() ?? "";
-  if (title === "" || body === "") return { problem: "The title and the message are necessary." };
-  const problem = values.url === undefined ? undefined : linkProblem(values.url);
-  if (problem !== undefined) return { problem };
-  return { input: { title, body, url: values.url }, dryRun: values["dry-run"] === true };
+  const parsed = tellEventSchema.safeParse({
+    class: values.class,
+    item: values.item,
+    text: values.message,
+    ...(values.title === undefined ? {} : { title: values.title }),
+    ...(values.url === undefined ? {} : { url: values.url }),
+    ...(values.to === undefined ? {} : { to: values.to }),
+    ...(values.urgent === true ? { urgent: true } : {}),
+  });
+  // A problem names the field, not its value.
+  if (!parsed.success) return { problem: parsed.error.issues.map((issue) => `${issue.path.join(".") || "message"}: ${issue.message}`).join(" ") };
+  return { event: parsed.data };
 }
 
-/** This function reads and checks the private files, sends the message, and gives the exit code. */
-async function tell(input: TellInput, dryRun: boolean): Promise<number> {
-  const home = alertsHome(process.env, process.cwd());
-  const copy = await readCopySettings(home);
-  if (copy.tag === "err") {
-    console.error(`The settings of the copy have ${countOf(copy.error.length, "problem")}. Start \`node src/check.ts\` to see them.`);
+/** This function reads the port and the token of the intake, gives the message to the runtime, and gives the exit code. */
+async function tell(event: TellEvent): Promise<number> {
+  const file = await readText(() => readFile(configPath(process.env, process.cwd()), "utf8"));
+  if (!("text" in file)) {
+    console.error(`The file config.json cannot be read (${file.code}).`);
     return 1;
   }
-  const checked = checkTexts(
-    {
-      config: await readText(() => readFile(configPath(process.env, process.cwd()), "utf8")),
-      secrets: await readText(() => readFile(join(home, SECRETS_FILE), "utf8")),
-      parts: await readParts(join(home, PARTS_FOLDER)),
-    },
-    daemonCheck(copy.value),
-  );
-  if (checked.tag === "err") {
-    console.error(`The private files have ${countOf(checked.error.length, "problem")}. Start \`node src/check.ts\` to see them.`);
+  let entry: unknown;
+  try {
+    entry = (JSON.parse(file.text) as { tell?: unknown }).tell;
+  } catch {
+    console.error("The file config.json is not JSON. Start `node src/check.ts` to see the problem.");
     return 1;
   }
-  const at = Date.now();
-  const targets = tellTargets(checked.value.parsed.recipients, at);
-  const quiet = targets.filter((target) => target.quiet).length;
-  console.log(`The message goes to ${countOf(targets.length, "person", "people")} on Pushover${quiet > 0 ? `, ${quiet} in the quiet window` : ""}.`);
-  const [target] = targets;
-  if (targets.length !== 1 || target === undefined) {
-    console.error("This command sends only to one person, with no throttle. Thus it sends nothing.");
+  if (entry === undefined) {
+    console.error("The file config.json has no entry tell. Thus the runtime has no intake.");
     return 1;
   }
-  if (dryRun) {
-    console.log("The dry run sends nothing.");
-    return 0;
+  const config = tellConfigSchema.safeParse(entry);
+  if (!config.success) {
+    console.error("The entry tell of config.json has a problem. Start `node src/check.ts` to see it.");
+    return 1;
   }
-  const channel = createPushoverChannel({ token: checked.value.keys[PUSHOVER_TOKEN] ?? "", fetch, now: () => Date.now() });
-  const outcome = await channel.send({ message: tellMessage(input, target, at), address: target.address });
-  if (outcome.ok) {
-    console.log("Pushover accepted the message.");
-    return 0;
+  const token = await readTellToken(alertsHome(process.env, process.cwd()));
+  if (token === undefined) {
+    console.error(`The file ${TELL_TOKEN_FILE} is absent. The runtime makes it at its first start with the entry tell.`);
+    return 1;
   }
-  // The message of a failure can hold the words of Pushover. Only the kind goes to the output.
-  console.error(`Pushover did not accept the message: ${outcome.kind}.`);
-  return 1;
+  const call = tellCall({ port: config.data.port, token });
+  const receipt = (await call(event, AbortSignal.timeout(TELL_CALL_LIMIT + 1_000))) as { persons?: number; link?: string };
+  const persons = receipt.persons === 1 ? "1 person" : `${String(receipt.persons ?? 0)} people`;
+  console.log(`The runtime took the message for ${persons}${receipt.link === "phone" ? ", with the phone form of the link" : ""}.`);
+  return 0;
 }
 
 const parsed = command(process.argv.slice(2));
@@ -97,9 +99,10 @@ if ("problem" in parsed) {
   process.exitCode = 2;
 } else {
   try {
-    process.exitCode = await tell(parsed.input, parsed.dryRun);
+    process.exitCode = await tell(parsed.event);
   } catch (error) {
-    console.error(`The command stopped: ${errorMessage(error)}`);
+    // The intake gives the reason of a refusal. The message holds no person and no token.
+    console.error(`The runtime did not take the message: ${errorMessage(error)}`);
     process.exitCode = 1;
   }
 }

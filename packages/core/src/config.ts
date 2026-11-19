@@ -160,6 +160,17 @@ export interface OutageConfig {
 }
 
 /**
+ * The two forms of the links of a local site (AL-92). A link on the loopback address does not open on a phone. Thus the
+ * intake changes the origin `local` of a link to the origin `phone`, and it keeps the path, the query and the fragment.
+ */
+export interface TellSite {
+  /** The origin of the site on the loopback address: `http` or `https`, the host `127.0.0.1`, `localhost` or `[::1]`, and a port. */
+  readonly local: string;
+  /** The origin of the same site that a phone opens: `https` and a host of two labels or more, with no path. */
+  readonly phone: string;
+}
+
+/**
  * The intake of the messages of the operator (AL-92). The runtime takes each message on a port of the loopback address,
  * with the token of the file `tell.token` in its home. Without this entry, the runtime has no intake.
  */
@@ -168,6 +179,11 @@ export interface TellConfig {
   readonly port: number;
   /** The most messages that the intake takes in one day. Without it, the cap is `DEFAULT_TELL_DAILY_CAP`. */
   readonly dailyCap?: number;
+  /**
+   * The local site of the links. The intake changes a link of this site, or a path that starts with `/`, to its phone form.
+   * It refuses each other link on the loopback address. Without this entry, it refuses each such link and each path.
+   */
+  readonly site?: TellSite;
 }
 
 /** The daily cap of the intake of the messages of the operator when the configuration gives none. */

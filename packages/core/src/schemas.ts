@@ -157,6 +157,7 @@ import {
   type SpendConfig,
   type SecretRef,
   type TellConfig,
+  type TellSite,
 } from "./config.ts";
 import type { TryChain } from "./chain.ts";
 import type { ChannelDownConfig, ChannelRun } from "./channel-down.ts";
@@ -1603,9 +1604,35 @@ export const throttleConfigSchema: z.ZodType<ThrottleConfig, ThrottleConfig> = s
   z.strictObject({ window: durationSchema.exactOptional(), key: z.enum(["channel", "incident"]).exactOptional(), streams: z.enum(["system", "family"]).exactOptional(), exempt: z.array(levelSchema).readonly().exactOptional() }).readonly(),
 );
 
-/** This schema checks the intake of the messages of the operator (AL-92): a port, and a daily cap of 1 or more. */
+// The origin of a site on the loopback address, with a port and no path.
+const LOOPBACK_ORIGIN = /^https?:\/\/(?:127\.0\.0\.1|localhost|\[::1\]):[0-9]{1,5}$/iu;
+// The origin of a site that a phone opens: `https`, a host of two labels or more and an optional port, with no path.
+const PHONE_ORIGIN = /^https:\/\/[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+(?::[0-9]{1,5})?$/iu;
+// An IPv4 address. A phone does not open the loopback form of the site, thus the phone origin has no such host.
+const IPV4_HOST = /^https:\/\/[0-9.]+(?::[0-9]{1,5})?$/u;
+
+/** This schema checks the two forms of the links of a local site (AL-92): a loopback origin and a phone origin. */
+export const tellSiteSchema: z.ZodType<TellSite, TellSite> = schemaOf<TellSite>()(
+  z
+    .strictObject({
+      local: z.string().regex(LOOPBACK_ORIGIN, "The local origin is http or https, a loopback host and a port, with no path."),
+      phone: z
+        .string()
+        .regex(PHONE_ORIGIN, "The phone origin is https and a host of two labels or more, with no path.")
+        .refine((text) => !IPV4_HOST.test(text), "The phone origin has a name, not an IPv4 address."),
+    })
+    .readonly(),
+);
+
+/** This schema checks the intake of the messages of the operator (AL-92): a port, a daily cap of 1 or more, and the local site. */
 export const tellConfigSchema: z.ZodType<TellConfig, TellConfig> = schemaOf<TellConfig>()(
-  z.strictObject({ port: z.int().min(1).max(65535, "The port is 1 to 65535."), dailyCap: z.int().min(1).exactOptional() }).readonly(),
+  z
+    .strictObject({
+      port: z.int().min(1).max(65535, "The port is 1 to 65535."),
+      dailyCap: z.int().min(1).exactOptional(),
+      site: tellSiteSchema.exactOptional(),
+    })
+    .readonly(),
 );
 
 /** This schema checks the policy of a down channel (AL-65). A run opens a line at 1 failed call or more. */
