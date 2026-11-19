@@ -19,6 +19,15 @@ const s = (value: number): Quantity => ({ value, unit: "s" });
 /** The name of the boot task, of the group of the supervisor and of its folder. */
 export const HOST_NAME = "alerts";
 
+/** The node flag that closes the inspector to `SIGUSR1`. Node 22.14 and later know it. */
+export const NO_SIGUSR1 = "--disable-sigusr1";
+
+/**
+ * This function gives the node flags of the supervisor and the runtime. The runtime holds the keys of the send services,
+ * so a signal must not open its inspector. A node that does not know the flag gets no flag, because an unknown flag stops the start.
+ */
+export const nodeFlags = (known: ReadonlySet<string> = process.allowedNodeEnvironmentFlags): string[] => (known.has(NO_SIGUSR1) ? [NO_SIGUSR1] : []);
+
 /** The ports of the live instance. They are below the dynamic ports of Windows, and away from the usual ports of servers in development. */
 export const HOST_PORTS: { readonly port: number; readonly probePort: number } = { port: 4750, probePort: 4751 };
 
@@ -110,6 +119,7 @@ export function discoveryPid(text: FileText): number | undefined {
  * - A ready runtime that fails `/liveness` 3 times in sequence, 10 s apart, stops. Then the supervisor
  *   starts it again. One slow answer does not stop it.
  * - The stop goes on the IPC channel, because a Windows process cannot catch a signal of its parent.
+ * - The runtime starts with `nodeFlags()`. Thus a `SIGUSR1` does not open the inspector of a process that holds the keys.
  */
 export function hostGroup(options: HostOptions): GroupSpec {
   const port = options.port ?? HOST_PORTS.port;
@@ -122,7 +132,7 @@ export function hostGroup(options: HostOptions): GroupSpec {
       {
         name: RUNTIME_PROGRAM,
         program: options.node,
-        args: ["src/main.ts"],
+        args: [...nodeFlags(), "src/main.ts"],
         cwd: options.root,
         env: { ALERTS_HOME: options.home, PORT: String(port), PROBE_PORT: String(probePort), SERVICE_PROFILE: "daemon" },
         ipc: true,
@@ -147,7 +157,7 @@ export function hostTask(options: HostOptions): ServiceSpec {
     name: HOST_NAME,
     description: "The alerts runtime: a supervisor that keeps the runtime alive.",
     program: options.node,
-    args: [join(options.root, "src", "main.ts"), "supervise", options.home],
+    args: [...nodeFlags(), join(options.root, "src", "main.ts"), "supervise", options.home],
     cwd: options.root,
     start: "boot",
     restart: { after: { value: 1, unit: "min" } },

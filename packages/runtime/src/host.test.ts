@@ -1,3 +1,4 @@
+import { spawn } from "node:child_process";
 import { join, resolve } from "node:path";
 import { valueIn } from "@mark1russell7/quantity";
 import { groupProblems, renderSystemdUnit, renderTaskXml, serviceProblems, superviseGroup } from "@mark1russell7/service/host";
@@ -12,6 +13,8 @@ import {
   hostGroup,
   hostReadyWindow,
   hostTask,
+  nodeFlags,
+  NO_SIGUSR1,
   READY_WITHIN,
   readinessProbe,
   RUNTIME_GRACE,
@@ -60,6 +63,26 @@ async function pass(host: Awaited<ReturnType<typeof started>>["host"], seconds: 
   }
 }
 
+/** This helper starts a node with the flags, sends it `SIGUSR1` and gives its error output. Port 0 gives a free inspector port. */
+const afterSigusr1 = (flags: readonly string[]): Promise<string> =>
+  new Promise((done, fail) => {
+    const child = spawn(process.execPath, [...flags, "--inspect-port=0", "-e", "process.stdout.write('up'); setInterval(() => {}, 1000);"], {
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let errors = "";
+    const end = setTimeout(() => child.kill("SIGKILL"), 3000);
+    child.stderr.on("data", (chunk: Buffer) => {
+      errors += String(chunk);
+      if (errors.includes("Debugger listening")) child.kill("SIGKILL");
+    });
+    child.stdout.once("data", () => child.kill("SIGUSR1"));
+    child.on("error", fail);
+    child.on("close", () => {
+      clearTimeout(end);
+      done(errors);
+    });
+  });
+
 describe("the host of the instance", () => {
   it("resolves the folder argument of the supervisor as the runtime resolves ALERTS_HOME", () => {
     const user = join("/home", "owner");
@@ -107,7 +130,7 @@ describe("the host of the instance", () => {
     const { host, group } = await started();
     expect(host.children).toHaveLength(1);
     const { request } = host.children[0]!;
-    expect(request).toMatchObject({ program: NODE, args: ["src/main.ts"], cwd: ROOT, ipc: true });
+    expect(request).toMatchObject({ program: NODE, args: [...nodeFlags(), "src/main.ts"], cwd: ROOT, ipc: true });
     expect(request.env).toMatchObject({ ALERTS_HOME: HOME, PORT: String(HOST_PORTS.port), PROBE_PORT: String(HOST_PORTS.probePort), SERVICE_PROFILE: "daemon" });
     expect(group.states()[0]).toMatchObject({ name: "runtime", phase: "ready", restarts: 0 });
     await group.stop();
@@ -143,7 +166,7 @@ describe("the host of the instance", () => {
 
   it("gives a boot task that starts the supervisor with the folder of the private files, and starts it again 1 minute after a stop", () => {
     const spec = hostTask(OPTIONS);
-    expect(spec.args).toEqual([join(ROOT, "src", "main.ts"), "supervise", HOME]);
+    expect(spec.args).toEqual([...nodeFlags(), join(ROOT, "src", "main.ts"), "supervise", HOME]);
     expect(supervisorDiscovery(HOME)).toBe(join(HOME, "host", "supervisor.json"));
     const xml = renderTaskXml(spec, { user: "HOST\\test", conhost: "C:\\Windows\\System32\\conhost.exe" });
     expect(xml).toContain("<BootTrigger>");
@@ -162,6 +185,26 @@ describe("the host of the instance", () => {
     expect(unit).toContain(`TimeoutStopSec=${Math.ceil(msOf(SUPERVISOR_GRACE) / 1000)}`);
     expect(unit).toContain("Restart=always");
   });
+
+  it("starts the supervisor and the runtime with the inspector closed to SIGUSR1, when the node knows the flag", () => {
+    expect(nodeFlags(new Set([NO_SIGUSR1]))).toEqual([NO_SIGUSR1]);
+    expect(nodeFlags(new Set())).toEqual([]);
+    // The node of CI is 22.14 or later. Thus the boot task, the systemd unit and the runtime get the flag.
+    expect(process.allowedNodeEnvironmentFlags.has(NO_SIGUSR1)).toBe(true);
+    const spec = hostTask(OPTIONS);
+    expect(spec.args?.[0]).toBe(NO_SIGUSR1);
+    expect(renderSystemdUnit(spec)).toMatch(/^ExecStart=.*--disable-sigusr1/m);
+    expect(hostGroup(OPTIONS).programs[0]!.args?.[0]).toBe(NO_SIGUSR1);
+  });
+
+  it.skipIf(process.platform === "win32")(
+    "gives a SIGUSR1 no inspector in a node with the flag, and an inspector in a node without it",
+    async () => {
+      expect(await afterSigusr1([])).toContain("Debugger listening");
+      expect(await afterSigusr1([NO_SIGUSR1])).not.toContain("Debugger listening");
+    },
+    15_000,
+  );
 });
 
 describe("the discovery file of the runtime", () => {
