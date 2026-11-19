@@ -61,17 +61,30 @@ export function normalize(parts: MergeParts): MergeState {
     const held = reports.get(report.id);
     if (held === undefined || text < held.text) reports.set(report.id, { report, text });
   }
-  return {
+  return normal({
     reports: [...reports.entries()].sort(([a], [b]) => compareCodeUnits(a, b)).map(([, held]) => held.report),
     deliveries: uniqueByText((parts.deliveries ?? []).filter((delivery) => kept(delivery.incident))),
     acks: uniqueByText((parts.acks ?? []).filter((ack) => kept(ack.incident))),
     ends: uniqueByText((parts.ends ?? []).filter((mark) => kept(mark.report))),
     retired: [...tombstones.entries()].sort(([a], [b]) => compareCodeUnits(a, b)).map(([, tombstone]) => tombstone),
-  };
+  });
 }
+
+// The merge states in the one form: each list is in its order and has no duplicate. Only `normalize` and `add` put a
+// state in this set, so `add` can insert into the lists of such a state. A state from another place gets a full
+// `normalize`. A merge state does not change its lists.
+const normalStates = new WeakSet<MergeState>();
+function normal(state: MergeState): MergeState {
+  normalStates.add(state);
+  return state;
+}
+normal(EMPTY_STATE);
 
 /** This function gives the join of two merge states: the union of their parts. */
 export function join(a: MergeState, b: MergeState): MergeState {
+  // The join is commutative, so the parts of the other state go into the state in the one form.
+  if (normalStates.has(a)) return add(a, b);
+  if (normalStates.has(b)) return add(b, a);
   return normalize({
     reports: [...a.reports, ...b.reports],
     deliveries: [...a.deliveries, ...b.deliveries],
@@ -81,15 +94,98 @@ export function join(a: MergeState, b: MergeState): MergeState {
   });
 }
 
-/** This function adds parts to a merge state. A part that the state has already changes nothing. */
+/**
+ * This function adds parts to a merge state. A part that the state has already changes nothing.
+ *
+ * The result is equal to the `normalize` of all the parts. For a state in the one form, the function inserts each
+ * new part into the sorted lists. Each new part costs a search in the list, and each list that changes costs one copy.
+ * When no part changes the state, the function gives the same state. A state that is not in the one form gets a full
+ * `normalize`. A new tombstone also gets a full `normalize`, because it removes parts.
+ */
 export function add(state: MergeState, parts: MergeParts): MergeState {
-  return normalize({
-    reports: [...state.reports, ...(parts.reports ?? [])],
-    deliveries: [...state.deliveries, ...(parts.deliveries ?? [])],
-    acks: [...state.acks, ...(parts.acks ?? [])],
-    ends: [...state.ends, ...(parts.ends ?? [])],
-    retired: [...state.retired, ...(parts.retired ?? [])],
+  if (!normalStates.has(state) || retiresMore(state.retired, parts.retired ?? [])) {
+    return normalize({
+      reports: [...state.reports, ...(parts.reports ?? [])],
+      deliveries: [...state.deliveries, ...(parts.deliveries ?? [])],
+      acks: [...state.acks, ...(parts.acks ?? [])],
+      ends: [...state.ends, ...(parts.ends ?? [])],
+      retired: [...state.retired, ...(parts.retired ?? [])],
+    });
+  }
+  const kept = (report: ReportId): boolean => indexIn(state.retired, report, tombstoneKey) < 0;
+  // For two contents of one id, the content with the smaller canonical JSON. A tie keeps the content that the state has.
+  const smaller = (held: Report, report: Report): Report => (canonical(report) < canonical(held) ? report : held);
+  const first = <T>(held: T): T => held;
+  const reports = insertSorted(state.reports, (parts.reports ?? []).filter((report) => kept(report.id)), reportKey, smaller);
+  const deliveries = insertSorted(state.deliveries, (parts.deliveries ?? []).filter((delivery) => kept(delivery.incident)), canonical, first);
+  const acks = insertSorted(state.acks, (parts.acks ?? []).filter((ack) => kept(ack.incident)), canonical, first);
+  const ends = insertSorted(state.ends, (parts.ends ?? []).filter((mark) => kept(mark.report)), canonical, first);
+  if (reports === state.reports && deliveries === state.deliveries && acks === state.acks && ends === state.ends) return state;
+  return normal({ reports, deliveries, acks, ends, retired: state.retired });
+}
+
+const reportKey = (report: Report): string => report.id;
+const tombstoneKey = (tombstone: Tombstone): string => tombstone.report;
+
+/** True when a tombstone of the parts is new, or has a later `until` than the tombstone of the state. */
+function retiresMore(held: readonly Tombstone[], tombstones: readonly Tombstone[]): boolean {
+  return tombstones.some((tombstone) => {
+    const index = indexIn(held, tombstone.report, tombstoneKey);
+    return index < 0 || tombstone.until > held[index]!.until;
   });
+}
+
+/**
+ * This function gives the index of a key in a list in the order of its keys. For a key that the list does not have, it
+ * gives `-(p + 1)`, where `p` is the index where the key goes.
+ */
+function indexIn<T>(list: readonly T[], key: string, keyOf: (item: T) => string): number {
+  let low = 0;
+  let high = list.length - 1;
+  while (low <= high) {
+    const middle = (low + high) >>> 1;
+    const order = compareCodeUnits(keyOf(list[middle]!), key);
+    if (order === 0) return middle;
+    if (order < 0) low = middle + 1;
+    else high = middle - 1;
+  }
+  return -(low + 1);
+}
+
+/**
+ * This function inserts items into a list in the order of its keys, with one item for each key. For a key that is
+ * there already, `pick` gives the item that stays. When no item changes the list, it gives the same list.
+ */
+function insertSorted<T>(list: readonly T[], items: readonly T[], keyOf: (item: T) => string, pick: (held: T, item: T) => T): readonly T[] {
+  if (items.length === 0) return list;
+  let replaced: Map<number, T> | undefined;
+  let added: Map<string, T> | undefined;
+  for (const item of items) {
+    const key = keyOf(item);
+    const index = indexIn(list, key, keyOf);
+    if (index >= 0) {
+      const held = replaced?.get(index) ?? list[index]!;
+      const chosen = pick(held, item);
+      if (chosen !== held) (replaced ??= new Map()).set(index, chosen);
+    } else {
+      const held = added?.get(key);
+      (added ??= new Map()).set(key, held === undefined ? item : pick(held, item));
+    }
+  }
+  if (replaced === undefined && added === undefined) return list;
+  const swaps = replaced;
+  const base = swaps === undefined ? list : list.map((item, index) => swaps.get(index) ?? item);
+  if (added === undefined) return base;
+  const out: T[] = [];
+  let from = 0;
+  for (const [key, item] of [...added.entries()].sort(([a], [b]) => compareCodeUnits(a, b))) {
+    const to = -(indexIn(base, key, keyOf) + 1);
+    for (let index = from; index < to; index += 1) out.push(base[index]!);
+    out.push(item);
+    from = to;
+  }
+  for (let index = from; index < base.length; index += 1) out.push(base[index]!);
+  return out;
 }
 
 /**
@@ -125,7 +221,22 @@ export interface IncidentOptions {
  * the areas of its heads with no code that has a later statement.
  */
 export function incidents(state: MergeState, at: Instant, options: IncidentOptions = {}): Incident[] {
-  const reports = state.reports;
+  const ended = endedReports(state, at);
+  return groupsOf(state.reports, options.link).map((group) => cachedIncident(group, at, ended));
+}
+
+// The key of the groups of a list of reports with no link rule.
+const NO_LINK: object = {};
+// The groups of each list of reports and each link rule, in the order of their anchors. The groups do not read the
+// time, so each pass over the same list reads them again. Each entry lives while its list and its link rule live.
+const groupCache = new WeakMap<readonly Report[], WeakMap<object, readonly (readonly Report[])[]>>();
+
+/** This function gives the groups of reports of the incidents, in the order of their anchors. */
+function groupsOf(reports: readonly Report[], link: LinkRule | undefined): readonly (readonly Report[])[] {
+  let byLink = groupCache.get(reports);
+  if (byLink === undefined) groupCache.set(reports, (byLink = new WeakMap()));
+  const held = byLink.get(link ?? NO_LINK);
+  if (held !== undefined) return held;
   const edges: number[][] = reports.map(() => []);
   const connect = (a: number, b: number): void => {
     edges[a]!.push(b);
@@ -143,7 +254,6 @@ export function incidents(state: MergeState, at: Instant, options: IncidentOptio
     for (const reference of report.references) share(JSON.stringify(["key", report.status, report.source, reference]), index);
     for (const key of report.correlation) share(JSON.stringify(["correlation", report.status, key.system, key.id]), index);
   });
-  const link = options.link;
   if (link !== undefined) {
     const blocks = new Map<string, number[]>();
     reports.forEach((report, index) => {
@@ -165,10 +275,31 @@ export function incidents(state: MergeState, at: Instant, options: IncidentOptio
   // The edges go in the two directions, so the strong components are the connected components.
   // The nodes of a component keep the order of the reports: the order of their ids.
   const components = stronglyConnectedComponents(reports.keys(), (index) => edges[index]!);
-  const ended = endedReports(state, at);
-  return components
-    .map((component) => incidentOf(component.map((index) => reports[index]!), at, ended))
-    .sort((a, b) => compareCodeUnits(a.anchor, b.anchor));
+  // The anchor of an incident is the id of the first report of its group.
+  const groups = components.map((component) => component.map((index) => reports[index]!)).sort((a, b) => compareCodeUnits(a[0]!.id, b[0]!.id));
+  byLink.set(link ?? NO_LINK, groups);
+  return groups;
+}
+
+// The incident of each group, by its first report, with the reports and the live mask that it read.
+const incidentCache = new WeakMap<Report, { readonly group: readonly Report[]; readonly mask: string; readonly incident: Incident }>();
+
+/** True when a report is live at a time: it is not a cancel, it did not expire and it did not end. */
+const liveAt = (report: Report, at: Instant, ended: ReadonlySet<ReportId>): boolean =>
+  report.op !== "cancel" && !(report.expires !== undefined && report.expires <= at) && !ended.has(report.id);
+
+/**
+ * This function gives the incident of a group at a time. The incident reads the time only through the live reports.
+ * Thus the same reports with the same live mask give the same incident, and the function gives it again.
+ */
+function cachedIncident(group: readonly Report[], at: Instant, ended: ReadonlySet<ReportId>): Incident {
+  let mask = "";
+  for (const report of group) mask += liveAt(report, at, ended) ? "1" : "0";
+  const held = incidentCache.get(group[0]!);
+  if (held !== undefined && held.mask === mask && held.group.length === group.length && held.group.every((report, index) => report === group[index])) return held.incident;
+  const incident = incidentOf(group, at, ended);
+  incidentCache.set(group[0]!, { group, mask, incident });
+  return incident;
 }
 
 /**
@@ -222,7 +353,7 @@ function incidentOf(group: readonly Report[], at: Instant, ended: ReadonlySet<Re
   let heads = group.filter((report) => !superseded.has(report.id) && !replaced.has(report.id));
   // A cycle of references leaves no head. Then each report counts as a head.
   if (heads.length === 0) heads = [...group];
-  const liveHeads = heads.filter((report) => report.op !== "cancel" && !(report.expires !== undefined && report.expires <= at) && !ended.has(report.id));
+  const liveHeads = heads.filter((report) => liveAt(report, at, ended));
   const basis = liveHeads.length > 0 ? liveHeads : heads;
   const stated = basis.map((report) => ({ report, ...knownValues(report, events) }));
   const lines = stated.map(
@@ -253,7 +384,7 @@ function incidentOf(group: readonly Report[], at: Instant, ended: ReadonlySet<Re
     live: liveHeads.length > 0,
     corroboration: new Set(group.map((report) => report.origin)).size,
     // The lines are present only when their values differ. Else each place gets the values of the incident.
-    ...(new Set(lines.map(lineValues)).size > 1 ? { lines } : {}),
+    ...(lines.length > 1 && new Set(lines.map(lineValues)).size > 1 ? { lines } : {}),
   };
   return {
     ...incident,

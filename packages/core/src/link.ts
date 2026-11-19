@@ -114,6 +114,9 @@ function linked(a: Report, b: Report, family: LinkFamily): boolean {
   return near(x.centers, y.centers, family.distanceKm);
 }
 
+// The rule of each policy object. A policy does not change.
+const rules = new WeakMap<LinkPolicy, LinkRule>();
+
 /**
  * This function gives the link rule of a policy, for `incidents`.
  *
@@ -121,13 +124,17 @@ function linked(a: Report, b: Report, family: LinkFamily): boolean {
  * before it. A slot is as long as the window of the family. So two onsets in one window are in one slot
  * or in two slots next to each other, and their reports share a block.
  *
+ * One policy object gives one rule object. Thus `incidents` keeps the groups of a list of reports for each pass.
+ *
  * @throws RangeError when the window of a family is not more than 0
  */
 export function linkRule(policy: LinkPolicy): LinkRule {
+  const held = rules.get(policy);
+  if (held !== undefined) return held;
   for (const family of policy.families) {
     if (!(family.windowMs > 0)) throw new RangeError(`The window of the family ${family.family} is not more than 0: ${family.windowMs}.`);
   }
-  return {
+  const rule: LinkRule = {
     blocks: (report) =>
       policy.families.flatMap((family, index) => {
         const facts = factsOf(report, family);
@@ -137,4 +144,6 @@ export function linkRule(policy: LinkPolicy): LinkRule {
       }),
     matches: (a, b) => a.source !== b.source && policy.families.some((family) => linked(a, b, family)),
   };
+  rules.set(policy, rule);
+  return rule;
 }
