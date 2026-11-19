@@ -19,7 +19,8 @@
  * The environment gives `ALERTS_HOME`, as for `main.ts`, and `PNPM`, the program of pnpm (`slots.ts`, `pnpmCall`).
  * The exit code is 0 for success, 1 for a refusal or a failed step, and 2 for a wrong command. The output holds no value of a private file.
  */
-import { readFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { constants, setPriority, tmpdir, totalmem } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { writeFileAtomic } from "@procedures/fs/files";
@@ -33,13 +34,16 @@ import {
   DEPLOY_FILE,
   entryRoot,
   installArgs,
+  loadStep,
   otherSlot,
   parseDeployFile,
   pnpmCall,
   readLive,
+  runStep,
   SERVICE_PACKAGE,
   slotsOf,
   STAGE_CHECKS,
+  stageScope,
   SUPERVISOR_FILES,
   supervisorChanges,
   swapLink,
@@ -51,7 +55,6 @@ import {
 } from "./slots.ts";
 
 const USAGE = "The command is: node src/deploy.ts status | adopt | stage <commit> [--page] | swap";
-const STEP_TIMEOUT_MS = 20 * 60_000;
 
 const root = entryRoot(process.argv[1], join(fileURLToPath(new URL(".", import.meta.url)), ".."));
 const slots = slotsOf(checkoutOf(root));
@@ -65,14 +68,17 @@ const readText = async (path: string): Promise<string | undefined> => {
 const readMarks = async (): Promise<DeployFile> => parseDeployFile(await readText(deployPath));
 const writeMarks = (file: DeployFile): Promise<void> => writeFileAtomic(deployPath, `${JSON.stringify(file, null, 2)}\n`);
 
-/** This function runs one program to its end. A failure prints the end of its output and throws. */
-async function step(name: string, program: string, args: readonly string[], cwd: string, env: Record<string, string> = {}): Promise<CommandResult> {
-  const result = await runCommand(program, { args, cwd, env, timeout: STEP_TIMEOUT_MS });
-  if (!result.success) {
-    const tail = `${result.stderr}\n${result.stdout}`.trim().split("\n").slice(-12).join("\n");
-    throw new Error(`The step "${name}" failed with the code ${result.exitCode}${result.timedOut === true ? " (time-out)" : ""}.\n${tail}`);
-  }
-  return result;
+const step = runStep;
+
+/**
+ * This function gives the arguments of `systemd-run` for the heavy steps of a stage, or undefined when no scope of the user
+ * manager can start. On a host with no scope, the stage runs only at the lowest priority of the processor.
+ */
+async function scopeOf(): Promise<readonly string[] | undefined> {
+  if (process.platform !== "linux") return undefined;
+  const scope = stageScope(totalmem());
+  const probe = await runCommand("systemd-run", { args: [...scope, "true"], timeout: 60_000 });
+  return probe.success ? scope : undefined;
 }
 
 const git = (cwd: string, ...args: string[]): Promise<CommandResult> => step(`git ${args[0] ?? ""}`, "git", args, cwd);
@@ -135,6 +141,13 @@ async function status(): Promise<void> {
 
 async function stage(commit: string, page: boolean): Promise<void> {
   const live = await liveSlot();
+  // The stage and each program that it starts run at the lowest priority of the processor.
+  setPriority(constants.priority.PRIORITY_LOW);
+  // A nice value does not count against another cgroup. A scope next to the runtime caps the memory and the weight of each heavy step.
+  const scope = await scopeOf();
+  const heavy = (name: string, program: string, args: readonly string[], cwd: string, env: Readonly<Record<string, string>> = {}): Promise<CommandResult> =>
+    scope === undefined ? step(name, program, args, cwd, env) : step(name, "systemd-run", [...scope, program, ...args], cwd, env);
+  console.log(scope === undefined ? "The stage runs with no scope: only its priority is low." : `The heavy steps run in a scope: ${scope.slice(4).join(" ")}.`);
   const slot = otherSlot(live);
   const folder = slots[slot];
   const call = pnpmCall(process.env, process.execPath);
@@ -153,12 +166,19 @@ async function stage(commit: string, page: boolean): Promise<void> {
   const sha = (await headOf(folder)) ?? "";
   console.log(`Slot ${slot} has the commit ${sha.slice(0, 7)}.`);
   const env = { CI: "1", COREPACK_ENABLE_DOWNLOAD_PROMPT: "0" };
-  await step("install", call.program, [...call.prefix, ...installArgs(page)], folder, env);
-  if (page) await step("page", call.program, [...call.prefix, "--filter", "./packages/site", "build"], folder, env);
+  await heavy("install", call.program, [...call.prefix, ...installArgs(page)], folder, env);
+  if (page) await heavy("page", call.program, [...call.prefix, "--filter", "./packages/site", "build"], folder, env);
   const runtime = join(folder, "packages", "runtime");
-  const config = await step("config", process.execPath, [join(runtime, "src", "check.ts")], runtime);
+  const config = await heavy("config", process.execPath, [join(runtime, "src", "check.ts")], runtime);
   console.log(config.stdout.trim());
-  await step("load", process.execPath, [join(runtime, "src", "main.ts"), "load"], runtime);
+  // The load needs no private file. An empty home keeps each write of a module away from the live home.
+  const scratch = await mkdtemp(join(tmpdir(), "alerts-load-"));
+  try {
+    const load = loadStep(runtime, scratch, process.execPath);
+    await heavy("load", load.program, load.args, runtime, load.env);
+  } finally {
+    await rm(scratch, { recursive: true, force: true });
+  }
   await writeMarks(withMark(await readMarks(), slot, { sha, at: new Date().toISOString(), checks: [...STAGE_CHECKS] }));
   console.log(`Slot ${slot} is staged at ${sha.slice(0, 7)}: ${STAGE_CHECKS.join(", ")} passed.`);
   await tellSupervisor(live, slot);

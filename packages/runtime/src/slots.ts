@@ -14,7 +14,8 @@
 import { createHash } from "node:crypto";
 import type { Stats } from "node:fs";
 import { lstat, readlink, rename, rmdir, symlink, unlink } from "node:fs/promises";
-import { basename, dirname, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
+import { runCommand, type CommandResult } from "@procedures/shell/command";
 
 /** The names of the two slots. */
 export const SLOT_NAMES = ["a", "b"] as const;
@@ -247,8 +248,56 @@ export function pnpmCall(env: Readonly<Record<string, string | undefined>>, node
   return { program: "pnpm", prefix: [] };
 }
 
+/** The part of the memory of the host that the programs of a stage can use before the kernel takes their pages back. */
+export const STAGE_MEMORY_SHARE = 0.25;
+
+/** The weight of a stage for the processor, against the weight 100 of the runtime in the same slice. */
+export const STAGE_CPU_WEIGHT = 10;
+
+/**
+ * This function gives the arguments of `systemd-run` that start a program of a stage in a scope of the user manager.
+ * The scope caps the memory of the program at a share of the memory of the host.
+ * It also gives the program a low weight for the processor.
+ * Thus a stage on a small host pays for its own memory with its own pages, and the live runtime keeps its pages.
+ */
+export function stageScope(totalMemory: number): readonly string[] {
+  const high = Math.max(64 * 2 ** 20, Math.floor(totalMemory * STAGE_MEMORY_SHARE));
+  return ["--user", "--scope", "--quiet", "-p", `MemoryHigh=${high}`, "-p", `CPUWeight=${STAGE_CPU_WEIGHT}`];
+}
+
 /** This function gives the arguments of the install of a stage: the runtime and its packages, or each package for the local page. */
 export function installArgs(page: boolean): readonly string[] {
   const scope = page ? [] : ["--prod", "--filter", "@mark1russell7/alerts-runtime..."];
   return ["install", "--frozen-lockfile", ...scope, "--prefer-offline", "--network-concurrency=2", "--child-concurrency=1", "--reporter=silent"];
+}
+
+/** The time limit of one step of a stage: 20 minutes. */
+export const STEP_TIMEOUT_MS: number = 20 * 60_000;
+
+/** This interface is one program of a stage: its arguments, and the variables that go over the environment of the stage. */
+export interface StageStep {
+  readonly program: string;
+  readonly args: readonly string[];
+  readonly env: Readonly<Record<string, string>>;
+}
+
+/**
+ * This function gives the load step of a stage. The load runs `main.ts load` of the slot in the empty home `scratch`.
+ * The variable `ALERTS_HOME` of the step goes over the live home of the environment. Thus no module of the new code writes to the live home.
+ */
+export function loadStep(runtime: string, scratch: string, node: string): StageStep {
+  return { program: node, args: [join(runtime, "src", "main.ts"), "load"], env: { ALERTS_HOME: scratch } };
+}
+
+/**
+ * This function runs one program of a stage to its end. The variables of `env` go over the environment of this process.
+ * A failure throws with the end of the output.
+ */
+export async function runStep(name: string, program: string, args: readonly string[], cwd: string, env: Readonly<Record<string, string>> = {}): Promise<CommandResult> {
+  const result = await runCommand(program, { args: [...args], cwd, env: { ...env }, timeout: STEP_TIMEOUT_MS });
+  if (!result.success) {
+    const tail = `${result.stderr}\n${result.stdout}`.trim().split("\n").slice(-12).join("\n");
+    throw new Error(`The step "${name}" failed with the code ${result.exitCode}${result.timedOut === true ? " (time-out)" : ""}.\n${tail}`);
+  }
+  return result;
 }
