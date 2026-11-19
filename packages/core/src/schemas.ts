@@ -1595,7 +1595,7 @@ export const sendLimitConfigSchema: z.ZodType<SendLimitConfig, SendLimitConfig> 
 
 /** This schema checks the throttle of each person and channel (AL-72 part 4). `loadConfig` checks the bounds of the window. */
 export const throttleConfigSchema: z.ZodType<ThrottleConfig, ThrottleConfig> = schemaOf<ThrottleConfig>()(
-  z.strictObject({ window: durationSchema.exactOptional(), key: z.enum(["channel", "incident"]).exactOptional(), exempt: z.array(levelSchema).readonly().exactOptional() }).readonly(),
+  z.strictObject({ window: durationSchema.exactOptional(), key: z.enum(["channel", "incident"]).exactOptional(), streams: z.enum(["system", "family"]).exactOptional(), exempt: z.array(levelSchema).readonly().exactOptional() }).readonly(),
 );
 
 /** This schema checks the policy of a down channel (AL-65). A run opens a line at 1 failed call or more. */

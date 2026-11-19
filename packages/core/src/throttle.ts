@@ -2,13 +2,22 @@
  * This module holds the rise-only throttle of each person and channel (AL-72 part 4). It is pure. In one window, a
  * channel sends a second message to a person only when the level rises. The new level must be above each level that
  * the channel sent to the person in the window. A send of the same level or of a lower level does not go. The log keeps
- * it as a suppression with its reason, and the digest tells its incident.
+ * it as a suppression with its reason, and the digest tells its incident. Each stream has its own window. By default,
+ * the system lines (the kinds of the family `system`) are one stream, and the alerts are the other stream. Thus a health
+ * notice never stops a weather notice, and a weather notice never stops a health notice.
  */
 import { compareCodeUnits } from "@mark1russell7/text/order";
-import { LEVELS, type ChannelId, type Delivery, type Duration, type Instant, type Level, type PersonId, type ReportId } from "./contracts.ts";
+import { LEVELS, type ChannelId, type Delivery, type Duration, type Instant, type Level, type PersonId, type Report, type ReportId } from "./contracts.ts";
 import type { Route } from "./delivery.ts";
 import type { EscalationSend } from "./escalation.ts";
 import { messageKey } from "./ids.ts";
+import { hasKind } from "./kind-prefix.ts";
+
+/** The family of the kinds of the system lines: `system.health`, `system.quota` and the other kinds `system.*` of `assess.ts`. */
+const SYSTEM_KINDS: readonly string[] = ["system"];
+
+/** The stream of the system lines. */
+const SYSTEM_STREAM = "system";
 
 /**
  * The key of the window of the throttle.
@@ -21,12 +30,26 @@ export type ThrottleKey = "channel" | "incident";
 /** The keys of the window of the throttle. */
 export const THROTTLE_KEYS: readonly ThrottleKey[] = ["channel", "incident"];
 
+/**
+ * The streams of the throttle. Each stream has its own window, for each person and channel.
+ *
+ * - `system`: two streams. The system lines are one stream, and the alerts are the other stream.
+ * - `family`: the stream of the system lines, and one stream for each family of the alerts. The family is the first part
+ *   of the kind, for example `met` of `met.flood`.
+ */
+export type ThrottleStreams = "system" | "family";
+
+/** The streams of the throttle. */
+export const THROTTLE_STREAMS: readonly ThrottleStreams[] = ["system", "family"];
+
 /** The rise-only throttle of each person and channel. */
 export interface Throttle {
   /** The length of the window. */
   readonly window: Duration;
   /** The key of the window. */
   readonly key: ThrottleKey;
+  /** The streams. Each stream has its own window. */
+  readonly streams: ThrottleStreams;
   /** The levels that the throttle does not stop. Their sends always go, and they count in the window of the other levels. */
   readonly exempt: readonly Level[];
 }
@@ -35,7 +58,8 @@ export interface Throttle {
 export type ThrottleConfig = Partial<Throttle>;
 
 /**
- * The default throttle: a window of 30 minutes for each person and channel. A `life-safety` send always goes.
+ * The default throttle: a window of 30 minutes for each person, channel and stream. The streams are the system lines and
+ * the alerts. A `life-safety` send always goes.
  *
  * The window comes from a replay of the burst of 2026-11-18 (`fixtures/burst-2026-11-18.json`, with made-up ids). The
  * burst gave 171 messages to one person on one channel in 22 minutes, in two waves 9 minutes apart. With a window of 15
@@ -43,7 +67,7 @@ export type ThrottleConfig = Partial<Throttle>;
  * 2026-11-17, the shortest time between two messages that did not come at the same time was 32 minutes. A window of 32
  * minutes or less stops none of them. The default is 30 minutes, in this range.
  */
-export const DEFAULT_THROTTLE: Throttle = { window: 1_800_000, key: "channel", exempt: ["life-safety"] };
+export const DEFAULT_THROTTLE: Throttle = { window: 1_800_000, key: "channel", streams: "system", exempt: ["life-safety"] };
 
 /** The shortest window of the throttle: one minute. */
 export const THROTTLE_MIN_WINDOW: Duration = 60_000;
@@ -64,6 +88,7 @@ export function throttleProblems(config: ThrottleConfig): string[] {
     problems.push(`The window of the throttle is ${String(window)} ms. It must be an integer from ${THROTTLE_MIN_WINDOW} to ${THROTTLE_MAX_WINDOW} ms.`);
   }
   if (config.key !== undefined && !THROTTLE_KEYS.includes(config.key)) problems.push(`The key of the throttle is ${String(config.key)}. It must be one of: ${THROTTLE_KEYS.join(", ")}.`);
+  if (config.streams !== undefined && !THROTTLE_STREAMS.includes(config.streams)) problems.push(`The streams of the throttle are ${String(config.streams)}. They must be one of: ${THROTTLE_STREAMS.join(", ")}.`);
   for (const level of config.exempt ?? []) {
     if (!LEVELS.includes(level) || level === "digest") problems.push(`The throttle cannot exempt the level ${String(level)}. A level with an exemption is notice, urgent or life-safety.`);
   }
@@ -73,8 +98,8 @@ export function throttleProblems(config: ThrottleConfig): string[] {
 /**
  * The reason of a suppression.
  *
- * - `same-level`: the channel already sent a message of the same level to the person in the window.
- * - `lower-level`: the channel already sent a message of a higher level to the person in the window.
+ * - `same-level`: the channel already sent a message of the same level and stream to the person in the window.
+ * - `lower-level`: the channel already sent a message of a higher level and of the same stream to the person in the window.
  */
 export type SuppressionReason = "same-level" | "lower-level";
 
@@ -91,7 +116,7 @@ export interface Suppression {
   readonly episode: number;
   readonly at: Instant;
   readonly reason: SuppressionReason;
-  /** The highest level that the channel sent to the person in the window, or that it sends in the same pass. */
+  /** The highest level of the stream that the channel sent to the person in the window, or that it sends in the same pass. */
   readonly over: Level;
 }
 
@@ -103,6 +128,11 @@ export interface ThrottleInput {
   readonly deliveries: readonly Delivery[];
   /** The suppressions of the log. A send with a suppression does not go, also after its window. */
   readonly suppressions: readonly Suppression[];
+  /**
+   * The reports of the merge state (`MergeState.reports`). They give the stream of a delivery after the end of its route. A
+   * retirement removes a report and its deliveries together, thus a delivery in the window always has its report here.
+   */
+  readonly reports?: readonly Pick<Report, "id" | "kind">[] | undefined;
   /** The throttle. The default is `DEFAULT_THROTTLE`. */
   readonly throttle?: Throttle | undefined;
   /**
@@ -129,13 +159,18 @@ const rankOf = (level: Level): number => LEVELS.indexOf(level);
 /**
  * This function applies the throttle to the sends of the routes.
  *
+ * - Each send and each delivery has a stream: the system lines, or the alerts (`streams`). A system line has a kind of
+ *   the family `system`. The routes and the reports give the kind of the incident of a delivery.
+ * - A delivery of an incident with no route and no report is in the stream of the system lines. The copies share the
+ *   reports of the alerts (the `fetch` events), but not the system lines. Thus such a delivery is a system line of the
+ *   other copy.
  * - A send of a level with an exemption goes. Thus a `life-safety` alert of a new incident goes, and each step of an
  *   escalation of `life-safety` goes until the acknowledgment.
  * - A send with a suppression in the log does not go. The suppression does not end, thus the send does not go late.
  * - A started send (`started`) goes. The phone can already have its message.
  * - Each other send goes only when its level is above the bar of its window. The bar is the highest level of two
- *   groups. The first group is the deliveries of the ledger to the person on the channel in the window. The second
- *   group is the sends that go before it in this pass.
+ *   groups. The first group is the deliveries of the ledger of its stream to the person on the channel in the window. The
+ *   second group is the sends of its stream that go before it in this pass.
  *   With the key `incident`, only the deliveries and the sends of the same incident count. The deliveries of the other
  *   copies count, thus the throttle applies over all the copies.
  * - A send at or below the bar gets a suppression at `now`, with its reason.
@@ -158,6 +193,18 @@ export function throttleRoutes(input: ThrottleInput): ThrottleResult {
     readonly key: string;
     readonly started: boolean;
   }
+  // The reports of the incident of each route. With the key `incident`, a delivery counts for each route that holds its report.
+  const reportsOf = input.routes.map((entry) => new Set<string>([entry.incident.anchor, ...entry.incident.reports]));
+  // The stream of a kind (D16): the system lines, or the alerts. With the streams `family`, each family of the alerts.
+  const streamOf = (kind: string): string => (hasKind(SYSTEM_KINDS, kind) ? SYSTEM_STREAM : throttle.streams === "family" ? `alerts ${kind.split(".")[0]!}` : "alerts");
+  const routeStreams = input.routes.map((entry) => streamOf(entry.incident.kind.code));
+  // The stream of each known report. A delivery of an unknown report is a system line of the other copy.
+  const reportStreams = new Map<string, string>();
+  for (const report of input.reports ?? []) reportStreams.set(report.id, streamOf(report.kind.code));
+  reportsOf.forEach((reports, route) => {
+    for (const report of reports) reportStreams.set(report, routeStreams[route]!);
+  });
+
   const items: Item[] = [];
   const dropped = new Set<string>();
   input.routes.forEach((entry, route) => {
@@ -184,10 +231,9 @@ export function throttleRoutes(input: ThrottleInput): ThrottleResult {
     );
   });
 
-  // The reports of the incident of each route. With the key `incident`, a delivery counts for each route that holds its report.
-  const reportsOf = input.routes.map((entry) => new Set<string>([entry.incident.anchor, ...entry.incident.reports]));
-  // The window of a send: its person and channel, and with the key `incident` the anchor of the incident of its route.
-  const groupOf = (person: PersonId, channel: ChannelId, route: number): string => (throttle.key === "incident" ? `${person} ${channel} ${input.routes[route]!.incident.anchor}` : `${person} ${channel}`);
+  // The window of a send: its person, channel and stream, and with the key `incident` the anchor of the incident of its route.
+  const groupOf = (person: PersonId, channel: ChannelId, route: number): string =>
+    throttle.key === "incident" ? `${person} ${channel} ${routeStreams[route]!} ${input.routes[route]!.incident.anchor}` : `${person} ${channel} ${routeStreams[route]!}`;
   // The bar of each window: the highest level of the deliveries in the window, then of the sends of this pass.
   const bars = new Map<string, number>();
   const raise = (group: string, level: Level): void => {
@@ -195,7 +241,7 @@ export function throttleRoutes(input: ThrottleInput): ThrottleResult {
   };
   for (const delivery of input.deliveries) {
     if (delivery.level === "digest" || !(delivery.at > from && delivery.at <= input.now)) continue;
-    if (throttle.key === "channel") raise(`${delivery.person} ${delivery.channel}`, delivery.level);
+    if (throttle.key === "channel") raise(`${delivery.person} ${delivery.channel} ${reportStreams.get(delivery.incident) ?? SYSTEM_STREAM}`, delivery.level);
     else reportsOf.forEach((reports, route) => {
       if (reports.has(delivery.incident)) raise(groupOf(delivery.person, delivery.channel, route), delivery.level);
     });

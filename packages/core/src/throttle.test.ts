@@ -4,7 +4,7 @@ import type { ChannelId, Delivery, EscalationPolicy, Incident, Level, PersonId, 
 import type { EscalationHold, Route } from "./delivery.ts";
 import { messageKey } from "./ids.ts";
 import { DEFAULT_SEND_LIMITS, limitRoutes } from "./send-limit.ts";
-import { DEFAULT_THROTTLE, throttleOf, throttleProblems, throttleRoutes, type Suppression, type Throttle } from "./throttle.ts";
+import { DEFAULT_THROTTLE, throttleOf, throttleProblems, throttleRoutes, type Suppression, type Throttle, type ThrottleInput } from "./throttle.ts";
 
 const SECOND = 1000;
 const MINUTE = 60 * SECOND;
@@ -25,13 +25,13 @@ function sent(index: number, level: Level, at: number, options: { readonly who?:
 }
 
 // A route of an escalation with one send that is due: step `step` on `channel`.
-function entry(index: number, options: { readonly level?: Level; readonly due?: number; readonly who?: PersonId; readonly channel?: ChannelId; readonly step?: number; readonly episode?: number } = {}): Route {
-  const { level = "notice", due = T0, who = person, channel = pushover, step = 0, episode = 0 } = options;
+function entry(index: number, options: { readonly level?: Level; readonly due?: number; readonly who?: PersonId; readonly channel?: ChannelId; readonly step?: number; readonly episode?: number; readonly kind?: string } = {}): Route {
+  const { level = "notice", due = T0, who = person, channel = pushover, step = 0, episode = 0, kind = "met.flood" } = options;
   const incident: Incident = {
     anchor: idOf(index),
     reports: [idOf(index)],
     status: "actual",
-    kind: { code: "met.flood", label: "Flood" },
+    kind: { code: kind, label: kind },
     severity: "moderate",
     urgency: "expected",
     certainty: "observed",
@@ -64,11 +64,17 @@ function entry(index: number, options: { readonly level?: Level; readonly due?: 
 
 const sendsOf = (routes: readonly Route[]): string[] => routes.flatMap((route) => route.plan.sends.map((send) => `${send.incident.slice(-2)}:${send.level}`));
 
+// The report of a made-up incident with a kind.
+const reportOf = (index: number, code: string) => ({ id: idOf(index), kind: { code, label: code } });
+// The reports of the made-up incidents 0 to 15: alerts of the kind `met.flood`. A test gives other reports when it needs them.
+const WORLD = Array.from({ length: 16 }, (_, index) => reportOf(index, "met.flood"));
+const throttled = (input: ThrottleInput) => throttleRoutes({ reports: WORLD, ...input });
+
 describe("the throttle of a configuration", () => {
   it("keeps each default that the configuration does not give", () => {
     expect(throttleOf(undefined)).toEqual(DEFAULT_THROTTLE);
     expect(throttleOf({ window: 10 * MINUTE })).toEqual({ ...DEFAULT_THROTTLE, window: 10 * MINUTE });
-    expect(DEFAULT_THROTTLE).toEqual({ window: 30 * MINUTE, key: "channel", exempt: ["life-safety"] });
+    expect(DEFAULT_THROTTLE).toEqual({ window: 30 * MINUTE, key: "channel", streams: "system", exempt: ["life-safety"] });
   });
 
   it("finds a bad window, a bad key and a bad exemption", () => {
@@ -76,6 +82,8 @@ describe("the throttle of a configuration", () => {
     expect(throttleProblems({ window: 30 * SECOND })).toHaveLength(1);
     expect(throttleProblems({ window: 2 * 86_400_000 })).toHaveLength(1);
     expect(throttleProblems({ key: "place" as Throttle["key"] })).toHaveLength(1);
+    expect(throttleProblems({ streams: "lanes" as Throttle["streams"] })).toHaveLength(1);
+    expect(throttleProblems({ streams: "family" })).toEqual([]);
     expect(throttleProblems({ exempt: ["digest"] })).toHaveLength(1);
     expect(throttleProblems({ exempt: ["urgent", "life-safety"] })).toEqual([]);
   });
@@ -84,7 +92,7 @@ describe("the throttle of a configuration", () => {
 describe("throttleRoutes", () => {
   it("(b) sends an urgent alert at once after a notice in the window", () => {
     const deliveries = [sent(1, "notice", T0)];
-    const result = throttleRoutes({ routes: [entry(2, { level: "urgent", due: T0 + MINUTE })], deliveries, suppressions: [], now: T0 + MINUTE });
+    const result = throttled({ routes: [entry(2, { level: "urgent", due: T0 + MINUTE })], deliveries, suppressions: [], now: T0 + MINUTE });
     expect(sendsOf(result.routes)).toEqual(["02:urgent"]);
     expect(result.suppressions).toEqual([]);
   });
@@ -93,14 +101,14 @@ describe("throttleRoutes", () => {
     // A life-safety message went 1 minute before. Two new life-safety incidents in one pass and step 1 of the first all go.
     const deliveries = [sent(1, "life-safety", T0)];
     const routes = [entry(2, { level: "life-safety", due: T0 + MINUTE }), entry(3, { level: "life-safety", due: T0 + MINUTE }), entry(1, { level: "life-safety", due: T0 + 5 * MINUTE, step: 1 })];
-    const result = throttleRoutes({ routes, deliveries, suppressions: [], now: T0 + 5 * MINUTE });
+    const result = throttled({ routes, deliveries, suppressions: [], now: T0 + 5 * MINUTE });
     expect(sendsOf(result.routes)).toEqual(["02:life-safety", "03:life-safety", "01:life-safety"]);
     expect(result.suppressions).toEqual([]);
   });
 
   it("(d) stops a lower level after a higher one in the window, and keeps the reason", () => {
     const deliveries = [sent(1, "urgent", T0)];
-    const result = throttleRoutes({ routes: [entry(2, { due: T0 + MINUTE })], deliveries, suppressions: [], now: T0 + MINUTE });
+    const result = throttled({ routes: [entry(2, { due: T0 + MINUTE })], deliveries, suppressions: [], now: T0 + MINUTE });
     expect(sendsOf(result.routes)).toEqual([]);
     const key = messageKey({ incident: idOf(2), level: "notice", person, step: 0 });
     expect(result.suppressions).toEqual<Suppression[]>([{ key, incident: idOf(2), level: "notice", person, channel: pushover, step: 0, episode: 0, at: T0 + MINUTE, reason: "lower-level", over: "urgent" }]);
@@ -108,17 +116,17 @@ describe("throttleRoutes", () => {
 
   it("stops a second notice in the window as same-level, and lets it go after the window", () => {
     const deliveries = [sent(1, "notice", T0)];
-    const inside = throttleRoutes({ routes: [entry(2, { due: T0 + 29 * MINUTE })], deliveries, suppressions: [], now: T0 + 29 * MINUTE });
+    const inside = throttled({ routes: [entry(2, { due: T0 + 29 * MINUTE })], deliveries, suppressions: [], now: T0 + 29 * MINUTE });
     expect(inside.suppressions.map((one) => [one.reason, one.over])).toEqual([["same-level", "notice"]]);
     // The window is (now - window, now]. A delivery at now - window is out of it.
-    const after = throttleRoutes({ routes: [entry(2, { due: T0 + 30 * MINUTE })], deliveries, suppressions: [], now: T0 + 30 * MINUTE });
+    const after = throttled({ routes: [entry(2, { due: T0 + 30 * MINUTE })], deliveries, suppressions: [], now: T0 + 30 * MINUTE });
     expect(sendsOf(after.routes)).toEqual(["02:notice"]);
   });
 
   it("keeps a send with a suppression in the log out, also after its window", () => {
     const deliveries = [sent(1, "notice", T0)];
-    const first = throttleRoutes({ routes: [entry(2, { due: T0 + MINUTE })], deliveries, suppressions: [], now: T0 + MINUTE });
-    const later = throttleRoutes({ routes: [entry(2, { due: T0 + MINUTE })], deliveries, suppressions: first.suppressions, now: T0 + 3 * 60 * MINUTE });
+    const first = throttled({ routes: [entry(2, { due: T0 + MINUTE })], deliveries, suppressions: [], now: T0 + MINUTE });
+    const later = throttled({ routes: [entry(2, { due: T0 + MINUTE })], deliveries, suppressions: first.suppressions, now: T0 + 3 * 60 * MINUTE });
     expect(sendsOf(later.routes)).toEqual([]);
     // The log has the suppression already, thus the pass adds none.
     expect(later.suppressions).toEqual([]);
@@ -128,14 +136,14 @@ describe("throttleRoutes", () => {
 
   it("sends one message of each level in one pass, the earliest due first, and stops the rest", () => {
     const routes = [entry(3, { due: T0 + 2 * SECOND }), entry(1, { due: T0 }), entry(2, { due: T0 + SECOND }), entry(4, { level: "urgent", due: T0 + 3 * SECOND }), entry(5, { level: "urgent", due: T0 + 4 * SECOND })];
-    const result = throttleRoutes({ routes, deliveries: [], suppressions: [], now: T0 + 5 * SECOND });
+    const result = throttled({ routes, deliveries: [], suppressions: [], now: T0 + 5 * SECOND });
     expect(sendsOf(result.routes)).toEqual(["01:notice", "04:urgent"]);
     expect(result.suppressions.map((one) => `${one.incident.slice(-2)}:${one.reason}:${one.over}`)).toEqual(["02:same-level:notice", "03:same-level:notice", "05:same-level:urgent"]);
   });
 
   it("stops a notice that comes after an urgent alert of the same pass", () => {
     const routes = [entry(1, { level: "urgent", due: T0 }), entry(2, { due: T0 + SECOND })];
-    const result = throttleRoutes({ routes, deliveries: [], suppressions: [], now: T0 + SECOND });
+    const result = throttled({ routes, deliveries: [], suppressions: [], now: T0 + SECOND });
     expect(sendsOf(result.routes)).toEqual(["01:urgent"]);
     expect(result.suppressions.map((one) => one.reason)).toEqual(["lower-level"]);
   });
@@ -144,7 +152,7 @@ describe("throttleRoutes", () => {
     // The delivery of the other copy has the same form as an own delivery: the ledger holds both.
     const deliveries = [sent(1, "notice", T0)];
     const routes = [entry(2, { due: T0 + MINUTE, who: other }), entry(3, { due: T0 + MINUTE, channel: call }), entry(4, { due: T0 + MINUTE })];
-    const result = throttleRoutes({ routes, deliveries, suppressions: [], now: T0 + MINUTE });
+    const result = throttled({ routes, deliveries, suppressions: [], now: T0 + MINUTE });
     expect(sendsOf(result.routes)).toEqual(["02:notice", "03:notice"]);
     expect(result.suppressions.map((one) => one.incident)).toEqual([idOf(4)]);
   });
@@ -152,14 +160,14 @@ describe("throttleRoutes", () => {
   it("lets a started send go first, and counts its level in the window", () => {
     const started = entry(2, { due: T0 + 2 * SECOND });
     const routes = [entry(1, { due: T0 }), started];
-    const result = throttleRoutes({ routes, deliveries: [], suppressions: [], started: new Set([messageKey(started.plan.sends[0]!)]), now: T0 + 3 * SECOND });
+    const result = throttled({ routes, deliveries: [], suppressions: [], started: new Set([messageKey(started.plan.sends[0]!)]), now: T0 + 3 * SECOND });
     expect(sendsOf(result.routes)).toEqual(["02:notice"]);
     expect(result.suppressions.map((one) => one.incident)).toEqual([idOf(1)]);
   });
 
   it("does not count a digest, and does not stop one", () => {
     const deliveries = [sent(1, "digest", T0)];
-    const result = throttleRoutes({ routes: [entry(2, { due: T0 + MINUTE }), entry(3, { level: "digest", due: T0 + MINUTE })], deliveries, suppressions: [], now: T0 + MINUTE });
+    const result = throttled({ routes: [entry(2, { due: T0 + MINUTE }), entry(3, { level: "digest", due: T0 + MINUTE })], deliveries, suppressions: [], now: T0 + MINUTE });
     expect(sendsOf(result.routes)).toEqual(["02:notice", "03:digest"]);
   });
 
@@ -167,7 +175,7 @@ describe("throttleRoutes", () => {
     const throttle: Throttle = { ...DEFAULT_THROTTLE, key: "incident" };
     const deliveries = [sent(1, "notice", T0)];
     const routes = [entry(1, { due: T0 + MINUTE, step: 1 }), entry(2, { due: T0 + MINUTE })];
-    const result = throttleRoutes({ routes, deliveries, suppressions: [], throttle, now: T0 + MINUTE });
+    const result = throttled({ routes, deliveries, suppressions: [], throttle, now: T0 + MINUTE });
     expect(sendsOf(result.routes)).toEqual(["02:notice"]);
     expect(result.suppressions.map((one) => `${one.incident.slice(-2)}:${String(one.step)}`)).toEqual(["01:1"]);
   });
@@ -175,13 +183,73 @@ describe("throttleRoutes", () => {
   it("stops a life-safety send when the configuration takes the exemption away", () => {
     const throttle: Throttle = { ...DEFAULT_THROTTLE, exempt: [] };
     const deliveries = [sent(1, "life-safety", T0)];
-    const result = throttleRoutes({ routes: [entry(2, { level: "life-safety", due: T0 + MINUTE })], deliveries, suppressions: [], throttle, now: T0 + MINUTE });
+    const result = throttled({ routes: [entry(2, { level: "life-safety", due: T0 + MINUTE })], deliveries, suppressions: [], throttle, now: T0 + MINUTE });
     expect(result.suppressions.map((one) => one.reason)).toEqual(["same-level"]);
+  });
+
+  it("(i) sends a system notice after a weather notice in the window: the two are in different streams", () => {
+    // A weather notice went 1 minute before. A health notice goes, and a second weather notice does not.
+    const routes = [entry(2, { kind: "system.health", due: T0 + MINUTE }), entry(3, { due: T0 + MINUTE })];
+    const result = throttled({ routes, deliveries: [sent(1, "notice", T0)], suppressions: [], now: T0 + MINUTE });
+    expect(sendsOf(result.routes)).toEqual(["02:notice"]);
+    expect(result.suppressions.map((one) => [one.incident, one.reason, one.over])).toEqual([[idOf(3), "same-level", "notice"]]);
+    // A quota notice under an urgent weather message goes too.
+    const under = throttled({ routes: [entry(4, { kind: "system.quota.low", due: T0 + MINUTE })], deliveries: [sent(1, "urgent", T0)], suppressions: [], now: T0 + MINUTE });
+    expect(sendsOf(under.routes)).toEqual(["04:notice"]);
+    expect(under.suppressions).toEqual([]);
+  });
+
+  it("(ii) sends a weather notice after a system notice in the window: in one pass, and after a delivery", () => {
+    // In one pass: the health notice is due first, and the weather notice still goes.
+    const pass = throttled({ routes: [entry(1, { kind: "system.health", due: T0 }), entry(2, { due: T0 + MINUTE })], deliveries: [], suppressions: [], now: T0 + MINUTE });
+    expect(sendsOf(pass.routes)).toEqual(["01:notice", "02:notice"]);
+    // After a delivery of a health notice: its report gives its stream.
+    const reports = [reportOf(1, "system.health"), ...WORLD.slice(2)];
+    const after = throttled({ routes: [entry(2, { due: T0 + MINUTE })], deliveries: [sent(1, "notice", T0)], suppressions: [], reports, now: T0 + MINUTE });
+    expect(sendsOf(after.routes)).toEqual(["02:notice"]);
+    expect(after.suppressions).toEqual([]);
+  });
+
+  it("(iii) stops a repeat of a system.health notice at the same level in the window, and a lower level, with the reason", () => {
+    const reports = [reportOf(1, "system.health"), reportOf(4, "system.health"), ...WORLD.slice(2, 4)];
+    const repeat = throttled({ routes: [entry(2, { kind: "system.health", due: T0 + MINUTE })], deliveries: [sent(1, "notice", T0)], suppressions: [], reports, now: T0 + MINUTE });
+    expect(sendsOf(repeat.routes)).toEqual([]);
+    expect(repeat.suppressions.map((one) => [one.incident, one.level, one.reason, one.over])).toEqual([[idOf(2), "notice", "same-level", "notice"]]);
+    expect(repeat.routes[0]?.suppressed?.reason).toBe("same-level");
+    // The re-page (step 1) of the line of a source at the same level does not go either.
+    const repage = throttled({ routes: [entry(1, { kind: "system.health", due: T0 + 5 * MINUTE, step: 1 })], deliveries: [sent(1, "notice", T0)], suppressions: [], reports, now: T0 + 5 * MINUTE });
+    expect(repage.suppressions.map((one) => [one.step, one.reason])).toEqual([[1, "same-level"]]);
+    const lower = throttled({ routes: [entry(3, { kind: "system.copy", due: T0 + MINUTE })], deliveries: [sent(4, "urgent", T0)], suppressions: [], reports, now: T0 + MINUTE });
+    expect(lower.suppressions.map((one) => [one.reason, one.over])).toEqual([["lower-level", "urgent"]]);
+  });
+
+  it("(iv) counts a system delivery with no route in the stream of the system lines, not in the stream of the alerts", () => {
+    // The line ended, thus it has no route. A retirement removes a report and its deliveries together, thus the report is here.
+    const ended = [reportOf(1, "system.health"), ...WORLD.slice(2)];
+    // The other copy sent a system line: this copy has no report of it, because the copies do not share the system lines.
+    const other = WORLD.slice(2);
+    for (const reports of [ended, other]) {
+      const routes = [entry(2, { due: T0 + MINUTE }), entry(3, { kind: "system.health", due: T0 + MINUTE })];
+      const result = throttled({ routes, deliveries: [sent(1, "notice", T0)], suppressions: [], reports, now: T0 + MINUTE });
+      expect(sendsOf(result.routes)).toEqual(["02:notice"]);
+      expect(result.suppressions.map((one) => [one.incident, one.reason])).toEqual([[idOf(3), "same-level"]]);
+    }
+  });
+
+  it("keeps one stream for all the alerts by default, and one stream for each family with the streams family", () => {
+    const reports = [reportOf(1, "met.flood"), reportOf(2, "transport.rail.delay")];
+    const input = { routes: [entry(2, { kind: "transport.rail.delay", due: T0 + MINUTE })], deliveries: [sent(1, "notice", T0)], suppressions: [], reports, now: T0 + MINUTE };
+    expect(throttled(input).suppressions.map((one) => one.reason)).toEqual(["same-level"]);
+    const families = throttled({ ...input, throttle: { ...DEFAULT_THROTTLE, streams: "family" } });
+    expect(sendsOf(families.routes)).toEqual(["02:notice"]);
+    // The same family is one stream.
+    const same = throttled({ ...input, routes: [entry(3, { kind: "met.wind", due: T0 + MINUTE })], throttle: { ...DEFAULT_THROTTLE, streams: "family" } });
+    expect(same.suppressions.map((one) => one.reason)).toEqual(["same-level"]);
   });
 
   it("gives the same routes object when it stops nothing", () => {
     const routes = [entry(1)];
-    expect(throttleRoutes({ routes, deliveries: [], suppressions: [], now: T0 }).routes).toBe(routes);
+    expect(throttled({ routes, deliveries: [], suppressions: [], now: T0 }).routes).toBe(routes);
   });
 });
 
@@ -197,6 +265,7 @@ function replay(throttle: Throttle | undefined): { readonly delivered: readonly 
   const suppressions: Suppression[] = [];
   const holds: EscalationHold[] = [];
   const times = [...new Set(BURST.sends.map(([second]) => second))];
+  const reports = BURST.sends.map(([, , index]) => reportOf(1000 + index, "met.flood"));
   for (const second of times) {
     const now = T0 + second * SECOND;
     const done = new Set([...delivered.map((delivery) => delivery.key), ...suppressions.map((suppression) => suppression.key)]);
@@ -206,7 +275,7 @@ function replay(throttle: Throttle | undefined): { readonly delivered: readonly 
       .filter((route) => !done.has(messageKey(route.plan.sends[0]!)));
     const limited = limitRoutes({ routes, deliveries: delivered, holds, limits: DEFAULT_SEND_LIMITS, now });
     holds.push(...limited.holds);
-    const result = throttle === undefined ? { routes: limited.routes, suppressions: [] } : throttleRoutes({ routes: limited.routes, deliveries: delivered, suppressions, throttle, now });
+    const result = throttle === undefined ? { routes: limited.routes, suppressions: [] } : throttleRoutes({ routes: limited.routes, deliveries: delivered, suppressions, reports, throttle, now });
     suppressions.push(...result.suppressions);
     for (const route of result.routes) for (const send of route.plan.sends) delivered.push({ key: messageKey(send), incident: send.incident, level: send.level, person: send.person, channel: send.channel, step: send.step, at: now, receipt: {} });
   }

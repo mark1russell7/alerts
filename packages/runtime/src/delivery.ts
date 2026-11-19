@@ -421,7 +421,7 @@ export function createDispatcher(options: DeliveryOptions, context: DeliveryCont
         // The send limit counts new escalations, and the throttle counts messages on each channel. The send limit stays a
         // cap over all the channels.
         if (options.throttle === undefined) return { ...limited, suppressions: [] };
-        const throttled = throttleRoutes({ routes: limited.routes, deliveries: state.merge.deliveries, suppressions: state.suppressions, throttle: options.throttle, started, now: at });
+        const throttled = throttleRoutes({ routes: limited.routes, deliveries: state.merge.deliveries, suppressions: state.suppressions, reports: state.merge.reports, throttle: options.throttle, started, now: at });
         return { routes: throttled.routes, holds: limited.holds, suppressions: throttled.suppressions };
       };
       const failures: DeliveryFailure[] = [];

@@ -541,7 +541,8 @@ describe("openInstance", () => {
     expect(pass.delivery?.failures.map((failure) => failure.kind)).toEqual(["reserved"]);
     await clock.advance(1000);
     const next = await finish(clock, instance.runtime.pass());
-    // In the next pass, the throttle (AL-72 part 4) stops the messages before the reserve: the line went in the window.
+    // In the next pass, the throttle (AL-72 part 4) stops the waiting quota line before the reserve. The line of the entry into
+    // the reserve went in the window, and the two lines are in the stream of the system lines.
     expect(next.delivery?.failures ?? []).toEqual([]);
     expect(instance.runtime.state().suppressions.map((one) => [one.level, one.reason, one.over])).toEqual([["notice", "same-level", "notice"]]);
     expect(server.calls).toHaveLength(1);

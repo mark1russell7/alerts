@@ -987,21 +987,26 @@ A new source starts in the observe mode (AL-73). It sends nothing below `life-sa
 
 ## The throttle
 
-The core function `throttleRoutes` applies the rise-only throttle of each person and channel to the routes of a pass (AL-72 part 4). It comes after the send limit.
+The core function `throttleRoutes` applies the rise-only throttle of each person, channel and stream to the routes of a pass (AL-72 part 4). It comes after the send limit.
 
-- In one window, a channel sends a second message to a person only when the level is above each level that it sent to the person in the window.
+- In one window, a channel sends a second message of a stream to a person only at a higher level.
+- By default, there are two streams: the system lines (the kinds of the family `system`) and the alerts (each other kind). Thus a health notice never stops a weather notice, and a weather notice never stops a health notice.
+- With the streams `family`, each family of the alerts is a stream. The family is the first part of the kind, for example `met` of `met.flood`. The system lines stay one stream.
+- The kind of the incident of a route, or of the report of a delivery, gives the stream. The report comes from the merge state. A retirement removes a report and its deliveries together, thus a delivery in the window always has its report.
+- A delivery of a report that the copy does not know is in the stream of the system lines. The copies share the reports of the alerts, but not the system lines. Thus such a delivery is a system line of the other copy.
 - A send at the same level or at a lower level does not go. It gets a suppression with its reason: `same-level` or `lower-level`.
-- The suppression is an event `suppressed` of the log of the copy. It is not shared. Its field `over` has the highest level in the window.
+- The suppression is an event `suppressed` of the log of the copy. It is not shared. Its field `over` has the highest level of the stream in the window.
 - A suppression does not end. Thus a suppressed send does not go late, also after its window.
-- The default window is 30 minutes for each person and channel (`DEFAULT_THROTTLE`).
-- The field `throttle` of the configuration changes the window, the key or the levels with an exemption. The window is one minute to one day.
-- The key `channel` has one window for each person and channel. The key `incident` has one window for each person, channel and incident.
+- The default window is 30 minutes for each person, channel and stream (`DEFAULT_THROTTLE`).
+- The field `throttle` of the configuration changes the window, the key, the streams or the levels with an exemption. The window is one minute to one day.
+- The key `channel` has one window for each person, channel and stream. The key `incident` has one window for each person, channel, stream and incident.
 - A level with an exemption always sends. The default exemption is `life-safety`. Thus a `life-safety` alert of a new incident goes at once, and each step of its escalation goes until the acknowledgment.
 - The sends of a level with an exemption count in the bar of the other levels. A digest has no throttle, and it does not count.
 - The bar counts the deliveries of the other copies, thus the throttle applies over all the copies.
 - A send in flight, or a send with an open copy in the log, goes. Its level counts in the bar.
 - The other sends of a pass go in the order of their due times, then of the anchor, the episode, the step and the channel.
 - An escalation with a suppression and no delivery has no exhaustion. The next digest tells its incident.
+- A system line ends with a cancel of its sends, not with a send. Thus the throttle does not stop the end of a line.
 - The send limit stays. It counts the new escalations of each level over all the channels, and the throttle counts the messages on each channel.
 
 The default window comes from a replay of the burst of 2026-11-18, with made-up ids (`packages/core/fixtures/burst-2026-11-18.json`).

@@ -220,8 +220,8 @@ export interface AlertConfig {
    */
   readonly sendLimit?: SendLimitConfig;
   /**
-   * The rise-only throttle of each person and channel (AL-72 part 4). In one window, a channel sends again to a person
-   * only for a higher level. Each field that is absent keeps its default (`DEFAULT_THROTTLE`).
+   * The rise-only throttle of each person, channel and stream (AL-72 part 4). In one window, a channel sends again to a
+   * person only for a higher level of the stream. Each field that is absent keeps its default (`DEFAULT_THROTTLE`).
    */
   readonly throttle?: ThrottleConfig;
 }
