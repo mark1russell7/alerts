@@ -17,7 +17,7 @@
     "@mark1russell7/alerts-format-nws": "workspace:*",
     "@mark1russell7/algebra": "^0.9.7",
     "@mark1russell7/service": "^0.10.0",
-    "@mark1russell7/text": "^0.0.13",
+    "@mark1russell7/text": "^0.0.16",
     "@xmpp/client": "^0.14.0"
   },
   "devDependencies": {

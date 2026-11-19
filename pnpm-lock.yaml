@@ -179,8 +179,8 @@ importers:
         specifier: ^0.5.6
         version: 0.5.6
       '@mark1russell7/boundaries':
-        specifier: ^0.2.1
-        version: 0.2.1(@swc/core@1.16.22)(dependency-cruiser@18.7.2)
+        specifier: ^0.3.2
+        version: 0.3.2(@swc/core@1.16.22)(dependency-cruiser@18.7.2)
       '@mark1russell7/conventions':
         specifier: ^0.41.5
         version: 0.41.5
@@ -188,8 +188,8 @@ importers:
         specifier: ^2.0.0
         version: 2.1.4
       '@mark1russell7/ste-lint':
-        specifier: ^0.3.0
-        version: 0.3.2
+        specifier: ^0.4.0
+        version: 0.4.0
       '@mark1russell7/template-cli':
         specifier: ^0.1.7
         version: 0.1.9
@@ -218,8 +218,8 @@ importers:
         specifier: workspace:*
         version: link:../core
       '@mark1russell7/text':
-        specifier: ^0.0.13
-        version: 0.0.13
+        specifier: ^0.0.16
+        version: 0.0.16
     devDependencies:
       '@mark1russell7/alerts-source-aws':
         specifier: workspace:*
@@ -294,8 +294,8 @@ importers:
         specifier: workspace:*
         version: link:../core
       '@mark1russell7/text':
-        specifier: ^0.0.13
-        version: 0.0.13
+        specifier: ^0.0.16
+        version: 0.0.16
       '@procedures/notify':
         specifier: ^0.64.0
         version: 0.64.0(@mark1russell7/rigor-testkit@0.1.20(@mark1russell7/rigor-chaos@0.3.3)(@mark1russell7/rigor-generators@0.2.0)(@opentelemetry/api@1.10.0)(fast-check@4.10.2)(ltx@3.1.2))
@@ -331,8 +331,8 @@ importers:
         specifier: ^0.1.18
         version: 0.1.19
       '@mark1russell7/text':
-        specifier: ^0.0.13
-        version: 0.0.13
+        specifier: ^0.0.16
+        version: 0.0.16
       '@procedures/notify':
         specifier: ^0.64.0
         version: 0.64.0(@mark1russell7/rigor-testkit@0.1.20(@mark1russell7/rigor-chaos@0.3.3)(@mark1russell7/rigor-generators@0.1.19)(@mark1russell7/rigor-proxy@0.3.2(zod@4.6.7))(@opentelemetry/api@1.10.0)(fast-check@4.10.2)(ltx@3.1.2))
@@ -381,7 +381,7 @@ importers:
         version: 0.1.0
       '@mark1russell7/optional':
         specifier: ^1.2.0
-        version: 1.2.0
+        version: 1.3.0
       '@mark1russell7/quantity':
         specifier: ^0.4.2
         version: 0.4.2(zod@4.6.7)
@@ -392,8 +392,8 @@ importers:
         specifier: ^0.2.8
         version: 0.2.8
       '@mark1russell7/text':
-        specifier: ^0.0.13
-        version: 0.0.13
+        specifier: ^0.0.16
+        version: 0.0.16
       zod:
         specifier: ^4.6.7
         version: 4.6.7
@@ -423,8 +423,8 @@ importers:
         specifier: workspace:*
         version: link:../core
       '@mark1russell7/text':
-        specifier: ^0.0.13
-        version: 0.0.13
+        specifier: ^0.0.16
+        version: 0.0.16
       polite-crawler:
         specifier: ^0.7.10
         version: 0.7.10(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
@@ -547,8 +547,8 @@ importers:
         specifier: ^0.2.8
         version: 0.2.8
       '@mark1russell7/text':
-        specifier: ^0.0.13
-        version: 0.0.13
+        specifier: ^0.0.16
+        version: 0.0.16
       '@procedures/json':
         specifier: ^0.64.0
         version: 0.64.0
@@ -657,7 +657,7 @@ importers:
         version: 0.0.4
       '@mark1russell7/optional':
         specifier: ^1.2.0
-        version: 1.2.0
+        version: 1.3.0
       '@mark1russell7/quantity':
         specifier: ^0.4.2
         version: 0.4.2(zod@4.6.7)
@@ -674,8 +674,8 @@ importers:
         specifier: ^0.3.8
         version: 0.3.9
       '@mark1russell7/text':
-        specifier: ^0.0.13
-        version: 0.0.13
+        specifier: ^0.0.16
+        version: 0.0.16
       '@procedures/client':
         specifier: ^0.64.0
         version: 0.64.0
@@ -729,8 +729,8 @@ importers:
         specifier: ^0.3.8
         version: 0.3.9
       '@mark1russell7/text':
-        specifier: ^0.0.13
-        version: 0.0.13
+        specifier: ^0.0.16
+        version: 0.0.16
       polite-crawler:
         specifier: ^0.7.10
         version: 0.7.10(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
@@ -769,14 +769,14 @@ importers:
         specifier: ^0.5.2
         version: 0.5.3
       '@mark1russell7/site-pages':
-        specifier: ^0.7.0
-        version: 0.7.0
+        specifier: ^0.8.0
+        version: 0.8.0
       '@mark1russell7/text':
-        specifier: ^0.0.13
-        version: 0.0.13
+        specifier: ^0.0.16
+        version: 0.0.16
       '@mark1russell7/visuals':
         specifier: ^0.3.1
-        version: 0.3.1(three@0.187.0)
+        version: 0.3.10(three@0.187.0)
       '@types/d3-geo':
         specifier: ^3.1.1
         version: 3.1.1
@@ -817,8 +817,8 @@ importers:
         specifier: workspace:*
         version: link:../format-cap
       '@mark1russell7/text':
-        specifier: ^0.0.13
-        version: 0.0.13
+        specifier: ^0.0.16
+        version: 0.0.16
       polite-crawler:
         specifier: ^0.7.10
         version: 0.7.10(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
@@ -888,8 +888,8 @@ importers:
         specifier: workspace:*
         version: link:../space-weather
       '@mark1russell7/text':
-        specifier: ^0.0.13
-        version: 0.0.13
+        specifier: ^0.0.16
+        version: 0.0.16
       polite-crawler:
         specifier: ^0.7.10
         version: 0.7.10(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
@@ -925,8 +925,8 @@ importers:
         specifier: workspace:*
         version: link:../format-cap
       '@mark1russell7/text':
-        specifier: ^0.0.13
-        version: 0.0.13
+        specifier: ^0.0.16
+        version: 0.0.16
       polite-crawler:
         specifier: ^0.7.10
         version: 0.7.10(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
@@ -959,8 +959,8 @@ importers:
         specifier: workspace:*
         version: link:../fetch
       '@mark1russell7/text':
-        specifier: ^0.0.13
-        version: 0.0.13
+        specifier: ^0.0.16
+        version: 0.0.16
       polite-crawler:
         specifier: ^0.7.10
         version: 0.7.10(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
@@ -1002,8 +1002,8 @@ importers:
         specifier: workspace:*
         version: link:../source-gcp
       '@mark1russell7/text':
-        specifier: ^0.0.13
-        version: 0.0.13
+        specifier: ^0.0.16
+        version: 0.0.16
       polite-crawler:
         specifier: ^0.7.10
         version: 0.7.10(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
@@ -1033,8 +1033,8 @@ importers:
         specifier: workspace:*
         version: link:../fetch
       '@mark1russell7/text':
-        specifier: ^0.0.13
-        version: 0.0.13
+        specifier: ^0.0.16
+        version: 0.0.16
       polite-crawler:
         specifier: ^0.7.10
         version: 0.7.10(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
@@ -1076,8 +1076,8 @@ importers:
         specifier: workspace:*
         version: link:../quake
       '@mark1russell7/text':
-        specifier: ^0.0.13
-        version: 0.0.13
+        specifier: ^0.0.16
+        version: 0.0.16
       polite-crawler:
         specifier: ^0.7.10
         version: 0.7.10(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
@@ -1113,8 +1113,8 @@ importers:
         specifier: workspace:*
         version: link:../fetch
       '@mark1russell7/text':
-        specifier: ^0.0.13
-        version: 0.0.13
+        specifier: ^0.0.16
+        version: 0.0.16
       polite-crawler:
         specifier: ^0.7.10
         version: 0.7.10(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
@@ -1150,8 +1150,8 @@ importers:
         specifier: workspace:*
         version: link:../fetch
       '@mark1russell7/text':
-        specifier: ^0.0.13
-        version: 0.0.13
+        specifier: ^0.0.16
+        version: 0.0.16
       polite-crawler:
         specifier: ^0.7.10
         version: 0.7.10(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
@@ -1187,8 +1187,8 @@ importers:
         specifier: workspace:*
         version: link:../space-weather
       '@mark1russell7/text':
-        specifier: ^0.0.13
-        version: 0.0.13
+        specifier: ^0.0.16
+        version: 0.0.16
       polite-crawler:
         specifier: ^0.7.10
         version: 0.7.10(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
@@ -1224,8 +1224,8 @@ importers:
         specifier: workspace:*
         version: link:../fetch
       '@mark1russell7/text':
-        specifier: ^0.0.13
-        version: 0.0.13
+        specifier: ^0.0.16
+        version: 0.0.16
       '@procedures/json':
         specifier: ^0.64.0
         version: 0.64.0
@@ -1270,8 +1270,8 @@ importers:
         specifier: workspace:*
         version: link:../format-nws
       '@mark1russell7/text':
-        specifier: ^0.0.13
-        version: 0.0.13
+        specifier: ^0.0.16
+        version: 0.0.16
       polite-crawler:
         specifier: ^0.7.10
         version: 0.7.10(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
@@ -1322,8 +1322,8 @@ importers:
         specifier: workspace:*
         version: link:../format-nws
       '@mark1russell7/text':
-        specifier: ^0.0.13
-        version: 0.0.13
+        specifier: ^0.0.16
+        version: 0.0.16
       polite-crawler:
         specifier: ^0.7.10
         version: 0.7.10(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
@@ -1365,8 +1365,8 @@ importers:
         specifier: workspace:*
         version: link:../format-nws
       '@mark1russell7/text':
-        specifier: ^0.0.13
-        version: 0.0.13
+        specifier: ^0.0.16
+        version: 0.0.16
       polite-crawler:
         specifier: ^0.7.10
         version: 0.7.10(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
@@ -1408,8 +1408,8 @@ importers:
         specifier: ^0.10.0
         version: 0.10.0(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
       '@mark1russell7/text':
-        specifier: ^0.0.13
-        version: 0.0.13
+        specifier: ^0.0.16
+        version: 0.0.16
       '@xmpp/client':
         specifier: ^0.14.0
         version: 0.14.0
@@ -1454,8 +1454,8 @@ importers:
         specifier: workspace:*
         version: link:../format-cap
       '@mark1russell7/text':
-        specifier: ^0.0.13
-        version: 0.0.13
+        specifier: ^0.0.16
+        version: 0.0.16
       polite-crawler:
         specifier: ^0.7.10
         version: 0.7.10(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
@@ -1494,8 +1494,8 @@ importers:
         specifier: workspace:*
         version: link:../space-weather
       '@mark1russell7/text':
-        specifier: ^0.0.13
-        version: 0.0.13
+        specifier: ^0.0.16
+        version: 0.0.16
       polite-crawler:
         specifier: ^0.7.10
         version: 0.7.10(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
@@ -1534,8 +1534,8 @@ importers:
         specifier: workspace:*
         version: link:../format-nws
       '@mark1russell7/text':
-        specifier: ^0.0.13
-        version: 0.0.13
+        specifier: ^0.0.16
+        version: 0.0.16
       polite-crawler:
         specifier: ^0.7.10
         version: 0.7.10(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
@@ -1571,8 +1571,8 @@ importers:
         specifier: workspace:*
         version: link:../quake
       '@mark1russell7/text':
-        specifier: ^0.0.13
-        version: 0.0.13
+        specifier: ^0.0.16
+        version: 0.0.16
       polite-crawler:
         specifier: ^0.7.10
         version: 0.7.10(@opentelemetry/api@1.10.0)(ws@8.23.0)(zod@4.6.7)
@@ -1675,8 +1675,8 @@ importers:
         specifier: ^0.3.8
         version: 0.3.9
       '@mark1russell7/text':
-        specifier: ^0.0.13
-        version: 0.0.13
+        specifier: ^0.0.16
+        version: 0.0.16
       '@procedures/notify':
         specifier: ^0.64.0
         version: 0.64.0(@mark1russell7/rigor-testkit@0.1.20(@mark1russell7/rigor-chaos@0.3.3)(@mark1russell7/rigor-generators@0.1.19)(@mark1russell7/rigor-proxy@0.3.2(zod@4.6.7))(@opentelemetry/api@1.10.0)(fast-check@4.10.2)(ltx@3.1.2))
@@ -1935,8 +1935,8 @@ packages:
     engines: {node: '>=22'}
     hasBin: true
 
-  '@mark1russell7/boundaries@0.2.1':
-    resolution: {integrity: sha512-ZaNTU/VEDJddvBEHyCtYhrPippjOWoWWWpgVs/zpYOfu4QujMz+JfQfmyCE1IGgb6SJq9Rsb5RlujAgTrP6qOw==}
+  '@mark1russell7/boundaries@0.3.2':
+    resolution: {integrity: sha512-PlgXsF+iJ6EoOusW61gx5Om1Oq86xySyTeMgmxEon6MM4/Eyi2ylDhf5a2YiwoWfpYJqPQE9zWj6pCcXvezFtQ==}
     engines: {node: '>=22'}
     peerDependencies:
       '@swc/core': ^1.10.0
@@ -1984,12 +1984,12 @@ packages:
     resolution: {integrity: sha512-gxOyU9JQ4ikiomiisbOmNPwwKuOtWqQ6hPWcJANOWvIipjwQu2aYOvCeLokYpMEoCEhJHoY5FxzBGpn/mbgx+A==}
     engines: {node: '>=22'}
 
-  '@mark1russell7/layout-contract@0.10.2':
-    resolution: {integrity: sha512-53xgUkaVtkGXEdRZesdxKl1bSel8NCIs/OyKyk56t7VhjgSIIinELGKei8prBL1/cHnjswXMkkDgu/eo6wqmYg==}
+  '@mark1russell7/layout-contract@0.10.6':
+    resolution: {integrity: sha512-/al3v3Q/DH9QvSVZdAqxjKIcoC53FfhCR6T6p819lUIMFglNswy8AaXEo3EZ7rz0xBwBj5C4X0bPLWitrcOsLg==}
     engines: {node: '>=22.12'}
 
-  '@mark1russell7/optional@1.2.0':
-    resolution: {integrity: sha512-vS5jF21WC/VApRv4p8afRZahcMl9cuNp03LxbVngY9nYkzq+S7Oit6ksySt2baML+tp46UF60sxnHxn1jlwtTg==}
+  '@mark1russell7/optional@1.3.0':
+    resolution: {integrity: sha512-PCK0H/St2CorXD6SbvzXp389QPive2ahfFRIOapUWM50Pk60YvB7CibGbI6+y7jdeVLFzbuzfoXFmAFcOQAg6w==}
     engines: {node: '>=22.12'}
 
   '@mark1russell7/predicates@0.1.5':
@@ -2133,8 +2133,8 @@ packages:
       zod:
         optional: true
 
-  '@mark1russell7/site-pages@0.7.0':
-    resolution: {integrity: sha512-nFiaxs1D/IAxj54KUow0AkU35fxWj6iCHAcQ2GG2ISv0yD+YwnOoDHNmO1mV1g+roRV7G5czJNZlzv+3lcT2vg==}
+  '@mark1russell7/site-pages@0.8.0':
+    resolution: {integrity: sha512-OlqsZfj5yNovI1ysfPJEIVsRnON3KgEP9ELMIH5CO+kP9FY5Vu873oCY+Zja5dKB8wTVgU3YewEcTqH9ncDurg==}
     engines: {node: '>=22'}
     hasBin: true
 
@@ -2142,8 +2142,8 @@ packages:
     resolution: {integrity: sha512-H+dMOGwhOLFvxDfodTJvFjIIQaHcm5YaLCh5HC72NxSIJCZ8xRIoGFVPNMgGjTqe+6KEb71nUU2GE7N7Hw7LPg==}
     engines: {node: '>=22.13'}
 
-  '@mark1russell7/ste-lint@0.3.2':
-    resolution: {integrity: sha512-0WRNon1oYKX1mmTP/AhrPnpoGAGolmpkJWHaTkHXc4SKe1tQhUvPrY/0TQ4gvu7aN+TEPpypiZDIkOjYZG8qBA==}
+  '@mark1russell7/ste-lint@0.4.0':
+    resolution: {integrity: sha512-V58Mtpt7WOW2wRBreSuuIO4am0WOdrJq8603+NNtqyI5EY0/LpPiQFxEDx+yNOgkN5ddnpPTkjalRTmBF+9GXQ==}
     engines: {node: '>=22'}
     hasBin: true
 
@@ -2155,10 +2155,6 @@ packages:
     resolution: {integrity: sha512-7ebtLlCmT6KYhbpoI2SZHXCQC6/7Rc660SvKwQvfslseSQrXMRlmBj+1/F5KOCep6aB+LtvGWg+HmTKi6uZjyQ==}
     engines: {node: '>=22.12'}
     hasBin: true
-
-  '@mark1russell7/text@0.0.13':
-    resolution: {integrity: sha512-8Tu7DTTpfmpXIy0F2JCyOW1RD91X7tm38c5xiqz3cLdmEkUQViH/06kTBLj+hrzuQPMBGVyxd7snqVG6EpNLdQ==}
-    engines: {node: '>=22.12'}
 
   '@mark1russell7/text@0.0.16':
     resolution: {integrity: sha512-hq2AWdtbKtXlibTTcVA/6GQAxgPj+6U3Hdmkh1I4sRMQZn/SiKh1k78UtcMgtcLJxwHHG9GVs2O2VNQxJP7R1Q==}
@@ -2172,8 +2168,8 @@ packages:
     resolution: {integrity: sha512-uKmmt2icpkn2k9Wn/y1fRZvBml80dgwRLRhI72e6SkGVSF3UWCiuPZdYTJA2WEstRolq0viSLRJjXb/o8NF8JQ==}
     engines: {node: '>=22.12'}
 
-  '@mark1russell7/visuals@0.3.1':
-    resolution: {integrity: sha512-syFFEuw2cb1PlAuippo/Up991iDMDLCvfYIT8nU2IR//6Vt+unnn78Gqkw6g0wAsh+TGezhhkM9rDEx3Cpb+9w==}
+  '@mark1russell7/visuals@0.3.10':
+    resolution: {integrity: sha512-BtfsVFzrMS+29Qk0BRyb+gduu8eY+VESlzWZMQbyKb89KacR3Tc6KrvHGiEW7izQr8zACHlRpcpBIzYNNEkwWw==}
     engines: {node: '>=22'}
     peerDependencies:
       three: '>=0.187.0'
@@ -3586,7 +3582,7 @@ snapshots:
     dependencies:
       '@mark1russell7/conventions': 0.41.5
 
-  '@mark1russell7/boundaries@0.2.1(@swc/core@1.16.22)(dependency-cruiser@18.7.2)':
+  '@mark1russell7/boundaries@0.3.2(@swc/core@1.16.22)(dependency-cruiser@18.7.2)':
     optionalDependencies:
       '@swc/core': 1.16.22
       dependency-cruiser: 18.7.2
@@ -3601,7 +3597,7 @@ snapshots:
   '@mark1russell7/collections@0.10.2(zod@4.6.7)':
     dependencies:
       '@mark1russell7/algebra': 0.8.10(zod@4.6.7)
-      '@mark1russell7/optional': 1.2.0
+      '@mark1russell7/optional': 1.3.0
       '@mark1russell7/rigor-statistics': 0.1.29
     transitivePeerDependencies:
       - zod
@@ -3609,7 +3605,7 @@ snapshots:
   '@mark1russell7/collections@0.11.2(zod@4.6.7)':
     dependencies:
       '@mark1russell7/algebra': 0.8.10(zod@4.6.7)
-      '@mark1russell7/optional': 1.2.0
+      '@mark1russell7/optional': 1.3.0
       '@mark1russell7/rigor-statistics': 0.2.8
     transitivePeerDependencies:
       - zod
@@ -3626,12 +3622,12 @@ snapshots:
 
   '@mark1russell7/geo@0.5.3':
     dependencies:
-      '@mark1russell7/optional': 1.2.0
+      '@mark1russell7/optional': 1.3.0
       '@mark1russell7/predicates': 0.1.5
 
   '@mark1russell7/interval@0.1.0': {}
 
-  '@mark1russell7/layout-contract@0.10.2':
+  '@mark1russell7/layout-contract@0.10.6':
     dependencies:
       '@mark1russell7/predicates': 0.1.5
       '@mark1russell7/rigor-generators': 0.1.19
@@ -3641,7 +3637,7 @@ snapshots:
     transitivePeerDependencies:
       - zod
 
-  '@mark1russell7/optional@1.2.0': {}
+  '@mark1russell7/optional@1.3.0': {}
 
   '@mark1russell7/predicates@0.1.5': {}
 
@@ -3726,14 +3722,15 @@ snapshots:
       ws: 8.23.0
       zod: 4.6.7
 
-  '@mark1russell7/site-pages@0.7.0':
+  '@mark1russell7/site-pages@0.8.0':
     dependencies:
       '@mark1russell7/rigor-statistics': 0.2.8
 
   '@mark1russell7/sqlite@0.3.9': {}
 
-  '@mark1russell7/ste-lint@0.3.2':
+  '@mark1russell7/ste-lint@0.4.0':
     dependencies:
+      '@mark1russell7/files': 0.0.4
       typescript: 6.0.3
 
   '@mark1russell7/strategy-space@0.0.5':
@@ -3744,8 +3741,6 @@ snapshots:
   '@mark1russell7/template-cli@0.1.9':
     dependencies:
       '@clack/prompts': 1.9.0
-
-  '@mark1russell7/text@0.0.13': {}
 
   '@mark1russell7/text@0.0.16': {}
 
@@ -3758,10 +3753,10 @@ snapshots:
     transitivePeerDependencies:
       - zod
 
-  '@mark1russell7/visuals@0.3.1(three@0.187.0)':
+  '@mark1russell7/visuals@0.3.10(three@0.187.0)':
     dependencies:
       '@mark1russell7/geo': 0.5.3
-      '@mark1russell7/layout-contract': 0.10.2
+      '@mark1russell7/layout-contract': 0.10.6
     optionalDependencies:
       three: 0.187.0
     transitivePeerDependencies:
