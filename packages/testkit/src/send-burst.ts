@@ -33,7 +33,8 @@
  *   copy sends.
  * - `noThrow`: no pass throws, and each read of the exchange has no problem.
  * - `oneSend`, in the arms where the copies read each other at each step: no incident has a send of each copy.
- * - `throttled`: in each window of the throttle, each copy sends at most one notice to the person.
+ * - `throttled`: in each window of the throttle, each copy sends at most one notice of each stream to the person. The
+ *   system lines, such as the held notice of the send limit (AL-81), and the alerts are two streams.
  * - `flapped`, in `flapping`: the flaps gave 1 system incident or more, and each one has a send, a hold or a suppression. Before
  *   AL-75, each flap opens a new incident. A flap window of the health line keeps one incident for each episode.
  */
@@ -56,6 +57,7 @@ import {
   type SourceDescriptor,
   DEFAULT_THROTTLE,
   type Throttle,
+  throttleStreamOf,
   type SourceId,
   type SourceProcedures,
   SOURCE_SUBJECT,
@@ -221,6 +223,8 @@ export interface BurstRecord {
   readonly tornadoes: readonly string[];
   /** The system incidents of the flaps of the source, on each copy. */
   readonly flaps: readonly string[];
+  /** The stream of the throttle of each report of the copies, by its id. An incident with no stream is in the stream `alerts`. */
+  readonly streams: Readonly<Record<string, string>>;
   /** The start of the quiet tail, and the escalations, holds and ends of each copy in it. */
   readonly quietFrom: number;
   readonly quietEvents: number;
@@ -293,10 +297,12 @@ export function burstResultOf(record: BurstRecord, settings: BurstSettings = CAS
         break;
       }
       case "throttled": {
-        const copies = [...new Set(counted.map((send) => send.copy))];
-        const peaks = copies.map((copy) => peakOf(counted.filter((send) => send.copy === copy), "notice", settings.throttle.window));
+        // The throttle counts each stream on its own (D16). Thus the gate counts the sends of each copy and stream.
+        const keyOf = (send: BurstSend): string => `${send.copy} ${record.streams[send.incident] ?? "alerts"}`;
+        const keys = [...new Set(counted.map(keyOf))];
+        const peaks = keys.map((key) => peakOf(counted.filter((send) => keyOf(send) === key), "notice", settings.throttle.window));
         gates.throttled = peaks.every((peak) => peak <= 1);
-        if (!gates.throttled) problems.push(`${record.arm}: a copy sent ${String(Math.max(...peaks))} notices in one window of the throttle.`);
+        if (!gates.throttled) problems.push(`${record.arm}: a copy sent ${String(Math.max(...peaks))} notices of one stream in one window of the throttle.`);
         break;
       }
       case "lifeSafety": {
@@ -589,6 +595,11 @@ function flapsOf(copy: Copy): string[] {
     .map((report) => report.id);
 }
 
+// The stream of the throttle of each report of a copy.
+function streamsOf(copy: Copy, throttle: Throttle): [string, string][] {
+  return copy.runtime.state().merge.reports.map((report) => [report.id, throttleStreamOf(report.kind.code, throttle.streams)]);
+}
+
 /** This function runs one arm of the case and gives its record. */
 export async function runBurstArm(arm: BurstArm, settings: BurstSettings = CASE_15_SETTINGS): Promise<BurstRecord> {
   const start = CASE_15_START;
@@ -660,6 +671,7 @@ export async function runBurstArm(arm: BurstArm, settings: BurstSettings = CASE_
       floods,
       tornadoes,
       flaps: copies.flatMap(flapsOf),
+      streams: Object.fromEntries(copies.flatMap((copy) => streamsOf(copy, settings.throttle))),
       quietFrom,
       quietEvents,
       passErrors,
@@ -669,7 +681,7 @@ export async function runBurstArm(arm: BurstArm, settings: BurstSettings = CASE_
     for (const copy of copies) copy.log.close();
     return record;
   } catch (error) {
-    return { arm, error: errorMessage(error), sends, countFrom: start, holds: [], floods, tornadoes, flaps: [], quietFrom: start, quietEvents: 0, passErrors, exchangeProblems };
+    return { arm, error: errorMessage(error), sends, countFrom: start, holds: [], floods, tornadoes, flaps: [], streams: {}, quietFrom: start, quietEvents: 0, passErrors, exchangeProblems };
   }
 }
 

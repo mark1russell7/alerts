@@ -37,6 +37,7 @@ function recordOf(arm: BurstArm, change: Partial<BurstRecord> = {}): BurstRecord
     floods: FLOODS,
     tornadoes: TORNADOES,
     flaps: arm === "flapping" ? ["flap-1", "flap-2"] : [],
+    streams: {},
     quietFrom: T0 + S.armMs - S.quietMs,
     quietEvents: 0,
     passErrors: [],
@@ -110,6 +111,10 @@ describe("the gates of case 15", () => {
     // A notice of the other copy, or a notice at the end of the window, is not a second notice of the copy in the window.
     expect(burstResultOf({ ...record, sends: [...record.sends, send(FLOODS[1]!, BURST + MINUTE, "notice", "cloud")] }).gates.throttled).toBe(true);
     expect(burstResultOf({ ...record, sends: [...record.sends, send(FLOODS[1]!, BURST + S.throttle.window)] }).gates.throttled).toBe(true);
+    // A system line is its own stream: one held notice in the window of a flood notice is not a second notice (AL-81).
+    const held = { ...record, streams: { "held-1": "system", "held-2": "system" } };
+    expect(burstResultOf({ ...held, sends: [...record.sends, send("held-1", BURST + MINUTE)] }).gates.throttled).toBe(true);
+    expect(burstResultOf({ ...held, sends: [...record.sends, send("held-1", BURST + MINUTE), send("held-2", BURST + 2 * MINUTE)] }).gates.throttled).toBe(false);
   });
 
   it("fails lifeSafety when a tornado warning has no send", () => {

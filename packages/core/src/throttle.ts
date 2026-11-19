@@ -80,6 +80,14 @@ export const THROTTLE_MIN_WINDOW: Duration = 60_000;
 /** The longest window of the throttle: one day. */
 export const THROTTLE_MAX_WINDOW: Duration = 86_400_000;
 
+/**
+ * This function gives the stream of the throttle for a kind (D16). The system lines are one stream. The alerts are the
+ * other stream. With the streams `family`, each family of the alerts is a stream.
+ */
+export function throttleStreamOf(kind: string, streams: ThrottleStreams): string {
+  return hasKind(SYSTEM_KINDS, kind) ? SYSTEM_STREAM : streams === "family" ? `alerts ${kind.split(".")[0]!}` : "alerts";
+}
+
 /** This function gives the throttle of a configuration. Each field that is absent has its default. */
 export function throttleOf(config: ThrottleConfig | undefined): Throttle {
   return { ...DEFAULT_THROTTLE, ...config };
@@ -203,7 +211,7 @@ export function throttleRoutes(input: ThrottleInput): ThrottleResult {
   // The reports of the incident of each route. With the key `incident`, a delivery counts for each route that holds its report.
   const reportsOf = input.routes.map((entry) => new Set<string>([entry.incident.anchor, ...entry.incident.reports]));
   // The stream of a kind (D16): the system lines, or the alerts. With the streams `family`, each family of the alerts.
-  const streamOf = (kind: string): string => (hasKind(SYSTEM_KINDS, kind) ? SYSTEM_STREAM : throttle.streams === "family" ? `alerts ${kind.split(".")[0]!}` : "alerts");
+  const streamOf = (kind: string): string => throttleStreamOf(kind, throttle.streams);
   // A private incident is a message to its persons (AL-92). It is its own stream, by its anchor. Thus the throttle stops
   // only its repeats, and a system line does not stop it. Its intake has its own gates: a check of repeats and a daily cap.
   const routeStreams = input.routes.map((entry) => (isPrivate(entry.incident) ? `${PRIVATE_STREAM} ${entry.incident.anchor}` : streamOf(entry.incident.kind.code)));
