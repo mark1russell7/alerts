@@ -50,10 +50,25 @@ export const TELL_TITLE_LIMIT = 80;
 export const TELL_PERSONS_LIMIT = 10;
 
 /** The time from the intake of a message to its end, in milliseconds: one day. */
-export const TELL_LIFE = 24 * 60 * 60_000;
+export const TELL_LIFE: number = 24 * 60 * 60_000;
+
+/** One message of the operator, as the client gives it. */
+export interface TellEvent {
+  readonly class: TellClass;
+  /** An urgent message sounds. Only a message `needs-you` can be urgent. */
+  readonly urgent?: boolean;
+  /** The item of the roadmap that the message is about. */
+  readonly item: string;
+  readonly title?: string;
+  readonly text: string;
+  /** A link for the message. The intake changes a link of the local site to its phone form. */
+  readonly url?: string;
+  /** The persons of the message. With no persons, the message goes to the operator. */
+  readonly to?: readonly string[];
+}
 
 /** This schema checks one message of the operator, as the client gives it. Only a message `needs-you` can be urgent. */
-export const tellEventSchema = z
+export const tellEventSchema: z.ZodType<TellEvent> = z
   .strictObject({
     class: z.enum(TELL_CLASSES),
     urgent: z.boolean().exactOptional(),
@@ -64,9 +79,6 @@ export const tellEventSchema = z
     to: z.array(z.string().min(1).max(100)).min(1).max(TELL_PERSONS_LIMIT).exactOptional(),
   })
   .refine((event) => event.urgent !== true || event.class === "needs-you", "Only a message needs-you can be urgent.");
-
-/** One message of the operator, as the client gives it. */
-export type TellEvent = z.infer<typeof tellEventSchema>;
 
 /** One message that the intake took. Its persons and its link are final. */
 export interface TellDraft {
@@ -110,7 +122,7 @@ export type SiteLink = { readonly url: string | undefined } | { readonly refused
  *
  * - A path that starts with `/` goes to the phone origin of the site.
  * - A link on the loopback address with the port of the local site goes to the phone origin, with its path, query and fragment.
- * - Each other link on the loopback address, and a path with no site, is refused. Thus such a link never reaches a channel.
+ * - Each other link on the loopback address, and a path with no site, is refused. Thus no channel gets such a link.
  * - Each other `https` or `http` link stays as it is.
  */
 export function siteLink(url: string | undefined, site: TellSite | undefined): SiteLink {

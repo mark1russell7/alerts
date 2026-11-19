@@ -1756,23 +1756,27 @@ describe("the messages of the operator (AL-92)", () => {
       return finish(opened.clock, opened.instance.runtime.pass());
     };
     const told = () => opened.server.calls.filter((call) => (call.fields["title"] ?? "").includes("AL-92"));
-    return { ...opened, intake, pass, told };
+    // The step of the view has only the system reports. The incidents of the view show each report of the source tell.
+    const tells = (result: Awaited<ReturnType<typeof pass>>) =>
+      result.view.incidents.filter((incident) => incident.kind.code.startsWith("system.tell.")).map((incident) => [incident.kind.code, incident.live, incident.reports.length]);
+    return { ...opened, intake, pass, told, tells };
   }
 
   it("sends a new class once, and a repeat of the same class is no send: the same facts give no report, and new facts update the incident", async () => {
-    const { intake, pass, told } = openTelling();
+    const { intake, pass, told, tells } = openTelling();
     intake.take(ASK);
     const first = await pass(true);
     expect(first.fetched).toContain("tell");
+    expect(tells(first)).toEqual([["system.tell.needs-you", true, 1]]);
     expect(told().map((call) => call.fields["title"])).toEqual([expect.stringContaining("Needs you: AL-92")]);
     intake.take(ASK);
     const same = await pass();
-    expect(same.view.step.reports.filter((report) => report.source === "tell")).toEqual([]);
+    expect(same.fetched).toContain("tell");
+    expect(tells(same)).toEqual([["system.tell.needs-you", true, 1]]);
     intake.take({ ...ASK, text: "The deploy still waits for your restart." });
     const changed = await pass();
-    expect(changed.view.step.reports.filter((report) => report.source === "tell").map((report) => report.op)).toEqual(["update"]);
-    const asks = changed.view.incidents.filter((incident) => incident.kind.code === "system.tell.needs-you");
-    expect(asks.map((incident) => [incident.live, incident.reports.length])).toEqual([[true, 2]]);
+    // The update joins the incident of the first report. The throttle sends no second message at the same level.
+    expect(tells(changed)).toEqual([["system.tell.needs-you", true, 2]]);
     expect(told()).toHaveLength(1);
     // A new class is a new incident. It sends once.
     intake.take({ class: "live", item: "AL-92", text: "The swap is live." });
@@ -1782,17 +1786,15 @@ describe("the messages of the operator (AL-92)", () => {
   });
 
   it("ends a live needs-you at a message done-you-asked, and sends the done message", async () => {
-    const { intake, pass, told } = openTelling();
+    const { intake, pass, told, tells } = openTelling();
     intake.take(ASK);
     await pass(true);
     intake.take({ class: "done-you-asked", item: "AL-92", text: "The restart is done." });
     const done = await pass();
-    expect(done.view.step.reports.filter((report) => report.source === "tell").map((report) => [report.kind.code, report.op])).toEqual([
-      ["system.tell.done-you-asked", "alert"],
-      ["system.tell.needs-you", "cancel"],
-    ]);
-    const ask = done.view.incidents.find((incident) => incident.kind.code === "system.tell.needs-you");
-    expect(ask?.live ?? false).toBe(false);
+    // The cancel joins the incident of the request and ends it. The done message is a new incident.
+    expect(tells(done)).toHaveLength(2);
+    expect(tells(done)).toContainEqual(["system.tell.done-you-asked", true, 1]);
+    expect(tells(done)).toContainEqual(["system.tell.needs-you", false, 2]);
     await pass();
     expect(told().map((call) => call.fields["title"])).toEqual([expect.stringContaining("Needs you: AL-92"), expect.stringContaining("Done: AL-92")]);
   });
