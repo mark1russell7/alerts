@@ -4,9 +4,11 @@
  * the channel sent to the person in the window. A send of the same level or of a lower level does not go. The log keeps
  * it as a suppression with its reason, and the digest tells its incident. Each stream has its own window. By default,
  * the system lines (the kinds of the family `system`) are one stream, and the alerts are the other stream. Thus a health
- * notice does not stop a weather notice, and a weather notice does not stop a health notice.
+ * notice does not stop a weather notice, and a weather notice does not stop a health notice. Each private incident is
+ * its own stream (AL-92). Thus the throttle stops only the repeats of a message of the operator.
  */
 import { compareCodeUnits } from "@mark1russell7/text/order";
+import { isPrivate } from "./audience.ts";
 import { LEVELS, type ChannelId, type Delivery, type Duration, type Instant, type Level, type PersonId, type Report, type ReportId } from "./contracts.ts";
 import type { Route } from "./delivery.ts";
 import type { EscalationSend } from "./escalation.ts";
@@ -18,6 +20,9 @@ const SYSTEM_KINDS: readonly string[] = ["system"];
 
 /** The stream of the system lines. */
 const SYSTEM_STREAM = "system";
+
+/** The first part of the stream of a private incident. Each private incident is its own stream (AL-92). */
+const PRIVATE_STREAM = "private";
 
 /**
  * The key of the window of the throttle.
@@ -132,7 +137,7 @@ export interface ThrottleInput {
    * The reports of the merge state (`MergeState.reports`). They give the stream of a delivery after the end of its route. A
    * retirement removes a report and its deliveries together, thus a delivery in the window always has its report here.
    */
-  readonly reports?: readonly Pick<Report, "id" | "kind">[] | undefined;
+  readonly reports?: readonly Pick<Report, "id" | "kind" | "addresses">[] | undefined;
   /** The throttle. The default is `DEFAULT_THROTTLE`. */
   readonly throttle?: Throttle | undefined;
   /**
@@ -161,6 +166,7 @@ const rankOf = (level: Level): number => LEVELS.indexOf(level);
  *
  * - Each send and each delivery has a stream: the system lines, or the alerts (`streams`). A system line has a kind of
  *   the family `system`. The routes and the reports give the kind of the incident of a delivery.
+ * - A private incident (`addresses`) is its own stream, by its anchor. Thus only its own deliveries count in its bar.
  * - A delivery of an incident with no route and no report is in the stream of the system lines. The copies share the
  *   reports of the alerts (the `fetch` events), but not the system lines. Thus such a delivery is a system line of the
  *   other copy. An alert delivery of the other copy can come before its report. Then the worst result is one more push.
@@ -198,10 +204,15 @@ export function throttleRoutes(input: ThrottleInput): ThrottleResult {
   const reportsOf = input.routes.map((entry) => new Set<string>([entry.incident.anchor, ...entry.incident.reports]));
   // The stream of a kind (D16): the system lines, or the alerts. With the streams `family`, each family of the alerts.
   const streamOf = (kind: string): string => (hasKind(SYSTEM_KINDS, kind) ? SYSTEM_STREAM : throttle.streams === "family" ? `alerts ${kind.split(".")[0]!}` : "alerts");
-  const routeStreams = input.routes.map((entry) => streamOf(entry.incident.kind.code));
-  // The stream of each known report. A delivery of an unknown report is a system line of the other copy.
+  // A private incident is a message to its persons (AL-92). It is its own stream, by its anchor. Thus the throttle stops
+  // only its repeats, and a system line does not stop it. Its intake has its own gates: a check of repeats and a daily cap.
+  const routeStreams = input.routes.map((entry) => (isPrivate(entry.incident) ? `${PRIVATE_STREAM} ${entry.incident.anchor}` : streamOf(entry.incident.kind.code)));
+  // The stream of each known report. A delivery of an unknown report is a system line of the other copy. A delivery holds
+  // the anchor of its incident at its send, thus after the end of the route a private report by its own id gives the
+  // stream. A later report with a smaller id changes the anchor, and then a new route has another stream. Two private
+  // reports in one incident are rare, thus the worst result is one more push.
   const reportStreams = new Map<string, string>();
-  for (const report of input.reports ?? []) reportStreams.set(report.id, streamOf(report.kind.code));
+  for (const report of input.reports ?? []) reportStreams.set(report.id, isPrivate(report) ? `${PRIVATE_STREAM} ${report.id}` : streamOf(report.kind.code));
   reportsOf.forEach((reports, route) => {
     for (const report of reports) reportStreams.set(report, routeStreams[route]!);
   });

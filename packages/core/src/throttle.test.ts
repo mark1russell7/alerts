@@ -25,8 +25,8 @@ function sent(index: number, level: Level, at: number, options: { readonly who?:
 }
 
 // A route of an escalation with one send that is due: step `step` on `channel`.
-function entry(index: number, options: { readonly level?: Level; readonly due?: number; readonly who?: PersonId; readonly channel?: ChannelId; readonly step?: number; readonly episode?: number; readonly kind?: string } = {}): Route {
-  const { level = "notice", due = T0, who = person, channel = pushover, step = 0, episode = 0, kind = "met.flood" } = options;
+function entry(index: number, options: { readonly level?: Level; readonly due?: number; readonly who?: PersonId; readonly channel?: ChannelId; readonly step?: number; readonly episode?: number; readonly kind?: string; readonly addresses?: readonly PersonId[] } = {}): Route {
+  const { level = "notice", due = T0, who = person, channel = pushover, step = 0, episode = 0, kind = "met.flood", addresses } = options;
   const incident: Incident = {
     anchor: idOf(index),
     reports: [idOf(index)],
@@ -39,6 +39,7 @@ function entry(index: number, options: { readonly level?: Level; readonly due?: 
     about: [],
     live: true,
     corroboration: 1,
+    ...(addresses === undefined ? {} : { addresses }),
   };
   const policy: EscalationPolicy = { level, steps: [{ channel, at: 0 }, { channel, at: 5 * MINUTE }], exhaustedAfter: 10 * MINUTE };
   return {
@@ -90,6 +91,20 @@ describe("the throttle of a configuration", () => {
 });
 
 describe("throttleRoutes", () => {
+  it("gives each private incident its own stream: a system notice in the window does not stop a new message of the operator (AL-92)", () => {
+    // A health notice went at T0, and the private incident 2 got a notice at T0 + 1 min. Both are in the window.
+    const reports = [reportOf(1, "system.health.failing"), { ...reportOf(2, "system.tell.live"), addresses: [person] }];
+    const deliveries = [sent(1, "notice", T0), sent(2, "notice", T0 + MINUTE)];
+    const routes = [
+      entry(2, { kind: "system.tell.live", addresses: [person], step: 1 }),
+      entry(3, { kind: "system.tell.done-you-asked", addresses: [person] }),
+      entry(4, { kind: "system.store.empty" }),
+    ];
+    const result = throttleRoutes({ reports, routes, deliveries, suppressions: [], now: T0 + 2 * MINUTE });
+    // The new private incident 3 goes. The repeat of the private incident 2 does not, and the public system line 4 is under the health notice.
+    expect(sendsOf(result.routes)).toEqual(["03:notice"]);
+  });
+
   it("(b) sends an urgent alert at once after a notice in the window", () => {
     const deliveries = [sent(1, "notice", T0)];
     const result = throttled({ routes: [entry(2, { level: "urgent", due: T0 + MINUTE })], deliveries, suppressions: [], now: T0 + MINUTE });

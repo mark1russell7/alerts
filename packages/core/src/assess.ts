@@ -183,6 +183,21 @@ export const CHANNEL_KIND = "system.channel";
 export const STORE_KIND = "system.store";
 
 /**
+ * The prefix of the kinds of the messages of the operator (AL-92). The intake of the runtime maps each message to
+ * `system.tell.<class>` with the status `system`. Each such message is private: its addresses name its persons.
+ */
+export const TELL_KIND = "system.tell";
+
+/**
+ * The classes of a message of the operator (AL-92). `needs-you`: the person must decide or act. `done-you-asked`: a
+ * request of the person is done. `live`: a change is live.
+ */
+export const TELL_CLASSES = ["needs-you", "done-you-asked", "live"] as const;
+
+/** The class of a message of the operator. */
+export type TellClass = (typeof TELL_CLASSES)[number];
+
+/**
  * The subject system of a person. The id of a subject is the id of a person. A person who watches the subject of another
  * person gets the escalation reports of that person. A subject of the person itself does not match the person.
  */
@@ -204,6 +219,15 @@ const SYSTEM_TABLE: LevelTable = {
 };
 
 /**
+ * The table of the messages of the operator (AL-92). These messages reach `urgent` at most. The intake gives the
+ * severity `severe` and the urgency `immediate` only to an urgent `needs-you`. Each other message gets `notice`.
+ */
+const TELL_TABLE: LevelTable = {
+  severity: { extreme: "urgent", severe: "urgent", moderate: "notice", minor: "digest", unknown: "notice" },
+  urgency: { immediate: "urgent", expected: "notice", future: "notice", past: "digest", unknown: "notice" },
+};
+
+/**
  * The first policy. An incident is `life-safety` when its status is `actual` and its kind is in
  * `LIFE_SAFETY_KINDS`. Its severity must be `severe`, `extreme` or `unknown`, and its urgency must
  * be `immediate`, `expected` or `unknown`. A place of the person must be in its areas.
@@ -211,6 +235,9 @@ const SYSTEM_TABLE: LevelTable = {
  * The three system classes hold the reports of the core, and they admit only the status `system`. The
  * coverage of a life-safety kind, a drill run and an exhausted escalation can reach `life-safety`. Each other report of the core reaches
  * `notice` at most. The NWS kinds `system.test` and `system.admin` are not in these classes.
+ *
+ * The class `system-tell` holds the messages of the operator (`TELL_KIND`). It admits only the status `system`, and it
+ * reaches `urgent` at most.
  *
  * The earthquake class has its own table. In one hour after the onset, its urgency `past` counts as
  * `immediate`. Then `extreme` is `life-safety`, and `severe` is `urgent`.
@@ -229,6 +256,8 @@ export const DEFAULT_ASSESS_POLICY: AssessPolicy = {
     { id: "system-drill", kinds: [`${DRILL_KIND}.run`], statuses: ["system"], ...LOUD_SYSTEM_TABLE },
     // An exhausted escalation of a person keeps its level for the people who watch that person (AL-21).
     { id: "system-escalation", kinds: [ESCALATION_KIND], statuses: ["system"], ...LOUD_SYSTEM_TABLE },
+    // A message of the operator reaches only the persons of its addresses (AL-92). An urgent `needs-you` reaches `urgent`.
+    { id: "system-tell", kinds: [TELL_KIND], statuses: ["system"], ...TELL_TABLE },
     { id: "system", kinds: [HEALTH_KIND, COVERAGE_KIND, QUOTA_KIND, BALANCE_KIND, CLOCK_KIND, LOG_KIND, COPY_KIND, DRILL_KIND, CHANNEL_KIND, STORE_KIND], statuses: ["system"], ...SYSTEM_TABLE },
     // The service alerts of public transit are context. Their counts are indicator readings.
     { id: "context", kinds: CONTEXT_KINDS, ...CONTEXT_TABLE },

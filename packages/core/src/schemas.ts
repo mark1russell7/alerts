@@ -156,6 +156,7 @@ import {
   type SecretLookup,
   type SpendConfig,
   type SecretRef,
+  type TellConfig,
 } from "./config.ts";
 import type { TryChain } from "./chain.ts";
 import type { ChannelDownConfig, ChannelRun } from "./channel-down.ts";
@@ -1602,6 +1603,11 @@ export const throttleConfigSchema: z.ZodType<ThrottleConfig, ThrottleConfig> = s
   z.strictObject({ window: durationSchema.exactOptional(), key: z.enum(["channel", "incident"]).exactOptional(), streams: z.enum(["system", "family"]).exactOptional(), exempt: z.array(levelSchema).readonly().exactOptional() }).readonly(),
 );
 
+/** This schema checks the intake of the messages of the operator (AL-92): a port, and a daily cap of 1 or more. */
+export const tellConfigSchema: z.ZodType<TellConfig, TellConfig> = schemaOf<TellConfig>()(
+  z.strictObject({ port: z.int().min(1).max(65535, "The port is 1 to 65535."), dailyCap: z.int().min(1).exactOptional() }).readonly(),
+);
+
 /** This schema checks the policy of a down channel (AL-65). A run opens a line at 1 failed call or more. */
 export const channelDownConfigSchema: z.ZodType<ChannelDownConfig, ChannelDownConfig> = schemaOf<ChannelDownConfig>()(
   z.strictObject({ failures: z.number().int().min(1).exactOptional(), span: durationSchema.exactOptional() }).readonly(),
@@ -1639,6 +1645,7 @@ export const alertConfigSchema: z.ZodType<AlertConfig, AlertConfig> = schemaOf<A
       sourceClear: sourceClearConfigSchema.exactOptional(),
       sendLimit: sendLimitConfigSchema.exactOptional(),
       throttle: throttleConfigSchema.exactOptional(),
+      tell: tellConfigSchema.exactOptional(),
     })
     .readonly(),
 );

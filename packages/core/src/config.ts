@@ -159,6 +159,20 @@ export interface OutageConfig {
   readonly people: readonly OutagePersonConfig[];
 }
 
+/**
+ * The intake of the messages of the operator (AL-92). The runtime takes each message on a port of the loopback address,
+ * with the token of the file `tell.token` in its home. Without this entry, the runtime has no intake.
+ */
+export interface TellConfig {
+  /** The port of the intake on the loopback address. */
+  readonly port: number;
+  /** The most messages that the intake takes in one day. Without it, the cap is `DEFAULT_TELL_DAILY_CAP`. */
+  readonly dailyCap?: number;
+}
+
+/** The daily cap of the intake of the messages of the operator when the configuration gives none. */
+export const DEFAULT_TELL_DAILY_CAP = 20;
+
 /** The private configuration of the people and the places. Each copy of the system loads the same configuration. */
 export interface AlertConfig {
   readonly format: typeof CONFIG_FORMAT;
@@ -224,6 +238,8 @@ export interface AlertConfig {
    * person only for a higher level of the stream. Each field that is absent keeps its default (`DEFAULT_THROTTLE`).
    */
   readonly throttle?: ThrottleConfig;
+  /** The intake of the messages of the operator (AL-92). Without it, the runtime takes no message of the operator. */
+  readonly tell?: TellConfig;
 }
 
 /** The name of the format of a part of the configuration. A change that breaks a part gets a new name. */

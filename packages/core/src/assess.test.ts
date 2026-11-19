@@ -866,4 +866,17 @@ describe("a private incident (AL-92)", () => {
   it("gives no level to a person of its addresses after its end", () => {
     expect(assess(incident({ addresses: [addressed], live: false }), person(), places).level).toBe("none");
   });
+
+  it("gives a message of the operator `urgent` for an urgent need and `notice` for each other class, only with the status system", () => {
+    const tell = (code: string, severity: Incident["severity"], urgency: Incident["urgency"], status: Incident["status"] = "system") =>
+      assess(incident({ kind: code, status, severity, urgency, addresses: [addressed], areas: [] }), person([], []), places).level;
+    expect(tell("system.tell.needs-you", "severe", "immediate")).toBe("urgent");
+    expect(tell("system.tell.needs-you", "moderate", "expected")).toBe("notice");
+    expect(tell("system.tell.done-you-asked", "moderate", "expected")).toBe("notice");
+    expect(tell("system.tell.live", "moderate", "expected")).toBe("notice");
+    // The class reaches `urgent` at most, also with the highest values.
+    expect(tell("system.tell.needs-you", "extreme", "immediate")).toBe("urgent");
+    // The class admits only the status `system`.
+    expect(tell("system.tell.live", "moderate", "expected", "actual")).toBe("none");
+  });
 });

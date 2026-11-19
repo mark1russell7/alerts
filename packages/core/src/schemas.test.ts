@@ -545,6 +545,7 @@ const SCHEMA_NAMES = [
   "subjectKindSchema",
   "subjectSchema",
   "subjectWatchSchema",
+  "tellConfigSchema",
   "throttleConfigSchema",
   "transportSchema",
   "tryChainSchema",
@@ -1177,5 +1178,17 @@ describe("the private configuration", () => {
       required: ["format", "places", "people", "contacts", "policies"],
       properties: { format: { const: CONFIG_FORMAT } },
     });
+  });
+});
+
+describe("the intake of the messages of the operator (AL-92)", () => {
+  it("takes a port and a daily cap, and refuses a port out of range, a cap of 0 and a field that it does not know", () => {
+    const { tellConfigSchema } = schemas;
+    expect(tellConfigSchema.safeParse({ port: 4790 }).success).toBe(true);
+    expect(tellConfigSchema.safeParse({ port: 4790, dailyCap: 20 }).success).toBe(true);
+    expect(tellConfigSchema.safeParse({ port: 0 }).success).toBe(false);
+    expect(tellConfigSchema.safeParse({ port: 65536 }).success).toBe(false);
+    expect(tellConfigSchema.safeParse({ port: 4790, dailyCap: 0 }).success).toBe(false);
+    expect(tellConfigSchema.safeParse({ port: 4790, host: "0.0.0.0" }).success).toBe(false);
   });
 });

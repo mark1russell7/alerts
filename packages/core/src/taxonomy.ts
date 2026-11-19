@@ -11,7 +11,7 @@
  * its plain name and its summary here, and in no other place. A new code comes here first, in its pull request.
  */
 import { compareCodeUnits } from "@mark1russell7/text/order";
-import { BALANCE_KIND, CHANNEL_KIND, CLOCK_KIND, COPY_KIND, COVERAGE_KIND, DRILL_KIND, ESCALATION_KIND, HEALTH_KIND, LOG_KIND, QUOTA_KIND, STORE_KIND } from "./assess.ts";
+import { BALANCE_KIND, CHANNEL_KIND, CLOCK_KIND, COPY_KIND, COVERAGE_KIND, DRILL_KIND, ESCALATION_KIND, HEALTH_KIND, LOG_KIND, QUOTA_KIND, STORE_KIND, TELL_KIND } from "./assess.ts";
 import type { BalanceStage, Category, CopyStage, HealthState, QuotaStage } from "./contracts.ts";
 
 /** One code of the taxonomy: its plain name and one plain sentence about it. */
@@ -410,6 +410,10 @@ export const TAXONOMY: Readonly<Record<string, KindEntry>> = {
   [CHANNEL_KIND]: entry("Channel of the system", "A channel that takes the alerts to the people, as a push service, a text service or a call service."),
   [`${CHANNEL_KIND}.down`]: entry("Down channel", "The calls of a channel to its provider fail. The other channels of each person carry the alerts until a call passes again."),
   [STORE_KIND]: entry("Store of the system", "A store of the alert system that fills from its sources after each start, as the store of the outlines of the zones."),
+  [TELL_KIND]: entry("Message of the operator", "A short private message from the operator of the alert system to one person. It is not a warning."),
+  [`${TELL_KIND}.needs-you`]: entry("Needs you", "A message of the operator: the person must decide or act."),
+  [`${TELL_KIND}.done-you-asked`]: entry("Done", "A message of the operator: a request of the person is done."),
+  [`${TELL_KIND}.live`]: entry("Live", "A message of the operator: a change is live."),
   [`${STORE_KIND}.empty`]: entry("Empty store", "A family of a store has no entry in the time after a start. Each feature that reads the family works without it."),
   [`${ESCALATION_KIND}.exhausted`]: entry("Exhausted escalation", "A person did not acknowledge a real warning in the time of the policy. The people who watch the person get this report."),
 };
