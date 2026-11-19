@@ -1,5 +1,5 @@
 /**
- * This file deploys new code to the live checkout through two slots (AL-89, `slots.ts`). The install never changes
+ * This file deploys new code to the live checkout through two slots (AL-89, `slots.ts`). The install does not change
  * the code under the running runtime. Start this file through the live path, thus with the code of the live slot:
  * `node <live>/packages/runtime/src/deploy.ts <command>`.
  *
