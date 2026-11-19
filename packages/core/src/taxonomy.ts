@@ -11,7 +11,7 @@
  * its plain name and its summary here, and in no other place. A new code comes here first, in its pull request.
  */
 import { compareCodeUnits } from "@mark1russell7/text/order";
-import { BALANCE_KIND, CHANNEL_KIND, CLOCK_KIND, COPY_KIND, COVERAGE_KIND, DRILL_KIND, ESCALATION_KIND, HEALTH_KIND, LOG_KIND, QUOTA_KIND, STORE_KIND, TELL_KIND } from "./assess.ts";
+import { BALANCE_KIND, CHANNEL_KIND, CLOCK_KIND, COPY_KIND, COVERAGE_KIND, DRILL_KIND, ESCALATION_KIND, HEALTH_KIND, LIMIT_KIND, LOG_KIND, QUOTA_KIND, STORE_KIND, TELL_KIND } from "./assess.ts";
 import type { BalanceStage, Category, CopyStage, HealthState, QuotaStage } from "./contracts.ts";
 
 /** One code of the taxonomy: its plain name and one plain sentence about it. */
@@ -415,6 +415,8 @@ export const TAXONOMY: Readonly<Record<string, KindEntry>> = {
   [`${TELL_KIND}.done-you-asked`]: entry("Done", "A message of the operator: a request of the person is done."),
   [`${TELL_KIND}.live`]: entry("Live", "A message of the operator: a change is live."),
   [`${STORE_KIND}.empty`]: entry("Empty store", "A family of a store has no entry in the time after a start. Each feature that reads the family works without it."),
+  [LIMIT_KIND]: entry("Send limit of the system", "The most new alerts that one person gets in one window. The digest tells each alert that the limit holds."),
+  [`${LIMIT_KIND}.held`]: entry("Alerts held", "The send limit holds new alerts for the person. The next digest tells each one. The limit does not hold a life-safety warning."),
   [`${ESCALATION_KIND}.exhausted`]: entry("Exhausted escalation", "A person did not acknowledge a real warning in the time of the policy. The people who watch the person get this report."),
 };
 

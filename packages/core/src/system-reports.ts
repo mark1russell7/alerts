@@ -9,7 +9,7 @@
  */
 import { canonicalJson } from "@mark1russell7/rigor-generators";
 import { compareCodeUnits } from "@mark1russell7/text/order";
-import { BALANCE_KIND, CHANNEL_KIND, CLOCK_KIND, CONTEXT_KINDS, COPY_KIND, COVERAGE_KIND, DRILL_KIND, ESCALATION_KIND, hasKind, HEALTH_KIND, LOG_KIND, matchPlaces, PERSON_SUBJECT, QUOTA_KIND, STORE_KIND } from "./assess.ts";
+import { BALANCE_KIND, CHANNEL_KIND, CLOCK_KIND, CONTEXT_KINDS, COPY_KIND, COVERAGE_KIND, DRILL_KIND, ESCALATION_KIND, hasKind, HEALTH_KIND, LIMIT_KIND, LOG_KIND, matchPlaces, PERSON_SUBJECT, QUOTA_KIND, STORE_KIND } from "./assess.ts";
 import { isPrivate } from "./audience.ts";
 import type {
   Area,
@@ -26,6 +26,7 @@ import type {
   Kind,
   Observation,
   Operation,
+  PersonId,
   PlaceId,
   ProviderBalance,
   QuotaStage,
@@ -47,6 +48,7 @@ import { drillVerdict, type DrillConfig, type DrillRun } from "./drill.ts";
 import { observationId, reportId } from "./ids.ts";
 import type { Lateness } from "./lateness.ts";
 import type { ObserveCondition } from "./observe.ts";
+import type { HeldPerson } from "./send-limit.ts";
 import { kindLabel } from "./taxonomy.ts";
 
 /** The source of each report of the core. No adapter has this id. */
@@ -215,6 +217,8 @@ export interface SystemLine {
   readonly kind: Kind;
   readonly areas: readonly Area[];
   readonly about: readonly Subject[];
+  /** The persons of a private line (AL-81). Its cancel goes to the same persons. */
+  readonly addresses?: readonly PersonId[];
 }
 
 /** The state of the fold. It is data, so the runtime can keep it in its log. */
@@ -300,6 +304,11 @@ export interface SystemSnapshot {
    * watch the person. Only one copy reports them (`reportsShared`). With no list, each open line of an exhaustion stays open.
    */
   readonly exhausted?: readonly Exhaustion[];
+  /**
+   * The persons with a hold of the send limit in its window (`heldPersons`, AL-81). Each one is a private condition for
+   * that person. Only one copy reports them (`reportsShared`). With no list, each open line of a hold stays open.
+   */
+  readonly held?: readonly HeldPerson[];
   /**
    * The channels of this copy, with their runs of failed calls (AL-65). A run that `runOpens` under the policy is a
    * condition. An open line stays a condition until a good call at or after its onset, also with no run. With no list,
@@ -475,6 +484,7 @@ export function gapGrade(entry: Coverage, threatened: boolean): { readonly sever
  * - The latest recovery of the log in `LOG_RECOVERY_WINDOW` before `at`.
  * - Each run of a drill that waits for its acknowledgment, and each drill whose last run failed.
  * - Each exhausted escalation of a real warning. Only one copy reports it (`reportsShared`).
+ * - Each person with a hold of the send limit in its window. The report is private. Only one copy reports it (`reportsShared`).
  * - Each down channel of the copy: a run that opens a line, or an open line with no good call since its onset.
  * - Each family of a store with no entry at the end of its window after the start, or with an open line and no entry.
  *
@@ -532,6 +542,8 @@ export function systemReports(lines: SystemLines, snapshot: SystemSnapshot, at: 
   }
   // The two copies see the same exhaustion in the shared log. Thus one copy reports it, as with a shared balance.
   if (shared) for (const entry of snapshot.exhausted ?? []) conditions.set(exhaustionName(entry), exhaustionCondition(entry));
+  // Each copy counts the deliveries of all the copies, thus each copy holds the same burst. One copy tells each person (AL-81).
+  if (shared) for (const entry of snapshot.held ?? []) conditions.set(heldName(entry), heldCondition(entry));
   // Each copy reports its own down channels, because each copy has its own network path to the provider.
   const policy = channelDownPolicy(snapshot.channelDown);
   for (const entry of snapshot.channels ?? []) {
@@ -558,6 +570,7 @@ export function systemReports(lines: SystemLines, snapshot: SystemSnapshot, at: 
     if (condition === undefined && snapshot.copies === undefined && name.startsWith(COPY_LINE)) continue;
     if (condition === undefined && snapshot.drills === undefined && name.startsWith(DRILL_LINE)) continue;
     if (condition === undefined && snapshot.exhausted === undefined && name.startsWith(EXHAUSTION_LINE)) continue;
+    if (condition === undefined && snapshot.held === undefined && name.startsWith(HELD_LINE)) continue;
     if (condition === undefined && snapshot.channels === undefined && name.startsWith(CHANNEL_LINE)) continue;
     if (condition === undefined && snapshot.observing === undefined && name.startsWith(OBSERVE_LINE)) continue;
     if (condition === undefined && snapshot.stores === undefined && name.startsWith(STORE_LINE)) continue;
@@ -572,7 +585,7 @@ export function systemReports(lines: SystemLines, snapshot: SystemSnapshot, at: 
     observations.push(observation);
     reports.push(reportOf(draft, { key, op, references: line === undefined ? [] : [line.key], at, observation: observation.id }));
     if (op === "cancel") open.delete(name);
-    else open.set(name, { key, facts, kind: draft.kind, areas: draft.areas, about: draft.about });
+    else open.set(name, { key, facts, kind: draft.kind, areas: draft.areas, about: draft.about, ...(draft.addresses === undefined ? {} : { addresses: draft.addresses }) });
   }
   const sorted = [...open.entries()].sort(([a], [b]) => compareCodeUnits(a, b));
   return { lines: { count, open: Object.fromEntries(sorted) }, reports, observations };
@@ -599,7 +612,7 @@ export function addSystemReports(lines: SystemLines, reports: readonly Report[],
     const { facts } = JSON.parse(body) as { readonly facts: Condition["facts"] };
     count = Math.max(count, Number(report.key.slice(mark + 1)));
     if (report.op === "cancel") open.delete(name);
-    else open.set(name, { key: report.key, facts: canonicalJson(facts, { form: "json" }), kind: report.kind, areas: report.areas, about: report.about });
+    else open.set(name, { key: report.key, facts: canonicalJson(facts, { form: "json" }), kind: report.kind, areas: report.areas, about: report.about, ...(report.addresses === undefined ? {} : { addresses: report.addresses }) });
   }
   const sorted = [...open.entries()].sort(([a], [b]) => compareCodeUnits(a, b));
   return { count, open: Object.fromEntries(sorted) };
@@ -615,6 +628,8 @@ interface Condition {
   readonly onset?: Instant;
   readonly areas: readonly Area[];
   readonly about: readonly Subject[];
+  /** The persons of a private condition (AL-81). Only they get its report. */
+  readonly addresses?: readonly PersonId[];
   readonly headline: string;
   readonly description?: string;
   readonly instruction?: string;
@@ -850,6 +865,35 @@ function exhaustionCondition(entry: Exhaustion): Condition {
     description: `The warning reached ${entry.person} at the level ${entry.level}. No acknowledgment came before ${new Date(entry.at).toISOString()}, the end of the escalation.`,
     instruction: `Speak to ${entry.person}. An acknowledgment of the warning by ${entry.person} ends this alert.`,
     parameters: { person: [entry.person], level: [entry.level], kind: [entry.kind.code], incident: [entry.incident] },
+  };
+}
+
+const HELD_LINE = "held/";
+
+function heldName(entry: HeldPerson): string {
+  return `${HELD_LINE}${encodeURIComponent(entry.person)}`;
+}
+
+function heldCondition(entry: HeldPerson): Condition {
+  const code = `${LIMIT_KIND}.held`;
+  return {
+    // The person is the only fact. Thus the first hold of a window gives one alert, and a later hold in the window gives no report.
+    // The line ends one window after the last hold. A hold after that end opens a new line, thus a new message.
+    facts: { person: entry.person },
+    kind: { code, label: kindLabel(code) },
+    // The table of the system reports gives the level `notice`.
+    severity: "moderate",
+    urgency: "expected",
+    response: ["none"],
+    onset: entry.first,
+    // The report is private. Thus only the person with the holds gets it, and the people who watch the person do not.
+    areas: [],
+    about: [{ system: PERSON_SUBJECT, id: entry.person, label: `Person ${entry.person}` }],
+    addresses: [entry.person],
+    headline: "The send limit holds new alerts for you",
+    description: "More new alerts came than your send limit lets through in one window. The limit does not hold a life-safety warning.",
+    instruction: "Read the next digest. It tells each held alert.",
+    parameters: { person: [entry.person] },
   };
 }
 
@@ -1203,6 +1247,7 @@ function cancelOf(line: SystemLine): Condition {
     response: ["allclear"],
     areas: line.areas,
     about: line.about,
+    ...(line.addresses === undefined ? {} : { addresses: line.addresses }),
     headline: `${line.kind.label}: the condition ended.`,
     parameters: {},
   };
@@ -1244,6 +1289,7 @@ function reportOf(draft: Condition, envelope: Envelope): Report {
     ...(draft.onset === undefined ? {} : { onset: draft.onset }),
     areas: draft.areas,
     about: draft.about,
+    ...(draft.addresses === undefined ? {} : { addresses: draft.addresses }),
     sender: "alerts",
     headline: draft.headline,
     ...(draft.description === undefined ? {} : { description: draft.description }),

@@ -8,8 +8,8 @@
  * its own stream (AL-92). Thus the throttle stops only the repeats of a message of the operator.
  */
 import { compareCodeUnits } from "@mark1russell7/text/order";
-import { isPrivate } from "./audience.ts";
-import { LEVELS, type ChannelId, type Delivery, type Duration, type Instant, type Level, type PersonId, type Report, type ReportId } from "./contracts.ts";
+import { isPrivate, type Audience } from "./audience.ts";
+import { LEVELS, type ChannelId, type Delivery, type Duration, type Instant, type Kind, type Level, type PersonId, type Report, type ReportId } from "./contracts.ts";
 import type { Route } from "./delivery.ts";
 import type { EscalationSend } from "./escalation.ts";
 import { messageKey } from "./ids.ts";
@@ -79,6 +79,22 @@ export const THROTTLE_MIN_WINDOW: Duration = 60_000;
 
 /** The longest window of the throttle: one day. */
 export const THROTTLE_MAX_WINDOW: Duration = 86_400_000;
+
+/** The part of a report or an incident that gives its stream of the throttle. */
+export interface ThrottleItem extends Audience {
+  readonly kind: Pick<Kind, "code">;
+}
+
+/**
+ * This function gives the stream of the throttle for a report or an incident (D16). A private item (AL-92) is its own
+ * stream, by its id: the id of a report, or the anchor of an incident. The system lines are one stream. The alerts are
+ * the other stream. With the streams `family`, each family of the alerts is a stream.
+ */
+export function throttleStreamOf(item: ThrottleItem, id: string, streams: ThrottleStreams): string {
+  if (isPrivate(item)) return `${PRIVATE_STREAM} ${id}`;
+  const kind = item.kind.code;
+  return hasKind(SYSTEM_KINDS, kind) ? SYSTEM_STREAM : streams === "family" ? `alerts ${kind.split(".")[0]!}` : "alerts";
+}
 
 /** This function gives the throttle of a configuration. Each field that is absent has its default. */
 export function throttleOf(config: ThrottleConfig | undefined): Throttle {
@@ -202,17 +218,16 @@ export function throttleRoutes(input: ThrottleInput): ThrottleResult {
   }
   // The reports of the incident of each route. With the key `incident`, a delivery counts for each route that holds its report.
   const reportsOf = input.routes.map((entry) => new Set<string>([entry.incident.anchor, ...entry.incident.reports]));
-  // The stream of a kind (D16): the system lines, or the alerts. With the streams `family`, each family of the alerts.
-  const streamOf = (kind: string): string => (hasKind(SYSTEM_KINDS, kind) ? SYSTEM_STREAM : throttle.streams === "family" ? `alerts ${kind.split(".")[0]!}` : "alerts");
-  // A private incident is a message to its persons (AL-92). It is its own stream, by its anchor. Thus the throttle stops
-  // only its repeats, and a system line does not stop it. Its intake has its own gates: a check of repeats and a daily cap.
-  const routeStreams = input.routes.map((entry) => (isPrivate(entry.incident) ? `${PRIVATE_STREAM} ${entry.incident.anchor}` : streamOf(entry.incident.kind.code)));
+  // The stream of each route (D16). A private incident is a message to its persons (AL-92). It is its own stream, by its
+  // anchor. Thus the throttle stops only its repeats, and a system line does not stop it. Its intake has its own gates: a
+  // check of repeats and a daily cap.
+  const routeStreams = input.routes.map((entry) => throttleStreamOf(entry.incident, entry.incident.anchor, throttle.streams));
   // The stream of each known report. A delivery of an unknown report is a system line of the other copy. A delivery holds
   // the anchor of its incident at its send, thus after the end of the route a private report by its own id gives the
   // stream. A later report with a smaller id changes the anchor, and then a new route has another stream. Two private
   // reports in one incident are rare, thus the worst result is one more push.
   const reportStreams = new Map<string, string>();
-  for (const report of input.reports ?? []) reportStreams.set(report.id, isPrivate(report) ? `${PRIVATE_STREAM} ${report.id}` : streamOf(report.kind.code));
+  for (const report of input.reports ?? []) reportStreams.set(report.id, throttleStreamOf(report, report.id, throttle.streams));
   reportsOf.forEach((reports, route) => {
     for (const report of reports) reportStreams.set(report, routeStreams[route]!);
   });

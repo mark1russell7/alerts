@@ -1,6 +1,6 @@
 import { random, seedsFrom } from "@mark1russell7/rigor-generators";
 import { describe, expect, it } from "vitest";
-import { assess } from "./assess.ts";
+import { assess, PERSON_SUBJECT } from "./assess.ts";
 import { CONFIG_FORMAT } from "./config.ts";
 import { messageOf } from "./delivery.ts";
 import type { ChannelId, ChannelQuota, CopyRead, CopyWatch, Coverage, HealthState, Incident, Observation, PersonId, PersonWatch, PlaceId, ProviderBalance, Report, ReportId, SourceDescriptor, SourceHealth, SourceId, WatchedPlace } from "./contracts.ts";
@@ -49,7 +49,8 @@ import {
   type SystemLines,
   type SystemSnapshot,
 } from "./system-reports.ts";
-import { alertConfigSchema, sourceClearConfigSchema } from "./schemas.ts";
+import { alertConfigSchema, reportSchema, sourceClearConfigSchema } from "./schemas.ts";
+import type { HeldPerson } from "./send-limit.ts";
 import { unknownKinds } from "./taxonomy.ts";
 
 const SEEDS = seedsFrom(process.env["SEED"], [1, 2, 3, 4, 5, 6, 7, 8]);
@@ -888,6 +889,65 @@ describe("the store reports (AL-86)", () => {
     expect(levels(step.reports, OPERATOR, END)).toEqual(["notice"]);
     expect(levels(step.reports, NEIGHBOR, END)).toEqual(["none"]);
     expect(levels(step.reports, { ...NEIGHBOR, subjects: [{ system: STORE_SUBJECT }] }, END)).toEqual(["notice"]);
+  });
+});
+
+describe("the notices of the send limit (AL-81)", () => {
+  const AT = Date.UTC(2026, 10, 18, 12);
+  const WINDOW = 60 * 60_000;
+  const held = (person: PersonWatch, first = AT - 60_000, last = AT): HeldPerson => ({ person: person.person, first, last, until: last + WINDOW, count: 2 });
+
+  it("gives one private notice to each person with a hold, with the person as its only address", () => {
+    expect(unknownKinds(["system.limit", "system.limit.held"])).toEqual([]);
+    const step = systemReports(NO_SYSTEM_LINES, snapshot({ held: [held(OPERATOR)] }), AT);
+    expect(step.reports).toMatchObject([
+      {
+        op: "alert",
+        status: "system",
+        kind: { code: "system.limit.held", label: "Alerts held" },
+        severity: "moderate",
+        urgency: "expected",
+        onset: AT - 60_000,
+        areas: [],
+        about: [{ system: PERSON_SUBJECT, id: OPERATOR.person }],
+        addresses: [OPERATOR.person],
+        headline: "The send limit holds new alerts for you",
+      },
+    ]);
+    expect(step.reports.every((report) => reportSchema.safeParse(report).success)).toBe(true);
+    // Only the person gets the notice. A person who watches the person or each source does not get it.
+    expect(levels(step.reports, OPERATOR, AT)).toEqual(["notice"]);
+    expect(levels(step.reports, NEIGHBOR, AT)).toEqual(["none"]);
+    expect(levels(step.reports, { ...NEIGHBOR, subjects: [{ system: PERSON_SUBJECT }, { system: SOURCE_SUBJECT }] }, AT)).toEqual(["none"]);
+  });
+
+  it("gives no report for a later hold in the window, and cancels the line of the same person when the holds leave the window", () => {
+    const first = systemReports(NO_SYSTEM_LINES, snapshot({ held: [held(OPERATOR)] }), AT);
+    // A later hold changes the last time and the count, not the facts. Thus the person gets one notice in each window.
+    expect(systemReports(first.lines, snapshot({ held: [{ ...held(OPERATOR, AT - 60_000, AT + 60_000), count: 3 }] }), AT + 60_000).reports).toEqual([]);
+    // With no list, as in a copy with no delivery, the line stays open.
+    expect(systemReports(first.lines, snapshot(), AT + 120_000).reports).toEqual([]);
+    const ended = systemReports(first.lines, snapshot({ held: [] }), AT + WINDOW);
+    expect(ended.reports.map((report) => [report.op, report.kind.code, report.addresses])).toEqual([["cancel", "system.limit.held", [OPERATOR.person]]]);
+    expect(ended.lines.open).toEqual({});
+    // A hold after the end opens a new line, thus a new notice.
+    const again = systemReports(ended.lines, snapshot({ held: [held(OPERATOR, AT + WINDOW + 1, AT + WINDOW + 1)] }), AT + WINDOW + 1);
+    expect(again.reports.map((report) => report.op)).toEqual(["alert"]);
+  });
+
+  it("keeps the addresses of a line in the lines that the log gives", () => {
+    const step = systemReports(NO_SYSTEM_LINES, snapshot({ held: [held(OPERATOR)] }), AT);
+    const lines = addSystemReports(NO_SYSTEM_LINES, step.reports, step.observations);
+    expect(lines).toEqual(step.lines);
+    expect(systemReports(lines, snapshot({ held: [] }), AT + WINDOW).reports[0]?.addresses).toEqual([OPERATOR.person]);
+  });
+
+  it("comes from one copy: the copy that reports the facts of a shared account", () => {
+    // The copy a has the smaller id, and it answers. Thus it reports, and the copy b does not.
+    const watch = (copy: string): CopyWatch => ({ copy, skewLimit: 60_000, maxAge: 10 * 60_000, since: AT });
+    const count = (copy: string, other: string): number =>
+      systemReports(NO_SYSTEM_LINES, snapshot({ held: [held(OPERATOR)], copy, copies: [watch(other)] }), AT).reports.filter((report) => report.kind.code === "system.limit.held").length;
+    expect([count("a", "b"), count("b", "a")]).toEqual([1, 0]);
   });
 });
 
